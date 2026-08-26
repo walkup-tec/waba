@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AQUECEDOR_DAILY_CAP_CEILING = exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = exports.AQUECEDOR_DAILY_CAP_BASE = exports.AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL = exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = exports.AQUECEDOR_HUMAN_PAUSE_MS = void 0;
+exports.AQUECEDOR_DAILY_CAP_CEILING = exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = exports.AQUECEDOR_DAILY_CAP_BASE = exports.AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL = exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = exports.AQUECEDOR_POST_RECONNECT_HUMAN_PAUSE_GRACE_MS = exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = exports.AQUECEDOR_HUMAN_PAUSE_MS = void 0;
 exports.collectInstanceNameKeys = collectInstanceNameKeys;
 exports.findAquecedorLifecycleRow = findAquecedorLifecycleRow;
 exports.getAquecedorLifecycleStatusForInstance = getAquecedorLifecycleStatusForInstance;
@@ -11,6 +11,7 @@ exports.computeDailyCapForInstance = computeDailyCapForInstance;
 exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
 exports.clearAquecedorHumanPause = clearAquecedorHumanPause;
+exports.noteAquecedorInstanceReconnected = noteAquecedorInstanceReconnected;
 exports.removeAquecedorInstanceLifecycle = removeAquecedorInstanceLifecycle;
 exports.restoreAquecedorLifecycleFromHistory = restoreAquecedorLifecycleFromHistory;
 exports.restoreAquecedorLifecyclesFromHistoryBatch = restoreAquecedorLifecyclesFromHistoryBatch;
@@ -44,6 +45,8 @@ const HUMAN_PAUSE_MS = exports.AQUECEDOR_HUMAN_PAUSE_MS;
  * Só depois dessa janela a pausa de 3h pode ser aplicada.
  */
 exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
+/** Após QR/reconexão a sessão oscila; pausa humana nesse intervalo é falso positivo. */
+exports.AQUECEDOR_POST_RECONNECT_HUMAN_PAUSE_GRACE_MS = 20 * 60 * 1000;
 const POST_PREPARING_SEND_WINDOW_MS = exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS;
 exports.AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
 /** Duração da fase Preparando (6h desde a integração). */
@@ -137,6 +140,7 @@ function emptyRow(phase, preparingSince) {
         dailyDate: null,
         dailySendCount: 0,
         dailyCap: null,
+        lastReconnectAt: null,
     };
 }
 async function readEvoInstanceCreatedAt(instanceName) {
@@ -307,6 +311,7 @@ async function getAquecedorLifecycleRow(instanceName) {
     refreshRestrictionPhase(found.row);
     return { ...found.row };
 }
+/** Tira a instância da pausa humana de 3h e deixa phase=active (não mexe em proxy). */
 async function clearAquecedorHumanPause(instanceName) {
     const name = String(instanceName || "").trim();
     if (!name) {
@@ -340,6 +345,29 @@ async function clearAquecedorHumanPause(instanceName) {
         phase: "active",
         wasRestricted,
     };
+}
+/** Marca QR/reconexão e tira pausa humana residual da sessão oscilante. */
+async function noteAquecedorInstanceReconnected(instanceName) {
+    const name = String(instanceName || "").trim();
+    if (!name)
+        return;
+    const store = await loadStore();
+    const found = await findAquecedorLifecycleRow(name);
+    const key = found?.key ?? normalizeKey(name);
+    const row = found?.row || store.instances[key] || emptyRow("active");
+    row.lastReconnectAt = new Date().toISOString();
+    if (row.phase === "restricted_wait") {
+        row.phase = "active";
+        row.restrictedUntil = null;
+        row.restrictedReason = null;
+        console.info(`[Aquecedor] ${name}: pausa humana limpa no QR/reconexão.`);
+    }
+    if (!row.activatedAt)
+        row.activatedAt = row.lastReconnectAt;
+    store.instances[key] = row;
+    if (found && found.key !== key)
+        delete store.instances[found.key];
+    await saveStore(store);
 }
 async function removeAquecedorInstanceLifecycle(instanceName) {
     const aliasesMap = await loadAliasesMap();
@@ -549,6 +577,12 @@ async function markAquecedorInstanceRestricted(instanceName, detail, opts) {
     const key = found?.key ?? normalizeKey(name);
     const row = found?.row || store.instances[key] || emptyRow("active");
     refreshRestrictionPhase(row);
+    const reconnectMs = row.lastReconnectAt ? new Date(row.lastReconnectAt).getTime() : NaN;
+    if (Number.isFinite(reconnectMs) &&
+        Date.now() < reconnectMs + exports.AQUECEDOR_POST_RECONNECT_HUMAN_PAUSE_GRACE_MS) {
+        console.info(`[Aquecedor] pausa humana ignorada em ${name}: janela de ${Math.round(exports.AQUECEDOR_POST_RECONNECT_HUMAN_PAUSE_GRACE_MS / 60000)} min após reconexão/QR.`);
+        return false;
+    }
     if (!opts?.force && !canApplyAquecedorHumanPause(row)) {
         const activatedLabel = row.activatedAt || "—";
         console.info(`[Aquecedor] pausa humana ignorada em ${name}: ainda na janela de 6h de envio pós-Preparando (activatedAt=${activatedLabel}).`);

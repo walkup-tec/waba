@@ -13,6 +13,8 @@ const HUMAN_PAUSE_MS = AQUECEDOR_HUMAN_PAUSE_MS;
  * Só depois dessa janela a pausa de 3h pode ser aplicada.
  */
 export const AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
+/** Após QR/reconexão a sessão oscila; pausa humana nesse intervalo é falso positivo. */
+export const AQUECEDOR_POST_RECONNECT_HUMAN_PAUSE_GRACE_MS = 20 * 60 * 1000;
 const POST_PREPARING_SEND_WINDOW_MS = AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS;
 export const AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
 /** Duração da fase Preparando (6h desde a integração). */
@@ -34,6 +36,8 @@ export type AquecedorInstanceLifecycleRow = {
   dailyDate: string | null;
   dailySendCount: number;
   dailyCap: number | null;
+  /** Último QR/pareamento. Bloqueia pausa humana nos minutos seguintes. */
+  lastReconnectAt?: string | null;
 };
 
 type LifecycleStore = {
@@ -140,6 +144,7 @@ function emptyRow(
     dailyDate: null,
     dailySendCount: 0,
     dailyCap: null,
+    lastReconnectAt: null,
   };
 }
 
@@ -381,6 +386,27 @@ export async function clearAquecedorHumanPause(
   };
 }
 
+/** Marca QR/reconexão e tira pausa humana residual da sessão oscilante. */
+export async function noteAquecedorInstanceReconnected(instanceName: string): Promise<void> {
+  const name = String(instanceName || "").trim();
+  if (!name) return;
+  const store = await loadStore();
+  const found = await findAquecedorLifecycleRow(name);
+  const key = found?.key ?? normalizeKey(name);
+  const row = found?.row || store.instances[key] || emptyRow("active");
+  row.lastReconnectAt = new Date().toISOString();
+  if (row.phase === "restricted_wait") {
+    row.phase = "active";
+    row.restrictedUntil = null;
+    row.restrictedReason = null;
+    console.info(`[Aquecedor] ${name}: pausa humana limpa no QR/reconexão.`);
+  }
+  if (!row.activatedAt) row.activatedAt = row.lastReconnectAt;
+  store.instances[key] = row;
+  if (found && found.key !== key) delete store.instances[found.key];
+  await saveStore(store);
+}
+
 export async function removeAquecedorInstanceLifecycle(instanceName: string): Promise<void> {
   const aliasesMap = await loadAliasesMap();
   const keys = collectInstanceNameKeys(instanceName, aliasesMap);
@@ -613,6 +639,19 @@ export async function markAquecedorInstanceRestricted(
   const key = found?.key ?? normalizeKey(name);
   const row = found?.row || store.instances[key] || emptyRow("active");
   refreshRestrictionPhase(row);
+
+  const reconnectMs = row.lastReconnectAt ? new Date(row.lastReconnectAt).getTime() : NaN;
+  if (
+    Number.isFinite(reconnectMs) &&
+    Date.now() < reconnectMs + AQUECEDOR_POST_RECONNECT_HUMAN_PAUSE_GRACE_MS
+  ) {
+    console.info(
+      `[Aquecedor] pausa humana ignorada em ${name}: janela de ${Math.round(
+        AQUECEDOR_POST_RECONNECT_HUMAN_PAUSE_GRACE_MS / 60000,
+      )} min após reconexão/QR.`,
+    );
+    return false;
+  }
 
   if (!opts?.force && !canApplyAquecedorHumanPause(row)) {
     const activatedLabel = row.activatedAt || "—";

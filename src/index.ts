@@ -223,6 +223,7 @@ import {
   getAquecedorLifecycleStatusMap,
   markAquecedorInstanceRestricted,
   clearAquecedorHumanPause,
+  noteAquecedorInstanceReconnected,
   recordAquecedorInstanceDailySend,
   registerAquecedorInstancePreparing,
   removeAquecedorInstanceLifecycle,
@@ -240,8 +241,8 @@ import {
   applyProxyBrasilToEvoInstance,
   areAllInstanceNamesProxyConfirmedEnabled,
   disableProxyBrasilOnEvoInstance,
+  fetchEvoProxyFindEnabled,
   getConfirmedProxyFind,
-  isProxyBrasilSessionReadyForSend,
   prepareProxyBrasilSessionsForCampaign,
   campaignStatusHoldsProxyBrasil,
   instanceNamesToReleaseAfterCampaignEnd,
@@ -249,9 +250,14 @@ import {
   queueConfirmProxyFindForInstanceNames,
   queueDisableProxyBrasilOnInstances,
   queueSyncProxyBrasilForCampaignSelection,
+  reconcileProxyBrasilForCampaignInstances,
   refreshConfirmedProxyFindForNames,
-  markProxyBrasilSessionReadyForSend,
 } from "./proxy/evo-instance-proxy.service";
+import {
+  classifyProxyBrasilConnection,
+  heldProxyBrasilInstanceNames,
+  instanceMaySendWithProxyBrasil,
+} from "./proxy/proxy-brasil-campaign.rules";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 import {
   WABA_CAMPAIGN_INTAKE_API_VERSION,
@@ -3022,6 +3028,8 @@ type DisparosCampaignLead = {
   shortUrl?: string;
   /** Preenchido quando status === "failed" (envio na mesma execução); leads antigos sem valor caem em send_error no relatório. */
   failureKind?: LeadFailureKind;
+  /** sendMedia já aceito neste lead — não reenviar imagem se o botão falhar. */
+  mediaMessageId?: string;
   createdAt: string;
   sentAt: string | null;
 };
@@ -3181,6 +3189,7 @@ function queuePersistDisparosLocalState(): void {
           messageText: l.messageText,
           shortUrl: l.shortUrl,
           failureKind: l.failureKind,
+          mediaMessageId: l.mediaMessageId,
           createdAt: l.createdAt,
           sentAt: l.sentAt,
         })),
@@ -3240,6 +3249,7 @@ async function loadDisparosLocalState(): Promise<void> {
         messageText: typeof l?.messageText === "string" ? l.messageText : undefined,
         shortUrl: typeof l?.shortUrl === "string" ? l.shortUrl : undefined,
         failureKind,
+        mediaMessageId: typeof l?.mediaMessageId === "string" ? l.mediaMessageId : undefined,
         createdAt: String(l?.createdAt || new Date().toISOString()),
         sentAt: l?.sentAt ? String(l.sentAt) : null,
       });
@@ -7206,6 +7216,7 @@ async function applyCampaignDisconnectedSwap(
       swapped.removedBlocked,
     );
   }
+  await reconcileProxyBrasilForLiveCampaign(campaign, swapped.removedBlocked);
   console.warn(
     `[Campanha] Troca de instâncias ${campaign.id}: saem ${swapped.removedBlocked.join(", ") || "—"} · entram ${swapped.added.join(", ")}`,
   );
@@ -8944,7 +8955,7 @@ async function sendEvoAlternativaUrlButtonMessage(input: {
   const url = `${EVO_API_BASE}/message/sendButtons/${encodeURIComponent(instanceName)}`;
   const result = await callEvoAction(url, "POST", payload, {
     timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 30_000),
-    retries: 1,
+    retries: 0,
   });
   if (result.ok && isGhostButtonsPayload(result.json ?? result.body)) {
     return {
@@ -9762,6 +9773,7 @@ async function runRegistrarQrcode(
   });
   const keepWarmthOnReconnect = reconnectPurge.hadPriorSessions === true;
   const rememberLifecycleAfterQr = async (createdNew: boolean) => {
+    await noteAquecedorInstanceReconnected(name);
     if (!createdNew) return;
     if (keepWarmthOnReconnect) {
       await ensureAquecedorInstanceRegistered(name);
@@ -9770,17 +9782,26 @@ async function runRegistrarQrcode(
     await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
   };
 
-  // Proxy ligado impede pareamento WhatsApp — exceto fluxo «Proxy Campanha».
+  // Proxy ligado impede pareamento WhatsApp — exceto Proxy Campanha ou chip já na campanha.
   const campaignProxy = input.campaignProxy === true;
+  const inLiveCampaign = heldProxyBrasilInstanceNames(
+    disparosCampaignsMemory.map((c) => ({
+      status: c.status,
+      selectedInstanceNames: Array.isArray(c.configSnapshot?.selectedDisparadorInstances)
+        ? c.configSnapshot.selectedDisparadorInstances
+        : [],
+    })),
+  ).some((n) => n.toLowerCase() === name.toLowerCase());
+  const keepCampaignProxy = campaignProxy || inLiveCampaign;
   try {
-    if (campaignProxy) {
+    if (keepCampaignProxy) {
       await applyProxyBrasilToEvoInstance(name, callEvoAction, EVO_API_BASE);
     } else {
       await disableProxyBrasilOnEvoInstance(name, callEvoAction, EVO_API_BASE);
     }
   } catch (err) {
     console.warn(
-      `[QR] ${name}: falha ao ${campaignProxy ? "aplicar" : "desligar"} proxy antes do QR:`,
+      `[QR] ${name}: falha ao ${keepCampaignProxy ? "aplicar" : "desligar"} proxy antes do QR:`,
       err,
     );
   }
@@ -13185,6 +13206,19 @@ async function pickDisparadorInstanceForConfig(
     }
     const live = await fetchEvoInstanceLiveState(name, { fresh: true });
     if (!isEvoLiveStateOpen(live)) continue;
+    if (loadProxyBrasilConfig()?.enabled) {
+      const proxyFind = await fetchEvoProxyFindEnabled(name, callEvoAction, EVO_API_BASE, {
+        timeoutMs: 6_000,
+        retries: 0,
+      });
+      const maySend = instanceMaySendWithProxyBrasil({
+        proxyConfigEnabled: true,
+        selectedInLiveCampaign: true,
+        connection: "open",
+        proxyFindEnabled: proxyFind,
+      });
+      if (!maySend.allowed) continue;
+    }
     const fromList = byName.get(name.toLowerCase());
     let numero = String(fromList?.numero || "").trim();
     if (!numero) {
@@ -13524,6 +13558,32 @@ function selectedInstanceNamesFromCampaign(campaign: { configSnapshot?: Disparos
   return Array.isArray(raw) ? raw.map((n) => String(n || "").trim()).filter(Boolean) : [];
 }
 
+function heldProxyBrasilNamesFromLiveCampaigns(): string[] {
+  return heldProxyBrasilInstanceNames(
+    disparosCampaignsMemory.map((c) => ({
+      status: c.status,
+      selectedInstanceNames: selectedInstanceNamesFromCampaign(c),
+    })),
+  );
+}
+
+async function reconcileProxyBrasilForLiveCampaign(
+  campaign: { configSnapshot?: DisparosConfig | null },
+  extraReleaseInstanceNames?: string[],
+  allowEnable = true,
+): Promise<void> {
+  if (!loadProxyBrasilConfig()?.enabled) return;
+  await reconcileProxyBrasilForCampaignInstances({
+    selectedInstanceNames: selectedInstanceNamesFromCampaign(campaign),
+    heldInstanceNames: heldProxyBrasilNamesFromLiveCampaigns(),
+    extraReleaseInstanceNames,
+    allowEnable,
+    callEvoAction,
+    evoApiBase: EVO_API_BASE,
+    prepareDeps: getProxyBrasilCampaignPrepareDeps(),
+  });
+}
+
 function queueReleaseProxyBrasilAfterCampaignEnd(endedCampaign: {
   id: string;
   configSnapshot?: DisparosConfig | null;
@@ -13688,10 +13748,26 @@ async function sendCampaignMessengerImageToEvo(input: {
     const media = `data:${mediaData.mimeType};base64,${mediaData.base64.replace(/\s+/g, "")}`;
     const result = await callEvoAction(sendUrl, "POST", { ...baseBody, media }, {
       timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 60000),
-      retries: 2,
+      retries: 0,
     });
     if (result.ok) {
       return { ok: true, json: result.json, status: result.status, body: String(result.body || "") };
+    }
+    // Timeout (HTTP 0): a Evolution pode ter aceito mesmo assim — não mandar de novo via URL.
+    if (result.status === 0) {
+      const maybeId = extractCampaignSendMessageId(result.json);
+      if (maybeId) {
+        console.warn(
+          "[Campanha] sendMedia base64 timeout mas messageId presente — trata como enviado (sem fallback URL):",
+          maybeId,
+        );
+        return { ok: true, json: result.json, status: 0, body: String(result.body || "timeout") };
+      }
+      console.warn(
+        "[Campanha] sendMedia base64 timeout/sem HTTP — não faz fallback URL (evita 2 imagens):",
+        String(result.body || "").slice(0, 160),
+      );
+      return { ok: false, json: result.json, status: 0, body: String(result.body || "timeout") };
     }
     console.warn(
       "[Campanha] sendMedia base64 falhou; tentando URL:",
@@ -13703,7 +13779,7 @@ async function sendCampaignMessengerImageToEvo(input: {
   const mediaUrl = buildCampaignMessengerMediaPublicUrl(input.image.id);
   const result = await callEvoAction(sendUrl, "POST", { ...baseBody, media: mediaUrl }, {
     timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 60000),
-    retries: 2,
+    retries: 0,
   });
   return {
     ok: result.ok,
@@ -13798,27 +13874,33 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
     }
 
     const proxyCfg = loadProxyBrasilConfig();
-    if (proxyCfg?.enabled && !isProxyBrasilSessionReadyForSend(instancePick.instancia)) {
+    if (proxyCfg?.enabled) {
+      const proxyFind = await fetchEvoProxyFindEnabled(
+        instancePick.instancia,
+        callEvoAction,
+        EVO_API_BASE,
+        { timeoutMs: 6_000, retries: 0 },
+      );
       const liveForReady = await fetchEvoInstanceLiveState(instancePick.instancia, { fresh: true });
-      if (isEvoLiveStateOpen(liveForReady)) {
-        // Memória de "ready" some no Redeploy. Não chamar proxy/set nem restart no meio do disparo.
-        markProxyBrasilSessionReadyForSend(instancePick.instancia, {
-          state: liveForReady,
-          reason: "open no disparo — sem proxy/set",
-        });
-      } else if (!String(liveForReady || "").trim()) {
+      const maySend = instanceMaySendWithProxyBrasil({
+        proxyConfigEnabled: true,
+        selectedInLiveCampaign: true,
+        connection: classifyProxyBrasilConnection(liveForReady),
+        proxyFindEnabled: proxyFind,
+      });
+      if (!maySend.allowed) {
         console.warn(
-          `[Campanha] Instância ${instancePick.instancia}: connectionState indisponível; segue o disparo sem pausar.`,
+          `[Campanha] envio bloqueado sem Proxy Brasil (${maySend.reason}):`,
+          instancePick.instancia,
         );
-      } else {
-        console.warn(
-          `[Campanha] Instância ${instancePick.instancia} sem sessão open (state=${liveForReady || "desconhecido"}). Sem proxy/set no disparo.`,
-        );
-        await pauseCampaignDueToProxyPrepareFailure(
-          campaignId,
-          `Instância ${instancePick.instancia} saiu de open (${liveForReady || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`,
-          { instanceName: instancePick.instancia, disableProxy: false },
-        );
+        if (maySend.reason === "not-open") {
+          const conn = classifyProxyBrasilConnection(liveForReady);
+          await pauseCampaignDueToProxyPrepareFailure(
+            campaignId,
+            `Instância ${instancePick.instancia} saiu de open (${liveForReady || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`,
+            { instanceName: instancePick.instancia, disableProxy: conn === "disconnected" },
+          );
+        }
         lead.status = "pending";
         return;
       }
@@ -13840,11 +13922,11 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         instancePick.instancia,
         instanceLiveState || "desconhecido",
       );
-      // Nunca rollback/restart no meio do disparo — gera conflict/device_removed e perde o número.
+      const conn = classifyProxyBrasilConnection(instanceLiveState);
       await pauseCampaignDueToProxyPrepareFailure(
         campaignId,
         `Instância ${instancePick.instancia} saiu de open durante o disparo (${instanceLiveState || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`,
-        { instanceName: instancePick.instancia, disableProxy: false },
+        { instanceName: instancePick.instancia, disableProxy: conn === "disconnected" },
       );
       lead.status = "pending";
       return;
@@ -13852,33 +13934,40 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
     const messengerImages = normalizeMessengerImagesConfig(campaign.configSnapshot.messengerImages);
     if (messengerImagesAreComplete(messengerImages)) {
-      const imageIdx = pickNextMessengerImageIndex(
-        campaignMessengerImageCursor,
-        campaign.id,
-        messengerImages.length,
-      );
-      const imageMeta = messengerImages[imageIdx];
-      const mediaSend = await sendCampaignMessengerImageToEvo({
-        instanceName: instancePick.instancia,
-        number: numero,
-        image: imageMeta,
-      });
-      if (!mediaSend.ok) {
-        console.error(
-          "[Campanha] EVO sendMedia falhou:",
-          mediaSend.status,
-          String(mediaSend.body || "").slice(0, 200),
-        );
-        await persistLeadFailed(lead, classifyEvoSendFailure(mediaSend.status, mediaSend.body));
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-        return;
-      }
-      const mediaMessageId = extractCampaignSendMessageId(mediaSend.json);
+      let mediaMessageId = String(lead.mediaMessageId || "").trim();
+      let imageMetaSlot = 0;
       if (!mediaMessageId) {
-        console.error("[Campanha] sendMedia sem messageId — não envia texto sem ACK da imagem:", lead.phone);
-        await persistLeadFailed(lead, "send_error");
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-        return;
+        const imageIdx = pickNextMessengerImageIndex(
+          campaignMessengerImageCursor,
+          campaign.id,
+          messengerImages.length,
+        );
+        const imageMeta = messengerImages[imageIdx];
+        imageMetaSlot = imageMeta.slot + 1;
+        const mediaSend = await sendCampaignMessengerImageToEvo({
+          instanceName: instancePick.instancia,
+          number: numero,
+          image: imageMeta,
+        });
+        if (!mediaSend.ok) {
+          console.error(
+            "[Campanha] EVO sendMedia falhou:",
+            mediaSend.status,
+            String(mediaSend.body || "").slice(0, 200),
+          );
+          await persistLeadFailed(lead, classifyEvoSendFailure(mediaSend.status, mediaSend.body));
+          scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+          return;
+        }
+        mediaMessageId = extractCampaignSendMessageId(mediaSend.json);
+        if (!mediaMessageId) {
+          console.error("[Campanha] sendMedia sem messageId — não envia texto sem ACK da imagem:", lead.phone);
+          await persistLeadFailed(lead, "send_error");
+          scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+          return;
+        }
+        lead.mediaMessageId = mediaMessageId;
+        queuePersistDisparosLocalState();
       }
       const mediaAck = await probeCampaignMessageAckStatus(instancePick.instancia, mediaMessageId, {
         maxAttempts: 10,
@@ -13886,7 +13975,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         requireDeviceDelivery: true,
       });
       console.info(
-        `[Campanha] ACK imagem slot=${imageMeta.slot + 1} ${instancePick.instancia} → ${lead.phone} msg=${mediaMessageId} status=${mediaAck.status}`,
+        `[Campanha] ACK imagem slot=${imageMetaSlot || "?"} ${instancePick.instancia} → ${lead.phone} msg=${mediaMessageId} status=${mediaAck.status}`,
       );
       if (isEvoAckFailure(mediaAck.status)) {
         console.error(
@@ -13894,18 +13983,31 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           mediaAck.status,
           lead.phone,
         );
+        lead.mediaMessageId = undefined;
         await persistLeadFailed(lead, "send_error");
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
         return;
       }
       if (!isEvoAckDeviceDelivered(mediaAck.status)) {
         console.warn(
-          "[Campanha] ACK imagem ainda não é DELIVERY_ACK; segue texto/botão (sendMedia HTTP ok):",
+          "[Campanha] ACK imagem ainda não é DELIVERY_ACK — não envia botão/texto:",
           mediaAck.status,
           lead.phone,
         );
+        lead.status = "pending";
+        queuePersistDisparosLocalState();
+        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+        return;
       }
       await sleepCampaignMs(800);
+    } else if (isAlternativaMotor) {
+      console.warn(
+        "[Campanha Alternativa] Sem 4 imagens 1080×1080 no snapshot — não envia texto sem imagem:",
+        campaign.id,
+      );
+      lead.status = "pending";
+      scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+      return;
     } else {
       console.warn(
         "[Campanha] Sem 4 imagens 1080×1080 no snapshot — enviando apenas texto:",
@@ -14005,6 +14107,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           ghost ? "viewOnce" : String(buttonResult.body || "").slice(0, 180),
         );
         lead.status = "pending";
+        queuePersistDisparosLocalState();
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
         return;
       }
@@ -14013,6 +14116,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         "[Campanha Alternativa] sem URL do botão; lead pending — não envia texto sem botão.",
       );
       lead.status = "pending";
+      queuePersistDisparosLocalState();
       scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
       return;
     } else {
@@ -14036,6 +14140,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
     const sentIso = new Date().toISOString();
     lead.status = "sent";
+    lead.mediaMessageId = undefined;
     lead.messageText = usedUrlButton
       ? `${deliveredText}\n[Botão: ${buttonLabel}]`
       : deliveredText;
@@ -14104,6 +14209,7 @@ async function runCampaignDispatchTick(): Promise<void> {
       await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
+    await reconcileProxyBrasilForLiveCampaign(c, undefined, false);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
     if (health.needsMoreInstancesForMinimum) {
       c.status = "paused";
@@ -14145,6 +14251,7 @@ async function runCampaignDispatchTick(): Promise<void> {
       await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
+    await reconcileProxyBrasilForLiveCampaign(c, undefined, false);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
     if (health.needsMoreInstancesForMinimum) continue;
     console.warn(
@@ -15165,16 +15272,27 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
             .filter(Boolean)
         : [];
       if (selectedForProxy.length && loadProxyBrasilConfig()?.enabled) {
-        // Ativar não faz proxy/set nem restart — isso derruba o pareamento (campanha Seguradoras).
-        // A Proxy já foi ligada na seleção/criação. Só marca ready se a sessão já está open.
+        await prepareProxyBrasilForCampaignInstancesNow(selectedForProxy);
+        let anyReady = false;
         for (const rawName of selectedForProxy) {
-          const live = await fetchEvoInstanceLiveState(rawName);
-          if (isEvoLiveStateOpen(live)) {
-            markProxyBrasilSessionReadyForSend(rawName, {
-              state: live,
-              reason: "ativar campanha — sessão open, sem proxy/set",
-            });
-          }
+          const live = await fetchEvoInstanceLiveState(rawName, { fresh: true });
+          const proxyFind = await fetchEvoProxyFindEnabled(rawName, callEvoAction, EVO_API_BASE, {
+            timeoutMs: 8_000,
+            retries: 0,
+          });
+          const maySend = instanceMaySendWithProxyBrasil({
+            proxyConfigEnabled: true,
+            selectedInLiveCampaign: true,
+            connection: classifyProxyBrasilConnection(live),
+            proxyFindEnabled: proxyFind,
+          });
+          if (maySend.allowed) anyReady = true;
+        }
+        if (!anyReady) {
+          return res.status(409).json({
+            error:
+              "Nenhuma instância selecionada está conectada com Proxy Brasil ligada. Reconecte no Aquecedor com Proxy Campanha e tente Ativar de novo.",
+          });
         }
       }
     }

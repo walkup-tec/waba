@@ -1,5 +1,19 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-26 17:49 — Campanha: imagem única + ACK + pausa humana pós-QR
+- `sendMedia`/`sendButtons` sem retry; timeout não duplica imagem via URL
+- Botão só após `DELIVERY_ACK`; `mediaMessageId` evita segundo `sendMedia`
+- QR de chip em campanha não desliga Proxy; 20 min sem pausa humana após reconectar
+- Inclui regra Proxy Brasil (envio só com `/proxy/find` enabled)
+- Marker `DEPLOY-2026-08-26-campanha-imagem-ack-pausa-qr`
+- LOG: `doc/LOG-2026-08-26__174900__campanha-imagem-ack-pausa-qr.md`
+
+## 2026-08-26 17:25 — Proxy Brasil: não envia sem proxy; desliga fora da campanha
+- Envio só com instância selecionada, `open` e `/proxy/find` enabled
+- Liga na criação, na troca (quem entra) e no Ativar; tick só desliga desconectada/fora da seleção
+- Marker `DEPLOY-2026-08-26-proxy-brasil-regra-envio`
+- LOG: `doc/LOG-2026-08-26__172500__proxy-brasil-regra-envio.md`
+
 ## 2026-08-26 14:28 — Alternativa: newline real + botão sem corte
 - `\n` literal vira quebra de linha; `1) 2) 3)` cada item na sua linha
 - Rótulo custom >15 caracteres cai na allowlist (WhatsApp corta texto de 20)

@@ -1,4 +1,14 @@
 import { loadProxyBrasilConfig, type ProxyBrasilResolved } from "./proxy-brasil.config";
+import {
+  classifyProxyBrasilConnection,
+  shouldDisableProxyBrasil,
+  shouldEnableProxyBrasil,
+} from "./proxy-brasil-campaign.rules";
+
+export {
+  campaignStatusHoldsProxyBrasil,
+  instanceNamesToReleaseAfterCampaignEnd,
+} from "./proxy-brasil-campaign.rules";
 
 export type EvoProxySetResult = {
   ok: boolean;
@@ -144,6 +154,15 @@ export function areAllInstanceNamesProxyConfirmedEnabled(instanceNames: string[]
   const names = normalizeInstanceNameList(instanceNames);
   if (!names.length) return false;
   return names.every((n) => getConfirmedProxyFind(n) === true);
+}
+
+export async function fetchEvoProxyFindEnabled(
+  instanceName: string,
+  callEvoAction: CallEvoAction,
+  evoApiBase: string,
+  opts?: { timeoutMs?: number; retries?: number },
+): Promise<boolean | null> {
+  return fetchEvoProxyEnabled(instanceName, callEvoAction, evoApiBase, opts);
 }
 
 async function fetchEvoProxyEnabled(
@@ -367,12 +386,11 @@ export function clearProxyBrasilSessionPrepareStatus(instanceName: string): void
   if (key) prepareStatusByInstance.delete(key);
 }
 
-/** Proxy global off → envio liberado. Proxy on → só após prepare ready. */
+/** Proxy global off → envio liberado. Proxy on → só com `/proxy/find` enabled. */
 export function isProxyBrasilSessionReadyForSend(instanceName: string): boolean {
   const cfg = loadProxyBrasilConfig();
   if (!cfg?.enabled) return true;
-  const entry = getProxyBrasilSessionPrepareStatus(instanceName);
-  return entry?.status === "ready";
+  return getConfirmedProxyFind(instanceName) === true;
 }
 
 /** Marca pronta sem restart (sessão já open no EVO). Usado no disparo para não derrubar Baileys. */
@@ -805,18 +823,103 @@ export function queueApplyProxyBrasilToInstances(
   })();
 }
 
-/** Campanha ainda “segura” a Proxy (selecionada e não encerrada). */
-export function campaignStatusHoldsProxyBrasil(status: string): boolean {
-  const s = String(status || "").trim().toLowerCase();
-  return s === "running" || s === "paused";
-}
+const lastProxyEnableAt = new Map<string, number>();
+const PROXY_ENABLE_COOLDOWN_MS = 120_000;
 
-export function instanceNamesToReleaseAfterCampaignEnd(
-  endingSelected: string[],
-  otherLiveSelected: string[],
-): string[] {
-  const held = new Set(normalizeInstanceNameList(otherLiveSelected).map((n) => n.toLowerCase()));
-  return normalizeInstanceNameList(endingSelected).filter((n) => !held.has(n.toLowerCase()));
+/**
+ * Liga Proxy nas selecionadas `open` sem `/proxy/find` enabled.
+ * Desliga nas desconectadas confirmadas ou nas que saíram da seleção (held).
+ */
+export async function reconcileProxyBrasilForCampaignInstances(opts: {
+  selectedInstanceNames: string[];
+  heldInstanceNames: string[];
+  extraReleaseInstanceNames?: string[];
+  allowEnable?: boolean;
+  callEvoAction: CallEvoAction;
+  evoApiBase: string;
+  prepareDeps?: Omit<ProxyBrasilPrepareDeps, "callEvoAction" | "evoApiBase">;
+}): Promise<{ enabled: string[]; disabled: string[] }> {
+  const enabled: string[] = [];
+  const disabled: string[] = [];
+  const cfg = loadProxyBrasilConfig();
+  if (!cfg?.enabled) return { enabled, disabled };
+
+  const selected = normalizeInstanceNameList(opts.selectedInstanceNames);
+  const extra = normalizeInstanceNameList(opts.extraReleaseInstanceNames || []);
+  const heldLower = new Set(
+    normalizeInstanceNameList(opts.heldInstanceNames).map((n) => n.toLowerCase()),
+  );
+  const names = normalizeInstanceNameList([...selected, ...extra]);
+  const fetchLive = opts.prepareDeps?.fetchLiveState;
+
+  for (const name of names) {
+    const inHeld = heldLower.has(name.toLowerCase());
+    let live = "";
+    if (fetchLive) {
+      try {
+        live = await fetchLive(name, { fresh: true });
+      } catch {
+        live = "";
+      }
+    }
+    const connection = classifyProxyBrasilConnection(live);
+    let find: boolean | null = getConfirmedProxyFind(name);
+    if (find === null) {
+      find = await fetchEvoProxyEnabled(name, opts.callEvoAction, opts.evoApiBase, {
+        timeoutMs: 6_000,
+        retries: 0,
+      });
+    }
+
+    if (
+      opts.allowEnable !== false &&
+      shouldEnableProxyBrasil({
+        selectedInLiveCampaign: inHeld,
+        connection,
+        proxyFindEnabled: find,
+      })
+    ) {
+      const key = prepareKey(name);
+      const last = lastProxyEnableAt.get(key) || 0;
+      if (Date.now() - last < PROXY_ENABLE_COOLDOWN_MS) continue;
+      lastProxyEnableAt.set(key, Date.now());
+      try {
+        if (opts.prepareDeps) {
+          await prepareProxyBrasilSessionForCampaignSend(name, {
+            callEvoAction: opts.callEvoAction,
+            evoApiBase: opts.evoApiBase,
+            ...opts.prepareDeps,
+          });
+        } else {
+          await applyProxyBrasilToEvoInstance(name, opts.callEvoAction, opts.evoApiBase, {
+            config: cfg,
+          });
+        }
+        enabled.push(name);
+      } catch (err: any) {
+        console.warn(`[ProxyBrasil] reconcile enable falhou em ${name}:`, err?.message || err);
+      }
+      continue;
+    }
+
+    if (
+      shouldDisableProxyBrasil({
+        selectedInLiveCampaign: inHeld,
+        connection,
+      }) &&
+      find !== false
+    ) {
+      try {
+        await disableProxyBrasilOnEvoInstance(name, opts.callEvoAction, opts.evoApiBase);
+        prepareStatusByInstance.delete(prepareKey(name));
+        disabled.push(name);
+      } catch (err: any) {
+        console.warn(`[ProxyBrasil] reconcile disable falhou em ${name}:`, err?.message || err);
+      }
+    }
+  }
+
+  return { enabled, disabled };
 }
 
 export function queueDisableProxyBrasilOnInstances(
