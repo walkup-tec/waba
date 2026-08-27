@@ -49370,12 +49370,14 @@
                     0,
                     Math.floor(Number(health?.spareConnectedForSwap) || 0)
                   );
+                  const spare2102Available = item?.spare2102Available === true;
                   const showAddInstances =
                     !isFinished &&
                     (needsMoreInstancesForMinimum ||
                       shouldPauseByDisconnectedRatio ||
-                      disconnectedCount > 0) &&
-                    (spareConnectedForSwap === 0 || !isRunning);
+                      disconnectedCount > 0 ||
+                      spare2102Available) &&
+                    (spareConnectedForSwap === 0 || !isRunning || spare2102Available);
                   const minConnectedRequired = Math.max(
                     1,
                     Math.floor(Number(health?.minConnectedRequired) || 1)

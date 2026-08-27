@@ -322,6 +322,7 @@ export class WabaInstanceOwnershipService {
 
     const email = normalizeEmail(auth.email);
     if (!email.includes("@")) return [];
+    if (auth.role === "master" || isWabaMasterEmail(email)) return items;
 
     const store = await this.loadStore();
     return items.filter((item) => {
@@ -343,6 +344,9 @@ export class WabaInstanceOwnershipService {
     }
 
     const email = normalizeEmail(auth.email);
+    if (auth.role === "master" || isWabaMasterEmail(email)) {
+      return new Set(names.map((n) => normalizeInstanceName(n)).filter(Boolean));
+    }
     const store = await this.loadStore();
     const allowed = new Set<string>();
     for (const name of names) {

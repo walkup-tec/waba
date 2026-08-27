@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 11:45 — Botão + Instâncias inclui 5197462102
+- POST auto inclui `walkup`/2102 mesmo com chips verdes; lista Evolution sem filtro de dono
+- Master vê todas as instâncias no filtro de ownership
+- Botão permanece visível com campanha em execução se o 2102 estiver `open` e fora da seleção
+- Marker: `DEPLOY-2026-08-27-botao-instancias-2102`
+- LOG: `doc/LOG-2026-08-27__114500__botao-instancias-2102.md`
+
 ## 2026-08-27 11:12 — Campanha: incluir 5197462102 (walkup)
 - Tick coloca EVO `walkup` / `5197462102` na campanha `running`/`paused` sem exigir chip vermelho
 - Liga Disparador, libera pausa humana e Proxy no que entra
