@@ -1,16 +1,14 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
-<<<<<<< HEAD
-## 2026-08-27 13:40 — + Instâncias reconhece WB-2102
-- Alias/telefone entram na identidade; clique confirma connectionState
-- Marker: `DEPLOY-2026-08-27-botao-instancias-alias`
-- LOG: `doc/LOG-2026-08-27__134000__botao-instancias-alias-wb-2102.md`
-=======
 ## 2026-08-27 14:00 — Laboratório só para Mozart em produção
 - Seção Laboratório (Conexão, Inbox, Templates, Automação) some para walkup e quantumivst
 - Permanece só em `mozart.pmo@gmail.com` no perfil production
 - LOG: `doc/LOG-2026-08-27__140000__laboratorio-so-mozart-producao.md`
->>>>>>> f0421ad (fix(menu): Laboratório só para Mozart em produção)
+
+## 2026-08-27 13:40 — + Instâncias reconhece WB-2102
+- Alias/telefone entram na identidade; clique confirma connectionState
+- Marker: `DEPLOY-2026-08-27-botao-instancias-alias`
+- LOG: `doc/LOG-2026-08-27__134000__botao-instancias-alias-wb-2102.md`
 
 ## 2026-08-27 12:48 — Botão + Instâncias genérico
 - Clique inclui qualquer EVO `open` que ainda não está na campanha
