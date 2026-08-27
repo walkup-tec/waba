@@ -5963,32 +5963,124 @@ async function persistCampaignSelectedInstances(campaign, selected) {
     }
     queuePersistDisparosLocalState();
 }
-function listConnectedSpareEvoNames(exceptCampaignId, selectedNames, evoRows, maxToAdd = 20) {
-    const selectedKeys = new Set();
+function evoRowIdentityKeys(row) {
+    const out = new Set();
+    const instanceKey = String(row.instanceKey || "").trim().toLowerCase();
+    const displayName = String(row.displayName || "").trim().toLowerCase();
+    if (instanceKey)
+        out.add(instanceKey);
+    if (displayName)
+        out.add(displayName);
+    for (const k of row.nameKeys || []) {
+        const n = String(k || "").trim().toLowerCase();
+        if (n)
+            out.add(n);
+    }
+    for (const d of row.digitKeys || []) {
+        const digits = String(d || "").trim();
+        if (digits.length >= 8)
+            out.add(`d:${digits}`);
+    }
+    return out;
+}
+function campaignSelectionIdentityKeys(selectedNames, evoRows) {
+    const out = new Set();
     for (const raw of selectedNames) {
         const n = String(raw || "").trim();
         if (!n)
             continue;
-        selectedKeys.add(n.toLowerCase());
+        out.add(n.toLowerCase());
         const resolved = resolveStoredNameToEvoTag(n, evoRows);
         const key = String(resolved.instanceKey || n).trim().toLowerCase();
+        const display = String(resolved.displayName || "").trim().toLowerCase();
         if (key)
-            selectedKeys.add(key);
-    }
-    const heldOther = new Set(heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId).map((n) => n.toLowerCase()));
-    const out = [];
-    for (const row of evoRows) {
-        const name = String(row.instanceKey || "").trim();
-        const key = name.toLowerCase();
-        if (!name || row.connected !== true)
+            out.add(key);
+        if (display)
+            out.add(display);
+        const row = evoRows.find((r) => String(r.instanceKey || "").trim().toLowerCase() === key);
+        if (!row)
             continue;
-        if (selectedKeys.has(key) || heldOther.has(key))
+        for (const id of evoRowIdentityKeys(row))
+            out.add(id);
+    }
+    return out;
+}
+function evoRowIsInIdentity(row, identity) {
+    for (const id of evoRowIdentityKeys(row)) {
+        if (identity.has(id))
+            return true;
+    }
+    return false;
+}
+function listSpareEvoRowsNotInCampaign(exceptCampaignId, selectedNames, evoRows) {
+    const identity = campaignSelectionIdentityKeys(selectedNames, evoRows);
+    const heldRaw = heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId);
+    const heldIdentity = campaignSelectionIdentityKeys(heldRaw, evoRows);
+    return evoRows.filter((row) => {
+        const name = String(row.instanceKey || "").trim();
+        if (!name)
+            return false;
+        if (evoRowIsInIdentity(row, identity))
+            return false;
+        if (evoRowIsInIdentity(row, heldIdentity))
+            return false;
+        return true;
+    });
+}
+function listConnectedSpareEvoNames(exceptCampaignId, selectedNames, evoRows, maxToAdd = 20) {
+    const out = [];
+    for (const row of listSpareEvoRowsNotInCampaign(exceptCampaignId, selectedNames, evoRows)) {
+        const name = String(row.instanceKey || "").trim();
+        const alias = String(row.displayName || "").trim();
+        const hasAlias = Boolean(alias) && alias.toLowerCase() !== name.toLowerCase();
+        if (row.connected !== true && !hasAlias)
             continue;
         out.push(name);
         if (out.length >= maxToAdd)
             break;
     }
     return out;
+}
+async function resolveLiveSpareEvoNames(exceptCampaignId, selectedNames, evoRows, maxToAdd = 20) {
+    const candidates = listSpareEvoRowsNotInCampaign(exceptCampaignId, selectedNames, evoRows);
+    candidates.sort((a, b) => {
+        const aName = String(a.instanceKey || "").trim();
+        const bName = String(b.instanceKey || "").trim();
+        const aAlias = String(a.displayName || "").trim().toLowerCase() !== aName.toLowerCase() ? 0 : 1;
+        const bAlias = String(b.displayName || "").trim().toLowerCase() !== bName.toLowerCase() ? 0 : 1;
+        if (aAlias !== bAlias)
+            return aAlias - bAlias;
+        if (Boolean(a.connected) === Boolean(b.connected))
+            return 0;
+        return a.connected ? -1 : 1;
+    });
+    if (!candidates.length || maxToAdd <= 0)
+        return [];
+    const confirmed = [];
+    const concurrency = 6;
+    for (let i = 0; i < candidates.length && confirmed.length < maxToAdd; i += concurrency) {
+        const chunk = candidates.slice(i, i + concurrency);
+        const states = await Promise.all(chunk.map(async (row) => {
+            const name = String(row.instanceKey || "").trim();
+            if (row.connected === true)
+                return { name, open: true };
+            try {
+                const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
+                return { name, open: (0, evo_connection_state_service_1.isEvoLiveStateOpen)(live) };
+            }
+            catch {
+                return { name, open: false };
+            }
+        }));
+        for (const item of states) {
+            if (!item.open || !item.name)
+                continue;
+            confirmed.push(item.name);
+            if (confirmed.length >= maxToAdd)
+                break;
+        }
+    }
+    return confirmed;
 }
 async function persistIncomingCampaignInstances(campaign, incoming, evoRows) {
     const prevSelected = selectedInstanceNamesFromCampaign(campaign);
@@ -13469,7 +13561,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         let incoming = [];
         if (auto) {
             const pickLimit = Math.max(instancesToAdd, 1);
-            incoming = listConnectedSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
+            incoming = await resolveLiveSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
             if (!incoming.length) {
                 return res.status(409).json({
                     error: disconnectedNames.length

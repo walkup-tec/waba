@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 13:40 — + Instâncias reconhece WB-2102
+- Alias/telefone entram na identidade; clique confirma connectionState
+- Marker: `DEPLOY-2026-08-27-botao-instancias-alias`
+- LOG: `doc/LOG-2026-08-27__134000__botao-instancias-alias-wb-2102.md`
+
 ## 2026-08-27 12:48 — Botão + Instâncias genérico
 - Clique inclui qualquer EVO `open` que ainda não está na campanha
 - Não exige chip vermelho nem o número 2102

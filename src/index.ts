@@ -7268,34 +7268,126 @@ async function persistCampaignSelectedInstances(
   queuePersistDisparosLocalState();
 }
 
+function evoRowIdentityKeys(row: EvoInstanceTagRow): Set<string> {
+  const out = new Set<string>();
+  const instanceKey = String(row.instanceKey || "").trim().toLowerCase();
+  const displayName = String(row.displayName || "").trim().toLowerCase();
+  if (instanceKey) out.add(instanceKey);
+  if (displayName) out.add(displayName);
+  for (const k of row.nameKeys || []) {
+    const n = String(k || "").trim().toLowerCase();
+    if (n) out.add(n);
+  }
+  for (const d of row.digitKeys || []) {
+    const digits = String(d || "").trim();
+    if (digits.length >= 8) out.add(`d:${digits}`);
+  }
+  return out;
+}
+
+function campaignSelectionIdentityKeys(
+  selectedNames: string[],
+  evoRows: EvoInstanceTagRow[],
+): Set<string> {
+  const out = new Set<string>();
+  for (const raw of selectedNames) {
+    const n = String(raw || "").trim();
+    if (!n) continue;
+    out.add(n.toLowerCase());
+    const resolved = resolveStoredNameToEvoTag(n, evoRows);
+    const key = String(resolved.instanceKey || n).trim().toLowerCase();
+    const display = String(resolved.displayName || "").trim().toLowerCase();
+    if (key) out.add(key);
+    if (display) out.add(display);
+    const row = evoRows.find((r) => String(r.instanceKey || "").trim().toLowerCase() === key);
+    if (!row) continue;
+    for (const id of evoRowIdentityKeys(row)) out.add(id);
+  }
+  return out;
+}
+
+function evoRowIsInIdentity(row: EvoInstanceTagRow, identity: Set<string>): boolean {
+  for (const id of evoRowIdentityKeys(row)) {
+    if (identity.has(id)) return true;
+  }
+  return false;
+}
+
+function listSpareEvoRowsNotInCampaign(
+  exceptCampaignId: string | undefined,
+  selectedNames: string[],
+  evoRows: EvoInstanceTagRow[],
+): EvoInstanceTagRow[] {
+  const identity = campaignSelectionIdentityKeys(selectedNames, evoRows);
+  const heldRaw = heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId);
+  const heldIdentity = campaignSelectionIdentityKeys(heldRaw, evoRows);
+  return evoRows.filter((row) => {
+    const name = String(row.instanceKey || "").trim();
+    if (!name) return false;
+    if (evoRowIsInIdentity(row, identity)) return false;
+    if (evoRowIsInIdentity(row, heldIdentity)) return false;
+    return true;
+  });
+}
+
 function listConnectedSpareEvoNames(
   exceptCampaignId: string | undefined,
   selectedNames: string[],
   evoRows: EvoInstanceTagRow[],
   maxToAdd = 20,
 ): string[] {
-  const selectedKeys = new Set<string>();
-  for (const raw of selectedNames) {
-    const n = String(raw || "").trim();
-    if (!n) continue;
-    selectedKeys.add(n.toLowerCase());
-    const resolved = resolveStoredNameToEvoTag(n, evoRows);
-    const key = String(resolved.instanceKey || n).trim().toLowerCase();
-    if (key) selectedKeys.add(key);
-  }
-  const heldOther = new Set(
-    heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId).map((n) => n.toLowerCase()),
-  );
   const out: string[] = [];
-  for (const row of evoRows) {
+  for (const row of listSpareEvoRowsNotInCampaign(exceptCampaignId, selectedNames, evoRows)) {
     const name = String(row.instanceKey || "").trim();
-    const key = name.toLowerCase();
-    if (!name || row.connected !== true) continue;
-    if (selectedKeys.has(key) || heldOther.has(key)) continue;
+    const alias = String(row.displayName || "").trim();
+    const hasAlias = Boolean(alias) && alias.toLowerCase() !== name.toLowerCase();
+    if (row.connected !== true && !hasAlias) continue;
     out.push(name);
     if (out.length >= maxToAdd) break;
   }
   return out;
+}
+
+async function resolveLiveSpareEvoNames(
+  exceptCampaignId: string | undefined,
+  selectedNames: string[],
+  evoRows: EvoInstanceTagRow[],
+  maxToAdd = 20,
+): Promise<string[]> {
+  const candidates = listSpareEvoRowsNotInCampaign(exceptCampaignId, selectedNames, evoRows);
+  candidates.sort((a, b) => {
+    const aName = String(a.instanceKey || "").trim();
+    const bName = String(b.instanceKey || "").trim();
+    const aAlias = String(a.displayName || "").trim().toLowerCase() !== aName.toLowerCase() ? 0 : 1;
+    const bAlias = String(b.displayName || "").trim().toLowerCase() !== bName.toLowerCase() ? 0 : 1;
+    if (aAlias !== bAlias) return aAlias - bAlias;
+    if (Boolean(a.connected) === Boolean(b.connected)) return 0;
+    return a.connected ? -1 : 1;
+  });
+  if (!candidates.length || maxToAdd <= 0) return [];
+  const confirmed: string[] = [];
+  const concurrency = 6;
+  for (let i = 0; i < candidates.length && confirmed.length < maxToAdd; i += concurrency) {
+    const chunk = candidates.slice(i, i + concurrency);
+    const states = await Promise.all(
+      chunk.map(async (row) => {
+        const name = String(row.instanceKey || "").trim();
+        if (row.connected === true) return { name, open: true };
+        try {
+          const live = await fetchEvoInstanceLiveState(name, { fresh: true });
+          return { name, open: isEvoLiveStateOpen(live) };
+        } catch {
+          return { name, open: false };
+        }
+      }),
+    );
+    for (const item of states) {
+      if (!item.open || !item.name) continue;
+      confirmed.push(item.name);
+      if (confirmed.length >= maxToAdd) break;
+    }
+  }
+  return confirmed;
 }
 
 async function persistIncomingCampaignInstances(
@@ -15701,7 +15793,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
     let incoming: string[] = [];
     if (auto) {
       const pickLimit = Math.max(instancesToAdd, 1);
-      incoming = listConnectedSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
+      incoming = await resolveLiveSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
       if (!incoming.length) {
         return res.status(409).json({
           error: disconnectedNames.length
