@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 12:48 — Botão + Instâncias genérico
+- Clique inclui qualquer EVO `open` que ainda não está na campanha
+- Não exige chip vermelho nem o número 2102
+- Marker: `DEPLOY-2026-08-27-botao-instancias-generico`
+- LOG: `doc/LOG-2026-08-27__124800__botao-instancias-generico.md`
+
 ## 2026-08-27 12:10 — Botão + Instâncias grava 2102 na hora
 - POST não espera connectionState de todas as EVO nem reconcile de Proxy
 - Grava `walkup`/2102 na seleção e responde; Proxy em fila

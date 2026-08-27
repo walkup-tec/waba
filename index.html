@@ -49370,14 +49370,12 @@
                     0,
                     Math.floor(Number(health?.spareConnectedForSwap) || 0)
                   );
-                  const spare2102Available = item?.spare2102Available === true;
                   const showAddInstances =
                     !isFinished &&
                     (needsMoreInstancesForMinimum ||
                       shouldPauseByDisconnectedRatio ||
                       disconnectedCount > 0 ||
-                      spare2102Available) &&
-                    (spareConnectedForSwap === 0 || !isRunning || spare2102Available);
+                      spareConnectedForSwap > 0);
                   const minConnectedRequired = Math.max(
                     1,
                     Math.floor(Number(health?.minConnectedRequired) || 1)
@@ -57689,7 +57687,7 @@
           btn.setAttribute("aria-busy", "true");
           btn.style.pointerEvents = "none";
           btn.textContent = "Trocando…";
-          showToast("Incluindo o 5197462102 na campanha…", "success", 2800);
+          showToast("Incluindo instância conectada na campanha…", "success", 2800);
           try {
             await addInstancesToCampaign(id);
           } catch (err) {

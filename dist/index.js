@@ -5963,6 +5963,79 @@ async function persistCampaignSelectedInstances(campaign, selected) {
     }
     queuePersistDisparosLocalState();
 }
+function listConnectedSpareEvoNames(exceptCampaignId, selectedNames, evoRows, maxToAdd = 20) {
+    const selectedKeys = new Set();
+    for (const raw of selectedNames) {
+        const n = String(raw || "").trim();
+        if (!n)
+            continue;
+        selectedKeys.add(n.toLowerCase());
+        const resolved = resolveStoredNameToEvoTag(n, evoRows);
+        const key = String(resolved.instanceKey || n).trim().toLowerCase();
+        if (key)
+            selectedKeys.add(key);
+    }
+    const heldOther = new Set(heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId).map((n) => n.toLowerCase()));
+    const out = [];
+    for (const row of evoRows) {
+        const name = String(row.instanceKey || "").trim();
+        const key = name.toLowerCase();
+        if (!name || row.connected !== true)
+            continue;
+        if (selectedKeys.has(key) || heldOther.has(key))
+            continue;
+        out.push(name);
+        if (out.length >= maxToAdd)
+            break;
+    }
+    return out;
+}
+async function persistIncomingCampaignInstances(campaign, incoming, evoRows) {
+    const prevSelected = selectedInstanceNamesFromCampaign(campaign);
+    for (const name of incoming) {
+        try {
+            await (0, aquecedor_instance_lifecycle_service_1.clearAquecedorHumanPause)(name);
+        }
+        catch {
+            /* não bloqueia a inclusão */
+        }
+        try {
+            const usageMap = await loadInstanceUsageMap();
+            const current = getInstanceUsageFromMap(usageMap, name);
+            await persistInstanceUsage([
+                {
+                    instanceName: name,
+                    useAquecedor: current?.useAquecedor !== false,
+                    useDisparador: true,
+                },
+            ]);
+        }
+        catch {
+            /* não bloqueia a inclusão */
+        }
+    }
+    const swapped = mergeCampaignInstancesReplacingBlocked({
+        prevSelected,
+        incoming,
+        evoRows,
+    });
+    const nextSelected = swapped.added.length
+        ? swapped.selected
+        : Array.from(new Set([...prevSelected, ...incoming.map((n) => String(n || "").trim()).filter(Boolean)]));
+    const added = swapped.added.length
+        ? swapped.added
+        : incoming.filter((n) => {
+            const key = String(n || "").trim().toLowerCase();
+            return key && !prevSelected.some((p) => p.toLowerCase() === key);
+        });
+    if (!added.length) {
+        return { added: [], removedBlocked: swapped.removedBlocked, selected: prevSelected };
+    }
+    await persistCampaignSelectedInstances(campaign, nextSelected);
+    queueProxyBrasilPrepareForCampaignInstances(added);
+    console.warn(`[Campanha] ${campaign.id}: entram ${added.join(", ")}${swapped.removedBlocked.length ? ` · saem ${swapped.removedBlocked.join(", ")}` : ""}.`);
+    return { added, removedBlocked: swapped.removedBlocked, selected: nextSelected };
+}
 async function applyCampaignDisconnectedSwap(campaign, incoming, evoRows) {
     const prevSelected = Array.isArray(campaign.configSnapshot?.selectedDisparadorInstances)
         ? campaign.configSnapshot.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
@@ -11726,63 +11799,6 @@ async function releaseHumanPauseForSelectedCampaignInstances(campaign) {
     if (usagePatches.length)
         await persistInstanceUsage(usagePatches);
 }
-/** 5197462102 = EVO `walkup`. */
-function resolveWalkup2102EvoName(evoRows) {
-    const byPhone = resolveStoredNameToEvoTag("5197462102", evoRows);
-    const fromPhone = String(byPhone.instanceKey || "").trim();
-    if (fromPhone)
-        return fromPhone;
-    const walkupRow = evoRows.find((r) => String(r.instanceKey || "").trim().toLowerCase() === "walkup");
-    return String(walkupRow?.instanceKey || "").trim();
-}
-function campaignSelectionHasEvoName(selected, evoName, evoRows) {
-    const target = String(evoName || "").trim().toLowerCase();
-    if (!target)
-        return false;
-    return selected.some((n) => {
-        const resolved = resolveStoredNameToEvoTag(n, evoRows);
-        return String(resolved.instanceKey || n || "").trim().toLowerCase() === target;
-    });
-}
-/** 5197462102 = EVO `walkup`. Entra na campanha em execução mesmo sem chip vermelho. */
-async function tryIncludeSpare5197462102InLiveCampaign(campaign, evoRows) {
-    const selected = selectedInstanceNamesFromCampaign(campaign);
-    const evoName = resolveWalkup2102EvoName(evoRows);
-    if (!evoName)
-        return false;
-    if (campaignSelectionHasEvoName(selected, evoName, evoRows))
-        return true;
-    try {
-        await (0, aquecedor_instance_lifecycle_service_1.clearAquecedorHumanPause)(evoName);
-    }
-    catch {
-        /* não bloqueia a inclusão */
-    }
-    try {
-        const usageMap = await loadInstanceUsageMap();
-        const current = getInstanceUsageFromMap(usageMap, evoName);
-        await persistInstanceUsage([
-            {
-                instanceName: evoName,
-                useAquecedor: current?.useAquecedor !== false,
-                useDisparador: true,
-            },
-        ]);
-    }
-    catch {
-        /* não bloqueia a inclusão */
-    }
-    const swapped = mergeCampaignInstancesReplacingBlocked({
-        prevSelected: selected,
-        incoming: [evoName],
-        evoRows,
-    });
-    const nextSelected = swapped.added.length ? swapped.selected : [...selected, evoName];
-    await persistCampaignSelectedInstances(campaign, nextSelected);
-    queueProxyBrasilPrepareForCampaignInstances([evoName]);
-    console.warn(`[Campanha] ${campaign.id}: 5197462102 (${evoName}) gravado na seleção${swapped.removedBlocked.length ? ` · saem ${swapped.removedBlocked.join(", ")}` : ""}.`);
-    return true;
-}
 function heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId) {
     return (0, proxy_brasil_campaign_rules_1.namesHeldByUnfinishedCampaigns)(disparosCampaignsMemory.map((c) => ({
         id: c.id,
@@ -12317,7 +12333,6 @@ async function runCampaignDispatchTick() {
             await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
-        await tryIncludeSpare5197462102InLiveCampaign(c, evoRows);
         liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
         await releaseHumanPauseForSelectedCampaignInstances(c);
@@ -12363,7 +12378,6 @@ async function runCampaignDispatchTick() {
             await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
-        await tryIncludeSpare5197462102InLiveCampaign(c, evoRows);
         liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
         await releaseHumanPauseForSelectedCampaignInstances(c);
@@ -12868,14 +12882,11 @@ app.get("/disparos/campanhas", async (req, res) => {
                 : snapshotCfg;
             const liveRows = await enrichSelectedCampaignInstancesLive(configForTags, evoRowsAll);
             liveRowsByCampaignId.set(item.id, liveRows);
-            const probeHealth = getCampaignInstanceHealth(configForTags, liveRows);
-            if (probeHealth.disconnectedCount > 0 || probeHealth.needsMoreInstancesForMinimum) {
-                try {
-                    spareByCampaignId.set(item.id, (await resolveAutoInstancesForCampaign(auth, configForTags, evoRows, 20, item.id)).length);
-                }
-                catch {
-                    spareByCampaignId.set(item.id, 0);
-                }
+            if (st !== "finished") {
+                const selectedForSpare = Array.isArray(configForTags?.selectedDisparadorInstances)
+                    ? configForTags.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+                    : [];
+                spareByCampaignId.set(item.id, listConnectedSpareEvoNames(item.id, selectedForSpare, evoRowsAll, 20).length);
             }
         }
         const proxyBrasilOn = Boolean((0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled);
@@ -12919,11 +12930,6 @@ app.get("/disparos/campanhas", async (req, res) => {
             const proxyProtectionActive = proxyBrasilOn &&
                 connectedEvoKeys.length > 0 &&
                 (0, evo_instance_proxy_service_1.areAllInstanceNamesProxyConfirmedEnabled)(connectedEvoKeys);
-            const walkup2102Name = resolveWalkup2102EvoName(evoRowsAll);
-            const spare2102Available = Boolean(walkup2102Name) &&
-                !campaignSelectionHasEvoName(selectedRaw, walkup2102Name, evoRowsAll) &&
-                evoRowsAll.some((r) => String(r.instanceKey || "").trim().toLowerCase() === walkup2102Name.toLowerCase() &&
-                    r.connected === true);
             return {
                 ...item,
                 selectedInstanceNames: selectedDisparadorNamesFromConfig(configByCampaignId.get(item.id)),
@@ -12932,7 +12938,6 @@ app.get("/disparos/campanhas", async (req, res) => {
                 instanceHealth: healthWithSpare,
                 runtimeStage,
                 proxyProtectionActive,
-                spare2102Available,
             };
         });
         if (proxyBrasilOn) {
@@ -13451,42 +13456,43 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         const disconnectedNames = listDisconnectedStoredInstanceNames(selectedNames, evoRows);
         let incoming = [];
         if (auto) {
-            const included2102 = await tryIncludeSpare5197462102InLiveCampaign(campaign, evoRowsAll);
-            if (included2102) {
-                const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRowsAll);
-                return res.json({
-                    ok: true,
-                    id,
-                    auto,
-                    selectedDisparadorInstances: campaign.configSnapshot.selectedDisparadorInstances,
-                    addedCount: 1,
-                    removedBlockedCount: 0,
-                    removedBlocked: [],
-                    instanceHealth,
-                    stillNeedsMore: instanceHealth.needsMoreInstancesForMinimum,
-                    message: "Instâncias atualizadas (5197462102 adicionado). Proxy Brasil será ligada no novo número.",
-                });
-            }
-            if (instancesToAdd <= 0) {
-                return res.status(400).json({
-                    error: "O número 5197462102 (walkup) não foi encontrado na Evolution. Não há outros números desconectados e o mínimo já está atendido.",
-                    instanceHealth: healthBefore,
-                });
-            }
-            evoRowsAll = await enrichEvoInstanceTagRowsWithLiveState(evoRowsAll);
-            evoRows = await filterEvoTagRowsForRequest(req, evoRowsAll);
-            evoRows = await enrichSelectedCampaignInstancesLive(campaign.configSnapshot, evoRows);
-            incoming = await resolveAutoInstancesForCampaign(auth, prev, evoRows, instancesToAdd, campaign.id);
+            const pickLimit = Math.max(instancesToAdd, 1);
+            incoming = listConnectedSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
             if (!incoming.length) {
                 return res.status(409).json({
                     error: disconnectedNames.length
                         ? `Não há instância conectada livre para substituir ${disconnectedNames.join(", ")}. Conecte um número habilitado para disparos e use «+ Instâncias».`
-                        : "Não há instância conectada livre. Conecte um número habilitado para disparos e use «+ Instâncias».",
+                        : "Não há instância conectada fora desta campanha. Conecte um número e use «+ Instâncias».",
                     instanceHealth: healthBefore,
                     code: "buy_numbers_required",
                     needsPurchase: true,
                 });
             }
+            const swappedFast = await persistIncomingCampaignInstances(campaign, incoming, evoRowsAll);
+            if (!swappedFast.added.length) {
+                return res.status(400).json({
+                    error: "Nenhuma instância nova foi adicionada. Verifique se o número está conectado.",
+                    instanceHealth: healthBefore,
+                });
+            }
+            const instanceHealthFast = getCampaignInstanceHealth(campaign.configSnapshot, evoRowsAll);
+            const addedCountFast = swappedFast.added.length;
+            const removedCountFast = swappedFast.removedBlocked.length;
+            const swapNoteFast = removedCountFast > 0
+                ? ` Substituímos ${removedCountFast} número(s) bloqueado(s)/offline (${swappedFast.removedBlocked.join(", ")}).`
+                : "";
+            return res.json({
+                ok: true,
+                id,
+                auto,
+                selectedDisparadorInstances: campaign.configSnapshot.selectedDisparadorInstances,
+                addedCount: addedCountFast,
+                removedBlockedCount: removedCountFast,
+                removedBlocked: swappedFast.removedBlocked,
+                instanceHealth: instanceHealthFast,
+                stillNeedsMore: instanceHealthFast.needsMoreInstancesForMinimum,
+                message: `Instâncias atualizadas (${addedCountFast} adicionada(s)).${swapNoteFast} Proxy Brasil será ligada nos novos números.`,
+            });
         }
         else {
             const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
