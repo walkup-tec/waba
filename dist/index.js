@@ -776,6 +776,10 @@ async function persistInstanceUsage(items) {
     if (!status.restrictionSuspected)
         return;
     void (async () => {
+        if (instanceNameHeldByUnfinishedCampaign(status.sourceInstance)) {
+            console.info(`[Campanha] ignorando pausa humana em ${status.sourceInstance}: chip selecionado em campanha aberta.`);
+            return;
+        }
         await (0, aquecedor_instance_lifecycle_service_1.markAquecedorInstanceRestricted)(status.sourceInstance, status.apiTest.detail || "Restrição detectada no teste de integração.");
         const usageMap = await loadInstanceUsageMap();
         const current = getInstanceUsageFromMap(usageMap, status.sourceInstance);
@@ -792,6 +796,10 @@ async function persistInstanceUsage(items) {
     if (!status.restrictionSuspected)
         return;
     void (async () => {
+        if (instanceNameHeldByUnfinishedCampaign(status.instanceName)) {
+            console.info(`[Campanha] ignorando pausa humana em ${status.instanceName}: chip selecionado em campanha aberta.`);
+            return;
+        }
         await (0, aquecedor_instance_lifecycle_service_1.markAquecedorInstanceRestricted)(status.instanceName, status.sendTest.detail || "Restrição detectada na validação inbound.");
         const usageMap = await loadInstanceUsageMap();
         const current = getInstanceUsageFromMap(usageMap, status.instanceName);
@@ -3909,7 +3917,9 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
                     sendResult.json?.error ||
                     sendResult.body ||
                     "");
-                await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(chosen.instancia_origem, sendResult.status, detailStr);
+                if (!instanceNameHeldByUnfinishedCampaign(chosen.instancia_origem)) {
+                    await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(chosen.instancia_origem, sendResult.status, detailStr);
+                }
                 continue;
             }
             sendAccepted = true;
@@ -3978,7 +3988,7 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
             });
             // Outbound ERROR = sessão origem quebrada (não culpar o destino nem rajada).
             const cooldownMs = outboundAckBroken ? 60 * 60 * 1000 : 15 * 60 * 1000;
-            if (outboundAckBroken) {
+            if (outboundAckBroken && !instanceNameHeldByUnfinishedCampaign(chosen.instancia_origem)) {
                 await (0, aquecedor_instance_lifecycle_service_1.markAquecedorInstanceRestricted)(chosen.instancia_origem, `Aquecedor: outbound MessageUpdate=${lastAckStatus || "ERROR"} — reconecte QR da ${chosen.instancia_origem}.`);
             }
             const cooldown = await (0, delivery_cooldown_service_1.recordDirectedDeliveryFailure)({
@@ -11680,6 +11690,40 @@ function selectedInstanceNamesFromCampaign(campaign) {
     const raw = campaign?.configSnapshot?.selectedDisparadorInstances;
     return Array.isArray(raw) ? raw.map((n) => String(n || "").trim()).filter(Boolean) : [];
 }
+function instanceNameHeldByUnfinishedCampaign(instanceName) {
+    const target = String(instanceName || "").trim().toLowerCase();
+    if (!target)
+        return false;
+    const held = (0, proxy_brasil_campaign_rules_1.namesHeldByUnfinishedCampaigns)(disparosCampaignsMemory.map((c) => ({
+        id: c.id,
+        status: c.status,
+        selectedInstanceNames: selectedInstanceNamesFromCampaign(c),
+    })));
+    return held.some((n) => String(n || "").trim().toLowerCase() === target);
+}
+async function releaseHumanPauseForSelectedCampaignInstances(campaign) {
+    const names = selectedInstanceNamesFromCampaign(campaign);
+    if (!names.length)
+        return;
+    const usageMap = await loadInstanceUsageMap();
+    const usagePatches = [];
+    for (const name of names) {
+        const life = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(name);
+        if (life?.phase === "restricted_wait") {
+            await (0, aquecedor_instance_lifecycle_service_1.clearAquecedorHumanPause)(name);
+        }
+        const current = getInstanceUsageFromMap(usageMap, name);
+        if (current?.useDisparador === false) {
+            usagePatches.push({
+                instanceName: name,
+                useAquecedor: current.useAquecedor !== false,
+                useDisparador: true,
+            });
+        }
+    }
+    if (usagePatches.length)
+        await persistInstanceUsage(usagePatches);
+}
 function heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId) {
     return (0, proxy_brasil_campaign_rules_1.namesHeldByUnfinishedCampaigns)(disparosCampaignsMemory.map((c) => ({
         id: c.id,
@@ -11947,13 +11991,13 @@ async function processOneCampaignDispatch(campaignId) {
             return;
         }
         const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot, {
-            skipHumanPaused: isAlternativaMotor,
+            skipHumanPaused: false,
             campaignId: campaign.id,
             preferInstanceName: lead.mediaMessageId ? lead.mediaInstanceName : undefined,
         });
         if (!instancePick) {
             console.error(isAlternativaMotor
-                ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas, Disparador ativo e fora de pausa humana)."
+                ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas e com Disparador ativo)."
                 : "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo).");
             lead.status = "pending";
             return;
@@ -12070,9 +12114,6 @@ async function processOneCampaignDispatch(campaignId) {
             const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
             if (!sendResult.ok) {
                 console.error("[Campanha] EVO send falhou:", sendResult.status, String(sendResult.body || "").slice(0, 200));
-                if (isAlternativaMotor) {
-                    await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(instancePick.instancia, sendResult.status, String(sendResult.body || ""), { force: true });
-                }
                 const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
                 await persistLeadFailed(lead, failKind);
                 return false;
@@ -12216,6 +12257,7 @@ async function runCampaignDispatchTick() {
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
         await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
+        await releaseHumanPauseForSelectedCampaignInstances(c);
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
         if (health.needsMoreInstancesForMinimum) {
             c.status = "paused";
@@ -12259,6 +12301,7 @@ async function runCampaignDispatchTick() {
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
         await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
+        await releaseHumanPauseForSelectedCampaignInstances(c);
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
         if (health.needsMoreInstancesForMinimum)
             continue;

@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 09:48 — Campanha: sem pausa humana no chip selecionado
+- Alternativa não pula `restricted_wait` nos números da campanha (WB-7770/`drax`)
+- Falha de envio da campanha e aquecedor/probe não reaplicam pausa em chip de campanha aberta
+- Tick libera pausa humana e religa Disparador nos selecionados
+- Marker: `DEPLOY-2026-08-27-campanha-sem-pausa-humana-no-chip`
+- LOG: `doc/LOG-2026-08-27__094800__campanha-sem-pausa-humana-chip.md`
+
 ## 2026-08-27 09:00 — Campanha: balanço por chip
 - Delay de envio passou a ser **por número**, não da campanha inteira
 - Pick pelo menor volume desta campanha; ACK da imagem não trava os outros chips

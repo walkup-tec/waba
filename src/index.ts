@@ -1024,6 +1024,12 @@ async function persistInstanceUsage(
 setIntegrationProbeFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
+    if (instanceNameHeldByUnfinishedCampaign(status.sourceInstance)) {
+      console.info(
+        `[Campanha] ignorando pausa humana em ${status.sourceInstance}: chip selecionado em campanha aberta.`,
+      );
+      return;
+    }
     await markAquecedorInstanceRestricted(
       status.sourceInstance,
       status.apiTest.detail || "Restrição detectada no teste de integração.",
@@ -1043,6 +1049,12 @@ setIntegrationProbeFinishedHandler((status) => {
 setInboundValidationFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
+    if (instanceNameHeldByUnfinishedCampaign(status.instanceName)) {
+      console.info(
+        `[Campanha] ignorando pausa humana em ${status.instanceName}: chip selecionado em campanha aberta.`,
+      );
+      return;
+    }
     await markAquecedorInstanceRestricted(
       status.instanceName,
       status.sendTest.detail || "Restrição detectada na validação inbound.",
@@ -4896,11 +4908,13 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
             sendResult.body ||
             "",
         );
-        await detectAndMarkRestrictionFromSend(
-          chosen.instancia_origem,
-          sendResult.status,
-          detailStr,
-        );
+        if (!instanceNameHeldByUnfinishedCampaign(chosen.instancia_origem)) {
+          await detectAndMarkRestrictionFromSend(
+            chosen.instancia_origem,
+            sendResult.status,
+            detailStr,
+          );
+        }
         continue;
       }
       sendAccepted = true;
@@ -4986,7 +5000,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       });
       // Outbound ERROR = sessão origem quebrada (não culpar o destino nem rajada).
       const cooldownMs = outboundAckBroken ? 60 * 60 * 1000 : 15 * 60 * 1000;
-      if (outboundAckBroken) {
+      if (outboundAckBroken && !instanceNameHeldByUnfinishedCampaign(chosen.instancia_origem)) {
         await markAquecedorInstanceRestricted(
           chosen.instancia_origem,
           `Aquecedor: outbound MessageUpdate=${lastAckStatus || "ERROR"} — reconecte QR da ${chosen.instancia_origem}.`,
@@ -13644,6 +13658,47 @@ function selectedInstanceNamesFromCampaign(campaign: { configSnapshot?: Disparos
   return Array.isArray(raw) ? raw.map((n) => String(n || "").trim()).filter(Boolean) : [];
 }
 
+function instanceNameHeldByUnfinishedCampaign(instanceName: string): boolean {
+  const target = String(instanceName || "").trim().toLowerCase();
+  if (!target) return false;
+  const held = namesHeldByUnfinishedCampaigns(
+    disparosCampaignsMemory.map((c) => ({
+      id: c.id,
+      status: c.status,
+      selectedInstanceNames: selectedInstanceNamesFromCampaign(c),
+    })),
+  );
+  return held.some((n) => String(n || "").trim().toLowerCase() === target);
+}
+
+async function releaseHumanPauseForSelectedCampaignInstances(campaign: {
+  configSnapshot?: DisparosConfig | null;
+}): Promise<void> {
+  const names = selectedInstanceNamesFromCampaign(campaign);
+  if (!names.length) return;
+  const usageMap = await loadInstanceUsageMap();
+  const usagePatches: Array<{
+    instanceName: string;
+    useAquecedor: boolean;
+    useDisparador: boolean;
+  }> = [];
+  for (const name of names) {
+    const life = await getAquecedorLifecycleStatusForInstance(name);
+    if (life?.phase === "restricted_wait") {
+      await clearAquecedorHumanPause(name);
+    }
+    const current = getInstanceUsageFromMap(usageMap, name);
+    if (current?.useDisparador === false) {
+      usagePatches.push({
+        instanceName: name,
+        useAquecedor: current.useAquecedor !== false,
+        useDisparador: true,
+      });
+    }
+  }
+  if (usagePatches.length) await persistInstanceUsage(usagePatches);
+}
+
 function heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId?: string): string[] {
   return namesHeldByUnfinishedCampaigns(
     disparosCampaignsMemory.map((c) => ({
@@ -13969,14 +14024,14 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
     }
 
     const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot, {
-      skipHumanPaused: isAlternativaMotor,
+      skipHumanPaused: false,
       campaignId: campaign.id,
       preferInstanceName: lead.mediaMessageId ? lead.mediaInstanceName : undefined,
     });
     if (!instancePick) {
       console.error(
         isAlternativaMotor
-          ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas, Disparador ativo e fora de pausa humana)."
+          ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas e com Disparador ativo)."
           : "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo)."
       );
       lead.status = "pending";
@@ -14146,14 +14201,6 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           sendResult.status,
           String(sendResult.body || "").slice(0, 200),
         );
-        if (isAlternativaMotor) {
-          await detectAndMarkRestrictionFromSend(
-            instancePick.instancia,
-            sendResult.status,
-            String(sendResult.body || ""),
-            { force: true },
-          );
-        }
         const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
         await persistLeadFailed(lead, failKind);
         return false;
@@ -14324,6 +14371,7 @@ async function runCampaignDispatchTick(): Promise<void> {
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
     await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
+    await releaseHumanPauseForSelectedCampaignInstances(c);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
     if (health.needsMoreInstancesForMinimum) {
       c.status = "paused";
@@ -14366,6 +14414,7 @@ async function runCampaignDispatchTick(): Promise<void> {
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
     await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
+    await releaseHumanPauseForSelectedCampaignInstances(c);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
     if (health.needsMoreInstancesForMinimum) continue;
     console.warn(
