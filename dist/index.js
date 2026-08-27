@@ -2553,6 +2553,10 @@ async function loadDisparosLocalState() {
     }
 }
 const campaignNextAllowedSendAt = new Map();
+/** Cooldown de envio por chip da campanha (não trava os outros números). */
+const campaignInstanceNextSendAt = new Map();
+/** Envios confirmados nesta campanha, por instância (balanço). */
+const campaignInstanceSendCounts = new Map();
 const campaignAutoSwapAtMs = new Map();
 const CAMPAIGN_AUTO_SWAP_COOLDOWN_MS = 45000;
 /** Round-robin de imagens 1080×1080 por campanha (Alternativa). */
@@ -3329,6 +3333,53 @@ function recordInstanceDailySend(instanceName) {
         return;
     }
     bucket.count += 1;
+}
+function campaignInstanceGateKey(campaignId, instanceName) {
+    return `${String(campaignId || "").trim()}::${String(instanceName || "").trim().toLowerCase()}`;
+}
+function getCampaignInstanceSendCount(campaignId, instanceName) {
+    const camp = String(campaignId || "").trim();
+    const key = String(instanceName || "").trim().toLowerCase();
+    if (!camp || !key)
+        return 0;
+    return campaignInstanceSendCounts.get(camp)?.get(key) || 0;
+}
+function recordCampaignInstanceSend(campaignId, instanceName) {
+    const camp = String(campaignId || "").trim();
+    const key = String(instanceName || "").trim().toLowerCase();
+    if (!camp || !key)
+        return;
+    let bucket = campaignInstanceSendCounts.get(camp);
+    if (!bucket) {
+        bucket = new Map();
+        campaignInstanceSendCounts.set(camp, bucket);
+    }
+    bucket.set(key, (bucket.get(key) || 0) + 1);
+}
+function isCampaignInstanceInCooldown(campaignId, instanceName) {
+    const until = campaignInstanceNextSendAt.get(campaignInstanceGateKey(campaignId, instanceName)) || 0;
+    return Date.now() < until;
+}
+function resolveSelectedDisparadorToEvoName(name, connected) {
+    const raw = String(name || "").trim();
+    if (!raw)
+        return "";
+    const lower = raw.toLowerCase();
+    const exact = connected.find((c) => String(c.instancia || "").trim().toLowerCase() === lower);
+    if (exact)
+        return String(exact.instancia || "").trim() || raw;
+    const digits = raw.replace(/\D/g, "");
+    const tail = digits.length >= 4 ? digits.slice(-4) : "";
+    if (!tail)
+        return raw;
+    const hits = connected.filter((c) => {
+        const instDigits = String(c.instancia || "").replace(/\D/g, "");
+        const numDigits = String(c.numero || "").replace(/\D/g, "");
+        return instDigits.endsWith(tail) || numDigits.endsWith(tail);
+    });
+    if (hits.length === 1)
+        return String(hits[0].instancia || "").trim() || raw;
+    return raw;
 }
 function applyAlternativaDispatchProfile(config) {
     const throttle = (0, alternativa_dispatch_rules_1.computeAlternativaThrottle)({
@@ -11303,44 +11354,51 @@ async function pickDisparadorInstanceForConfig(config, opts) {
     const byName = new Map(connected.map((item) => [String(item.instancia || "").trim().toLowerCase(), item]));
     const usageMap = await loadInstanceUsageMap();
     const eligible = [];
+    const campaignKey = String(opts?.campaignId || "").trim() || "__global_rr__";
     for (const name of selectedList) {
-        const usage = resolveUsageFromMap(usageMap, name);
+        const evoName = resolveSelectedDisparadorToEvoName(name, connected) || name;
+        const usage = resolveUsageFromMap(usageMap, evoName) || resolveUsageFromMap(usageMap, name);
         if (usage && usage.useDisparador === false)
             continue;
         if (opts?.skipHumanPaused) {
-            const life = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(name);
+            const life = (await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(evoName)) ||
+                (await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(name));
             if (life?.phase === "restricted_wait")
                 continue;
         }
-        const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
+        if (campaignKey !== "__global_rr__" && isCampaignInstanceInCooldown(campaignKey, evoName)) {
+            continue;
+        }
+        const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(evoName, { fresh: true });
         if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(live))
             continue;
         if ((0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled) {
-            const proxyFind = await (0, evo_instance_proxy_service_1.fetchEvoProxyFindEnabled)(name, callEvoAction, EVO_API_BASE, {
+            const proxyFind = await (0, evo_instance_proxy_service_1.fetchEvoProxyFindEnabled)(evoName, callEvoAction, EVO_API_BASE, {
                 timeoutMs: 6000,
                 retries: 0,
             });
+            const cachedOn = (0, evo_instance_proxy_service_1.getConfirmedProxyFind)(evoName) === true;
             const maySend = (0, proxy_brasil_campaign_rules_1.instanceMaySendWithProxyBrasil)({
                 proxyConfigEnabled: true,
                 selectedInLiveCampaign: true,
                 connection: "open",
-                proxyFindEnabled: proxyFind,
+                proxyFindEnabled: cachedOn ? true : proxyFind,
             });
             if (!maySend.allowed)
                 continue;
         }
-        const fromList = byName.get(name.toLowerCase());
+        const fromList = byName.get(evoName.toLowerCase()) || byName.get(name.toLowerCase());
         let numero = String(fromList?.numero || "").trim();
         if (!numero) {
             try {
-                numero = String((await (0, evo_instance_phone_service_1.resolveEvoInstancePhone)(name)) || "").trim();
+                numero = String((await (0, evo_instance_phone_service_1.resolveEvoInstancePhone)(evoName)) || "").trim();
             }
             catch {
                 numero = "";
             }
         }
         eligible.push({
-            instancia: fromList?.instancia || name,
+            instancia: fromList?.instancia || evoName,
             numero,
         });
     }
@@ -11355,10 +11413,14 @@ async function pickDisparadorInstanceForConfig(config, opts) {
     if (prefer) {
         return pool.find((item) => item.instancia.toLowerCase() === prefer) || null;
     }
-    const campaignKey = String(opts?.campaignId || "").trim() || "__global_rr__";
-    const picked = (0, proxy_brasil_campaign_rules_1.pickNextEligibleCampaignInstance)({
-        selectedNames: selectedList,
+    const sendCounts = {};
+    for (const item of pool) {
+        sendCounts[item.instancia.toLowerCase()] = getCampaignInstanceSendCount(campaignKey, item.instancia);
+    }
+    const picked = (0, proxy_brasil_campaign_rules_1.pickBalancedEligibleCampaignInstance)({
+        selectedNames: selectedList.map((n) => resolveSelectedDisparadorToEvoName(n, connected) || n),
         eligibleNames: pool.map((item) => item.instancia),
+        sendCounts,
         cursor: campaignDisparadorRoundRobin.get(campaignKey) ?? 0,
     });
     if (!picked.instanceName)
@@ -11693,11 +11755,23 @@ async function pauseCampaignDueToProxyPrepareFailure(campaignId, reason, options
     }
     queuePersistDisparosLocalState();
 }
-function scheduleNextCampaignDispatchDelay(campaignId, config) {
+function scheduleNextCampaignDispatchDelay(campaignId, config, instanceName) {
     const minS = Math.max(10, Number(config.delayMinSeconds) || DISPAROS_DEFAULTS.delayMinSeconds);
     const maxS = Math.max(minS, Number(config.delayMaxSeconds) || DISPAROS_DEFAULTS.delayMaxSeconds);
     const waitSec = minS + Math.random() * (maxS - minS);
-    campaignNextAllowedSendAt.set(campaignId, Date.now() + waitSec * 1000);
+    const until = Date.now() + waitSec * 1000;
+    const inst = String(instanceName || "").trim();
+    if (inst) {
+        campaignInstanceNextSendAt.set(campaignInstanceGateKey(campaignId, inst), until);
+        return;
+    }
+    campaignNextAllowedSendAt.set(campaignId, Date.now() + Math.min(15000, waitSec * 1000));
+}
+function scheduleCampaignInstanceRetryMs(campaignId, instanceName, waitMs) {
+    const inst = String(instanceName || "").trim();
+    if (!inst)
+        return;
+    campaignInstanceNextSendAt.set(campaignInstanceGateKey(campaignId, inst), Date.now() + Math.max(3000, waitMs));
 }
 function extractCampaignSendMessageId(json) {
     if (!json || typeof json !== "object")
@@ -11823,12 +11897,11 @@ async function processOneCampaignDispatch(campaignId) {
             .filter((l) => l.campaignId === campaignId && l.status === "sent")
             .map((l) => String(normalizeWhatsAppNumber(l.phone) || "").replace(/\D/g, ""))
             .filter((d) => d.length >= 10));
-        const lead = disparosCampaignLeadsMemory.find((l) => {
+        const pendingLeads = disparosCampaignLeadsMemory.filter((l) => {
             if (l.campaignId !== campaignId || l.status !== "pending")
                 return false;
             const digits = String(normalizeWhatsAppNumber(l.phone) || "").replace(/\D/g, "");
             if (digits.length >= 10 && sentPhoneDigits.has(digits)) {
-                // Destino já recebeu nesta campanha — nunca reenviar (corrige persist/hydrate).
                 l.status = "sent";
                 if (!l.sentAt)
                     l.sentAt = new Date().toISOString();
@@ -11836,6 +11909,7 @@ async function processOneCampaignDispatch(campaignId) {
             }
             return true;
         });
+        const lead = pendingLeads.find((l) => !String(l.mediaMessageId || "").trim()) || pendingLeads[0];
         if (!lead) {
             const stillSending = disparosCampaignLeadsMemory.some((l) => l.campaignId === campaignId && l.status === "sending");
             if (stillSending)
@@ -11910,7 +11984,7 @@ async function processOneCampaignDispatch(campaignId) {
         const digitsCheck = String(numero || "").replace(/\D/g, "");
         if (!isPlausibleBrWhatsappDestinationDigits(digitsCheck)) {
             await persistLeadFailed(lead, "invalid_phone");
-            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
             return;
         }
         const instanceLiveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia);
@@ -11937,14 +12011,14 @@ async function processOneCampaignDispatch(campaignId) {
                 if (!mediaSend.ok) {
                     console.error("[Campanha] EVO sendMedia falhou:", mediaSend.status, String(mediaSend.body || "").slice(0, 200));
                     await persistLeadFailed(lead, classifyEvoSendFailure(mediaSend.status, mediaSend.body));
-                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
                     return;
                 }
                 mediaMessageId = extractCampaignSendMessageId(mediaSend.json);
                 if (!mediaMessageId) {
                     console.error("[Campanha] sendMedia sem messageId — não envia texto sem ACK da imagem:", lead.phone);
                     await persistLeadFailed(lead, "send_error");
-                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
                     return;
                 }
                 lead.mediaMessageId = mediaMessageId;
@@ -11962,14 +12036,14 @@ async function processOneCampaignDispatch(campaignId) {
                 lead.mediaMessageId = undefined;
                 lead.mediaInstanceName = undefined;
                 await persistLeadFailed(lead, "send_error");
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
                 return;
             }
             if (!(0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(mediaAck.status)) {
                 console.warn("[Campanha] ACK imagem ainda não é DELIVERY_ACK — não envia botão/texto:", mediaAck.status, lead.phone);
                 lead.status = "pending";
                 queuePersistDisparosLocalState();
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                scheduleCampaignInstanceRetryMs(campaignId, instancePick.instancia, 12000);
                 return;
             }
             await sleepCampaignMs(800);
@@ -11977,7 +12051,7 @@ async function processOneCampaignDispatch(campaignId) {
         else if (isAlternativaMotor) {
             console.warn("[Campanha Alternativa] Sem 4 imagens 1080×1080 no snapshot — não envia texto sem imagem:", campaign.id);
             lead.status = "pending";
-            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
             return;
         }
         else {
@@ -12051,7 +12125,7 @@ async function processOneCampaignDispatch(campaignId) {
                 console.warn("[Campanha Alternativa] sendButtons falhou; lead volta a pending (sem fallback texto):", buttonResult.status, ghost ? "viewOnce" : String(buttonResult.body || "").slice(0, 180));
                 lead.status = "pending";
                 queuePersistDisparosLocalState();
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
                 return;
             }
         }
@@ -12059,12 +12133,12 @@ async function processOneCampaignDispatch(campaignId) {
             console.error("[Campanha Alternativa] sem URL do botão; lead pending — não envia texto sem botão.");
             lead.status = "pending";
             queuePersistDisparosLocalState();
-            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
             return;
         }
         else {
             if (!(await sendCampaignTextMessage(outbound.text))) {
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
                 return;
             }
         }
@@ -12072,7 +12146,7 @@ async function processOneCampaignDispatch(campaignId) {
         if ((0, delivery_verify_helpers_1.isEvoAckFailure)(ackStatus)) {
             console.error(`[Campanha] ACK=${ackStatus} — não marcar sent (EVO HTTP ok, WhatsApp rejeitou):`, instancePick.instancia, lead.phone);
             await persistLeadFailed(lead, "send_error");
-            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
             return;
         }
         const sentIso = new Date().toISOString();
@@ -12087,6 +12161,7 @@ async function processOneCampaignDispatch(campaignId) {
         const sentN = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaign.id && l.status === "sent").length;
         campaign.sentCount = Math.max(campaign.sentCount, sentN);
         recordInstanceDailySend(instancePick.instancia);
+        recordCampaignInstanceSend(campaign.id, instancePick.instancia);
         if (ownerEmail) {
             const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
             if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
@@ -12118,7 +12193,7 @@ async function processOneCampaignDispatch(campaignId) {
         if (!persisted) {
             console.error("[Campanha] Lead marcado sent em memória mas falhou no Supabase — bloqueando reenvio pelo status local:", lead.id, lead.phone);
         }
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
     }
     finally {
         campaignDispatchBusy.delete(campaignId);

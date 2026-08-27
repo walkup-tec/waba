@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 09:00 — Campanha: balanço por chip
+- Delay de envio passou a ser **por número**, não da campanha inteira
+- Pick pelo menor volume desta campanha; ACK da imagem não trava os outros chips
+- `proxy/find` nulo não apaga `proxy/set` ok (WB-5401)
+- Marker: `DEPLOY-2026-08-27-campanha-balanco-por-chip`
+- LOG: `doc/LOG-2026-08-27__090000__campanha-balanco-por-chip.md`
+
 ## 2026-08-26 20:12 — Números disponíveis só fora de campanha aberta
 - Picker omite chips em campanha `running`/`paused` até finalizar
 - Marker `DEPLOY-2026-08-26-numeros-disponiveis-livres`

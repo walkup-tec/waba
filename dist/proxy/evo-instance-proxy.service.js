@@ -110,6 +110,22 @@ function areAllInstanceNamesProxyConfirmedEnabled(instanceNames) {
 async function fetchEvoProxyFindEnabled(instanceName, callEvoAction, evoApiBase, opts) {
     return fetchEvoProxyEnabled(instanceName, callEvoAction, evoApiBase, opts);
 }
+function readEvoProxyEnabledFlag(json) {
+    if (json == null)
+        return false;
+    if (typeof json !== "object")
+        return null;
+    const root = json;
+    const nested = [root, root.proxy, root.data, root.response];
+    for (const node of nested) {
+        if (!node || typeof node !== "object")
+            continue;
+        if ("enabled" in node) {
+            return Boolean(node.enabled);
+        }
+    }
+    return null;
+}
 async function fetchEvoProxyEnabled(instanceName, callEvoAction, evoApiBase, opts) {
     const name = String(instanceName || "").trim();
     if (!name)
@@ -126,17 +142,18 @@ async function fetchEvoProxyEnabled(instanceName, callEvoAction, evoApiBase, opt
         });
         if (!result.ok)
             continue;
-        const json = result.json;
-        if (json == null) {
-            rememberConfirmedProxyFind(name, false);
-            return false;
+        const parsed = readEvoProxyEnabledFlag(result.json);
+        if (parsed === null)
+            continue;
+        if (parsed === false && getConfirmedProxyFind(name) === true) {
+            // 200+null / enabled:false logo após proxy/set: a Evolution ainda não gravou a linha.
+            return true;
         }
-        if (typeof json === "object" && json !== null && "enabled" in json) {
-            const enabled = Boolean(json.enabled);
-            rememberConfirmedProxyFind(name, enabled);
-            return enabled;
-        }
+        rememberConfirmedProxyFind(name, parsed);
+        return parsed;
     }
+    if (getConfirmedProxyFind(name) === true)
+        return true;
     return null;
 }
 async function refreshConfirmedProxyFindForNames(instanceNames, callEvoAction, evoApiBase) {
@@ -479,7 +496,8 @@ async function prepareProxyBrasilSessionForCampaignSend(instanceName, deps, opts
                     };
                 }
                 const enabledAfter = await fetchEvoProxyEnabled(name, deps.callEvoAction, deps.evoApiBase);
-                if (enabledAfter !== true) {
+                const proxyOn = enabledAfter === true || (apply.ok && getConfirmedProxyFind(name) === true);
+                if (!proxyOn) {
                     const entry = setPrepareStatus(name, {
                         status: "failed",
                         state: liveBefore,
@@ -678,10 +696,11 @@ async function reconcileProxyBrasilForCampaignInstances(opts) {
     const selected = normalizeInstanceNameList(opts.selectedInstanceNames);
     const extra = normalizeInstanceNameList(opts.extraReleaseInstanceNames || []);
     const heldLower = new Set(normalizeInstanceNameList(opts.heldInstanceNames).map((n) => n.toLowerCase()));
+    const selectedLower = new Set(selected.map((n) => n.toLowerCase()));
     const names = normalizeInstanceNameList([...selected, ...extra]);
     const fetchLive = opts.prepareDeps?.fetchLiveState;
     for (const name of names) {
-        const inHeld = heldLower.has(name.toLowerCase());
+        const inHeld = heldLower.has(name.toLowerCase()) || selectedLower.has(name.toLowerCase());
         let live = "";
         if (fetchLive) {
             try {

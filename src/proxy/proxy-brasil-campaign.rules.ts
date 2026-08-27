@@ -147,6 +147,52 @@ export function pickNextEligibleCampaignInstance(input: {
   return { instanceName: null, nextCursor: start };
 }
 
+function sendCountForInstanceName(
+  sendCounts: Record<string, number> | undefined,
+  instanceName: string,
+): number {
+  const key = String(instanceName || "").trim().toLowerCase();
+  if (!key) return 0;
+  const n = Number(sendCounts?.[key]);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * Entre os ativos, escolhe quem tem menos envios nesta campanha.
+ * Empate: ordem da seleção a partir do cursor (1 por número, depois repete).
+ */
+export function pickBalancedEligibleCampaignInstance(input: {
+  selectedNames: string[];
+  eligibleNames: string[];
+  sendCounts?: Record<string, number>;
+  cursor: number;
+}): { instanceName: string | null; nextCursor: number } {
+  const selected = normalizeProxyBrasilInstanceNames(input.selectedNames);
+  const eligible = new Set(
+    normalizeProxyBrasilInstanceNames(input.eligibleNames).map((n) => n.toLowerCase()),
+  );
+  if (!selected.length || !eligible.size) {
+    return { instanceName: null, nextCursor: Number.isFinite(input.cursor) ? input.cursor : 0 };
+  }
+  const active = selected.filter((n) => eligible.has(n.toLowerCase()));
+  if (!active.length) {
+    return { instanceName: null, nextCursor: Number.isFinite(input.cursor) ? input.cursor : 0 };
+  }
+  let min = sendCountForInstanceName(input.sendCounts, active[0]);
+  for (const name of active) {
+    const n = sendCountForInstanceName(input.sendCounts, name);
+    if (n < min) min = n;
+  }
+  const lowest = new Set(
+    active.filter((n) => sendCountForInstanceName(input.sendCounts, n) === min).map((n) => n.toLowerCase()),
+  );
+  return pickNextEligibleCampaignInstance({
+    selectedNames: selected,
+    eligibleNames: selected.filter((n) => lowest.has(n.toLowerCase())),
+    cursor: input.cursor,
+  });
+}
+
 export function runProxyBrasilCampaignRulesSelfCheck(): void {
   const send = instanceMaySendWithProxyBrasil;
   const cases: Array<[string, boolean, ReturnType<typeof send>]> = [
@@ -307,5 +353,32 @@ export function runProxyBrasilCampaignRulesSelfCheck(): void {
   });
   if (wrap.instanceName !== "9224" || wrap.nextCursor !== 0) {
     throw new Error(`proxy-brasil rule failed: rr-wrap ${wrap.instanceName}`);
+  }
+  const balanced = pickBalancedEligibleCampaignInstance({
+    selectedNames: cycle,
+    eligibleNames: cycle,
+    sendCounts: { "9224": 12, drax: 3, "2477": 1, "walkup-5401": 1 },
+    cursor: 0,
+  });
+  if (balanced.instanceName !== "2477") {
+    throw new Error(`proxy-brasil rule failed: balance-least ${balanced.instanceName}`);
+  }
+  const catchUp = pickBalancedEligibleCampaignInstance({
+    selectedNames: cycle,
+    eligibleNames: ["2477", "drax", "9224"],
+    sendCounts: { "2477": 4, drax: 4, "9224": 12 },
+    cursor: 0,
+  });
+  if (catchUp.instanceName !== "2477") {
+    throw new Error(`proxy-brasil rule failed: balance-tie ${catchUp.instanceName}`);
+  }
+  const skipHeavy = pickBalancedEligibleCampaignInstance({
+    selectedNames: cycle,
+    eligibleNames: ["2477", "drax", "9224"],
+    sendCounts: { "2477": 4, drax: 3, "9224": 12 },
+    cursor: 0,
+  });
+  if (skipHeavy.instanceName !== "drax") {
+    throw new Error(`proxy-brasil rule failed: balance-skip-heavy ${skipHeavy.instanceName}`);
   }
 }
