@@ -23594,8 +23594,78 @@
     </button>
 
     <script>
+      (function initWabaMetaEsLoginHelper() {
+        var UNAVAILABLE = "Configuração do WhatsApp Embedded Signup indisponível.";
+        window.__WABA_META_ES_LOGIN_OPTIONS = null;
+        window.__WABA_META_ES_LOGIN_CB = null;
+        window.__WABA_META_ES_RETRYING = false;
+        window.wabaMetaEsPublicPath = function (path) {
+          if (typeof resolveWabaPublicPath === "function") return resolveWabaPublicPath(path);
+          var base = String(window.WABA_BASE_PATH || "").replace(/\/$/, "");
+          var raw = String(path || "");
+          if (!base) return raw;
+          return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
+        };
+        window.wabaMetaEsLast4 = function (id) {
+          var s = String(id || "").trim();
+          return s.length >= 4 ? s.slice(-4) : "";
+        };
+        window.wabaMetaEsBuildLoginOptions = function (configId) {
+          var id = String(configId || "").trim();
+          if (!id) return null;
+          return {
+            config_id: id,
+            response_type: "code",
+            override_default_response_type: true,
+            extras: { setup: {}, sessionInfoVersion: "3" }
+          };
+        };
+        window.wabaMetaEsLogStart = function (info) {
+          var cfgPresent = Boolean(info && info.configIdPresent);
+          console.info(
+            "[META][ES][START]",
+            "appIdPresent=" + (info && info.appIdPresent ? "true" : "false"),
+            "configIdPresent=" + (cfgPresent ? "true" : "false"),
+            "configIdLast4=" + (cfgPresent ? String(info.configIdLast4 || "") : ""),
+            "sdkReady=" + (info && info.sdkReady ? "true" : "false")
+          );
+        };
+        window.wabaMetaEsInvokeFbLogin = function (callback, configId) {
+          var options = window.wabaMetaEsBuildLoginOptions(configId);
+          if (!options) {
+            console.error("[META][ES][FB_LOGIN]", "configIdPresent=false");
+            return { ok: false, error: UNAVAILABLE };
+          }
+          if (typeof FB === "undefined" || typeof FB.login !== "function") {
+            return { ok: false, error: "SDK da Meta não carregou. Verifique bloqueador de anúncios." };
+          }
+          window.__WABA_META_ES_LOGIN_OPTIONS = options;
+          window.__WABA_META_ES_LOGIN_CB = callback;
+          console.info("[META][ES][FB_LOGIN]", "responseType=code", "configIdPresent=true");
+          FB.login(callback, options);
+          return { ok: true };
+        };
+        window.wabaMetaEsRetryLoginIfNeeded = function (callback, reason) {
+          var options = window.__WABA_META_ES_LOGIN_OPTIONS;
+          if (!options || !options.config_id) return false;
+          if (window.__WABA_META_ES_RETRYING) return false;
+          var msg = String(reason || "").toLowerCase();
+          if (msg.indexOf("config_id") === -1) return false;
+          window.__WABA_META_ES_RETRYING = true;
+          console.info("[META][ES][FB_LOGIN]", "responseType=code", "configIdPresent=true");
+          FB.login(callback || window.__WABA_META_ES_LOGIN_CB, options);
+          return true;
+        };
+      })();
+
       (function initMetaEmbeddedSignupSdk() {
+        function metaEsConfigUrl() {
+          return typeof window.wabaMetaEsPublicPath === "function"
+            ? window.wabaMetaEsPublicPath("/integrations/meta/whatsapp/config")
+            : "/integrations/meta/whatsapp/config";
+        }
         function applyMetaEsConfig(cfg) {
+          window.__META_TP_CONFIG = cfg;
           window.__META_ES_CONFIG = cfg;
           window.fbAsyncInit = function () {
             if (typeof FB !== "undefined" && cfg.appId) {
@@ -23620,7 +23690,7 @@
           }
         }
         function loadMetaEsConfig(attempt) {
-          fetch("/meta-oficial/embedded-signup/config", { credentials: "same-origin" })
+          fetch(metaEsConfigUrl(), { credentials: "same-origin", headers: { Accept: "application/json" } })
             .then((r) => {
               if (!r.ok) throw new Error(String(r.status));
               return r.json();
@@ -23634,6 +23704,7 @@
                 return;
               }
               window.__META_ES_CONFIG = { ok: false, loadError: true };
+              window.__META_TP_CONFIG = { ok: false, loadError: true };
             });
         }
         loadMetaEsConfig(0);
@@ -34801,49 +34872,51 @@
           metaTpSetStatus("O Embedded Signup exige HTTPS. Abra o Waba em https://waba.draxsistemas.com.br/");
           return false;
         }
-        const cfg = window.__META_ES_CONFIG || {};
-        const appId = String(cfg.appId || "").trim();
-        const configId = String(cfg.configId || "").trim();
-        if (!appId || !configId) {
+        const publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
+        const appId = String(publicCfg.appId || "").trim();
+        const configId = String(publicCfg.configId || "").trim();
+        const sdkReady = typeof FB !== "undefined" && typeof FB.login === "function";
+        if (typeof window.wabaMetaEsLogStart === "function") {
+          window.wabaMetaEsLogStart({
+            appIdPresent: Boolean(appId),
+            configIdPresent: Boolean(configId),
+            configIdLast4: typeof window.wabaMetaEsLast4 === "function" ? window.wabaMetaEsLast4(configId) : "",
+            sdkReady: sdkReady,
+          });
+        }
+        if (!configId) {
+          metaTpSetStatus("Configuração do WhatsApp Embedded Signup indisponível.");
+          return false;
+        }
+        if (!appId) {
           metaTpSetStatus("A conexão com a Meta não está disponível. Recarregue a página e tente de novo.");
           return false;
         }
-        if (typeof FB === "undefined" || typeof FB.login !== "function") {
+        if (!sdkReady) {
           metaTpSetStatus("SDK da Meta não carregou. Verifique bloqueador de anúncios.");
           return false;
-        }
-        try {
-          FB.init({
-            appId: appId,
-            cookie: true,
-            xfbml: true,
-            version: String(cfg.graphVersion || "v22.0"),
-          });
-        } catch (_err) {
-          /* init já pode ter ocorrido no carregamento da página */
         }
         window.__wabaMetaTechSignupActive = true;
         metaTpLog("início");
         if (typeof window.wabaMetaLabSetStep === "function") window.wabaMetaLabSetStep(2);
         metaTpFetchJson("/integrations/meta/whatsapp/start").catch(function () {});
-        FB.login(
-          function (response) {
-            const code = String((response && response.authResponse && response.authResponse.code) || "").trim();
-            if (!code) {
-              metaTpLog("FB.login sem code");
-              return;
-            }
-            metaTpSession.codeReceived = true;
-            metaTpSession._code = code;
-            metaTpTryAdvance();
-          },
-          {
-            config_id: configId,
-            response_type: "code",
-            override_default_response_type: true,
-            extras: { setup: {}, sessionInfoVersion: "3" },
-          },
-        );
+        const onFbLogin = function (response) {
+          const code = String((response && response.authResponse && response.authResponse.code) || "").trim();
+          if (!code) {
+            metaTpLog("FB.login sem code");
+            return;
+          }
+          metaTpSession.codeReceived = true;
+          metaTpSession._code = code;
+          metaTpTryAdvance();
+        };
+        var invoked = typeof window.wabaMetaEsInvokeFbLogin === "function"
+          ? window.wabaMetaEsInvokeFbLogin(onFbLogin, configId)
+          : { ok: false, error: "SDK da Meta não carregou. Verifique bloqueador de anúncios." };
+        if (!invoked || invoked.ok === false) {
+          window.__wabaMetaTechSignupActive = false;
+          metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
+        }
         return false;
       };
 
@@ -34866,6 +34939,13 @@
         if (META_TP_FINISH_EVENTS[eventName]) {
           metaTpSession.finishEvent = eventName;
           metaTpLog("signup event=" + eventName);
+        }
+        if (eventName === "ERROR" && typeof window.wabaMetaEsRetryLoginIfNeeded === "function") {
+          const errText = String(inner.error_message || inner.error || payload.error || eventName);
+          if (window.wabaMetaEsRetryLoginIfNeeded(window.__WABA_META_ES_LOGIN_CB, errText)) {
+            metaTpLog("retry FB.login com config_id");
+            return;
+          }
         }
         if (eventName === "CANCEL" || eventName === "ERROR") {
           window.__wabaMetaTechSignupActive = false;
@@ -56869,12 +56949,18 @@
               return;
             }
             showToast("Abrindo janela da Meta…", "info");
-            FB.login(metaEsFbLoginCallback, {
-              config_id: String(cfg.configId),
-              response_type: "code",
-              override_default_response_type: true,
-              extras: { setup: {} },
-            });
+            var esLogin = typeof window.wabaMetaEsInvokeFbLogin === "function"
+              ? window.wabaMetaEsInvokeFbLogin(metaEsFbLoginCallback, String(cfg.configId))
+              : { ok: false, error: "Helper de login Meta indisponível." };
+            if (!esLogin || esLogin.ok === false) {
+              const err = String((esLogin && esLogin.error) || "Não foi possível abrir a conexão com a Meta.");
+              setMetaEmbeddedSignupActionMessage(err, true);
+              showToast(err, "error");
+              setMetaAtivosStatus(err, "error");
+              metaEsEmbeddedSignupSucceeded = false;
+              setMetaEsIntegrationResult("fail");
+              return;
+            }
             // Fallback determinístico: se a Meta autenticar e não devolver payload completo, refletimos o estado do SDK.
             window.setTimeout(() => {
               try {

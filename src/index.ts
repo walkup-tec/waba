@@ -11962,6 +11962,21 @@ app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
   });
 });
 
+/** Config pública do Tech Provider. Sem secrets. Fonte: META_CONFIG_ID || META_ES_CONFIG_ID. */
+app.get("/integrations/meta/whatsapp/config", (_req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.set("Pragma", "no-cache");
+  const appId = String(process.env.META_APP_ID || "").trim();
+  const configId = String(process.env.META_CONFIG_ID || process.env.META_ES_CONFIG_ID || "").trim();
+  res.json({
+    ok: Boolean(appId && configId),
+    appId: appId || undefined,
+    configId: configId || undefined,
+    graphVersion: META_GRAPH_VERSION,
+    callbackPath: "/integrations/meta/whatsapp/callback",
+  });
+});
+
 /**
  * Troca o código do Embedded Signup por business token (Tech Provider / doc Meta nov/2025).
  * Usa META_APP_ID e META_APP_SECRET do ambiente — não envie app secret do cliente.

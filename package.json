@@ -11,7 +11,7 @@
     "dev:v01": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-v01.ps1",
     "dev:v02": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-v02.ps1",
     "init:env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init-env-v01-v02.ps1",
-    "build": "node scripts/generate-brand-logo-module.mjs && tsc && node scripts/copy-index-html.mjs",
+    "build": "node scripts/generate-brand-logo-module.mjs && node scripts/clean-dist-js.cjs && tsc && node scripts/copy-index-html.mjs",
     "build:h": "node scripts/build-with-local-deps.cjs",
     "verify:uptime-diagnose": "node scripts/verify-uptime-diagnose.cjs",
     "verify:welcome-routing": "node scripts/verify-welcome-routing-rules.cjs",
@@ -38,7 +38,8 @@
     "test:meta-phase7": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-phase7.test.ts",
     "test:meta-phase8": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-phase8.test.ts",
     "test:meta-phase9": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-phase9.test.ts",
-    "test:meta-lab-tokens": "node --require ts-node/register --test src/auth/waba-meta-oficial-token-access.test.ts"
+    "test:meta-lab-tokens": "node --require ts-node/register --test src/auth/waba-meta-oficial-token-access.test.ts",
+    "test:meta-es-login": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-es-fb-login.test.ts"
   },
   "keywords": [
     "n8n",

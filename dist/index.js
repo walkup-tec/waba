@@ -6022,12 +6022,10 @@ async function persistIncomingCampaignInstances(campaign, incoming, evoRows) {
     const nextSelected = swapped.added.length
         ? swapped.selected
         : Array.from(new Set([...prevSelected, ...incoming.map((n) => String(n || "").trim()).filter(Boolean)]));
-    const added = swapped.added.length
-        ? swapped.added
-        : incoming.filter((n) => {
-            const key = String(n || "").trim().toLowerCase();
-            return key && !prevSelected.some((p) => p.toLowerCase() === key);
-        });
+    const added = swapped.added.length ? swapped.added : incoming.filter((n) => {
+        const key = String(n || "").trim().toLowerCase();
+        return key && !prevSelected.some((p) => p.toLowerCase() === key);
+    });
     if (!added.length) {
         return { added: [], removedBlocked: swapped.removedBlocked, selected: prevSelected };
     }
@@ -10117,6 +10115,20 @@ app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
         graphVersion: META_GRAPH_VERSION,
     });
 });
+/** Config pública do Tech Provider. Sem secrets. Fonte: META_CONFIG_ID || META_ES_CONFIG_ID. */
+app.get("/integrations/meta/whatsapp/config", (_req, res) => {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.set("Pragma", "no-cache");
+    const appId = String(process.env.META_APP_ID || "").trim();
+    const configId = String(process.env.META_CONFIG_ID || process.env.META_ES_CONFIG_ID || "").trim();
+    res.json({
+        ok: Boolean(appId && configId),
+        appId: appId || undefined,
+        configId: configId || undefined,
+        graphVersion: META_GRAPH_VERSION,
+        callbackPath: "/integrations/meta/whatsapp/callback",
+    });
+});
 /**
  * Troca o código do Embedded Signup por business token (Tech Provider / doc Meta nov/2025).
  * Usa META_APP_ID e META_APP_SECRET do ambiente — não envie app secret do cliente.
@@ -13468,30 +13480,30 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
                     needsPurchase: true,
                 });
             }
-            const swappedFast = await persistIncomingCampaignInstances(campaign, incoming, evoRowsAll);
-            if (!swappedFast.added.length) {
+            const swapped = await persistIncomingCampaignInstances(campaign, incoming, evoRowsAll);
+            if (!swapped.added.length) {
                 return res.status(400).json({
                     error: "Nenhuma instância nova foi adicionada. Verifique se o número está conectado.",
                     instanceHealth: healthBefore,
                 });
             }
-            const instanceHealthFast = getCampaignInstanceHealth(campaign.configSnapshot, evoRowsAll);
-            const addedCountFast = swappedFast.added.length;
-            const removedCountFast = swappedFast.removedBlocked.length;
-            const swapNoteFast = removedCountFast > 0
-                ? ` Substituímos ${removedCountFast} número(s) bloqueado(s)/offline (${swappedFast.removedBlocked.join(", ")}).`
+            const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRowsAll);
+            const addedCount = swapped.added.length;
+            const removedCount = swapped.removedBlocked.length;
+            const swapNote = removedCount > 0
+                ? ` Substituímos ${removedCount} número(s) bloqueado(s)/offline (${swapped.removedBlocked.join(", ")}).`
                 : "";
             return res.json({
                 ok: true,
                 id,
                 auto,
                 selectedDisparadorInstances: campaign.configSnapshot.selectedDisparadorInstances,
-                addedCount: addedCountFast,
-                removedBlockedCount: removedCountFast,
-                removedBlocked: swappedFast.removedBlocked,
-                instanceHealth: instanceHealthFast,
-                stillNeedsMore: instanceHealthFast.needsMoreInstancesForMinimum,
-                message: `Instâncias atualizadas (${addedCountFast} adicionada(s)).${swapNoteFast} Proxy Brasil será ligada nos novos números.`,
+                addedCount,
+                removedBlockedCount: removedCount,
+                removedBlocked: swapped.removedBlocked,
+                instanceHealth,
+                stillNeedsMore: instanceHealth.needsMoreInstancesForMinimum,
+                message: `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números.`,
             });
         }
         else {
