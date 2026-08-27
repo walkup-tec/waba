@@ -3212,7 +3212,7 @@
         }
         .meta-onboard-step strong { display:block; font-size:12px; line-height:1.3; }
         .meta-onboard-step-hint { display:block; margin-top:4px; font-size:11px; color:rgba(226,232,240,.62); }
-        .meta-connected-card { display:none; align-items:center; gap:14px; padding:16px 18px; border-radius:14px; border:1px solid rgba(37,211,102,.4); background:linear-gradient(180deg, rgba(6,36,24,.92), rgba(15,23,42,.7)); margin-bottom:14px; }
+        .meta-connected-card { display:none; align-items:center; gap:14px; padding:16px 18px; border-radius:14px; border:1px solid rgba(37,211,102,.4); background:linear-gradient(180deg, rgba(6,36,24,.92), rgba(15,23,42,.7)); margin:14px 0 0; }
         .meta-connected-card.is-visible { display:flex; }
         .meta-connected-avatar, .meta-chat-avatar { width:52px; height:52px; border-radius:50%; background:#25d366; color:#052e16; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; flex:0 0 auto; }
         .meta-chat-avatar { width:44px; height:44px; font-size:14px; font-weight:700; background:#00a884; }
@@ -3227,6 +3227,23 @@
           color: #86efac;
           border: 1px solid rgba(37, 211, 102, 0.55);
         }
+        .meta-lab-card {
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 16px;
+          padding: 18px;
+          margin: 0 0 16px;
+          background: rgba(15, 23, 42, 0.42);
+        }
+        .meta-lab-card-title {
+          margin: 0 0 14px;
+          font-size: 0.78rem;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(226, 232, 240, 0.58);
+        }
+        .meta-lab-card .meta-onboard-hero { margin-bottom: 16px; }
+        .meta-lab-card .meta-onboard-steps { margin-bottom: 0; }
         .meta-portfolio { margin: 0 0 18px; }
         .meta-portfolio[hidden] { display: none; }
         .meta-portfolio-card {
@@ -3239,6 +3256,7 @@
           background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(6, 36, 24, 0.45));
           margin-bottom: 14px;
         }
+        .meta-portfolio-card-copy { flex: 1; min-width: 0; }
         .meta-portfolio-logo {
           width: 56px;
           height: 56px;
@@ -3253,6 +3271,22 @@
           letter-spacing: -0.04em;
           flex: 0 0 auto;
           border: 1px solid rgba(37, 211, 102, 0.35);
+          overflow: hidden;
+        }
+        .meta-portfolio-logo img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .meta-portfolio-logo.has-photo {
+          padding: 0;
+          background: #052e16;
+        }
+        .meta-portfolio-logo.has-photo span { display: none; }
+        .meta-portfolio-logo.has-meta-fallback img {
+          object-fit: contain;
+          background: #000;
         }
         .meta-portfolio-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
         .meta-portfolio-card p { margin: 0 0 4px; font-size: 13px; color: rgba(226, 232, 240, 0.78); line-height: 1.4; }
@@ -3294,17 +3328,52 @@
         .meta-number-chip.is-busy { background: rgba(56, 189, 248, 0.16); color: #7dd3fc; }
         .meta-number-activate { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
         .meta-number-activate label { display: grid; gap: 4px; font-size: 11px; color: rgba(226, 232, 240, 0.7); }
-        .meta-number-activate input {
-          width: 108px;
+        .meta-number-actions { display: grid; gap: 8px; justify-items: end; }
+        .meta-number-edit {
+          min-width: 0;
+          min-height: 40px;
+          padding: 8px 14px;
+          font-size: 13px;
+        }
+        .meta-edit-modal {
+          position: fixed;
+          inset: 0;
+          z-index: 80;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 18px;
+          background: rgba(2, 6, 23, 0.72);
+        }
+        .meta-edit-modal[hidden] { display: none; }
+        .meta-edit-modal-card {
+          width: min(440px, 100%);
+          border-radius: 16px;
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          background: #0f172a;
+          padding: 18px;
+        }
+        .meta-edit-modal-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+        .meta-edit-modal-card label { display: grid; gap: 6px; margin: 12px 0 0; font-size: 13px; color: rgba(226, 232, 240, 0.78); }
+        .meta-edit-modal-card input[type="text"] {
           border: 1px solid rgba(148, 163, 184, 0.28);
           border-radius: 10px;
           background: rgba(2, 6, 23, 0.55);
           color: #e2e8f0;
-          padding: 8px 10px;
-          letter-spacing: 0.2em;
+          padding: 10px 12px;
         }
+        .meta-edit-preview {
+          width: 72px;
+          height: 72px;
+          border-radius: 12px;
+          object-fit: cover;
+          margin-top: 10px;
+          border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        .meta-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
         @media (max-width: 640px) {
           .meta-number-card { grid-template-columns: 1fr; }
+          .meta-portfolio-card { flex-wrap: wrap; }
         }
         .meta-tpl-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-bottom:16px; }
         .meta-tpl-card { text-align:left; border:1px solid rgba(148,163,184,.2); background:rgba(15,23,42,.55); border-radius:14px; padding:14px; color:inherit; cursor:pointer; min-height:140px; }
@@ -20321,37 +20390,45 @@
           <div class="row g-3">
             <section class="panel col-12">
               <div class="meta-onboard">
-                <div class="meta-onboard-hero">
-                  <div>
-                    <h2>Conectar WhatsApp</h2>
-                    <p>Conecte o <strong>portfólio da Drax</strong> uma vez. Depois cadastre vários números nesse mesmo portfólio, ative cada chip e use o que estiver livre no disparo. O cliente só precisa que a mensagem chegue — a logo entra no número escolhido.</p>
-                  </div>
-                  <button id="meta-tp-connect-btn" type="button" class="meta-onboard-cta" onclick="return window.wabaConnectMetaWhatsappOficial(event);">Conectar WhatsApp</button>
-                </div>
-                <ol class="meta-onboard-steps" id="meta-onboard-steps">
-                  <li class="meta-onboard-step is-current" data-meta-step="1"><span class="meta-onboard-step-n" aria-hidden="true">1</span><strong>Conectar</strong><span class="meta-onboard-step-hint">Clique no botão verde</span></li>
-                  <li class="meta-onboard-step" data-meta-step="2"><span class="meta-onboard-step-n" aria-hidden="true">2</span><strong>Empresa</strong><span class="meta-onboard-step-hint">Autorize na Meta</span></li>
-                  <li class="meta-onboard-step" data-meta-step="3"><span class="meta-onboard-step-n" aria-hidden="true">3</span><strong>WABA</strong><span class="meta-onboard-step-hint">Conta WhatsApp Business</span></li>
-                  <li class="meta-onboard-step" data-meta-step="4"><span class="meta-onboard-step-n" aria-hidden="true">4</span><strong>Número</strong><span class="meta-onboard-step-hint">Escolha o chip oficial</span></li>
-                  <li class="meta-onboard-step" data-meta-step="5"><span class="meta-onboard-step-n" aria-hidden="true">5</span><strong>Templates</strong><span class="meta-onboard-step-hint">Aprovados pela Meta</span></li>
-                  <li class="meta-onboard-step" data-meta-step="6"><span class="meta-onboard-step-n" aria-hidden="true">6</span><strong>Inbox</strong><span class="meta-onboard-step-hint">Teste e atendimento</span></li>
-                </ol>
-                <div id="meta-tp-connected-card" class="meta-connected-card" aria-live="polite" hidden>
-                  <div class="meta-connected-avatar" id="meta-tp-connected-initials">WA</div>
-                  <div>
-                    <h3 id="meta-tp-connected-name">WhatsApp conectado</h3>
-                    <p id="meta-tp-connected-phone">—</p>
-                  </div>
-                  <span class="meta-connected-badge">Conectado</span>
-                </div>
-                <section id="meta-tp-portfolio" class="meta-portfolio" hidden>
-                  <article class="meta-portfolio-card" aria-label="Portfólio empresarial">
-                    <div class="meta-portfolio-logo" id="meta-tp-portfolio-initials" aria-hidden="true">WP</div>
+                <article class="meta-lab-card" aria-labelledby="meta-card-steps-title">
+                  <h3 id="meta-card-steps-title" class="meta-lab-card-title">Etapas de integração</h3>
+                  <div class="meta-onboard-hero">
                     <div>
+                      <h2>Conectar WhatsApp</h2>
+                      <p>Conecte o <strong>portfólio da Drax</strong> uma vez. Depois cadastre vários números nesse mesmo portfólio, ative cada chip e use o que estiver livre no disparo. O cliente só precisa que a mensagem chegue — a logo entra no número escolhido.</p>
+                    </div>
+                    <button id="meta-tp-connect-btn" type="button" class="meta-onboard-cta" onclick="return window.wabaConnectMetaWhatsappOficial(event);">Conectar WhatsApp</button>
+                  </div>
+                  <ol class="meta-onboard-steps" id="meta-onboard-steps">
+                    <li class="meta-onboard-step is-current" data-meta-step="1"><span class="meta-onboard-step-n" aria-hidden="true">1</span><strong>Conectar</strong><span class="meta-onboard-step-hint">Clique no botão verde</span></li>
+                    <li class="meta-onboard-step" data-meta-step="2"><span class="meta-onboard-step-n" aria-hidden="true">2</span><strong>Empresa</strong><span class="meta-onboard-step-hint">Autorize na Meta</span></li>
+                    <li class="meta-onboard-step" data-meta-step="3"><span class="meta-onboard-step-n" aria-hidden="true">3</span><strong>WABA</strong><span class="meta-onboard-step-hint">Conta WhatsApp Business</span></li>
+                    <li class="meta-onboard-step" data-meta-step="4"><span class="meta-onboard-step-n" aria-hidden="true">4</span><strong>Número</strong><span class="meta-onboard-step-hint">Escolha o chip oficial</span></li>
+                    <li class="meta-onboard-step" data-meta-step="5"><span class="meta-onboard-step-n" aria-hidden="true">5</span><strong>Templates</strong><span class="meta-onboard-step-hint">Aprovados pela Meta</span></li>
+                    <li class="meta-onboard-step" data-meta-step="6"><span class="meta-onboard-step-n" aria-hidden="true">6</span><strong>Inbox</strong><span class="meta-onboard-step-hint">Teste e atendimento</span></li>
+                  </ol>
+                  <div id="meta-tp-connected-card" class="meta-connected-card" aria-live="polite" hidden>
+                    <div class="meta-connected-avatar" id="meta-tp-connected-initials">WA</div>
+                    <div>
+                      <h3 id="meta-tp-connected-name">WhatsApp conectado</h3>
+                      <p id="meta-tp-connected-phone">—</p>
+                    </div>
+                    <span class="meta-connected-badge">Conectado</span>
+                  </div>
+                </article>
+                <article id="meta-tp-portfolio" class="meta-lab-card meta-portfolio" hidden>
+                  <h3 class="meta-lab-card-title">Portfólio e seus números</h3>
+                  <article class="meta-portfolio-card" aria-label="Portfólio empresarial">
+                    <div class="meta-portfolio-logo" id="meta-tp-portfolio-logo">
+                      <img id="meta-tp-portfolio-photo" alt="" hidden referrerpolicy="no-referrer" />
+                      <span id="meta-tp-portfolio-initials" aria-hidden="true">WP</span>
+                    </div>
+                    <div class="meta-portfolio-card-copy">
                       <h3 id="meta-tp-portfolio-name">Portfólio</h3>
                       <p>Identificação do portfólio empresarial: <span id="meta-tp-portfolio-id">—</span></p>
                       <p>Página principal: <span id="meta-tp-portfolio-page">—</span></p>
                     </div>
+                    <button type="button" id="meta-tp-edit-portfolio" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit">Editar</button>
                   </article>
                   <div class="meta-portfolio-toolbar">
                     <h3>Números deste portfólio</h3>
@@ -20359,7 +20436,27 @@
                   </div>
                   <div id="meta-tp-numbers" class="meta-number-list"></div>
                   <p id="meta-tp-numbers-empty" class="muted" hidden>Nenhum número neste portfólio ainda. Use Adicionar número, conclua o SMS no chip e ative com o PIN de 6 dígitos.</p>
-                </section>
+                </article>
+                <div id="meta-tp-edit-modal" class="meta-edit-modal" hidden>
+                  <div class="meta-edit-modal-card" role="dialog" aria-labelledby="meta-tp-edit-title">
+                    <h3 id="meta-tp-edit-title">Editar número</h3>
+                    <p id="meta-tp-edit-phone" class="muted" style="margin:0;">—</p>
+                    <label>
+                      <span id="meta-tp-edit-name-label">Nome de exibição no WhatsApp</span>
+                      <input id="meta-tp-edit-name" type="text" maxlength="512" autocomplete="organization" />
+                    </label>
+                    <p id="meta-tp-edit-hint" class="muted" style="margin:8px 0 0;">A Meta precisa aprovar o novo nome. Depois ative o número de novo com o PIN de 6 dígitos.</p>
+                    <label>Foto de perfil
+                      <input id="meta-tp-edit-photo" type="file" accept="image/png,image/jpeg" />
+                    </label>
+                    <img id="meta-tp-edit-preview" class="meta-edit-preview" alt="Prévia da foto" hidden />
+                    <p id="meta-tp-edit-status" class="muted" style="margin:10px 0 0;" role="status"></p>
+                    <div class="meta-edit-actions">
+                      <button type="button" class="instance-action-btn btn-refresh enabled" id="meta-tp-edit-cancel">Cancelar</button>
+                      <button type="button" class="meta-onboard-cta" id="meta-tp-edit-save">Salvar</button>
+                    </div>
+                  </div>
+                </div>
                 <p id="meta-tp-connect-status" class="muted" style="margin:0 0 10px;" role="status" aria-live="polite">Carregando status da conexão…</p>
                 <div class="meta-onboard-next">
                   <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaOpenLabTab('whatsapp-templates');">Ir para Templates</button>
@@ -34842,6 +34939,27 @@
         return parts.map((part) => part.charAt(0)).join("").toUpperCase();
       }
 
+      const META_PORTFOLIO_FALLBACK_LOGO = "/media/meta-logo.png";
+
+      function metaTpShowPortfolioLogo(photoEl, logoEl, src, alt, isFallback) {
+        photoEl.onload = () => {
+          photoEl.hidden = false;
+          logoEl.classList.add("has-photo");
+          logoEl.classList.toggle("has-meta-fallback", Boolean(isFallback));
+        };
+        photoEl.onerror = () => {
+          if (!isFallback) {
+            metaTpShowPortfolioLogo(photoEl, logoEl, META_PORTFOLIO_FALLBACK_LOGO, "Meta", true);
+            return;
+          }
+          photoEl.removeAttribute("src");
+          photoEl.hidden = true;
+          logoEl.classList.remove("has-photo", "has-meta-fallback");
+        };
+        photoEl.alt = alt;
+        photoEl.src = src;
+      }
+
       function metaTpRenderPortfolio(assets) {
         const section = document.getElementById("meta-tp-portfolio");
         const list = document.getElementById("meta-tp-numbers");
@@ -34860,11 +34978,22 @@
         const nameEl = document.getElementById("meta-tp-portfolio-name");
         const idEl = document.getElementById("meta-tp-portfolio-id");
         const pageEl = document.getElementById("meta-tp-portfolio-page");
+        const logoEl = document.getElementById("meta-tp-portfolio-logo");
+        const photoEl = document.getElementById("meta-tp-portfolio-photo");
         const iniEl = document.getElementById("meta-tp-portfolio-initials");
         if (nameEl) nameEl.textContent = name;
         if (idEl) idEl.textContent = String(portfolio.id);
         if (pageEl) pageEl.textContent = portfolio.primaryPageName || "—";
         if (iniEl) iniEl.textContent = metaTpInitials(name);
+        const photoUrl = String(portfolio.profilePictureUrl || "").trim();
+        const safePhoto = /^https:\/\//i.test(photoUrl) ? photoUrl : "";
+        if (photoEl && logoEl) {
+          if (safePhoto) {
+            metaTpShowPortfolioLogo(photoEl, logoEl, safePhoto, name, false);
+          } else {
+            metaTpShowPortfolioLogo(photoEl, logoEl, META_PORTFOLIO_FALLBACK_LOGO, "Meta", true);
+          }
+        }
         if (!list) return;
         if (!numbers.length) {
           list.innerHTML = "";
@@ -34904,8 +35033,16 @@
               statusChip +
               dispatchChip +
               "</div></div>" +
+              '<div class="meta-number-actions">' +
+              '<button type="button" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit" data-meta-edit="' +
+              id +
+              '" data-meta-edit-name="' +
+              verified +
+              '" data-meta-edit-phone="' +
+              phone +
+              '">Editar</button>' +
               activate +
-              "</article>"
+              "</div></article>"
             );
           })
           .join("");
@@ -35179,9 +35316,174 @@
         return true;
       };
 
+      const metaTpEditState = { kind: "number", phoneNumberId: "", originalName: "", photoBase64: "", photoMime: "" };
+
+      function metaTpEditStatus(text) {
+        const el = document.getElementById("meta-tp-edit-status");
+        if (el) el.textContent = text || "";
+      }
+
+      function metaTpSetEditCopy(kind, subtitle, name) {
+        const titleEl = document.getElementById("meta-tp-edit-title");
+        const phoneEl = document.getElementById("meta-tp-edit-phone");
+        const labelEl = document.getElementById("meta-tp-edit-name-label");
+        const hintEl = document.getElementById("meta-tp-edit-hint");
+        const nameEl = document.getElementById("meta-tp-edit-name");
+        const isPortfolio = kind === "portfolio";
+        if (titleEl) titleEl.textContent = isPortfolio ? "Editar portfólio" : "Editar número";
+        if (phoneEl) phoneEl.textContent = subtitle || "";
+        if (labelEl) labelEl.textContent = isPortfolio ? "Nome do portfólio" : "Nome de exibição no WhatsApp";
+        if (hintEl) {
+          hintEl.textContent = isPortfolio
+            ? "O nome muda no Business Manager. A foto usa a página principal da Meta (ou a primeira página do portfólio)."
+            : "A Meta precisa aprovar o novo nome. Depois ative o número de novo com o PIN de 6 dígitos.";
+        }
+        if (nameEl) nameEl.value = name || "";
+      }
+
+      function metaTpCloseEditNumber() {
+        const modal = document.getElementById("meta-tp-edit-modal");
+        if (modal) modal.hidden = true;
+        metaTpEditState.kind = "number";
+        metaTpEditState.phoneNumberId = "";
+        metaTpEditState.originalName = "";
+        metaTpEditState.photoBase64 = "";
+        metaTpEditState.photoMime = "";
+        const file = document.getElementById("meta-tp-edit-photo");
+        if (file) file.value = "";
+        const preview = document.getElementById("meta-tp-edit-preview");
+        if (preview) {
+          preview.removeAttribute("src");
+          preview.hidden = true;
+        }
+        metaTpEditStatus("");
+      }
+
+      function metaTpOpenEditNumber(phoneNumberId, phone, name) {
+        metaTpEditState.kind = "number";
+        metaTpEditState.phoneNumberId = String(phoneNumberId || "").trim();
+        metaTpEditState.originalName = String(name && name !== "Sem nome de exibição" ? name : "").trim();
+        metaTpEditState.photoBase64 = "";
+        metaTpEditState.photoMime = "";
+        const modal = document.getElementById("meta-tp-edit-modal");
+        const file = document.getElementById("meta-tp-edit-photo");
+        const preview = document.getElementById("meta-tp-edit-preview");
+        metaTpSetEditCopy("number", phone || "", metaTpEditState.originalName);
+        if (file) file.value = "";
+        if (preview) {
+          preview.removeAttribute("src");
+          preview.hidden = true;
+        }
+        metaTpEditStatus("");
+        if (modal) modal.hidden = false;
+        const nameEl = document.getElementById("meta-tp-edit-name");
+        if (nameEl) nameEl.focus();
+      }
+
+      function metaTpOpenEditPortfolio() {
+        const nameEl = document.getElementById("meta-tp-portfolio-name");
+        const idEl = document.getElementById("meta-tp-portfolio-id");
+        const name = String((nameEl && nameEl.textContent) || "").trim();
+        const id = String((idEl && idEl.textContent) || "").trim();
+        metaTpEditState.kind = "portfolio";
+        metaTpEditState.phoneNumberId = "";
+        metaTpEditState.originalName = name;
+        metaTpEditState.photoBase64 = "";
+        metaTpEditState.photoMime = "";
+        const modal = document.getElementById("meta-tp-edit-modal");
+        const file = document.getElementById("meta-tp-edit-photo");
+        const preview = document.getElementById("meta-tp-edit-preview");
+        metaTpSetEditCopy("portfolio", id ? "ID " + id : "", name);
+        if (file) file.value = "";
+        if (preview) {
+          preview.removeAttribute("src");
+          preview.hidden = true;
+        }
+        metaTpEditStatus("");
+        if (modal) modal.hidden = false;
+        const input = document.getElementById("meta-tp-edit-name");
+        if (input) input.focus();
+      }
+
+      window.wabaSaveMetaWhatsappNumberProfile = async function wabaSaveMetaWhatsappNumberProfile() {
+        const isPortfolio = metaTpEditState.kind === "portfolio";
+        const phoneNumberId = metaTpEditState.phoneNumberId;
+        const nameEl = document.getElementById("meta-tp-edit-name");
+        const displayName = String((nameEl && nameEl.value) || "").trim();
+        const nameChanged = Boolean(displayName && displayName !== metaTpEditState.originalName);
+        if (!isPortfolio && !phoneNumberId) return false;
+        if (!nameChanged && !metaTpEditState.photoBase64) {
+          metaTpEditStatus("Altere o nome ou escolha uma foto.");
+          return false;
+        }
+        metaTpEditStatus("Salvando na Meta…");
+        const path = isPortfolio
+          ? "/integrations/meta/whatsapp/portfolio/profile"
+          : "/integrations/meta/whatsapp/phone-numbers/profile";
+        const body = isPortfolio
+          ? {
+              displayName: nameChanged ? displayName : "",
+              photoBase64: metaTpEditState.photoBase64,
+              photoMime: metaTpEditState.photoMime,
+            }
+          : {
+              phoneNumberId: phoneNumberId,
+              displayName: nameChanged ? displayName : "",
+              photoBase64: metaTpEditState.photoBase64,
+              photoMime: metaTpEditState.photoMime,
+            };
+        const { response, payload } = await metaTpFetchJson(path, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        if (!response.ok || payload.ok === false) {
+          metaTpEditStatus(String(payload.error || "Não foi possível salvar."));
+          return false;
+        }
+        const parts = [];
+        if (payload.photoUpdated) parts.push("foto atualizada");
+        if (payload.nameUpdated) parts.push("nome atualizado");
+        if (payload.namePending) parts.push("nome enviado para aprovação da Meta");
+        if (isPortfolio && metaTpEditState.photoBase64 && payload.photoUpdated === false) {
+          parts.push("foto não aplicada (é preciso uma página no portfólio)");
+        }
+        metaTpSetStatus(parts.length ? (isPortfolio ? "Portfólio: " : "Número: ") + parts.join(" · ") : "Perfil atualizado.");
+        metaTpRenderPortfolio(payload);
+        metaTpCloseEditNumber();
+        return true;
+      };
+
       window.addEventListener("click", function (event) {
-        const btn = event.target && event.target.closest && event.target.closest("[data-meta-activate]");
-        if (!btn || !document.getElementById("meta-tp-numbers") || !document.getElementById("meta-tp-numbers").contains(btn)) {
+        const target = event.target;
+        if (!target || !target.closest) return;
+        if (target.id === "meta-tp-edit-cancel" || target.id === "meta-tp-edit-modal") {
+          event.preventDefault();
+          metaTpCloseEditNumber();
+          return;
+        }
+        if (target.id === "meta-tp-edit-save") {
+          event.preventDefault();
+          window.wabaSaveMetaWhatsappNumberProfile();
+          return;
+        }
+        if (target.id === "meta-tp-edit-portfolio" || (target.closest && target.closest("#meta-tp-edit-portfolio"))) {
+          event.preventDefault();
+          metaTpOpenEditPortfolio();
+          return;
+        }
+        const editBtn = target.closest("[data-meta-edit]");
+        const numbers = document.getElementById("meta-tp-numbers");
+        if (editBtn && numbers && numbers.contains(editBtn)) {
+          event.preventDefault();
+          metaTpOpenEditNumber(
+            editBtn.getAttribute("data-meta-edit"),
+            editBtn.getAttribute("data-meta-edit-phone"),
+            editBtn.getAttribute("data-meta-edit-name"),
+          );
+          return;
+        }
+        const btn = target.closest("[data-meta-activate]");
+        if (!btn || !numbers || !numbers.contains(btn)) {
           return;
         }
         event.preventDefault();
@@ -35194,6 +35496,33 @@
         }
         if (input) input.value = "";
         window.wabaActivateMetaWhatsappNumber(phoneNumberId, pin);
+      });
+
+      window.addEventListener("change", function (event) {
+        const input = event.target;
+        if (!input || input.id !== "meta-tp-edit-photo" || !input.files || !input.files[0]) return;
+        const file = input.files[0];
+        if (!/^image\/(jpeg|jpg|png)$/i.test(file.type)) {
+          metaTpEditStatus("Use uma foto JPEG ou PNG.");
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          metaTpEditStatus("A foto deve ter no máximo 5 MB.");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function () {
+          const dataUrl = String(reader.result || "");
+          metaTpEditState.photoBase64 = dataUrl;
+          metaTpEditState.photoMime = file.type;
+          const preview = document.getElementById("meta-tp-edit-preview");
+          if (preview) {
+            preview.src = dataUrl;
+            preview.hidden = false;
+          }
+          metaTpEditStatus("");
+        };
+        reader.readAsDataURL(file);
       });
 
       window.addEventListener("message", function (event) {

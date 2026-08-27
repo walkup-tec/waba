@@ -5,7 +5,9 @@ export type MetaPortfolioNumberUiStatus = "ativo" | "pendente";
 export type MetaPortfolioPublic = {
   id: string | null;
   name: string | null;
+  primaryPageId: string | null;
   primaryPageName: string | null;
+  profilePictureUrl: string | null;
   wabaId: string | null;
 };
 

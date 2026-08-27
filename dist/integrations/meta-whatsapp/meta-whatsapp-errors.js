@@ -23,6 +23,7 @@ const PUBLIC_MESSAGES = {
     automation_not_found: "Fluxo ou regra de automação não encontrado nesta conta.",
     invalid_pin: "Informe um PIN de 6 dígitos para ativar o número.",
     register_failed: "Não foi possível ativar o número na Meta. Confira o PIN e tente de novo.",
+    profile_update_failed: "Não foi possível atualizar o nome ou a foto deste número na Meta.",
 };
 class MetaWhatsappError extends Error {
     constructor(code, status) {
@@ -38,7 +39,7 @@ function defaultStatus(code) {
         return 401;
     if (code === "config_invalid" || code === "persist_failed")
         return 503;
-    if (code === "exchange_failed" || code === "send_failed" || code === "register_failed")
+    if (code === "exchange_failed" || code === "send_failed" || code === "register_failed" || code === "profile_update_failed")
         return 424;
     if (code === "not_connected" || code === "template_not_ready")
         return 409;

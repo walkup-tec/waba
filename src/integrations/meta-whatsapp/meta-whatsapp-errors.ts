@@ -17,7 +17,8 @@ export type MetaWhatsappErrorCode =
   | "automation_invalid"
   | "automation_not_found"
   | "invalid_pin"
-  | "register_failed";
+  | "register_failed"
+  | "profile_update_failed";
 
 const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   unauthenticated: "Faça login para conectar o WhatsApp Oficial.",
@@ -39,6 +40,7 @@ const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   automation_not_found: "Fluxo ou regra de automação não encontrado nesta conta.",
   invalid_pin: "Informe um PIN de 6 dígitos para ativar o número.",
   register_failed: "Não foi possível ativar o número na Meta. Confira o PIN e tente de novo.",
+  profile_update_failed: "Não foi possível atualizar o nome ou a foto deste número na Meta.",
 };
 
 export class MetaWhatsappError extends Error {
@@ -56,7 +58,7 @@ export class MetaWhatsappError extends Error {
 function defaultStatus(code: MetaWhatsappErrorCode): number {
   if (code === "unauthenticated") return 401;
   if (code === "config_invalid" || code === "persist_failed") return 503;
-  if (code === "exchange_failed" || code === "send_failed" || code === "register_failed") return 424;
+  if (code === "exchange_failed" || code === "send_failed" || code === "register_failed" || code === "profile_update_failed") return 424;
   if (code === "not_connected" || code === "template_not_ready") return 409;
   if (code === "template_not_found" || code === "conversation_not_found" || code === "automation_not_found") return 404;
   return 400;

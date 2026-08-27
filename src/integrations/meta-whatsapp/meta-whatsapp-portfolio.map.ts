@@ -12,6 +12,25 @@ function text(value: unknown): string | null {
   return raw || null;
 }
 
+function httpsUrl(value: unknown): string | null {
+  const raw = text(value);
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:") return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function pictureUrl(node: unknown): string | null {
+  const row = asRecord(node);
+  const data = asRecord(row.data);
+  if (data.is_silhouette === true) return null;
+  return httpsUrl(data.url) || httpsUrl(row.url);
+}
+
 export function isMetaPhoneConnected(metaStatus: string | null): boolean {
   return String(metaStatus || "").trim().toUpperCase() === "CONNECTED";
 }
@@ -25,9 +44,21 @@ export function mapMetaBusinessToPortfolio(
   return {
     id: text(row.id) || text(fallback.id),
     name: text(row.name),
+    primaryPageId: text(page.id),
     primaryPageName: text(page.name),
+    profilePictureUrl: httpsUrl(row.profile_picture_uri) || pictureUrl(page.picture),
     wabaId: text(fallback.wabaId),
   };
+}
+
+export function firstOwnedPageId(json: unknown): string | null {
+  const data = asRecord(json).data;
+  const rows = Array.isArray(data) ? data : [];
+  for (const item of rows) {
+    const id = text(asRecord(item).id);
+    if (id) return id;
+  }
+  return null;
 }
 
 export function mapMetaPhoneToPortfolioNumber(

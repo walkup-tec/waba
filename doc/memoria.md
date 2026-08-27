@@ -1,5 +1,19 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 20:48 — Editar nome e foto do portfólio
+- Nome via `POST /{business-id}`; foto via página principal da Meta
+- LOG: `doc/LOG-2026-08-27__204800__editar-nome-foto-portfolio.md`
+
+## 2026-08-27 20:35 — Cards Laboratório + editar nome/foto do chip
+- CARD 01 etapas; CARD 02 portfólio e números
+- Editar: foto (Resumable Upload) e nome (`new_display_name`, aprovação Meta)
+- LOG: `doc/LOG-2026-08-27__203500__cards-laboratorio-editar-numero.md`
+
+## 2026-08-27 20:15 — Foto de perfil do portfólio Meta
+- Graph: `profile_picture_uri` no Business; fallback da página principal
+- Sem foto: logo Meta em `/media/meta-logo.png` (não mais iniciais PE)
+- LOG: `doc/LOG-2026-08-27__201500__foto-perfil-portfolio-meta.md`
+
 ## 2026-08-27 19:35 — Portfólio oficial em produção (Mozart)
 - Flag `metaOfficialPortfolioLab` ligada em produção
 - Laboratório continua só `mozart.pmo@gmail.com` (walkup/quantumivst sem o menu)
