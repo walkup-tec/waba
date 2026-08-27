@@ -11,7 +11,7 @@
     "dev:v01": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-v01.ps1",
     "dev:v02": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-v02.ps1",
     "init:env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init-env-v01-v02.ps1",
-    "build": "node scripts/generate-brand-logo-module.mjs && tsc && node scripts/copy-index-html.mjs",
+    "build": "node scripts/generate-brand-logo-module.mjs && node scripts/clean-dist-js.cjs && tsc && node scripts/copy-index-html.mjs",
     "build:h": "node scripts/build-with-local-deps.cjs",
     "verify:uptime-diagnose": "node scripts/verify-uptime-diagnose.cjs",
     "verify:welcome-routing": "node scripts/verify-welcome-routing-rules.cjs",
