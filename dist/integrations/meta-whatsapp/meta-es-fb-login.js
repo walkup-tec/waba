@@ -13,6 +13,7 @@ exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = ex
 exports.readMetaConfigIdFromEnv = readMetaConfigIdFromEnv;
 exports.resolveMetaEsConfigId = resolveMetaEsConfigId;
 exports.configIdLast4 = configIdLast4;
+exports.buildMetaEsSetupPrefill = buildMetaEsSetupPrefill;
 exports.buildMetaEsFbLoginOptions = buildMetaEsFbLoginOptions;
 exports.shouldOpenMetaEsPopup = shouldOpenMetaEsPopup;
 exports.resolveFbLoginOptionsForAttempt = resolveFbLoginOptionsForAttempt;
@@ -45,7 +46,17 @@ function configIdLast4(configId) {
     const id = String(configId || "").trim();
     return id.length >= 4 ? id.slice(-4) : "";
 }
-function buildMetaEsFbLoginOptions(configId) {
+function buildMetaEsSetupPrefill(input) {
+    const setup = {};
+    const businessId = String(input.businessId || "").trim();
+    const wabaId = String(input.wabaId || "").trim();
+    if (businessId)
+        setup.business = { id: businessId };
+    if (wabaId)
+        setup.whatsAppBusinessAccount = { ids: wabaId };
+    return setup;
+}
+function buildMetaEsFbLoginOptions(configId, setup) {
     const id = String(configId || "").trim();
     if (!id)
         return null;
@@ -53,7 +64,7 @@ function buildMetaEsFbLoginOptions(configId) {
         config_id: id,
         response_type: "code",
         override_default_response_type: true,
-        extras: { setup: {}, sessionInfoVersion: "3" },
+        extras: { setup: setup && Object.keys(setup).length ? setup : {}, sessionInfoVersion: "3" },
     };
 }
 function shouldOpenMetaEsPopup(input) {

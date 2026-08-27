@@ -26,11 +26,16 @@ export const META_ES_LEGACY_EXCHANGE_PATHS = [
   "/waba-embedded-signup-exchange",
 ] as const;
 
+export type MetaEsSetupPrefill = {
+  business?: { id: string };
+  whatsAppBusinessAccount?: { ids: string };
+};
+
 export type MetaEsFbLoginOptions = {
   config_id: string;
   response_type: "code";
   override_default_response_type: true;
-  extras: { setup: Record<string, never>; sessionInfoVersion: "3" };
+  extras: { setup: MetaEsSetupPrefill; sessionInfoVersion: "3" };
 };
 
 export type MetaEsPublicConfig = {
@@ -71,14 +76,29 @@ export function configIdLast4(configId: string): string {
   return id.length >= 4 ? id.slice(-4) : "";
 }
 
-export function buildMetaEsFbLoginOptions(configId: string): MetaEsFbLoginOptions | null {
+export function buildMetaEsSetupPrefill(input: {
+  businessId?: string;
+  wabaId?: string;
+}): MetaEsSetupPrefill {
+  const setup: MetaEsSetupPrefill = {};
+  const businessId = String(input.businessId || "").trim();
+  const wabaId = String(input.wabaId || "").trim();
+  if (businessId) setup.business = { id: businessId };
+  if (wabaId) setup.whatsAppBusinessAccount = { ids: wabaId };
+  return setup;
+}
+
+export function buildMetaEsFbLoginOptions(
+  configId: string,
+  setup?: MetaEsSetupPrefill,
+): MetaEsFbLoginOptions | null {
   const id = String(configId || "").trim();
   if (!id) return null;
   return {
     config_id: id,
     response_type: "code",
     override_default_response_type: true,
-    extras: { setup: {}, sessionInfoVersion: "3" },
+    extras: { setup: setup && Object.keys(setup).length ? setup : {}, sessionInfoVersion: "3" },
   };
 }
 

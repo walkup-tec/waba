@@ -21,6 +21,11 @@ import type {
   MetaWhatsappTenant,
   MetaWhatsappUiStatus,
 } from "./meta-whatsapp-connection.types";
+import type { MetaPortfolioAssetsPublic } from "./meta-whatsapp-portfolio.types";
+import {
+  mapMetaBusinessToPortfolio,
+  mapMetaPhoneListToPortfolioNumbers,
+} from "./meta-whatsapp-portfolio.map";
 
 const SENSITIVE_KEY =
   /^(access_token|accessToken|app_secret|appSecret|client_secret|clientSecret|authorization_code|access_token_encrypted|accessTokenEncrypted|encrypted_token|encryptedToken|system_user_token|systemUserToken|refresh_token|refreshToken)$/i;
@@ -101,6 +106,7 @@ export type MetaConnectionGraphCaller = (input: {
   method: "GET" | "POST";
   path: string;
   query?: Record<string, string>;
+  body?: Record<string, unknown>;
 }) => Promise<MetaGraphJsonResult>;
 
 function wabaIdFromPhoneJson(json: unknown): string {
@@ -231,9 +237,9 @@ export class MetaWhatsappConnectionService {
     if (!open) {
       throw new MetaWhatsappError("no_pending_connection");
     }
-    const wabaId = String(input.wabaId || open.wabaId || "").trim();
-    const phoneNumberId = String(input.phoneNumberId || open.phoneNumberId || "").trim();
-    const businessId = String(input.businessId || open.metaBusinessId || "").trim();
+    const wabaId = String(open.wabaId || input.wabaId || "").trim();
+    const phoneNumberId = String(open.phoneNumberId || input.phoneNumberId || "").trim();
+    const businessId = String(open.metaBusinessId || input.businessId || "").trim();
     if (!wabaId && !phoneNumberId && !businessId) {
       return toMetaWhatsappPublicConnection(open);
     }
@@ -345,6 +351,137 @@ export class MetaWhatsappConnectionService {
       status: connected.status,
     });
     return toMetaWhatsappPublicConnection(connected);
+  }
+
+  async listPortfolioAssets(auth: WabaRequestAuth): Promise<MetaPortfolioAssetsPublic> {
+    const tenant = requireTenant(auth);
+    const open = await this.repository.findOpenByTenant(tenant.tenantId);
+    if (!open) {
+      return { portfolio: null, numbers: [] };
+    }
+
+    const fallbackPortfolio = mapMetaBusinessToPortfolio(
+      { id: open.metaBusinessId, name: null, primary_page: null },
+      { id: open.metaBusinessId, wabaId: open.wabaId },
+    );
+
+    let token = "";
+    try {
+      token = this.decrypt(open.accessTokenEncrypted);
+    } catch {
+      logMetaWhatsappSafe("portfolio-list-failed", { tenantId: tenant.tenantId, reason: "decrypt" });
+      throw new MetaWhatsappError("invalid_token");
+    }
+
+    let portfolio = fallbackPortfolio;
+    const businessId = String(open.metaBusinessId || "").trim();
+    if (businessId) {
+      const business = await this.graph({
+        token,
+        method: "GET",
+        path: businessId,
+        query: { fields: "id,name,primary_page{id,name}" },
+      });
+      if (business.ok) {
+        portfolio = mapMetaBusinessToPortfolio(business.json, {
+          id: open.metaBusinessId,
+          wabaId: open.wabaId,
+        });
+      } else if (business.status === 401) {
+        logMetaWhatsappSafe("portfolio-list-failed", { tenantId: tenant.tenantId, reason: "business" });
+        throw new MetaWhatsappError("invalid_token");
+      } else {
+        logMetaWhatsappSafe("portfolio-list-partial", {
+          tenantId: tenant.tenantId,
+          reason: "business",
+          status: business.status,
+        });
+      }
+    }
+
+    const wabaId = String(open.wabaId || "").trim();
+    if (!wabaId) {
+      return { portfolio: portfolio.id ? portfolio : null, numbers: [] };
+    }
+
+    const phones = await this.graph({
+      token,
+      method: "GET",
+      path: `${wabaId}/phone_numbers`,
+      query: {
+        fields: "id,display_phone_number,verified_name,quality_rating,status,code_verification_status",
+      },
+    });
+    if (!phones.ok) {
+      logMetaWhatsappSafe("portfolio-list-failed", {
+        tenantId: tenant.tenantId,
+        reason: "phones",
+        status: phones.status,
+      });
+      if (phones.status === 401) throw new MetaWhatsappError("invalid_token");
+      return { portfolio: portfolio.id ? portfolio : null, numbers: [] };
+    }
+
+    const numbers = mapMetaPhoneListToPortfolioNumbers(phones.json);
+    logMetaWhatsappSafe("portfolio-listed", {
+      tenantId: tenant.tenantId,
+      hasBusiness: Boolean(portfolio.id),
+      numbers: numbers.length,
+    });
+    return { portfolio: portfolio.id ? portfolio : null, numbers };
+  }
+
+  async registerPhoneFromAuth(
+    auth: WabaRequestAuth,
+    input: { phoneNumberId?: string; pin?: string },
+  ): Promise<MetaPortfolioAssetsPublic> {
+    const tenant = requireTenant(auth);
+    const open = await this.repository.findOpenByTenant(tenant.tenantId);
+    if (!open) throw new MetaWhatsappError("no_pending_connection");
+
+    const phoneNumberId = String(input.phoneNumberId || open.phoneNumberId || "").trim();
+    const pin = String(input.pin || "").trim();
+    if (!phoneNumberId) throw new MetaWhatsappError("invalid_payload");
+    if (!/^\d{6}$/.test(pin)) throw new MetaWhatsappError("invalid_pin");
+
+    let token = "";
+    try {
+      token = this.decrypt(open.accessTokenEncrypted);
+    } catch {
+      logMetaWhatsappSafe("phone-register-failed", { tenantId: tenant.tenantId, reason: "decrypt" });
+      throw new MetaWhatsappError("invalid_token");
+    }
+
+    const registered = await this.graph({
+      token,
+      method: "POST",
+      path: `${phoneNumberId}/register`,
+      body: { messaging_product: "whatsapp", pin },
+    });
+    if (!registered.ok) {
+      logMetaWhatsappSafe("phone-register-failed", {
+        tenantId: tenant.tenantId,
+        reason: "graph",
+        status: registered.status,
+      });
+      if (registered.status === 401) throw new MetaWhatsappError("invalid_token");
+      throw new MetaWhatsappError("register_failed");
+    }
+
+    logMetaWhatsappSafe("phone-registered", {
+      tenantId: tenant.tenantId,
+      connectionId: open.id,
+    });
+
+    if (open.wabaId && open.phoneNumberId && open.status !== "connected") {
+      try {
+        await this.confirmFromAuth(auth);
+      } catch {
+        logMetaWhatsappSafe("phone-register-confirm-skip", { tenantId: tenant.tenantId });
+      }
+    }
+
+    return this.listPortfolioAssets(auth);
   }
 
 }

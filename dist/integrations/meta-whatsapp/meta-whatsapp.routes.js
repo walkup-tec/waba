@@ -5,6 +5,7 @@ const waba_request_auth_1 = require("../../auth/waba-request-auth");
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_connection_service_1 = require("./meta-whatsapp-connection.service");
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
+const waba_feature_flags_1 = require("../../config/waba-feature-flags");
 const meta_whatsapp_messaging_service_1 = require("./meta-whatsapp-messaging.service");
 const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.service");
 const meta_whatsapp_inbox_service_1 = require("./meta-whatsapp-inbox.service");
@@ -135,6 +136,42 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             warnClientTenantClaim(req);
             const publicStatus = await service.confirmFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req));
             return sendPublic(res, 200, { ok: true, ...publicStatus });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
+    app.get("/integrations/meta/whatsapp/portfolio", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            const assets = await service.listPortfolioAssets((0, waba_request_auth_1.resolveWabaRequestAuth)(req));
+            return sendPublic(res, 200, { ok: true, ...assets });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
+    app.post("/integrations/meta/whatsapp/phone-numbers/register", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            warnClientTenantClaim(req);
+            const assets = await service.registerPhoneFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
+                phoneNumberId: String(req.body?.phoneNumberId || req.body?.phone_number_id || "").trim(),
+                pin: String(req.body?.pin || "").trim(),
+            });
+            return sendPublic(res, 200, { ok: true, ...assets });
         }
         catch (error) {
             return handleMetaError(res, error);

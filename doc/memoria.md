@@ -1,5 +1,21 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 19:35 — Portfólio oficial em produção (Mozart)
+- Flag `metaOfficialPortfolioLab` ligada em produção
+- Laboratório continua só `mozart.pmo@gmail.com` (walkup/quantumivst sem o menu)
+- LOG: `doc/LOG-2026-08-27__193500__portfolio-oficial-producao-mozart.md`
+
+## 2026-08-27 16:50 — Telas Meta só no localhost V02
+- Card de portfólio/números e rotas novas só com `WABA_ENV=v02` + `RUNTIME_MODE` ≠ production
+- Produção não mostra essas telas (supersedido às 19:35 para Mozart)
+- LOG: `doc/LOG-2026-08-27__165000__telas-meta-so-localhost-v02.md`
+
+## 2026-08-27 16:21 — Portfólio único + números oficiais
+- Um portfólio Drax/Walkup reúne os chips; não é um portfólio por cliente
+- Card com nome, ID e página principal; lista Ativo/Pendente e Livre/Em disparo
+- Adicionar número (ES curto) e Ativar com PIN de 6 dígitos
+- LOG: `doc/LOG-2026-08-27__162100__portfolio-numeros-oficiais-ativar.md`
+
 ## 2026-08-27 15:44 — Marker de deploy + Instâncias
 - Marker: `DEPLOY-2026-08-27-154400-botao-instancias-alias`
 - LOG: `doc/LOG-2026-08-27__154400__deploy-marker-botao-instancias.md`

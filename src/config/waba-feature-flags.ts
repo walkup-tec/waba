@@ -3,6 +3,8 @@ import { WABA_ENV } from "../load-env";
 export type WabaFeatureFlags = {
   /** Compra/ativação de números da fazenda (API não oficial via pool master). */
   alternativaNumbersPurchase: boolean;
+  /** Card de portfólio + lista/ativação de números oficiais (Laboratório: Mozart em produção). */
+  metaOfficialPortfolioLab: boolean;
 };
 
 const parseTruthy = (raw: string): boolean | null => {
@@ -19,9 +21,17 @@ export function isAlternativaNumbersPurchaseEnabled(): boolean {
   return false;
 }
 
+/** Telas de portfólio/números oficiais. Laboratório em produção continua só Mozart. */
+export function isMetaOfficialPortfolioLabEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const explicit = parseTruthy(String(env.WABA_META_OFFICIAL_PORTFOLIO_LAB ?? ""));
+  if (explicit !== null) return explicit;
+  return true;
+}
+
 export function getWabaFeatureFlags(): WabaFeatureFlags {
   return {
     alternativaNumbersPurchase: isAlternativaNumbersPurchaseEnabled(),
+    metaOfficialPortfolioLab: isMetaOfficialPortfolioLabEnabled(),
   };
 }
 

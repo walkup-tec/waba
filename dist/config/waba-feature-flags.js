@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isAlternativaNumbersPurchaseEnabled = isAlternativaNumbersPurchaseEnabled;
+exports.isMetaOfficialPortfolioLabEnabled = isMetaOfficialPortfolioLabEnabled;
 exports.getWabaFeatureFlags = getWabaFeatureFlags;
 exports.getWabaFeatureFlagsForClient = getWabaFeatureFlagsForClient;
 exports.describeWabaFeatureFlagsForOps = describeWabaFeatureFlagsForOps;
@@ -20,9 +21,17 @@ function isAlternativaNumbersPurchaseEnabled() {
         return explicit;
     return false;
 }
+/** Telas de portfólio/números oficiais. Laboratório em produção continua só Mozart. */
+function isMetaOfficialPortfolioLabEnabled(env = process.env) {
+    const explicit = parseTruthy(String(env.WABA_META_OFFICIAL_PORTFOLIO_LAB ?? ""));
+    if (explicit !== null)
+        return explicit;
+    return true;
+}
 function getWabaFeatureFlags() {
     return {
         alternativaNumbersPurchase: isAlternativaNumbersPurchaseEnabled(),
+        metaOfficialPortfolioLab: isMetaOfficialPortfolioLabEnabled(),
     };
 }
 function getWabaFeatureFlagsForClient() {

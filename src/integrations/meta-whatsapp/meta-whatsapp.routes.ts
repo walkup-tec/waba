@@ -12,6 +12,7 @@ import {
   stripMetaSecrets,
 } from "./meta-whatsapp-connection.service";
 import { logMetaWhatsappSafe, toPublicMetaError } from "./meta-whatsapp-errors";
+import { isMetaOfficialPortfolioLabEnabled } from "../../config/waba-feature-flags";
 import { MetaWhatsappMessagingService } from "./meta-whatsapp-messaging.service";
 import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 import { MetaWhatsappInboxService } from "./meta-whatsapp-inbox.service";
@@ -150,6 +151,42 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
       warnClientTenantClaim(req);
       const publicStatus = await service.confirmFromAuth(resolveWabaRequestAuth(req));
       return sendPublic(res, 200, { ok: true, ...publicStatus });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
+  app.get("/integrations/meta/whatsapp/portfolio", async (req: Request, res: Response) => {
+    try {
+      if (!isMetaOfficialPortfolioLabEnabled()) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Recurso indisponível neste ambiente.",
+          code: "config_invalid",
+        });
+      }
+      const assets = await service.listPortfolioAssets(resolveWabaRequestAuth(req));
+      return sendPublic(res, 200, { ok: true, ...assets });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
+  app.post("/integrations/meta/whatsapp/phone-numbers/register", async (req: Request, res: Response) => {
+    try {
+      if (!isMetaOfficialPortfolioLabEnabled()) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Recurso indisponível neste ambiente.",
+          code: "config_invalid",
+        });
+      }
+      warnClientTenantClaim(req);
+      const assets = await service.registerPhoneFromAuth(resolveWabaRequestAuth(req), {
+        phoneNumberId: String(req.body?.phoneNumberId || req.body?.phone_number_id || "").trim(),
+        pin: String(req.body?.pin || "").trim(),
+      });
+      return sendPublic(res, 200, { ok: true, ...assets });
     } catch (error) {
       return handleMetaError(res, error);
     }

@@ -5,6 +5,7 @@ import {
   META_ES_TECH_PROVIDER_PATHS,
   META_ES_UNAVAILABLE_MESSAGE,
   buildMetaEsFbLoginOptions,
+  buildMetaEsSetupPrefill,
   configIdLast4,
   isGenericFacebookOauthUrl,
   isLegacyExchangePath,
@@ -25,6 +26,13 @@ describe("meta-es-fb-login", () => {
     assert.equal(options.response_type, "code");
     assert.equal(options.override_default_response_type, true);
     assert.deepEqual(options.extras, { setup: {}, sessionInfoVersion: "3" });
+    const prefill = buildMetaEsSetupPrefill({
+      businessId: "1247508354180311",
+      wabaId: "waba-1",
+    });
+    const withSetup = buildMetaEsFbLoginOptions("1467449278208212", prefill);
+    assert.equal(withSetup?.extras.setup.business?.id, "1247508354180311");
+    assert.equal(withSetup?.extras.setup.whatsAppBusinessAccount?.ids, "waba-1");
     const plan = planMetaEsTechProviderClick("1467449278208212");
     assert.equal(plan.callFbInit, false);
     assert.equal(plan.loginOptions?.config_id, "1467449278208212");

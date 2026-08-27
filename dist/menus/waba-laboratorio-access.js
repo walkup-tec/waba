@@ -7,6 +7,7 @@ exports.canAccessWabaLaboratorioMenus = canAccessWabaLaboratorioMenus;
 /**
  * Laboratório (Meta Tech Provider) no painel de gestão.
  * Em produção só a conta Mozart vê a seção e os menus.
+ * No localhost V02 as telas novas ficam visíveis para validação.
  */
 exports.WABA_LABORATORIO_OWNER_EMAIL = "mozart.pmo@gmail.com";
 function isWabaLaboratorioOwnerEmail(email) {
@@ -21,7 +22,14 @@ function isWabaUiProductionProfile(env = process.env) {
         return false;
     return String(env.WABA_ENV || "").trim().toLowerCase() !== "v01";
 }
+function isLocalV02Lab(env) {
+    if (String(env.WABA_ENV || "").trim().toLowerCase() !== "v02")
+        return false;
+    return String(env.RUNTIME_MODE || "").trim().toLowerCase() !== "production";
+}
 function canAccessWabaLaboratorioMenus(email, env = process.env) {
+    if (isLocalV02Lab(env))
+        return true;
     if (!isWabaUiProductionProfile(env))
         return true;
     return isWabaLaboratorioOwnerEmail(email);
