@@ -3309,6 +3309,16 @@
         display: none !important;
       }
 
+      body.waba-ui-production:not(.waba-laboratorio-visible) .menu-group[data-menu-group="lab-api-oficial"],
+      body.waba-ui-production:not(.waba-laboratorio-visible) .mobile-tabs-section-label[data-menu-section="lab-api-oficial"],
+      body.waba-ui-production:not(.waba-laboratorio-visible) .tab-button[data-menu-section="lab-api-oficial"],
+      body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-oficial,
+      body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-inbox,
+      body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-templates,
+      body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-automation {
+        display: none !important;
+      }
+
       body:not(.waba-master-visible) .menu-group[data-menu-group="suporte"] {
         display: none !important;
       }
@@ -24496,12 +24506,19 @@
       }
 
       const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
+      const LABORATORIO_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
 
       function canAccessDeviceCloudMenu() {
         const profile = String(window.WABA_UI_PROFILE || "").trim().toLowerCase();
         if (profile !== "production") return false;
         const email = String(wabaSessionEmail || "").trim().toLowerCase();
         return DEVICE_CLOUD_ALLOWLIST.has(email);
+      }
+
+      function canAccessLaboratorioMenu() {
+        if (!isProductionUi()) return false;
+        const email = String(wabaSessionEmail || "").trim().toLowerCase();
+        return LABORATORIO_ALLOWLIST.has(email);
       }
 
       function syncDeviceCloudMenuVisibility() {
@@ -27418,6 +27435,7 @@
       function isTabBlockedByMenuPolicy(tabName) {
         if (!tabName) return false;
         if (tabName === "dispositivos" && !canAccessDeviceCloudMenu()) return true;
+        if (getMenuSectionForTab(tabName) === "lab-api-oficial" && !canAccessLaboratorioMenu()) return true;
         if (tabName === "admin-usuarios") return !hasMasterAccess();
         if (tabName === "admin-assinantes") return !hasMasterAccess();
         if (tabName === "admin-chamados") return !hasMasterAccess();
@@ -27634,6 +27652,7 @@
       function applyMenuSectionAccess() {
         document.body.classList.toggle("waba-menu-admin-visible", hasAdminAccess());
         document.body.classList.toggle("waba-master-visible", hasMasterAccess());
+        document.body.classList.toggle("waba-laboratorio-visible", canAccessLaboratorioMenu());
         syncStaffMenuPermissions();
         syncTabButtonMenuSections();
 

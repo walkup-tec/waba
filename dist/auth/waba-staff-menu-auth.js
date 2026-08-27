@@ -11,10 +11,17 @@ const rejectUnlessStaffMenu = (req, res, menuId) => {
         res.status(401).json({ error: "Faça login para continuar." });
         return null;
     }
-    if (auth.role === "master")
-        return auth;
-    const user = systemUserService.getByEmail(auth.email);
-    if (!user || !(0, waba_menu_permissions_service_1.isMenuAllowedForUser)(user, menuId)) {
+    const stored = systemUserService.getByEmail(auth.email);
+    const actor = stored ?? {
+        email: auth.email,
+        role: auth.role === "operacional" || auth.role === "suporte" ? auth.role : "master",
+        menuPermissions: null,
+    };
+    if (auth.role !== "master" && !stored) {
+        res.status(403).json({ error: "Você não tem permissão para acessar esta área." });
+        return null;
+    }
+    if (!(0, waba_menu_permissions_service_1.isMenuAllowedForUser)(actor, menuId)) {
         res.status(403).json({ error: "Você não tem permissão para acessar esta área." });
         return null;
     }

@@ -1,4 +1,5 @@
 import type { WabaSystemUser, WabaSystemUserRole } from "../users/waba-system-user.repository";
+import { canAccessWabaLaboratorioMenus } from "./waba-laboratorio-access";
 import {
   listWabaMenuDefinitions,
   listWabaMenuIds,
@@ -38,12 +39,24 @@ export const buildNoMenusEnabled = (): MenuPermissionsMap => {
   return result;
 };
 
+function applyLaboratorioMenuPolicy(
+  user: Pick<WabaSystemUser, "email">,
+  permissions: MenuPermissionsMap,
+): MenuPermissionsMap {
+  if (canAccessWabaLaboratorioMenus(user.email)) return permissions;
+  const result = { ...permissions };
+  for (const id of WABA_TECH_PROVIDER_MENU_IDS) {
+    result[id] = false;
+  }
+  return result;
+}
+
 /** Resolve permissões efetivas; chaves ausentes = desabilitado. */
 export const resolveEffectiveMenuPermissions = (
-  user: Pick<WabaSystemUser, "role" | "menuPermissions">,
+  user: Pick<WabaSystemUser, "role" | "menuPermissions" | "email">,
 ): MenuPermissionsMap => {
   if (user.role === "master") {
-    return buildAllMenusEnabled();
+    return applyLaboratorioMenuPolicy(user, buildAllMenusEnabled());
   }
 
   const allIds = listWabaMenuIds();
@@ -54,7 +67,7 @@ export const resolveEffectiveMenuPermissions = (
     result[id] = stored?.[id] === true;
   }
 
-  return result;
+  return applyLaboratorioMenuPolicy(user, result);
 };
 
 /** Migra usuário legado (sem menuPermissions): concede todos os menus atuais uma vez. */
@@ -77,7 +90,7 @@ export const buildDefaultOperacionalMenuPermissions = (): MenuPermissionsMap => 
 };
 
 export const listAllowedMenuIds = (
-  user: Pick<WabaSystemUser, "role" | "menuPermissions">,
+  user: Pick<WabaSystemUser, "role" | "menuPermissions" | "email">,
 ): string[] => {
   const effective = resolveEffectiveMenuPermissions(user);
   return Object.entries(effective)
@@ -86,18 +99,16 @@ export const listAllowedMenuIds = (
 };
 
 export const isMenuAllowedForUser = (
-  user: Pick<WabaSystemUser, "role" | "menuPermissions">,
+  user: Pick<WabaSystemUser, "role" | "menuPermissions" | "email">,
   menuId: string,
 ): boolean => {
-  if (user.role === "master") return true;
   return resolveEffectiveMenuPermissions(user)[menuId] === true;
 };
 
 export const isTabAllowedForUser = (
-  user: Pick<WabaSystemUser, "role" | "menuPermissions">,
+  user: Pick<WabaSystemUser, "role" | "menuPermissions" | "email">,
   tab: string,
 ): boolean => {
-  if (user.role === "master") return true;
   const menus = listWabaMenuDefinitions().filter((item) => item.tab === tab);
   if (!menus.length) return true;
   const effective = resolveEffectiveMenuPermissions(user);
