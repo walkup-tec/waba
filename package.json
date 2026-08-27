@@ -38,7 +38,8 @@
     "test:meta-phase7": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-phase7.test.ts",
     "test:meta-phase8": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-phase8.test.ts",
     "test:meta-phase9": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-phase9.test.ts",
-    "test:meta-lab-tokens": "node --require ts-node/register --test src/auth/waba-meta-oficial-token-access.test.ts"
+    "test:meta-lab-tokens": "node --require ts-node/register --test src/auth/waba-meta-oficial-token-access.test.ts",
+    "test:meta-es-login": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-es-fb-login.test.ts"
   },
   "keywords": [
     "n8n",
