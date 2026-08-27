@@ -13699,6 +13699,54 @@ async function releaseHumanPauseForSelectedCampaignInstances(campaign: {
   if (usagePatches.length) await persistInstanceUsage(usagePatches);
 }
 
+/** 5197462102 = EVO `walkup`. Entra na campanha em execução mesmo sem chip vermelho. */
+async function tryIncludeSpare5197462102InLiveCampaign(
+  campaign: DisparosCampaign,
+  evoRows: EvoInstanceTagRow[],
+): Promise<void> {
+  const selected = selectedInstanceNamesFromCampaign(campaign);
+  const selectedKeys = new Set(
+    selected.map((n) => {
+      const resolved = resolveStoredNameToEvoTag(n, evoRows);
+      return String(resolved.instanceKey || n || "")
+        .trim()
+        .toLowerCase();
+    }),
+  );
+  const byPhone = resolveStoredNameToEvoTag("5197462102", evoRows);
+  const walkupRow = evoRows.find((r) => String(r.instanceKey || "").trim().toLowerCase() === "walkup");
+  const evoName = String(byPhone.instanceKey || walkupRow?.instanceKey || "").trim();
+  if (!evoName) return;
+  if (selectedKeys.has(evoName.toLowerCase())) return;
+  const heldOther = heldProxyBrasilNamesFromLiveCampaigns(campaign.id);
+  if (instanceNameConflictsWithHeld(evoName, heldOther)) return;
+  const live = await fetchEvoInstanceLiveState(evoName, { fresh: true });
+  if (!isEvoLiveStateOpen(live)) {
+    console.warn(
+      `[Campanha] 5197462102 (${evoName}) não está open — não entra na campanha (${live || "desconhecido"}).`,
+    );
+    return;
+  }
+  await clearAquecedorHumanPause(evoName);
+  const usageMap = await loadInstanceUsageMap();
+  const current = getInstanceUsageFromMap(usageMap, evoName);
+  await persistInstanceUsage([
+    {
+      instanceName: evoName,
+      useAquecedor: current?.useAquecedor !== false,
+      useDisparador: true,
+    },
+  ]);
+  const swapped = await applyCampaignDisconnectedSwap(campaign, [evoName], evoRows);
+  if (swapped.added.length) {
+    console.warn(
+      `[Campanha] ${campaign.id}: 5197462102 (${evoName}) incluído na seleção${
+        swapped.removedBlocked.length ? ` · saem ${swapped.removedBlocked.join(", ")}` : ""
+      }.`,
+    );
+  }
+}
+
 function heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId?: string): string[] {
   return namesHeldByUnfinishedCampaigns(
     disparosCampaignsMemory.map((c) => ({
@@ -13804,15 +13852,6 @@ function scheduleNextCampaignDispatchDelay(
     return;
   }
   campaignNextAllowedSendAt.set(campaignId, Date.now() + Math.min(15_000, waitSec * 1000));
-}
-
-function scheduleCampaignInstanceRetryMs(campaignId: string, instanceName: string, waitMs: number) {
-  const inst = String(instanceName || "").trim();
-  if (!inst) return;
-  campaignInstanceNextSendAt.set(
-    campaignInstanceGateKey(campaignId, inst),
-    Date.now() + Math.max(3_000, waitMs),
-  );
 }
 
 function extractCampaignSendMessageId(json: unknown): string {
@@ -13983,7 +14022,15 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
       return true;
     });
     const lead =
-      pendingLeads.find((l) => !String(l.mediaMessageId || "").trim()) || pendingLeads[0];
+      pendingLeads.find((l) => {
+        const mid = String(l.mediaMessageId || "").trim();
+        if (!mid) return false;
+        const inst = String(l.mediaInstanceName || "").trim();
+        if (!inst) return true;
+        return !isCampaignInstanceInCooldown(campaignId, inst);
+      }) ||
+      pendingLeads.find((l) => !String(l.mediaMessageId || "").trim()) ||
+      pendingLeads[0];
     if (!lead) {
       const stillSending = disparosCampaignLeadsMemory.some(
         (l) => l.campaignId === campaignId && l.status === "sending",
@@ -14136,9 +14183,9 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         queuePersistDisparosLocalState();
       }
       const mediaAck = await probeCampaignMessageAckStatus(instancePick.instancia, mediaMessageId, {
-        maxAttempts: 10,
+        maxAttempts: 5,
         intervalMs: 2000,
-        requireDeviceDelivery: true,
+        requireDeviceDelivery: false,
       });
       console.info(
         `[Campanha] ACK imagem slot=${imageMetaSlot || "?"} ${instancePick.instancia} → ${lead.phone} msg=${mediaMessageId} status=${mediaAck.status}`,
@@ -14157,14 +14204,10 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
       }
       if (!isEvoAckDeviceDelivered(mediaAck.status)) {
         console.warn(
-          "[Campanha] ACK imagem ainda não é DELIVERY_ACK — não envia botão/texto:",
+          "[Campanha] ACK imagem ainda não é DELIVERY_ACK; segue texto/botão (sendMedia HTTP ok):",
           mediaAck.status,
           lead.phone,
         );
-        lead.status = "pending";
-        queuePersistDisparosLocalState();
-        scheduleCampaignInstanceRetryMs(campaignId, instancePick.instancia, 12_000);
-        return;
       }
       await sleepCampaignMs(800);
     } else if (isAlternativaMotor) {
@@ -14261,14 +14304,17 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         lastSendJson = buttonResult.json;
       } else {
         console.warn(
-          "[Campanha Alternativa] sendButtons falhou; lead volta a pending (sem fallback texto):",
+          "[Campanha Alternativa] sendButtons indisponível; envia texto sem URL (imagem já foi):",
           buttonResult.status,
           ghost ? "viewOnce" : String(buttonResult.body || "").slice(0, 180),
         );
-        lead.status = "pending";
-        queuePersistDisparosLocalState();
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
-        return;
+        const textOnly =
+          prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
+        if (!(await sendCampaignTextMessage(textOnly))) {
+          scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+          return;
+        }
+        deliveredText = textOnly;
       }
     } else if (isAlternativaMotor && !buttonUrl) {
       console.error(
@@ -14370,6 +14416,8 @@ async function runCampaignDispatchTick(): Promise<void> {
       await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
+    await tryIncludeSpare5197462102InLiveCampaign(c, evoRows);
+    liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
     await releaseHumanPauseForSelectedCampaignInstances(c);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
@@ -14413,6 +14461,8 @@ async function runCampaignDispatchTick(): Promise<void> {
       await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
+    await tryIncludeSpare5197462102InLiveCampaign(c, evoRows);
+    liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
     await releaseHumanPauseForSelectedCampaignInstances(c);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);

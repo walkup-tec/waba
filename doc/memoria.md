@@ -1,5 +1,18 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 11:12 — Campanha: incluir 5197462102 (walkup)
+- Tick coloca EVO `walkup` / `5197462102` na campanha `running`/`paused` sem exigir chip vermelho
+- Liga Disparador, libera pausa humana e Proxy no que entra
+- Marker: `DEPLOY-2026-08-27-campanha-incluir-2102`
+- LOG: `doc/LOG-2026-08-27__111200__campanha-incluir-2102.md`
+
+## 2026-08-27 10:40 — Campanha: imagem sempre seguida de texto/botão
+- Não abandona o ciclo em `SERVER_ACK`; 5401 deixava só a imagem
+- Completa lead com `mediaMessageId` antes de puxar lead novo
+- `sendButtons` falhou: texto sem URL (imagem já foi)
+- Marker: `DEPLOY-2026-08-27-campanha-imagem-com-texto-botao`
+- LOG: `doc/LOG-2026-08-27__104000__campanha-imagem-com-texto-botao.md`
+
 ## 2026-08-27 09:48 — Campanha: sem pausa humana no chip selecionado
 - Alternativa não pula `restricted_wait` nos números da campanha (WB-7770/`drax`)
 - Falha de envio da campanha e aquecedor/probe não reaplicam pausa em chip de campanha aberta

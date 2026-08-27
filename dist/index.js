@@ -11724,6 +11724,43 @@ async function releaseHumanPauseForSelectedCampaignInstances(campaign) {
     if (usagePatches.length)
         await persistInstanceUsage(usagePatches);
 }
+/** 5197462102 = EVO `walkup`. Entra na campanha em execução mesmo sem chip vermelho. */
+async function tryIncludeSpare5197462102InLiveCampaign(campaign, evoRows) {
+    const selected = selectedInstanceNamesFromCampaign(campaign);
+    const selectedKeys = new Set(selected.map((n) => {
+        const resolved = resolveStoredNameToEvoTag(n, evoRows);
+        return String(resolved.instanceKey || n || "").trim().toLowerCase();
+    }));
+    const byPhone = resolveStoredNameToEvoTag("5197462102", evoRows);
+    const walkupRow = evoRows.find((r) => String(r.instanceKey || "").trim().toLowerCase() === "walkup");
+    const evoName = String(byPhone.instanceKey || walkupRow?.instanceKey || "").trim();
+    if (!evoName)
+        return;
+    if (selectedKeys.has(evoName.toLowerCase()))
+        return;
+    const heldOther = heldProxyBrasilNamesFromLiveCampaigns(campaign.id);
+    if ((0, proxy_brasil_campaign_rules_1.instanceNameConflictsWithHeld)(evoName, heldOther))
+        return;
+    const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(evoName, { fresh: true });
+    if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(live)) {
+        console.warn(`[Campanha] 5197462102 (${evoName}) não está open — não entra na campanha (${live || "desconhecido"}).`);
+        return;
+    }
+    await (0, aquecedor_instance_lifecycle_service_1.clearAquecedorHumanPause)(evoName);
+    const usageMap = await loadInstanceUsageMap();
+    const current = getInstanceUsageFromMap(usageMap, evoName);
+    await persistInstanceUsage([
+        {
+            instanceName: evoName,
+            useAquecedor: current?.useAquecedor !== false,
+            useDisparador: true,
+        },
+    ]);
+    const swapped = await applyCampaignDisconnectedSwap(campaign, [evoName], evoRows);
+    if (swapped.added.length) {
+        console.warn(`[Campanha] ${campaign.id}: 5197462102 (${evoName}) incluído na seleção${swapped.removedBlocked.length ? ` · saem ${swapped.removedBlocked.join(", ")}` : ""}.`);
+    }
+}
 function heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId) {
     return (0, proxy_brasil_campaign_rules_1.namesHeldByUnfinishedCampaigns)(disparosCampaignsMemory.map((c) => ({
         id: c.id,
@@ -11810,12 +11847,6 @@ function scheduleNextCampaignDispatchDelay(campaignId, config, instanceName) {
         return;
     }
     campaignNextAllowedSendAt.set(campaignId, Date.now() + Math.min(15000, waitSec * 1000));
-}
-function scheduleCampaignInstanceRetryMs(campaignId, instanceName, waitMs) {
-    const inst = String(instanceName || "").trim();
-    if (!inst)
-        return;
-    campaignInstanceNextSendAt.set(campaignInstanceGateKey(campaignId, inst), Date.now() + Math.max(3000, waitMs));
 }
 function extractCampaignSendMessageId(json) {
     if (!json || typeof json !== "object")
@@ -11953,7 +11984,17 @@ async function processOneCampaignDispatch(campaignId) {
             }
             return true;
         });
-        const lead = pendingLeads.find((l) => !String(l.mediaMessageId || "").trim()) || pendingLeads[0];
+        const lead = pendingLeads.find((l) => {
+            const mid = String(l.mediaMessageId || "").trim();
+            if (!mid)
+                return false;
+            const inst = String(l.mediaInstanceName || "").trim();
+            if (!inst)
+                return true;
+            return !isCampaignInstanceInCooldown(campaignId, inst);
+        }) ||
+            pendingLeads.find((l) => !String(l.mediaMessageId || "").trim()) ||
+            pendingLeads[0];
         if (!lead) {
             const stillSending = disparosCampaignLeadsMemory.some((l) => l.campaignId === campaignId && l.status === "sending");
             if (stillSending)
@@ -12070,9 +12111,9 @@ async function processOneCampaignDispatch(campaignId) {
                 queuePersistDisparosLocalState();
             }
             const mediaAck = await probeCampaignMessageAckStatus(instancePick.instancia, mediaMessageId, {
-                maxAttempts: 10,
+                maxAttempts: 5,
                 intervalMs: 2000,
-                requireDeviceDelivery: true,
+                requireDeviceDelivery: false,
             });
             console.info(`[Campanha] ACK imagem slot=${imageMetaSlot || "?"} ${instancePick.instancia} → ${lead.phone} msg=${mediaMessageId} status=${mediaAck.status}`);
             if ((0, delivery_verify_helpers_1.isEvoAckFailure)(mediaAck.status)) {
@@ -12084,11 +12125,7 @@ async function processOneCampaignDispatch(campaignId) {
                 return;
             }
             if (!(0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(mediaAck.status)) {
-                console.warn("[Campanha] ACK imagem ainda não é DELIVERY_ACK — não envia botão/texto:", mediaAck.status, lead.phone);
-                lead.status = "pending";
-                queuePersistDisparosLocalState();
-                scheduleCampaignInstanceRetryMs(campaignId, instancePick.instancia, 12000);
-                return;
+                console.warn("[Campanha] ACK imagem ainda não é DELIVERY_ACK; segue texto/botão (sendMedia HTTP ok):", mediaAck.status, lead.phone);
             }
             await sleepCampaignMs(800);
         }
@@ -12163,11 +12200,13 @@ async function processOneCampaignDispatch(campaignId) {
                 lastSendJson = buttonResult.json;
             }
             else {
-                console.warn("[Campanha Alternativa] sendButtons falhou; lead volta a pending (sem fallback texto):", buttonResult.status, ghost ? "viewOnce" : String(buttonResult.body || "").slice(0, 180));
-                lead.status = "pending";
-                queuePersistDisparosLocalState();
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
-                return;
+                console.warn("[Campanha Alternativa] sendButtons indisponível; envia texto sem URL (imagem já foi):", buttonResult.status, ghost ? "viewOnce" : String(buttonResult.body || "").slice(0, 180));
+                const textOnly = prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
+                if (!(await sendCampaignTextMessage(textOnly))) {
+                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+                    return;
+                }
+                deliveredText = textOnly;
             }
         }
         else if (isAlternativaMotor && !buttonUrl) {
@@ -12256,6 +12295,8 @@ async function runCampaignDispatchTick() {
             await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
+        await tryIncludeSpare5197462102InLiveCampaign(c, evoRows);
+        liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
         await releaseHumanPauseForSelectedCampaignInstances(c);
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
@@ -12300,6 +12341,8 @@ async function runCampaignDispatchTick() {
             await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
+        await tryIncludeSpare5197462102InLiveCampaign(c, evoRows);
+        liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
         await releaseHumanPauseForSelectedCampaignInstances(c);
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
