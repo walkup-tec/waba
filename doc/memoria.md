@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 15:44 — Marker de deploy + Instâncias
+- Marker: `DEPLOY-2026-08-27-154400-botao-instancias-alias`
+- LOG: `doc/LOG-2026-08-27__154400__deploy-marker-botao-instancias.md`
+
 ## 2026-08-27 14:00 — Laboratório só para Mozart em produção
 - Seção Laboratório (Conexão, Inbox, Templates, Automação) some para walkup e quantumivst
 - Permanece só em `mozart.pmo@gmail.com` no perfil production
