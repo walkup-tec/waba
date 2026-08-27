@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 12:10 — Botão + Instâncias grava 2102 na hora
+- POST não espera connectionState de todas as EVO nem reconcile de Proxy
+- Grava `walkup`/2102 na seleção e responde; Proxy em fila
+- Lista GET sem probe-all; tags veem o 2102 após o clique
+- Marker: `DEPLOY-2026-08-27-botao-instancias-2102-v2`
+- LOG: `doc/LOG-2026-08-27__121000__botao-instancias-2102-v2.md`
+
 ## 2026-08-27 11:45 — Botão + Instâncias inclui 5197462102
 - POST auto inclui `walkup`/2102 mesmo com chips verdes; lista Evolution sem filtro de dono
 - Master vê todas as instâncias no filtro de ownership

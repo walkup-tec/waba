@@ -49744,17 +49744,22 @@
               credentials: "same-origin",
               body: JSON.stringify({ auto: true }),
             },
-            25000
+            45000
           );
         } catch (err) {
           const timedOut = String(err?.message || "").toLowerCase() === "timeout";
           showToast(
             timedOut
-              ? "A troca de instâncias demorou demais. Tente de novo."
+              ? "A troca de instâncias demorou demais. Recarregando a lista…"
               : String(err?.message || "Não foi possível adicionar instâncias na campanha."),
             "error",
             6200
           );
+          if (isDisparoEvoUi()) {
+            await loadDisparosEvoCampaigns({ silent: true }).catch(() => {});
+          } else {
+            await loadDisparosTemplates({ silent: true }).catch(() => {});
+          }
           return false;
         }
         const data = await response.json().catch(() => ({}));
@@ -57684,7 +57689,7 @@
           btn.setAttribute("aria-busy", "true");
           btn.style.pointerEvents = "none";
           btn.textContent = "Trocando…";
-          showToast("Procurando número conectado para substituir o desconectado…", "success", 2800);
+          showToast("Incluindo o 5197462102 na campanha…", "success", 2800);
           try {
             await addInstancesToCampaign(id);
           } catch (err) {
