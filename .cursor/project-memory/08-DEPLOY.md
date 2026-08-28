@@ -54,6 +54,8 @@ A URL de login/disparador usa o container Docker (`COPY dist/`). Mudança só em
 
 | Marker | Tema |
 |--------|------|
+| `DEPLOY-2026-08-28-111300-inbox-opt-in-numero` | Inbox: switch cinza, banner do número, webhook ao ligar |
+| `DEPLOY-2026-08-28-101500-pick-7770-drax-1261` | Campanha: pick 7770→drax e 1261 na lista |
 | `DEPLOY-2026-08-28-090000-botao-append-spare` | «+ Instâncias» inclui o spare da UI (append, sem 409 compra) |
 | `DEPLOY-2026-08-24-alternativa-sem-asteriscos-titulo` | Alternativa: sendButtons sem `**` (title real) |
 | `DEPLOY-2026-08-21-campanha-auto-swap-instancias` | Campanha: troca automática de desconectado + Proxy |

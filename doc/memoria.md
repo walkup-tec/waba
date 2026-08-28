@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 11:13 — Inbox no ar ainda é a UI antiga
+- Produção: `inboxEnabled !== false` (switch verde). Git já tem opt-in. Falta Redeploy `waba_disparador`.
+- Marker: `DEPLOY-2026-08-28-111300-inbox-opt-in-numero`
+- LOG: `doc/LOG-2026-08-28__111300__inbox-prod-ainda-html-antigo.md`
+
 ## 2026-08-28 10:15 — 7770 envia via drax; 1261 volta à lista
 - Pick da campanha casa WB-7770 → `drax` e sonda live no nome EVO; 1261 open sem telefone entra na lista
 - Marker: `DEPLOY-2026-08-28-101500-pick-7770-drax-1261`
