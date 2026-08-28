@@ -1,5 +1,20 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-27 21:20 — Editar nome/foto do número
+- POST de nome sem JSON vazio; foto não aborta o nome
+- Número pendente não recebe foto até o PIN
+- LOG: `doc/LOG-2026-08-27__212000__editar-nome-foto-numero.md`
+
+## 2026-08-27 21:14 — Editar portfólio sem página
+- Foto do Business Manager é só leitura; sem Página do Facebook a Meta recusa
+- Código `portfolio_photo_no_page`; UI bloqueia o seletor de foto
+- LOG: `doc/LOG-2026-08-27__211400__editar-portfolio-sem-pagina.md`
+
+## 2026-08-27 21:09 — CTA Conectar Portfólio
+- Hero sem texto à esquerda; botão à esquerda com logo Meta + “Conectar Portfólio”
+- Azul do toggle Laboratório (`rgba(15, 40, 80, 0.9)`), não verde WhatsApp
+- LOG: `doc/LOG-2026-08-27__210900__cta-conectar-portfolio-azul-lab.md`
+
 ## 2026-08-27 20:48 — Editar nome e foto do portfólio
 - Nome via `POST /{business-id}`; foto via página principal da Meta
 - LOG: `doc/LOG-2026-08-27__204800__editar-nome-foto-portfolio.md`

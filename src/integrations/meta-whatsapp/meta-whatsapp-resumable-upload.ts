@@ -9,6 +9,12 @@ export type MetaResumableUploadInput = {
   bytes: Buffer;
 };
 
+function toUploadSessionPath(id: string): string {
+  const raw = String(id || "").trim();
+  if (!raw) return "";
+  return raw.startsWith("upload:") ? raw : `upload:${raw}`;
+}
+
 export async function uploadMetaResumableImage(
   input: MetaResumableUploadInput,
 ): Promise<{ handle: string }> {
@@ -25,9 +31,11 @@ export async function uploadMetaResumableImage(
       file_type: input.mime,
     },
   });
-  const sessionId = String(started.json?.id || "").trim();
+  const sessionId = toUploadSessionPath(String(started.json?.id || "").trim());
   if (!started.ok || !sessionId) {
-    throw new Error("A Meta não abriu a sessão de upload da foto.");
+    throw new Error(
+      `upload-session ${started.status}${started.graphCode ? ` ${started.graphCode}` : ""}`.trim(),
+    );
   }
   const url = `${readMetaGraphBase()}/${readMetaGraphVersion()}/${sessionId}`;
   const controller = new AbortController();
@@ -51,7 +59,8 @@ export async function uploadMetaResumableImage(
     }
     const handle = String(json?.h || "").trim();
     if (!response.ok || !handle) {
-      throw new Error("A Meta não concluiu o upload da foto.");
+      const graphCode = String((json as { error?: { code?: unknown } } | null)?.error?.code || "").trim();
+      throw new Error(graphCode ? `upload-binary ${response.status} ${graphCode}` : "A Meta não concluiu o upload da foto.");
     }
     return { handle };
   } finally {
@@ -95,7 +104,8 @@ export async function publishMetaPageProfilePicture(input: {
     }
     const photoId = String(json?.id || "").trim();
     if (!response.ok || !photoId) {
-      throw new Error("A Meta não publicou a foto na página.");
+      const graphCode = String((json as { error?: { code?: unknown } } | null)?.error?.code || "").trim();
+      throw new Error(graphCode ? `page-photo ${response.status} ${graphCode}` : "A Meta não publicou a foto na página.");
     }
     const pictured = await callMetaGraphJson({
       token,

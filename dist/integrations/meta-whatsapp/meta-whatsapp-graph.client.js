@@ -53,7 +53,7 @@ async function callMetaGraphJson(input) {
                 method: input.method,
                 headers: {
                     Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
+                    ...(input.body ? { "Content-Type": "application/json" } : {}),
                 },
                 body: input.body ? JSON.stringify(input.body) : undefined,
                 signal: controller.signal,

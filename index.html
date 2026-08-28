@@ -3164,13 +3164,32 @@
           color: #93c5fd;
         }
 
-        .meta-onboard { max-width: 920px; margin: 0 auto; }
-        .meta-onboard-hero { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; }
+        .meta-onboard { max-width: none; margin: 0; }
+        .meta-onboard-hero { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:16px; margin-bottom:18px; }
         .meta-onboard-hero h2 { margin:0 0 6px; font-size:1.35rem; font-weight:700; }
         .meta-onboard-hero p { margin:0; max-width:42rem; color:rgba(226,232,240,.78); line-height:1.45; }
         .meta-onboard-cta { min-width:220px; min-height:48px; border:0; border-radius:12px; background:#25d366; color:#052e16; font-weight:700; font-size:15px; padding:12px 18px; cursor:pointer; }
         .meta-onboard-cta:hover { filter:brightness(1.06); }
         .meta-onboard-cta:disabled { opacity:.55; cursor:wait; }
+        .meta-onboard-cta-portfolio {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          min-width: 0;
+          background: rgba(15, 40, 80, 0.9);
+          color: #93c5fd;
+          border: 1px solid rgba(59, 130, 246, 0.9);
+        }
+        .meta-onboard-cta-portfolio:hover { filter: brightness(1.12); }
+        .meta-connect-logo {
+          width: 22px;
+          height: 22px;
+          border-radius: 5px;
+          object-fit: cover;
+          flex: 0 0 auto;
+          background: #000;
+        }
         .meta-onboard-steps { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; margin:0 0 18px; padding:0; list-style:none; }
         .meta-onboard-step { background:rgba(15,23,42,.55); border:1px solid rgba(148,163,184,.18); border-radius:12px; padding:10px 10px 12px; min-height:88px; }
         .meta-onboard-step.is-done { border-color:rgba(37,211,102,.45); background:rgba(6,36,24,.55); }
@@ -20393,14 +20412,13 @@
                 <article class="meta-lab-card" aria-labelledby="meta-card-steps-title">
                   <h3 id="meta-card-steps-title" class="meta-lab-card-title">Etapas de integração</h3>
                   <div class="meta-onboard-hero">
-                    <div>
-                      <h2>Conectar WhatsApp</h2>
-                      <p>Conecte o <strong>portfólio da Drax</strong> uma vez. Depois cadastre vários números nesse mesmo portfólio, ative cada chip e use o que estiver livre no disparo. O cliente só precisa que a mensagem chegue — a logo entra no número escolhido.</p>
-                    </div>
-                    <button id="meta-tp-connect-btn" type="button" class="meta-onboard-cta" onclick="return window.wabaConnectMetaWhatsappOficial(event);">Conectar WhatsApp</button>
+                    <button id="meta-tp-connect-btn" type="button" class="meta-onboard-cta meta-onboard-cta-portfolio" aria-label="Conectar Portfólio" onclick="return window.wabaConnectMetaWhatsappOficial(event);">
+                      <img src="/media/meta-logo.png" alt="" class="meta-connect-logo" width="22" height="22" />
+                      Conectar Portfólio
+                    </button>
                   </div>
                   <ol class="meta-onboard-steps" id="meta-onboard-steps">
-                    <li class="meta-onboard-step is-current" data-meta-step="1"><span class="meta-onboard-step-n" aria-hidden="true">1</span><strong>Conectar</strong><span class="meta-onboard-step-hint">Clique no botão verde</span></li>
+                    <li class="meta-onboard-step is-current" data-meta-step="1"><span class="meta-onboard-step-n" aria-hidden="true">1</span><strong>Conectar</strong><span class="meta-onboard-step-hint">Clique em Conectar Portfólio</span></li>
                     <li class="meta-onboard-step" data-meta-step="2"><span class="meta-onboard-step-n" aria-hidden="true">2</span><strong>Empresa</strong><span class="meta-onboard-step-hint">Autorize na Meta</span></li>
                     <li class="meta-onboard-step" data-meta-step="3"><span class="meta-onboard-step-n" aria-hidden="true">3</span><strong>WABA</strong><span class="meta-onboard-step-hint">Conta WhatsApp Business</span></li>
                     <li class="meta-onboard-step" data-meta-step="4"><span class="meta-onboard-step-n" aria-hidden="true">4</span><strong>Número</strong><span class="meta-onboard-step-hint">Escolha o chip oficial</span></li>
@@ -34888,6 +34906,7 @@
         businessId: "",
         savedBusinessId: "",
         savedWabaId: "",
+        portfolioPrimaryPageId: "",
         finishEvent: "",
         advancing: false,
         addNumber: false,
@@ -34984,6 +35003,7 @@
         if (nameEl) nameEl.textContent = name;
         if (idEl) idEl.textContent = String(portfolio.id);
         if (pageEl) pageEl.textContent = portfolio.primaryPageName || "—";
+        metaTpSession.portfolioPrimaryPageId = String(portfolio.primaryPageId || "").trim();
         if (iniEl) iniEl.textContent = metaTpInitials(name);
         const photoUrl = String(portfolio.profilePictureUrl || "").trim();
         const safePhoto = /^https:\/\//i.test(photoUrl) ? photoUrl : "";
@@ -35330,14 +35350,19 @@
         const hintEl = document.getElementById("meta-tp-edit-hint");
         const nameEl = document.getElementById("meta-tp-edit-name");
         const isPortfolio = kind === "portfolio";
+        const hasPage = Boolean(metaTpSession.portfolioPrimaryPageId);
+        const file = document.getElementById("meta-tp-edit-photo");
         if (titleEl) titleEl.textContent = isPortfolio ? "Editar portfólio" : "Editar número";
         if (phoneEl) phoneEl.textContent = subtitle || "";
         if (labelEl) labelEl.textContent = isPortfolio ? "Nome do portfólio" : "Nome de exibição no WhatsApp";
         if (hintEl) {
           hintEl.textContent = isPortfolio
-            ? "O nome muda no Business Manager. A foto usa a página principal da Meta (ou a primeira página do portfólio)."
-            : "A Meta precisa aprovar o novo nome. Depois ative o número de novo com o PIN de 6 dígitos.";
+            ? hasPage
+              ? "O nome muda no Business Manager. A foto usa a página principal da Meta."
+              : "O nome pode ser salvo no Business Manager. A foto deste portfólio não pode ser alterada pela API da Meta enquanto não houver uma Página do Facebook ligada a ele."
+            : "A Meta precisa aprovar o novo nome. O número precisa estar Ativo para mudar a foto. Depois da aprovação do nome, ative de novo com o PIN de 6 dígitos.";
         }
+        if (file) file.disabled = Boolean(isPortfolio && !hasPage);
         if (nameEl) nameEl.value = name || "";
       }
 
@@ -35350,7 +35375,10 @@
         metaTpEditState.photoBase64 = "";
         metaTpEditState.photoMime = "";
         const file = document.getElementById("meta-tp-edit-photo");
-        if (file) file.value = "";
+        if (file) {
+          file.value = "";
+          file.disabled = false;
+        }
         const preview = document.getElementById("meta-tp-edit-preview");
         if (preview) {
           preview.removeAttribute("src");
@@ -35416,6 +35444,14 @@
           metaTpEditStatus("Altere o nome ou escolha uma foto.");
           return false;
         }
+        if (nameChanged && displayName.length < 3) {
+          metaTpEditStatus("O nome de exibição precisa ter pelo menos 3 caracteres.");
+          return false;
+        }
+        if (isPortfolio && metaTpEditState.photoBase64 && !metaTpSession.portfolioPrimaryPageId) {
+          metaTpEditStatus("Este portfólio não tem página no Facebook. A Meta não deixa gravar a foto no Business Manager. Altere só o nome, ou ligue uma Página principal.");
+          return false;
+        }
         metaTpEditStatus("Salvando na Meta…");
         const path = isPortfolio
           ? "/integrations/meta/whatsapp/portfolio/profile"
@@ -35444,6 +35480,7 @@
         if (payload.photoUpdated) parts.push("foto atualizada");
         if (payload.nameUpdated) parts.push("nome atualizado");
         if (payload.namePending) parts.push("nome enviado para aprovação da Meta");
+        if (payload.warning) parts.push(String(payload.warning));
         if (isPortfolio && metaTpEditState.photoBase64 && payload.photoUpdated === false) {
           parts.push("foto não aplicada (é preciso uma página no portfólio)");
         }

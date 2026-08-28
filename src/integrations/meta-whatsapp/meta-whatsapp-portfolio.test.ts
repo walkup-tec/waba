@@ -13,6 +13,7 @@ import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
 import { parseDisplayName, parseProfilePhoto } from "./meta-whatsapp-phone-profile";
+import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 
 describe("meta portfolio mapper", () => {
   it("mapeia card do portfólio sem vazar token", () => {
@@ -379,11 +380,80 @@ describe("meta portfolio service", () => {
     assert.equal(posts[0]?.body?.profile_picture_handle, "pic-handle");
   });
 
-  it("atualiza o nome do portfólio na Meta", async () => {
-    const posts: Array<{ path: string; query?: Record<string, string> }> = [];
+  it("ainda pede o nome se a foto falhar na Meta", async () => {
+    const png =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const posts: string[] = [];
     const graph = async (input: { path: string; method: string; query?: Record<string, string> }) => {
+      if (input.path === "phone-1/whatsapp_business_profile") {
+        return { ok: false, status: 400, json: { error: { code: 100 } }, graphCode: "100" };
+      }
       if (input.method === "POST") {
-        posts.push({ path: input.path, query: input.query });
+        posts.push(input.path);
+        return { ok: true, status: 200, json: { success: true } };
+      }
+      if (input.path === "1247508354180311") {
+        return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup" } };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: { data: [{ id: "phone-1", status: "CONNECTED", verified_name: "Walkup" }] },
+      };
+    };
+    const service = new MetaWhatsappConnectionService(
+      { async findOpenByTenant() { return connectedRow(); } } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+      decryptMetaToken,
+      async () => ({ handle: "pic-handle" }),
+    );
+    const result = await service.updatePhoneProfileFromAuth(auth, {
+      phoneNumberId: "phone-1",
+      displayName: "Soma Promotora",
+      photoBase64: png,
+      photoMime: "image/png",
+    });
+    assert.equal(result.namePending, true);
+    assert.equal(result.photoUpdated, false);
+    assert.deepEqual(posts, ["phone-1"]);
+    assert.match(String(result.warning || ""), /foto/i);
+  });
+
+  it("recusa foto de número ainda pendente", async () => {
+    const png =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1247508354180311") {
+        return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup" } };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: { data: [{ id: "phone-1", status: "PENDING", verified_name: "Walkup" }] },
+      };
+    };
+    const service = new MetaWhatsappConnectionService(
+      { async findOpenByTenant() { return connectedRow(); } } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    await assert.rejects(
+      () =>
+        service.updatePhoneProfileFromAuth(auth, {
+          phoneNumberId: "phone-1",
+          photoBase64: png,
+          photoMime: "image/png",
+        }),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "phone_not_registered",
+    );
+  });
+
+  it("atualiza o nome do portfólio na Meta", async () => {
+    const posts: Array<{ path: string; body?: Record<string, unknown> }> = [];
+    const graph = async (input: { path: string; method: string; body?: Record<string, unknown> }) => {
+      if (input.method === "POST") {
+        posts.push({ path: input.path, body: input.body });
         return { ok: true, status: 200, json: { success: true } };
       }
       if (input.path === "1247508354180311") {
@@ -407,7 +477,7 @@ describe("meta portfolio service", () => {
     const result = await service.updatePortfolioFromAuth(auth, { displayName: "Drax Sistemas" });
     assert.equal(result.nameUpdated, true);
     assert.equal(posts[0]?.path, "1247508354180311");
-    assert.equal(posts[0]?.query?.name, "Drax Sistemas");
+    assert.equal(posts[0]?.body?.name, "Drax Sistemas");
   });
 
   it("atualiza a foto do portfólio pela página principal", async () => {
@@ -441,5 +511,60 @@ describe("meta portfolio service", () => {
     });
     assert.equal(result.photoUpdated, true);
     assert.deepEqual(pages, ["page-1"]);
+  });
+
+  it("não grava foto no Business quando o portfólio não tem página", async () => {
+    const png =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let pictureCalls = 0;
+    const graph = async (input: { path: string; method: string }) => {
+      if (input.path === "1247508354180311/owned_pages") {
+        return { ok: true, status: 200, json: { data: [] } };
+      }
+      if (input.path === "1247508354180311") {
+        return { ok: true, status: 200, json: { id: "1247508354180311", name: "Drax Sistemas" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      { async findOpenByTenant() { return connectedRow(); } } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+      decryptMetaToken,
+      async () => ({ handle: "unused" }),
+      async () => {
+        pictureCalls += 1;
+        return { photoId: "photo-1" };
+      },
+    );
+    await assert.rejects(
+      () => service.updatePortfolioFromAuth(auth, { photoBase64: png, photoMime: "image/png" }),
+      (error: unknown) =>
+        error instanceof MetaWhatsappError && error.code === "portfolio_photo_no_page",
+    );
+    assert.equal(pictureCalls, 0);
+  });
+});
+
+describe("meta graph json client", () => {
+  it("não envia Content-Type JSON em POST só com query", async () => {
+    let contentType = "missing";
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      contentType = headers.get("Content-Type") || "";
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ success: true }),
+      } as Response;
+    };
+    await callMetaGraphJson({
+      token: "token",
+      method: "POST",
+      path: "106540352242922",
+      query: { new_display_name: "Lucky Shrub" },
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    assert.equal(contentType, "");
   });
 });
