@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-28 — Chip bloqueado no WhatsApp não fica verde na campanha
+
+- **Decisão:** Auto-swap e cor do chip usam `statusReason` 403 / outbound ERROR / bloqueio de campanha, não só `connectionState`. Spare do tick = mesma lista do botão «+ Instâncias».
+- **Motivo:** Banimento WhatsApp deixa a Evolution `open`; o 9224 continuava verde e o 2102 (`walkup`) não entrava porque o auto-swap filtrava por ownership/lifecycle.
+- **Impacto:** Marker `DEPLOY-2026-08-28-110000-swap-bloqueado-2102`. Exige Redeploy EasyPanel.
+
 ### 2026-08-28 — Inbox: opt-in, número visível, webhook ao ligar
 
 - **Decisão:** Switch cinza até `inboxEnabled === true`. O Inbox lista o telefone do chip. Ligar o switch tenta `subscribed_apps`. Inbound aceita conexão `pending_confirmation`.

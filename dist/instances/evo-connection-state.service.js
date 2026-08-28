@@ -2,11 +2,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isEvoLiveStateOpen = isEvoLiveStateOpen;
 exports.campaignChipConnectedFromLiveState = campaignChipConnectedFromLiveState;
+exports.pickEvoStatusReason = pickEvoStatusReason;
+exports.isEvoWhatsAppRestrictedReason = isEvoWhatsAppRestrictedReason;
+exports.campaignChipConnectedForDispatch = campaignChipConnectedForDispatch;
+exports.runEvoConnectionStateSelfCheck = runEvoConnectionStateSelfCheck;
 exports.aquecedorLiveStateAllowsConnected = aquecedorLiveStateAllowsConnected;
 exports.isEvoConnectionInProgress = isEvoConnectionInProgress;
 exports.waitForEvoInstanceLiveOpen = waitForEvoInstanceLiveOpen;
 exports.waitForEvoInstanceLiveOpenLenient = waitForEvoInstanceLiveOpenLenient;
 exports.pickEvoConnectionState = pickEvoConnectionState;
+exports.fetchEvoInstanceLiveDetail = fetchEvoInstanceLiveDetail;
 exports.fetchEvoInstanceLiveState = fetchEvoInstanceLiveState;
 exports.invalidateEvoLiveStateCache = invalidateEvoLiveStateCache;
 exports.resolveEvoLiveConnectionSnapshots = resolveEvoLiveConnectionSnapshots;
@@ -35,6 +40,56 @@ function campaignChipConnectedFromLiveState(liveState) {
     if (s === "connecting" || s === "pairing" || s === "qrcode")
         return true;
     return false;
+}
+/** WhatsApp 403 = ban/restrição. Sessão EVO pode continuar `open` — o chip não pode ficar verde. */
+function pickEvoStatusReason(payload) {
+    if (!payload || typeof payload !== "object")
+        return null;
+    const root = payload;
+    const inst = root.instance ?? root;
+    const candidates = [root.statusReason, inst.statusReason, root.code, inst.code];
+    for (const value of candidates) {
+        const n = Number(value);
+        if (Number.isFinite(n) && n > 0)
+            return Math.floor(n);
+    }
+    return null;
+}
+function isEvoWhatsAppRestrictedReason(statusReason) {
+    return Number(statusReason) === 403;
+}
+/**
+ * Verde na campanha = conexão utilizável para disparo.
+ * Ban (403) / outbound quebrado / bloqueio de campanha vencem o `open` da Evolution.
+ */
+function campaignChipConnectedForDispatch(input) {
+    if (isEvoWhatsAppRestrictedReason(input.statusReason))
+        return false;
+    if (input.outboundBroken === true)
+        return false;
+    if (input.blocked === true)
+        return false;
+    return campaignChipConnectedFromLiveState(input.liveState);
+}
+function runEvoConnectionStateSelfCheck() {
+    if (campaignChipConnectedForDispatch({ liveState: "open", statusReason: 403 }) !== false) {
+        throw new Error("403 tem de deixar o chip da campanha vermelho mesmo com EVO open");
+    }
+    if (campaignChipConnectedForDispatch({ liveState: "open", outboundBroken: true }) !== false) {
+        throw new Error("outbound ERROR tem de deixar o chip vermelho");
+    }
+    if (campaignChipConnectedForDispatch({ liveState: "open", blocked: true }) !== false) {
+        throw new Error("bloqueio de campanha tem de deixar o chip vermelho");
+    }
+    if (campaignChipConnectedForDispatch({ liveState: "open" }) !== true) {
+        throw new Error("open sem 403 continua verde");
+    }
+    if (campaignChipConnectedForDispatch({ liveState: "" }) !== true) {
+        throw new Error("probe vazio não é desconectado");
+    }
+    if (campaignChipConnectedFromLiveState("close") !== false) {
+        throw new Error("close continua vermelho");
+    }
 }
 /**
  * fetchInstances já marcou a linha como open. Só descarta quando o
@@ -106,14 +161,14 @@ function pickEvoConnectionState(payload) {
         "";
     return String(raw || "").trim().toLowerCase();
 }
-async function fetchEvoInstanceLiveState(instanceName, options) {
+async function fetchEvoInstanceLiveDetail(instanceName, options) {
     const key = String(instanceName || "").trim().toLowerCase();
     if (!key)
-        return "";
+        return { state: "", statusReason: null };
     if (!options?.fresh) {
         const cached = liveStateCache.get(key);
         if (cached && cached.expiresAt > Date.now()) {
-            return cached.state;
+            return { state: cached.state, statusReason: cached.statusReason };
         }
     }
     const enc = encodeURIComponent(String(instanceName || "").trim());
@@ -130,12 +185,21 @@ async function fetchEvoInstanceLiveState(instanceName, options) {
         if (!result.ok && result.status === 404)
             continue;
         const state = pickEvoConnectionState(result.json);
-        if (state) {
-            liveStateCache.set(key, { state, expiresAt: Date.now() + LIVE_STATE_TTL_MS });
-            return state;
+        const statusReason = pickEvoStatusReason(result.json);
+        if (state || statusReason != null) {
+            liveStateCache.set(key, {
+                state,
+                statusReason,
+                expiresAt: Date.now() + LIVE_STATE_TTL_MS,
+            });
+            return { state, statusReason };
         }
     }
-    return "";
+    return { state: "", statusReason: null };
+}
+async function fetchEvoInstanceLiveState(instanceName, options) {
+    const detail = await fetchEvoInstanceLiveDetail(instanceName, options);
+    return detail.state;
 }
 function invalidateEvoLiveStateCache(instanceName) {
     if (!instanceName) {

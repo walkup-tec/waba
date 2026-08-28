@@ -5,6 +5,12 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 - Marker: `DEPLOY-2026-08-28-111300-inbox-opt-in-numero`
 - LOG: `doc/LOG-2026-08-28__111300__inbox-prod-ainda-html-antigo.md`
 
+## 2026-08-28 11:00 — Troca automática de bloqueado (9224) e spare 2102
+- Chip da campanha vermelho com WhatsApp 403 / outbound ERROR, mesmo com EVO `open`
+- Auto-swap usa a mesma lista de spare do botão «+ Instâncias»
+- Marker: `DEPLOY-2026-08-28-110000-swap-bloqueado-2102`
+- LOG: `doc/LOG-2026-08-28__110000__swap-bloqueado-2102.md`
+
 ## 2026-08-28 10:15 — 7770 envia via drax; 1261 volta à lista
 - Pick da campanha casa WB-7770 → `drax` e sonda live no nome EVO; 1261 open sem telefone entra na lista
 - Marker: `DEPLOY-2026-08-28-101500-pick-7770-drax-1261`

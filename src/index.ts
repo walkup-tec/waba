@@ -125,7 +125,9 @@ import {
   invalidateEvoLiveStateCache,
   fetchEvoInstanceLiveState,
   aquecedorLiveStateAllowsConnected,
-  campaignChipConnectedFromLiveState,
+  campaignChipConnectedForDispatch,
+  fetchEvoInstanceLiveDetail,
+  isEvoWhatsAppRestrictedReason,
   isEvoLiveStateOpen,
   isEvoConnectionInProgress,
   pickEvoConnectionState,
@@ -1031,8 +1033,12 @@ setIntegrationProbeFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
     if (instanceNameHeldByUnfinishedCampaign(status.sourceInstance)) {
+      markCampaignInstanceBlocked(
+        status.sourceInstance,
+        "restriction-probe-held",
+      );
       console.info(
-        `[Campanha] ignorando pausa humana em ${status.sourceInstance}: chip selecionado em campanha aberta.`,
+        `[Campanha] ${status.sourceInstance} bloqueado para disparo (restrição com chip em campanha) — troca automática.`,
       );
       return;
     }
@@ -1056,8 +1062,9 @@ setInboundValidationFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
     if (instanceNameHeldByUnfinishedCampaign(status.instanceName)) {
+      markCampaignInstanceBlocked(status.instanceName, "inbound-restriction-held");
       console.info(
-        `[Campanha] ignorando pausa humana em ${status.instanceName}: chip selecionado em campanha aberta.`,
+        `[Campanha] ${status.instanceName} bloqueado para disparo (restrição inbound com chip em campanha) — troca automática.`,
       );
       return;
     }
@@ -3296,6 +3303,41 @@ const campaignInstanceNextSendAt = new Map<string, number>();
 const campaignInstanceSendCounts = new Map<string, Map<string, number>>();
 const campaignAutoSwapAtMs = new Map<string, number>();
 const CAMPAIGN_AUTO_SWAP_COOLDOWN_MS = 45_000;
+const CAMPAIGN_BLOCKED_INSTANCE_TTL_MS = 3 * 60 * 60 * 1000;
+const campaignBlockedInstanceUntilMs = new Map<string, number>();
+
+function campaignBlockedInstanceKey(instanceName: string): string {
+  return String(instanceName || "").trim().toLowerCase();
+}
+
+function markCampaignInstanceBlocked(instanceName: string, reason: string): void {
+  const key = campaignBlockedInstanceKey(instanceName);
+  if (!key) return;
+  campaignBlockedInstanceUntilMs.set(key, Date.now() + CAMPAIGN_BLOCKED_INSTANCE_TTL_MS);
+  console.warn(
+    `[Campanha] chip ${instanceName} tratado como bloqueado (${reason}) — troca automática.`,
+  );
+}
+
+function isCampaignInstanceBlocked(instanceName: string): boolean {
+  const key = campaignBlockedInstanceKey(instanceName);
+  if (!key) return false;
+  const until = campaignBlockedInstanceUntilMs.get(key) || 0;
+  if (until <= Date.now()) {
+    campaignBlockedInstanceUntilMs.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function isEvoSenderBanHttp(status: number, body: string): boolean {
+  if (Number(status) === 403) return true;
+  const b = String(body || "").toLowerCase();
+  return (
+    (b.includes("statusreason") && b.includes("403")) ||
+    /\b(banned|banished|whatsapp.*restrict)\b/.test(b)
+  );
+}
 /** Round-robin de imagens 1080×1080 por campanha (Alternativa). */
 const campaignMessengerImageCursor = new Map<string, number>();
 /** Evita dois processamentos paralelos da mesma campanha (tick a cada 7s vs typing/IA). */
@@ -5033,11 +5075,15 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       });
       // Outbound ERROR = sessão origem quebrada (não culpar o destino nem rajada).
       const cooldownMs = outboundAckBroken ? 60 * 60 * 1000 : 15 * 60 * 1000;
-      if (outboundAckBroken && !instanceNameHeldByUnfinishedCampaign(chosen.instancia_origem)) {
-        await markAquecedorInstanceRestricted(
-          chosen.instancia_origem,
-          `Aquecedor: outbound MessageUpdate=${lastAckStatus || "ERROR"} — reconecte QR da ${chosen.instancia_origem}.`,
-        );
+      if (outboundAckBroken) {
+        if (instanceNameHeldByUnfinishedCampaign(chosen.instancia_origem)) {
+          markCampaignInstanceBlocked(chosen.instancia_origem, "aquecedor-outbound-error");
+        } else {
+          await markAquecedorInstanceRestricted(
+            chosen.instancia_origem,
+            `Aquecedor: outbound MessageUpdate=${lastAckStatus || "ERROR"} — reconecte QR da ${chosen.instancia_origem}.`,
+          );
+        }
       }
       const cooldown = await recordDirectedDeliveryFailure({
         origem: chosen.instancia_origem,
@@ -6985,6 +7031,7 @@ function syntheticEvoInstanceTagRow(
 async function enrichSelectedCampaignInstancesLive(
   config: DisparosConfig | undefined | null,
   evoRows: EvoInstanceTagRow[],
+  opts?: { withOutboundHealth?: boolean },
 ): Promise<EvoInstanceTagRow[]> {
   const selected = selectedDisparadorNamesFromConfig(config);
   const rows = evoRows.map(cloneEvoInstanceTagRow);
@@ -7001,19 +7048,41 @@ async function enrichSelectedCampaignInstancesLive(
       ),
     );
     let live = "";
+    let statusReason: number | null = null;
     let probedKey = key;
     try {
       for (const probe of probeKeys) {
-        live = await fetchEvoInstanceLiveState(probe, { fresh: true });
-        if (String(live || "").trim()) {
+        const detail = await fetchEvoInstanceLiveDetail(probe, { fresh: true });
+        live = detail.state;
+        statusReason = detail.statusReason;
+        if (String(live || "").trim() || isEvoWhatsAppRestrictedReason(statusReason)) {
           probedKey = probe;
           break;
         }
       }
     } catch {
       live = "";
+      statusReason = null;
     }
-    const open = campaignChipConnectedFromLiveState(live);
+    if (isEvoWhatsAppRestrictedReason(statusReason)) {
+      markCampaignInstanceBlocked(key, "statusReason-403");
+    }
+    let outboundBroken = false;
+    if (
+      opts?.withOutboundHealth &&
+      isEvoLiveStateOpen(live) &&
+      !isEvoWhatsAppRestrictedReason(statusReason)
+    ) {
+      const health = await probeAquecedorInstanceOutboundHealth(key);
+      outboundBroken = health === "broken";
+      if (outboundBroken) markCampaignInstanceBlocked(key, "outbound-error");
+    }
+    const open = campaignChipConnectedForDispatch({
+      liveState: live,
+      statusReason,
+      outboundBroken,
+      blocked: isCampaignInstanceBlocked(key) || isCampaignInstanceBlocked(name),
+    });
     const idx = rows.findIndex(
       (r) =>
         r.instanceKey.toLowerCase() === key.toLowerCase() ||
@@ -7382,6 +7451,7 @@ function listConnectedSpareEvoNames(
   const out: string[] = [];
   for (const row of listSpareEvoRowsNotInCampaign(exceptCampaignId, selectedNames, evoRows)) {
     const name = String(row.instanceKey || "").trim();
+    if (isCampaignInstanceBlocked(name)) continue;
     const alias = String(row.displayName || "").trim();
     const hasAlias = Boolean(alias) && alias.toLowerCase() !== name.toLowerCase();
     if (row.connected !== true && !hasAlias) continue;
@@ -7423,15 +7493,29 @@ async function resolveLiveSpareEvoNames(
       chunk.map(async (row) => {
         const name = String(row.instanceKey || "").trim();
         const alias = String(row.displayName || "").trim();
-        if (row.connected === true) return { name, open: true };
+        if (!name || isCampaignInstanceBlocked(name)) return { name, open: false };
         try {
-          let live = await fetchEvoInstanceLiveState(name, { fresh: true });
-          if (!String(live || "").trim() && alias && alias.toLowerCase() !== name.toLowerCase()) {
-            live = await fetchEvoInstanceLiveState(alias, { fresh: true });
+          const detail = await fetchEvoInstanceLiveDetail(name, { fresh: true });
+          let live = detail.state;
+          let statusReason = detail.statusReason;
+          if (
+            !String(live || "").trim() &&
+            !isEvoWhatsAppRestrictedReason(statusReason) &&
+            alias &&
+            alias.toLowerCase() !== name.toLowerCase()
+          ) {
+            const aliasDetail = await fetchEvoInstanceLiveDetail(alias, { fresh: true });
+            live = aliasDetail.state;
+            statusReason = aliasDetail.statusReason;
           }
-          return { name, open: campaignChipConnectedFromLiveState(live) };
+          const open = campaignChipConnectedForDispatch({
+            liveState: live || (row.connected === true ? "open" : ""),
+            statusReason,
+            blocked: false,
+          });
+          return { name, open };
         } catch {
-          return { name, open: false };
+          return { name, open: row.connected === true };
         }
       }),
     );
@@ -7581,14 +7665,11 @@ async function tryAutoSwapDisconnectedCampaignInstances(
     return { swapped: false, spareCount: -1 };
   }
   const toAdd = Math.max(computeCampaignInstancesToAdd(health), health.disconnectedCount);
-  const auth = campaignOwnerAuth(campaign.ownerEmail);
-  const incoming = await resolveAutoInstancesForCampaign(
-    auth,
-    campaign.configSnapshot,
-    evoRows,
-    toAdd,
-    campaign.id,
-  );
+  const selectedNames = selectedDisparadorNamesFromConfig(campaign.configSnapshot);
+  const heuristic = listConnectedSpareEvoNames(campaign.id, selectedNames, evoRows, toAdd);
+  const incoming = heuristic.length
+    ? heuristic
+    : await resolveLiveSpareEvoNames(campaign.id, selectedNames, evoRows, toAdd);
   if (!incoming.length) {
     return { swapped: false, spareCount: 0 };
   }
@@ -13595,11 +13676,24 @@ async function pickDisparadorInstanceForConfig(
       continue;
     }
     let live = "";
+    let statusReason: number | null = null;
     for (const probe of uniqueProbeNamesForLiveState(evoName, name)) {
-      live = await fetchEvoInstanceLiveState(probe, { fresh: true });
-      if (isEvoLiveStateOpen(live)) break;
+      const detail = await fetchEvoInstanceLiveDetail(probe, { fresh: true });
+      live = detail.state;
+      statusReason = detail.statusReason;
+      if (isEvoLiveStateOpen(live) && !isEvoWhatsAppRestrictedReason(statusReason)) break;
     }
     if (!isEvoLiveStateOpen(live)) continue;
+    if (
+      !campaignChipConnectedForDispatch({
+        liveState: live,
+        statusReason,
+        blocked: isCampaignInstanceBlocked(evoName) || isCampaignInstanceBlocked(name),
+        outboundBroken: getCachedAquecedorOutboundHealth(evoName)?.class === "broken",
+      })
+    ) {
+      continue;
+    }
     if (loadProxyBrasilConfig()?.enabled) {
       const proxyFind = await fetchEvoProxyFindEnabled(evoName, callEvoAction, EVO_API_BASE, {
         timeoutMs: 6_000,
@@ -14441,6 +14535,9 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
             mediaSend.status,
             String(mediaSend.body || "").slice(0, 200),
           );
+          if (isEvoSenderBanHttp(mediaSend.status, String(mediaSend.body || ""))) {
+            markCampaignInstanceBlocked(instancePick.instancia, "sendMedia-403");
+          }
           await persistLeadFailed(lead, classifyEvoSendFailure(mediaSend.status, mediaSend.body));
           scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
           return;
@@ -14518,6 +14615,9 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           sendResult.status,
           String(sendResult.body || "").slice(0, 200),
         );
+        if (isEvoSenderBanHttp(sendResult.status, String(sendResult.body || ""))) {
+          markCampaignInstanceBlocked(instancePick.instancia, "sendText-403");
+        }
         const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
         await persistLeadFailed(lead, failKind);
         return false;
@@ -14685,7 +14785,9 @@ async function runCampaignDispatchTick(): Promise<void> {
   }
   const running = disparosCampaignsMemory.filter((c) => c.status === "running");
   for (const c of running) {
-    let liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+    let liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows, {
+      withOutboundHealth: true,
+    });
     if (getCampaignInstanceHealth(c.configSnapshot, liveRows).disconnectedCount > 0) {
       await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
@@ -14729,7 +14831,9 @@ async function runCampaignDispatchTick(): Promise<void> {
 
   for (const c of disparosCampaignsMemory.filter((row) => row.status === "paused")) {
     if (isOperatorHeldCampaignPause(c.pauseReason)) continue;
-    let liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+    let liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows, {
+      withOutboundHealth: true,
+    });
     if (getCampaignInstanceHealth(c.configSnapshot, liveRows).disconnectedCount > 0) {
       await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
@@ -15316,10 +15420,12 @@ app.get("/disparos/campanhas", async (req, res) => {
         const selectedForSpare = Array.isArray(configForTags?.selectedDisparadorInstances)
           ? configForTags.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
           : [];
-        spareByCampaignId.set(
-          item.id,
-          listConnectedSpareEvoNames(item.id, selectedForSpare, evoRowsAll, 20).length,
-        );
+        let spareN = listConnectedSpareEvoNames(item.id, selectedForSpare, evoRowsAll, 20).length;
+        const disconnectedN = getCampaignInstanceHealth(configForTags, liveRows).disconnectedCount;
+        if (spareN === 0 && disconnectedN > 0) {
+          spareN = (await resolveLiveSpareEvoNames(item.id, selectedForSpare, evoRowsAll, 20)).length;
+        }
+        spareByCampaignId.set(item.id, spareN);
       }
     }
 

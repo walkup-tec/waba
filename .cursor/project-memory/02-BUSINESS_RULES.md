@@ -4,6 +4,11 @@ Somente regras permanentes. Sem detalhes de implementação.
 
 ## Regras
 
+### Campanha — troca automática do número bloqueado
+
+- Chip **vermelho** (Evolution `close`, WhatsApp `statusReason` 403, outbound quebrado ou restrição com o chip já na campanha) é substituído 1:1 pelo número livre.
+- A lista de substituição é a mesma do botão «+ Instâncias». Sessão EVO `open` com banimento WhatsApp **não** conta como ativo.
+
 ### Campanha — «+ Instâncias»
 
 - O botão inclui o número conectado livre que a tela já mostra e **substitui** o chip vermelho (bloqueado/offline).

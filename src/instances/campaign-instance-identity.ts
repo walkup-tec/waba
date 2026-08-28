@@ -87,6 +87,30 @@ export function resolveCampaignStoredNameToEvoKey(
   return raw;
 }
 
+/** Tokens usados para saber se um spare já está na seleção (nome/alias/telefone ≥8 dígitos). */
+export function campaignIdentityTokensFromRow(row: CampaignInstanceIdentityRow): string[] {
+  const out = new Set<string>();
+  for (const k of row.nameKeys) addKey(out, k);
+  addKey(out, row.instanceKey);
+  addKey(out, row.displayName);
+  for (const d of row.digitKeys) {
+    const digits = String(d || "").trim();
+    if (digits.length >= 8) out.add(`d:${digits}`);
+  }
+  return Array.from(out);
+}
+
+export function campaignRowSharesSelectionIdentity(
+  selectedRows: CampaignInstanceIdentityRow[],
+  candidate: CampaignInstanceIdentityRow,
+): boolean {
+  const identity = new Set<string>();
+  for (const row of selectedRows) {
+    for (const token of campaignIdentityTokensFromRow(row)) identity.add(token);
+  }
+  return campaignIdentityTokensFromRow(candidate).some((token) => identity.has(token));
+}
+
 export function uniqueProbeNamesForLiveState(
   evoKey: string,
   storedName: string,
@@ -117,13 +141,19 @@ export function runCampaignInstanceIdentitySelfCheck(): void {
     displayName: "WB-5401",
     phone: "5198335401",
   });
-  const rows = [drax, n1261, walkup5401];
+  const walkup2102 = identityRowFromEvoFields({
+    instanceKey: "walkup",
+    displayName: "WB-2102",
+    phone: "5197462102",
+  });
+  const rows = [drax, n1261, walkup5401, walkup2102];
 
   const cases: Array<[string, string, string]> = [
     ["WB-7770", "drax", "alias da campanha tem de virar a chave EVO"],
     ["drax", "drax", "chave técnica permanece"],
     ["1261", "1261", "1261 sem telefone no fetch continua encontrável"],
     ["WB-5401", "walkup-5401", "5401 pelo alias"],
+    ["WB-2102", "walkup", "2102 pelo alias não vira walkup-5401"],
   ];
   for (const [stored, expected, label] of cases) {
     const got = resolveCampaignStoredNameToEvoKey(stored, rows);
@@ -135,5 +165,9 @@ export function runCampaignInstanceIdentitySelfCheck(): void {
   const probes = uniqueProbeNamesForLiveState("drax", "WB-7770");
   if (probes.join(",") !== "drax,WB-7770") {
     throw new Error(`probes 7770: ${probes.join(",")}`);
+  }
+
+  if (campaignRowSharesSelectionIdentity([walkup5401, n1261, drax], walkup2102)) {
+    throw new Error("walkup/2102 não pode ser tratado como já selecionado só porque existe walkup-5401");
   }
 }

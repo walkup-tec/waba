@@ -16,7 +16,12 @@ const LIVE_STATE_TTL_MS = Math.max(
   Math.min(120_000, Number(process.env.EVO_CONNECTION_STATE_CACHE_MS ?? 4_000) || 4_000),
 );
 
-let liveStateCache = new Map<string, { state: string; expiresAt: number }>();
+export type EvoLiveStateDetail = {
+  state: string;
+  statusReason: number | null;
+};
+
+let liveStateCache = new Map<string, { state: string; statusReason: number | null; expiresAt: number }>();
 
 export function isEvoLiveStateOpen(state: string): boolean {
   return String(state || "").trim().toLowerCase() === "open";
@@ -33,6 +38,60 @@ export function campaignChipConnectedFromLiveState(liveState: string): boolean {
   if (s === "open") return true;
   if (s === "connecting" || s === "pairing" || s === "qrcode") return true;
   return false;
+}
+
+/** WhatsApp 403 = ban/restrição. Sessão EVO pode continuar `open` — o chip não pode ficar verde. */
+export function pickEvoStatusReason(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, unknown>;
+  const inst = (root.instance as Record<string, unknown> | undefined) ?? root;
+  const candidates = [root.statusReason, inst.statusReason, root.code, inst.code];
+  for (const value of candidates) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+  return null;
+}
+
+export function isEvoWhatsAppRestrictedReason(statusReason: number | null | undefined): boolean {
+  return Number(statusReason) === 403;
+}
+
+/**
+ * Verde na campanha = conexão utilizável para disparo.
+ * Ban (403) / outbound quebrado / bloqueio de campanha vencem o `open` da Evolution.
+ */
+export function campaignChipConnectedForDispatch(input: {
+  liveState: string;
+  statusReason?: number | null;
+  outboundBroken?: boolean;
+  blocked?: boolean;
+}): boolean {
+  if (isEvoWhatsAppRestrictedReason(input.statusReason)) return false;
+  if (input.outboundBroken === true) return false;
+  if (input.blocked === true) return false;
+  return campaignChipConnectedFromLiveState(input.liveState);
+}
+
+export function runEvoConnectionStateSelfCheck(): void {
+  if (campaignChipConnectedForDispatch({ liveState: "open", statusReason: 403 }) !== false) {
+    throw new Error("403 tem de deixar o chip da campanha vermelho mesmo com EVO open");
+  }
+  if (campaignChipConnectedForDispatch({ liveState: "open", outboundBroken: true }) !== false) {
+    throw new Error("outbound ERROR tem de deixar o chip vermelho");
+  }
+  if (campaignChipConnectedForDispatch({ liveState: "open", blocked: true }) !== false) {
+    throw new Error("bloqueio de campanha tem de deixar o chip vermelho");
+  }
+  if (campaignChipConnectedForDispatch({ liveState: "open" }) !== true) {
+    throw new Error("open sem 403 continua verde");
+  }
+  if (campaignChipConnectedForDispatch({ liveState: "" }) !== true) {
+    throw new Error("probe vazio não é desconectado");
+  }
+  if (campaignChipConnectedFromLiveState("close") !== false) {
+    throw new Error("close continua vermelho");
+  }
 }
 
 /**
@@ -120,17 +179,17 @@ export function pickEvoConnectionState(payload: unknown): string {
   return String(raw || "").trim().toLowerCase();
 }
 
-export async function fetchEvoInstanceLiveState(
+export async function fetchEvoInstanceLiveDetail(
   instanceName: string,
   options?: { fresh?: boolean },
-): Promise<string> {
+): Promise<EvoLiveStateDetail> {
   const key = String(instanceName || "").trim().toLowerCase();
-  if (!key) return "";
+  if (!key) return { state: "", statusReason: null };
 
   if (!options?.fresh) {
     const cached = liveStateCache.get(key);
     if (cached && cached.expiresAt > Date.now()) {
-      return cached.state;
+      return { state: cached.state, statusReason: cached.statusReason };
     }
   }
 
@@ -148,12 +207,25 @@ export async function fetchEvoInstanceLiveState(
     });
     if (!result.ok && result.status === 404) continue;
     const state = pickEvoConnectionState(result.json);
-    if (state) {
-      liveStateCache.set(key, { state, expiresAt: Date.now() + LIVE_STATE_TTL_MS });
-      return state;
+    const statusReason = pickEvoStatusReason(result.json);
+    if (state || statusReason != null) {
+      liveStateCache.set(key, {
+        state,
+        statusReason,
+        expiresAt: Date.now() + LIVE_STATE_TTL_MS,
+      });
+      return { state, statusReason };
     }
   }
-  return "";
+  return { state: "", statusReason: null };
+}
+
+export async function fetchEvoInstanceLiveState(
+  instanceName: string,
+  options?: { fresh?: boolean },
+): Promise<string> {
+  const detail = await fetchEvoInstanceLiveDetail(instanceName, options);
+  return detail.state;
 }
 
 export function invalidateEvoLiveStateCache(instanceName?: string): void {
