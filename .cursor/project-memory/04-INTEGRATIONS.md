@@ -27,6 +27,13 @@ Sessão WABA (cookie) para master/staff/assinante; rotas admin restritas a maste
 
 ## Fluxos de comunicação
 
+### Meta WhatsApp Cloud — portfólio (Laboratório)
+
+- Listagem: `GET /integrations/meta/whatsapp/portfolio`
+- Identidade do card: `POST /integrations/meta/whatsapp/portfolio/profile` (nome/foto locais; Graph best-effort)
+- Foto do card: `GET /integrations/meta/whatsapp/portfolio/photo` (sessão, `Cache-Control: private, no-store`)
+- Docs oficiais: Business `profile_picture_uri` é leitura — https://developers.facebook.com/docs/marketing-api/reference/business/
+
 ### Boas-vindas assinante
 
 - Cadastro ou `POST /admin/subscribers/:id/resend-welcome` → e-mail + WhatsApp.

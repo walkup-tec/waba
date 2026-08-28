@@ -12,6 +12,7 @@ const meta_whatsapp_connection_repository_1 = require("./meta-whatsapp-connectio
 const meta_whatsapp_tenant_1 = require("./meta-whatsapp-tenant");
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
+const meta_whatsapp_portfolio_identity_store_1 = require("./meta-whatsapp-portfolio-identity.store");
 const meta_whatsapp_phone_profile_1 = require("./meta-whatsapp-phone-profile");
 const meta_whatsapp_resumable_upload_1 = require("./meta-whatsapp-resumable-upload");
 const SENSITIVE_KEY = /^(access_token|accessToken|app_secret|appSecret|client_secret|clientSecret|authorization_code|access_token_encrypted|accessTokenEncrypted|encrypted_token|encryptedToken|system_user_token|systemUserToken|refresh_token|refreshToken)$/i;
@@ -78,6 +79,14 @@ function requireConfigured() {
     if (!(0, meta_config_1.isMetaTechProviderConfigured)()) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("config_invalid");
     }
+}
+function withLocalPortfolioIdentity(tenantId, assets) {
+    if (!assets.portfolio)
+        return assets;
+    return {
+        ...assets,
+        portfolio: (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioIdentity)(tenantId, assets.portfolio),
+    };
 }
 function wabaIdFromPhoneJson(json) {
     const row = json && typeof json === "object" ? json : {};
@@ -305,7 +314,7 @@ class MetaWhatsappConnectionService {
         const tenant = requireTenant(auth);
         const open = await this.repository.findOpenByTenant(tenant.tenantId);
         if (!open) {
-            return { portfolio: null, numbers: [] };
+            return withLocalPortfolioIdentity(tenant.tenantId, { portfolio: null, numbers: [] });
         }
         const fallbackPortfolio = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)({ id: open.metaBusinessId, name: null, primary_page: null }, { id: open.metaBusinessId, wabaId: open.wabaId });
         let token = "";
@@ -360,7 +369,10 @@ class MetaWhatsappConnectionService {
         }
         const wabaId = String(open.wabaId || "").trim();
         if (!wabaId) {
-            return { portfolio: portfolio.id ? portfolio : null, numbers: [] };
+            return withLocalPortfolioIdentity(tenant.tenantId, {
+                portfolio: portfolio.id ? portfolio : null,
+                numbers: [],
+            });
         }
         const phones = await this.graph({
             token,
@@ -378,7 +390,10 @@ class MetaWhatsappConnectionService {
             });
             if (phones.status === 401)
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
-            return { portfolio: portfolio.id ? portfolio : null, numbers: [] };
+            return withLocalPortfolioIdentity(tenant.tenantId, {
+                portfolio: portfolio.id ? portfolio : null,
+                numbers: [],
+            });
         }
         const numbers = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)(phones.json);
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-listed", {
@@ -386,7 +401,10 @@ class MetaWhatsappConnectionService {
             hasBusiness: Boolean(portfolio.id),
             numbers: numbers.length,
         });
-        return { portfolio: portfolio.id ? portfolio : null, numbers };
+        return withLocalPortfolioIdentity(tenant.tenantId, {
+            portfolio: portfolio.id ? portfolio : null,
+            numbers,
+        });
     }
     async registerPhoneFromAuth(auth, input) {
         const tenant = requireTenant(auth);
@@ -564,13 +582,12 @@ class MetaWhatsappConnectionService {
         if (!displayName && !photo) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         }
-        const assets = await this.listPortfolioAssets(auth);
-        const businessId = String(assets.portfolio?.id || "").trim();
-        if (!businessId)
-            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         const open = await this.repository.findOpenByTenant(tenant.tenantId);
         if (!open)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("no_pending_connection");
+        const businessId = String(open.metaBusinessId || "").trim();
+        if (!businessId)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         let token = "";
         try {
             token = this.decrypt(open.accessTokenEncrypted);
@@ -579,7 +596,15 @@ class MetaWhatsappConnectionService {
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-profile-failed", { tenantId: tenant.tenantId, reason: "decrypt" });
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
         }
-        let nameUpdated = false;
+        (0, meta_whatsapp_portfolio_identity_store_1.writePortfolioIdentity)(tenant.tenantId, {
+            name: displayName || undefined,
+            photo: photo
+                ? { ext: photo.mime.includes("png") ? "png" : "jpg", bytes: photo.bytes }
+                : undefined,
+        });
+        const nameUpdated = Boolean(displayName);
+        const photoUpdated = Boolean(photo);
+        const warnings = [];
         if (displayName) {
             const renamed = await this.graph({
                 token,
@@ -596,13 +621,20 @@ class MetaWhatsappConnectionService {
                 });
                 if (renamed.status === 401)
                     throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
-                throw new meta_whatsapp_errors_1.MetaWhatsappError("portfolio_update_failed");
+                warnings.push("A Meta não aceitou o nome neste token.");
             }
-            nameUpdated = true;
         }
-        let photoUpdated = false;
         if (photo) {
-            let pageId = String(assets.portfolio?.primaryPageId || "").trim();
+            const business = await this.graph({
+                token,
+                method: "GET",
+                path: businessId,
+                query: { fields: "id,primary_page{id,name}" },
+            });
+            const page = business.ok && business.json && typeof business.json === "object"
+                ? business.json.primary_page
+                : undefined;
+            let pageId = String(page?.id || "").trim();
             if (!pageId) {
                 const pages = await this.graph({
                     token,
@@ -617,8 +649,7 @@ class MetaWhatsappConnectionService {
                     tenantId: tenant.tenantId,
                     reason: "no_page",
                 });
-                if (!nameUpdated)
-                    throw new meta_whatsapp_errors_1.MetaWhatsappError("portfolio_photo_no_page");
+                warnings.push("A Meta não grava a foto do Business sem uma Página.");
             }
             else {
                 try {
@@ -629,7 +660,6 @@ class MetaWhatsappConnectionService {
                         mime: photo.mime,
                         bytes: photo.bytes,
                     });
-                    photoUpdated = true;
                 }
                 catch (error) {
                     (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-profile-failed", {
@@ -638,8 +668,7 @@ class MetaWhatsappConnectionService {
                         target: pageId,
                         detail: String(error?.message || "").slice(0, 80),
                     });
-                    if (!nameUpdated)
-                        throw new meta_whatsapp_errors_1.MetaWhatsappError("portfolio_update_failed");
+                    warnings.push("A Meta não aplicou a foto na Página.");
                 }
             }
         }
@@ -647,9 +676,15 @@ class MetaWhatsappConnectionService {
             tenantId: tenant.tenantId,
             nameUpdated,
             photoUpdated,
+            metaWarning: Boolean(warnings.length),
         });
         const listed = await this.listPortfolioAssets(auth);
-        return { ...listed, nameUpdated, photoUpdated };
+        const warning = warnings.join(" ").trim();
+        return { ...listed, nameUpdated, photoUpdated, ...(warning ? { warning } : {}) };
+    }
+    async readPortfolioPhotoFromAuth(auth) {
+        const tenant = requireTenant(auth);
+        return (0, meta_whatsapp_portfolio_identity_store_1.readPortfolioPhoto)(tenant.tenantId);
     }
 }
 exports.MetaWhatsappConnectionService = MetaWhatsappConnectionService;

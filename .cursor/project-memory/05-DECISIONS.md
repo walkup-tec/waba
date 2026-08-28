@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-28 — Card do portfólio: identidade local, Meta best-effort
+
+- **Decisão:** Nome e foto do CARD 02 no Laboratório persistem em ficheiros por tenant. A Graph (`POST /{business-id}` e foto da Página) é tentada, mas o sucesso do card não depende dela.
+- **Motivo:** `profile_picture_uri` do Business é só leitura. Este BM não tem Página. O token do Embedded Signup pode recusar o nome (3910).
+- **Impacto:** O operador vê DRAX.png e o nome no card mesmo quando a Meta não aplica. Docs: https://developers.facebook.com/docs/marketing-api/reference/business/ e https://developers.facebook.com/docs/graph-api/reference/page/picture/
+
 ### 2026-08-24 — sendButtons: title com letras reais (sem ZWSP)
 
 - **Decisão:** Não enviar `title` ZWSP/`""` no `sendButtons` da Alternativa. Title = primeira linha/palavras do texto; restante em `description`.

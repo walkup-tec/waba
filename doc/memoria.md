@@ -1,5 +1,13 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 05:10 — Identidade local do card do portfólio
+- Nome e foto do CARD 02 gravam no Laboratório; Meta é best-effort (foto do BM é só leitura sem Página)
+- LOG: `doc/LOG-2026-08-28__051000__portfolio-identidade-local-card.md`
+
+## 2026-08-28 04:56 — Ícone do botão Conectar Portfólio
+- PNG preto recortado trocado por SVG do infinito Meta na cor do botão
+- LOG: `doc/LOG-2026-08-28__045600__icone-botao-conectar-portfolio.md`
+
 ## 2026-08-28 04:42 — Marker de deploy
 - Marker: `DEPLOY-2026-08-28-044200-botao-instancias-alias`
 - LOG: `doc/LOG-2026-08-28__044200__deploy-marker.md`

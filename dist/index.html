@@ -3183,12 +3183,10 @@
         }
         .meta-onboard-cta-portfolio:hover { filter: brightness(1.12); }
         .meta-connect-logo {
-          width: 22px;
-          height: 22px;
-          border-radius: 5px;
-          object-fit: cover;
+          width: 26px;
+          height: 16px;
           flex: 0 0 auto;
-          background: #000;
+          display: block;
         }
         .meta-onboard-steps { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; margin:0 0 18px; padding:0; list-style:none; }
         .meta-onboard-step { background:rgba(15,23,42,.55); border:1px solid rgba(148,163,184,.18); border-radius:12px; padding:10px 10px 12px; min-height:88px; }
@@ -20413,7 +20411,9 @@
                   <h3 id="meta-card-steps-title" class="meta-lab-card-title">Etapas de integração</h3>
                   <div class="meta-onboard-hero">
                     <button id="meta-tp-connect-btn" type="button" class="meta-onboard-cta meta-onboard-cta-portfolio" aria-label="Conectar Portfólio" onclick="return window.wabaConnectMetaWhatsappOficial(event);">
-                      <img src="/media/meta-logo.png" alt="" class="meta-connect-logo" width="22" height="22" />
+                      <svg class="meta-connect-logo" viewBox="0 0 24 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M17.12.98c-1.86 0-3.48.8-4.56 2.14C11.48 1.78 9.86.98 8 .98 4.36.98 1.4 4.14 1.4 8.02c0 3.88 2.96 7.04 6.6 7.04 1.86 0 3.48-.8 4.56-2.14 1.08 1.34 2.7 2.14 4.56 2.14 3.64 0 6.6-3.16 6.6-7.04 0-3.88-2.96-7.04-6.6-7.04zM8 12.56c-2.32 0-4.2-2.04-4.2-4.54S5.68 3.48 8 3.48c1 0 1.9.38 2.58 1.04C9.86 5.62 9.5 6.78 9.5 8.02s.36 2.4 1.08 3.5C9.9 12.18 9 12.56 8 12.56zm9.12 0c-1 0-1.9-.38-2.58-1.04.72-1.1 1.08-2.26 1.08-3.5s-.36-2.4-1.08-3.5c.68-.66 1.58-1.04 2.58-1.04 2.32 0 4.2 2.04 4.2 4.54s-1.88 4.54-4.2 4.54z"/>
+                      </svg>
                       Conectar Portfólio
                     </button>
                   </div>
@@ -35006,7 +35006,12 @@
         metaTpSession.portfolioPrimaryPageId = String(portfolio.primaryPageId || "").trim();
         if (iniEl) iniEl.textContent = metaTpInitials(name);
         const photoUrl = String(portfolio.profilePictureUrl || "").trim();
-        const safePhoto = /^https:\/\//i.test(photoUrl) ? photoUrl : "";
+        const isLocalPhoto = /^\/integrations\/meta\/whatsapp\/portfolio\/photo(\?|$)/i.test(photoUrl);
+        const safePhoto = isLocalPhoto
+          ? resolveWabaPublicPath(photoUrl)
+          : /^https:\/\//i.test(photoUrl)
+            ? photoUrl
+            : "";
         if (photoEl && logoEl) {
           if (safePhoto) {
             metaTpShowPortfolioLogo(photoEl, logoEl, safePhoto, name, false);
@@ -35350,19 +35355,16 @@
         const hintEl = document.getElementById("meta-tp-edit-hint");
         const nameEl = document.getElementById("meta-tp-edit-name");
         const isPortfolio = kind === "portfolio";
-        const hasPage = Boolean(metaTpSession.portfolioPrimaryPageId);
         const file = document.getElementById("meta-tp-edit-photo");
         if (titleEl) titleEl.textContent = isPortfolio ? "Editar portfólio" : "Editar número";
         if (phoneEl) phoneEl.textContent = subtitle || "";
         if (labelEl) labelEl.textContent = isPortfolio ? "Nome do portfólio" : "Nome de exibição no WhatsApp";
         if (hintEl) {
           hintEl.textContent = isPortfolio
-            ? hasPage
-              ? "O nome muda no Business Manager. A foto usa a página principal da Meta."
-              : "O nome pode ser salvo no Business Manager. A foto deste portfólio não pode ser alterada pela API da Meta enquanto não houver uma Página do Facebook ligada a ele."
+            ? "O card do Laboratório atualiza na hora. A Meta só replica o nome se o token for admin do Business, e a foto só se houver uma Página do Facebook."
             : "A Meta precisa aprovar o novo nome. O número precisa estar Ativo para mudar a foto. Depois da aprovação do nome, ative de novo com o PIN de 6 dígitos.";
         }
-        if (file) file.disabled = Boolean(isPortfolio && !hasPage);
+        if (file) file.disabled = false;
         if (nameEl) nameEl.value = name || "";
       }
 
@@ -35448,11 +35450,7 @@
           metaTpEditStatus("O nome de exibição precisa ter pelo menos 3 caracteres.");
           return false;
         }
-        if (isPortfolio && metaTpEditState.photoBase64 && !metaTpSession.portfolioPrimaryPageId) {
-          metaTpEditStatus("Este portfólio não tem página no Facebook. A Meta não deixa gravar a foto no Business Manager. Altere só o nome, ou ligue uma Página principal.");
-          return false;
-        }
-        metaTpEditStatus("Salvando na Meta…");
+        metaTpEditStatus(isPortfolio ? "Salvando no card…" : "Salvando na Meta…");
         const path = isPortfolio
           ? "/integrations/meta/whatsapp/portfolio/profile"
           : "/integrations/meta/whatsapp/phone-numbers/profile";
@@ -35481,9 +35479,6 @@
         if (payload.nameUpdated) parts.push("nome atualizado");
         if (payload.namePending) parts.push("nome enviado para aprovação da Meta");
         if (payload.warning) parts.push(String(payload.warning));
-        if (isPortfolio && metaTpEditState.photoBase64 && payload.photoUpdated === false) {
-          parts.push("foto não aplicada (é preciso uma página no portfólio)");
-        }
         metaTpSetStatus(parts.length ? (isPortfolio ? "Portfólio: " : "Número: ") + parts.join(" · ") : "Perfil atualizado.");
         metaTpRenderPortfolio(payload);
         metaTpCloseEditNumber();

@@ -157,6 +157,32 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             return handleMetaError(res, error);
         }
     });
+    app.get("/integrations/meta/whatsapp/portfolio/photo", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            const photo = await service.readPortfolioPhotoFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req));
+            if (!photo) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Foto do portfólio não encontrada.",
+                    code: "invalid_payload",
+                });
+            }
+            res.setHeader("Content-Type", photo.mime);
+            res.setHeader("Cache-Control", "private, no-store");
+            res.setHeader("Content-Length", String(photo.bytes.length));
+            return res.status(200).end(photo.bytes);
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
     app.post("/integrations/meta/whatsapp/phone-numbers/register", async (req, res) => {
         try {
             if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {

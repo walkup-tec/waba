@@ -4,6 +4,12 @@ Somente regras permanentes. Sem detalhes de implementação.
 
 ## Regras
 
+### Laboratório — identidade do card do portfólio
+
+- Nome e foto visíveis no CARD 02 são da conta WABA (Laboratório).
+- A Meta só replica o nome se o token for admin do Business Manager.
+- A foto do Business Manager é só leitura; gravação na Meta exige Página do Facebook.
+
 ### Crédito mínimo no checkout PIX (Disparos)
 
 - API Alternativa: mínimo **R$ 200,00** (pacote de 1.000 envios).

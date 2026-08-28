@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it, before, after } from "node:test";
+import { describe, it, before, after, afterEach } from "node:test";
 import { randomBytes } from "node:crypto";
 import { MetaWhatsappConnectionService } from "./meta-whatsapp-connection.service";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
@@ -14,6 +14,7 @@ import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.ty
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
 import { parseDisplayName, parseProfilePhoto } from "./meta-whatsapp-phone-profile";
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
+import { purgePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 
 describe("meta portfolio mapper", () => {
   it("mapeia card do portfólio sem vazar token", () => {
@@ -153,6 +154,11 @@ describe("meta portfolio service", () => {
     restore("META_APP_SECRET", previous.appSecret);
     restore("META_CONFIG_ID", previous.configId);
     restore("META_TOKEN_ENCRYPTION_KEY", previous.enc);
+    purgePortfolioIdentity(tenantId);
+  });
+
+  afterEach(() => {
+    purgePortfolioIdentity(tenantId);
   });
 
   function connectedRow(): MetaWhatsappConnectionRecord {
@@ -476,6 +482,7 @@ describe("meta portfolio service", () => {
     );
     const result = await service.updatePortfolioFromAuth(auth, { displayName: "Drax Sistemas" });
     assert.equal(result.nameUpdated, true);
+    assert.equal(result.portfolio?.name, "Drax Sistemas");
     assert.equal(posts[0]?.path, "1247508354180311");
     assert.equal(posts[0]?.body?.name, "Drax Sistemas");
   });
@@ -510,10 +517,11 @@ describe("meta portfolio service", () => {
       photoMime: "image/png",
     });
     assert.equal(result.photoUpdated, true);
+    assert.match(String(result.portfolio?.profilePictureUrl || ""), /\/integrations\/meta\/whatsapp\/portfolio\/photo/);
     assert.deepEqual(pages, ["page-1"]);
   });
 
-  it("não grava foto no Business quando o portfólio não tem página", async () => {
+  it("grava a foto no card mesmo sem Página na Meta", async () => {
     const png =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
     let pictureCalls = 0;
@@ -537,12 +545,32 @@ describe("meta portfolio service", () => {
         return { photoId: "photo-1" };
       },
     );
-    await assert.rejects(
-      () => service.updatePortfolioFromAuth(auth, { photoBase64: png, photoMime: "image/png" }),
-      (error: unknown) =>
-        error instanceof MetaWhatsappError && error.code === "portfolio_photo_no_page",
-    );
+    const result = await service.updatePortfolioFromAuth(auth, { photoBase64: png, photoMime: "image/png" });
+    assert.equal(result.photoUpdated, true);
     assert.equal(pictureCalls, 0);
+    assert.match(String(result.portfolio?.profilePictureUrl || ""), /\/integrations\/meta\/whatsapp\/portfolio\/photo/);
+    assert.match(String(result.warning || ""), /Página/);
+  });
+
+  it("mantém o nome no card se a Meta recusar o POST", async () => {
+    const graph = async (input: { path: string; method: string }) => {
+      if (input.method === "POST") {
+        return { ok: false, status: 400, json: { error: { code: 3910, message: "denied" } }, graphCode: 3910 };
+      }
+      if (input.path === "1247508354180311") {
+        return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      { async findOpenByTenant() { return connectedRow(); } } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const result = await service.updatePortfolioFromAuth(auth, { displayName: "Drax Sistemas" });
+    assert.equal(result.nameUpdated, true);
+    assert.equal(result.portfolio?.name, "Drax Sistemas");
+    assert.match(String(result.warning || ""), /Meta/);
   });
 });
 
