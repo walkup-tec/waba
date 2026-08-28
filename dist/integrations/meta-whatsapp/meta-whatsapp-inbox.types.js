@@ -19,7 +19,7 @@ function previewFromContent(input) {
         .trim()
         .slice(0, 80);
 }
-function toPublicInboxConversation(row, window) {
+function toPublicInboxConversation(row, window, channel) {
     return {
         id: row.id,
         contactName: row.contactName,
@@ -31,6 +31,11 @@ function toPublicInboxConversation(row, window) {
         status: row.status,
         assignedTo: row.assignedTo,
         humanTakeover: row.humanTakeover,
+        phoneNumberId: row.phoneNumberId,
+        channelName: channel?.name || null,
+        channelPhone: channel?.phone || null,
+        channelPhotoUrl: channel?.photoUrl || null,
+        agentKind: row.humanTakeover ? "human" : "bot",
         customerCareWindow: {
             known: window.known,
             withinWindow: window.withinWindow,
@@ -39,6 +44,7 @@ function toPublicInboxConversation(row, window) {
     };
 }
 function toPublicInboxMessage(row) {
+    const source = row.direction === "inbound" ? "contact" : row.provider === "automation" ? "bot" : "human";
     return {
         id: row.id,
         direction: row.direction,
@@ -48,5 +54,6 @@ function toPublicInboxMessage(row) {
         templateName: row.templateName,
         createdAt: row.createdAt,
         errorMessage: row.status === "failed" ? row.errorMessage || "Não foi possível enviar." : null,
+        source,
     };
 }

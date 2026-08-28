@@ -5,6 +5,10 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 - Marker: `DEPLOY-2026-08-28-083300-keep-pairing-chip-live`
 - LOG: `doc/LOG-2026-08-28__083300__push-keep-pairing-chip-live.md`
 
+## 2026-08-28 08:18 — Card em colunas + Inbox multicanal
+- Card do número em 6 colunas; switch Inbox por chip; Inbox unificado com canal de origem
+- LOG: `doc/LOG-2026-08-28__081800__card-colunas-inbox-multicanal.md`
+
 ## 2026-08-28 07:34 — Portfólio sumiu no Laboratório
 - `verified` indefinido no render da lista de números escondia o card; corrigido
 - LOG: `doc/LOG-2026-08-28__073400__portfolio-sumiu-verified-indefinido.md`

@@ -85,6 +85,7 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
         nameSyncStatus: null,
         photoSyncStatus: null,
         profileSyncStatus: null,
+        inboxEnabled: true,
     };
 }
 function mapMetaPhoneListToPortfolioNumbers(json, busyPhoneIds = new Set()) {

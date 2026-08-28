@@ -279,6 +279,8 @@ class MetaWhatsappAutomationEngine {
                     type: "text",
                     text,
                     connectionId: conversation.connectionId,
+                    conversationId: conversation.id,
+                    source: "bot",
                 });
                 await this.finish(run, {
                     status: "sent",
@@ -400,6 +402,8 @@ class MetaWhatsappAutomationEngine {
             type: "text",
             text,
             connectionId: conversation.connectionId,
+            conversationId: conversation.id,
+            source: "bot",
         });
         (0, meta_whatsapp_automation_log_1.logMetaAutomation)("SEND", {
             tenantId: conversation.tenantId,
@@ -419,6 +423,7 @@ class MetaWhatsappAutomationEngine {
             to,
             type: "template",
             connectionId,
+            source: "bot",
             template: {
                 name: template.name,
                 language: template.language,

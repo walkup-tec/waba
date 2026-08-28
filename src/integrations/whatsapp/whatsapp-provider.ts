@@ -5,6 +5,7 @@ export type WhatsAppSendTextInput = {
   to: string;
   text: string;
   connectionId?: string;
+  phoneNumberId?: string;
 };
 
 export type WhatsAppTemplateComponent = {
@@ -21,6 +22,7 @@ export type WhatsAppSendTemplateInput = {
   language: string;
   components?: WhatsAppTemplateComponent[];
   connectionId?: string;
+  phoneNumberId?: string;
 };
 
 export type WhatsAppSendResult = {

@@ -75,7 +75,11 @@ export class MetaWhatsappMessagingService {
   ): Promise<MetaSendPublicResult> {
     const tenant = requireTenant(auth);
     warnIgnoredClientClaims(body, tenant.tenantId);
-    return this.sendForTenant(tenant.tenantId, body);
+    const cleaned = { ...(body || {}) };
+    delete cleaned.source;
+    delete cleaned.phoneNumberId;
+    delete cleaned.phone_number_id;
+    return this.sendForTenant(tenant.tenantId, cleaned);
   }
 
   async sendForTenant(
@@ -93,11 +97,22 @@ export class MetaWhatsappMessagingService {
       clientConnectionId || undefined,
     );
 
+    const conversationId = String(body?.conversationId || body?.conversation_id || "").trim();
+    const existingConversation = conversationId
+      ? await this.conversations.findByIdForTenant(tenantId, conversationId)
+      : null;
+    if (conversationId && (!existingConversation || existingConversation.connectionId !== connection.id)) {
+      throw new MetaWhatsappError("conversation_not_found");
+    }
+    const sendPhoneNumberId =
+      String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
+    const botSend = body?.source === "bot";
+
     const atIso = new Date().toISOString();
     const upserted = await this.conversations.upsertForContact({
       tenantId,
       connectionId: connection.id,
-      phoneNumberId: connection.phoneNumberId,
+      phoneNumberId: sendPhoneNumberId,
       contactWaId: recipient.waId,
       contactPhone: recipient.waId,
       outbound: true,
@@ -136,12 +151,12 @@ export class MetaWhatsappMessagingService {
       direction: "outbound",
       type: isTemplate ? "template" : "text",
       status: "queued",
-      fromWaId: connection.phoneNumberId,
+      fromWaId: sendPhoneNumberId,
       toWaId: recipient.waId,
       textContent: text,
       templateName: template?.name || null,
       templateLanguage: template?.language || null,
-      provider: "meta-cloud",
+      provider: botSend ? "automation" : "meta-cloud",
     });
     const localId = inserted.record?.id;
     if (!localId) throw new MetaWhatsappError("persist_failed");
@@ -156,12 +171,14 @@ export class MetaWhatsappMessagingService {
             language: template!.language,
             components: template!.components,
             connectionId: connection.id,
+            phoneNumberId: sendPhoneNumberId || undefined,
           })
         : await this.provider.sendText({
             tenantId,
             to: recipient.waId,
             text: text!,
             connectionId: connection.id,
+            phoneNumberId: sendPhoneNumberId || undefined,
           });
     } catch (error) {
       await this.messages.updateAfterGraph(tenantId, localId, {

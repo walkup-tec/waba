@@ -16,11 +16,24 @@ export type MetaInboxConversationPublic = {
   status: MetaConversationRecord["status"];
   assignedTo: string | null;
   humanTakeover: boolean;
+  phoneNumberId: string | null;
+  channelName: string | null;
+  channelPhone: string | null;
+  channelPhotoUrl: string | null;
+  agentKind: "bot" | "human";
   customerCareWindow: {
     known: boolean;
     withinWindow: boolean | null;
     state: MetaInboxWindowLabel;
   };
+};
+
+export type MetaInboxChannelPublic = {
+  phoneNumberId: string;
+  name: string;
+  displayPhoneNumber: string | null;
+  profilePictureUrl: string | null;
+  unreadCount: number;
 };
 
 export type MetaInboxMessagePublic = {
@@ -32,6 +45,7 @@ export type MetaInboxMessagePublic = {
   templateName: string | null;
   createdAt: string;
   errorMessage: string | null;
+  source: "contact" | "bot" | "human";
 };
 
 export function windowStateFromCare(window: CustomerCareWindowState): MetaInboxWindowLabel {
@@ -57,6 +71,7 @@ export function previewFromContent(input: {
 export function toPublicInboxConversation(
   row: MetaConversationRecord,
   window: CustomerCareWindowState,
+  channel?: { name?: string | null; phone?: string | null; photoUrl?: string | null },
 ): MetaInboxConversationPublic {
   return {
     id: row.id,
@@ -69,6 +84,11 @@ export function toPublicInboxConversation(
     status: row.status,
     assignedTo: row.assignedTo,
     humanTakeover: row.humanTakeover,
+    phoneNumberId: row.phoneNumberId,
+    channelName: channel?.name || null,
+    channelPhone: channel?.phone || null,
+    channelPhotoUrl: channel?.photoUrl || null,
+    agentKind: row.humanTakeover ? "human" : "bot",
     customerCareWindow: {
       known: window.known,
       withinWindow: window.withinWindow,
@@ -78,6 +98,8 @@ export function toPublicInboxConversation(
 }
 
 export function toPublicInboxMessage(row: MetaMessageRecord): MetaInboxMessagePublic {
+  const source =
+    row.direction === "inbound" ? "contact" : row.provider === "automation" ? "bot" : "human";
   return {
     id: row.id,
     direction: row.direction,
@@ -87,5 +109,6 @@ export function toPublicInboxMessage(row: MetaMessageRecord): MetaInboxMessagePu
     templateName: row.templateName,
     createdAt: row.createdAt,
     errorMessage: row.status === "failed" ? row.errorMessage || "Não foi possível enviar." : null,
+    source,
   };
 }

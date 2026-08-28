@@ -8,9 +8,11 @@ import { MetaWhatsappError } from "./meta-whatsapp-errors";
 import { logMetaInbox } from "./meta-whatsapp-inbox-log";
 import { readMetaInboxPollMs } from "./meta-config";
 import { resolveCustomerCareWindow } from "./meta-whatsapp-customer-care-window";
+import { listPhoneInboxChannels, type MetaPhoneInboxChannel } from "./meta-whatsapp-phone-identity.store";
 import {
   toPublicInboxConversation,
   toPublicInboxMessage,
+  type MetaInboxChannelPublic,
   type MetaInboxConversationPublic,
   type MetaInboxFilter,
   type MetaInboxMessagePublic,
@@ -40,6 +42,25 @@ function clampPage(raw: unknown, fallback: number, max: number): number {
   return Math.min(max, Math.max(0, Math.floor(n)));
 }
 
+function channelLabel(channel: MetaPhoneInboxChannel | undefined, fallbackPhone: string | null): string {
+  return String(channel?.name || channel?.displayPhoneNumber || fallbackPhone || "WhatsApp Oficial").trim();
+}
+
+function withChannel(
+  row: MetaConversationRecord,
+  channelsById: Map<string, MetaPhoneInboxChannel>,
+  connectionPhone: string | null,
+  connectionName: string | null,
+) {
+  const id = String(row.phoneNumberId || "").trim();
+  const snapshot = id ? channelsById.get(id) : undefined;
+  return toPublicInboxConversation(row, resolveCustomerCareWindow({ lastInboundAt: row.lastInboundAt }), {
+    name: channelLabel(snapshot, snapshot?.displayPhoneNumber || connectionName),
+    phone: snapshot?.displayPhoneNumber || (id && id === String(connectionPhone || "") ? connectionPhone : null),
+    photoUrl: snapshot?.profilePictureUrl || null,
+  });
+}
+
 export class MetaWhatsappInboxService {
   constructor(
     private readonly connections = new MetaWhatsappConnectionRepository(),
@@ -57,6 +78,12 @@ export class MetaWhatsappInboxService {
     if (!row || row.tenantId !== tenantId || row.connectionId !== connectionId) {
       throw new MetaWhatsappError("conversation_not_found");
     }
+    if (row.phoneNumberId) {
+      const snapshot = listPhoneInboxChannels(tenantId).find((item) => item.phoneNumberId === row.phoneNumberId);
+      if (snapshot && !snapshot.inboxEnabled) {
+        throw new MetaWhatsappError("conversation_not_found");
+      }
+    }
     return row;
   }
 
@@ -72,26 +99,76 @@ export class MetaWhatsappInboxService {
     const tenant = requireTenant(auth);
     const connection = await this.requireConnected(tenant.tenantId);
     const filter = parseFilter(query?.filter);
+    const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();
     const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
     const offset = clampPage(query?.offset, 0, 10_000);
+    const snapshots = listPhoneInboxChannels(tenant.tenantId);
+    const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
+    const disabledIds = snapshots.filter((row) => !row.inboxEnabled).map((row) => row.phoneNumberId);
+    if (selectedPhone && disabledIds.includes(selectedPhone)) {
+      return {
+        connected: true,
+        poll: readMetaInboxPollMs(),
+        conversations: [],
+        channels: [] as MetaInboxChannelPublic[],
+        selectedPhoneNumberId: selectedPhone,
+        page: { limit, offset, hasMore: false },
+      };
+    }
     const rows = await this.conversations.listForInbox({
       tenantId: tenant.tenantId,
       connectionId: connection.id,
       filter,
       assignedTo: auth.email,
+      phoneNumberId: selectedPhone || null,
+      excludePhoneNumberIds: selectedPhone ? [] : disabledIds,
       limit: limit + 1,
       offset,
     });
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
+    const unreadRows = await this.conversations.listUnreadByPhone(tenant.tenantId, connection.id);
+    const unreadByPhone = new Map<string, number>();
+    let unreadAll = 0;
+    for (const item of unreadRows) {
+      if (item.phoneNumberId && disabledIds.includes(item.phoneNumberId)) continue;
+      unreadAll += item.unreadCount;
+      if (item.phoneNumberId) {
+        unreadByPhone.set(item.phoneNumberId, (unreadByPhone.get(item.phoneNumberId) || 0) + item.unreadCount);
+      }
+    }
+    const channelIds = new Set<string>();
+    for (const snap of snapshots) {
+      if (snap.inboxEnabled) channelIds.add(snap.phoneNumberId);
+    }
+    if (connection.phoneNumberId && !disabledIds.includes(connection.phoneNumberId)) {
+      channelIds.add(connection.phoneNumberId);
+    }
+    for (const row of page) {
+      if (row.phoneNumberId && !disabledIds.includes(row.phoneNumberId)) channelIds.add(row.phoneNumberId);
+    }
+    const channels: MetaInboxChannelPublic[] = Array.from(channelIds).map((id) => {
+      const snap = channelsById.get(id);
+      const isConnection = id === String(connection.phoneNumberId || "");
+      return {
+        phoneNumberId: id,
+        name: channelLabel(snap, isConnection ? connection.verifiedName : id),
+        displayPhoneNumber: snap?.displayPhoneNumber || (isConnection ? connection.displayPhoneNumber : null),
+        profilePictureUrl: snap?.profilePictureUrl || null,
+        unreadCount: unreadByPhone.get(id) || 0,
+      };
+    });
     const poll = readMetaInboxPollMs();
     logMetaInbox("LIST", { tenantId: tenant.tenantId, filter, count: page.length });
     return {
       connected: true,
       poll,
       conversations: page.map((row) =>
-        toPublicInboxConversation(row, resolveCustomerCareWindow({ lastInboundAt: row.lastInboundAt })),
+        withChannel(row, channelsById, connection.displayPhoneNumber, connection.verifiedName),
       ),
+      channels,
+      selectedPhoneNumberId: selectedPhone || null,
+      unreadCount: unreadAll,
       page: { limit, offset, hasMore },
     };
   }
@@ -110,11 +187,10 @@ export class MetaWhatsappInboxService {
     const limit = Math.min(80, Math.max(1, clampPage(query?.limit, 80, 80) || 80));
     const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
     logMetaInbox("THREAD", { tenantId: tenant.tenantId, count: messages.length });
+    const snapshots = listPhoneInboxChannels(tenant.tenantId);
+    const channelsById = new Map(snapshots.map((item) => [item.phoneNumberId, item]));
     return {
-      conversation: toPublicInboxConversation(
-        row,
-        resolveCustomerCareWindow({ lastInboundAt: row.lastInboundAt }),
-      ),
+      conversation: withChannel(row, channelsById, connection.displayPhoneNumber, connection.verifiedName),
       messages: messages.map(toPublicInboxMessage),
     };
   }

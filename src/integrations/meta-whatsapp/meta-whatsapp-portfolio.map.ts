@@ -90,6 +90,7 @@ export function mapMetaPhoneToPortfolioNumber(
     nameSyncStatus: null,
     photoSyncStatus: null,
     profileSyncStatus: null,
+    inboxEnabled: true,
   };
 }
 

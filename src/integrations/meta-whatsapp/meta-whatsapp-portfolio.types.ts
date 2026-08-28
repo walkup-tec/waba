@@ -32,6 +32,7 @@ export type MetaPortfolioNumberPublic = {
   nameSyncStatus: MetaProfileSyncStatus | null;
   photoSyncStatus: MetaProfileSyncStatus | null;
   profileSyncStatus: MetaProfileSyncStatus | null;
+  inboxEnabled: boolean;
 };
 
 export type MetaPortfolioAssetsPublic = {

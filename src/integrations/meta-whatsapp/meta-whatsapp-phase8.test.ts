@@ -12,6 +12,7 @@ import { stripMetaSecrets } from "./meta-whatsapp-connection.service";
 import { resolveCustomerCareWindow } from "./meta-whatsapp-customer-care-window";
 import { windowStateFromCare, toPublicInboxConversation, toPublicInboxMessage } from "./meta-whatsapp-inbox.types";
 import type { MetaGraphMessagesResult } from "./meta-whatsapp-graph-messages.client";
+import { purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
 
 const EMAIL_A = "phase8-a@example.com";
 const EMAIL_B = "phase8-b@example.com";
@@ -130,6 +131,8 @@ class FakeConversations {
     connectionId: string;
     filter: string;
     assignedTo?: string | null;
+    phoneNumberId?: string | null;
+    excludePhoneNumberIds?: string[];
     limit: number;
     offset: number;
   }) {
@@ -141,7 +144,18 @@ class FakeConversations {
       rows = rows.filter((row) => row.status === input.filter);
     }
     if (input.filter === "mine") rows = rows.filter((row) => row.assignedTo === input.assignedTo);
+    if (input.phoneNumberId) {
+      rows = rows.filter((row) => row.phoneNumberId === input.phoneNumberId);
+    } else if (input.excludePhoneNumberIds && input.excludePhoneNumberIds.length) {
+      const blocked = new Set(input.excludePhoneNumberIds);
+      rows = rows.filter((row) => !row.phoneNumberId || !blocked.has(row.phoneNumberId));
+    }
     return rows.slice(input.offset, input.offset + input.limit);
+  }
+  async listUnreadByPhone(tenantId: string, connectionId: string) {
+    return this.rows
+      .filter((row) => row.tenantId === tenantId && row.connectionId === connectionId && row.unreadCount > 0)
+      .map((row) => ({ phoneNumberId: row.phoneNumberId, unreadCount: row.unreadCount }));
   }
   async markRead(tenantId: string, id: string) {
     const row = await this.findByIdForTenant(tenantId, id);
@@ -409,5 +423,27 @@ describe("fase 8 DTO público", () => {
     assert.equal(publicConv.humanTakeover, true);
     assert.equal(publicMsg.errorMessage, "Não foi possível enviar.");
     assert.equal(JSON.stringify(publicConv).includes("access_token"), false);
+  });
+});
+
+describe("fase 8 canais do Inbox", () => {
+  it("lista o canal do número e oculta conversa com Inbox desligado", async () => {
+    purgePhoneIdentities(TENANT_A);
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const conversations = new FakeConversations();
+    conversations.rows.push(conv());
+    const service = inboxOf(connections, conversations, new FakeMessages());
+    const listed = await service.listConversations(auth(EMAIL_A), {});
+    assert.equal(listed.conversations[0]?.phoneNumberId, "phone-a");
+    assert.equal(listed.conversations[0]?.agentKind, "bot");
+    assert.equal(
+      listed.channels.some((item: { phoneNumberId: string }) => item.phoneNumberId === "phone-a"),
+      true,
+    );
+    writePhoneIdentity(TENANT_A, "phone-a", { inboxEnabled: false, channelName: "Drax" });
+    const hidden = await service.listConversations(auth(EMAIL_A), {});
+    assert.equal(hidden.conversations.length, 0);
+    purgePhoneIdentities(TENANT_A);
   });
 });

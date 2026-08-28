@@ -636,6 +636,24 @@ class MetaWhatsappConnectionService {
             return null;
         return (0, meta_whatsapp_phone_identity_store_1.readPhonePhoto)(tenant.tenantId, id);
     }
+    async setPhoneInboxFromAuth(auth, input) {
+        const tenant = requireTenant(auth);
+        const phoneNumberId = String(input.phoneNumberId || "").trim();
+        if (!phoneNumberId || typeof input.enabled !== "boolean") {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        }
+        const assets = await this.listPortfolioAssets(auth);
+        const numberRow = assets.numbers.find((row) => row.phoneNumberId === phoneNumberId);
+        if (!numberRow)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {
+            inboxEnabled: input.enabled,
+            displayPhoneNumber: numberRow.displayPhoneNumber,
+            channelName: numberRow.verifiedName || numberRow.requestedName,
+        });
+        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-inbox-updated", { tenantId: tenant.tenantId, enabled: input.enabled });
+        return this.listPortfolioAssets(auth);
+    }
     async updatePortfolioFromAuth(auth, input) {
         const tenant = requireTenant(auth);
         const displayName = (0, meta_whatsapp_phone_profile_1.parseDisplayName)(input.displayName);

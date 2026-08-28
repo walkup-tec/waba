@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveDataDir } from "../../data-path";
 import type { MetaPortfolioNumberPublic, MetaProfileSyncStatus } from "./meta-whatsapp-portfolio.types";
@@ -16,7 +16,18 @@ export type MetaPhoneIdentity = {
   email: string | null;
   photoMetaApplied: boolean;
   profileMetaApplied: boolean;
+  inboxEnabled: boolean | null;
+  displayPhoneNumber: string | null;
+  channelName: string | null;
   updatedAt: string;
+};
+
+export type MetaPhoneInboxChannel = {
+  phoneNumberId: string;
+  name: string | null;
+  displayPhoneNumber: string | null;
+  profilePictureUrl: string | null;
+  inboxEnabled: boolean;
 };
 
 function safeTenantId(tenantId: string): string {
@@ -61,8 +72,24 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
     const email = String(row.email || "").trim() || null;
     const photoMetaApplied = row.photoMetaApplied === true;
     const profileMetaApplied = row.profileMetaApplied === true;
+    const inboxEnabled = row.inboxEnabled === false ? false : row.inboxEnabled === true ? true : null;
+    const displayPhoneNumber = String(row.displayPhoneNumber || "").trim() || null;
+    const channelName = String(row.channelName || "").trim() || null;
     const updatedAt = String(row.updatedAt || "").trim() || new Date().toISOString();
-    return { name, photoExt, vertical, description, address, email, photoMetaApplied, profileMetaApplied, updatedAt };
+    return {
+      name,
+      photoExt,
+      vertical,
+      description,
+      address,
+      email,
+      photoMetaApplied,
+      profileMetaApplied,
+      inboxEnabled,
+      displayPhoneNumber,
+      channelName,
+      updatedAt,
+    };
   } catch {
     return null;
   }
@@ -80,6 +107,9 @@ export function writePhoneIdentity(
     email?: string | null;
     photoMetaApplied?: boolean;
     profileMetaApplied?: boolean;
+    inboxEnabled?: boolean;
+    displayPhoneNumber?: string | null;
+    channelName?: string | null;
   },
 ): MetaPhoneIdentity {
   ensureDir(tenantId);
@@ -92,6 +122,9 @@ export function writePhoneIdentity(
     email: null,
     photoMetaApplied: false,
     profileMetaApplied: false,
+    inboxEnabled: null,
+    displayPhoneNumber: null,
+    channelName: null,
     updatedAt: "",
   };
   const bizTouched =
@@ -118,6 +151,10 @@ export function writePhoneIdentity(
         : bizTouched
           ? false
           : current.profileMetaApplied,
+    inboxEnabled: input.inboxEnabled !== undefined ? input.inboxEnabled : current.inboxEnabled,
+    displayPhoneNumber:
+      input.displayPhoneNumber !== undefined ? input.displayPhoneNumber : current.displayPhoneNumber,
+    channelName: input.channelName !== undefined ? input.channelName : current.channelName,
     updatedAt: new Date().toISOString(),
   };
   if (input.photo) {
@@ -199,6 +236,34 @@ export function phoneIdentitySyncStatus(input: {
   };
 }
 
+export function isPhoneInboxEnabled(identity: MetaPhoneIdentity | null): boolean {
+  return identity?.inboxEnabled !== false;
+}
+
+export function listPhoneInboxChannels(tenantId: string): MetaPhoneInboxChannel[] {
+  try {
+    const dir = tenantDir(tenantId);
+    if (!existsSync(dir)) return [];
+    const out: MetaPhoneInboxChannel[] = [];
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith(".json")) continue;
+      const phoneNumberId = file.slice(0, -5);
+      const identity = readPhoneIdentity(tenantId, phoneNumberId);
+      if (!identity) continue;
+      out.push({
+        phoneNumberId,
+        name: identity.channelName || identity.name,
+        displayPhoneNumber: identity.displayPhoneNumber,
+        profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
+        inboxEnabled: isPhoneInboxEnabled(identity),
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 export function applyLocalPhoneIdentities(
   tenantId: string,
   numbers: MetaPortfolioNumberPublic[],
@@ -206,7 +271,14 @@ export function applyLocalPhoneIdentities(
   return numbers.map((row) => {
     const identity = readPhoneIdentity(tenantId, row.phoneNumberId);
     if (!identity) {
-      return { ...row, requestedName: null, nameSyncStatus: null, photoSyncStatus: null, profileSyncStatus: null };
+      return {
+        ...row,
+        requestedName: null,
+        nameSyncStatus: null,
+        photoSyncStatus: null,
+        profileSyncStatus: null,
+        inboxEnabled: true,
+      };
     }
     const sync = phoneIdentitySyncStatus({
       localName: identity.name,
@@ -235,6 +307,7 @@ export function applyLocalPhoneIdentities(
       nameSyncStatus: sync.nameSyncStatus,
       photoSyncStatus: sync.photoSyncStatus,
       profileSyncStatus: sync.profileSyncStatus,
+      inboxEnabled: isPhoneInboxEnabled(identity),
     };
   });
 }

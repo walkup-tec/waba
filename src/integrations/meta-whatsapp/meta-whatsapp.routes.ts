@@ -244,6 +244,27 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  app.post("/integrations/meta/whatsapp/phone-numbers/inbox", async (req: Request, res: Response) => {
+    try {
+      if (!isMetaOfficialPortfolioLabEnabled()) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Recurso indisponível neste ambiente.",
+          code: "config_invalid",
+        });
+      }
+      warnClientTenantClaim(req);
+      const enabledRaw = (req.body as { enabled?: unknown } | undefined)?.enabled;
+      const assets = await service.setPhoneInboxFromAuth(resolveWabaRequestAuth(req), {
+        phoneNumberId: String(req.body?.phoneNumberId || req.body?.phone_number_id || "").trim(),
+        enabled: enabledRaw === true || enabledRaw === false ? enabledRaw : undefined,
+      });
+      return sendPublic(res, 200, { ok: true, ...assets });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
   app.get("/integrations/meta/whatsapp/phone-numbers/photo", async (req: Request, res: Response) => {
     try {
       if (!isMetaOfficialPortfolioLabEnabled()) {

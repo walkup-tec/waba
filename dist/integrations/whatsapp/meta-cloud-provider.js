@@ -47,7 +47,7 @@ class MetaCloudProvider {
             to: recipient.waId,
             type: "text",
             text: { preview_url: false, body: text },
-        });
+        }, input.phoneNumberId);
     }
     async sendTemplate(input) {
         const name = String(input.templateName || "").trim();
@@ -70,7 +70,7 @@ class MetaCloudProvider {
             to: recipient.waId,
             type: "template",
             template,
-        });
+        }, input.phoneNumberId);
     }
     async requireConnected(tenantId, connectionId) {
         let row = null;
@@ -88,7 +88,7 @@ class MetaCloudProvider {
         }
         return row;
     }
-    async dispatch(connection, body) {
+    async dispatch(connection, body, phoneNumberId) {
         let token = "";
         try {
             token = this.decrypt(connection.accessTokenEncrypted);
@@ -96,9 +96,12 @@ class MetaCloudProvider {
         catch {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
         }
+        const sendPhone = String(phoneNumberId || connection.phoneNumberId || "").trim();
+        if (!sendPhone)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
         const result = await this.graph({
             token,
-            phoneNumberId: String(connection.phoneNumberId),
+            phoneNumberId: sendPhone,
             body,
         });
         if (!result.ok) {
@@ -117,7 +120,7 @@ class MetaCloudProvider {
             messageId: result.wamid,
             status: "accepted",
             connectionId: connection.id,
-            phoneNumberId: String(connection.phoneNumberId),
+            phoneNumberId: sendPhone,
         };
     }
 }

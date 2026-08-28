@@ -754,6 +754,27 @@ export class MetaWhatsappConnectionService {
     return readPhonePhoto(tenant.tenantId, id);
   }
 
+  async setPhoneInboxFromAuth(
+    auth: WabaRequestAuth,
+    input: { phoneNumberId?: string; enabled?: boolean },
+  ): Promise<MetaPortfolioAssetsPublic> {
+    const tenant = requireTenant(auth);
+    const phoneNumberId = String(input.phoneNumberId || "").trim();
+    if (!phoneNumberId || typeof input.enabled !== "boolean") {
+      throw new MetaWhatsappError("invalid_payload");
+    }
+    const assets = await this.listPortfolioAssets(auth);
+    const numberRow = assets.numbers.find((row) => row.phoneNumberId === phoneNumberId);
+    if (!numberRow) throw new MetaWhatsappError("invalid_payload");
+    writePhoneIdentity(tenant.tenantId, phoneNumberId, {
+      inboxEnabled: input.enabled,
+      displayPhoneNumber: numberRow.displayPhoneNumber,
+      channelName: numberRow.verifiedName || numberRow.requestedName,
+    });
+    logMetaWhatsappSafe("phone-inbox-updated", { tenantId: tenant.tenantId, enabled: input.enabled });
+    return this.listPortfolioAssets(auth);
+  }
+
   async updatePortfolioFromAuth(
     auth: WabaRequestAuth,
     input: { displayName?: string; photoBase64?: string; photoMime?: string },

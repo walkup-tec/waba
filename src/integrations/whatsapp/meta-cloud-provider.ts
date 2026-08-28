@@ -58,7 +58,7 @@ export class MetaCloudProvider implements WhatsAppProvider {
       to: recipient.waId,
       type: "text",
       text: { preview_url: false, body: text },
-    });
+    }, input.phoneNumberId);
   }
 
   async sendTemplate(input: WhatsAppSendTemplateInput): Promise<WhatsAppSendResult> {
@@ -79,7 +79,7 @@ export class MetaCloudProvider implements WhatsAppProvider {
       to: recipient.waId,
       type: "template",
       template,
-    });
+    }, input.phoneNumberId);
   }
 
   async requireConnected(
@@ -104,6 +104,7 @@ export class MetaCloudProvider implements WhatsAppProvider {
   private async dispatch(
     connection: MetaWhatsappConnectionRecord,
     body: Record<string, unknown>,
+    phoneNumberId?: string,
   ): Promise<WhatsAppSendResult> {
     let token = "";
     try {
@@ -111,9 +112,11 @@ export class MetaCloudProvider implements WhatsAppProvider {
     } catch {
       throw new MetaWhatsappError("invalid_token");
     }
+    const sendPhone = String(phoneNumberId || connection.phoneNumberId || "").trim();
+    if (!sendPhone) throw new MetaWhatsappError("not_connected");
     const result = await this.graph({
       token,
-      phoneNumberId: String(connection.phoneNumberId),
+      phoneNumberId: sendPhone,
       body,
     });
     if (!result.ok) {
@@ -131,7 +134,7 @@ export class MetaCloudProvider implements WhatsAppProvider {
       messageId: result.wamid,
       status: "accepted",
       connectionId: connection.id,
-      phoneNumberId: String(connection.phoneNumberId),
+      phoneNumberId: sendPhone,
     };
   }
 }

@@ -95,6 +95,7 @@ describe("meta portfolio mapper", () => {
     assert.equal(row?.nameSyncStatus, null);
     assert.equal(row?.photoSyncStatus, null);
     assert.equal(row?.profileSyncStatus, null);
+    assert.equal(row?.inboxEnabled, true);
   });
 
   it("PENDING fica pendente e pode ativar", () => {
@@ -186,14 +187,19 @@ describe("meta portfolio mapper", () => {
         nameSyncStatus: null,
         photoSyncStatus: null,
         profileSyncStatus: null,
+        inboxEnabled: true,
       },
     ]);
     assert.equal(pending[0]?.verifiedName, "Mms Marketing E Sistemas Digitais Ltda");
     assert.equal(pending[0]?.requestedName, "Drax");
     assert.equal(pending[0]?.nameSyncStatus, "pending");
     assert.equal(pending[0]?.photoSyncStatus, "pending");
+    assert.equal(pending[0]?.inboxEnabled, true);
 
-    writePhoneIdentity(tenantId, "phone-1", { photoMetaApplied: true, profileMetaApplied: true });
+    writePhoneIdentity(tenantId, "phone-1", { inboxEnabled: false });
+    assert.equal(applyLocalPhoneIdentities(tenantId, pending)[0]?.inboxEnabled, false);
+
+    writePhoneIdentity(tenantId, "phone-1", { photoMetaApplied: true, profileMetaApplied: true, inboxEnabled: true });
     const posted = applyLocalPhoneIdentities(tenantId, [
       {
         ...pending[0],
@@ -202,6 +208,7 @@ describe("meta portfolio mapper", () => {
         nameSyncStatus: null,
         photoSyncStatus: null,
         profileSyncStatus: null,
+        inboxEnabled: true,
       },
     ]);
     assert.equal(posted[0]?.photoSyncStatus, "applied");
@@ -215,6 +222,7 @@ describe("meta portfolio mapper", () => {
         nameSyncStatus: null,
         photoSyncStatus: null,
         profileSyncStatus: null,
+        inboxEnabled: true,
       },
     ]);
     assert.equal(applied[0]?.nameSyncStatus, "applied");

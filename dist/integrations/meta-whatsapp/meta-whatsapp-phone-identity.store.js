@@ -8,6 +8,8 @@ exports.writePhoneIdentity = writePhoneIdentity;
 exports.readPhonePhoto = readPhonePhoto;
 exports.localPhonePhotoUrl = localPhonePhotoUrl;
 exports.phoneIdentitySyncStatus = phoneIdentitySyncStatus;
+exports.isPhoneInboxEnabled = isPhoneInboxEnabled;
+exports.listPhoneInboxChannels = listPhoneInboxChannels;
 exports.applyLocalPhoneIdentities = applyLocalPhoneIdentities;
 exports.purgePhoneIdentities = purgePhoneIdentities;
 const node_crypto_1 = require("node:crypto");
@@ -56,8 +58,24 @@ function readPhoneIdentity(tenantId, phoneNumberId) {
         const email = String(row.email || "").trim() || null;
         const photoMetaApplied = row.photoMetaApplied === true;
         const profileMetaApplied = row.profileMetaApplied === true;
+        const inboxEnabled = row.inboxEnabled === false ? false : row.inboxEnabled === true ? true : null;
+        const displayPhoneNumber = String(row.displayPhoneNumber || "").trim() || null;
+        const channelName = String(row.channelName || "").trim() || null;
         const updatedAt = String(row.updatedAt || "").trim() || new Date().toISOString();
-        return { name, photoExt, vertical, description, address, email, photoMetaApplied, profileMetaApplied, updatedAt };
+        return {
+            name,
+            photoExt,
+            vertical,
+            description,
+            address,
+            email,
+            photoMetaApplied,
+            profileMetaApplied,
+            inboxEnabled,
+            displayPhoneNumber,
+            channelName,
+            updatedAt,
+        };
     }
     catch {
         return null;
@@ -74,6 +92,9 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
         email: null,
         photoMetaApplied: false,
         profileMetaApplied: false,
+        inboxEnabled: null,
+        displayPhoneNumber: null,
+        channelName: null,
         updatedAt: "",
     };
     const bizTouched = input.vertical !== undefined ||
@@ -97,6 +118,9 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
             : bizTouched
                 ? false
                 : current.profileMetaApplied,
+        inboxEnabled: input.inboxEnabled !== undefined ? input.inboxEnabled : current.inboxEnabled,
+        displayPhoneNumber: input.displayPhoneNumber !== undefined ? input.displayPhoneNumber : current.displayPhoneNumber,
+        channelName: input.channelName !== undefined ? input.channelName : current.channelName,
         updatedAt: new Date().toISOString(),
     };
     if (input.photo) {
@@ -157,11 +181,48 @@ function phoneIdentitySyncStatus(input) {
             : null,
     };
 }
+function isPhoneInboxEnabled(identity) {
+    return identity?.inboxEnabled !== false;
+}
+function listPhoneInboxChannels(tenantId) {
+    try {
+        const dir = tenantDir(tenantId);
+        if (!(0, node_fs_1.existsSync)(dir))
+            return [];
+        const out = [];
+        for (const file of (0, node_fs_1.readdirSync)(dir)) {
+            if (!file.endsWith(".json"))
+                continue;
+            const phoneNumberId = file.slice(0, -5);
+            const identity = readPhoneIdentity(tenantId, phoneNumberId);
+            if (!identity)
+                continue;
+            out.push({
+                phoneNumberId,
+                name: identity.channelName || identity.name,
+                displayPhoneNumber: identity.displayPhoneNumber,
+                profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
+                inboxEnabled: isPhoneInboxEnabled(identity),
+            });
+        }
+        return out;
+    }
+    catch {
+        return [];
+    }
+}
 function applyLocalPhoneIdentities(tenantId, numbers) {
     return numbers.map((row) => {
         const identity = readPhoneIdentity(tenantId, row.phoneNumberId);
         if (!identity) {
-            return { ...row, requestedName: null, nameSyncStatus: null, photoSyncStatus: null, profileSyncStatus: null };
+            return {
+                ...row,
+                requestedName: null,
+                nameSyncStatus: null,
+                photoSyncStatus: null,
+                profileSyncStatus: null,
+                inboxEnabled: true,
+            };
         }
         const sync = phoneIdentitySyncStatus({
             localName: identity.name,
@@ -190,6 +251,7 @@ function applyLocalPhoneIdentities(tenantId, numbers) {
             nameSyncStatus: sync.nameSyncStatus,
             photoSyncStatus: sync.photoSyncStatus,
             profileSyncStatus: sync.profileSyncStatus,
+            inboxEnabled: isPhoneInboxEnabled(identity),
         };
     });
 }
