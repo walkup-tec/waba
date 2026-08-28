@@ -6,6 +6,7 @@ import { emitMetaInboxEvent } from "./meta-whatsapp-inbox-events";
 import { previewFromContent } from "./meta-whatsapp-inbox.types";
 import { mapWebhookStatus } from "./meta-whatsapp-messaging.types";
 import { logMetaWebhook } from "./meta-whatsapp-webhook-log";
+import { isPhoneInboxEnabled, readPhoneIdentity } from "./meta-whatsapp-phone-identity.store";
 
 export type MetaWhatsappWebhookInboxPort = {
   persistInbound(input: {
@@ -37,6 +38,11 @@ export class MetaWhatsappWebhookInboxService implements MetaWhatsappWebhookInbox
     const from = String(input.event.fromWaId || "").trim();
     const wamid = String(input.event.messageId || "").trim();
     if (!from || !wamid) return;
+    const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim() || null;
+    if (!phoneNumberId || !isPhoneInboxEnabled(readPhoneIdentity(input.connection.tenantId, phoneNumberId))) {
+      logMetaWebhook("PROCESSED", { eventType: "messages", reason: "inbox_disabled" });
+      return;
+    }
     const already = await this.messages.findByTenantWamid(input.connection.tenantId, wamid);
     if (already) {
       logMetaWebhook("DUPLICATE", { eventType: "messages", reason: "wamid" });
@@ -48,7 +54,7 @@ export class MetaWhatsappWebhookInboxService implements MetaWhatsappWebhookInbox
     const upserted = await this.conversations.upsertForContact({
       tenantId: input.connection.tenantId,
       connectionId: input.connection.id,
-      phoneNumberId: input.connection.phoneNumberId,
+      phoneNumberId,
       contactWaId: from,
       contactPhone: from,
       contactName: input.event.contactName,
@@ -72,7 +78,7 @@ export class MetaWhatsappWebhookInboxService implements MetaWhatsappWebhookInbox
       type,
       status: "accepted",
       fromWaId: from,
-      toWaId: input.connection.phoneNumberId,
+      toWaId: phoneNumberId,
       textContent,
       provider: "meta-cloud",
     });

@@ -231,7 +231,7 @@ export class MetaWhatsappConnectionRepository {
       .from(TABLE)
       .select(COLUMNS)
       .eq("phone_number_id", id)
-      .eq("status", "connected")
+      .in("status", ["connected", "pending_confirmation"])
       .is("disconnected_at", null)
       .order("updated_at", { ascending: false })
       .limit(1)
@@ -247,7 +247,7 @@ export class MetaWhatsappConnectionRepository {
       .from(TABLE)
       .select(COLUMNS)
       .eq("waba_id", id)
-      .eq("status", "connected")
+      .in("status", ["connected", "pending_confirmation"])
       .is("disconnected_at", null)
       .order("updated_at", { ascending: false })
       .limit(1)
@@ -262,7 +262,7 @@ export class MetaWhatsappConnectionRepository {
       .update({ last_webhook_at: atIso })
       .eq("id", connectionId)
       .eq("tenant_id", tenantId)
-      .eq("status", "connected");
+      .in("status", ["connected", "pending_confirmation"]);
     if (error) throw new Error(error.message);
   }
 

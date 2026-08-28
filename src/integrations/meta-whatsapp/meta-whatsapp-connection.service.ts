@@ -27,6 +27,10 @@ import {
   mapMetaPhoneListToPortfolioNumbers,
   firstOwnedPageId,
   isMetaPhoneConnected,
+  mapPhoneNameFields,
+  resolvePhoneNameSync,
+  META_PHONE_NUMBER_LIST_FIELDS,
+  META_PHONE_NAME_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
 import {
   applyLocalPortfolioIdentity,
@@ -35,6 +39,7 @@ import {
 } from "./meta-whatsapp-portfolio-identity.store";
 import {
   applyLocalPhoneIdentities,
+  readPhoneIdentity,
   readPhonePhoto,
   writePhoneIdentity,
 } from "./meta-whatsapp-phone-identity.store";
@@ -46,8 +51,10 @@ import {
   parseEmail,
   parseVertical,
   mapWhatsappBusinessProfile,
+  fetchHttpsProfileImage,
 } from "./meta-whatsapp-phone-profile";
 import { publishMetaPageProfilePicture, uploadMetaResumableImage } from "./meta-whatsapp-resumable-upload";
+import { MetaWhatsappWebhookSubscriptionService } from "./meta-whatsapp-webhook-subscription.service";
 
 const SENSITIVE_KEY =
   /^(access_token|accessToken|app_secret|appSecret|client_secret|clientSecret|authorization_code|access_token_encrypted|accessTokenEncrypted|encrypted_token|encryptedToken|system_user_token|systemUserToken|refresh_token|refreshToken)$/i;
@@ -133,31 +140,84 @@ function withLocalIdentities(
   };
 }
 
+const PHOTO_GRAPH_GRACE_MS = 90_000;
+
+async function cacheGraphPhonePhoto(
+  tenantId: string,
+  phoneNumberId: string,
+  url: string | null,
+): Promise<void> {
+  if (process.env.NODE_TEST_CONTEXT) return;
+  if (!url || !/^https:\/\//i.test(url)) return;
+  const identity = readPhoneIdentity(tenantId, phoneNumberId);
+  if (identity?.photoExt && identity.photoMetaApplied) {
+    const age = Date.now() - Date.parse(identity.updatedAt);
+    if (Number.isFinite(age) && age >= 0 && age < PHOTO_GRAPH_GRACE_MS) return;
+  }
+  const downloaded = await fetchHttpsProfileImage(url);
+  if (!downloaded) return;
+  writePhoneIdentity(tenantId, phoneNumberId, {
+    photo: downloaded,
+    photoMetaApplied: true,
+  });
+}
+
 async function attachPhoneBusinessProfiles(
   graph: MetaConnectionGraphCaller,
   token: string,
   numbers: MetaPortfolioNumberPublic[],
+  tenantId: string,
 ): Promise<MetaPortfolioNumberPublic[]> {
   if (!numbers.length) return numbers;
   const limited = numbers.slice(0, 20);
   const rest = numbers.slice(20);
   const withProfiles = await Promise.all(
     limited.map(async (row) => {
+      const nameNode = await graph({
+        token,
+        method: "GET",
+        path: row.phoneNumberId,
+        query: { fields: META_PHONE_NAME_FIELDS },
+      });
       const profile = await graph({
         token,
         method: "GET",
         path: `${row.phoneNumberId}/whatsapp_business_profile`,
         query: { fields: "about,address,description,email,profile_picture_url,vertical" },
       });
-      if (!profile.ok) return row;
-      const mapped = mapWhatsappBusinessProfile(profile.json);
+      const named = nameNode.ok ? mapPhoneNameFields(nameNode.json) : {
+        verifiedName: null,
+        nameStatus: null,
+        newDisplayName: null,
+        newNameStatus: null,
+      };
+      const verifiedName = named.verifiedName || row.verifiedName;
+      const nameStatus = named.nameStatus || row.nameStatus;
+      const newDisplayName = named.newDisplayName || row.newDisplayName;
+      const newNameStatus = named.newNameStatus || row.newNameStatus;
+      const nameSync = resolvePhoneNameSync({
+        verifiedName,
+        nameStatus,
+        newDisplayName,
+        newNameStatus,
+      });
+      const mapped = profile.ok ? mapWhatsappBusinessProfile(profile.json) : null;
+      await cacheGraphPhonePhoto(tenantId, row.phoneNumberId, mapped?.profilePictureUrl || null);
       return {
         ...row,
-        profilePictureUrl: mapped.profilePictureUrl || row.profilePictureUrl,
-        vertical: mapped.vertical,
-        description: mapped.description,
-        address: mapped.address,
-        email: mapped.email,
+        verifiedName,
+        nameStatus,
+        newDisplayName,
+        newNameStatus,
+        requestedName: nameSync.requestedName,
+        nameSyncStatus: nameSync.nameSyncStatus,
+        nameNeedsRegister: nameSync.nameNeedsRegister,
+        canActivate: !isMetaPhoneConnected(row.metaStatus) || nameSync.nameNeedsRegister,
+        profilePictureUrl: null as string | null,
+        vertical: mapped?.vertical ?? row.vertical,
+        description: mapped?.description ?? row.description,
+        address: mapped?.address ?? row.address,
+        email: mapped?.email ?? row.email,
       };
     }),
   );
@@ -490,7 +550,7 @@ export class MetaWhatsappConnectionService {
       method: "GET",
       path: `${wabaId}/phone_numbers`,
       query: {
-        fields: "id,display_phone_number,verified_name,quality_rating,status,code_verification_status",
+        fields: META_PHONE_NUMBER_LIST_FIELDS,
       },
     });
     if (!phones.ok) {
@@ -510,6 +570,7 @@ export class MetaWhatsappConnectionService {
       this.graph,
       token,
       mapMetaPhoneListToPortfolioNumbers(phones.json),
+      tenant.tenantId,
     );
     logMetaWhatsappSafe("portfolio-listed", {
       tenantId: tenant.tenantId,
@@ -590,6 +651,7 @@ export class MetaWhatsappConnectionService {
   ): Promise<
     MetaPortfolioAssetsPublic & {
       namePending: boolean;
+      nameNeedsRegister: boolean;
       nameUpdated: boolean;
       photoUpdated: boolean;
       profileUpdated: boolean;
@@ -640,6 +702,7 @@ export class MetaWhatsappConnectionService {
     }
 
     let namePending = false;
+    let nameNeedsRegister = false;
     if (displayName) {
       const renamed = await this.graph({
         token,
@@ -657,7 +720,27 @@ export class MetaWhatsappConnectionService {
         if (renamed.status === 401) throw new MetaWhatsappError("invalid_token");
         throw new MetaWhatsappError("profile_update_failed");
       }
-      namePending = true;
+      const nameNode = await this.graph({
+        token,
+        method: "GET",
+        path: phoneNumberId,
+        query: { fields: META_PHONE_NAME_FIELDS },
+      });
+      const named = nameNode.ok ? mapPhoneNameFields(nameNode.json) : {
+        verifiedName: null,
+        nameStatus: null,
+        newDisplayName: null,
+        newNameStatus: null,
+      };
+      const nameSync = resolvePhoneNameSync({
+        verifiedName: named.verifiedName,
+        nameStatus: named.nameStatus,
+        newDisplayName: named.newDisplayName || displayName,
+        newNameStatus: named.newNameStatus,
+        localName: displayName,
+      });
+      namePending = nameSync.nameSyncStatus === "pending";
+      nameNeedsRegister = nameSync.nameNeedsRegister;
     }
 
     const profileBody: Record<string, unknown> = { messaging_product: "whatsapp" };
@@ -729,6 +812,7 @@ export class MetaWhatsappConnectionService {
     logMetaWhatsappSafe("phone-profile-updated", {
       tenantId: tenant.tenantId,
       namePending,
+      nameNeedsRegister,
       nameUpdated,
       photoUpdated,
       profileUpdated,
@@ -738,6 +822,7 @@ export class MetaWhatsappConnectionService {
     return {
       ...listed,
       namePending,
+      nameNeedsRegister: nameNeedsRegister || listed.numbers.some((row) => row.phoneNumberId === phoneNumberId && row.nameNeedsRegister),
       nameUpdated,
       photoUpdated,
       profileUpdated,
@@ -756,23 +841,74 @@ export class MetaWhatsappConnectionService {
 
   async setPhoneInboxFromAuth(
     auth: WabaRequestAuth,
-    input: { phoneNumberId?: string; enabled?: boolean },
-  ): Promise<MetaPortfolioAssetsPublic> {
+    input: {
+      phoneNumberId?: string;
+      enabled?: boolean;
+      displayPhoneNumber?: string;
+      channelName?: string;
+    },
+  ): Promise<{
+    phoneNumberId: string;
+    inboxEnabled: boolean;
+    displayPhoneNumber: string | null;
+    channelName: string | null;
+  }> {
     const tenant = requireTenant(auth);
     const phoneNumberId = String(input.phoneNumberId || "").trim();
     if (!phoneNumberId || typeof input.enabled !== "boolean") {
       throw new MetaWhatsappError("invalid_payload");
     }
-    const assets = await this.listPortfolioAssets(auth);
-    const numberRow = assets.numbers.find((row) => row.phoneNumberId === phoneNumberId);
-    if (!numberRow) throw new MetaWhatsappError("invalid_payload");
-    writePhoneIdentity(tenant.tenantId, phoneNumberId, {
+    const open = await this.repository.findOpenByTenant(tenant.tenantId);
+    if (!open) throw new MetaWhatsappError("no_pending_connection");
+    const current = readPhoneIdentity(tenant.tenantId, phoneNumberId);
+    const displayPhoneNumber =
+      String(input.displayPhoneNumber || "").trim() ||
+      current?.displayPhoneNumber ||
+      open.displayPhoneNumber ||
+      null;
+    const channelName =
+      String(input.channelName || "").trim() ||
+      current?.channelName ||
+      current?.name ||
+      open.verifiedName ||
+      null;
+    const saved = writePhoneIdentity(tenant.tenantId, phoneNumberId, {
       inboxEnabled: input.enabled,
-      displayPhoneNumber: numberRow.displayPhoneNumber,
-      channelName: numberRow.verifiedName || numberRow.requestedName,
+      displayPhoneNumber,
+      channelName,
     });
     logMetaWhatsappSafe("phone-inbox-updated", { tenantId: tenant.tenantId, enabled: input.enabled });
-    return this.listPortfolioAssets(auth);
+    return {
+      phoneNumberId,
+      inboxEnabled: input.enabled,
+      displayPhoneNumber: saved.displayPhoneNumber,
+      channelName: saved.channelName,
+    };
+  }
+
+  async subscribeWebhooksFromAuth(auth: WabaRequestAuth): Promise<{
+    subscribed: boolean;
+    alreadySubscribed: boolean;
+    detail?: string;
+  }> {
+    const tenant = requireTenant(auth);
+    const open = await this.repository.findOpenByTenant(tenant.tenantId);
+    if (
+      !open?.wabaId ||
+      (open.status !== "connected" && open.status !== "pending_confirmation")
+    ) {
+      return {
+        subscribed: false,
+        alreadySubscribed: false,
+        detail: "WABA ainda não confirmada.",
+      };
+    }
+    const result = await new MetaWhatsappWebhookSubscriptionService().ensureSubscribed(open);
+    return {
+      subscribed: result.subscribed,
+      alreadySubscribed: result.alreadySubscribed,
+      detail: result.detail,
+    };
   }
 
   async updatePortfolioFromAuth(

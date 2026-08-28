@@ -46,6 +46,17 @@ function channelLabel(channel: MetaPhoneInboxChannel | undefined, fallbackPhone:
   return String(channel?.name || channel?.displayPhoneNumber || fallbackPhone || "WhatsApp Oficial").trim();
 }
 
+function canServeInbox(row: { tenantId: string; status: string; wabaId: string | null; phoneNumberId: string | null; disconnectedAt: string | null } | null, tenantId: string): boolean {
+  return Boolean(
+    row &&
+      row.tenantId === tenantId &&
+      !row.disconnectedAt &&
+      row.wabaId &&
+      row.phoneNumberId &&
+      (row.status === "connected" || row.status === "pending_confirmation"),
+  );
+}
+
 function withChannel(
   row: MetaConversationRecord,
   channelsById: Map<string, MetaPhoneInboxChannel>,
@@ -80,19 +91,21 @@ export class MetaWhatsappInboxService {
     }
     if (row.phoneNumberId) {
       const snapshot = listPhoneInboxChannels(tenantId).find((item) => item.phoneNumberId === row.phoneNumberId);
-      if (snapshot && !snapshot.inboxEnabled) {
+      if (!snapshot?.inboxEnabled) {
         throw new MetaWhatsappError("conversation_not_found");
       }
+    } else {
+      throw new MetaWhatsappError("conversation_not_found");
     }
     return row;
   }
 
   async requireConnected(tenantId: string) {
-    const row = await this.connections.findConnectedByTenant(tenantId);
-    if (!row || row.status !== "connected" || row.tenantId !== tenantId) {
-      throw new MetaWhatsappError("not_connected");
-    }
-    return row;
+    const connected = await this.connections.findConnectedByTenant(tenantId);
+    if (canServeInbox(connected, tenantId) && connected) return connected;
+    const open = await this.connections.findOpenByTenant(tenantId);
+    if (canServeInbox(open, tenantId) && open) return open;
+    throw new MetaWhatsappError("not_connected");
   }
 
   async listConversations(auth: WabaRequestAuth, query: Record<string, unknown> | undefined) {
@@ -104,14 +117,15 @@ export class MetaWhatsappInboxService {
     const offset = clampPage(query?.offset, 0, 10_000);
     const snapshots = listPhoneInboxChannels(tenant.tenantId);
     const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
-    const disabledIds = snapshots.filter((row) => !row.inboxEnabled).map((row) => row.phoneNumberId);
-    if (selectedPhone && disabledIds.includes(selectedPhone)) {
+    const enabledIds = snapshots.filter((row) => row.inboxEnabled).map((row) => row.phoneNumberId);
+    if (!enabledIds.length || (selectedPhone && !enabledIds.includes(selectedPhone))) {
       return {
         connected: true,
         poll: readMetaInboxPollMs(),
         conversations: [],
         channels: [] as MetaInboxChannelPublic[],
-        selectedPhoneNumberId: selectedPhone,
+        selectedPhoneNumberId: selectedPhone || null,
+        unreadCount: 0,
         page: { limit, offset, hasMore: false },
       };
     }
@@ -121,7 +135,7 @@ export class MetaWhatsappInboxService {
       filter,
       assignedTo: auth.email,
       phoneNumberId: selectedPhone || null,
-      excludePhoneNumberIds: selectedPhone ? [] : disabledIds,
+      includePhoneNumberIds: selectedPhone ? undefined : enabledIds,
       limit: limit + 1,
       offset,
     });
@@ -131,22 +145,11 @@ export class MetaWhatsappInboxService {
     const unreadByPhone = new Map<string, number>();
     let unreadAll = 0;
     for (const item of unreadRows) {
-      if (item.phoneNumberId && disabledIds.includes(item.phoneNumberId)) continue;
+      if (!item.phoneNumberId || !enabledIds.includes(item.phoneNumberId)) continue;
       unreadAll += item.unreadCount;
-      if (item.phoneNumberId) {
-        unreadByPhone.set(item.phoneNumberId, (unreadByPhone.get(item.phoneNumberId) || 0) + item.unreadCount);
-      }
+      unreadByPhone.set(item.phoneNumberId, (unreadByPhone.get(item.phoneNumberId) || 0) + item.unreadCount);
     }
-    const channelIds = new Set<string>();
-    for (const snap of snapshots) {
-      if (snap.inboxEnabled) channelIds.add(snap.phoneNumberId);
-    }
-    if (connection.phoneNumberId && !disabledIds.includes(connection.phoneNumberId)) {
-      channelIds.add(connection.phoneNumberId);
-    }
-    for (const row of page) {
-      if (row.phoneNumberId && !disabledIds.includes(row.phoneNumberId)) channelIds.add(row.phoneNumberId);
-    }
+    const channelIds = new Set<string>(enabledIds);
     const channels: MetaInboxChannelPublic[] = Array.from(channelIds).map((id) => {
       const snap = channelsById.get(id);
       const isConnection = id === String(connection.phoneNumberId || "");

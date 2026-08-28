@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { describe, it, before, after, beforeEach, afterEach } from "node:test";
 import { randomUUID } from "node:crypto";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
@@ -19,6 +19,7 @@ import { stripMetaSecrets } from "./meta-whatsapp-connection.service";
 import { encryptMetaToken } from "./meta-token-crypto";
 import { computeMetaHubSignatureHex } from "./meta-whatsapp-webhook-signature";
 import { MetaWhatsappError, toPublicMetaError } from "./meta-whatsapp-errors";
+import { purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
 import type { MetaGraphMessagesResult } from "./meta-whatsapp-graph-messages.client";
 
 const TENANT_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -535,6 +536,14 @@ describe("fase 6 messaging service", () => {
 });
 
 describe("fase 6 inbox inbound/status", () => {
+  beforeEach(() => {
+    writePhoneIdentity(TENANT_A, "phone-a", { inboxEnabled: true, channelName: "Loja" });
+    writePhoneIdentity(TENANT_A, "phone-chip", { inboxEnabled: true, channelName: "Chip" });
+  });
+  afterEach(() => {
+    purgePhoneIdentities(TENANT_A);
+  });
+
   it("persiste inbound e não duplica wamid", async () => {
     const conversations = new FakeConversations();
     const messages = new FakeMessages();
@@ -565,6 +574,58 @@ describe("fase 6 inbox inbound/status", () => {
     assert.equal(conversations.rows.length, 1);
     assert.equal(conversations.rows[0].unreadCount, 1);
     assert.equal(conversations.rows[0].contactName, "Ana");
+    assert.equal(conversations.rows[0].phoneNumberId, "phone-a");
+  });
+
+  it("grava a conversa no phoneNumberId do webhook, não no da conexão", async () => {
+    const conversations = new FakeConversations();
+    const messages = new FakeMessages();
+    const inbox = new MetaWhatsappWebhookInboxService(conversations as any, messages as any);
+    await inbox.persistInbound({
+      connection: connectedRow({ phoneNumberId: "phone-conexao" }),
+      event: {
+        eventKey: "msg:2",
+        eventType: "messages",
+        wabaId: "waba-a",
+        phoneNumberId: "phone-chip",
+        messageId: "wamid.CHIP",
+        status: null,
+        timestamp: "1710000000",
+        recipientId: null,
+        conversationId: null,
+        pricingCategory: null,
+        errorCode: null,
+        qualityRating: null,
+        verifiedName: null,
+        messageType: "text",
+        fromWaId: "5551999111111",
+        textContent: "oi",
+        contactName: "Ana",
+      } as any,
+    });
+    assert.equal(conversations.rows[0]?.phoneNumberId, "phone-chip");
+    assert.equal(messages.rows[0]?.toWaId, "phone-chip");
+  });
+
+  it("não persiste inbound se o Inbox do chip estiver desligado", async () => {
+    writePhoneIdentity(TENANT_A, "phone-a", { inboxEnabled: false });
+    const conversations = new FakeConversations();
+    const messages = new FakeMessages();
+    const inbox = new MetaWhatsappWebhookInboxService(conversations as any, messages as any);
+    await inbox.persistInbound({
+      connection: connectedRow(),
+      event: {
+        eventType: "messages",
+        phoneNumberId: "phone-a",
+        messageId: "wamid.OFF",
+        fromWaId: "5551999111111",
+        messageType: "text",
+        textContent: "oi",
+        timestamp: "1710000000",
+      } as any,
+    });
+    assert.equal(conversations.rows.length, 0);
+    assert.equal(messages.rows.length, 0);
   });
 
   it("status sent/delivered/read e ignora regressão", async () => {

@@ -7,6 +7,7 @@ const meta_whatsapp_inbox_events_1 = require("./meta-whatsapp-inbox-events");
 const meta_whatsapp_inbox_types_1 = require("./meta-whatsapp-inbox.types");
 const meta_whatsapp_messaging_types_1 = require("./meta-whatsapp-messaging.types");
 const meta_whatsapp_webhook_log_1 = require("./meta-whatsapp-webhook-log");
+const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
 function isoFromUnix(value) {
     const n = Number(value || "");
     if (Number.isFinite(n) && n > 0)
@@ -23,6 +24,11 @@ class MetaWhatsappWebhookInboxService {
         const wamid = String(input.event.messageId || "").trim();
         if (!from || !wamid)
             return;
+        const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim() || null;
+        if (!phoneNumberId || !(0, meta_whatsapp_phone_identity_store_1.isPhoneInboxEnabled)((0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(input.connection.tenantId, phoneNumberId))) {
+            (0, meta_whatsapp_webhook_log_1.logMetaWebhook)("PROCESSED", { eventType: "messages", reason: "inbox_disabled" });
+            return;
+        }
         const already = await this.messages.findByTenantWamid(input.connection.tenantId, wamid);
         if (already) {
             (0, meta_whatsapp_webhook_log_1.logMetaWebhook)("DUPLICATE", { eventType: "messages", reason: "wamid" });
@@ -34,7 +40,7 @@ class MetaWhatsappWebhookInboxService {
         const upserted = await this.conversations.upsertForContact({
             tenantId: input.connection.tenantId,
             connectionId: input.connection.id,
-            phoneNumberId: input.connection.phoneNumberId,
+            phoneNumberId,
             contactWaId: from,
             contactPhone: from,
             contactName: input.event.contactName,
@@ -58,7 +64,7 @@ class MetaWhatsappWebhookInboxService {
             type,
             status: "accepted",
             fromWaId: from,
-            toWaId: input.connection.phoneNumberId,
+            toWaId: phoneNumberId,
             textContent,
             provider: "meta-cloud",
         });

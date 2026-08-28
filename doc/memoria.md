@@ -5,9 +5,17 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 - Marker: `DEPLOY-2026-08-28-101500-pick-7770-drax-1261`
 - LOG: `doc/LOG-2026-08-28__101500__pick-7770-drax-1261.md`
 
+## 2026-08-28 10:07 — Inbox mostra o número ligado
+- Switch nasce cinza. Ligar grava telefone/nome e tenta `subscribed_apps`. Banner do Inbox lista o chip. Webhook também atende `pending_confirmation`.
+- LOG: `doc/LOG-2026-08-28__100700__inbox-numero-banner-e2e.md`
+
 ## 2026-08-28 09:58 — Marker forçado para Redeploy
 - Marker: `DEPLOY-2026-08-28-095800-FORCE-INSTANCIAS-SWAP`
 - Produção já estava em `093700`; push só para EasyPanel puxar imagem nova
+
+## 2026-08-28 09:42 — Inbox opt-in (switch cinza)
+- Chip só entra no Inbox depois de ligar o switch. Cinza = fora. Verde = enviar e receber.
+- LOG: `doc/LOG-2026-08-28__094200__inbox-opt-in-switch-cinza.md`
 
 ## 2026-08-28 09:37 — + Instâncias substitui o bloqueado (2477)
 - Produção ainda estava em `083300`; POST devolvia `buy_numbers_required` e a UI ia para compra
@@ -15,11 +23,19 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 - Marker: `DEPLOY-2026-08-28-093700-instancias-substitui-bloqueada`
 - LOG: `doc/LOG-2026-08-28__093700__instancias-substitui-bloqueada.md`
 
+## 2026-08-28 09:20 — Switch Inbox instantâneo + canal do webhook
+- Clique do Inbox não espera Graph; switch compacto. Inbound usa `phone_number_id` do webhook. Switch desligado oculta o chip na lista.
+- LOG: `doc/LOG-2026-08-28__092000__inbox-switch-lento-webhook-phone.md`
+
 ## 2026-08-28 09:15 — Intervalo entre mensagens −30%
 - Wait por chip = 70% do pacing anterior (Alternativa 8h–22h: ~240–264s → ~168–185s)
 - Campanha já running pega o throttle novo no tick; teto 100/dia e burst 60/14 iguais
 - Marker: `DEPLOY-2026-08-28-091500-intervalo-envio-menos-30`
 - LOG: `doc/LOG-2026-08-28__091500__intervalo-envio-menos-30.md`
+
+## 2026-08-28 09:12 — Nome/foto do chip conforme a Graph
+- POST `new_display_name` não aplica o nome no WhatsApp. Card usa `new_name_status`; PIN de register em número já Ativo quando aprovado. Foto em cache local, sem URL assinada no browser.
+- LOG: `doc/LOG-2026-08-28__091200__meta-nome-foto-register-docs.md`
 
 ## 2026-08-28 09:00 — Botão + Instâncias inclui o spare da UI
 - POST usava live `open` e 409 ia para comprar números; a tela já mostrava spare

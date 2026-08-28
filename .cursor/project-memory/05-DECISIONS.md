@@ -4,6 +4,13 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-28 — Inbox: opt-in, número visível, webhook ao ligar
+
+- **Decisão:** Switch cinza até `inboxEnabled === true`. O Inbox lista o telefone do chip. Ligar o switch tenta `subscribed_apps`. Inbound aceita conexão `pending_confirmation`.
+- **Motivo:** O switch verde por omissão desligava no primeiro clique; a mensagem de teste não aparecia; o operador não via qual número estava no Inbox.
+- **Impacto:** Produção só recebe no Inbox depois de ligar o switch. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks/
+- **Data:** 2026-08-28
+
 ### 2026-08-28 — «+ Instâncias» substitui o bloqueado, sem ir à compra
 
 - **Decisão:** POST auto usa a mesma lista de spare do GET. Troca 1:1 só dos vermelhos. Resposta sem `buy_numbers_required`.
@@ -16,11 +23,18 @@ Registrar apenas decisões permanentes.
 - **Motivo:** Throughput percebido estava baixo; o operador pediu reduzir o intervalo entre cada mensagem em 30%, sem subir o teto diário.
 - **Impacto:** Marker `DEPLOY-2026-08-28-091500-intervalo-envio-menos-30`. Burst 60/14 e 100/dia inalterados.
 
+### 2026-08-28 — Nome do chip: Graph `new_name_status` + register com PIN
+
+- **Decisão:** O card lê `verified_name`, `new_display_name` e `new_name_status`. Não trata `{ success: true }` do POST como nome aplicado. Número Ativo com nome aprovado mostra PIN de `POST /register`. Foto do chip é cache local da Graph, nunca a URL assinada no browser.
+- **Motivo:** A doc oficial exige re-registro após aprovação. A aba Profile do Manager mostra o nome pedido na hora; a coluna Name / WhatsApp só mudam depois do register. `pps.whatsapp.net` expira.
+- **Impacto:** Status Em análise / Aprovado / Recusado / Atualizado. Sem o PIN o `verified_name` não troca. Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names
+- **Data:** 2026-08-28
+
 ### 2026-08-28 — Card do número oficial: só o que a Meta já aplicou
 
-- **Decisão:** Nome e foto do chip no CARD 02 são os da Graph. A Drax não confirma save se a Meta recusar. Foto/descrição entram no POST do perfil. O nome visível no card (e no disparo) é o `verified_name` até a Meta aprovar o novo.
+- **Decisão:** Nome e foto do chip no CARD 02 são os da Graph. A Drax não confirma save se a Meta recusar. Foto/descrição entram no POST do perfil. O nome visível no card (e no disparo) é o `verified_name` até register após aprovação.
 - **Motivo:** O cliente do disparo vê o perfil da Cloud API, não o arquivo local do Laboratório.
-- **Impacto:** Sem número Ativo ou com recusa da Graph, o save falha. Nome pedido aparece como `solicitado:` até `verified_name` mudar. Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names e https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/
+- **Impacto:** Sem número Ativo ou com recusa da Graph, o save falha. Pedido novo usa `new_display_name`. Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names e https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/
 
 ### 2026-08-28 — Card do portfólio: identidade local, Meta best-effort
 

@@ -62,7 +62,11 @@ export const registerMetaWhatsappSubscriptionRoute = (app: Express): void => {
       const auth = resolveWabaRequestAuth(req);
       const tenant = resolveMetaWhatsappTenant(auth);
       const connection = await connections.findOpenByTenant(tenant.tenantId);
-      if (!connection || connection.status !== "connected" || !connection.wabaId) {
+      if (
+        !connection ||
+        !connection.wabaId ||
+        (connection.status !== "connected" && connection.status !== "pending_confirmation")
+      ) {
         return res.status(409).json({
           ok: false,
           error: "Conecte e confirme a WABA antes de inscrever o webhook.",

@@ -3397,7 +3397,9 @@
           line-height: 1.2;
         }
         .meta-number-sync-cell.is-applied { color: #86efac; }
+        .meta-number-sync-cell.is-ready { color: #67e8f9; }
         .meta-number-sync-cell.is-pending { color: #fde68a; }
+        .meta-number-sync-cell.is-declined { color: #fca5a5; }
         .meta-number-sync-cell.is-empty { color: rgba(148, 163, 184, 0.7); font-weight: 500; }
         .meta-number-sync-cell svg {
           width: 14px;
@@ -3418,33 +3420,39 @@
         .meta-number-chip.is-busy { background: rgba(56, 189, 248, 0.16); color: #7dd3fc; }
         .meta-number-inbox {
           justify-items: start;
+          align-items: center;
+          align-content: center;
         }
         .meta-number-switch {
-          width: 44px;
-          height: 26px;
+          width: 34px;
+          height: 18px;
+          min-width: 34px;
+          max-width: 34px;
+          align-self: center;
           border: 0;
           border-radius: 999px;
           background: rgba(148, 163, 184, 0.28);
           position: relative;
           cursor: pointer;
           padding: 0;
+          flex: 0 0 auto;
         }
         .meta-number-switch::after {
           content: "";
           position: absolute;
-          top: 3px;
-          left: 3px;
-          width: 20px;
-          height: 20px;
+          top: 2px;
+          left: 2px;
+          width: 14px;
+          height: 14px;
           border-radius: 50%;
           background: #e2e8f0;
-          transition: transform 0.15s ease;
+          transition: transform 0.12s ease;
         }
         .meta-number-switch.is-on {
           background: #16a34a;
         }
         .meta-number-switch.is-on::after {
-          transform: translateX(18px);
+          transform: translateX(16px);
         }
         .meta-number-switch:focus-visible {
           outline: 2px solid rgba(37, 211, 102, 0.7);
@@ -3581,6 +3589,17 @@
         .meta-inbox-origin-dot {
           width:7px; height:7px; border-radius:50%; background:#25d366; flex:0 0 auto;
         }
+        .meta-inbox-banner {
+          margin: 0 0 8px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: #111b21;
+          color: #e9edef;
+          font-size: 13px;
+          font-weight: 600;
+          line-height: 1.4;
+        }
+        .meta-inbox-banner.is-empty { color: #fbbf24; background: rgba(251, 191, 36, 0.08); }
         .meta-inbox-item-main { min-width:0; }
         .meta-inbox-item-meta { font-size:11px; color:#8696a0; }
         .meta-inbox-msg-label {
@@ -20741,10 +20760,10 @@
                 <div id="tab-whatsapp-inbox" class="tab-panel tab-hidden" aria-hidden="true">
           <div class="row g-3">
             <section class="panel col-12" style="padding:10px;">
-              <p id="meta-inbox-banner" class="muted" style="margin:0 0 8px;" role="status" aria-live="polite">Carregando</p>
+              <p id="meta-inbox-banner" class="meta-inbox-banner" role="status" aria-live="polite">Carregando</p>
               <div id="meta-chat-shell" class="meta-chat">
                 <div class="meta-chat-list">
-                  <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Conversas</div><div class="meta-chat-thread-sub">Inbox unificado · canal de origem visível</div></div></div>
+                  <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Conversas</div><div class="meta-chat-thread-sub">Inbox unificado · o número ligado aparece abaixo</div></div></div>
                   <div class="meta-chat-search"><input id="meta-inbox-search" type="search" placeholder="Buscar conversa" autocomplete="off" /></div>
                   <div id="meta-inbox-channels" class="meta-chat-channels" aria-label="Canais do Inbox"></div>
                   <div class="meta-chat-filters">
@@ -35194,9 +35213,14 @@
       const META_PORTFOLIO_FALLBACK_LOGO = "/media/meta-logo.png";
 
       function metaTpSyncIcon(kind) {
-        if (kind === "applied") {
+        if (kind === "applied" || kind === "ready") {
           return (
             '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5l3 3 6-7"/></svg>'
+          );
+        }
+        if (kind === "declined") {
+          return (
+            '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 4l8 8M12 4l-8 8"/></svg>'
           );
         }
         return (
@@ -35220,13 +35244,35 @@
             "</div></div>"
           );
         }
+        if (state === "ready") {
+          return (
+            '<div class="meta-number-col meta-number-col-sync">' +
+            '<span class="meta-number-col-label">' +
+            kind +
+            "</span>" +
+            '<div class="meta-number-sync-cell is-ready"><span>Aprovado</span>' +
+            metaTpSyncIcon("ready") +
+            "</div></div>"
+          );
+        }
+        if (state === "declined") {
+          return (
+            '<div class="meta-number-col meta-number-col-sync">' +
+            '<span class="meta-number-col-label">' +
+            kind +
+            "</span>" +
+            '<div class="meta-number-sync-cell is-declined"><span>Recusado</span>' +
+            metaTpSyncIcon("declined") +
+            "</div></div>"
+          );
+        }
         if (state === "pending") {
           return (
             '<div class="meta-number-col meta-number-col-sync">' +
             '<span class="meta-number-col-label">' +
             kind +
             "</span>" +
-            '<div class="meta-number-sync-cell is-pending"><span>Processando</span>' +
+            '<div class="meta-number-sync-cell is-pending"><span>Em análise</span>' +
             metaTpSyncIcon("pending") +
             "</div></div>"
           );
@@ -35311,8 +35357,19 @@
             const phone = metaTpEsc(item.displayPhoneNumber || item.phoneNumberId);
             const verified = metaTpEsc(item.verifiedName || "Sem nome de exibição");
             const requested = String(item.requestedName || "").trim();
+            const nameState = String(item.nameSyncStatus || "");
+            const requestedPrefix =
+              nameState === "ready"
+                ? "aprovado: "
+                : nameState === "declined"
+                  ? "recusado: "
+                  : "em análise: ";
             const requestedLine = requested
-              ? '<span class="meta-number-requested">solicitado: ' + metaTpEsc(requested) + "</span>"
+              ? '<span class="meta-number-requested">' +
+                requestedPrefix +
+                metaTpEsc(requested) +
+                (nameState === "ready" ? " — informe o PIN" : "") +
+                "</span>"
               : "";
             const editName = metaTpEsc(requested || item.verifiedName || "");
             const id = metaTpEsc(item.phoneNumberId);
@@ -35340,16 +35397,22 @@
             const dispatchChip = busy
               ? '<span class="meta-number-chip is-busy">Em disparo</span>'
               : '<span class="meta-number-chip is-ok">Livre</span>';
-            const inboxOn = item.inboxEnabled !== false;
-            const activate = ativo
-              ? ""
-              : '<div class="meta-number-activate">' +
-                '<label>PIN de 6 dígitos<input type="password" inputmode="numeric" maxlength="6" autocomplete="off" data-meta-pin="' +
+            const inboxOn = item.inboxEnabled === true;
+            const activate = item.canActivate
+              ? '<div class="meta-number-activate">' +
+                "<label>" +
+                (item.nameNeedsRegister
+                  ? "PIN de 6 dígitos — a Meta já aprovou o nome"
+                  : "PIN de 6 dígitos") +
+                '<input type="password" inputmode="numeric" maxlength="6" autocomplete="off" data-meta-pin="' +
                 id +
                 '" /></label>' +
                 '<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-activate="' +
                 id +
-                '">Ativar número</button></div>';
+                '">' +
+                (item.nameNeedsRegister && ativo ? "Aplicar nome na Meta" : "Ativar número") +
+                "</button></div>"
+              : "";
             const editAttrs =
               ' data-meta-edit="' +
               id +
@@ -35401,6 +35464,10 @@
               id +
               '" data-meta-inbox-enabled="' +
               (inboxOn ? "1" : "0") +
+              '" data-meta-inbox-phone="' +
+              metaTpEsc(phone) +
+              '" data-meta-inbox-name="' +
+              metaTpEsc(verified) +
               '"></button></div>' +
               activate +
               "</article>"
@@ -35887,24 +35954,39 @@
           const phoneNumberId = String(inboxToggle.getAttribute("data-meta-inbox-toggle") || "").trim();
           const enabled = inboxToggle.getAttribute("data-meta-inbox-enabled") !== "1";
           if (!phoneNumberId) return;
-          inboxToggle.disabled = true;
+          const previous = inboxToggle.getAttribute("data-meta-inbox-enabled") === "1";
+          const displayPhoneNumber = String(inboxToggle.getAttribute("data-meta-inbox-phone") || "").trim();
+          const channelName = String(inboxToggle.getAttribute("data-meta-inbox-name") || "").trim();
+          inboxToggle.classList.toggle("is-on", enabled);
+          inboxToggle.setAttribute("data-meta-inbox-enabled", enabled ? "1" : "0");
+          inboxToggle.setAttribute("aria-checked", enabled ? "true" : "false");
+          inboxToggle.setAttribute(
+            "aria-label",
+            enabled ? "Desligar Inbox deste número" : "Ligar Inbox deste número",
+          );
           metaTpFetchJson("/integrations/meta/whatsapp/phone-numbers/inbox", {
             method: "POST",
-            body: JSON.stringify({ phoneNumberId, enabled }),
+            body: JSON.stringify({ phoneNumberId, enabled, displayPhoneNumber, channelName }),
           })
             .then(({ response, payload }) => {
               if (!response.ok || payload.ok === false) {
+                inboxToggle.classList.toggle("is-on", previous);
+                inboxToggle.setAttribute("data-meta-inbox-enabled", previous ? "1" : "0");
+                inboxToggle.setAttribute("aria-checked", previous ? "true" : "false");
                 metaTpSetStatus(String(payload.error || "Não foi possível alterar o Inbox deste número."));
                 return;
               }
               metaTpSetStatus("");
-              metaTpRenderPortfolio(payload);
+              if (typeof metaInbox !== "undefined" && metaInbox.active) {
+                metaInbox.listFp = "";
+                metaInboxLoadList(false);
+              }
             })
             .catch(() => {
+              inboxToggle.classList.toggle("is-on", previous);
+              inboxToggle.setAttribute("data-meta-inbox-enabled", previous ? "1" : "0");
+              inboxToggle.setAttribute("aria-checked", previous ? "true" : "false");
               metaTpSetStatus("Não foi possível alterar o Inbox deste número.");
-            })
-            .finally(() => {
-              inboxToggle.disabled = false;
             });
           return;
         }
@@ -35927,7 +36009,7 @@
         const input = document.querySelector('[data-meta-pin="' + phoneNumberId + '"]');
         const pin = String((input && input.value) || "").trim();
         if (!/^\d{6}$/.test(pin)) {
-          metaTpSetStatus("Informe um PIN de 6 dígitos para ativar o número.");
+          metaTpSetStatus("Informe um PIN de 6 dígitos.");
           return;
         }
         if (input) input.value = "";
@@ -36548,9 +36630,28 @@
         box.innerHTML = items.join("");
       }
 
-      function metaInboxBanner(text) {
+      function metaInboxBanner(text, empty) {
         const el = document.getElementById("meta-inbox-banner");
-        if (el) el.textContent = text || "";
+        if (!el) return;
+        el.textContent = text || "";
+        el.classList.toggle("is-empty", Boolean(empty));
+      }
+
+      function metaInboxConnectedNumbersText(channels) {
+        const rows = Array.isArray(channels) ? channels : [];
+        if (!rows.length) {
+          return "Nenhum número ligado ao Inbox. No Laboratório, ligue o switch Inbox (cinza → verde) no chip que deve receber e enviar.";
+        }
+        return (
+          "Números no Inbox: " +
+          rows
+            .map((item) => {
+              const phone = metaInboxChannelPhone(item);
+              const name = metaInboxChannelName(item);
+              return phone ? name + " · " + phone : name;
+            })
+            .join(" · ")
+        );
       }
 
       function metaInboxWindowLabel(state) {
@@ -36743,14 +36844,14 @@
             .map((item) => `${item.id}:${item.unreadCount}:${item.lastMessageAt}:${item.status}:${item.phoneNumberId}`)
             .join("|") + `|ch:${metaInbox.channelId}`;
           if (!append && fp === metaInbox.listFp) {
-            metaInboxBanner("Conectado");
+            metaInboxBanner(metaInboxConnectedNumbersText(payload.channels), !(payload.channels || []).length);
             return;
           }
           if (!append) metaInbox.listFp = fp;
           metaInboxRenderList(payload.conversations, append);
           const more = document.getElementById("meta-inbox-more");
           if (more) more.hidden = !metaInbox.hasMore;
-          metaInboxBanner(payload.conversations && payload.conversations.length ? "Conectado" : "Sem conversas");
+          metaInboxBanner(metaInboxConnectedNumbersText(payload.channels), !(payload.channels || []).length);
         } catch (error) {
           const msg = error && error.message ? error.message : "Erro";
           metaInboxBanner(/conecte/i.test(msg) ? "Sem conexão Meta" : msg);

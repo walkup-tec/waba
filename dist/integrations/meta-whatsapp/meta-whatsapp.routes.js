@@ -240,11 +240,22 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             }
             warnClientTenantClaim(req);
             const enabledRaw = req.body?.enabled;
-            const assets = await service.setPhoneInboxFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
+            const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+            const result = await service.setPhoneInboxFromAuth(auth, {
                 phoneNumberId: String(req.body?.phoneNumberId || req.body?.phone_number_id || "").trim(),
                 enabled: enabledRaw === true || enabledRaw === false ? enabledRaw : undefined,
+                displayPhoneNumber: String(req.body?.displayPhoneNumber || req.body?.display_phone_number || "").trim(),
+                channelName: String(req.body?.channelName || req.body?.channel_name || "").trim(),
             });
-            return sendPublic(res, 200, { ok: true, ...assets });
+            let webhooks;
+            if (result.inboxEnabled) {
+                webhooks = await service.subscribeWebhooksFromAuth(auth).catch(() => ({
+                    subscribed: false,
+                    alreadySubscribed: false,
+                    detail: "Falha ao inscrever webhooks.",
+                }));
+            }
+            return sendPublic(res, 200, { ok: true, ...result, webhooks });
         }
         catch (error) {
             return handleMetaError(res, error);

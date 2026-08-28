@@ -177,6 +177,7 @@ export class MetaWhatsappConversationRepository {
     filter: "all" | "unread" | "open" | "pending" | "closed" | "mine";
     assignedTo?: string | null;
     phoneNumberId?: string | null;
+    includePhoneNumberIds?: string[];
     excludePhoneNumberIds?: string[];
     limit: number;
     offset: number;
@@ -196,6 +197,10 @@ export class MetaWhatsappConversationRepository {
     const selected = String(input.phoneNumberId || "").trim();
     if (selected) {
       query = query.eq("phone_number_id", selected);
+    } else if (input.includePhoneNumberIds) {
+      const ids = input.includePhoneNumberIds.map((id) => String(id || "").trim()).filter(Boolean);
+      if (!ids.length) return [];
+      query = query.in("phone_number_id", ids);
     } else if (input.excludePhoneNumberIds && input.excludePhoneNumberIds.length) {
       const ids = input.excludePhoneNumberIds.map((id) => String(id || "").trim()).filter(Boolean);
       if (ids.length) {

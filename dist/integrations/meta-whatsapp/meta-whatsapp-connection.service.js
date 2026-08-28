@@ -16,6 +16,7 @@ const meta_whatsapp_portfolio_identity_store_1 = require("./meta-whatsapp-portfo
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
 const meta_whatsapp_phone_profile_1 = require("./meta-whatsapp-phone-profile");
 const meta_whatsapp_resumable_upload_1 = require("./meta-whatsapp-resumable-upload");
+const meta_whatsapp_webhook_subscription_service_1 = require("./meta-whatsapp-webhook-subscription.service");
 const SENSITIVE_KEY = /^(access_token|accessToken|app_secret|appSecret|client_secret|clientSecret|authorization_code|access_token_encrypted|accessTokenEncrypted|encrypted_token|encryptedToken|system_user_token|systemUserToken|refresh_token|refreshToken)$/i;
 function toMetaWhatsappUiStatus(status) {
     if (status === "connected")
@@ -87,28 +88,77 @@ function withLocalIdentities(tenantId, assets) {
         numbers: (0, meta_whatsapp_phone_identity_store_1.applyLocalPhoneIdentities)(tenantId, assets.numbers || []),
     };
 }
-async function attachPhoneBusinessProfiles(graph, token, numbers) {
+const PHOTO_GRAPH_GRACE_MS = 90000;
+async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {
+    if (process.env.NODE_TEST_CONTEXT)
+        return;
+    if (!url || !/^https:\/\//i.test(url))
+        return;
+    const identity = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenantId, phoneNumberId);
+    if (identity?.photoExt && identity.photoMetaApplied) {
+        const age = Date.now() - Date.parse(identity.updatedAt);
+        if (Number.isFinite(age) && age >= 0 && age < PHOTO_GRAPH_GRACE_MS)
+            return;
+    }
+    const downloaded = await (0, meta_whatsapp_phone_profile_1.fetchHttpsProfileImage)(url);
+    if (!downloaded)
+        return;
+    (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenantId, phoneNumberId, {
+        photo: downloaded,
+        photoMetaApplied: true,
+    });
+}
+async function attachPhoneBusinessProfiles(graph, token, numbers, tenantId) {
     if (!numbers.length)
         return numbers;
     const limited = numbers.slice(0, 20);
     const rest = numbers.slice(20);
     const withProfiles = await Promise.all(limited.map(async (row) => {
+        const nameNode = await graph({
+            token,
+            method: "GET",
+            path: row.phoneNumberId,
+            query: { fields: meta_whatsapp_portfolio_map_1.META_PHONE_NAME_FIELDS },
+        });
         const profile = await graph({
             token,
             method: "GET",
             path: `${row.phoneNumberId}/whatsapp_business_profile`,
             query: { fields: "about,address,description,email,profile_picture_url,vertical" },
         });
-        if (!profile.ok)
-            return row;
-        const mapped = (0, meta_whatsapp_phone_profile_1.mapWhatsappBusinessProfile)(profile.json);
+        const named = nameNode.ok ? (0, meta_whatsapp_portfolio_map_1.mapPhoneNameFields)(nameNode.json) : {
+            verifiedName: null,
+            nameStatus: null,
+            newDisplayName: null,
+            newNameStatus: null,
+        };
+        const verifiedName = named.verifiedName || row.verifiedName;
+        const nameStatus = named.nameStatus || row.nameStatus;
+        const newDisplayName = named.newDisplayName || row.newDisplayName;
+        const newNameStatus = named.newNameStatus || row.newNameStatus;
+        const nameSync = (0, meta_whatsapp_portfolio_map_1.resolvePhoneNameSync)({
+            verifiedName,
+            nameStatus,
+            newDisplayName,
+            newNameStatus,
+        });
+        const mapped = profile.ok ? (0, meta_whatsapp_phone_profile_1.mapWhatsappBusinessProfile)(profile.json) : null;
+        await cacheGraphPhonePhoto(tenantId, row.phoneNumberId, mapped?.profilePictureUrl || null);
         return {
             ...row,
-            profilePictureUrl: mapped.profilePictureUrl || row.profilePictureUrl,
-            vertical: mapped.vertical,
-            description: mapped.description,
-            address: mapped.address,
-            email: mapped.email,
+            verifiedName,
+            nameStatus,
+            newDisplayName,
+            newNameStatus,
+            requestedName: nameSync.requestedName,
+            nameSyncStatus: nameSync.nameSyncStatus,
+            nameNeedsRegister: nameSync.nameNeedsRegister,
+            canActivate: !(0, meta_whatsapp_portfolio_map_1.isMetaPhoneConnected)(row.metaStatus) || nameSync.nameNeedsRegister,
+            profilePictureUrl: null,
+            vertical: mapped?.vertical ?? row.vertical,
+            description: mapped?.description ?? row.description,
+            address: mapped?.address ?? row.address,
+            email: mapped?.email ?? row.email,
         };
     }));
     return rest.length ? withProfiles.concat(rest) : withProfiles;
@@ -404,7 +454,7 @@ class MetaWhatsappConnectionService {
             method: "GET",
             path: `${wabaId}/phone_numbers`,
             query: {
-                fields: "id,display_phone_number,verified_name,quality_rating,status,code_verification_status",
+                fields: meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS,
             },
         });
         if (!phones.ok) {
@@ -420,7 +470,7 @@ class MetaWhatsappConnectionService {
                 numbers: [],
             });
         }
-        const numbers = await attachPhoneBusinessProfiles(this.graph, token, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)(phones.json));
+        const numbers = await attachPhoneBusinessProfiles(this.graph, token, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)(phones.json), tenant.tenantId);
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-listed", {
             tenantId: tenant.tenantId,
             hasBusiness: Boolean(portfolio.id),
@@ -521,6 +571,7 @@ class MetaWhatsappConnectionService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("phone_not_registered");
         }
         let namePending = false;
+        let nameNeedsRegister = false;
         if (displayName) {
             const renamed = await this.graph({
                 token,
@@ -539,7 +590,27 @@ class MetaWhatsappConnectionService {
                     throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_update_failed");
             }
-            namePending = true;
+            const nameNode = await this.graph({
+                token,
+                method: "GET",
+                path: phoneNumberId,
+                query: { fields: meta_whatsapp_portfolio_map_1.META_PHONE_NAME_FIELDS },
+            });
+            const named = nameNode.ok ? (0, meta_whatsapp_portfolio_map_1.mapPhoneNameFields)(nameNode.json) : {
+                verifiedName: null,
+                nameStatus: null,
+                newDisplayName: null,
+                newNameStatus: null,
+            };
+            const nameSync = (0, meta_whatsapp_portfolio_map_1.resolvePhoneNameSync)({
+                verifiedName: named.verifiedName,
+                nameStatus: named.nameStatus,
+                newDisplayName: named.newDisplayName || displayName,
+                newNameStatus: named.newNameStatus,
+                localName: displayName,
+            });
+            namePending = nameSync.nameSyncStatus === "pending";
+            nameNeedsRegister = nameSync.nameNeedsRegister;
         }
         const profileBody = { messaging_product: "whatsapp" };
         if (vertical)
@@ -615,6 +686,7 @@ class MetaWhatsappConnectionService {
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-updated", {
             tenantId: tenant.tenantId,
             namePending,
+            nameNeedsRegister,
             nameUpdated,
             photoUpdated,
             profileUpdated,
@@ -624,6 +696,7 @@ class MetaWhatsappConnectionService {
         return {
             ...listed,
             namePending,
+            nameNeedsRegister: nameNeedsRegister || listed.numbers.some((row) => row.phoneNumberId === phoneNumberId && row.nameNeedsRegister),
             nameUpdated,
             photoUpdated,
             profileUpdated,
@@ -642,17 +715,49 @@ class MetaWhatsappConnectionService {
         if (!phoneNumberId || typeof input.enabled !== "boolean") {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         }
-        const assets = await this.listPortfolioAssets(auth);
-        const numberRow = assets.numbers.find((row) => row.phoneNumberId === phoneNumberId);
-        if (!numberRow)
-            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
-        (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {
+        const open = await this.repository.findOpenByTenant(tenant.tenantId);
+        if (!open)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("no_pending_connection");
+        const current = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenant.tenantId, phoneNumberId);
+        const displayPhoneNumber = String(input.displayPhoneNumber || "").trim() ||
+            current?.displayPhoneNumber ||
+            open.displayPhoneNumber ||
+            null;
+        const channelName = String(input.channelName || "").trim() ||
+            current?.channelName ||
+            current?.name ||
+            open.verifiedName ||
+            null;
+        const saved = (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {
             inboxEnabled: input.enabled,
-            displayPhoneNumber: numberRow.displayPhoneNumber,
-            channelName: numberRow.verifiedName || numberRow.requestedName,
+            displayPhoneNumber,
+            channelName,
         });
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-inbox-updated", { tenantId: tenant.tenantId, enabled: input.enabled });
-        return this.listPortfolioAssets(auth);
+        return {
+            phoneNumberId,
+            inboxEnabled: input.enabled,
+            displayPhoneNumber: saved.displayPhoneNumber,
+            channelName: saved.channelName,
+        };
+    }
+    async subscribeWebhooksFromAuth(auth) {
+        const tenant = requireTenant(auth);
+        const open = await this.repository.findOpenByTenant(tenant.tenantId);
+        if (!open?.wabaId ||
+            (open.status !== "connected" && open.status !== "pending_confirmation")) {
+            return {
+                subscribed: false,
+                alreadySubscribed: false,
+                detail: "WABA ainda não confirmada.",
+            };
+        }
+        const result = await new meta_whatsapp_webhook_subscription_service_1.MetaWhatsappWebhookSubscriptionService().ensureSubscribed(open);
+        return {
+            subscribed: result.subscribed,
+            alreadySubscribed: result.alreadySubscribed,
+            detail: result.detail,
+        };
     }
     async updatePortfolioFromAuth(auth, input) {
         const tenant = requireTenant(auth);

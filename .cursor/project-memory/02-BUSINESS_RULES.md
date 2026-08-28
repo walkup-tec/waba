@@ -20,9 +20,11 @@ Somente regras permanentes. Sem detalhes de implementação.
 - Nome e foto visíveis no CARD 02 (portfólio e chips) são da conta WABA (Laboratório).
 - A Meta só replica o nome do portfólio se o token for admin do Business Manager.
 - A foto do Business Manager é só leitura; gravação na Meta exige Página do Facebook.
-- A Meta só replica o nome do chip após aprovação do display name (e um novo PIN). A foto e as informações da empresa (categoria, descrição, endereço, e-mail) na Meta só entram se o número estiver Ativo.
-- O card do chip mostra o nome e a foto **já aplicados na Meta** (o que o cliente do disparo vê). Se a Graph recusar, a Drax não grava como se tivesse mudado.
-- Foto e descrição: check no POST `success: true`. Nome: ampulheta até o `verified_name` da Meta mudar; o card continua com o nome antigo até lá.
+- A Meta só replica o nome do chip após aprovação do display name **e** `POST /{PHONE_NUMBER_ID}/register` com PIN. Foto e dados da empresa só entram se o número estiver Ativo.
+- O card mostra o `verified_name` (coluna Name / o que o WhatsApp entrega). `new_display_name` + `new_name_status` da Graph mandam o status: Em análise, Aprovado (PIN), Recusado ou Atualizado.
+- A foto do chip no card vem do cache local; URL assinada `pps.whatsapp.net` não vai no browser (expira e quebra no Gerenciador).
+- Inbox do chip nasce **desligado**. Só entra no Inbox (enviar e receber) depois que o operador ligar o switch.
+- O Inbox mostra o número (e o nome) dos chips com switch verde. Sem chip ligado, avisa para ligar no Laboratório.
 
 ### Crédito mínimo no checkout PIX (Disparos)
 

@@ -16,6 +16,7 @@ const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const data_path_1 = require("../../data-path");
+const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
 function safeTenantId(tenantId) {
@@ -155,25 +156,12 @@ function localPhonePhotoUrl(phoneNumberId, identity) {
         return null;
     return `/integrations/meta/whatsapp/phone-numbers/photo?id=${encodeURIComponent(phoneNumberId)}&v=${encodeURIComponent(identity.updatedAt)}`;
 }
-function namesMatch(local, meta) {
-    const a = String(local || "").trim().toLowerCase();
-    const b = String(meta || "").trim().toLowerCase();
-    return Boolean(a) && a === b;
-}
 function textsMatch(local, meta) {
     return String(local || "").trim() === String(meta || "").trim() && Boolean(String(local || "").trim());
 }
-function hasMetaPhoto(url) {
-    return /^https:\/\//i.test(String(url || "").trim());
-}
 function phoneIdentitySyncStatus(input) {
     return {
-        nameSyncStatus: input.localName ? (namesMatch(input.localName, input.metaVerifiedName) ? "applied" : "pending") : null,
-        photoSyncStatus: input.localPhoto
-            ? input.photoMetaApplied || hasMetaPhoto(input.metaProfilePictureUrl)
-                ? "applied"
-                : "pending"
-            : null,
+        photoSyncStatus: input.localPhoto ? (input.photoMetaApplied ? "applied" : "pending") : null,
         profileSyncStatus: input.localDescription
             ? input.profileMetaApplied || textsMatch(input.localDescription, input.metaDescription)
                 ? "applied"
@@ -182,7 +170,7 @@ function phoneIdentitySyncStatus(input) {
     };
 }
 function isPhoneInboxEnabled(identity) {
-    return identity?.inboxEnabled !== false;
+    return identity?.inboxEnabled === true;
 }
 function listPhoneInboxChannels(tenantId) {
     try {
@@ -214,42 +202,49 @@ function listPhoneInboxChannels(tenantId) {
 function applyLocalPhoneIdentities(tenantId, numbers) {
     return numbers.map((row) => {
         const identity = readPhoneIdentity(tenantId, row.phoneNumberId);
+        const nameSync = (0, meta_whatsapp_portfolio_map_1.resolvePhoneNameSync)({
+            verifiedName: row.verifiedName,
+            nameStatus: row.nameStatus,
+            newDisplayName: row.newDisplayName || identity?.name || null,
+            newNameStatus: row.newNameStatus,
+            localName: identity?.name || null,
+        });
+        const connected = (0, meta_whatsapp_portfolio_map_1.isMetaPhoneConnected)(row.metaStatus);
         if (!identity) {
             return {
                 ...row,
-                requestedName: null,
-                nameSyncStatus: null,
+                requestedName: nameSync.requestedName,
+                nameSyncStatus: nameSync.nameSyncStatus,
+                nameNeedsRegister: nameSync.nameNeedsRegister,
+                canActivate: !connected || nameSync.nameNeedsRegister,
                 photoSyncStatus: null,
                 profileSyncStatus: null,
-                inboxEnabled: true,
+                inboxEnabled: false,
             };
         }
         const sync = phoneIdentitySyncStatus({
-            localName: identity.name,
             localPhoto: Boolean(identity.photoExt),
             localDescription: String(identity.description || "").trim() || null,
-            metaVerifiedName: row.verifiedName,
-            metaProfilePictureUrl: row.profilePictureUrl,
             metaDescription: row.description,
             photoMetaApplied: identity.photoMetaApplied,
             profileMetaApplied: identity.profileMetaApplied,
         });
-        const nameApplied = sync.nameSyncStatus === "applied";
         const photoApplied = sync.photoSyncStatus === "applied";
         const profileApplied = sync.profileSyncStatus === "applied";
+        const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
         return {
             ...row,
-            requestedName: identity.name && !nameApplied ? identity.name : null,
-            verifiedName: nameApplied ? identity.name || row.verifiedName : row.verifiedName,
-            profilePictureUrl: photoApplied
-                ? localPhonePhotoUrl(row.phoneNumberId, identity) || row.profilePictureUrl
-                : row.profilePictureUrl,
+            requestedName: nameSync.requestedName,
+            verifiedName: row.verifiedName,
+            profilePictureUrl: localPhoto || null,
             vertical: profileApplied ? identity.vertical || row.vertical : row.vertical,
             description: profileApplied ? identity.description ?? row.description : row.description,
             address: profileApplied ? identity.address ?? row.address : row.address,
             email: profileApplied ? identity.email || row.email : row.email,
-            nameSyncStatus: sync.nameSyncStatus,
-            photoSyncStatus: sync.photoSyncStatus,
+            nameSyncStatus: nameSync.nameSyncStatus,
+            nameNeedsRegister: nameSync.nameNeedsRegister,
+            canActivate: !connected || nameSync.nameNeedsRegister,
+            photoSyncStatus: photoApplied || localPhoto ? (photoApplied ? "applied" : sync.photoSyncStatus) : null,
             profileSyncStatus: sync.profileSyncStatus,
             inboxEnabled: isPhoneInboxEnabled(identity),
         };

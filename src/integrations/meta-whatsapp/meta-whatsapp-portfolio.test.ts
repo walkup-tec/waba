@@ -7,15 +7,17 @@ import {
   mapMetaBusinessToPortfolio,
   mapMetaPhoneListToPortfolioNumbers,
   mapMetaPhoneToPortfolioNumber,
+  resolvePhoneNameSync,
+  META_PHONE_NUMBER_LIST_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
 import { encryptMetaToken, decryptMetaToken } from "./meta-token-crypto";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
-import { parseDisplayName, parseProfilePhoto, parseVertical, parseDescription, parseEmail, mapWhatsappBusinessProfile } from "./meta-whatsapp-phone-profile";
+import { parseDisplayName, parseProfilePhoto, parseVertical, parseDescription, parseEmail, mapWhatsappBusinessProfile, fetchHttpsProfileImage } from "./meta-whatsapp-phone-profile";
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
-import { applyLocalPhoneIdentities, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
+import { applyLocalPhoneIdentities, listPhoneInboxChannels, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
 
 describe("meta portfolio mapper", () => {
   it("mapeia card do portfólio sem vazar token", () => {
@@ -92,10 +94,11 @@ describe("meta portfolio mapper", () => {
     assert.equal(row?.uiStatus, "ativo");
     assert.equal(row?.dispatchStatus, "livre");
     assert.equal(row?.canActivate, false);
-    assert.equal(row?.nameSyncStatus, null);
+    assert.equal(row?.nameNeedsRegister, false);
+    assert.equal(row?.nameSyncStatus, "applied");
     assert.equal(row?.photoSyncStatus, null);
     assert.equal(row?.profileSyncStatus, null);
-    assert.equal(row?.inboxEnabled, true);
+    assert.equal(row?.inboxEnabled, false);
   });
 
   it("PENDING fica pendente e pode ativar", () => {
@@ -107,6 +110,50 @@ describe("meta portfolio mapper", () => {
     });
     assert.equal(row?.uiStatus, "pendente");
     assert.equal(row?.canActivate, true);
+  });
+
+  it("lê new_display_name e exige PIN quando a Meta já aprovou", () => {
+    const pending = mapMetaPhoneToPortfolioNumber({
+      id: "phone-1",
+      verified_name: "Mms Marketing E Sistemas Digitais Ltda",
+      status: "CONNECTED",
+      new_display_name: "Drax Sistema",
+      new_name_status: "PENDING_REVIEW",
+    });
+    assert.equal(pending?.verifiedName, "Mms Marketing E Sistemas Digitais Ltda");
+    assert.equal(pending?.requestedName, "Drax Sistema");
+    assert.equal(pending?.nameSyncStatus, "pending");
+    assert.equal(pending?.nameNeedsRegister, false);
+    assert.equal(pending?.canActivate, false);
+
+    const ready = mapMetaPhoneToPortfolioNumber({
+      id: "phone-1",
+      verified_name: "Mms Marketing E Sistemas Digitais Ltda",
+      status: "CONNECTED",
+      new_display_name: "Drax Sistema",
+      new_name_status: "AVAILABLE_WITHOUT_REVIEW",
+    });
+    assert.equal(ready?.nameSyncStatus, "ready");
+    assert.equal(ready?.nameNeedsRegister, true);
+    assert.equal(ready?.canActivate, true);
+    assert.equal(ready?.requestedName, "Drax Sistema");
+
+    assert.equal(
+      resolvePhoneNameSync({
+        verifiedName: "Drax Sistema",
+        newDisplayName: "Drax Sistema",
+        newNameStatus: "APPROVED",
+      }).nameSyncStatus,
+      "applied",
+    );
+    assert.equal(
+      resolvePhoneNameSync({
+        verifiedName: "Antigo",
+        newDisplayName: "Novo",
+        newNameStatus: "DECLINED",
+      }).nameSyncStatus,
+      "declined",
+    );
   });
 
   it("marca em_disparo só quando o id está ocupado", () => {
@@ -178,6 +225,10 @@ describe("meta portfolio mapper", () => {
         uiStatus: "ativo",
         dispatchStatus: "livre",
         canActivate: false,
+        nameNeedsRegister: false,
+        nameStatus: null,
+        newDisplayName: null,
+        newNameStatus: "PENDING_REVIEW",
         profilePictureUrl: null,
         vertical: null,
         description: null,
@@ -194,7 +245,8 @@ describe("meta portfolio mapper", () => {
     assert.equal(pending[0]?.requestedName, "Drax");
     assert.equal(pending[0]?.nameSyncStatus, "pending");
     assert.equal(pending[0]?.photoSyncStatus, "pending");
-    assert.equal(pending[0]?.inboxEnabled, true);
+    assert.match(String(pending[0]?.profilePictureUrl || ""), /\/integrations\/meta\/whatsapp\/phone-numbers\/photo/);
+    assert.equal(pending[0]?.inboxEnabled, false);
 
     writePhoneIdentity(tenantId, "phone-1", { inboxEnabled: false });
     assert.equal(applyLocalPhoneIdentities(tenantId, pending)[0]?.inboxEnabled, false);
@@ -213,6 +265,7 @@ describe("meta portfolio mapper", () => {
     ]);
     assert.equal(posted[0]?.photoSyncStatus, "applied");
     assert.equal(posted[0]?.nameSyncStatus, "pending");
+    assert.match(String(posted[0]?.profilePictureUrl || ""), /\/integrations\/meta\/whatsapp\/phone-numbers\/photo/);
 
     const applied = applyLocalPhoneIdentities(tenantId, [
       {
@@ -227,6 +280,7 @@ describe("meta portfolio mapper", () => {
     ]);
     assert.equal(applied[0]?.nameSyncStatus, "applied");
     assert.equal(applied[0]?.photoSyncStatus, "applied");
+    assert.match(String(applied[0]?.profilePictureUrl || ""), /\/integrations\/meta\/whatsapp\/phone-numbers\/photo/);
     purgePhoneIdentities(tenantId);
   });
 });
@@ -345,11 +399,18 @@ describe("meta portfolio service", () => {
     assert.equal(assets.portfolio?.primaryPageName, "Soma Promotora");
     assert.equal(assets.portfolio?.profilePictureUrl, "https://scontent.xx.fbcdn.net/v/walkup.png");
     assert.match(graphFields[0] || "", /profile_picture_uri/);
+    assert.match(graphFields[1] || "", /new_display_name/);
+    assert.equal(graphFields[1], META_PHONE_NUMBER_LIST_FIELDS);
     assert.equal(assets.numbers.length, 1);
     assert.equal(assets.numbers[0].uiStatus, "pendente");
     assert.equal(assets.numbers[0].dispatchStatus, "livre");
     assert.doesNotMatch(json, /EAAB-secret-token|access_token|accessToken/);
-    assert.deepEqual(graphCalls, ["1247508354180311", "waba-1/phone_numbers", "phone-1/whatsapp_business_profile"]);
+    assert.deepEqual(graphCalls, [
+      "1247508354180311",
+      "waba-1/phone_numbers",
+      "phone-1",
+      "phone-1/whatsapp_business_profile",
+    ]);
   });
 
   it("ativa número com PIN de 6 dígitos", async () => {
@@ -425,6 +486,55 @@ describe("meta portfolio service", () => {
     assert.equal(graphCalls, 0);
   });
 
+  it("liga o Inbox sem consultar a Graph", async () => {
+    let graphCalls = 0;
+    const service = new MetaWhatsappConnectionService(
+      { async findOpenByTenant() { return connectedRow(); } } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      (async () => {
+        graphCalls += 1;
+        return { ok: true, status: 200, json: {} };
+      }) as any,
+    );
+    const result = await service.setPhoneInboxFromAuth(auth, {
+      phoneNumberId: "phone-1",
+      enabled: true,
+      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Drax Sistema",
+    });
+    assert.equal(result.inboxEnabled, true);
+    assert.equal(result.phoneNumberId, "phone-1");
+    assert.equal(result.displayPhoneNumber, "+55 51 8200-1279");
+    assert.equal(result.channelName, "Drax Sistema");
+    assert.equal(graphCalls, 0);
+    assert.equal(listPhoneInboxChannels(tenantId)[0]?.displayPhoneNumber, "+55 51 8200-1279");
+    assert.equal(applyLocalPhoneIdentities(tenantId, [{
+      phoneNumberId: "phone-1",
+      displayPhoneNumber: "+55 51 8200-1279",
+      verifiedName: "Walkup",
+      qualityRating: null,
+      metaStatus: "CONNECTED",
+      codeVerificationStatus: "VERIFIED",
+      uiStatus: "ativo",
+      dispatchStatus: "livre",
+      canActivate: false,
+      nameNeedsRegister: false,
+      nameStatus: null,
+      newDisplayName: null,
+      newNameStatus: null,
+      profilePictureUrl: null,
+      vertical: null,
+      description: null,
+      address: null,
+      email: null,
+      requestedName: null,
+      nameSyncStatus: null,
+      photoSyncStatus: null,
+      profileSyncStatus: null,
+      inboxEnabled: true,
+    }])[0]?.inboxEnabled, true);
+  });
+
   it("pede novo nome de exibição na Meta", async () => {
     const posts: Array<{ path: string; query?: Record<string, string> }> = [];
     const graph = async (input: { path: string; method: string; query?: Record<string, string> }) => {
@@ -434,6 +544,19 @@ describe("meta portfolio service", () => {
       }
       if (input.path === "1247508354180311") {
         return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup" } };
+      }
+      if (input.path === "phone-1") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "phone-1",
+            verified_name: "Walkup",
+            name_status: "APPROVED",
+            new_display_name: "Soma Promotora",
+            new_name_status: "PENDING_REVIEW",
+          },
+        };
       }
       return {
         ok: true,
@@ -451,6 +574,7 @@ describe("meta portfolio service", () => {
       displayName: "Soma Promotora",
     });
     assert.equal(result.namePending, true);
+    assert.equal(result.nameNeedsRegister, false);
     assert.equal(result.nameUpdated, true);
     assert.equal(result.photoUpdated, false);
     assert.equal(result.numbers[0]?.verifiedName, "Walkup");
@@ -458,6 +582,61 @@ describe("meta portfolio service", () => {
     assert.equal(result.numbers[0]?.nameSyncStatus, "pending");
     assert.equal(posts[0]?.path, "phone-1");
     assert.equal(posts[0]?.query?.new_display_name, "Soma Promotora");
+  });
+
+  it("mostra PIN quando a Meta aprova o nome sem mudar o verified_name", async () => {
+    const graph = async (input: { path: string; method: string }) => {
+      if (input.method === "POST") {
+        return { ok: true, status: 200, json: { success: true } };
+      }
+      if (input.path === "1247508354180311") {
+        return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup" } };
+      }
+      if (input.path === "phone-1") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "phone-1",
+            verified_name: "Walkup",
+            name_status: "APPROVED",
+            new_display_name: "Drax Sistema",
+            new_name_status: "AVAILABLE_WITHOUT_REVIEW",
+          },
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: {
+          data: [
+            {
+              id: "phone-1",
+              status: "CONNECTED",
+              verified_name: "Walkup",
+              new_display_name: "Drax Sistema",
+              new_name_status: "AVAILABLE_WITHOUT_REVIEW",
+            },
+          ],
+        },
+      };
+    };
+    const service = new MetaWhatsappConnectionService(
+      { async findOpenByTenant() { return connectedRow(); } } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const result = await service.updatePhoneProfileFromAuth(auth, {
+      phoneNumberId: "phone-1",
+      displayName: "Drax Sistema",
+    });
+    assert.equal(result.namePending, false);
+    assert.equal(result.nameNeedsRegister, true);
+    assert.equal(result.numbers[0]?.nameSyncStatus, "ready");
+    assert.equal(result.numbers[0]?.nameNeedsRegister, true);
+    assert.equal(result.numbers[0]?.canActivate, true);
+    assert.equal(result.numbers[0]?.verifiedName, "Walkup");
+    assert.equal(result.numbers[0]?.requestedName, "Drax Sistema");
   });
 
   it("envia categoria e descrição do perfil para a Meta", async () => {
@@ -783,5 +962,18 @@ describe("meta graph json client", () => {
       fetchImpl: fetchImpl as typeof fetch,
     });
     assert.equal(contentType, "");
+  });
+
+  it("baixa a foto https da Meta para cache local", async () => {
+    const png =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const fetched = await fetchHttpsProfileImage("https://pps.whatsapp.net/v/pic.jpg", (async () => ({
+      ok: true,
+      headers: { get: (name: string) => (name.toLowerCase() === "content-type" ? "image/png" : null) },
+      arrayBuffer: async () => Buffer.from(png, "base64"),
+    })) as unknown as typeof fetch);
+    assert.equal(fetched?.ext, "png");
+    assert.ok(fetched && fetched.bytes.length > 0);
+    assert.equal(await fetchHttpsProfileImage("http://pps.whatsapp.net/v/pic.jpg"), null);
   });
 });

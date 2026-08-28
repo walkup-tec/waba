@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { MetaConversationRecord, MetaMessageRecord } from "./meta-whatsapp-messaging.types";
 import { MetaWhatsappInboxService } from "./meta-whatsapp-inbox.service";
 import { MetaWhatsappMessagingService } from "./meta-whatsapp-messaging.service";
+import { MetaWhatsappWebhookInboxService } from "./meta-whatsapp-webhook-inbox.service";
 import { MetaCloudProvider } from "../whatsapp/meta-cloud-provider";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
 import { stripMetaSecrets } from "./meta-whatsapp-connection.service";
@@ -109,6 +110,18 @@ class FakeConnections {
   async findConnectedByTenant(tenantId: string) {
     return this.rows.find((row) => row.tenantId === tenantId && row.status === "connected") || null;
   }
+  async findOpenByTenant(tenantId: string) {
+    return (
+      this.rows.find(
+        (row) =>
+          row.tenantId === tenantId &&
+          !row.disconnectedAt &&
+          (row.status === "pending_token" ||
+            row.status === "pending_confirmation" ||
+            row.status === "connected"),
+      ) || null
+    );
+  }
   async findByIdForTenant(tenantId: string, id: string) {
     return this.rows.find((row) => row.tenantId === tenantId && row.id === id) || null;
   }
@@ -132,6 +145,7 @@ class FakeConversations {
     filter: string;
     assignedTo?: string | null;
     phoneNumberId?: string | null;
+    includePhoneNumberIds?: string[];
     excludePhoneNumberIds?: string[];
     limit: number;
     offset: number;
@@ -146,6 +160,9 @@ class FakeConversations {
     if (input.filter === "mine") rows = rows.filter((row) => row.assignedTo === input.assignedTo);
     if (input.phoneNumberId) {
       rows = rows.filter((row) => row.phoneNumberId === input.phoneNumberId);
+    } else if (input.includePhoneNumberIds) {
+      const allowed = new Set(input.includePhoneNumberIds);
+      rows = rows.filter((row) => Boolean(row.phoneNumberId) && allowed.has(row.phoneNumberId as string));
     } else if (input.excludePhoneNumberIds && input.excludePhoneNumberIds.length) {
       const blocked = new Set(input.excludePhoneNumberIds);
       rows = rows.filter((row) => !row.phoneNumberId || !blocked.has(row.phoneNumberId));
@@ -179,24 +196,41 @@ class FakeConversations {
   async upsertForContact(input: {
     tenantId: string;
     connectionId: string;
+    phoneNumberId?: string | null;
     contactWaId: string;
+    contactPhone?: string | null;
+    contactName?: string | null;
+    inbound?: boolean;
+    outbound?: boolean;
     atIso: string;
     lastMessagePreview?: string | null;
   }) {
     const existing = await this.findByTenantConnectionContact(input.tenantId, input.connectionId, input.contactWaId);
     if (existing) {
       existing.lastMessageAt = input.atIso;
+      if (input.phoneNumberId) existing.phoneNumberId = input.phoneNumberId;
       if (input.lastMessagePreview !== undefined) existing.lastMessagePreview = input.lastMessagePreview || null;
+      if (input.inbound) {
+        existing.lastInboundAt = input.atIso;
+        existing.unreadCount += 1;
+      }
+      if (input.outbound) existing.lastOutboundAt = input.atIso;
+      if (input.contactName) existing.contactName = input.contactName;
       return { created: false, record: existing };
     }
     const record = conv({
       id: `conv-${this.rows.length + 1}`,
       tenantId: input.tenantId,
       connectionId: input.connectionId,
+      phoneNumberId: input.phoneNumberId || null,
       contactWaId: input.contactWaId,
+      contactPhone: input.contactPhone || input.contactWaId,
+      contactName: input.contactName || null,
       lastMessagePreview: input.lastMessagePreview || null,
       lastMessageAt: input.atIso,
-      unreadCount: 0,
+      lastInboundAt: input.inbound ? input.atIso : null,
+      lastOutboundAt: input.outbound ? input.atIso : null,
+      unreadCount: input.inbound ? 1 : 0,
     });
     this.rows.push(record);
     return { created: true, record };
@@ -205,6 +239,9 @@ class FakeConversations {
 
 class FakeMessages {
   rows: MetaMessageRecord[] = [];
+  async findByTenantWamid(tenantId: string, wamid: string) {
+    return this.rows.find((row) => row.tenantId === tenantId && row.wamid === wamid) || null;
+  }
   async listByConversation(tenantId: string, conversationId: string, limit: number) {
     return this.rows
       .filter((row) => row.tenantId === tenantId && row.conversationId === conversationId)
@@ -250,6 +287,14 @@ function inboxOf(connections: FakeConnections, conversations: FakeConversations,
   );
 }
 
+function enableInbox(phoneNumberId = "phone-a") {
+  writePhoneIdentity(TENANT_A, phoneNumberId, {
+    inboxEnabled: true,
+    channelName: "Loja",
+    displayPhoneNumber: "5551999000000",
+  });
+}
+
 describe("fase 8 janela", () => {
   it("janela open / closed / unknown", () => {
     const open = resolveCustomerCareWindow({ lastInboundAt: new Date().toISOString() });
@@ -264,6 +309,9 @@ describe("fase 8 janela", () => {
 });
 
 describe("fase 8 listagem e isolamento", () => {
+  beforeEach(() => enableInbox());
+  afterEach(() => purgePhoneIdentities(TENANT_A));
+
   it("lista conversas do tenant ordered e pagina", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow());
@@ -305,6 +353,8 @@ describe("fase 8 listagem e isolamento", () => {
 });
 
 describe("fase 8 histórico unread status assign", () => {
+  beforeEach(() => enableInbox());
+  afterEach(() => purgePhoneIdentities(TENANT_A));
   it("histórico só do tenant e DTO sem token", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow());
@@ -357,6 +407,8 @@ describe("fase 8 histórico unread status assign", () => {
 });
 
 describe("fase 8 envio", () => {
+  beforeEach(() => enableInbox());
+  afterEach(() => purgePhoneIdentities(TENANT_A));
   it("resposta texto reutiliza messaging e aparece no histórico", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow());
@@ -427,13 +479,18 @@ describe("fase 8 DTO público", () => {
 });
 
 describe("fase 8 canais do Inbox", () => {
-  it("lista o canal do número e oculta conversa com Inbox desligado", async () => {
+  it("só incorpora o número no Inbox depois de ligar o switch", async () => {
     purgePhoneIdentities(TENANT_A);
     const connections = new FakeConnections();
     connections.rows.push(connectedRow());
     const conversations = new FakeConversations();
     conversations.rows.push(conv());
     const service = inboxOf(connections, conversations, new FakeMessages());
+    const off = await service.listConversations(auth(EMAIL_A), {});
+    assert.equal(off.conversations.length, 0);
+    assert.equal(off.channels.length, 0);
+
+    writePhoneIdentity(TENANT_A, "phone-a", { inboxEnabled: true, channelName: "Drax" });
     const listed = await service.listConversations(auth(EMAIL_A), {});
     assert.equal(listed.conversations[0]?.phoneNumberId, "phone-a");
     assert.equal(listed.conversations[0]?.agentKind, "bot");
@@ -441,9 +498,125 @@ describe("fase 8 canais do Inbox", () => {
       listed.channels.some((item: { phoneNumberId: string }) => item.phoneNumberId === "phone-a"),
       true,
     );
+
     writePhoneIdentity(TENANT_A, "phone-a", { inboxEnabled: false, channelName: "Drax" });
     const hidden = await service.listConversations(auth(EMAIL_A), {});
     assert.equal(hidden.conversations.length, 0);
+    assert.equal(hidden.channels.length, 0);
+    purgePhoneIdentities(TENANT_A);
+  });
+
+  it("WABA pending_confirmation ainda serve o Inbox se o switch estiver ligado", async () => {
+    purgePhoneIdentities(TENANT_A);
+    writePhoneIdentity(TENANT_A, "phone-a", {
+      inboxEnabled: true,
+      channelName: "Drax",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow({ status: "pending_confirmation" }));
+    const conversations = new FakeConversations();
+    conversations.rows.push(conv());
+    const service = inboxOf(connections, conversations, new FakeMessages());
+    const listed = await service.listConversations(auth(EMAIL_A), {});
+    assert.equal(listed.connected, true);
+    assert.equal(listed.channels[0]?.displayPhoneNumber, "+55 51 8200-1279");
+    assert.equal(listed.conversations.length, 1);
+    purgePhoneIdentities(TENANT_A);
+  });
+
+  it("ponta a ponta: switch cinza, ligar, receber webhook, listar e responder", async () => {
+    purgePhoneIdentities(TENANT_A);
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const conversations = new FakeConversations();
+    const messages = new FakeMessages();
+    const provider = new MetaCloudProvider(connections as any, async () => graphOk("wamid.E2E"), () => "tok");
+    const messaging = new MetaWhatsappMessagingService(
+      provider,
+      conversations as any,
+      messages as any,
+      { assertSendable: async () => ({ status: "APPROVED" }) } as any,
+    );
+    const inbox = inboxOf(connections, conversations, messages, messaging);
+    const webhookInbox = new MetaWhatsappWebhookInboxService(conversations as any, messages as any);
+
+    const off = await inbox.listConversations(auth(EMAIL_A), {});
+    assert.equal(off.conversations.length, 0);
+    assert.equal(off.channels.length, 0);
+
+    await webhookInbox.persistInbound({
+      connection: connectedRow(),
+      event: {
+        eventKey: "msg:skip",
+        eventType: "messages",
+        wabaId: "waba-a",
+        phoneNumberId: "phone-a",
+        messageId: "wamid.SKIP",
+        status: null,
+        timestamp: "1710000000",
+        recipientId: null,
+        conversationId: null,
+        pricingCategory: null,
+        errorCode: null,
+        qualityRating: null,
+        verifiedName: null,
+        messageType: "text",
+        fromWaId: "5551999111111",
+        textContent: "antes de ligar",
+        contactName: "Ana",
+      } as any,
+    });
+    assert.equal(conversations.rows.length, 0);
+
+    writePhoneIdentity(TENANT_A, "phone-a", {
+      inboxEnabled: true,
+      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+
+    const labSend = await messaging.sendFromAuth(auth(EMAIL_A), {
+      to: "5551999111111",
+      type: "text",
+      text: "mensagem teste",
+    });
+    assert.ok(labSend.messageId);
+    const afterSend = await inbox.listConversations(auth(EMAIL_A), {});
+    assert.equal(afterSend.conversations.length, 1);
+    assert.equal(afterSend.channels[0]?.displayPhoneNumber, "+55 51 8200-1279");
+    assert.equal(afterSend.channels[0]?.name, "Drax Sistema");
+    assert.match(String(afterSend.conversations[0]?.channelPhone || ""), /8200-1279/);
+
+    await webhookInbox.persistInbound({
+      connection: connectedRow(),
+      event: {
+        eventKey: "msg:in",
+        eventType: "messages",
+        wabaId: "waba-a",
+        phoneNumberId: "phone-a",
+        messageId: "wamid.IN",
+        status: null,
+        timestamp: "1710000001",
+        recipientId: null,
+        conversationId: null,
+        pricingCategory: null,
+        errorCode: null,
+        qualityRating: null,
+        verifiedName: null,
+        messageType: "text",
+        fromWaId: "5551999111111",
+        textContent: "resposta do cliente",
+        contactName: "Ana",
+      } as any,
+    });
+    const inbound = await inbox.listConversations(auth(EMAIL_A), {});
+    assert.equal(inbound.conversations[0]?.lastMessagePreview, "resposta do cliente");
+
+    const reply = await inbox.sendMessage(auth(EMAIL_A), inbound.conversations[0].id, {
+      type: "text",
+      text: "ok",
+    });
+    assert.equal(reply.messageId, "wamid.E2E");
     purgePhoneIdentities(TENANT_A);
   });
 });

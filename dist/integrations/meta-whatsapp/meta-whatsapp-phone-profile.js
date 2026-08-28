@@ -9,6 +9,7 @@ exports.parseEmail = parseEmail;
 exports.parseVertical = parseVertical;
 exports.mapWhatsappBusinessProfile = mapWhatsappBusinessProfile;
 exports.mapWhatsappBusinessProfilePicture = mapWhatsappBusinessProfilePicture;
+exports.fetchHttpsProfileImage = fetchHttpsProfileImage;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png"]);
 exports.META_WHATSAPP_VERTICALS = [
@@ -117,4 +118,42 @@ function mapWhatsappBusinessProfile(json) {
 }
 function mapWhatsappBusinessProfilePicture(json) {
     return mapWhatsappBusinessProfile(json).profilePictureUrl;
+}
+const PHOTO_FETCH_MS = 5000;
+async function fetchHttpsProfileImage(url, fetchImpl = fetch) {
+    const raw = String(url || "").trim();
+    if (!/^https:\/\//i.test(raw))
+        return null;
+    let parsed;
+    try {
+        parsed = new URL(raw);
+    }
+    catch {
+        return null;
+    }
+    if (parsed.protocol !== "https:")
+        return null;
+    try {
+        const response = await fetchImpl(parsed.toString(), {
+            method: "GET",
+            redirect: "follow",
+            signal: AbortSignal.timeout(PHOTO_FETCH_MS),
+        });
+        if (!response.ok)
+            return null;
+        const mime = String(response.headers.get("content-type") || "")
+            .split(";")[0]
+            .trim()
+            .toLowerCase();
+        if (!ALLOWED_MIME.has(mime))
+            return null;
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (!bytes.length || bytes.length > MAX_PHOTO_BYTES)
+            return null;
+        const ext = mime.includes("png") ? "png" : "jpg";
+        return { ext, bytes };
+    }
+    catch {
+        return null;
+    }
 }
