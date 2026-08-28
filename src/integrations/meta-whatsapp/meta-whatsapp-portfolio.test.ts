@@ -12,7 +12,7 @@ import { encryptMetaToken, decryptMetaToken } from "./meta-token-crypto";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
-import { parseDisplayName, parseProfilePhoto } from "./meta-whatsapp-phone-profile";
+import { parseDisplayName, parseProfilePhoto, parseVertical, parseDescription, parseEmail, mapWhatsappBusinessProfile } from "./meta-whatsapp-phone-profile";
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 import { purgePhoneIdentities } from "./meta-whatsapp-phone-identity.store";
@@ -126,6 +126,30 @@ describe("meta portfolio mapper", () => {
     const png =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
     assert.equal(parseProfilePhoto({ photoBase64: png, photoMime: "image/png" })?.mime, "image/png");
+    assert.equal(parseVertical("OTHER"), "OTHER");
+    assert.equal(parseVertical("nope"), null);
+    assert.equal(parseDescription("a".repeat(513)), null);
+    assert.equal(parseEmail("nao-email"), null);
+    assert.equal(parseEmail("contato@drax.com"), "contato@drax.com");
+  });
+
+  it("mapeia o perfil comercial do WhatsApp", () => {
+    const mapped = mapWhatsappBusinessProfile({
+      data: [
+        {
+          profile_picture_url: "https://pps.whatsapp.net/v/pic.jpg",
+          vertical: "OTHER",
+          description: "Empresa de sistemas",
+          address: "Rua 1",
+          email: "contato@drax.com",
+        },
+      ],
+    });
+    assert.equal(mapped.profilePictureUrl, "https://pps.whatsapp.net/v/pic.jpg");
+    assert.equal(mapped.vertical, "OTHER");
+    assert.equal(mapped.description, "Empresa de sistemas");
+    assert.equal(mapped.address, "Rua 1");
+    assert.equal(mapped.email, "contato@drax.com");
   });
 });
 
@@ -247,7 +271,7 @@ describe("meta portfolio service", () => {
     assert.equal(assets.numbers[0].uiStatus, "pendente");
     assert.equal(assets.numbers[0].dispatchStatus, "livre");
     assert.doesNotMatch(json, /EAAB-secret-token|access_token|accessToken/);
-    assert.deepEqual(graphCalls, ["1247508354180311", "waba-1/phone_numbers"]);
+    assert.deepEqual(graphCalls, ["1247508354180311", "waba-1/phone_numbers", "phone-1/whatsapp_business_profile"]);
   });
 
   it("ativa número com PIN de 6 dígitos", async () => {
@@ -356,6 +380,51 @@ describe("meta portfolio service", () => {
     assert.equal(posts[0]?.query?.new_display_name, "Soma Promotora");
   });
 
+  it("envia categoria e descrição do perfil para a Meta", async () => {
+    const posts: Array<{ path: string; body?: Record<string, unknown> }> = [];
+    const graph = async (input: { path: string; method: string; body?: Record<string, unknown> }) => {
+      if (input.method === "POST") {
+        posts.push({ path: input.path, body: input.body });
+        return { ok: true, status: 200, json: { success: true } };
+      }
+      if (input.path === "phone-1/whatsapp_business_profile") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ vertical: "OTHER", description: "Antiga", profile_picture_url: "https://pps.whatsapp.net/v/a.jpg" }] },
+        };
+      }
+      if (input.path === "1247508354180311") {
+        return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup" } };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: { data: [{ id: "phone-1", status: "CONNECTED", verified_name: "Walkup" }] },
+      };
+    };
+    const service = new MetaWhatsappConnectionService(
+      { async findOpenByTenant() { return connectedRow(); } } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const result = await service.updatePhoneProfileFromAuth(auth, {
+      phoneNumberId: "phone-1",
+      vertical: "OTHER",
+      description: "Sistemas digitais",
+      address: "Porto Alegre",
+      email: "contato@mms.com.br",
+    });
+    assert.equal(result.profileUpdated, true);
+    assert.equal(result.numbers[0]?.description, "Sistemas digitais");
+    assert.equal(result.numbers[0]?.vertical, "OTHER");
+    assert.equal(posts[0]?.path, "phone-1/whatsapp_business_profile");
+    assert.equal(posts[0]?.body?.messaging_product, "whatsapp");
+    assert.equal(posts[0]?.body?.vertical, "OTHER");
+    assert.equal(posts[0]?.body?.description, "Sistemas digitais");
+    assert.equal(posts[0]?.body?.email, "contato@mms.com.br");
+  });
+
   it("envia foto pelo handle do upload resumable", async () => {
     const posts: Array<{ path: string; body?: Record<string, unknown> }> = [];
     const graph = async (input: { path: string; method: string; body?: Record<string, unknown> }) => {
@@ -430,16 +499,16 @@ describe("meta portfolio service", () => {
     assert.equal(result.photoUpdated, true);
     assert.equal(result.numbers[0]?.verifiedName, "Soma Promotora");
     assert.deepEqual(posts, ["phone-1"]);
-    assert.match(String(result.warning || ""), /foto/i);
+    assert.match(String(result.warning || ""), /perfil|foto/i);
   });
 
   it("grava a foto no card mesmo com número pendente", async () => {
     const png =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
     let profilePosts = 0;
-    const graph = async (input: { path: string }) => {
+    const graph = async (input: { path: string; method?: string }) => {
       if (input.path === "phone-1/whatsapp_business_profile") {
-        profilePosts += 1;
+        if (input.method === "POST") profilePosts += 1;
         return { ok: true, status: 200, json: { success: true } };
       }
       if (input.path === "1247508354180311") {

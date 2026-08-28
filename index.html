@@ -3328,13 +3328,38 @@
           border: 1px solid rgba(148, 163, 184, 0.18);
           background: rgba(15, 23, 42, 0.55);
         }
-        .meta-number-card.has-photo { grid-template-columns: 48px minmax(0, 1fr) auto; }
+        .meta-number-identity {
+          display: grid;
+          grid-template-columns: 48px minmax(0, 1fr);
+          gap: 10px;
+          align-items: start;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: inherit;
+          text-align: left;
+          cursor: pointer;
+        }
+        .meta-number-identity:hover .meta-number-name,
+        .meta-number-identity:focus-visible .meta-number-name {
+          color: #e2e8f0;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
         .meta-number-photo {
           width: 48px;
           height: 48px;
           border-radius: 12px;
           object-fit: cover;
           background: #020617;
+          border: 1px solid rgba(148, 163, 184, 0.22);
+        }
+        .meta-number-photo.is-fallback {
+          object-fit: contain;
+          padding: 8px;
+          background: #000;
         }
         .meta-number-card strong { display: block; font-size: 15px; }
         .meta-number-card .meta-number-name { display: block; margin-top: 4px; font-size: 12px; color: rgba(226, 232, 240, 0.62); }
@@ -3372,7 +3397,9 @@
         }
         .meta-edit-modal[hidden] { display: none; }
         .meta-edit-modal-card {
-          width: min(440px, 100%);
+          width: min(520px, 100%);
+          max-height: 90vh;
+          overflow: auto;
           border-radius: 16px;
           border: 1px solid rgba(148, 163, 184, 0.22);
           background: #0f172a;
@@ -3380,13 +3407,20 @@
         }
         .meta-edit-modal-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
         .meta-edit-modal-card label { display: grid; gap: 6px; margin: 12px 0 0; font-size: 13px; color: rgba(226, 232, 240, 0.78); }
-        .meta-edit-modal-card input[type="text"] {
+        .meta-edit-modal-card input[type="text"],
+        .meta-edit-modal-card input[type="email"],
+        .meta-edit-modal-card select,
+        .meta-edit-modal-card textarea {
           border: 1px solid rgba(148, 163, 184, 0.28);
           border-radius: 10px;
           background: rgba(2, 6, 23, 0.55);
           color: #e2e8f0;
           padding: 10px 12px;
+          font: inherit;
         }
+        .meta-edit-modal-card textarea { min-height: 88px; resize: vertical; }
+        .meta-edit-count { font-size: 11px; color: rgba(148, 163, 184, 0.85); text-align: right; }
+        .meta-edit-biz[hidden] { display: none; }
         .meta-edit-preview {
           width: 72px;
           height: 72px;
@@ -3398,7 +3432,6 @@
         .meta-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
         @media (max-width: 640px) {
           .meta-number-card { grid-template-columns: 1fr; }
-          .meta-number-card.has-photo { grid-template-columns: 48px minmax(0, 1fr); }
           .meta-portfolio-card { flex-wrap: wrap; }
         }
         .meta-tpl-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-bottom:16px; }
@@ -20477,6 +20510,43 @@
                       <input id="meta-tp-edit-photo" type="file" accept="image/png,image/jpeg" />
                     </label>
                     <img id="meta-tp-edit-preview" class="meta-edit-preview" alt="Prévia da foto" hidden />
+                    <div id="meta-tp-edit-biz" class="meta-edit-biz" hidden>
+                      <label>Categoria
+                        <select id="meta-tp-edit-vertical">
+                          <option value="">Selecionar</option>
+                          <option value="OTHER">Outro</option>
+                          <option value="PROF_SERVICES">Serviços profissionais</option>
+                          <option value="RETAIL">Compras e varejo</option>
+                          <option value="RESTAURANT">Restaurante</option>
+                          <option value="BEAUTY">Beleza, spa e salão</option>
+                          <option value="HEALTH">Saúde e medicina</option>
+                          <option value="EDU">Educação</option>
+                          <option value="FINANCE">Finanças e bancos</option>
+                          <option value="AUTO">Automotivo</option>
+                          <option value="APPAREL">Roupas e vestuário</option>
+                          <option value="ENTERTAIN">Entretenimento</option>
+                          <option value="EVENT_PLAN">Eventos e serviços</option>
+                          <option value="GROCERY">Alimentos e mercearia</option>
+                          <option value="GOVT">Serviço público</option>
+                          <option value="HOTEL">Hotel e hospedagem</option>
+                          <option value="NONPROFIT">Organização sem fins lucrativos</option>
+                          <option value="TRAVEL">Viagem e transporte</option>
+                          <option value="ALCOHOL">Bebidas alcoólicas</option>
+                        </select>
+                      </label>
+                      <label>Descrição
+                        <textarea id="meta-tp-edit-description" maxlength="512" placeholder="Descrição da empresa"></textarea>
+                        <span id="meta-tp-edit-description-count" class="meta-edit-count">0/512</span>
+                      </label>
+                      <label>Endereço
+                        <input id="meta-tp-edit-address" type="text" maxlength="256" placeholder="Insira o endereço comercial" autocomplete="street-address" />
+                        <span id="meta-tp-edit-address-count" class="meta-edit-count">0/256</span>
+                      </label>
+                      <label>E-mail
+                        <input id="meta-tp-edit-email" type="email" maxlength="128" placeholder="Insira o e-mail comercial" autocomplete="email" />
+                        <span id="meta-tp-edit-email-count" class="meta-edit-count">0/128</span>
+                      </label>
+                    </div>
                     <p id="meta-tp-edit-status" class="muted" style="margin:10px 0 0;" role="status"></p>
                     <div class="meta-edit-actions">
                       <button type="button" class="instance-action-btn btn-refresh enabled" id="meta-tp-edit-cancel">Cancelar</button>
@@ -34916,6 +34986,7 @@
         savedBusinessId: "",
         savedWabaId: "",
         portfolioPrimaryPageId: "",
+        numbers: [],
         finishEvent: "",
         advancing: false,
         addNumber: false,
@@ -34994,6 +35065,7 @@
         const empty = document.getElementById("meta-tp-numbers-empty");
         const portfolio = assets && assets.portfolio;
         const numbers = Array.isArray(assets && assets.numbers) ? assets.numbers : [];
+        metaTpSession.numbers = numbers;
         if (!section) return;
         if (!portfolio || !portfolio.id) {
           section.hidden = true;
@@ -35047,9 +35119,15 @@
               : /^https:\/\//i.test(photoUrl)
                 ? photoUrl
                 : "";
-            const avatar = safePhoto
-              ? '<img class="meta-number-photo" alt="" src="' + metaTpEsc(safePhoto) + '" />'
-              : "";
+            const photoSrc = safePhoto || resolveWabaPublicPath(META_PORTFOLIO_FALLBACK_LOGO);
+            const avatar =
+              '<img class="meta-number-photo' +
+              (safePhoto ? "" : " is-fallback") +
+              '" alt="' +
+              verified +
+              '" src="' +
+              metaTpEsc(photoSrc) +
+              '" />';
             const ativo = item.uiStatus === "ativo";
             const busy = item.dispatchStatus === "em_disparo";
             const statusChip = ativo
@@ -35068,26 +35146,26 @@
                 id +
                 '">Ativar número</button></div>';
             return (
-              '<article class="meta-number-card' +
-              (safePhoto ? " has-photo" : "") +
+              '<article class="meta-number-card">' +
+              '<button type="button" class="meta-number-identity" data-meta-edit="' +
+              id +
+              '" data-meta-edit-name="' +
+              verified +
+              '" data-meta-edit-phone="' +
+              phone +
+              '" aria-label="Editar perfil de ' +
+              verified +
               '">' +
               avatar +
-              "<div><strong>" +
+              "<span><strong>" +
               phone +
               '</strong><span class="meta-number-name">' +
               verified +
               '</span><div class="meta-number-badges">' +
               statusChip +
               dispatchChip +
-              "</div></div>" +
+              "</div></span></button>" +
               '<div class="meta-number-actions">' +
-              '<button type="button" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit" data-meta-edit="' +
-              id +
-              '" data-meta-edit-name="' +
-              verified +
-              '" data-meta-edit-phone="' +
-              phone +
-              '">Editar</button>' +
               activate +
               "</div></article>"
             );
@@ -35384,10 +35462,12 @@
         if (hintEl) {
           hintEl.textContent = isPortfolio
             ? "O card do Laboratório atualiza na hora. A Meta só replica o nome se o token for admin do Business, e a foto só se houver uma Página do Facebook."
-            : "O card do Laboratório atualiza na hora. A Meta só replica o nome após aprovação (e um novo PIN). A foto na Meta só entra se o número estiver Ativo.";
+            : "Clique na logo ou no nome para editar. A Drax envia à Meta o nome (aprovação + PIN), a foto e as informações da empresa se o número estiver Ativo.";
         }
         if (file) file.disabled = false;
         if (nameEl) nameEl.value = name || "";
+        const biz = document.getElementById("meta-tp-edit-biz");
+        if (biz) biz.hidden = isPortfolio;
       }
 
       function metaTpCloseEditNumber() {
@@ -35411,16 +35491,41 @@
         metaTpEditStatus("");
       }
 
+      function metaTpFillCount(id, countId, max) {
+        const el = document.getElementById(id);
+        const count = document.getElementById(countId);
+        const len = String((el && el.value) || "").length;
+        if (count) count.textContent = len + "/" + max;
+      }
+
+      function metaTpFillBizFields(row) {
+        const verticalEl = document.getElementById("meta-tp-edit-vertical");
+        const descEl = document.getElementById("meta-tp-edit-description");
+        const addrEl = document.getElementById("meta-tp-edit-address");
+        const emailEl = document.getElementById("meta-tp-edit-email");
+        if (verticalEl) verticalEl.value = String((row && row.vertical) || "");
+        if (descEl) descEl.value = String((row && row.description) || "");
+        if (addrEl) addrEl.value = String((row && row.address) || "");
+        if (emailEl) emailEl.value = String((row && row.email) || "");
+        metaTpFillCount("meta-tp-edit-description", "meta-tp-edit-description-count", 512);
+        metaTpFillCount("meta-tp-edit-address", "meta-tp-edit-address-count", 256);
+        metaTpFillCount("meta-tp-edit-email", "meta-tp-edit-email-count", 128);
+      }
+
       function metaTpOpenEditNumber(phoneNumberId, phone, name) {
         metaTpEditState.kind = "number";
         metaTpEditState.phoneNumberId = String(phoneNumberId || "").trim();
         metaTpEditState.originalName = String(name && name !== "Sem nome de exibição" ? name : "").trim();
         metaTpEditState.photoBase64 = "";
         metaTpEditState.photoMime = "";
+        const row = (metaTpSession.numbers || []).find(function (item) {
+          return String(item.phoneNumberId) === metaTpEditState.phoneNumberId;
+        }) || {};
         const modal = document.getElementById("meta-tp-edit-modal");
         const file = document.getElementById("meta-tp-edit-photo");
         const preview = document.getElementById("meta-tp-edit-preview");
         metaTpSetEditCopy("number", phone || "", metaTpEditState.originalName);
+        metaTpFillBizFields(row);
         if (file) file.value = "";
         if (preview) {
           preview.removeAttribute("src");
@@ -35446,6 +35551,7 @@
         const file = document.getElementById("meta-tp-edit-photo");
         const preview = document.getElementById("meta-tp-edit-preview");
         metaTpSetEditCopy("portfolio", id ? "ID " + id : "", name);
+        metaTpFillBizFields({});
         if (file) file.value = "";
         if (preview) {
           preview.removeAttribute("src");
@@ -35463,9 +35569,14 @@
         const nameEl = document.getElementById("meta-tp-edit-name");
         const displayName = String((nameEl && nameEl.value) || "").trim();
         const nameChanged = Boolean(displayName && displayName !== metaTpEditState.originalName);
+        const vertical = String((document.getElementById("meta-tp-edit-vertical") || {}).value || "").trim();
+        const description = String((document.getElementById("meta-tp-edit-description") || {}).value || "").trim();
+        const address = String((document.getElementById("meta-tp-edit-address") || {}).value || "").trim();
+        const email = String((document.getElementById("meta-tp-edit-email") || {}).value || "").trim();
+        const bizChanged = !isPortfolio && Boolean(vertical || description || address || email);
         if (!isPortfolio && !phoneNumberId) return false;
-        if (!nameChanged && !metaTpEditState.photoBase64) {
-          metaTpEditStatus("Altere o nome ou escolha uma foto.");
+        if (!nameChanged && !metaTpEditState.photoBase64 && !bizChanged) {
+          metaTpEditStatus("Altere o nome, a foto ou as informações da empresa.");
           return false;
         }
         if (nameChanged && displayName.length < 3) {
@@ -35487,6 +35598,10 @@
               displayName: nameChanged ? displayName : "",
               photoBase64: metaTpEditState.photoBase64,
               photoMime: metaTpEditState.photoMime,
+              vertical: vertical,
+              description: description,
+              address: address,
+              email: email,
             };
         const { response, payload } = await metaTpFetchJson(path, {
           method: "POST",
@@ -35500,6 +35615,7 @@
         if (payload.photoUpdated) parts.push("foto atualizada");
         if (payload.nameUpdated) parts.push("nome atualizado");
         if (payload.namePending) parts.push("nome enviado para aprovação da Meta");
+        if (payload.profileUpdated) parts.push("perfil enviado à Meta");
         if (payload.warning) parts.push(String(payload.warning));
         metaTpSetStatus(parts.length ? (isPortfolio ? "Portfólio: " : "Número: ") + parts.join(" · ") : "Perfil atualizado.");
         metaTpRenderPortfolio(payload);
@@ -35550,6 +35666,13 @@
         }
         if (input) input.value = "";
         window.wabaActivateMetaWhatsappNumber(phoneNumberId, pin);
+      });
+
+      window.addEventListener("input", function (event) {
+        const id = event.target && event.target.id;
+        if (id === "meta-tp-edit-description") metaTpFillCount("meta-tp-edit-description", "meta-tp-edit-description-count", 512);
+        if (id === "meta-tp-edit-address") metaTpFillCount("meta-tp-edit-address", "meta-tp-edit-address-count", 256);
+        if (id === "meta-tp-edit-email") metaTpFillCount("meta-tp-edit-email", "meta-tp-edit-email-count", 128);
       });
 
       window.addEventListener("change", function (event) {

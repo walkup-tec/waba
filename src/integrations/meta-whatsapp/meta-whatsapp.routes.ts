@@ -233,6 +233,10 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
         displayName: String(req.body?.displayName || req.body?.display_name || "").trim(),
         photoBase64: String(req.body?.photoBase64 || req.body?.photo_base64 || "").trim(),
         photoMime: String(req.body?.photoMime || req.body?.photo_mime || "").trim(),
+        vertical: String(req.body?.vertical || "").trim(),
+        description: String(req.body?.description || "").trim(),
+        address: String(req.body?.address || "").trim(),
+        email: String(req.body?.email || "").trim(),
       });
       return sendPublic(res, 200, { ok: true, ...assets });
     } catch (error) {

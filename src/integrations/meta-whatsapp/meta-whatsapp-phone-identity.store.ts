@@ -10,6 +10,10 @@ const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
 export type MetaPhoneIdentity = {
   name: string | null;
   photoExt: "png" | "jpg" | null;
+  vertical: string | null;
+  description: string | null;
+  address: string | null;
+  email: string | null;
   updatedAt: string;
 };
 
@@ -49,8 +53,12 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
     const row = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
     const photoExt = row.photoExt === "png" || row.photoExt === "jpg" ? row.photoExt : null;
     const name = String(row.name || "").trim() || null;
+    const vertical = String(row.vertical || "").trim() || null;
+    const description = row.description === undefined || row.description === null ? null : String(row.description);
+    const address = row.address === undefined || row.address === null ? null : String(row.address);
+    const email = String(row.email || "").trim() || null;
     const updatedAt = String(row.updatedAt || "").trim() || new Date().toISOString();
-    return { name, photoExt, updatedAt };
+    return { name, photoExt, vertical, description, address, email, updatedAt };
   } catch {
     return null;
   }
@@ -59,17 +67,32 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
 export function writePhoneIdentity(
   tenantId: string,
   phoneNumberId: string,
-  input: { name?: string | null; photo?: { ext: "png" | "jpg"; bytes: Buffer } | null },
+  input: {
+    name?: string | null;
+    photo?: { ext: "png" | "jpg"; bytes: Buffer } | null;
+    vertical?: string | null;
+    description?: string | null;
+    address?: string | null;
+    email?: string | null;
+  },
 ): MetaPhoneIdentity {
   ensureDir(tenantId);
   const current = readPhoneIdentity(tenantId, phoneNumberId) || {
     name: null,
     photoExt: null,
+    vertical: null,
+    description: null,
+    address: null,
+    email: null,
     updatedAt: "",
   };
   const next: MetaPhoneIdentity = {
     name: input.name !== undefined ? input.name : current.name,
     photoExt: current.photoExt,
+    vertical: input.vertical !== undefined ? input.vertical : current.vertical,
+    description: input.description !== undefined ? input.description : current.description,
+    address: input.address !== undefined ? input.address : current.address,
+    email: input.email !== undefined ? input.email : current.email,
     updatedAt: new Date().toISOString(),
   };
   if (input.photo) {
@@ -119,6 +142,10 @@ export function applyLocalPhoneIdentities(
       ...row,
       verifiedName: identity.name || row.verifiedName,
       profilePictureUrl: localPhonePhotoUrl(row.phoneNumberId, identity) || row.profilePictureUrl,
+      vertical: identity.vertical || row.vertical,
+      description: identity.description ?? row.description,
+      address: identity.address ?? row.address,
+      email: identity.email || row.email,
     };
   });
 }

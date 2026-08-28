@@ -22,6 +22,10 @@ export type MetaPortfolioNumberPublic = {
   dispatchStatus: MetaPortfolioDispatchStatus;
   canActivate: boolean;
   profilePictureUrl: string | null;
+  vertical: string | null;
+  description: string | null;
+  address: string | null;
+  email: string | null;
 };
 
 export type MetaPortfolioAssetsPublic = {

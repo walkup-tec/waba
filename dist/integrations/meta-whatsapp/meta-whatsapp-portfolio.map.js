@@ -77,6 +77,10 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
         dispatchStatus: busy ? "em_disparo" : "livre",
         canActivate: !connected,
         profilePictureUrl: null,
+        vertical: null,
+        description: null,
+        address: null,
+        email: null,
     };
 }
 function mapMetaPhoneListToPortfolioNumbers(json, busyPhoneIds = new Set()) {

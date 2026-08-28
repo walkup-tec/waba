@@ -82,6 +82,10 @@ export function mapMetaPhoneToPortfolioNumber(
     dispatchStatus: busy ? "em_disparo" : "livre",
     canActivate: !connected,
     profilePictureUrl: null,
+    vertical: null,
+    description: null,
+    address: null,
+    email: null,
   };
 }
 

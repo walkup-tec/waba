@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 05:40 — Perfil comercial do WhatsApp na Drax
+- Card do chip: logo + nome clicáveis; modal com categoria, descrição, endereço e e-mail; envio à Graph `whatsapp_business_profile`
+- LOG: `doc/LOG-2026-08-28__054000__perfil-comercial-whatsapp-drax.md`
+
 ## 2026-08-28 05:28 — Identidade local do card do número WhatsApp
 - Nome e foto do chip no CARD 02 gravam no Laboratório; Meta é best-effort (nome precisa de aprovação; foto só em número Ativo)
 - LOG: `doc/LOG-2026-08-28__052800__numero-identidade-local-card.md`

@@ -9,7 +9,7 @@ Somente regras permanentes. Sem detalhes de implementação.
 - Nome e foto visíveis no CARD 02 (portfólio e chips) são da conta WABA (Laboratório).
 - A Meta só replica o nome do portfólio se o token for admin do Business Manager.
 - A foto do Business Manager é só leitura; gravação na Meta exige Página do Facebook.
-- A Meta só replica o nome do chip após aprovação do display name (e um novo PIN). A foto na Meta só entra se o número estiver Ativo.
+- A Meta só replica o nome do chip após aprovação do display name (e um novo PIN). A foto e as informações da empresa (categoria, descrição, endereço, e-mail) na Meta só entram se o número estiver Ativo.
 
 ### Crédito mínimo no checkout PIX (Disparos)
 
