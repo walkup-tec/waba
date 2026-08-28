@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-28-093700-instancias-substitui-bloqueada";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-28-095800-FORCE-INSTANCIAS-SWAP";

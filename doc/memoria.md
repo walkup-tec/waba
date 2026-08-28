@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 09:58 — Marker forçado para Redeploy
+- Marker: `DEPLOY-2026-08-28-095800-FORCE-INSTANCIAS-SWAP`
+- Produção já estava em `093700`; push só para EasyPanel puxar imagem nova
+
 ## 2026-08-28 09:37 — + Instâncias substitui o bloqueado (2477)
 - Produção ainda estava em `083300`; POST devolvia `buy_numbers_required` e a UI ia para compra
 - POST usa a mesma lista de spare da tela; troca 1:1 do vermelho; sem redirecionar para comprar

@@ -2,4 +2,4 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WABA_DEPLOY_MARKER = void 0;
-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-08-28-093700-instancias-substitui-bloqueada";
+exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-08-28-095800-FORCE-INSTANCIAS-SWAP";
