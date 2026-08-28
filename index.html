@@ -35180,6 +35180,7 @@
         list.innerHTML = numbers
           .map((item) => {
             const phone = metaTpEsc(item.displayPhoneNumber || item.phoneNumberId);
+            const verified = metaTpEsc(item.verifiedName || "Sem nome de exibição");
             const requested = String(item.requestedName || "").trim();
             const requestedLine = requested
               ? '<span class="meta-number-name">solicitado: ' + metaTpEsc(requested) + "</span>"

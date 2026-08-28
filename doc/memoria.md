@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 07:34 — Portfólio sumiu no Laboratório
+- `verified` indefinido no render da lista de números escondia o card; corrigido
+- LOG: `doc/LOG-2026-08-28__073400__portfolio-sumiu-verified-indefinido.md`
+
 ## 2026-08-28 06:42 — Perfil do chip igual ao da Meta no disparo
 - Save de nome/foto só confirma se a Graph aceitar. O card mostra o `verified_name` ao vivo; foto na hora no POST.
 - LOG: `doc/LOG-2026-08-28__064200__perfil-chip-igual-meta-disparo.md`
