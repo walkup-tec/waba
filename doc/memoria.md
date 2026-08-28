@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 04:42 — Marker de deploy
+- Marker: `DEPLOY-2026-08-28-044200-botao-instancias-alias`
+- LOG: `doc/LOG-2026-08-28__044200__deploy-marker.md`
+
 ## 2026-08-27 21:20 — Editar nome/foto do número
 - POST de nome sem JSON vazio; foto não aborta o nome
 - Número pendente não recebe foto até o PIN
