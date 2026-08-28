@@ -206,6 +206,20 @@ export class MetaWhatsappConnectionRepository {
     return mapRow(asRow(data));
   }
 
+  async listInboxConnections(tenantId: string): Promise<MetaWhatsappConnectionRecord[]> {
+    const id = String(tenantId || "").trim();
+    if (!id) return [];
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("tenant_id", id)
+      .is("disconnected_at", null)
+      .in("status", ["connected", "pending_confirmation"])
+      .order("updated_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => mapRow(asRow(row)));
+  }
+
   async findConnectedByTenant(tenantId: string): Promise<MetaWhatsappConnectionRecord | null> {
     const id = String(tenantId || "").trim();
     if (!id) return null;

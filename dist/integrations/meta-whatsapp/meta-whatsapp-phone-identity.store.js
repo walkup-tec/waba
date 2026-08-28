@@ -217,11 +217,25 @@ function listEnabledInboxPhoneIds(tenantId) {
         .map((row) => String(row.phoneNumberId || "").trim())
         .filter(Boolean);
 }
+function asPhoneIds(value) {
+    const list = Array.isArray(value) ? value : [value];
+    const out = [];
+    const seen = new Set();
+    for (const item of list) {
+        const id = String(item || "").trim();
+        if (!id || seen.has(id))
+            continue;
+        seen.add(id);
+        out.push(id);
+    }
+    return out;
+}
 function inboxQueryPhoneIds(tenantId, connectionPhoneNumberId, selectedPhoneNumberId) {
     const enabled = listEnabledInboxPhoneIds(tenantId);
-    const conn = String(connectionPhoneNumberId || "").trim();
+    const conns = asPhoneIds(connectionPhoneNumberId);
     const selected = String(selectedPhoneNumberId || "").trim();
-    const aliases = enabled.length === 1 && conn && !enabled.includes(conn) ? [...enabled, conn] : enabled;
+    const extras = enabled.length === 1 ? conns.filter((id) => !enabled.includes(id)) : [];
+    const aliases = [...enabled, ...extras];
     if (!selected)
         return aliases;
     if (enabled.length === 1 && aliases.includes(selected))
@@ -235,8 +249,8 @@ function isInboxPhoneAllowed(tenantId, phoneNumberId, connectionPhoneNumberId) {
     const enabled = listEnabledInboxPhoneIds(tenantId);
     if (enabled.includes(id))
         return true;
-    const conn = String(connectionPhoneNumberId || "").trim();
-    return enabled.length === 1 && Boolean(conn) && id === conn && enabled[0] !== id;
+    const conns = asPhoneIds(connectionPhoneNumberId);
+    return enabled.length === 1 && conns.includes(id) && enabled[0] !== id;
 }
 function resolveInboxSendPhoneNumberId(input) {
     const enabled = listEnabledInboxPhoneIds(input.tenantId);

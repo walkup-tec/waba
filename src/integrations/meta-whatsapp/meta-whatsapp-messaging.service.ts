@@ -88,18 +88,29 @@ export class MetaWhatsappMessagingService {
     const recipient = normalizeCloudApiRecipient(toRaw);
     if (!recipient.ok) throw new MetaWhatsappError("invalid_recipient");
 
-    const clientConnectionId = String(body?.connectionId || body?.connection_id || "").trim();
-    const connection = await this.provider.requireConnected(
-      tenantId,
-      clientConnectionId || undefined,
-    );
-
     const conversationId = String(body?.conversationId || body?.conversation_id || "").trim();
     const existingConversation = conversationId
       ? await this.conversations.findByIdForTenant(tenantId, conversationId)
       : null;
-    if (conversationId && (!existingConversation || existingConversation.connectionId !== connection.id)) {
+    if (conversationId && !existingConversation) {
       throw new MetaWhatsappError("conversation_not_found");
+    }
+    const preferredConnectionId = String(
+      existingConversation?.connectionId || body?.connectionId || body?.connection_id || "",
+    ).trim();
+    let connection;
+    try {
+      connection = await this.provider.requireConnected(tenantId, preferredConnectionId || undefined);
+    } catch (error) {
+      if (
+        preferredConnectionId &&
+        error instanceof MetaWhatsappError &&
+        error.code === "not_connected"
+      ) {
+        connection = await this.provider.requireConnected(tenantId);
+      } else {
+        throw error;
+      }
     }
     const requestedPhone = String(body?.phoneNumberId || body?.phone_number_id || "").trim();
     const sendPhoneNumberId =

@@ -84,6 +84,22 @@ export class MetaWhatsappConversationRepository {
     return this.clientFactory();
   }
 
+  async findByTenantContact(
+    tenantId: string,
+    contactWaId: string,
+  ): Promise<MetaConversationRecord | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("tenant_id", tenantId)
+      .eq("contact_wa_id", contactWaId)
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+
   async findByTenantConnectionContact(
     tenantId: string,
     connectionId: string,
@@ -103,11 +119,13 @@ export class MetaWhatsappConversationRepository {
   async upsertForContact(
     input: UpsertConversationInput,
   ): Promise<{ record: MetaConversationRecord; created: boolean }> {
-    const existing = await this.findByTenantConnectionContact(
-      input.tenantId,
-      input.connectionId,
-      input.contactWaId,
-    );
+    const existing =
+      (await this.findByTenantContact(input.tenantId, input.contactWaId)) ||
+      (await this.findByTenantConnectionContact(
+        input.tenantId,
+        input.connectionId,
+        input.contactWaId,
+      ));
     if (existing) {
       const unread = input.inbound ? existing.unreadCount + 1 : existing.unreadCount;
       const { data, error } = await this.client()
@@ -173,7 +191,8 @@ export class MetaWhatsappConversationRepository {
 
   async listForInbox(input: {
     tenantId: string;
-    connectionId: string;
+    connectionId?: string;
+    connectionIds?: string[];
     filter: "all" | "unread" | "open" | "pending" | "closed" | "mine";
     assignedTo?: string | null;
     phoneNumberId?: string | null;
@@ -186,9 +205,13 @@ export class MetaWhatsappConversationRepository {
       .from(TABLE)
       .select(COLUMNS)
       .eq("tenant_id", input.tenantId)
-      .eq("connection_id", input.connectionId)
       .order("last_message_at", { ascending: false })
       .range(input.offset, input.offset + input.limit - 1);
+    const connectionIds = (input.connectionIds || [])
+      .map((id) => String(id || "").trim())
+      .filter(Boolean);
+    if (connectionIds.length) query = query.in("connection_id", connectionIds);
+    else if (input.connectionId) query = query.eq("connection_id", input.connectionId);
     if (input.filter === "unread") query = query.gt("unread_count", 0);
     if (input.filter === "open" || input.filter === "pending" || input.filter === "closed") {
       query = query.eq("status", input.filter);
@@ -214,14 +237,16 @@ export class MetaWhatsappConversationRepository {
 
   async listUnreadByPhone(
     tenantId: string,
-    connectionId: string,
+    connectionIds?: string[],
   ): Promise<Array<{ phoneNumberId: string | null; unreadCount: number }>> {
-    const { data, error } = await this.client()
+    let query = this.client()
       .from(TABLE)
       .select("phone_number_id, unread_count")
       .eq("tenant_id", tenantId)
-      .eq("connection_id", connectionId)
       .gt("unread_count", 0);
+    const ids = (connectionIds || []).map((id) => String(id || "").trim()).filter(Boolean);
+    if (ids.length) query = query.in("connection_id", ids);
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
     return (data || []).map((row) => {
       const rec = asRow(row);

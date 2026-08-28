@@ -260,16 +260,29 @@ export function listEnabledInboxPhoneIds(tenantId: string): string[] {
     .filter(Boolean);
 }
 
+function asPhoneIds(value?: string | string[] | null): string[] {
+  const list = Array.isArray(value) ? value : [value];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    const id = String(item || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 export function inboxQueryPhoneIds(
   tenantId: string,
-  connectionPhoneNumberId?: string | null,
+  connectionPhoneNumberId?: string | string[] | null,
   selectedPhoneNumberId?: string | null,
 ): string[] {
   const enabled = listEnabledInboxPhoneIds(tenantId);
-  const conn = String(connectionPhoneNumberId || "").trim();
+  const conns = asPhoneIds(connectionPhoneNumberId);
   const selected = String(selectedPhoneNumberId || "").trim();
-  const aliases =
-    enabled.length === 1 && conn && !enabled.includes(conn) ? [...enabled, conn] : enabled;
+  const extras = enabled.length === 1 ? conns.filter((id) => !enabled.includes(id)) : [];
+  const aliases = [...enabled, ...extras];
   if (!selected) return aliases;
   if (enabled.length === 1 && aliases.includes(selected)) return aliases;
   return enabled.includes(selected) ? [selected] : [];
@@ -278,14 +291,14 @@ export function inboxQueryPhoneIds(
 export function isInboxPhoneAllowed(
   tenantId: string,
   phoneNumberId: string | null | undefined,
-  connectionPhoneNumberId?: string | null,
+  connectionPhoneNumberId?: string | string[] | null,
 ): boolean {
   const id = String(phoneNumberId || "").trim();
   if (!id) return false;
   const enabled = listEnabledInboxPhoneIds(tenantId);
   if (enabled.includes(id)) return true;
-  const conn = String(connectionPhoneNumberId || "").trim();
-  return enabled.length === 1 && Boolean(conn) && id === conn && enabled[0] !== id;
+  const conns = asPhoneIds(connectionPhoneNumberId);
+  return enabled.length === 1 && conns.includes(id) && enabled[0] !== id;
 }
 
 export function resolveInboxSendPhoneNumberId(input: {

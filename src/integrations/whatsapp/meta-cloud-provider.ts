@@ -89,9 +89,16 @@ export class MetaCloudProvider implements WhatsAppProvider {
     let row: MetaWhatsappConnectionRecord | null = null;
     if (connectionId) {
       row = await this.connections.findByIdForTenant(tenantId, connectionId);
-    } else {
-      row = await this.connections.findConnectedByTenant(tenantId);
+      const usable =
+        Boolean(row) &&
+        row!.tenantId === tenantId &&
+        !row!.disconnectedAt &&
+        Boolean(row!.phoneNumberId) &&
+        (row!.status === "connected" || row!.status === "pending_confirmation");
+      if (!usable || !row) throw new MetaWhatsappError("not_connected");
+      return row;
     }
+    row = await this.connections.findConnectedByTenant(tenantId);
     if (!row || row.status !== "connected" || !row.phoneNumberId) {
       throw new MetaWhatsappError("not_connected");
     }

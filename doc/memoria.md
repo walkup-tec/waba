@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 14:28 — Inbox lista o fio em qualquer conexão do tenant
+- Lista por tenant + chips ligados, não por um único `connection_id`. Mesmo contato vira um fio. Resposta usa a conexão da conversa. Envio do Laboratório abre a aba Inbox.
+- Marker: `DEPLOY-2026-08-28-142800-inbox-tenant-thread`
+- LOG: `doc/LOG-2026-08-28__142800__inbox-tenant-thread.md`
+
 ## 2026-08-28 11:55 — Inbox lista o envio e responde o contato
 - Envio Cloud e compositor usam o chip ligado. Alias do `phone_number_id` da conexão quando há um chip só.
 - Marker: `DEPLOY-2026-08-28-121400-inbox-envio-conversa`

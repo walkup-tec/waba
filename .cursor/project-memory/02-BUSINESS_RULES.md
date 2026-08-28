@@ -32,6 +32,7 @@ Somente regras permanentes. Sem detalhes de implementação.
 - O Inbox mostra o número (e o nome) dos chips com switch verde. Sem chip ligado, avisa para ligar no Laboratório.
 - O nome no Inbox segue o nome salvo no Laboratório (pedido no perfil do chip). O card continua mostrando o `verified_name` da Graph até o PIN de register.
 - Mensagem enviada pelo Laboratório ou recebida no webhook entra na conversa do chip ligado. O compositor do Inbox responde esse mesmo contato pela Cloud API.
+- O Inbox lista o fio pelo tenant e pelos chips ligados, não só pela conexão Meta mais recente. O mesmo contato no WhatsApp é um único fio.
 
 ### Crédito mínimo no checkout PIX (Disparos)
 

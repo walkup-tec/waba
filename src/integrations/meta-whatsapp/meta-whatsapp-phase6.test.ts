@@ -78,6 +78,10 @@ class FakeConversations {
   rows: MetaConversationRecord[] = [];
   upserts: Array<{ contactWaId: string; inbound?: boolean }> = [];
 
+  async findByTenantContact(tenantId: string, contactWaId: string) {
+    return this.rows.find((row) => row.tenantId === tenantId && row.contactWaId === contactWaId) || null;
+  }
+
   async findByTenantConnectionContact(tenantId: string, connectionId: string, contactWaId: string) {
     return (
       this.rows.find(
@@ -99,11 +103,13 @@ class FakeConversations {
     atIso: string;
   }) {
     this.upserts.push({ contactWaId: input.contactWaId, inbound: input.inbound });
-    const existing = await this.findByTenantConnectionContact(
-      input.tenantId,
-      input.connectionId,
-      input.contactWaId,
-    );
+    const existing =
+      (await this.findByTenantContact(input.tenantId, input.contactWaId)) ||
+      (await this.findByTenantConnectionContact(
+        input.tenantId,
+        input.connectionId,
+        input.contactWaId,
+      ));
     if (existing) {
       existing.lastMessageAt = input.atIso;
       if (input.inbound) {
@@ -720,6 +726,26 @@ describe("fase 6 inbox inbound/status", () => {
       } as any,
     });
     assert.equal(messages.rows[0].status, "failed");
+  });
+
+  it("status sem wamid local cria a conversa se o Inbox do chip estiver ligado", async () => {
+    const conversations = new FakeConversations();
+    const messages = new FakeMessages();
+    const inbox = new MetaWhatsappWebhookInboxService(conversations as any, messages as any);
+    await inbox.applyStatus({
+      connection: connectedRow(),
+      event: {
+        eventType: "statuses",
+        messageId: "wamid.MISSING",
+        status: "sent",
+        timestamp: "1710000001",
+        recipientId: "5551999111111",
+        phoneNumberId: "phone-a",
+      } as any,
+    });
+    assert.equal(conversations.rows.length, 1);
+    assert.equal(conversations.rows[0].contactWaId, "5551999111111");
+    assert.equal(conversations.rows[0].phoneNumberId, "phone-a");
   });
 });
 

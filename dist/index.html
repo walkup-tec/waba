@@ -35282,7 +35282,11 @@
               " id=" +
               String(payload.messageId || "—");
           }
-          if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
+          if (payload.conversationId && typeof window.wabaOpenMetaInboxConversation === "function") {
+            window.wabaOpenMetaInboxConversation(payload.conversationId);
+          } else if (typeof window.wabaRefreshMetaInbox === "function") {
+            window.wabaRefreshMetaInbox();
+          }
         } catch {
           if (outEl) outEl.textContent = "Falha de rede ao enviar.";
         } finally {
@@ -36456,7 +36460,11 @@
               " id=" +
               String(payload.messageId || "—");
           }
-          if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
+          if (payload.conversationId && typeof window.wabaOpenMetaInboxConversation === "function") {
+            window.wabaOpenMetaInboxConversation(payload.conversationId);
+          } else if (typeof window.wabaRefreshMetaInbox === "function") {
+            window.wabaRefreshMetaInbox();
+          }
         } catch (error) {
           if (outEl) outEl.textContent = error && error.message ? error.message : "Não foi possível enviar.";
         }
@@ -36984,6 +36992,16 @@
         metaInbox.listFp = "";
         metaInboxLoadList(false);
         if (metaInbox.selectedId) metaInboxLoadThread();
+      };
+
+      window.wabaOpenMetaInboxConversation = function wabaOpenMetaInboxConversation(id) {
+        metaInbox.selectedId = String(id || "");
+        metaInbox.listFp = "";
+        const panel = document.getElementById("tab-whatsapp-inbox");
+        const alreadyOpen = Boolean(panel && !panel.classList.contains("tab-hidden"));
+        const tab = document.querySelector('[data-tab="whatsapp-inbox"]');
+        if (tab && !alreadyOpen && typeof tab.click === "function") tab.click();
+        else if (typeof window.wabaStartMetaInbox === "function") window.wabaStartMetaInbox();
       };
 
       async function metaInboxLoadList(append) {

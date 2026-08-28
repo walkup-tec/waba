@@ -104,12 +104,29 @@ export class MetaWhatsappWebhookInboxService implements MetaWhatsappWebhookInbox
     const next = mapWebhookStatus(input.event.status);
     if (!wamid || !next) return;
     const atIso = isoFromUnix(input.event.timestamp);
-    await this.messages.applyWebhookStatus(
+    const applied = await this.messages.applyWebhookStatus(
       input.connection.tenantId,
       wamid,
       next,
       atIso,
       { code: input.event.errorCode, message: null },
     );
+    if (applied.record) return;
+    const recipient = String(input.event.recipientId || "").trim();
+    const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim();
+    if (!recipient || !phoneNumberId) return;
+    if (!listEnabledInboxPhoneIds(input.connection.tenantId).includes(phoneNumberId)) {
+      return;
+    }
+    await this.conversations.upsertForContact({
+      tenantId: input.connection.tenantId,
+      connectionId: input.connection.id,
+      phoneNumberId,
+      contactWaId: recipient,
+      contactPhone: recipient,
+      outbound: true,
+      lastMessagePreview: previewFromContent({ type: "text", text: "Mensagem enviada" }),
+      atIso,
+    });
   }
 }

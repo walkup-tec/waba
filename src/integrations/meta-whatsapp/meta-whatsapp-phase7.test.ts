@@ -202,6 +202,8 @@ class FakeConversations {
   rows: MetaConversationRecord[] = [];
   async upsertForContact(input: { tenantId: string; connectionId: string; contactWaId: string; atIso: string }) {
     const existing = this.rows.find(
+      (row) => row.tenantId === input.tenantId && row.contactWaId === input.contactWaId,
+    ) || this.rows.find(
       (row) =>
         row.tenantId === input.tenantId &&
         row.connectionId === input.connectionId &&

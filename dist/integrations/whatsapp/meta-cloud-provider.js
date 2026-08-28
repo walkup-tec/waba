@@ -76,10 +76,16 @@ class MetaCloudProvider {
         let row = null;
         if (connectionId) {
             row = await this.connections.findByIdForTenant(tenantId, connectionId);
+            const usable = Boolean(row) &&
+                row.tenantId === tenantId &&
+                !row.disconnectedAt &&
+                Boolean(row.phoneNumberId) &&
+                (row.status === "connected" || row.status === "pending_confirmation");
+            if (!usable || !row)
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
+            return row;
         }
-        else {
-            row = await this.connections.findConnectedByTenant(tenantId);
-        }
+        row = await this.connections.findConnectedByTenant(tenantId);
         if (!row || row.status !== "connected" || !row.phoneNumberId) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
         }

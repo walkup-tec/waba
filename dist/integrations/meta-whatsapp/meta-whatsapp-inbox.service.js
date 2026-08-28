@@ -59,12 +59,23 @@ class MetaWhatsappInboxService {
         this.messages = messages;
         this.messaging = messaging;
     }
-    async requireOwnedConversation(tenantId, conversationId, connection) {
+    async inboxConnections(tenantId) {
+        const open = await this.connections.listInboxConnections(tenantId);
+        const usable = open.filter((row) => canServeInbox(row, tenantId));
+        if (!usable.length) {
+            const fallback = await this.requireConnected(tenantId);
+            return [fallback];
+        }
+        return usable;
+    }
+    async requireOwnedConversation(tenantId, conversationId) {
         const row = await this.conversations.findByIdForTenant(tenantId, conversationId);
-        if (!row || row.tenantId !== tenantId || row.connectionId !== connection.id) {
+        if (!row || row.tenantId !== tenantId) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("conversation_not_found");
         }
-        if (!(0, meta_whatsapp_phone_identity_store_1.isInboxPhoneAllowed)(tenantId, row.phoneNumberId, connection.phoneNumberId)) {
+        const open = await this.inboxConnections(tenantId);
+        const connPhones = open.map((item) => item.phoneNumberId).filter((id) => Boolean(id));
+        if (!(0, meta_whatsapp_phone_identity_store_1.isInboxPhoneAllowed)(tenantId, row.phoneNumberId, connPhones)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("conversation_not_found");
         }
         return row;
@@ -80,7 +91,8 @@ class MetaWhatsappInboxService {
     }
     async listConversations(auth, query) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnected(tenant.tenantId);
+        const open = await this.inboxConnections(tenant.tenantId);
+        const connection = open[0];
         const filter = parseFilter(query?.filter);
         const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();
         const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
@@ -88,7 +100,8 @@ class MetaWhatsappInboxService {
         const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId);
         const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
         const enabledIds = snapshots.filter((row) => row.inboxEnabled).map((row) => row.phoneNumberId);
-        const listIds = (0, meta_whatsapp_phone_identity_store_1.inboxQueryPhoneIds)(tenant.tenantId, connection.phoneNumberId, selectedPhone);
+        const connPhones = open.map((row) => row.phoneNumberId).filter((id) => Boolean(id));
+        const listIds = (0, meta_whatsapp_phone_identity_store_1.inboxQueryPhoneIds)(tenant.tenantId, connPhones, selectedPhone);
         if (!enabledIds.length || (selectedPhone && !listIds.length)) {
             return {
                 connected: true,
@@ -102,7 +115,6 @@ class MetaWhatsappInboxService {
         }
         const rows = await this.conversations.listForInbox({
             tenantId: tenant.tenantId,
-            connectionId: connection.id,
             filter,
             assignedTo: auth.email,
             phoneNumberId: null,
@@ -112,7 +124,7 @@ class MetaWhatsappInboxService {
         });
         const hasMore = rows.length > limit;
         const page = hasMore ? rows.slice(0, limit) : rows;
-        const unreadRows = await this.conversations.listUnreadByPhone(tenant.tenantId, connection.id);
+        const unreadRows = await this.conversations.listUnreadByPhone(tenant.tenantId);
         const unreadByPhone = new Map();
         let unreadAll = 0;
         for (const item of unreadRows) {
@@ -124,21 +136,26 @@ class MetaWhatsappInboxService {
         const channelIds = new Set(enabledIds);
         const channels = Array.from(channelIds).map((id) => {
             const snap = channelsById.get(id);
-            const isConnection = id === String(connection.phoneNumberId || "");
+            const matching = open.find((row) => String(row.phoneNumberId || "") === id) || connection;
+            const isConnection = id === String(matching.phoneNumberId || "");
             return {
                 phoneNumberId: id,
-                name: channelLabel(snap, isConnection ? connection.verifiedName : id),
-                displayPhoneNumber: snap?.displayPhoneNumber || (isConnection ? connection.displayPhoneNumber : null),
+                name: channelLabel(snap, isConnection ? matching.verifiedName : id),
+                displayPhoneNumber: snap?.displayPhoneNumber || (isConnection ? matching.displayPhoneNumber : null),
                 profilePictureUrl: snap?.profilePictureUrl || null,
                 unreadCount: unreadByPhone.get(id) || 0,
             };
         });
         const poll = (0, meta_config_1.readMetaInboxPollMs)();
+        const byConn = new Map(open.map((row) => [row.id, row]));
         (0, meta_whatsapp_inbox_log_1.logMetaInbox)("LIST", { tenantId: tenant.tenantId, filter, count: page.length });
         return {
             connected: true,
             poll,
-            conversations: page.map((row) => withChannel(row, channelsById, connection.displayPhoneNumber, connection.verifiedName)),
+            conversations: page.map((row) => {
+                const origin = byConn.get(row.connectionId) || connection;
+                return withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName);
+            }),
             channels,
             selectedPhoneNumberId: selectedPhone || null,
             unreadCount: unreadAll,
@@ -147,22 +164,22 @@ class MetaWhatsappInboxService {
     }
     async listMessages(auth, conversationId, query) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnected(tenant.tenantId);
-        const row = await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
+        const open = await this.inboxConnections(tenant.tenantId);
+        const row = await this.requireOwnedConversation(tenant.tenantId, conversationId);
+        const origin = open.find((item) => item.id === row.connectionId) || open[0];
         const limit = Math.min(80, Math.max(1, clampPage(query?.limit, 80, 80) || 80));
         const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
         (0, meta_whatsapp_inbox_log_1.logMetaInbox)("THREAD", { tenantId: tenant.tenantId, count: messages.length });
         const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId);
         const channelsById = new Map(snapshots.map((item) => [item.phoneNumberId, item]));
         return {
-            conversation: withChannel(row, channelsById, connection.displayPhoneNumber, connection.verifiedName),
+            conversation: withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName),
             messages: messages.map(meta_whatsapp_inbox_types_1.toPublicInboxMessage),
         };
     }
     async markRead(auth, conversationId) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnected(tenant.tenantId);
-        await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
+        await this.requireOwnedConversation(tenant.tenantId, conversationId);
         const updated = await this.conversations.markRead(tenant.tenantId, conversationId);
         if (!updated)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("conversation_not_found");
@@ -171,8 +188,7 @@ class MetaWhatsappInboxService {
     }
     async patchStatus(auth, conversationId, body) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnected(tenant.tenantId);
-        await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
+        await this.requireOwnedConversation(tenant.tenantId, conversationId);
         const status = String(body?.status || "").trim().toLowerCase();
         if (!STATUSES.has(status))
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
@@ -184,8 +200,7 @@ class MetaWhatsappInboxService {
     }
     async assign(auth, conversationId, body) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnected(tenant.tenantId);
-        await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
+        await this.requireOwnedConversation(tenant.tenantId, conversationId);
         const action = String(body?.action || "").trim().toLowerCase();
         if (action !== "assume" && action !== "release")
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
@@ -198,8 +213,7 @@ class MetaWhatsappInboxService {
     }
     async sendMessage(auth, conversationId, body) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnected(tenant.tenantId);
-        const row = await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
+        const row = await this.requireOwnedConversation(tenant.tenantId, conversationId);
         (0, meta_whatsapp_inbox_log_1.logMetaInbox)("SEND", { tenantId: tenant.tenantId, type: String(body?.type || "text") });
         const result = await this.messaging.sendFromAuth(auth, {
             ...(body && typeof body === "object" ? body : {}),

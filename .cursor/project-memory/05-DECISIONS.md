@@ -4,6 +4,13 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-28 — Inbox: um fio por contato no tenant
+
+- **Decisão:** A lista do Inbox não filtra um único `connection_id`. O upsert reutiliza `tenant_id + contact_wa_id`. A resposta Graph usa a conexão da conversa (`connected` ou `pending_confirmation`). Status webhook sem wamid local pode abrir o fio outbound se o chip estiver ligado.
+- **Motivo:** Produção já tinha o marker `121400` e a lista continuava vazia: envio/webhook gravavam em outra linha de conexão.
+- **Impacto:** Marker `DEPLOY-2026-08-28-142800-inbox-tenant-thread`. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-messages/ e https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/components/
+- **Data:** 2026-08-28
+
 ### 2026-08-28 — Inbox: envio e listagem no chip ligado
 
 - **Decisão:** Cloud API envia pelo `phone_number_id` do chip com Inbox verde. Se a conexão tiver outro ID e houver um único chip ligado, a listagem trata os dois como o mesmo canal.

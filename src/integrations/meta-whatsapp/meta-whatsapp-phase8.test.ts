@@ -108,19 +108,35 @@ function msg(overrides: Partial<MetaMessageRecord> = {}): MetaMessageRecord {
 class FakeConnections {
   rows: MetaWhatsappConnectionRecord[] = [];
   async findConnectedByTenant(tenantId: string) {
-    return this.rows.find((row) => row.tenantId === tenantId && row.status === "connected") || null;
+    return (
+      this.rows
+        .filter((row) => row.tenantId === tenantId && row.status === "connected" && !row.disconnectedAt)
+        .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))[0] || null
+    );
   }
   async findOpenByTenant(tenantId: string) {
     return (
-      this.rows.find(
+      this.rows
+        .filter(
+          (row) =>
+            row.tenantId === tenantId &&
+            !row.disconnectedAt &&
+            (row.status === "pending_token" ||
+              row.status === "pending_confirmation" ||
+              row.status === "connected"),
+        )
+        .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))[0] || null
+    );
+  }
+  async listInboxConnections(tenantId: string) {
+    return this.rows
+      .filter(
         (row) =>
           row.tenantId === tenantId &&
           !row.disconnectedAt &&
-          (row.status === "pending_token" ||
-            row.status === "pending_confirmation" ||
-            row.status === "connected"),
-      ) || null
-    );
+          (row.status === "connected" || row.status === "pending_confirmation"),
+      )
+      .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
   }
   async findByIdForTenant(tenantId: string, id: string) {
     return this.rows.find((row) => row.tenantId === tenantId && row.id === id) || null;
@@ -132,6 +148,14 @@ class FakeConversations {
   async findByIdForTenant(tenantId: string, id: string) {
     return this.rows.find((row) => row.tenantId === tenantId && row.id === id) || null;
   }
+  async findByTenantContact(tenantId: string, contactWaId: string) {
+    return (
+      this.rows
+        .filter((row) => row.tenantId === tenantId && row.contactWaId === contactWaId)
+        .sort((a, b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || "")))[0] ||
+      null
+    );
+  }
   async findByTenantConnectionContact(tenantId: string, connectionId: string, contactWaId: string) {
     return (
       this.rows.find(
@@ -141,7 +165,8 @@ class FakeConversations {
   }
   async listForInbox(input: {
     tenantId: string;
-    connectionId: string;
+    connectionId?: string;
+    connectionIds?: string[];
     filter: string;
     assignedTo?: string | null;
     phoneNumberId?: string | null;
@@ -151,8 +176,14 @@ class FakeConversations {
     offset: number;
   }) {
     let rows = this.rows
-      .filter((row) => row.tenantId === input.tenantId && row.connectionId === input.connectionId)
+      .filter((row) => row.tenantId === input.tenantId)
       .sort((a, b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || "")));
+    if (input.connectionIds?.length) {
+      const allowed = new Set(input.connectionIds);
+      rows = rows.filter((row) => allowed.has(row.connectionId));
+    } else if (input.connectionId) {
+      rows = rows.filter((row) => row.connectionId === input.connectionId);
+    }
     if (input.filter === "unread") rows = rows.filter((row) => row.unreadCount > 0);
     if (input.filter === "open" || input.filter === "pending" || input.filter === "closed") {
       rows = rows.filter((row) => row.status === input.filter);
@@ -169,9 +200,15 @@ class FakeConversations {
     }
     return rows.slice(input.offset, input.offset + input.limit);
   }
-  async listUnreadByPhone(tenantId: string, connectionId: string) {
+  async listUnreadByPhone(tenantId: string, connectionIds?: string[]) {
+    const allowed = connectionIds?.length ? new Set(connectionIds) : null;
     return this.rows
-      .filter((row) => row.tenantId === tenantId && row.connectionId === connectionId && row.unreadCount > 0)
+      .filter(
+        (row) =>
+          row.tenantId === tenantId &&
+          row.unreadCount > 0 &&
+          (!allowed || allowed.has(row.connectionId)),
+      )
       .map((row) => ({ phoneNumberId: row.phoneNumberId, unreadCount: row.unreadCount }));
   }
   async markRead(tenantId: string, id: string) {
@@ -205,7 +242,9 @@ class FakeConversations {
     atIso: string;
     lastMessagePreview?: string | null;
   }) {
-    const existing = await this.findByTenantConnectionContact(input.tenantId, input.connectionId, input.contactWaId);
+    const existing =
+      (await this.findByTenantContact(input.tenantId, input.contactWaId)) ||
+      (await this.findByTenantConnectionContact(input.tenantId, input.connectionId, input.contactWaId));
     if (existing) {
       existing.lastMessageAt = input.atIso;
       if (input.phoneNumberId) existing.phoneNumberId = input.phoneNumberId;
@@ -658,6 +697,40 @@ describe("fase 8 canais do Inbox", () => {
       text: "resposta pelo inbox",
     });
     assert.equal(reply.messageId, "wamid.LAB");
+    purgePhoneIdentities(TENANT_A);
+  });
+
+  it("lista e responde conversa gravada em outra conexão do mesmo tenant", async () => {
+    writePhoneIdentity(TENANT_A, "phone-a", {
+      inboxEnabled: true,
+      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({ id: "conn-old", phoneNumberId: "phone-a", updatedAt: "2026-01-01T00:00:00.000Z" }),
+    );
+    connections.rows.push(
+      connectedRow({ id: "conn-new", phoneNumberId: "phone-a", updatedAt: "2026-08-28T00:00:00.000Z" }),
+    );
+    const conversations = new FakeConversations();
+    conversations.rows.push(conv({ connectionId: "conn-old" }));
+    const messages = new FakeMessages();
+    const provider = new MetaCloudProvider(connections as any, async () => graphOk("wamid.OLD"), () => "tok");
+    const messaging = new MetaWhatsappMessagingService(
+      provider,
+      conversations as any,
+      messages as any,
+      { assertSendable: async () => ({ status: "APPROVED" }) } as any,
+    );
+    const inbox = inboxOf(connections, conversations, messages, messaging);
+    const listed = await inbox.listConversations(auth(EMAIL_A), {});
+    assert.equal(listed.conversations.length, 1);
+    const reply = await inbox.sendMessage(auth(EMAIL_A), listed.conversations[0].id, {
+      type: "text",
+      text: "ok",
+    });
+    assert.equal(reply.messageId, "wamid.OLD");
     purgePhoneIdentities(TENANT_A);
   });
 });
