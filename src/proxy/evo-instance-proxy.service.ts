@@ -2,7 +2,9 @@ import { loadProxyBrasilConfig, type ProxyBrasilResolved } from "./proxy-brasil.
 import {
   classifyProxyBrasilConnection,
   shouldDisableProxyBrasil,
+  shouldDisableProxyBrasilOnLiveCampaignTick,
   shouldEnableProxyBrasil,
+  shouldSkipProxySetBecauseSessionOpen,
 } from "./proxy-brasil-campaign.rules";
 
 export {
@@ -560,39 +562,62 @@ export async function prepareProxyBrasilSessionForCampaignSend(
         deps.evoApiBase,
       );
 
-      if (proxyEnabled === true && wasOpen && !opts?.forceRestart) {
-        const stable = await assertStableOpen(deps, name);
-        if (stable.ok) {
+      if (shouldSkipProxySetBecauseSessionOpen(wasOpen) && !opts?.forceRestart) {
+        if (proxyEnabled === true) {
+          const stable = await assertStableOpen(deps, name);
+          if (stable.ok) {
+            const entry = setPrepareStatus(name, {
+              status: "ready",
+              state: stable.state,
+              reason: "proxy já ligado e sessão open estável",
+              proxyApplied: false,
+              restarted: false,
+            });
+            console.info(`[ProxyBrasil] ${name}: sessão já pronta com proxy (open estável).`);
+            return {
+              ok: true,
+              instanceName: name,
+              status: entry.status,
+              state: stable.state,
+              reason: entry.reason,
+              proxyApplied: false,
+              restarted: false,
+            };
+          }
           const entry = setPrepareStatus(name, {
-            status: "ready",
-            state: stable.state,
-            reason: "proxy já ligado e sessão open estável",
-            proxyApplied: false,
-            restarted: false,
+            status: "failed",
+            state: stable.state || liveBefore,
+            reason: `Proxy ligado mas sessão instável (state=${stable.state || liveBefore}). Reconecte o QR com Proxy Campanha.`,
+            needsProxyPairing: true,
           });
-          console.info(`[ProxyBrasil] ${name}: sessão já pronta com proxy (open estável).`);
           return {
-            ok: true,
+            ok: false,
             instanceName: name,
             status: entry.status,
-            state: stable.state,
+            state: entry.state,
             reason: entry.reason,
-            proxyApplied: false,
-            restarted: false,
+            needsProxyPairing: true,
           };
         }
         const entry = setPrepareStatus(name, {
-          status: "failed",
-          state: stable.state || liveBefore,
-          reason: `Proxy ligado mas sessão instável (state=${stable.state || liveBefore}). Reconecte o QR com Proxy Campanha.`,
+          status: "ready",
+          state: liveBefore,
+          reason:
+            "sessão open: proxy/set omitido para preservar o pareamento. Para enviar, reconecte no Aquecedor com Proxy Campanha.",
+          proxyApplied: false,
+          restarted: false,
           needsProxyPairing: true,
         });
+        console.warn(`[ProxyBrasil] ${name}: ${entry.reason}`);
         return {
-          ok: false,
+          ok: true,
+          skipped: true,
           instanceName: name,
           status: entry.status,
-          state: entry.state,
+          state: liveBefore,
           reason: entry.reason,
+          proxyApplied: false,
+          restarted: false,
           needsProxyPairing: true,
         };
       }
@@ -842,14 +867,16 @@ const lastProxyEnableAt = new Map<string, number>();
 const PROXY_ENABLE_COOLDOWN_MS = 120_000;
 
 /**
- * Liga Proxy nas selecionadas `open` sem `/proxy/find` enabled.
- * Desliga nas desconectadas confirmadas ou nas que saíram da seleção (held).
+ * No tick: não liga nem desliga Proxy nos números que permanecem na campanha.
+ * Ligar (`proxy/set`) em sessão `open` derruba o pareamento (device_removed).
  */
 export async function reconcileProxyBrasilForCampaignInstances(opts: {
   selectedInstanceNames: string[];
   heldInstanceNames: string[];
   extraReleaseInstanceNames?: string[];
   allowEnable?: boolean;
+  /** false no tick: não desliga Proxy dos números que ainda estão na campanha. */
+  allowDisableHeld?: boolean;
   callEvoAction: CallEvoAction;
   evoApiBase: string;
   prepareDeps?: Omit<ProxyBrasilPrepareDeps, "callEvoAction" | "evoApiBase">;
@@ -906,10 +933,14 @@ export async function reconcileProxyBrasilForCampaignInstances(opts: {
             evoApiBase: opts.evoApiBase,
             ...opts.prepareDeps,
           });
-        } else {
+        } else if (connection !== "open") {
           await applyProxyBrasilToEvoInstance(name, opts.callEvoAction, opts.evoApiBase, {
             config: cfg,
           });
+        } else {
+          console.warn(
+            `[ProxyBrasil] ${name}: reconcile não aplica proxy/set em sessão open (preserva pareamento).`,
+          );
         }
         enabled.push(name);
       } catch (err: any) {
@@ -918,13 +949,17 @@ export async function reconcileProxyBrasilForCampaignInstances(opts: {
       continue;
     }
 
-    if (
-      shouldDisableProxyBrasil({
-        selectedInLiveCampaign: inHeld,
-        connection,
-      }) &&
-      find !== false
-    ) {
+    const mayDisable =
+      opts.allowDisableHeld === false
+        ? shouldDisableProxyBrasilOnLiveCampaignTick({
+            selectedInLiveCampaign: inHeld,
+            connection,
+          })
+        : shouldDisableProxyBrasil({
+            selectedInLiveCampaign: inHeld,
+            connection,
+          });
+    if (mayDisable && find !== false && connection !== "open") {
       try {
         await disableProxyBrasilOnEvoInstance(name, opts.callEvoAction, opts.evoApiBase);
         prepareStatusByInstance.delete(prepareKey(name));

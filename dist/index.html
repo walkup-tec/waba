@@ -50345,7 +50345,7 @@
                         : "dis-campaign-instance-tag dis-campaign-instance-tag--disconnected";
                       const title = ok
                         ? "Instância conectada (connectionState=open)"
-                        : "Desconectada — connectionState≠open (vermelho = offline)";
+                        : "Desconectada — Evolution confirmou close";
                       return `<span class="${cls}" title="${title}">${safe || "—"}</span>`;
                     });
                     tagsBlock = `<div class="dis-campaign-instance-tags" aria-label="Instâncias desta campanha">${parts.join("")}</div>`;

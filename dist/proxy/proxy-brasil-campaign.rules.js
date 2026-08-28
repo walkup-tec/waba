@@ -19,6 +19,8 @@ exports.instanceMaySendWithProxyBrasil = instanceMaySendWithProxyBrasil;
 exports.desiredProxyBrasilEnabled = desiredProxyBrasilEnabled;
 exports.shouldEnableProxyBrasil = shouldEnableProxyBrasil;
 exports.shouldDisableProxyBrasil = shouldDisableProxyBrasil;
+exports.shouldSkipProxySetBecauseSessionOpen = shouldSkipProxySetBecauseSessionOpen;
+exports.shouldDisableProxyBrasilOnLiveCampaignTick = shouldDisableProxyBrasilOnLiveCampaignTick;
 exports.instanceNamesToReleaseAfterCampaignEnd = instanceNamesToReleaseAfterCampaignEnd;
 exports.pickNextEligibleCampaignInstance = pickNextEligibleCampaignInstance;
 exports.pickBalancedEligibleCampaignInstance = pickBalancedEligibleCampaignInstance;
@@ -93,6 +95,22 @@ function shouldDisableProxyBrasil(input) {
     if (!input.selectedInLiveCampaign)
         return true;
     return input.connection === "disconnected";
+}
+/**
+ * `proxy/set` (ligar ou desligar) com a sessão já `open` gera conflict/device_removed.
+ * Ligar proxy só no QR «Proxy Campanha», nunca em número já pareado.
+ */
+function shouldSkipProxySetBecauseSessionOpen(wasOpen) {
+    return wasOpen === true;
+}
+/**
+ * No tick da campanha viva: não desligar Proxy dos números que ainda estão na seleção,
+ * mesmo se o connectionState oscilar. Desligar com sessão pareada derruba a integração.
+ */
+function shouldDisableProxyBrasilOnLiveCampaignTick(input) {
+    if (input.selectedInLiveCampaign)
+        return false;
+    return shouldDisableProxyBrasil(input);
 }
 function instanceNamesToReleaseAfterCampaignEnd(endingSelected, otherLiveSelected) {
     const held = new Set(normalizeProxyBrasilInstanceNames(otherLiveSelected).map((n) => n.toLowerCase()));
@@ -236,6 +254,24 @@ function runProxyBrasilCampaignRulesSelfCheck() {
         connection: "unknown",
     })) {
         throw new Error("proxy-brasil rule failed: keep-unknown");
+    }
+    if (!shouldSkipProxySetBecauseSessionOpen(true)) {
+        throw new Error("proxy-brasil rule failed: skip-proxy-set-on-open");
+    }
+    if (shouldSkipProxySetBecauseSessionOpen(false)) {
+        throw new Error("proxy-brasil rule failed: allow-proxy-set-when-not-open");
+    }
+    if (shouldDisableProxyBrasilOnLiveCampaignTick({
+        selectedInLiveCampaign: true,
+        connection: "disconnected",
+    })) {
+        throw new Error("proxy-brasil rule failed: tick-keep-proxy-on-selected");
+    }
+    if (!shouldDisableProxyBrasilOnLiveCampaignTick({
+        selectedInLiveCampaign: false,
+        connection: "open",
+    })) {
+        throw new Error("proxy-brasil rule failed: tick-disable-left-campaign");
     }
     if (!shouldDisableProxyBrasil({
         selectedInLiveCampaign: false,

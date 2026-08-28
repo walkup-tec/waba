@@ -124,6 +124,7 @@ import {
   invalidateEvoLiveStateCache,
   fetchEvoInstanceLiveState,
   aquecedorLiveStateAllowsConnected,
+  campaignChipConnectedFromLiveState,
   isEvoLiveStateOpen,
   isEvoConnectionInProgress,
   pickEvoConnectionState,
@@ -6962,21 +6963,33 @@ async function enrichSelectedCampaignInstancesLive(
   for (const name of selected) {
     const resolved = resolveStoredNameToEvoTag(name, rows);
     const key = String(resolved.instanceKey || name).trim();
+    const probeKeys = Array.from(
+      new Set(
+        [key, name, resolved.displayName]
+          .map((n) => String(n || "").trim())
+          .filter(Boolean),
+      ),
+    );
     let live = "";
+    let probedKey = key;
     try {
-      live = await fetchEvoInstanceLiveState(key, { fresh: true });
-      if (!live && key.toLowerCase() !== name.toLowerCase()) {
-        live = await fetchEvoInstanceLiveState(name, { fresh: true });
+      for (const probe of probeKeys) {
+        live = await fetchEvoInstanceLiveState(probe, { fresh: true });
+        if (String(live || "").trim()) {
+          probedKey = probe;
+          break;
+        }
       }
     } catch {
       live = "";
     }
-    if (!String(live || "").trim()) continue;
-    const open = isEvoLiveStateOpen(live);
+    const open = campaignChipConnectedFromLiveState(live);
     const idx = rows.findIndex(
       (r) =>
         r.instanceKey.toLowerCase() === key.toLowerCase() ||
-        r.nameKeys.has(name.toLowerCase()),
+        r.instanceKey.toLowerCase() === probedKey.toLowerCase() ||
+        r.nameKeys.has(name.toLowerCase()) ||
+        r.nameKeys.has(key.toLowerCase()),
     );
     if (idx >= 0) {
       rows[idx].connected = open;
@@ -7375,7 +7388,7 @@ async function resolveLiveSpareEvoNames(
         if (row.connected === true) return { name, open: true };
         try {
           const live = await fetchEvoInstanceLiveState(name, { fresh: true });
-          return { name, open: isEvoLiveStateOpen(live) };
+          return { name, open: campaignChipConnectedFromLiveState(live) };
         } catch {
           return { name, open: false };
         }
@@ -7466,7 +7479,7 @@ async function applyCampaignDisconnectedSwap(
       swapped.removedBlocked,
     );
   }
-  await reconcileProxyBrasilForLiveCampaign(campaign, swapped.removedBlocked);
+  await reconcileProxyBrasilForLiveCampaign(campaign, swapped.removedBlocked, false, false);
   console.warn(
     `[Campanha] Troca de instâncias ${campaign.id}: saem ${swapped.removedBlocked.join(", ") || "—"} · entram ${swapped.added.join(", ")}`,
   );
@@ -13805,10 +13818,10 @@ function queueProxyBrasilPrepareForCampaignInstances(instanceNames: string[]) {
   );
 }
 
-/** Desliga Proxy Brasil das instâncias offline da campanha (connectionState≠open). */
+/** Desliga Proxy Brasil só nos nomes explícitos que saíram da campanha — nunca nos que ficaram. */
 function queueDisableProxyBrasilForDisconnectedCampaignInstances(
-  campaign: { configSnapshot?: DisparosConfig | null },
-  evoRows: EvoInstanceTagRow[],
+  _campaign: { configSnapshot?: DisparosConfig | null },
+  _evoRows: EvoInstanceTagRow[],
   explicitInstanceNames?: string[]
 ): void {
   if (!loadProxyBrasilConfig()?.enabled) return;
@@ -13817,20 +13830,9 @@ function queueDisableProxyBrasilForDisconnectedCampaignInstances(
     const n = String(raw || "").trim();
     if (n) names.add(n);
   }
-  // Sem evoRows, tags marcariam tudo como offline (falso) — só usa lista explícita.
-  if (evoRows.length) {
-    const offlineTags = disparadorInstanceTagsForCampaign(campaign.configSnapshot, evoRows).filter(
-      (t) => t.connected !== true
-    );
-    for (const t of offlineTags) {
-      const resolved = resolveStoredNameToEvoTag(t.instanceName, evoRows);
-      const key = String(resolved.instanceKey || t.instanceName || "").trim();
-      if (key) names.add(key);
-    }
-  }
   if (!names.size) return;
   console.warn(
-    "[Campanha] Desligando Proxy Brasil em instância(ões) desconectada(s):",
+    "[Campanha] Desligando Proxy Brasil em instância(ões) que saíram da seleção:",
     Array.from(names).join(", ")
   );
   queueDisableProxyBrasilOnInstances(Array.from(names), callEvoAction, EVO_API_BASE);
@@ -13905,6 +13907,7 @@ async function reconcileProxyBrasilForLiveCampaign(
   campaign: { configSnapshot?: DisparosConfig | null },
   extraReleaseInstanceNames?: string[],
   allowEnable = true,
+  allowDisableHeld = true,
 ): Promise<void> {
   if (!loadProxyBrasilConfig()?.enabled) return;
   await reconcileProxyBrasilForCampaignInstances({
@@ -13912,6 +13915,7 @@ async function reconcileProxyBrasilForLiveCampaign(
     heldInstanceNames: heldProxyBrasilNamesFromLiveCampaigns(),
     extraReleaseInstanceNames,
     allowEnable,
+    allowDisableHeld,
     callEvoAction,
     evoApiBase: EVO_API_BASE,
     prepareDeps: getProxyBrasilCampaignPrepareDeps(),
@@ -14560,7 +14564,7 @@ async function runCampaignDispatchTick(): Promise<void> {
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
     liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
-    await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
+    await reconcileProxyBrasilForLiveCampaign(c, undefined, false, false);
     await releaseHumanPauseForSelectedCampaignInstances(c);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
     if (health.needsMoreInstancesForMinimum) {
@@ -14604,7 +14608,7 @@ async function runCampaignDispatchTick(): Promise<void> {
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
     liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
-    await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
+    await reconcileProxyBrasilForLiveCampaign(c, undefined, false, false);
     await releaseHumanPauseForSelectedCampaignInstances(c);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
     if (health.needsMoreInstancesForMinimum) continue;
@@ -15769,17 +15773,18 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       return res.status(404).json({ error: "Campanha não encontrada." });
     }
 
+    const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
     let evoRows: EvoInstanceTagRow[] = [];
     let evoRowsAll: EvoInstanceTagRow[] = [];
     try {
       evoRowsAll = await fetchEvoInstanceTagRows({ withLiveState: false });
+      evoRowsAll = await enrichSelectedCampaignInstancesLive(prev, evoRowsAll);
       evoRows = await filterEvoTagRowsForRequest(req, evoRowsAll);
     } catch {
       evoRows = [];
       evoRowsAll = [];
     }
 
-    const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
     const selectedNames = Array.isArray(prev.selectedDisparadorInstances)
       ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
       : [];

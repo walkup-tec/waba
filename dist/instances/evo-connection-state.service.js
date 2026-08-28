@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isEvoLiveStateOpen = isEvoLiveStateOpen;
+exports.campaignChipConnectedFromLiveState = campaignChipConnectedFromLiveState;
 exports.aquecedorLiveStateAllowsConnected = aquecedorLiveStateAllowsConnected;
 exports.isEvoConnectionInProgress = isEvoConnectionInProgress;
 exports.waitForEvoInstanceLiveOpen = waitForEvoInstanceLiveOpen;
@@ -19,6 +20,21 @@ const LIVE_STATE_TTL_MS = Math.max(2000, Math.min(120000, Number(process.env.EVO
 let liveStateCache = new Map();
 function isEvoLiveStateOpen(state) {
     return String(state || "").trim().toLowerCase() === "open";
+}
+/**
+ * Chip da campanha só fica vermelho com close explícito.
+ * Probe vazio/timeout e connecting não são «desconectado» — o fetchInstances e a aba
+ * Instâncias tratam o mesmo caso como número ainda no ar.
+ */
+function campaignChipConnectedFromLiveState(liveState) {
+    const s = String(liveState || "").trim().toLowerCase();
+    if (!s)
+        return true;
+    if (s === "open")
+        return true;
+    if (s === "connecting" || s === "pairing" || s === "qrcode")
+        return true;
+    return false;
 }
 /**
  * fetchInstances já marcou a linha como open. Só descarta quando o

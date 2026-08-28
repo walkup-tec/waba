@@ -40,6 +40,12 @@ Registrar apenas decisões permanentes.
 - **Motivo:** Dois Baileys no mesmo JID (ex.: `9224`/`soma-9224`, `drax`/`drax-7770`) derrubam a campanha; lixo antigo na EVO não deve voltar com o pareamento.
 - **Impacto:** `purgeOldEvoSessionsForReconnect` + `POST /instancias/:name/reconnect-purge`. Marker `DEPLOY-2026-08-21-evo-reconnect-purge`.
 
+### 2026-08-28 — Tick/campanha nunca faz proxy/set em sessão open
+
+- **Decisão:** O tick da campanha (running e paused) não liga nem desliga Proxy nos números que permanecem na seleção. `prepareProxyBrasilSessionForCampaignSend` não chama `proxy/set` se `connectionState` já é `open`. Desligar proxy só em nomes explícitos que saíram da campanha, e nunca em sessão `open`.
+- **Motivo:** A regra de 21/08 não estava no tick (`allowEnable: true` + disable nos offline). Depois de reconectar de manhã, o reconcile aplicava `proxy/set` e 3 números caíam (`device_removed`).
+- **Impacto:** Marker `DEPLOY-2026-08-28-083300-keep-pairing-chip-live`. Envio na Alternativa continua exigindo Proxy já ligada no QR «Proxy Campanha».
+
 ### 2026-08-21 — Campanha Alternativa: não desligar proxy nem restart com campanha viva
 
 - **Decisão:** O tick não chama `proxy/set` (disable) ao pausar por instâncias offline. Ativar campanha não faz prepare/restart; só marca ready se já estiver `open`.

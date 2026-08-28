@@ -5688,21 +5688,28 @@ async function enrichSelectedCampaignInstancesLive(config, evoRows) {
     for (const name of selected) {
         const resolved = resolveStoredNameToEvoTag(name, rows);
         const key = String(resolved.instanceKey || name).trim();
+        const probeKeys = Array.from(new Set([key, name, resolved.displayName]
+            .map((n) => String(n || "").trim())
+            .filter(Boolean)));
         let live = "";
+        let probedKey = key;
         try {
-            live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(key, { fresh: true });
-            if (!live && key.toLowerCase() !== name.toLowerCase()) {
-                live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
+            for (const probe of probeKeys) {
+                live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(probe, { fresh: true });
+                if (String(live || "").trim()) {
+                    probedKey = probe;
+                    break;
+                }
             }
         }
         catch {
             live = "";
         }
-        if (!String(live || "").trim())
-            continue;
-        const open = (0, evo_connection_state_service_1.isEvoLiveStateOpen)(live);
+        const open = (0, evo_connection_state_service_1.campaignChipConnectedFromLiveState)(live);
         const idx = rows.findIndex((r) => r.instanceKey.toLowerCase() === key.toLowerCase() ||
-            r.nameKeys.has(name.toLowerCase()));
+            r.instanceKey.toLowerCase() === probedKey.toLowerCase() ||
+            r.nameKeys.has(name.toLowerCase()) ||
+            r.nameKeys.has(key.toLowerCase()));
         if (idx >= 0) {
             rows[idx].connected = open;
             continue;
@@ -6066,7 +6073,7 @@ async function resolveLiveSpareEvoNames(exceptCampaignId, selectedNames, evoRows
                 return { name, open: true };
             try {
                 const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
-                return { name, open: (0, evo_connection_state_service_1.isEvoLiveStateOpen)(live) };
+                return { name, open: (0, evo_connection_state_service_1.campaignChipConnectedFromLiveState)(live) };
             }
             catch {
                 return { name, open: false };
@@ -6144,7 +6151,7 @@ async function applyCampaignDisconnectedSwap(campaign, incoming, evoRows) {
     if (swapped.removedBlocked.length) {
         queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows, swapped.removedBlocked);
     }
-    await reconcileProxyBrasilForLiveCampaign(campaign, swapped.removedBlocked);
+    await reconcileProxyBrasilForLiveCampaign(campaign, swapped.removedBlocked, false, false);
     console.warn(`[Campanha] Troca de instâncias ${campaign.id}: saem ${swapped.removedBlocked.join(", ") || "—"} · entram ${swapped.added.join(", ")}`);
     return swapped;
 }
@@ -11833,8 +11840,8 @@ function getProxyBrasilCampaignPrepareDeps() {
 function queueProxyBrasilPrepareForCampaignInstances(instanceNames) {
     (0, evo_instance_proxy_service_1.queueApplyProxyBrasilToInstances)(instanceNames, callEvoAction, EVO_API_BASE, getProxyBrasilCampaignPrepareDeps());
 }
-/** Desliga Proxy Brasil das instâncias offline da campanha (connectionState≠open). */
-function queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows, explicitInstanceNames) {
+/** Desliga Proxy Brasil só nos nomes explícitos que saíram da campanha — nunca nos que ficaram. */
+function queueDisableProxyBrasilForDisconnectedCampaignInstances(_campaign, _evoRows, explicitInstanceNames) {
     if (!(0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled)
         return;
     const names = new Set();
@@ -11843,19 +11850,9 @@ function queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRo
         if (n)
             names.add(n);
     }
-    // Sem evoRows, tags marcariam tudo como offline (falso) — só usa lista explícita.
-    if (evoRows.length) {
-        const offlineTags = disparadorInstanceTagsForCampaign(campaign.configSnapshot, evoRows).filter((t) => t.connected !== true);
-        for (const t of offlineTags) {
-            const resolved = resolveStoredNameToEvoTag(t.instanceName, evoRows);
-            const key = String(resolved.instanceKey || t.instanceName || "").trim();
-            if (key)
-                names.add(key);
-        }
-    }
     if (!names.size)
         return;
-    console.warn("[Campanha] Desligando Proxy Brasil em instância(ões) desconectada(s):", Array.from(names).join(", "));
+    console.warn("[Campanha] Desligando Proxy Brasil em instância(ões) que saíram da seleção:", Array.from(names).join(", "));
     (0, evo_instance_proxy_service_1.queueDisableProxyBrasilOnInstances)(Array.from(names), callEvoAction, EVO_API_BASE);
 }
 async function prepareProxyBrasilForCampaignInstancesNow(instanceNames) {
@@ -11910,7 +11907,7 @@ function heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId) {
         selectedInstanceNames: selectedInstanceNamesFromCampaign(c),
     })), exceptCampaignId);
 }
-async function reconcileProxyBrasilForLiveCampaign(campaign, extraReleaseInstanceNames, allowEnable = true) {
+async function reconcileProxyBrasilForLiveCampaign(campaign, extraReleaseInstanceNames, allowEnable = true, allowDisableHeld = true) {
     if (!(0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled)
         return;
     await (0, evo_instance_proxy_service_1.reconcileProxyBrasilForCampaignInstances)({
@@ -11918,6 +11915,7 @@ async function reconcileProxyBrasilForLiveCampaign(campaign, extraReleaseInstanc
         heldInstanceNames: heldProxyBrasilNamesFromLiveCampaigns(),
         extraReleaseInstanceNames,
         allowEnable,
+        allowDisableHeld,
         callEvoAction,
         evoApiBase: EVO_API_BASE,
         prepareDeps: getProxyBrasilCampaignPrepareDeps(),
@@ -12438,7 +12436,7 @@ async function runCampaignDispatchTick() {
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
         liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
-        await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
+        await reconcileProxyBrasilForLiveCampaign(c, undefined, false, false);
         await releaseHumanPauseForSelectedCampaignInstances(c);
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
         if (health.needsMoreInstancesForMinimum) {
@@ -12483,7 +12481,7 @@ async function runCampaignDispatchTick() {
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
         liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
-        await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
+        await reconcileProxyBrasilForLiveCampaign(c, undefined, false, false);
         await releaseHumanPauseForSelectedCampaignInstances(c);
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
         if (health.needsMoreInstancesForMinimum)
@@ -13541,17 +13539,18 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         if (!campaign) {
             return res.status(404).json({ error: "Campanha não encontrada." });
         }
+        const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
         let evoRows = [];
         let evoRowsAll = [];
         try {
             evoRowsAll = await fetchEvoInstanceTagRows({ withLiveState: false });
+            evoRowsAll = await enrichSelectedCampaignInstancesLive(prev, evoRowsAll);
             evoRows = await filterEvoTagRowsForRequest(req, evoRowsAll);
         }
         catch {
             evoRows = [];
             evoRowsAll = [];
         }
-        const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
         const selectedNames = Array.isArray(prev.selectedDisparadorInstances)
             ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : [];

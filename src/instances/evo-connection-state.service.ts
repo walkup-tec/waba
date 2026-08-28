@@ -23,6 +23,19 @@ export function isEvoLiveStateOpen(state: string): boolean {
 }
 
 /**
+ * Chip da campanha só fica vermelho com close explícito.
+ * Probe vazio/timeout e connecting não são «desconectado» — o fetchInstances e a aba
+ * Instâncias tratam o mesmo caso como número ainda no ar.
+ */
+export function campaignChipConnectedFromLiveState(liveState: string): boolean {
+  const s = String(liveState || "").trim().toLowerCase();
+  if (!s) return true;
+  if (s === "open") return true;
+  if (s === "connecting" || s === "pairing" || s === "qrcode") return true;
+  return false;
+}
+
+/**
  * fetchInstances já marcou a linha como open. Só descarta quando o
  * connectionState vier explícito e diferente de open (close/connecting).
  * Estado vazio (timeout/404) não é ghost.
