@@ -34,7 +34,7 @@ Não usar como histórico de desenvolvimento.
 
 ## Pendências relevantes
 
-- Pendência de deploy: validar `GET /health` = `DEPLOY-2026-08-28-083300-keep-pairing-chip-live` após Redeploy `waba_disparador`
+- Pendência de deploy: validar `GET /health` = `DEPLOY-2026-08-28-090000-botao-append-spare` após Redeploy `waba_disparador`
 - Após cada mudança de UI/runtime: `npm run build` + commit `dist/` antes do push (FTP sozinho **não** atualiza `waba.draxsistemas.com.br`)
 - Após deploy `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`: reenviar boas-vindas e confirmar JPEG nítido no WhatsApp
 - Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)

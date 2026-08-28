@@ -54,7 +54,7 @@ A URL de login/disparador usa o container Docker (`COPY dist/`). Mudança só em
 
 | Marker | Tema |
 |--------|------|
-| `DEPLOY-2026-08-28-083300-keep-pairing-chip-live` | Pareamento: sem proxy/set no tick; chip vermelho só com close |
+| `DEPLOY-2026-08-28-090000-botao-append-spare` | «+ Instâncias» inclui o spare da UI (append, sem 409 compra) |
 | `DEPLOY-2026-08-24-alternativa-sem-asteriscos-titulo` | Alternativa: sendButtons sem `**` (title real) |
 | `DEPLOY-2026-08-21-campanha-auto-swap-instancias` | Campanha: troca automática de desconectado + Proxy |
 | `DEPLOY-2026-08-21-alternativa-keep-pairing` | Alternativa: não desligar proxy/restart com campanha viva |

@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 09:00 — Botão + Instâncias inclui o spare da UI
+- POST usava live `open` e 409 ia para comprar números; a tela já mostrava spare
+- Clique agora usa a mesma lista do GET e **acrescenta** (não troca o 7770)
+- Marker: `DEPLOY-2026-08-28-090000-botao-append-spare`
+
 ## 2026-08-28 08:33 — Push unificado (pareamento + chip 7770)
 - Tick não faz `proxy/set` em sessão `open`; chip vermelho só com close; «+ Instâncias» inclui spare
 - Marker: `DEPLOY-2026-08-28-083300-keep-pairing-chip-live`

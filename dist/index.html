@@ -51005,19 +51005,6 @@
         }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          const code = String(data?.code || "").trim();
-          if (response.status === 409 && code === "buy_numbers_required") {
-            showToast(
-              String(
-                data?.error ||
-                  "Não há números disponíveis. Compre mais números para continuar a campanha."
-              ),
-              "warning",
-              6200
-            );
-            goToDisparosBuyNumbersPanel();
-            return false;
-          }
           showToast(String(data?.error || "Não foi possível adicionar instâncias na campanha."), "error", 6200);
           return false;
         }

@@ -6049,6 +6049,9 @@ function listConnectedSpareEvoNames(exceptCampaignId, selectedNames, evoRows, ma
     return out;
 }
 async function resolveLiveSpareEvoNames(exceptCampaignId, selectedNames, evoRows, maxToAdd = 20) {
+    const heuristic = listConnectedSpareEvoNames(exceptCampaignId, selectedNames, evoRows, maxToAdd);
+    if (heuristic.length)
+        return heuristic;
     const candidates = listSpareEvoRowsNotInCampaign(exceptCampaignId, selectedNames, evoRows);
     candidates.sort((a, b) => {
         const aName = String(a.instanceKey || "").trim();
@@ -6069,10 +6072,14 @@ async function resolveLiveSpareEvoNames(exceptCampaignId, selectedNames, evoRows
         const chunk = candidates.slice(i, i + concurrency);
         const states = await Promise.all(chunk.map(async (row) => {
             const name = String(row.instanceKey || "").trim();
+            const alias = String(row.displayName || "").trim();
             if (row.connected === true)
                 return { name, open: true };
             try {
-                const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
+                let live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
+                if (!String(live || "").trim() && alias && alias.toLowerCase() !== name.toLowerCase()) {
+                    live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(alias, { fresh: true });
+                }
                 return { name, open: (0, evo_connection_state_service_1.campaignChipConnectedFromLiveState)(live) };
             }
             catch {
@@ -6089,7 +6096,35 @@ async function resolveLiveSpareEvoNames(exceptCampaignId, selectedNames, evoRows
     }
     return confirmed;
 }
-async function persistIncomingCampaignInstances(campaign, incoming, evoRows) {
+function appendIncomingCampaignInstances(prevSelected, incoming, evoRows) {
+    const selected = prevSelected.map((n) => String(n || "").trim()).filter(Boolean);
+    const identity = campaignSelectionIdentityKeys(selected, evoRows);
+    const added = [];
+    for (const raw of incoming) {
+        const name = String(raw || "").trim();
+        if (!name)
+            continue;
+        const resolved = resolveStoredNameToEvoTag(name, evoRows);
+        const key = String(resolved.instanceKey || name).trim();
+        if (!key)
+            continue;
+        const row = evoRows.find((r) => String(r.instanceKey || "").trim().toLowerCase() === key.toLowerCase());
+        if (row && evoRowIsInIdentity(row, identity))
+            continue;
+        if (identity.has(key.toLowerCase()) || identity.has(name.toLowerCase()))
+            continue;
+        added.push(key);
+        selected.push(key);
+        identity.add(key.toLowerCase());
+        identity.add(name.toLowerCase());
+        if (row) {
+            for (const id of evoRowIdentityKeys(row))
+                identity.add(id);
+        }
+    }
+    return { added, selected };
+}
+async function persistIncomingCampaignInstances(campaign, incoming, evoRows, opts) {
     const prevSelected = selectedInstanceNamesFromCampaign(campaign);
     for (const name of incoming) {
         try {
@@ -6113,11 +6148,13 @@ async function persistIncomingCampaignInstances(campaign, incoming, evoRows) {
             /* não bloqueia a inclusão */
         }
     }
-    const swapped = mergeCampaignInstancesReplacingBlocked({
-        prevSelected,
-        incoming,
-        evoRows,
-    });
+    const swapped = opts?.appendOnly === true
+        ? { ...appendIncomingCampaignInstances(prevSelected, incoming, evoRows), removedBlocked: [] }
+        : mergeCampaignInstancesReplacingBlocked({
+            prevSelected,
+            incoming,
+            evoRows,
+        });
     const nextSelected = swapped.added.length
         ? swapped.selected
         : Array.from(new Set([...prevSelected, ...incoming.map((n) => String(n || "").trim()).filter(Boolean)]));
@@ -13561,17 +13598,18 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         if (auto) {
             const pickLimit = Math.max(instancesToAdd, 1);
             incoming = await resolveLiveSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
+            console.warn(`[Campanha] ${id} +Instâncias auto: spare=[${incoming.join(", ") || "—"}] selected=[${selectedNames.join(", ")}]`);
             if (!incoming.length) {
                 return res.status(409).json({
                     error: disconnectedNames.length
-                        ? `Não há instância conectada livre para substituir ${disconnectedNames.join(", ")}. Conecte um número habilitado para disparos e use «+ Instâncias».`
-                        : "Não há instância conectada fora desta campanha. Conecte um número e use «+ Instâncias».",
+                        ? `Não há instância livre para incluir na campanha (offline: ${disconnectedNames.join(", ")}).`
+                        : "Não há instância fora desta campanha para incluir.",
                     instanceHealth: healthBefore,
-                    code: "buy_numbers_required",
-                    needsPurchase: true,
                 });
             }
-            const swapped = await persistIncomingCampaignInstances(campaign, incoming, evoRowsAll);
+            const swapped = await persistIncomingCampaignInstances(campaign, incoming, evoRowsAll, {
+                appendOnly: true,
+            });
             if (!swapped.added.length) {
                 return res.status(400).json({
                     error: "Nenhuma instância nova foi adicionada. Verifique se o número está conectado.",
