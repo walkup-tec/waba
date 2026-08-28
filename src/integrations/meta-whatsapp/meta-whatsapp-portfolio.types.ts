@@ -21,6 +21,7 @@ export type MetaPortfolioNumberPublic = {
   uiStatus: MetaPortfolioNumberUiStatus;
   dispatchStatus: MetaPortfolioDispatchStatus;
   canActivate: boolean;
+  profilePictureUrl: string | null;
 };
 
 export type MetaPortfolioAssetsPublic = {

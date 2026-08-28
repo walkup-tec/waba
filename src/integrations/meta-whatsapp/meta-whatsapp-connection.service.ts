@@ -34,6 +34,11 @@ import {
   writePortfolioIdentity,
 } from "./meta-whatsapp-portfolio-identity.store";
 import {
+  applyLocalPhoneIdentities,
+  readPhonePhoto,
+  writePhoneIdentity,
+} from "./meta-whatsapp-phone-identity.store";
+import {
   parseDisplayName,
   parseProfilePhoto,
 } from "./meta-whatsapp-phone-profile";
@@ -113,14 +118,13 @@ function requireConfigured(): void {
   }
 }
 
-function withLocalPortfolioIdentity(
+function withLocalIdentities(
   tenantId: string,
   assets: MetaPortfolioAssetsPublic,
 ): MetaPortfolioAssetsPublic {
-  if (!assets.portfolio) return assets;
   return {
-    ...assets,
-    portfolio: applyLocalPortfolioIdentity(tenantId, assets.portfolio),
+    portfolio: assets.portfolio ? applyLocalPortfolioIdentity(tenantId, assets.portfolio) : null,
+    numbers: applyLocalPhoneIdentities(tenantId, assets.numbers || []),
   };
 }
 
@@ -382,7 +386,7 @@ export class MetaWhatsappConnectionService {
     const tenant = requireTenant(auth);
     const open = await this.repository.findOpenByTenant(tenant.tenantId);
     if (!open) {
-      return withLocalPortfolioIdentity(tenant.tenantId, { portfolio: null, numbers: [] });
+      return withLocalIdentities(tenant.tenantId, { portfolio: null, numbers: [] });
     }
 
     const fallbackPortfolio = mapMetaBusinessToPortfolio(
@@ -439,7 +443,7 @@ export class MetaWhatsappConnectionService {
 
     const wabaId = String(open.wabaId || "").trim();
     if (!wabaId) {
-      return withLocalPortfolioIdentity(tenant.tenantId, {
+      return withLocalIdentities(tenant.tenantId, {
         portfolio: portfolio.id ? portfolio : null,
         numbers: [],
       });
@@ -460,7 +464,7 @@ export class MetaWhatsappConnectionService {
         status: phones.status,
       });
       if (phones.status === 401) throw new MetaWhatsappError("invalid_token");
-      return withLocalPortfolioIdentity(tenant.tenantId, {
+      return withLocalIdentities(tenant.tenantId, {
         portfolio: portfolio.id ? portfolio : null,
         numbers: [],
       });
@@ -472,7 +476,7 @@ export class MetaWhatsappConnectionService {
       hasBusiness: Boolean(portfolio.id),
       numbers: numbers.length,
     });
-    return withLocalPortfolioIdentity(tenant.tenantId, {
+    return withLocalIdentities(tenant.tenantId, {
       portfolio: portfolio.id ? portfolio : null,
       numbers,
     });
@@ -534,7 +538,14 @@ export class MetaWhatsappConnectionService {
   async updatePhoneProfileFromAuth(
     auth: WabaRequestAuth,
     input: { phoneNumberId?: string; displayName?: string; photoBase64?: string; photoMime?: string },
-  ): Promise<MetaPortfolioAssetsPublic & { namePending: boolean; photoUpdated: boolean; warning?: string }> {
+  ): Promise<
+    MetaPortfolioAssetsPublic & {
+      namePending: boolean;
+      nameUpdated: boolean;
+      photoUpdated: boolean;
+      warning?: string;
+    }
+  > {
     const tenant = requireTenant(auth);
     const phoneNumberId = String(input.phoneNumberId || "").trim();
     const displayName = parseDisplayName(input.displayName);
@@ -560,17 +571,24 @@ export class MetaWhatsappConnectionService {
       throw new MetaWhatsappError("invalid_token");
     }
 
+    writePhoneIdentity(tenant.tenantId, phoneNumberId, {
+      name: displayName || undefined,
+      photo: photo
+        ? { ext: photo.mime.includes("png") ? "png" : "jpg", bytes: photo.bytes }
+        : undefined,
+    });
+    const nameUpdated = Boolean(displayName);
+    const photoUpdated = Boolean(photo);
     const connected = isMetaPhoneConnected(numberRow.metaStatus);
     const warnings: string[] = [];
-    let photoUpdated = false;
+
     if (photo) {
       if (!connected) {
         logMetaWhatsappSafe("phone-profile-failed", {
           tenantId: tenant.tenantId,
           reason: "not_registered",
         });
-        if (!displayName) throw new MetaWhatsappError("phone_not_registered");
-        warnings.push("A foto só muda depois que o número estiver Ativo (PIN de 6 dígitos).");
+        warnings.push("A Meta só aplica a foto depois que o número estiver Ativo (PIN de 6 dígitos).");
       } else {
         const appId = readMetaAppId();
         if (!appId) throw new MetaWhatsappError("config_invalid");
@@ -599,8 +617,6 @@ export class MetaWhatsappConnectionService {
             });
             if (profile.status === 401) throw new MetaWhatsappError("invalid_token");
             warnings.push("A Meta recusou a foto deste número.");
-          } else {
-            photoUpdated = true;
           }
         } catch (error) {
           if (error instanceof MetaWhatsappError) throw error;
@@ -636,18 +652,26 @@ export class MetaWhatsappConnectionService {
       }
     }
 
-    if (!photoUpdated && !namePending) {
-      throw new MetaWhatsappError(photo && !connected ? "phone_not_registered" : "profile_update_failed");
-    }
-
     logMetaWhatsappSafe("phone-profile-updated", {
       tenantId: tenant.tenantId,
       namePending,
+      nameUpdated,
       photoUpdated,
+      metaWarning: Boolean(warnings.length),
     });
     const listed = await this.listPortfolioAssets(auth);
     const warning = warnings.join(" ").trim();
-    return { ...listed, namePending, photoUpdated, ...(warning ? { warning } : {}) };
+    return { ...listed, namePending, nameUpdated, photoUpdated, ...(warning ? { warning } : {}) };
+  }
+
+  async readPhonePhotoFromAuth(
+    auth: WabaRequestAuth,
+    phoneNumberId: string,
+  ): Promise<{ mime: string; bytes: Buffer } | null> {
+    const tenant = requireTenant(auth);
+    const id = String(phoneNumberId || "").trim();
+    if (!id) return null;
+    return readPhonePhoto(tenant.tenantId, id);
   }
 
   async updatePortfolioFromAuth(

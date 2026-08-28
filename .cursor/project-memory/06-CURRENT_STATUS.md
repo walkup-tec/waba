@@ -25,7 +25,7 @@ Não usar como histórico de desenvolvimento.
 - Reconexão de número: apaga clones/sessão antiga na Evolution; preserva foguinhos e totais de envio
 - Campanha dispara quando a Evolution está `open`; pausa automática de saúde retoma sozinha
 - Campanha em execução: troca automática 1:1 do desconectado por conectado habilitado para disparos (Proxy sai/entra)
-- Laboratório: CARD 02 mostra nome e foto do portfólio gravados na conta WABA (Meta é best-effort)
+- Laboratório: CARD 02 mostra nome e foto do portfólio e dos chips gravados na conta WABA (Meta é best-effort)
 
 ## Funcionalidades em andamento
 

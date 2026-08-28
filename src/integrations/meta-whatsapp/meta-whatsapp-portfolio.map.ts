@@ -81,6 +81,7 @@ export function mapMetaPhoneToPortfolioNumber(
     uiStatus: connected ? "ativo" : "pendente",
     dispatchStatus: busy ? "em_disparo" : "livre",
     canActivate: !connected,
+    profilePictureUrl: null,
   };
 }
 

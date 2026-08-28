@@ -15,6 +15,7 @@ import type { WabaRequestAuth } from "../../auth/waba-request-auth";
 import { parseDisplayName, parseProfilePhoto } from "./meta-whatsapp-phone-profile";
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
+import { purgePhoneIdentities } from "./meta-whatsapp-phone-identity.store";
 
 describe("meta portfolio mapper", () => {
   it("mapeia card do portfólio sem vazar token", () => {
@@ -155,10 +156,12 @@ describe("meta portfolio service", () => {
     restore("META_CONFIG_ID", previous.configId);
     restore("META_TOKEN_ENCRYPTION_KEY", previous.enc);
     purgePortfolioIdentity(tenantId);
+    purgePhoneIdentities(tenantId);
   });
 
   afterEach(() => {
     purgePortfolioIdentity(tenantId);
+    purgePhoneIdentities(tenantId);
   });
 
   function connectedRow(): MetaWhatsappConnectionRecord {
@@ -346,7 +349,9 @@ describe("meta portfolio service", () => {
       displayName: "Soma Promotora",
     });
     assert.equal(result.namePending, true);
+    assert.equal(result.nameUpdated, true);
     assert.equal(result.photoUpdated, false);
+    assert.equal(result.numbers[0]?.verifiedName, "Soma Promotora");
     assert.equal(posts[0]?.path, "phone-1");
     assert.equal(posts[0]?.query?.new_display_name, "Soma Promotora");
   });
@@ -382,6 +387,7 @@ describe("meta portfolio service", () => {
       photoMime: "image/png",
     });
     assert.equal(result.photoUpdated, true);
+    assert.match(String(result.numbers[0]?.profilePictureUrl || ""), /\/integrations\/meta\/whatsapp\/phone-numbers\/photo/);
     assert.equal(posts[0]?.path, "phone-1/whatsapp_business_profile");
     assert.equal(posts[0]?.body?.profile_picture_handle, "pic-handle");
   });
@@ -421,15 +427,21 @@ describe("meta portfolio service", () => {
       photoMime: "image/png",
     });
     assert.equal(result.namePending, true);
-    assert.equal(result.photoUpdated, false);
+    assert.equal(result.photoUpdated, true);
+    assert.equal(result.numbers[0]?.verifiedName, "Soma Promotora");
     assert.deepEqual(posts, ["phone-1"]);
     assert.match(String(result.warning || ""), /foto/i);
   });
 
-  it("recusa foto de número ainda pendente", async () => {
+  it("grava a foto no card mesmo com número pendente", async () => {
     const png =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let profilePosts = 0;
     const graph = async (input: { path: string }) => {
+      if (input.path === "phone-1/whatsapp_business_profile") {
+        profilePosts += 1;
+        return { ok: true, status: 200, json: { success: true } };
+      }
       if (input.path === "1247508354180311") {
         return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup" } };
       }
@@ -444,15 +456,44 @@ describe("meta portfolio service", () => {
       { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
       graph as any,
     );
-    await assert.rejects(
-      () =>
-        service.updatePhoneProfileFromAuth(auth, {
-          phoneNumberId: "phone-1",
-          photoBase64: png,
-          photoMime: "image/png",
-        }),
-      (error: unknown) => error instanceof MetaWhatsappError && error.code === "phone_not_registered",
+    const result = await service.updatePhoneProfileFromAuth(auth, {
+      phoneNumberId: "phone-1",
+      photoBase64: png,
+      photoMime: "image/png",
+    });
+    assert.equal(result.photoUpdated, true);
+    assert.equal(profilePosts, 0);
+    assert.match(String(result.numbers[0]?.profilePictureUrl || ""), /\/integrations\/meta\/whatsapp\/phone-numbers\/photo/);
+    assert.match(String(result.warning || ""), /Ativo/);
+  });
+
+  it("mantém o nome no card se a Meta recusar o display name", async () => {
+    const graph = async (input: { path: string; method: string }) => {
+      if (input.method === "POST" && input.path === "phone-1") {
+        return { ok: false, status: 400, json: { error: { code: 100 } }, graphCode: "100" };
+      }
+      if (input.path === "1247508354180311") {
+        return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup" } };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: { data: [{ id: "phone-1", status: "CONNECTED", verified_name: "Walkup" }] },
+      };
+    };
+    const service = new MetaWhatsappConnectionService(
+      { async findOpenByTenant() { return connectedRow(); } } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
     );
+    const result = await service.updatePhoneProfileFromAuth(auth, {
+      phoneNumberId: "phone-1",
+      displayName: "Soma Promotora",
+    });
+    assert.equal(result.nameUpdated, true);
+    assert.equal(result.namePending, false);
+    assert.equal(result.numbers[0]?.verifiedName, "Soma Promotora");
+    assert.match(String(result.warning || ""), /Meta/);
   });
 
   it("atualiza o nome do portfólio na Meta", async () => {

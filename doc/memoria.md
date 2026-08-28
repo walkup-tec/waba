@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 05:28 — Identidade local do card do número WhatsApp
+- Nome e foto do chip no CARD 02 gravam no Laboratório; Meta é best-effort (nome precisa de aprovação; foto só em número Ativo)
+- LOG: `doc/LOG-2026-08-28__052800__numero-identidade-local-card.md`
+
 ## 2026-08-28 05:10 — Identidade local do card do portfólio
 - Nome e foto do CARD 02 gravam no Laboratório; Meta é best-effort (foto do BM é só leitura sem Página)
 - LOG: `doc/LOG-2026-08-28__051000__portfolio-identidade-local-card.md`

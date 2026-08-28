@@ -3328,6 +3328,14 @@
           border: 1px solid rgba(148, 163, 184, 0.18);
           background: rgba(15, 23, 42, 0.55);
         }
+        .meta-number-card.has-photo { grid-template-columns: 48px minmax(0, 1fr) auto; }
+        .meta-number-photo {
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
+          object-fit: cover;
+          background: #020617;
+        }
         .meta-number-card strong { display: block; font-size: 15px; }
         .meta-number-card .meta-number-name { display: block; margin-top: 4px; font-size: 12px; color: rgba(226, 232, 240, 0.62); }
         .meta-number-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -3390,6 +3398,7 @@
         .meta-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
         @media (max-width: 640px) {
           .meta-number-card { grid-template-columns: 1fr; }
+          .meta-number-card.has-photo { grid-template-columns: 48px minmax(0, 1fr); }
           .meta-portfolio-card { flex-wrap: wrap; }
         }
         .meta-tpl-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-bottom:16px; }
@@ -35031,6 +35040,16 @@
             const phone = metaTpEsc(item.displayPhoneNumber || item.phoneNumberId);
             const verified = metaTpEsc(item.verifiedName || "Sem nome de exibição");
             const id = metaTpEsc(item.phoneNumberId);
+            const photoUrl = String(item.profilePictureUrl || "").trim();
+            const isLocalPhoto = /^\/integrations\/meta\/whatsapp\/phone-numbers\/photo(\?|$)/i.test(photoUrl);
+            const safePhoto = isLocalPhoto
+              ? resolveWabaPublicPath(photoUrl)
+              : /^https:\/\//i.test(photoUrl)
+                ? photoUrl
+                : "";
+            const avatar = safePhoto
+              ? '<img class="meta-number-photo" alt="" src="' + metaTpEsc(safePhoto) + '" />'
+              : "";
             const ativo = item.uiStatus === "ativo";
             const busy = item.dispatchStatus === "em_disparo";
             const statusChip = ativo
@@ -35049,7 +35068,10 @@
                 id +
                 '">Ativar número</button></div>';
             return (
-              '<article class="meta-number-card">' +
+              '<article class="meta-number-card' +
+              (safePhoto ? " has-photo" : "") +
+              '">' +
+              avatar +
               "<div><strong>" +
               phone +
               '</strong><span class="meta-number-name">' +
@@ -35362,7 +35384,7 @@
         if (hintEl) {
           hintEl.textContent = isPortfolio
             ? "O card do Laboratório atualiza na hora. A Meta só replica o nome se o token for admin do Business, e a foto só se houver uma Página do Facebook."
-            : "A Meta precisa aprovar o novo nome. O número precisa estar Ativo para mudar a foto. Depois da aprovação do nome, ative de novo com o PIN de 6 dígitos.";
+            : "O card do Laboratório atualiza na hora. A Meta só replica o nome após aprovação (e um novo PIN). A foto na Meta só entra se o número estiver Ativo.";
         }
         if (file) file.disabled = false;
         if (nameEl) nameEl.value = name || "";
@@ -35450,7 +35472,7 @@
           metaTpEditStatus("O nome de exibição precisa ter pelo menos 3 caracteres.");
           return false;
         }
-        metaTpEditStatus(isPortfolio ? "Salvando no card…" : "Salvando na Meta…");
+        metaTpEditStatus("Salvando no card…");
         const path = isPortfolio
           ? "/integrations/meta/whatsapp/portfolio/profile"
           : "/integrations/meta/whatsapp/phone-numbers/profile";

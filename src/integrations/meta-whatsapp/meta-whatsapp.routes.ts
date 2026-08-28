@@ -240,6 +240,35 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  app.get("/integrations/meta/whatsapp/phone-numbers/photo", async (req: Request, res: Response) => {
+    try {
+      if (!isMetaOfficialPortfolioLabEnabled()) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Recurso indisponível neste ambiente.",
+          code: "config_invalid",
+        });
+      }
+      const photo = await service.readPhonePhotoFromAuth(
+        resolveWabaRequestAuth(req),
+        String(req.query.id || req.query.phoneNumberId || "").trim(),
+      );
+      if (!photo) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Foto do número não encontrada.",
+          code: "invalid_payload",
+        });
+      }
+      res.setHeader("Content-Type", photo.mime);
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("Content-Length", String(photo.bytes.length));
+      return res.status(200).end(photo.bytes);
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
   app.post("/integrations/meta/whatsapp/portfolio/profile", async (req: Request, res: Response) => {
     try {
       if (!isMetaOfficialPortfolioLabEnabled()) {
