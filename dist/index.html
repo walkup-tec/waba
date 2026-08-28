@@ -49173,6 +49173,24 @@
           );
 
           const selected = candidates.filter((row) => currentSelected.has(row.name));
+          const selectedNames = new Set(selected.map((row) => row.name));
+          currentSelected.forEach((name) => {
+            if (selectedNames.has(name)) return;
+            const inst = (Array.isArray(instancesData?.items) ? instancesData.items : []).find(
+              (row) => String(row?.name || row?.instanceName || "").trim() === name
+            );
+            selected.push({
+              name,
+              label: String(
+                inst?.instanceAlias ||
+                  inst?.instanceLabel ||
+                  inst?.name ||
+                  inst?.instanceName ||
+                  name
+              ).trim() || name,
+              status: String(inst?.connectionStatus || inst?.liveConnectionStatus || "open").toLowerCase(),
+            });
+          });
           let available = candidates.filter((row) => {
             if (currentSelected.has(row.name)) return false;
             if (availableId === "dis-available-instances" && instanceRowHeldByUnfinishedCampaign(row, heldKeys)) {

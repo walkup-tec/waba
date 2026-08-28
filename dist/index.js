@@ -77,6 +77,7 @@ const evo_instance_phone_service_1 = require("./instances/evo-instance-phone.ser
 const evo_connection_state_service_1 = require("./instances/evo-connection-state.service");
 const whatsapp_connecting_restriction_service_1 = require("./instances/whatsapp-connecting-restriction.service");
 const evo_reconnect_purge_service_1 = require("./instances/evo-reconnect-purge.service");
+const campaign_instance_identity_1 = require("./instances/campaign-instance-identity");
 const evo_integration_probe_service_1 = require("./services/evo-integration-probe.service");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
 const waba_fazenda_pool_service_1 = require("./instances/waba-fazenda-pool.service");
@@ -5536,10 +5537,7 @@ function buildConnectedFromEvoResponse(instances) {
         const row = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(item);
         if (!row || !row.open || !row.instanceName)
             return null;
-        const numero = row.phone;
-        if (!numero)
-            return null;
-        return { instancia: row.instanceName, numero };
+        return { instancia: row.instanceName, numero: row.phone || "" };
     })
         .filter((x) => x != null);
 }
@@ -6786,6 +6784,8 @@ async function enrichInstanceItemsWithLiveConnection(items) {
 }
 async function buildInstancesSnapshotForAuth(auth) {
     const ownedNames = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(auth.email);
+    const campaignNames = liveCampaignInstanceNamesForOwner(auth.email);
+    const listedNames = Array.from(new Set([...ownedNames, ...campaignNames]));
     const cache = await loadEvoInstancesCache();
     const cacheByName = new Map();
     for (const row of cache?.items || []) {
@@ -6795,7 +6795,7 @@ async function buildInstancesSnapshotForAuth(auth) {
     }
     const aliasesMap = await loadInstanceAliasesMap();
     const whatsappNamesMap = await loadWhatsappProfileNamesMap();
-    const items = ownedNames.map((instanceName) => {
+    const items = listedNames.map((instanceName) => {
         const cached = cacheByName.get(instanceName.toLowerCase());
         if (cached) {
             return {
@@ -11600,11 +11600,26 @@ async function pickDisparadorInstanceForConfig(config, opts) {
     }
     const connected = list.length ? buildConnectedFromEvoResponse(list) : [];
     const byName = new Map(connected.map((item) => [String(item.instancia || "").trim().toLowerCase(), item]));
+    const aliasesMap = await loadInstanceAliasesMap();
+    const whatsappMap = await loadWhatsappProfileNamesMap();
+    const evoRows = list.length
+        ? buildEvoInstanceTagRowsFromList(list, whatsappMap, aliasesMap)
+        : await fetchEvoInstanceTagRows({ withLiveState: false });
+    const identityRows = evoRows.map((r) => ({
+        instanceKey: r.instanceKey,
+        displayName: r.displayName,
+        nameKeys: Array.from(r.nameKeys),
+        digitKeys: Array.from(r.digitKeys),
+    }));
     const usageMap = await loadInstanceUsageMap();
     const eligible = [];
     const campaignKey = String(opts?.campaignId || "").trim() || "__global_rr__";
+    const canonicalSelected = [];
     for (const name of selectedList) {
-        const evoName = resolveSelectedDisparadorToEvoName(name, connected) || name;
+        const evoName = (0, campaign_instance_identity_1.resolveCampaignStoredNameToEvoKey)(name, identityRows) ||
+            resolveSelectedDisparadorToEvoName(name, connected) ||
+            name;
+        canonicalSelected.push(evoName);
         const usage = resolveUsageFromMap(usageMap, evoName) || resolveUsageFromMap(usageMap, name);
         if (usage && usage.useDisparador === false)
             continue;
@@ -11617,7 +11632,12 @@ async function pickDisparadorInstanceForConfig(config, opts) {
         if (campaignKey !== "__global_rr__" && isCampaignInstanceInCooldown(campaignKey, evoName)) {
             continue;
         }
-        const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(evoName, { fresh: true });
+        let live = "";
+        for (const probe of (0, campaign_instance_identity_1.uniqueProbeNamesForLiveState)(evoName, name)) {
+            live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(probe, { fresh: true });
+            if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(live))
+                break;
+        }
         if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(live))
             continue;
         if ((0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled) {
@@ -11631,6 +11651,7 @@ async function pickDisparadorInstanceForConfig(config, opts) {
                 selectedInLiveCampaign: true,
                 connection: "open",
                 proxyFindEnabled: cachedOn ? true : proxyFind,
+                sessionAlreadyOpen: true,
             });
             if (!maySend.allowed)
                 continue;
@@ -11666,7 +11687,7 @@ async function pickDisparadorInstanceForConfig(config, opts) {
         sendCounts[item.instancia.toLowerCase()] = getCampaignInstanceSendCount(campaignKey, item.instancia);
     }
     const picked = (0, proxy_brasil_campaign_rules_1.pickBalancedEligibleCampaignInstance)({
-        selectedNames: selectedList.map((n) => resolveSelectedDisparadorToEvoName(n, connected) || n),
+        selectedNames: canonicalSelected,
         eligibleNames: pool.map((item) => item.instancia),
         sendCounts,
         cursor: campaignDisparadorRoundRobin.get(campaignKey) ?? 0,
@@ -11917,6 +11938,22 @@ async function prepareProxyBrasilForCampaignInstancesNow(instanceNames) {
 function selectedInstanceNamesFromCampaign(campaign) {
     const raw = campaign?.configSnapshot?.selectedDisparadorInstances;
     return Array.isArray(raw) ? raw.map((n) => String(n || "").trim()).filter(Boolean) : [];
+}
+function liveCampaignInstanceNamesForOwner(ownerEmail) {
+    const email = String(ownerEmail || "").trim().toLowerCase();
+    if (!email.includes("@"))
+        return [];
+    const names = new Set();
+    for (const campaign of disparosCampaignsMemory) {
+        if (String(campaign.ownerEmail || "").trim().toLowerCase() !== email)
+            continue;
+        const st = String(campaign.status || "").trim().toLowerCase();
+        if (st !== "running" && st !== "paused")
+            continue;
+        for (const n of selectedInstanceNamesFromCampaign(campaign))
+            names.add(n);
+    }
+    return Array.from(names);
 }
 function instanceNameHeldByUnfinishedCampaign(instanceName) {
     const target = String(instanceName || "").trim().toLowerCase();
@@ -12249,6 +12286,7 @@ async function processOneCampaignDispatch(campaignId) {
                 selectedInLiveCampaign: true,
                 connection: (0, proxy_brasil_campaign_rules_1.classifyProxyBrasilConnection)(liveForReady),
                 proxyFindEnabled: proxyFind,
+                sessionAlreadyOpen: (0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveForReady),
             });
             if (!maySend.allowed) {
                 console.warn(`[Campanha] envio bloqueado sem Proxy Brasil (${maySend.reason}):`, instancePick.instancia);
@@ -13476,9 +13514,21 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
             if (selectedForProxy.length && (0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled) {
                 await prepareProxyBrasilForCampaignInstancesNow(selectedForProxy);
                 let anyReady = false;
+                const identityRowsForActivate = evoRows.map((r) => ({
+                    instanceKey: r.instanceKey,
+                    displayName: r.displayName,
+                    nameKeys: Array.from(r.nameKeys),
+                    digitKeys: Array.from(r.digitKeys),
+                }));
                 for (const rawName of selectedForProxy) {
-                    const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(rawName, { fresh: true });
-                    const proxyFind = await (0, evo_instance_proxy_service_1.fetchEvoProxyFindEnabled)(rawName, callEvoAction, EVO_API_BASE, {
+                    const evoName = (0, campaign_instance_identity_1.resolveCampaignStoredNameToEvoKey)(rawName, identityRowsForActivate) || rawName;
+                    let live = "";
+                    for (const probe of (0, campaign_instance_identity_1.uniqueProbeNamesForLiveState)(evoName, rawName)) {
+                        live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(probe, { fresh: true });
+                        if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(live))
+                            break;
+                    }
+                    const proxyFind = await (0, evo_instance_proxy_service_1.fetchEvoProxyFindEnabled)(evoName, callEvoAction, EVO_API_BASE, {
                         timeoutMs: 8000,
                         retries: 0,
                     });
@@ -13487,6 +13537,7 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
                         selectedInLiveCampaign: true,
                         connection: (0, proxy_brasil_campaign_rules_1.classifyProxyBrasilConnection)(live),
                         proxyFindEnabled: proxyFind,
+                        sessionAlreadyOpen: (0, evo_connection_state_service_1.isEvoLiveStateOpen)(live),
                     });
                     if (maySend.allowed)
                         anyReady = true;

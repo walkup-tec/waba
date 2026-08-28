@@ -68,6 +68,8 @@ export function instanceMaySendWithProxyBrasil(input: {
   selectedInLiveCampaign: boolean;
   connection: ProxyBrasilConnectionKind;
   proxyFindEnabled: boolean | null;
+  /** Sessão já open: proxy/set derruba o pareamento — o envio não pode ficar preso. */
+  sessionAlreadyOpen?: boolean;
 }): { allowed: boolean; reason: string } {
   if (!input.selectedInLiveCampaign) {
     return { allowed: false, reason: "not-selected" };
@@ -79,6 +81,9 @@ export function instanceMaySendWithProxyBrasil(input: {
     return { allowed: true, reason: "proxy-config-off" };
   }
   if (input.proxyFindEnabled !== true) {
+    if (input.sessionAlreadyOpen === true && input.connection === "open") {
+      return { allowed: true, reason: "open-cannot-set-proxy" };
+    }
     return { allowed: false, reason: "proxy-off" };
   }
   return { allowed: true, reason: "ok" };
@@ -224,6 +229,17 @@ export function runProxyBrasilCampaignRulesSelfCheck(): void {
         selectedInLiveCampaign: true,
         connection: "open",
         proxyFindEnabled: true,
+      }),
+    ],
+    [
+      "send-allows-open-without-proxy-when-cannot-set",
+      true,
+      send({
+        proxyConfigEnabled: true,
+        selectedInLiveCampaign: true,
+        connection: "open",
+        proxyFindEnabled: false,
+        sessionAlreadyOpen: true,
       }),
     ],
     [

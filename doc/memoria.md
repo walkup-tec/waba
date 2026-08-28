@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 10:15 — 7770 envia via drax; 1261 volta à lista
+- Pick da campanha casa WB-7770 → `drax` e sonda live no nome EVO; 1261 open sem telefone entra na lista
+- Marker: `DEPLOY-2026-08-28-101500-pick-7770-drax-1261`
+- LOG: `doc/LOG-2026-08-28__101500__pick-7770-drax-1261.md`
+
 ## 2026-08-28 09:58 — Marker forçado para Redeploy
 - Marker: `DEPLOY-2026-08-28-095800-FORCE-INSTANCIAS-SWAP`
 - Produção já estava em `093700`; push só para EasyPanel puxar imagem nova
