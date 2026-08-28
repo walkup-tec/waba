@@ -4,6 +4,18 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-28 — «+ Instâncias» substitui o bloqueado, sem ir à compra
+
+- **Decisão:** POST auto usa a mesma lista de spare do GET. Troca 1:1 só dos vermelhos. Resposta sem `buy_numbers_required`.
+- **Motivo:** Docker em `083300` devolvia compra quando o probe live do spare falhava, embora a UI já mostrasse número livre (2477 vs spare).
+- **Impacto:** Marker `DEPLOY-2026-08-28-093700-instancias-substitui-bloqueada`. Exige Redeploy EasyPanel.
+
+### 2026-08-28 — Intervalo de envio da campanha 30% menor
+
+- **Decisão:** `CAMPAIGN_SEND_INTERVAL_RATIO = 0.7` no throttle Alternativa e no wait da campanha oficial. Campanha Alternativa já running atualiza o snapshot no tick.
+- **Motivo:** Throughput percebido estava baixo; o operador pediu reduzir o intervalo entre cada mensagem em 30%, sem subir o teto diário.
+- **Impacto:** Marker `DEPLOY-2026-08-28-091500-intervalo-envio-menos-30`. Burst 60/14 e 100/dia inalterados.
+
 ### 2026-08-28 — Card do número oficial: só o que a Meta já aplicou
 
 - **Decisão:** Nome e foto do chip no CARD 02 são os da Graph. A Drax não confirma save se a Meta recusar. Foto/descrição entram no POST do perfil. O nome visível no card (e no disparo) é o `verified_name` até a Meta aprovar o novo.

@@ -9,6 +9,9 @@ export const ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
 export const DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 1;
 export const ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 100;
 
+/** Intervalo entre mensagens = 70% do pacing anterior (redução de 30%). */
+export const CAMPAIGN_SEND_INTERVAL_RATIO = 0.7;
+
 /** Dentro do expediente: 60 min enviando / 14 min pausa (mesmo padrão do aquecedor). */
 export const ALTERNATIVA_BURST_ON_MINUTES = 60;
 export const ALTERNATIVA_BURST_OFF_MINUTES = 14;
@@ -110,6 +113,7 @@ export function getAlternativaDispatchRulesMeta() {
     burstOffVariationRatio: ALTERNATIVA_BURST_OFF_VARIATION_RATIO,
     burstOffMinMinutes: offBounds.min,
     burstOffMaxMinutes: offBounds.max,
+    sendIntervalRatio: CAMPAIGN_SEND_INTERVAL_RATIO,
   };
 }
 
@@ -165,7 +169,8 @@ export function computeAlternativaTypingDelayMs(messageText: string): number {
 }
 
 /** Calcula delay e limites para respeitar o teto diário por número na janela de expediente.
- * Intervalo entre envios = metade do pacing “cheio” (ex.: 8–22h e 100/dia → ~240–264s).
+ * Intervalo entre envios = 70% da metade do pacing “cheio”
+ * (ex.: 8–22h e 100/dia → base ~240–264s → ~168–185s).
  */
 export function computeAlternativaThrottle(input: AlternativaThrottleInput): AlternativaThrottle {
   const startHour = Math.max(0, Math.min(23, Math.floor(Number(input.startHour) || 8)));
@@ -176,8 +181,14 @@ export function computeAlternativaThrottle(input: AlternativaThrottleInput): Alt
   const fullAvgIntervalSec = Math.max(60, Math.floor((hoursPerWindow * 3600) / maxPerDay));
   const avgIntervalSec = Math.max(30, Math.floor(fullAvgIntervalSec / 2));
   const jitter = Math.max(6, Math.floor(24 / 2));
-  const delayMin = Math.max(10, avgIntervalSec - jitter);
-  const delayMax = Math.min(3600, avgIntervalSec + jitter);
+  const delayMin = Math.max(
+    10,
+    Math.round((avgIntervalSec - jitter) * CAMPAIGN_SEND_INTERVAL_RATIO),
+  );
+  const delayMax = Math.min(
+    3600,
+    Math.round((avgIntervalSec + jitter) * CAMPAIGN_SEND_INTERVAL_RATIO),
+  );
   return {
     delayMinSeconds: delayMin,
     delayMaxSeconds: Math.max(delayMin, delayMax),

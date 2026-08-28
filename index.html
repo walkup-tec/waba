@@ -48723,10 +48723,13 @@
         const fallbackThrottle = (() => {
           const hours = Math.max(1, endHour - startHour);
           const maxPerDay = rules.maxSendsPerDayPerNumber;
-          const avg = Math.max(60, Math.floor((hours * 3600) / maxPerDay));
+          const fullAvg = Math.max(60, Math.floor((hours * 3600) / maxPerDay));
+          const avg = Math.max(30, Math.floor(fullAvg / 2));
+          const jitter = 12;
+          const ratio = 0.7;
           return {
-            delayMinSeconds: Math.max(10, avg - 24),
-            delayMaxSeconds: Math.min(3600, avg + 24),
+            delayMinSeconds: Math.max(10, Math.round((avg - jitter) * ratio)),
+            delayMaxSeconds: Math.min(3600, Math.round((avg + jitter) * ratio)),
             maxPerHourPerInstance: Math.max(1, Math.ceil(maxPerDay / hours)),
             maxPerDayPerInstance: maxPerDay,
           };
@@ -51005,22 +51008,28 @@
         }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          showToast(String(data?.error || "Não foi possível adicionar instâncias na campanha."), "error", 6200);
+          const code = String(data?.code || "").trim();
+          showToast(
+            String(
+              data?.error ||
+                (code === "buy_numbers_required"
+                  ? "Não foi possível incluir o número livre na campanha. Recarregue a página e tente «+ Instâncias» de novo."
+                  : "Não foi possível adicionar instâncias na campanha.")
+            ),
+            "error",
+            6200
+          );
           return false;
         }
         const stillNeedsMore = data?.stillNeedsMore === true;
-        const needsPurchase = data?.needsPurchase === true;
         showToast(
           String(
             data?.message ||
               "Instâncias adicionadas. Se a saúde da campanha estiver boa, ative novamente."
           ),
-          stillNeedsMore || needsPurchase ? "warning" : "success",
-          stillNeedsMore || needsPurchase ? 6200 : 4200
+          stillNeedsMore ? "warning" : "success",
+          stillNeedsMore ? 6200 : 4200
         );
-        if (needsPurchase) {
-          goToDisparosBuyNumbersPanel();
-        }
         if (isDisparoEvoUi()) {
           await loadDisparosEvoCampaigns();
         } else {

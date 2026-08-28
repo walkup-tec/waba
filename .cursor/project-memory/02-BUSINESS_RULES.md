@@ -4,6 +4,17 @@ Somente regras permanentes. Sem detalhes de implementação.
 
 ## Regras
 
+### Campanha — «+ Instâncias»
+
+- O botão inclui o número conectado livre que a tela já mostra e **substitui** o chip vermelho (bloqueado/offline).
+- Não redireciona para comprar números. Compra só vale quando realmente não há spare.
+
+### Campanha — intervalo entre mensagens
+
+- O wait entre envios do mesmo chip é **70%** do pacing anterior (`CAMPAIGN_SEND_INTERVAL_RATIO`).
+- API Alternativa (8h–22h, teto 100/dia): cerca de **168–185 s** entre mensagens do mesmo número (antes ~240–264 s).
+- Teto **100 envios/dia por número** e ciclo **60 min enviando / ~14 min pausa** permanecem.
+
 ### Laboratório — identidade do card do portfólio e dos números
 
 - Nome e foto visíveis no CARD 02 (portfólio e chips) são da conta WABA (Laboratório).

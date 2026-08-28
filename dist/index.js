@@ -3403,6 +3403,18 @@ function applyAlternativaDispatchProfile(config) {
         lockTtlSeconds: Math.max(180, Math.min(1800, throttle.delayMaxSeconds * 3)),
     };
 }
+function scaleOfficialCampaignSendInterval(config) {
+    const minS = Math.max(10, Math.round((Number(config.delayMinSeconds) || DISPAROS_DEFAULTS.delayMinSeconds) *
+        alternativa_dispatch_rules_1.CAMPAIGN_SEND_INTERVAL_RATIO));
+    const maxS = Math.max(minS, Math.round((Number(config.delayMaxSeconds) || DISPAROS_DEFAULTS.delayMaxSeconds) *
+        alternativa_dispatch_rules_1.CAMPAIGN_SEND_INTERVAL_RATIO));
+    return { ...config, delayMinSeconds: minS, delayMaxSeconds: maxS };
+}
+function campaignDispatchPacingConfig(config, alternativaMotor) {
+    return alternativaMotor
+        ? applyAlternativaDispatchProfile(config)
+        : scaleOfficialCampaignSendInterval(config);
+}
 async function resolveDispatchCreditsApiKindForOwner(ownerEmail) {
     const normalized = String(ownerEmail || "").trim().toLowerCase();
     if (!normalized.includes("@"))
@@ -6167,6 +6179,9 @@ async function persistIncomingCampaignInstances(campaign, incoming, evoRows, opt
     }
     await persistCampaignSelectedInstances(campaign, nextSelected);
     queueProxyBrasilPrepareForCampaignInstances(added);
+    if (swapped.removedBlocked.length) {
+        queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows, swapped.removedBlocked);
+    }
     console.warn(`[Campanha] ${campaign.id}: entram ${added.join(", ")}${swapped.removedBlocked.length ? ` · saem ${swapped.removedBlocked.join(", ")}` : ""}.`);
     return { added, removedBlocked: swapped.removedBlocked, selected: nextSelected };
 }
@@ -12145,6 +12160,11 @@ async function processOneCampaignDispatch(campaignId) {
     try {
         const ownerEmail = String(campaign.ownerEmail || "").trim().toLowerCase();
         const isAlternativaMotor = Boolean(ownerEmail) && (await shouldApplyAlternativaDispatchProfile(ownerEmail));
+        const pacingConfig = campaignDispatchPacingConfig(campaign.configSnapshot, isAlternativaMotor);
+        if (isAlternativaMotor) {
+            campaign.configSnapshot.delayMinSeconds = pacingConfig.delayMinSeconds;
+            campaign.configSnapshot.delayMaxSeconds = pacingConfig.delayMaxSeconds;
+        }
         const sentPhoneDigits = new Set(disparosCampaignLeadsMemory
             .filter((l) => l.campaignId === campaignId && l.status === "sent")
             .map((l) => String(normalizeWhatsAppNumber(l.phone) || "").replace(/\D/g, ""))
@@ -12246,7 +12266,7 @@ async function processOneCampaignDispatch(campaignId) {
         const digitsCheck = String(numero || "").replace(/\D/g, "");
         if (!isPlausibleBrWhatsappDestinationDigits(digitsCheck)) {
             await persistLeadFailed(lead, "invalid_phone");
-            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+            scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
             return;
         }
         const instanceLiveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia);
@@ -12273,14 +12293,14 @@ async function processOneCampaignDispatch(campaignId) {
                 if (!mediaSend.ok) {
                     console.error("[Campanha] EVO sendMedia falhou:", mediaSend.status, String(mediaSend.body || "").slice(0, 200));
                     await persistLeadFailed(lead, classifyEvoSendFailure(mediaSend.status, mediaSend.body));
-                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+                    scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
                     return;
                 }
                 mediaMessageId = extractCampaignSendMessageId(mediaSend.json);
                 if (!mediaMessageId) {
                     console.error("[Campanha] sendMedia sem messageId — não envia texto sem ACK da imagem:", lead.phone);
                     await persistLeadFailed(lead, "send_error");
-                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+                    scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
                     return;
                 }
                 lead.mediaMessageId = mediaMessageId;
@@ -12298,7 +12318,7 @@ async function processOneCampaignDispatch(campaignId) {
                 lead.mediaMessageId = undefined;
                 lead.mediaInstanceName = undefined;
                 await persistLeadFailed(lead, "send_error");
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+                scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
                 return;
             }
             if (!(0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(mediaAck.status)) {
@@ -12309,7 +12329,7 @@ async function processOneCampaignDispatch(campaignId) {
         else if (isAlternativaMotor) {
             console.warn("[Campanha Alternativa] Sem 4 imagens 1080×1080 no snapshot — não envia texto sem imagem:", campaign.id);
             lead.status = "pending";
-            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+            scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
             return;
         }
         else {
@@ -12380,7 +12400,7 @@ async function processOneCampaignDispatch(campaignId) {
                 console.warn("[Campanha Alternativa] sendButtons indisponível; envia texto sem URL (imagem já foi):", buttonResult.status, ghost ? "viewOnce" : String(buttonResult.body || "").slice(0, 180));
                 const textOnly = prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
                 if (!(await sendCampaignTextMessage(textOnly))) {
-                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+                    scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
                     return;
                 }
                 deliveredText = textOnly;
@@ -12390,12 +12410,12 @@ async function processOneCampaignDispatch(campaignId) {
             console.error("[Campanha Alternativa] sem URL do botão; lead pending — não envia texto sem botão.");
             lead.status = "pending";
             queuePersistDisparosLocalState();
-            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+            scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
             return;
         }
         else {
             if (!(await sendCampaignTextMessage(outbound.text))) {
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+                scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
                 return;
             }
         }
@@ -12403,7 +12423,7 @@ async function processOneCampaignDispatch(campaignId) {
         if ((0, delivery_verify_helpers_1.isEvoAckFailure)(ackStatus)) {
             console.error(`[Campanha] ACK=${ackStatus} — não marcar sent (EVO HTTP ok, WhatsApp rejeitou):`, instancePick.instancia, lead.phone);
             await persistLeadFailed(lead, "send_error");
-            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+            scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
             return;
         }
         const sentIso = new Date().toISOString();
@@ -12450,7 +12470,7 @@ async function processOneCampaignDispatch(campaignId) {
         if (!persisted) {
             console.error("[Campanha] Lead marcado sent em memória mas falhou no Supabase — bloqueando reenvio pelo status local:", lead.id, lead.phone);
         }
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot, instancePick.instancia);
+        scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
     }
     finally {
         campaignDispatchBusy.delete(campaignId);
@@ -13591,25 +13611,26 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         const selectedNames = Array.isArray(prev.selectedDisparadorInstances)
             ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : [];
-        const healthBefore = getCampaignInstanceHealth(prev, evoRows);
+        const healthBefore = getCampaignInstanceHealth(prev, evoRowsAll);
         const instancesToAdd = Math.max(computeCampaignInstancesToAdd(healthBefore), healthBefore.disconnectedCount);
-        const disconnectedNames = listDisconnectedStoredInstanceNames(selectedNames, evoRows);
+        const disconnectedNames = listDisconnectedStoredInstanceNames(selectedNames, evoRowsAll);
         let incoming = [];
         if (auto) {
             const pickLimit = Math.max(instancesToAdd, 1);
-            incoming = await resolveLiveSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
-            console.warn(`[Campanha] ${id} +Instâncias auto: spare=[${incoming.join(", ") || "—"}] selected=[${selectedNames.join(", ")}]`);
+            const spareSameAsUi = listConnectedSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
+            incoming = spareSameAsUi.length
+                ? spareSameAsUi
+                : await resolveLiveSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
+            console.warn(`[Campanha] ${id} +Instâncias auto: spare=[${incoming.join(", ") || "—"}] selected=[${selectedNames.join(", ")}] offline=[${disconnectedNames.join(", ") || "—"}]`);
             if (!incoming.length) {
                 return res.status(409).json({
                     error: disconnectedNames.length
-                        ? `Não há instância livre para incluir na campanha (offline: ${disconnectedNames.join(", ")}).`
+                        ? `Não há instância livre para substituir ${disconnectedNames.join(", ")}. Conecte um número habilitado para disparos e use «+ Instâncias».`
                         : "Não há instância fora desta campanha para incluir.",
                     instanceHealth: healthBefore,
                 });
             }
-            const swapped = await persistIncomingCampaignInstances(campaign, incoming, evoRowsAll, {
-                appendOnly: true,
-            });
+            const swapped = await persistIncomingCampaignInstances(campaign, incoming, evoRowsAll);
             if (!swapped.added.length) {
                 return res.status(400).json({
                     error: "Nenhuma instância nova foi adicionada. Verifique se o número está conectado.",
@@ -13649,14 +13670,14 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
                 });
             }
         }
-        const swapped = await applyCampaignDisconnectedSwap(campaign, incoming, evoRows);
+        const swapped = await applyCampaignDisconnectedSwap(campaign, incoming, evoRowsAll);
         if (!swapped.added.length) {
             return res.status(400).json({
                 error: "Nenhuma instância nova foi adicionada. Verifique se o número está conectado e habilitado para disparos.",
                 instanceHealth: healthBefore,
             });
         }
-        const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
+        const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRowsAll);
         const addedCount = swapped.added.length;
         const removedCount = swapped.removedBlocked.length;
         const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
@@ -13673,8 +13694,6 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             removedBlocked: swapped.removedBlocked,
             instanceHealth,
             stillNeedsMore,
-            needsPurchase: computeCampaignInstancesToAdd(instanceHealth) > 0 &&
-                addedCount < instancesToAdd,
             message: computeCampaignInstancesToAdd(instanceHealth) > 0
                 ? `Adicionamos ${addedCount} número(s).${swapNote} Ainda há instâncias desconectadas ou abaixo do mínimo. Conecte outro número e use «+ Instâncias».`
                 : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números.`,

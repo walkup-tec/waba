@@ -1,7 +1,7 @@
 "use strict";
 /** Regras do motor de envio API Alternativa (números da fazenda). */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALTERNATIVA_BURST_OFF_VARIATION_RATIO = exports.ALTERNATIVA_BURST_OFF_MINUTES = exports.ALTERNATIVA_BURST_ON_MINUTES = exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = void 0;
+exports.ALTERNATIVA_BURST_OFF_VARIATION_RATIO = exports.ALTERNATIVA_BURST_OFF_MINUTES = exports.ALTERNATIVA_BURST_ON_MINUTES = exports.CAMPAIGN_SEND_INTERVAL_RATIO = exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = void 0;
 exports.getAlternativaBurstOffBoundsMinutes = getAlternativaBurstOffBoundsMinutes;
 exports.getAlternativaDispatchRulesMeta = getAlternativaDispatchRulesMeta;
 exports.isAlternativaBurstWindowOpen = isAlternativaBurstWindowOpen;
@@ -19,6 +19,8 @@ exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
 /** Mínimo de números conectados para ativar campanha (era 4; agora 1). */
 exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 1;
 exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 100;
+/** Intervalo entre mensagens = 70% do pacing anterior (redução de 30%). */
+exports.CAMPAIGN_SEND_INTERVAL_RATIO = 0.7;
 /** Dentro do expediente: 60 min enviando / 14 min pausa (mesmo padrão do aquecedor). */
 exports.ALTERNATIVA_BURST_ON_MINUTES = 60;
 exports.ALTERNATIVA_BURST_OFF_MINUTES = 14;
@@ -81,6 +83,7 @@ function getAlternativaDispatchRulesMeta() {
         burstOffVariationRatio: exports.ALTERNATIVA_BURST_OFF_VARIATION_RATIO,
         burstOffMinMinutes: offBounds.min,
         burstOffMaxMinutes: offBounds.max,
+        sendIntervalRatio: exports.CAMPAIGN_SEND_INTERVAL_RATIO,
     };
 }
 /** Janela liga/pausa humanizada (minutos do dia em SP), independente do expediente.
@@ -133,7 +136,8 @@ function computeAlternativaTypingDelayMs(messageText) {
     return base + jitter;
 }
 /** Calcula delay e limites para respeitar o teto diário por número na janela de expediente.
- * Intervalo entre envios = metade do pacing “cheio” (ex.: 8–22h e 100/dia → ~240–264s).
+ * Intervalo entre envios = 70% da metade do pacing “cheio”
+ * (ex.: 8–22h e 100/dia → base ~240–264s → ~168–185s).
  */
 function computeAlternativaThrottle(input) {
     const startHour = Math.max(0, Math.min(23, Math.floor(Number(input.startHour) || 8)));
@@ -144,8 +148,8 @@ function computeAlternativaThrottle(input) {
     const fullAvgIntervalSec = Math.max(60, Math.floor((hoursPerWindow * 3600) / maxPerDay));
     const avgIntervalSec = Math.max(30, Math.floor(fullAvgIntervalSec / 2));
     const jitter = Math.max(6, Math.floor(24 / 2));
-    const delayMin = Math.max(10, avgIntervalSec - jitter);
-    const delayMax = Math.min(3600, avgIntervalSec + jitter);
+    const delayMin = Math.max(10, Math.round((avgIntervalSec - jitter) * exports.CAMPAIGN_SEND_INTERVAL_RATIO));
+    const delayMax = Math.min(3600, Math.round((avgIntervalSec + jitter) * exports.CAMPAIGN_SEND_INTERVAL_RATIO));
     return {
         delayMinSeconds: delayMin,
         delayMaxSeconds: Math.max(delayMin, delayMax),

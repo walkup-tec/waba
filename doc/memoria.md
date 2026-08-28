@@ -1,5 +1,17 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 09:37 — + Instâncias substitui o bloqueado (2477)
+- Produção ainda estava em `083300`; POST devolvia `buy_numbers_required` e a UI ia para compra
+- POST usa a mesma lista de spare da tela; troca 1:1 do vermelho; sem redirecionar para comprar
+- Marker: `DEPLOY-2026-08-28-093700-instancias-substitui-bloqueada`
+- LOG: `doc/LOG-2026-08-28__093700__instancias-substitui-bloqueada.md`
+
+## 2026-08-28 09:15 — Intervalo entre mensagens −30%
+- Wait por chip = 70% do pacing anterior (Alternativa 8h–22h: ~240–264s → ~168–185s)
+- Campanha já running pega o throttle novo no tick; teto 100/dia e burst 60/14 iguais
+- Marker: `DEPLOY-2026-08-28-091500-intervalo-envio-menos-30`
+- LOG: `doc/LOG-2026-08-28__091500__intervalo-envio-menos-30.md`
+
 ## 2026-08-28 09:00 — Botão + Instâncias inclui o spare da UI
 - POST usava live `open` e 409 ia para comprar números; a tela já mostrava spare
 - Clique agora usa a mesma lista do GET e **acrescenta** (não troca o 7770)
