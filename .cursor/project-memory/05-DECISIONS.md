@@ -4,6 +4,20 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-28 — Inbox: envio e listagem no chip ligado
+
+- **Decisão:** Cloud API envia pelo `phone_number_id` do chip com Inbox verde. Se a conexão tiver outro ID e houver um único chip ligado, a listagem trata os dois como o mesmo canal.
+- **Motivo:** O envio gravava o ID da conexão; o Inbox filtrava só o chip. A conversa não aparecia e não dava para responder.
+- **Impacto:** Marker `DEPLOY-2026-08-28-121400-inbox-envio-conversa`. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-messages/
+- **Data:** 2026-08-28
+
+### 2026-08-28 — Nome do Inbox = nome salvo no Laboratório
+
+- **Decisão:** Ao gravar o display name do chip, o Inbox usa esse nome (`identity.name`), não o snapshot do switch nem só o `verified_name` da Graph.
+- **Motivo:** O operador atualizava o nome no Laboratório e o Inbox continuava com a razão social antiga.
+- **Impacto:** Card do Laboratório segue honesto com a Graph; Inbox e banner acompanham o nome pedido. Botão **Todos** empilha acima do card do número.
+- **Data:** 2026-08-28
+
 ### 2026-08-28 — Chip bloqueado no WhatsApp não fica verde na campanha
 
 - **Decisão:** Auto-swap e cor do chip usam `statusReason` 403 / outbound ERROR / bloqueio de campanha, não só `connectionState`. Spare do tick = mesma lista do botão «+ Instâncias».

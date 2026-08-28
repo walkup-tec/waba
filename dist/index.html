@@ -3550,20 +3550,33 @@
         .meta-chat-filters { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 10px; }
         .meta-chat-filters button { border:0; border-radius:999px; background:#202c33; color:#8696a0; font-size:12px; padding:6px 10px; cursor:pointer; }
         .meta-chat-filters button.is-active { background:#005c4b; color:#fff; }
-        .meta-chat-channels { display:flex; gap:8px; overflow-x:auto; padding:0 12px 10px; }
+        .meta-chat-channels {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          padding: 0 12px 10px;
+          overflow: visible;
+        }
         .meta-chat-channel {
-          flex: 0 0 auto;
           display: grid;
-          grid-template-columns: 28px auto;
+          grid-template-columns: 28px minmax(0, 1fr);
           gap: 8px;
           align-items: center;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
           border: 1px solid rgba(255,255,255,.06);
           border-radius: 12px;
           background: #202c33;
           color: #e9edef;
-          padding: 6px 10px 6px 6px;
+          padding: 8px 10px 8px 8px;
           cursor: pointer;
           text-align: left;
+        }
+        .meta-chat-channel.is-all {
+          grid-template-columns: minmax(0, 1fr);
+          padding: 8px 12px;
         }
         .meta-chat-channel.is-active { border-color: #00a884; background: #005c4b; }
         .meta-chat-channel-photo {
@@ -3575,8 +3588,14 @@
         }
         .meta-chat-channel-photo.is-fallback { object-fit: contain; padding: 3px; }
         .meta-chat-channel-copy { display:grid; gap:1px; min-width:0; }
-        .meta-chat-channel-name { font-size:12px; font-weight:700; white-space:nowrap; }
-        .meta-chat-channel-phone { font-size:10px; color:#8696a0; white-space:nowrap; }
+        .meta-chat-channel-name,
+        .meta-chat-channel-phone {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .meta-chat-channel-name { font-size:12px; font-weight:700; }
+        .meta-chat-channel-phone { font-size:10px; color:#8696a0; }
         .meta-inbox-origin {
           display:inline-flex;
           align-items:center;
@@ -10421,6 +10440,43 @@
       .instance-action-btn.disabled {
         opacity: 0.55;
         cursor: not-allowed;
+      }
+
+      @keyframes waba-action-spin {
+        to { transform: rotate(360deg); }
+      }
+      .is-processing {
+        cursor: wait !important;
+        pointer-events: none;
+        opacity: 0.88;
+      }
+      button.is-processing::after,
+      .instance-action-btn.is-processing::after,
+      .meta-onboard-cta.is-processing::after,
+      .meta-chat-send.is-processing::after {
+        content: "";
+        display: inline-block;
+        width: 0.85em;
+        height: 0.85em;
+        margin-left: 0.45em;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: waba-action-spin 0.65s linear infinite;
+        vertical-align: -0.12em;
+      }
+      .meta-number-switch.is-processing {
+        position: relative;
+      }
+      .meta-number-switch.is-processing::before {
+        content: "";
+        position: absolute;
+        inset: -5px;
+        border: 2px solid rgba(148, 163, 184, 0.35);
+        border-top-color: #25d366;
+        border-radius: 999px;
+        animation: waba-action-spin 0.65s linear infinite;
+        z-index: 1;
       }
 
       .instances-table tr.instance-row-deleting {
@@ -35097,6 +35153,93 @@
         return raw.startsWith("/") ? `${base}${raw}` : `${base}/${raw}`;
       }
 
+      (function wabaActionBusyInit() {
+        if (window.__wabaActionBusyInit) return;
+        window.__wabaActionBusyInit = true;
+        let clickAt = 0;
+        let clickBtn = null;
+        let inflight = 0;
+        let gen = 0;
+        function isAction(el) {
+          if (!el) return false;
+          if (
+            el.closest(
+              "[data-meta-inbox-filter], [data-meta-inbox-channel], [data-meta-inbox-open], [data-waba-tab], .waba-tab, .menu-item, .drawer-nav",
+            )
+          ) {
+            return false;
+          }
+          if (
+            el.matches(
+              ".instance-action-btn, .meta-onboard-cta, .meta-chat-send, .meta-number-switch, .device-cloud-warm-tab",
+            )
+          ) {
+            return true;
+          }
+          if (
+            el.id === "meta-tp-edit-save" ||
+            el.id === "meta-cloud-lab-send" ||
+            el.id === "meta-inbox-send" ||
+            el.id === "meta-inbox-tpl-send"
+          ) {
+            return true;
+          }
+          return (
+            el.hasAttribute("data-meta-activate") ||
+            el.hasAttribute("data-meta-inbox-toggle") ||
+            el.hasAttribute("data-meta-inbox-status") ||
+            el.hasAttribute("data-meta-inbox-assign")
+          );
+        }
+        function setBusy(el, on) {
+          if (!el) return;
+          el.classList.toggle("is-processing", on);
+          if (on) el.setAttribute("aria-busy", "true");
+          else el.removeAttribute("aria-busy");
+        }
+        const origFetch = window.fetch.bind(window);
+        window.fetch = function () {
+          const btn = clickBtn && Date.now() - clickAt < 800 ? clickBtn : null;
+          const myGen = gen;
+          if (btn) {
+            inflight += 1;
+            setBusy(btn, true);
+          }
+          const p = origFetch.apply(null, arguments);
+          if (btn) {
+            const done = function () {
+              inflight -= 1;
+              if (inflight <= 0 && myGen === gen) {
+                inflight = 0;
+                setBusy(btn, false);
+                if (clickBtn === btn) clickBtn = null;
+              }
+            };
+            Promise.resolve(p).then(done, done);
+          }
+          return p;
+        };
+        document.addEventListener(
+          "click",
+          function (event) {
+            const el =
+              event.target && event.target.closest
+                ? event.target.closest("button, [role=button], input[type=submit]")
+                : null;
+            if (!el || el.disabled || !isAction(el)) return;
+            clickAt = Date.now();
+            clickBtn = el;
+            gen += 1;
+            inflight = 0;
+            setBusy(el, true);
+            window.setTimeout(function () {
+              if (inflight === 0 && clickBtn === el) setBusy(el, false);
+            }, 180);
+          },
+          true,
+        );
+      })();
+
       window.wabaSendMetaCloudLabTest = async function wabaSendMetaCloudLabTest(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         const toEl = document.getElementById("meta-cloud-lab-to");
@@ -35108,11 +35251,19 @@
         if (outEl) outEl.textContent = "Enviando…";
         if (btn) btn.disabled = true;
         try {
+          const inboxChip = Array.isArray(metaTpSession.numbers)
+            ? metaTpSession.numbers.find((item) => item && item.inboxEnabled === true)
+            : null;
           const response = await fetch(resolveWabaPublicPath("/integrations/meta/whatsapp/messages"), {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({ to, type: "text", text }),
+            body: JSON.stringify({
+              to,
+              type: "text",
+              text,
+              phoneNumberId: String((inboxChip && inboxChip.phoneNumberId) || metaTpSession.phoneNumberId || "").trim() || undefined,
+            }),
           });
           const payload = await response.json().catch(() => ({}));
           const serialized = JSON.stringify(payload);
@@ -35131,6 +35282,7 @@
               " id=" +
               String(payload.messageId || "—");
           }
+          if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
         } catch {
           if (outEl) outEl.textContent = "Falha de rede ao enviar.";
         } finally {
@@ -35467,7 +35619,7 @@
               '" data-meta-inbox-phone="' +
               metaTpEsc(phone) +
               '" data-meta-inbox-name="' +
-              metaTpEsc(verified) +
+              metaTpEsc(requested || item.verifiedName || "") +
               '"></button></div>' +
               activate +
               "</article>"
@@ -35573,6 +35725,7 @@
               ? "webhooks: já inscrito"
               : "webhooks: inscrição concluída",
           );
+          if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
         } catch {
           metaTpLog("webhooks: falha de rede");
         }
@@ -35925,6 +36078,9 @@
         }
         metaTpRenderPortfolio(payload);
         metaTpCloseEditNumber();
+        if (!isPortfolio && typeof window.wabaRefreshMetaInbox === "function") {
+          window.wabaRefreshMetaInbox();
+        }
         return true;
       };
 
@@ -35977,10 +36133,7 @@
                 return;
               }
               metaTpSetStatus("");
-              if (typeof metaInbox !== "undefined" && metaInbox.active) {
-                metaInbox.listFp = "";
-                metaInboxLoadList(false);
-              }
+              if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
             })
             .catch(() => {
               inboxToggle.classList.toggle("is-on", previous);
@@ -36303,6 +36456,7 @@
               " id=" +
               String(payload.messageId || "—");
           }
+          if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
         } catch (error) {
           if (outEl) outEl.textContent = error && error.message ? error.message : "Não foi possível enviar.";
         }
@@ -36592,9 +36746,9 @@
         const allUnread = rows.reduce((sum, item) => sum + Number(item.unreadCount || 0), 0);
         const allActive = !metaInbox.channelId ? " is-active" : "";
         const items = [
-          '<button type="button" class="meta-chat-channel' +
+          '<button type="button" class="meta-chat-channel is-all' +
             allActive +
-            '" data-meta-inbox-channel=""><span class="meta-chat-channel-copy"><span class="meta-chat-channel-name">Todos</span><span class="meta-chat-channel-phone">' +
+            '" data-meta-inbox-channel="" aria-label="Todos os canais"><span class="meta-chat-channel-copy"><span class="meta-chat-channel-name">Todos</span><span class="meta-chat-channel-phone">' +
             (allUnread ? allUnread + " não lidas" : "Todos os canais") +
             "</span></span></button>",
         ];
@@ -36825,6 +36979,13 @@
         }
       }
 
+      window.wabaRefreshMetaInbox = function wabaRefreshMetaInbox() {
+        if (!metaInbox.active) return;
+        metaInbox.listFp = "";
+        metaInboxLoadList(false);
+        if (metaInbox.selectedId) metaInboxLoadThread();
+      };
+
       async function metaInboxLoadList(append) {
         if (!metaInbox.active || document.hidden) return;
         try {
@@ -36904,10 +37065,45 @@
         metaInbox.threadTimer = window.setInterval(() => metaInboxLoadThread(), metaInbox.threadMs);
       };
 
+      (function bindMetaInboxComposer() {
+        const input = document.getElementById("meta-inbox-text");
+        if (!input || input.getAttribute("data-meta-inbox-enter") === "1") return;
+        input.setAttribute("data-meta-inbox-enter", "1");
+        input.addEventListener("keydown", function onMetaInboxEnter(event) {
+          if (event.key !== "Enter" || event.shiftKey) return;
+          event.preventDefault();
+          metaInboxSendOutgoing();
+        });
+      })();
+
       document.addEventListener("visibilitychange", function onMetaInboxVisibility() {
         if (document.hidden) metaInboxClearTimers();
         else if (metaInbox.active) window.wabaStartMetaInbox();
       });
+
+      async function metaInboxSendOutgoing() {
+        const lock = document.getElementById("meta-inbox-channel-lock");
+        const text = String((document.getElementById("meta-inbox-text") || {}).value || "").trim();
+        if (!metaInbox.selectedId) {
+          if (lock) lock.textContent = "Escolha uma conversa à esquerda para enviar ao contato.";
+          return;
+        }
+        if (!text) return;
+        try {
+          await metaInboxJson(
+            `/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(metaInbox.selectedId)}/messages`,
+            { method: "POST", body: JSON.stringify({ type: "text", text }) },
+          );
+          const input = document.getElementById("meta-inbox-text");
+          if (input) input.value = "";
+          metaInbox.listFp = "";
+          await metaInboxLoadList(false);
+          await metaInboxLoadThread();
+        } catch (error) {
+          const msg = error && error.message ? error.message : "Não foi possível enviar.";
+          if (lock) lock.textContent = msg;
+        }
+      }
 
       document.addEventListener("click", async function onMetaInboxClick(event) {
         const target = event.target && event.target.closest ? event.target.closest("[data-meta-inbox-filter], [data-meta-inbox-channel], [data-meta-inbox-open], [data-meta-inbox-status], [data-meta-inbox-assign], #meta-inbox-send, #meta-inbox-more, #meta-inbox-tpl-send") : null;
@@ -36964,17 +37160,7 @@
           return;
         }
         if (target.id === "meta-inbox-send") {
-          const text = String((document.getElementById("meta-inbox-text") || {}).value || "").trim();
-          if (!text) return;
-          const payload = await metaInboxJson(
-            `/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(metaInbox.selectedId)}/messages`,
-            { method: "POST", body: JSON.stringify({ type: "text", text }) },
-          );
-          const input = document.getElementById("meta-inbox-text");
-          if (input) input.value = "";
-          if (payload.message) {
-            await metaInboxLoadThread();
-          }
+          await metaInboxSendOutgoing();
           return;
         }
         if (target.id === "meta-inbox-tpl-send") {
@@ -36997,6 +37183,8 @@
               }),
             },
           );
+          metaInbox.listFp = "";
+          await metaInboxLoadList(false);
           await metaInboxLoadThread();
         }
       });

@@ -30,6 +30,8 @@ Somente regras permanentes. Sem detalhes de implementação.
 - A foto do chip no card vem do cache local; URL assinada `pps.whatsapp.net` não vai no browser (expira e quebra no Gerenciador).
 - Inbox do chip nasce **desligado**. Só entra no Inbox (enviar e receber) depois que o operador ligar o switch.
 - O Inbox mostra o número (e o nome) dos chips com switch verde. Sem chip ligado, avisa para ligar no Laboratório.
+- O nome no Inbox segue o nome salvo no Laboratório (pedido no perfil do chip). O card continua mostrando o `verified_name` da Graph até o PIN de register.
+- Mensagem enviada pelo Laboratório ou recebida no webhook entra na conversa do chip ligado. O compositor do Inbox responde esse mesmo contato pela Cloud API.
 
 ### Crédito mínimo no checkout PIX (Disparos)
 

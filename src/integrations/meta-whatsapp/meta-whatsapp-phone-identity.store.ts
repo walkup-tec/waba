@@ -222,6 +222,13 @@ export function isPhoneInboxEnabled(identity: MetaPhoneIdentity | null): boolean
   return identity?.inboxEnabled === true;
 }
 
+export function phoneInboxDisplayName(identity: MetaPhoneIdentity | null): string | null {
+  const saved = String(identity?.name || "").trim();
+  if (saved) return saved;
+  const channel = String(identity?.channelName || "").trim();
+  return channel || null;
+}
+
 export function listPhoneInboxChannels(tenantId: string): MetaPhoneInboxChannel[] {
   try {
     const dir = tenantDir(tenantId);
@@ -234,7 +241,7 @@ export function listPhoneInboxChannels(tenantId: string): MetaPhoneInboxChannel[
       if (!identity) continue;
       out.push({
         phoneNumberId,
-        name: identity.channelName || identity.name,
+        name: phoneInboxDisplayName(identity),
         displayPhoneNumber: identity.displayPhoneNumber,
         profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
         inboxEnabled: isPhoneInboxEnabled(identity),
@@ -244,6 +251,59 @@ export function listPhoneInboxChannels(tenantId: string): MetaPhoneInboxChannel[
   } catch {
     return [];
   }
+}
+
+export function listEnabledInboxPhoneIds(tenantId: string): string[] {
+  return listPhoneInboxChannels(tenantId)
+    .filter((row) => row.inboxEnabled)
+    .map((row) => String(row.phoneNumberId || "").trim())
+    .filter(Boolean);
+}
+
+export function inboxQueryPhoneIds(
+  tenantId: string,
+  connectionPhoneNumberId?: string | null,
+  selectedPhoneNumberId?: string | null,
+): string[] {
+  const enabled = listEnabledInboxPhoneIds(tenantId);
+  const conn = String(connectionPhoneNumberId || "").trim();
+  const selected = String(selectedPhoneNumberId || "").trim();
+  const aliases =
+    enabled.length === 1 && conn && !enabled.includes(conn) ? [...enabled, conn] : enabled;
+  if (!selected) return aliases;
+  if (enabled.length === 1 && aliases.includes(selected)) return aliases;
+  return enabled.includes(selected) ? [selected] : [];
+}
+
+export function isInboxPhoneAllowed(
+  tenantId: string,
+  phoneNumberId: string | null | undefined,
+  connectionPhoneNumberId?: string | null,
+): boolean {
+  const id = String(phoneNumberId || "").trim();
+  if (!id) return false;
+  const enabled = listEnabledInboxPhoneIds(tenantId);
+  if (enabled.includes(id)) return true;
+  const conn = String(connectionPhoneNumberId || "").trim();
+  return enabled.length === 1 && Boolean(conn) && id === conn && enabled[0] !== id;
+}
+
+export function resolveInboxSendPhoneNumberId(input: {
+  tenantId: string;
+  connectionPhoneNumberId?: string | null;
+  requestedPhoneNumberId?: string | null;
+  conversationPhoneNumberId?: string | null;
+}): string | null {
+  const enabled = listEnabledInboxPhoneIds(input.tenantId);
+  const conversation = String(input.conversationPhoneNumberId || "").trim();
+  const requested = String(input.requestedPhoneNumberId || "").trim();
+  const connection = String(input.connectionPhoneNumberId || "").trim();
+  if (conversation && enabled.includes(conversation)) return conversation;
+  if (conversation && enabled.length === 1 && conversation === connection) return enabled[0] || null;
+  if (requested && enabled.includes(requested)) return requested;
+  if (connection && enabled.includes(connection)) return connection;
+  if (enabled.length === 1) return enabled[0] || null;
+  return connection || null;
 }
 
 export function applyLocalPhoneIdentities(

@@ -670,6 +670,7 @@ class MetaWhatsappConnectionService {
         }
         (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {
             name: displayName || undefined,
+            channelName: displayName || undefined,
             photo: photo
                 ? { ext: photo.mime.includes("png") ? "png" : "jpg", bytes: photo.bytes }
                 : undefined,
@@ -723,9 +724,9 @@ class MetaWhatsappConnectionService {
             current?.displayPhoneNumber ||
             open.displayPhoneNumber ||
             null;
-        const channelName = String(input.channelName || "").trim() ||
+        const channelName = current?.name ||
+            String(input.channelName || "").trim() ||
             current?.channelName ||
-            current?.name ||
             open.verifiedName ||
             null;
         const saved = (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {

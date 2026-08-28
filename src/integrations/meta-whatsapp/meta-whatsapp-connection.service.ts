@@ -795,6 +795,7 @@ export class MetaWhatsappConnectionService {
 
     writePhoneIdentity(tenant.tenantId, phoneNumberId, {
       name: displayName || undefined,
+      channelName: displayName || undefined,
       photo: photo
         ? { ext: photo.mime.includes("png") ? "png" : "jpg", bytes: photo.bytes }
         : undefined,
@@ -867,9 +868,9 @@ export class MetaWhatsappConnectionService {
       open.displayPhoneNumber ||
       null;
     const channelName =
+      current?.name ||
       String(input.channelName || "").trim() ||
       current?.channelName ||
-      current?.name ||
       open.verifiedName ||
       null;
     const saved = writePhoneIdentity(tenant.tenantId, phoneNumberId, {

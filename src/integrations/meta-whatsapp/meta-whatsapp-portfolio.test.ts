@@ -535,6 +535,17 @@ describe("meta portfolio service", () => {
     }])[0]?.inboxEnabled, true);
   });
 
+  it("atualiza o nome do Inbox quando o nome do chip é salvo", () => {
+    writePhoneIdentity(tenantId, "phone-1", {
+      inboxEnabled: true,
+      channelName: "Mms Marketing E Sistemas Digitais Ltda",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    assert.equal(listPhoneInboxChannels(tenantId)[0]?.name, "Mms Marketing E Sistemas Digitais Ltda");
+    writePhoneIdentity(tenantId, "phone-1", { name: "Drax Sistema" });
+    assert.equal(listPhoneInboxChannels(tenantId)[0]?.name, "Drax Sistema");
+  });
+
   it("pede novo nome de exibição na Meta", async () => {
     const posts: Array<{ path: string; query?: Record<string, string> }> = [];
     const graph = async (input: { path: string; method: string; query?: Record<string, string> }) => {
@@ -580,6 +591,7 @@ describe("meta portfolio service", () => {
     assert.equal(result.numbers[0]?.verifiedName, "Walkup");
     assert.equal(result.numbers[0]?.requestedName, "Soma Promotora");
     assert.equal(result.numbers[0]?.nameSyncStatus, "pending");
+    assert.equal(listPhoneInboxChannels(tenantId)[0]?.name, "Soma Promotora");
     assert.equal(posts[0]?.path, "phone-1");
     assert.equal(posts[0]?.query?.new_display_name, "Soma Promotora");
   });

@@ -6,7 +6,7 @@ import { emitMetaInboxEvent } from "./meta-whatsapp-inbox-events";
 import { previewFromContent } from "./meta-whatsapp-inbox.types";
 import { mapWebhookStatus } from "./meta-whatsapp-messaging.types";
 import { logMetaWebhook } from "./meta-whatsapp-webhook-log";
-import { isPhoneInboxEnabled, readPhoneIdentity } from "./meta-whatsapp-phone-identity.store";
+import { listEnabledInboxPhoneIds } from "./meta-whatsapp-phone-identity.store";
 
 export type MetaWhatsappWebhookInboxPort = {
   persistInbound(input: {
@@ -39,7 +39,7 @@ export class MetaWhatsappWebhookInboxService implements MetaWhatsappWebhookInbox
     const wamid = String(input.event.messageId || "").trim();
     if (!from || !wamid) return;
     const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim() || null;
-    if (!phoneNumberId || !isPhoneInboxEnabled(readPhoneIdentity(input.connection.tenantId, phoneNumberId))) {
+    if (!phoneNumberId || !listEnabledInboxPhoneIds(input.connection.tenantId).includes(phoneNumberId)) {
       logMetaWebhook("PROCESSED", { eventType: "messages", reason: "inbox_disabled" });
       return;
     }

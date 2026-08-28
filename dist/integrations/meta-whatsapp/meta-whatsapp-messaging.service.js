@@ -11,6 +11,7 @@ const meta_whatsapp_customer_care_window_1 = require("./meta-whatsapp-customer-c
 const meta_whatsapp_recipient_1 = require("./meta-whatsapp-recipient");
 const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.service");
 const meta_whatsapp_inbox_types_1 = require("./meta-whatsapp-inbox.types");
+const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -25,9 +26,7 @@ function warnIgnoredClientClaims(body, tenantId) {
         body?.owner_email ||
         body?.ownerEmail ||
         body?.access_token ||
-        body?.accessToken ||
-        body?.phone_number_id ||
-        body?.phoneNumberId) {
+        body?.accessToken) {
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("ignored-client-send-claims", { tenantId });
     }
 }
@@ -52,8 +51,6 @@ class MetaWhatsappMessagingService {
         warnIgnoredClientClaims(body, tenant.tenantId);
         const cleaned = { ...(body || {}) };
         delete cleaned.source;
-        delete cleaned.phoneNumberId;
-        delete cleaned.phone_number_id;
         return this.sendForTenant(tenant.tenantId, cleaned);
     }
     async sendForTenant(tenantId, body) {
@@ -71,7 +68,13 @@ class MetaWhatsappMessagingService {
         if (conversationId && (!existingConversation || existingConversation.connectionId !== connection.id)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("conversation_not_found");
         }
-        const sendPhoneNumberId = String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
+        const requestedPhone = String(body?.phoneNumberId || body?.phone_number_id || "").trim();
+        const sendPhoneNumberId = (0, meta_whatsapp_phone_identity_store_1.resolveInboxSendPhoneNumberId)({
+            tenantId,
+            connectionPhoneNumberId: connection.phoneNumberId,
+            requestedPhoneNumberId: requestedPhone,
+            conversationPhoneNumberId: existingConversation?.phoneNumberId,
+        }) || String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
         const botSend = body?.source === "bot";
         const atIso = new Date().toISOString();
         const upserted = await this.conversations.upsertForContact({

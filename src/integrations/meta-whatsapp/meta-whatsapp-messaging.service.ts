@@ -16,6 +16,7 @@ import {
 import type { WhatsAppSendResult, WhatsAppTemplateComponent } from "../whatsapp/whatsapp-provider";
 import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 import { previewFromContent } from "./meta-whatsapp-inbox.types";
+import { resolveInboxSendPhoneNumberId } from "./meta-whatsapp-phone-identity.store";
 
 export type MetaSendPublicResult = WhatsAppSendResult & {
   conversationId: string;
@@ -40,9 +41,7 @@ function warnIgnoredClientClaims(body: Record<string, unknown> | undefined, tena
     body?.owner_email ||
     body?.ownerEmail ||
     body?.access_token ||
-    body?.accessToken ||
-    body?.phone_number_id ||
-    body?.phoneNumberId
+    body?.accessToken
   ) {
     logMetaWhatsappSafe("ignored-client-send-claims", { tenantId });
   }
@@ -77,8 +76,6 @@ export class MetaWhatsappMessagingService {
     warnIgnoredClientClaims(body, tenant.tenantId);
     const cleaned = { ...(body || {}) };
     delete cleaned.source;
-    delete cleaned.phoneNumberId;
-    delete cleaned.phone_number_id;
     return this.sendForTenant(tenant.tenantId, cleaned);
   }
 
@@ -104,8 +101,14 @@ export class MetaWhatsappMessagingService {
     if (conversationId && (!existingConversation || existingConversation.connectionId !== connection.id)) {
       throw new MetaWhatsappError("conversation_not_found");
     }
+    const requestedPhone = String(body?.phoneNumberId || body?.phone_number_id || "").trim();
     const sendPhoneNumberId =
-      String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
+      resolveInboxSendPhoneNumberId({
+        tenantId,
+        connectionPhoneNumberId: connection.phoneNumberId,
+        requestedPhoneNumberId: requestedPhone,
+        conversationPhoneNumberId: existingConversation?.phoneNumberId,
+      }) || String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
     const botSend = body?.source === "bot";
 
     const atIso = new Date().toISOString();

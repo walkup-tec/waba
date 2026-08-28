@@ -25,7 +25,7 @@ class MetaWhatsappWebhookInboxService {
         if (!from || !wamid)
             return;
         const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim() || null;
-        if (!phoneNumberId || !(0, meta_whatsapp_phone_identity_store_1.isPhoneInboxEnabled)((0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(input.connection.tenantId, phoneNumberId))) {
+        if (!phoneNumberId || !(0, meta_whatsapp_phone_identity_store_1.listEnabledInboxPhoneIds)(input.connection.tenantId).includes(phoneNumberId)) {
             (0, meta_whatsapp_webhook_log_1.logMetaWebhook)("PROCESSED", { eventType: "messages", reason: "inbox_disabled" });
             return;
         }

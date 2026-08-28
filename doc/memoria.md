@@ -1,5 +1,20 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 11:55 — Inbox lista o envio e responde o contato
+- Envio Cloud e compositor usam o chip ligado. Alias do `phone_number_id` da conexão quando há um chip só.
+- Marker: `DEPLOY-2026-08-28-121400-inbox-envio-conversa`
+- LOG: `doc/LOG-2026-08-28__115500__inbox-envio-conversa.md`
+
+## 2026-08-28 11:48 — Nome do chip no Inbox + botão Todos
+- Salvar o nome no Laboratório atualiza o canal do Inbox (`identity.name` vence `channelName` antigo).
+- Botão **Todos** em coluna, texto completo (sem «Todos os car»).
+- Marker: `DEPLOY-2026-08-28-114800-inbox-nome-canais`
+- LOG: `doc/LOG-2026-08-28__114800__inbox-nome-e-botao-todos.md`
+
+## 2026-08-28 11:38 — Ação com spinner e recarga sozinha
+- Botão/switch de ação mostra processando até o fetch. Inbox e teste Cloud recarregam a lista sem F5.
+- LOG: `doc/LOG-2026-08-28__113800__ui-busy-refresh-automatico.md`
+
 ## 2026-08-28 11:13 — Inbox no ar ainda é a UI antiga
 - Produção: `inboxEnabled !== false` (switch verde). Git já tem opt-in. Falta Redeploy `waba_disparador`.
 - Marker: `DEPLOY-2026-08-28-111300-inbox-opt-in-numero`

@@ -8,7 +8,7 @@ import { MetaWhatsappError } from "./meta-whatsapp-errors";
 import { logMetaInbox } from "./meta-whatsapp-inbox-log";
 import { readMetaInboxPollMs } from "./meta-config";
 import { resolveCustomerCareWindow } from "./meta-whatsapp-customer-care-window";
-import { listPhoneInboxChannels, type MetaPhoneInboxChannel } from "./meta-whatsapp-phone-identity.store";
+import { listPhoneInboxChannels, inboxQueryPhoneIds, isInboxPhoneAllowed, type MetaPhoneInboxChannel } from "./meta-whatsapp-phone-identity.store";
 import {
   toPublicInboxConversation,
   toPublicInboxMessage,
@@ -83,18 +83,13 @@ export class MetaWhatsappInboxService {
   private async requireOwnedConversation(
     tenantId: string,
     conversationId: string,
-    connectionId: string,
+    connection: { id: string; phoneNumberId: string | null },
   ): Promise<MetaConversationRecord> {
     const row = await this.conversations.findByIdForTenant(tenantId, conversationId);
-    if (!row || row.tenantId !== tenantId || row.connectionId !== connectionId) {
+    if (!row || row.tenantId !== tenantId || row.connectionId !== connection.id) {
       throw new MetaWhatsappError("conversation_not_found");
     }
-    if (row.phoneNumberId) {
-      const snapshot = listPhoneInboxChannels(tenantId).find((item) => item.phoneNumberId === row.phoneNumberId);
-      if (!snapshot?.inboxEnabled) {
-        throw new MetaWhatsappError("conversation_not_found");
-      }
-    } else {
+    if (!isInboxPhoneAllowed(tenantId, row.phoneNumberId, connection.phoneNumberId)) {
       throw new MetaWhatsappError("conversation_not_found");
     }
     return row;
@@ -118,7 +113,8 @@ export class MetaWhatsappInboxService {
     const snapshots = listPhoneInboxChannels(tenant.tenantId);
     const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
     const enabledIds = snapshots.filter((row) => row.inboxEnabled).map((row) => row.phoneNumberId);
-    if (!enabledIds.length || (selectedPhone && !enabledIds.includes(selectedPhone))) {
+    const listIds = inboxQueryPhoneIds(tenant.tenantId, connection.phoneNumberId, selectedPhone);
+    if (!enabledIds.length || (selectedPhone && !listIds.length)) {
       return {
         connected: true,
         poll: readMetaInboxPollMs(),
@@ -134,8 +130,8 @@ export class MetaWhatsappInboxService {
       connectionId: connection.id,
       filter,
       assignedTo: auth.email,
-      phoneNumberId: selectedPhone || null,
-      includePhoneNumberIds: selectedPhone ? undefined : enabledIds,
+      phoneNumberId: null,
+      includePhoneNumberIds: listIds,
       limit: limit + 1,
       offset,
     });
@@ -145,7 +141,7 @@ export class MetaWhatsappInboxService {
     const unreadByPhone = new Map<string, number>();
     let unreadAll = 0;
     for (const item of unreadRows) {
-      if (!item.phoneNumberId || !enabledIds.includes(item.phoneNumberId)) continue;
+      if (!item.phoneNumberId || !listIds.includes(item.phoneNumberId)) continue;
       unreadAll += item.unreadCount;
       unreadByPhone.set(item.phoneNumberId, (unreadByPhone.get(item.phoneNumberId) || 0) + item.unreadCount);
     }
@@ -186,7 +182,7 @@ export class MetaWhatsappInboxService {
   }> {
     const tenant = requireTenant(auth);
     const connection = await this.requireConnected(tenant.tenantId);
-    const row = await this.requireOwnedConversation(tenant.tenantId, conversationId, connection.id);
+    const row = await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
     const limit = Math.min(80, Math.max(1, clampPage(query?.limit, 80, 80) || 80));
     const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
     logMetaInbox("THREAD", { tenantId: tenant.tenantId, count: messages.length });
@@ -201,7 +197,7 @@ export class MetaWhatsappInboxService {
   async markRead(auth: WabaRequestAuth, conversationId: string) {
     const tenant = requireTenant(auth);
     const connection = await this.requireConnected(tenant.tenantId);
-    await this.requireOwnedConversation(tenant.tenantId, conversationId, connection.id);
+    await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
     const updated = await this.conversations.markRead(tenant.tenantId, conversationId);
     if (!updated) throw new MetaWhatsappError("conversation_not_found");
     logMetaInbox("READ", { tenantId: tenant.tenantId });
@@ -214,7 +210,7 @@ export class MetaWhatsappInboxService {
   async patchStatus(auth: WabaRequestAuth, conversationId: string, body: Record<string, unknown> | undefined) {
     const tenant = requireTenant(auth);
     const connection = await this.requireConnected(tenant.tenantId);
-    await this.requireOwnedConversation(tenant.tenantId, conversationId, connection.id);
+    await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
     const status = String(body?.status || "").trim().toLowerCase() as MetaConversationStatus;
     if (!STATUSES.has(status)) throw new MetaWhatsappError("invalid_payload");
     const updated = await this.conversations.patchStatus(tenant.tenantId, conversationId, status);
@@ -229,7 +225,7 @@ export class MetaWhatsappInboxService {
   async assign(auth: WabaRequestAuth, conversationId: string, body: Record<string, unknown> | undefined) {
     const tenant = requireTenant(auth);
     const connection = await this.requireConnected(tenant.tenantId);
-    await this.requireOwnedConversation(tenant.tenantId, conversationId, connection.id);
+    await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
     const action = String(body?.action || "").trim().toLowerCase();
     if (action !== "assume" && action !== "release") throw new MetaWhatsappError("invalid_payload");
     const assume = action === "assume";
@@ -254,7 +250,7 @@ export class MetaWhatsappInboxService {
   ): Promise<MetaSendPublicResult & { message: MetaInboxMessagePublic | null }> {
     const tenant = requireTenant(auth);
     const connection = await this.requireConnected(tenant.tenantId);
-    const row = await this.requireOwnedConversation(tenant.tenantId, conversationId, connection.id);
+    const row = await this.requireOwnedConversation(tenant.tenantId, conversationId, connection);
     logMetaInbox("SEND", { tenantId: tenant.tenantId, type: String(body?.type || "text") });
     const result = await this.messaging.sendFromAuth(auth, {
       ...(body && typeof body === "object" ? body : {}),

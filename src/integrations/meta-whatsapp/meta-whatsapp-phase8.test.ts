@@ -619,4 +619,45 @@ describe("fase 8 canais do Inbox", () => {
     assert.equal(reply.messageId, "wamid.E2E");
     purgePhoneIdentities(TENANT_A);
   });
+
+  it("envio Cloud e resposta no Inbox usam o chip ligado mesmo se a conexão tiver outro phone id", async () => {
+    writePhoneIdentity(TENANT_A, "phone-chip", {
+      inboxEnabled: true,
+      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow({ phoneNumberId: "phone-conn" }));
+    const conversations = new FakeConversations();
+    const messages = new FakeMessages();
+    const provider = new MetaCloudProvider(connections as any, async () => graphOk("wamid.LAB"), () => "tok");
+    const messaging = new MetaWhatsappMessagingService(
+      provider,
+      conversations as any,
+      messages as any,
+      { assertSendable: async () => ({ status: "APPROVED" }) } as any,
+    );
+    const inbox = inboxOf(connections, conversations, messages, messaging);
+
+    const labSend = await messaging.sendFromAuth(auth(EMAIL_A), {
+      to: "5551999111111",
+      type: "text",
+      text: "mensagem teste",
+    });
+    assert.ok(labSend.messageId);
+    const listed = await inbox.listConversations(auth(EMAIL_A), {});
+    assert.equal(listed.conversations.length, 1);
+    assert.equal(listed.conversations[0]?.phoneNumberId, "phone-chip");
+    assert.equal(listed.channels[0]?.phoneNumberId, "phone-chip");
+
+    conversations.rows[0].phoneNumberId = "phone-conn";
+    const aliased = await inbox.listConversations(auth(EMAIL_A), {});
+    assert.equal(aliased.conversations.length, 1);
+    const reply = await inbox.sendMessage(auth(EMAIL_A), aliased.conversations[0].id, {
+      type: "text",
+      text: "resposta pelo inbox",
+    });
+    assert.equal(reply.messageId, "wamid.LAB");
+    purgePhoneIdentities(TENANT_A);
+  });
 });
