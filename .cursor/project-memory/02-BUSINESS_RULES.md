@@ -10,6 +10,8 @@ Somente regras permanentes. Sem detalhes de implementação.
 - A Meta só replica o nome do portfólio se o token for admin do Business Manager.
 - A foto do Business Manager é só leitura; gravação na Meta exige Página do Facebook.
 - A Meta só replica o nome do chip após aprovação do display name (e um novo PIN). A foto e as informações da empresa (categoria, descrição, endereço, e-mail) na Meta só entram se o número estiver Ativo.
+- O card do chip mostra o nome e a foto **já aplicados na Meta** (o que o cliente do disparo vê). Se a Graph recusar, a Drax não grava como se tivesse mudado.
+- Foto e descrição: check no POST `success: true`. Nome: ampulheta até o `verified_name` da Meta mudar; o card continua com o nome antigo até lá.
 
 ### Crédito mínimo no checkout PIX (Disparos)
 

@@ -1,5 +1,21 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-28 06:42 — Perfil do chip igual ao da Meta no disparo
+- Save de nome/foto só confirma se a Graph aceitar. O card mostra o `verified_name` ao vivo; foto na hora no POST.
+- LOG: `doc/LOG-2026-08-28__064200__perfil-chip-igual-meta-disparo.md`
+
+## 2026-08-28 06:38 — Sem Detalhes técnicos no Laboratório Meta
+- Removido o bloco Detalhes técnicos; o status de foto/nome fica no card, não acima dos botões
+- LOG: `doc/LOG-2026-08-28__063800__remover-detalhes-tecnicos-lab-meta.md`
+
+## 2026-08-28 06:35 — Perfil WhatsApp: foto e descrição imediatas
+- Foto e descrição no card ficam com check no `POST` Graph (`success: true`), sem esperar GET. Nome continua ampulheta até aprovação.
+- LOG: `doc/LOG-2026-08-28__063500__perfil-whatsapp-post-imediato.md`
+
+## 2026-08-28 06:28 — Status Meta no card do número
+- Foto e nome ficam dentro do card, com check se a Meta já aplicou e ampulheta se ainda não
+- LOG: `doc/LOG-2026-08-28__062800__sync-status-card-numero-meta.md`
+
 ## 2026-08-28 05:40 — Perfil comercial do WhatsApp na Drax
 - Card do chip: logo + nome clicáveis; modal com categoria, descrição, endereço e e-mail; envio à Graph `whatsapp_business_profile`
 - LOG: `doc/LOG-2026-08-28__054000__perfil-comercial-whatsapp-drax.md`

@@ -86,6 +86,10 @@ export function mapMetaPhoneToPortfolioNumber(
     description: null,
     address: null,
     email: null,
+    requestedName: null,
+    nameSyncStatus: null,
+    photoSyncStatus: null,
+    profileSyncStatus: null,
   };
 }
 

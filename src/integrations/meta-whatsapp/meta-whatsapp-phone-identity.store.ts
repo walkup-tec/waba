@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveDataDir } from "../../data-path";
-import type { MetaPortfolioNumberPublic } from "./meta-whatsapp-portfolio.types";
+import type { MetaPortfolioNumberPublic, MetaProfileSyncStatus } from "./meta-whatsapp-portfolio.types";
 
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
@@ -14,6 +14,8 @@ export type MetaPhoneIdentity = {
   description: string | null;
   address: string | null;
   email: string | null;
+  photoMetaApplied: boolean;
+  profileMetaApplied: boolean;
   updatedAt: string;
 };
 
@@ -57,8 +59,10 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
     const description = row.description === undefined || row.description === null ? null : String(row.description);
     const address = row.address === undefined || row.address === null ? null : String(row.address);
     const email = String(row.email || "").trim() || null;
+    const photoMetaApplied = row.photoMetaApplied === true;
+    const profileMetaApplied = row.profileMetaApplied === true;
     const updatedAt = String(row.updatedAt || "").trim() || new Date().toISOString();
-    return { name, photoExt, vertical, description, address, email, updatedAt };
+    return { name, photoExt, vertical, description, address, email, photoMetaApplied, profileMetaApplied, updatedAt };
   } catch {
     return null;
   }
@@ -74,6 +78,8 @@ export function writePhoneIdentity(
     description?: string | null;
     address?: string | null;
     email?: string | null;
+    photoMetaApplied?: boolean;
+    profileMetaApplied?: boolean;
   },
 ): MetaPhoneIdentity {
   ensureDir(tenantId);
@@ -84,8 +90,15 @@ export function writePhoneIdentity(
     description: null,
     address: null,
     email: null,
+    photoMetaApplied: false,
+    profileMetaApplied: false,
     updatedAt: "",
   };
+  const bizTouched =
+    input.vertical !== undefined ||
+    input.description !== undefined ||
+    input.address !== undefined ||
+    input.email !== undefined;
   const next: MetaPhoneIdentity = {
     name: input.name !== undefined ? input.name : current.name,
     photoExt: current.photoExt,
@@ -93,6 +106,18 @@ export function writePhoneIdentity(
     description: input.description !== undefined ? input.description : current.description,
     address: input.address !== undefined ? input.address : current.address,
     email: input.email !== undefined ? input.email : current.email,
+    photoMetaApplied:
+      input.photoMetaApplied !== undefined
+        ? input.photoMetaApplied
+        : input.photo
+          ? false
+          : current.photoMetaApplied,
+    profileMetaApplied:
+      input.profileMetaApplied !== undefined
+        ? input.profileMetaApplied
+        : bizTouched
+          ? false
+          : current.profileMetaApplied,
     updatedAt: new Date().toISOString(),
   };
   if (input.photo) {
@@ -131,21 +156,85 @@ export function localPhonePhotoUrl(
   return `/integrations/meta/whatsapp/phone-numbers/photo?id=${encodeURIComponent(phoneNumberId)}&v=${encodeURIComponent(identity.updatedAt)}`;
 }
 
+function namesMatch(local: string | null, meta: string | null): boolean {
+  const a = String(local || "").trim().toLowerCase();
+  const b = String(meta || "").trim().toLowerCase();
+  return Boolean(a) && a === b;
+}
+
+function textsMatch(local: string | null, meta: string | null): boolean {
+  return String(local || "").trim() === String(meta || "").trim() && Boolean(String(local || "").trim());
+}
+
+function hasMetaPhoto(url: string | null): boolean {
+  return /^https:\/\//i.test(String(url || "").trim());
+}
+
+export function phoneIdentitySyncStatus(input: {
+  localName: string | null;
+  localPhoto: boolean;
+  localDescription: string | null;
+  metaVerifiedName: string | null;
+  metaProfilePictureUrl: string | null;
+  metaDescription: string | null;
+  photoMetaApplied?: boolean;
+  profileMetaApplied?: boolean;
+}): {
+  nameSyncStatus: MetaProfileSyncStatus | null;
+  photoSyncStatus: MetaProfileSyncStatus | null;
+  profileSyncStatus: MetaProfileSyncStatus | null;
+} {
+  return {
+    nameSyncStatus: input.localName ? (namesMatch(input.localName, input.metaVerifiedName) ? "applied" : "pending") : null,
+    photoSyncStatus: input.localPhoto
+      ? input.photoMetaApplied || hasMetaPhoto(input.metaProfilePictureUrl)
+        ? "applied"
+        : "pending"
+      : null,
+    profileSyncStatus: input.localDescription
+      ? input.profileMetaApplied || textsMatch(input.localDescription, input.metaDescription)
+        ? "applied"
+        : "pending"
+      : null,
+  };
+}
+
 export function applyLocalPhoneIdentities(
   tenantId: string,
   numbers: MetaPortfolioNumberPublic[],
 ): MetaPortfolioNumberPublic[] {
   return numbers.map((row) => {
     const identity = readPhoneIdentity(tenantId, row.phoneNumberId);
-    if (!identity) return row;
+    if (!identity) {
+      return { ...row, requestedName: null, nameSyncStatus: null, photoSyncStatus: null, profileSyncStatus: null };
+    }
+    const sync = phoneIdentitySyncStatus({
+      localName: identity.name,
+      localPhoto: Boolean(identity.photoExt),
+      localDescription: String(identity.description || "").trim() || null,
+      metaVerifiedName: row.verifiedName,
+      metaProfilePictureUrl: row.profilePictureUrl,
+      metaDescription: row.description,
+      photoMetaApplied: identity.photoMetaApplied,
+      profileMetaApplied: identity.profileMetaApplied,
+    });
+    const nameApplied = sync.nameSyncStatus === "applied";
+    const photoApplied = sync.photoSyncStatus === "applied";
+    const profileApplied = sync.profileSyncStatus === "applied";
     return {
       ...row,
-      verifiedName: identity.name || row.verifiedName,
-      profilePictureUrl: localPhonePhotoUrl(row.phoneNumberId, identity) || row.profilePictureUrl,
-      vertical: identity.vertical || row.vertical,
-      description: identity.description ?? row.description,
-      address: identity.address ?? row.address,
-      email: identity.email || row.email,
+      requestedName: identity.name && !nameApplied ? identity.name : null,
+      verifiedName: nameApplied ? identity.name || row.verifiedName : row.verifiedName,
+      profilePictureUrl: photoApplied
+        ? localPhonePhotoUrl(row.phoneNumberId, identity) || row.profilePictureUrl
+        : row.profilePictureUrl,
+      vertical: profileApplied ? identity.vertical || row.vertical : row.vertical,
+      description: profileApplied ? identity.description ?? row.description : row.description,
+      address: profileApplied ? identity.address ?? row.address : row.address,
+      email: profileApplied ? identity.email || row.email : row.email,
+      nameSyncStatus: sync.nameSyncStatus,
+      photoSyncStatus: sync.photoSyncStatus,
+      profileSyncStatus: sync.profileSyncStatus,
     };
   });
 }

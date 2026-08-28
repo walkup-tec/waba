@@ -81,6 +81,10 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
         description: null,
         address: null,
         email: null,
+        requestedName: null,
+        nameSyncStatus: null,
+        photoSyncStatus: null,
+        profileSyncStatus: null,
     };
 }
 function mapMetaPhoneListToPortfolioNumbers(json, busyPhoneIds = new Set()) {

@@ -2,6 +2,8 @@ export type MetaPortfolioDispatchStatus = "livre" | "em_disparo";
 
 export type MetaPortfolioNumberUiStatus = "ativo" | "pendente";
 
+export type MetaProfileSyncStatus = "pending" | "applied";
+
 export type MetaPortfolioPublic = {
   id: string | null;
   name: string | null;
@@ -26,6 +28,10 @@ export type MetaPortfolioNumberPublic = {
   description: string | null;
   address: string | null;
   email: string | null;
+  requestedName: string | null;
+  nameSyncStatus: MetaProfileSyncStatus | null;
+  photoSyncStatus: MetaProfileSyncStatus | null;
+  profileSyncStatus: MetaProfileSyncStatus | null;
 };
 
 export type MetaPortfolioAssetsPublic = {

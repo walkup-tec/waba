@@ -4,11 +4,11 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
-### 2026-08-28 — Card do número oficial: identidade local, Meta best-effort
+### 2026-08-28 — Card do número oficial: só o que a Meta já aplicou
 
-- **Decisão:** Nome e foto do chip no CARD 02 persistem por tenant + `phoneNumberId`. A Graph (`new_display_name` e `whatsapp_business_profile`) é tentada, mas o sucesso do card não depende dela.
-- **Motivo:** `verified_name` só muda após aprovação da Meta. Foto na Cloud API exige número registrado/Ativo.
-- **Impacto:** O operador vê o nome e a foto no Laboratório mesmo com número pendente ou recusa da Graph. Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names e https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/
+- **Decisão:** Nome e foto do chip no CARD 02 são os da Graph. A Drax não confirma save se a Meta recusar. Foto/descrição entram no POST do perfil. O nome visível no card (e no disparo) é o `verified_name` até a Meta aprovar o novo.
+- **Motivo:** O cliente do disparo vê o perfil da Cloud API, não o arquivo local do Laboratório.
+- **Impacto:** Sem número Ativo ou com recusa da Graph, o save falha. Nome pedido aparece como `solicitado:` até `verified_name` mudar. Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names e https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/
 
 ### 2026-08-28 — Card do portfólio: identidade local, Meta best-effort
 

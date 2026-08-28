@@ -512,87 +512,13 @@ class MetaWhatsappConnectionService {
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-failed", { tenantId: tenant.tenantId, reason: "decrypt" });
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
         }
-        (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {
-            name: displayName || undefined,
-            photo: photo
-                ? { ext: photo.mime.includes("png") ? "png" : "jpg", bytes: photo.bytes }
-                : undefined,
-            vertical: vertical !== undefined ? vertical || null : undefined,
-            description: description !== undefined ? description : undefined,
-            address: address !== undefined ? address : undefined,
-            email: email !== undefined ? email || null : undefined,
-        });
-        const nameUpdated = Boolean(displayName);
-        const photoUpdated = Boolean(photo);
-        const profileUpdated = hasBiz || photoUpdated;
         const connected = (0, meta_whatsapp_portfolio_map_1.isMetaPhoneConnected)(numberRow.metaStatus);
-        const warnings = [];
-        const profileBody = { messaging_product: "whatsapp" };
-        if (vertical)
-            profileBody.vertical = vertical;
-        if (description)
-            profileBody.description = description;
-        if (address)
-            profileBody.address = address;
-        if (email)
-            profileBody.email = email;
-        if (photo || Object.keys(profileBody).length > 1) {
-            if (!connected) {
-                (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-failed", {
-                    tenantId: tenant.tenantId,
-                    reason: "not_registered",
-                });
-                warnings.push("A Meta só aplica o perfil do WhatsApp depois que o número estiver Ativo (PIN de 6 dígitos).");
-            }
-            else {
-                if (photo) {
-                    const appId = (0, meta_config_1.readMetaAppId)();
-                    if (!appId)
-                        throw new meta_whatsapp_errors_1.MetaWhatsappError("config_invalid");
-                    try {
-                        const uploaded = await this.uploadImage({
-                            token,
-                            appId,
-                            fileName: photo.fileName,
-                            mime: photo.mime,
-                            bytes: photo.bytes,
-                        });
-                        const handle = String(uploaded.handle || "").trim();
-                        if (!handle)
-                            throw new Error("upload-handle vazio");
-                        profileBody.profile_picture_handle = handle;
-                    }
-                    catch (error) {
-                        if (error instanceof meta_whatsapp_errors_1.MetaWhatsappError)
-                            throw error;
-                        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-failed", {
-                            tenantId: tenant.tenantId,
-                            reason: "upload",
-                            detail: String(error?.message || "").slice(0, 80),
-                        });
-                        warnings.push("A Meta recusou o envio da foto.");
-                    }
-                }
-                if (Object.keys(profileBody).length > 1) {
-                    const profile = await this.graph({
-                        token,
-                        method: "POST",
-                        path: `${phoneNumberId}/whatsapp_business_profile`,
-                        body: profileBody,
-                    });
-                    if (!profile.ok) {
-                        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-failed", {
-                            tenantId: tenant.tenantId,
-                            reason: "profile",
-                            status: profile.status,
-                            graphCode: profile.graphCode,
-                        });
-                        if (profile.status === 401)
-                            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
-                        warnings.push("A Meta recusou os dados do perfil deste número.");
-                    }
-                }
-            }
+        if (!connected) {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-failed", {
+                tenantId: tenant.tenantId,
+                reason: "not_registered",
+            });
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("phone_not_registered");
         }
         let namePending = false;
         if (displayName) {
@@ -611,29 +537,96 @@ class MetaWhatsappConnectionService {
                 });
                 if (renamed.status === 401)
                     throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
-                warnings.push("A Meta recusou o novo nome de exibição.");
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_update_failed");
             }
-            else {
-                namePending = true;
+            namePending = true;
+        }
+        const profileBody = { messaging_product: "whatsapp" };
+        if (vertical)
+            profileBody.vertical = vertical;
+        if (description)
+            profileBody.description = description;
+        if (address)
+            profileBody.address = address;
+        if (email)
+            profileBody.email = email;
+        if (photo) {
+            const appId = (0, meta_config_1.readMetaAppId)();
+            if (!appId)
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("config_invalid");
+            try {
+                const uploaded = await this.uploadImage({
+                    token,
+                    appId,
+                    fileName: photo.fileName,
+                    mime: photo.mime,
+                    bytes: photo.bytes,
+                });
+                const handle = String(uploaded.handle || "").trim();
+                if (!handle)
+                    throw new Error("upload-handle vazio");
+                profileBody.profile_picture_handle = handle;
+            }
+            catch (error) {
+                if (error instanceof meta_whatsapp_errors_1.MetaWhatsappError)
+                    throw error;
+                (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-failed", {
+                    tenantId: tenant.tenantId,
+                    reason: "upload",
+                    detail: String(error?.message || "").slice(0, 80),
+                });
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_update_failed");
             }
         }
+        if (Object.keys(profileBody).length > 1) {
+            const profile = await this.graph({
+                token,
+                method: "POST",
+                path: `${phoneNumberId}/whatsapp_business_profile`,
+                body: profileBody,
+            });
+            if (!profile.ok) {
+                (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-failed", {
+                    tenantId: tenant.tenantId,
+                    reason: "profile",
+                    status: profile.status,
+                    graphCode: profile.graphCode,
+                });
+                if (profile.status === 401)
+                    throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_update_failed");
+            }
+        }
+        (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {
+            name: displayName || undefined,
+            photo: photo
+                ? { ext: photo.mime.includes("png") ? "png" : "jpg", bytes: photo.bytes }
+                : undefined,
+            vertical: vertical !== undefined ? vertical || null : undefined,
+            description: description !== undefined ? description : undefined,
+            address: address !== undefined ? address : undefined,
+            email: email !== undefined ? email || null : undefined,
+            ...(profileBody.profile_picture_handle ? { photoMetaApplied: true } : {}),
+            ...(vertical || description || address || email ? { profileMetaApplied: true } : {}),
+        });
+        const nameUpdated = Boolean(displayName);
+        const photoUpdated = Boolean(photo);
+        const profileUpdated = hasBiz || photoUpdated;
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-updated", {
             tenantId: tenant.tenantId,
             namePending,
             nameUpdated,
             photoUpdated,
             profileUpdated,
-            metaWarning: Boolean(warnings.length),
+            metaWarning: false,
         });
         const listed = await this.listPortfolioAssets(auth);
-        const warning = warnings.join(" ").trim();
         return {
             ...listed,
             namePending,
             nameUpdated,
             photoUpdated,
             profileUpdated,
-            ...(warning ? { warning } : {}),
         };
     }
     async readPhonePhotoFromAuth(auth, phoneNumberId) {

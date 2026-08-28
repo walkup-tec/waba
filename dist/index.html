@@ -3364,6 +3364,26 @@
         .meta-number-card strong { display: block; font-size: 15px; }
         .meta-number-card .meta-number-name { display: block; margin-top: 4px; font-size: 12px; color: rgba(226, 232, 240, 0.62); }
         .meta-number-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .meta-number-sync {
+          display: grid;
+          gap: 4px;
+          margin-top: 8px;
+        }
+        .meta-number-sync-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          line-height: 1.2;
+          font-weight: 600;
+        }
+        .meta-number-sync-row.is-applied { color: #86efac; }
+        .meta-number-sync-row.is-pending { color: #fde68a; }
+        .meta-number-sync-row svg {
+          width: 14px;
+          height: 14px;
+          flex: 0 0 auto;
+        }
         .meta-number-chip {
           display: inline-flex;
           align-items: center;
@@ -20554,14 +20574,14 @@
                     </div>
                   </div>
                 </div>
-                <p id="meta-tp-connect-status" class="muted" style="margin:0 0 10px;" role="status" aria-live="polite">Carregando status da conexão…</p>
+                <p id="meta-tp-connect-status" class="muted" style="margin:0 0 10px;" role="status" aria-live="polite" hidden></p>
                 <div class="meta-onboard-next">
                   <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaOpenLabTab('whatsapp-templates');">Ir para Templates</button>
                   <button type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaOpenLabTab('whatsapp-inbox');">Abrir Inbox</button>
                   <button id="meta-tp-refresh-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaRefreshMetaWhatsappStatus(event);">Atualizar</button>
                   <button id="meta-tp-subscribe-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaSubscribeMetaWhatsappWebhooks(event);">Inscrever webhooks</button>
                 </div>
-                <details><summary class="muted" style="cursor:pointer;">Detalhes técnicos</summary><p id="meta-tp-connect-log" class="muted" style="white-space:pre-wrap;" role="status" aria-live="polite"></p></details>
+                <p id="meta-tp-connect-log" hidden></p>
               </div>
             </section>
             <section class="panel col-12">
@@ -35001,7 +35021,10 @@
 
       function metaTpSetStatus(text) {
         const el = document.getElementById("meta-tp-connect-status");
-        if (el) el.textContent = text || "";
+        if (!el) return;
+        const value = String(text || "").trim();
+        el.textContent = value;
+        el.hidden = !value;
       }
 
       function metaTpLog(step) {
@@ -35039,6 +35062,53 @@
       }
 
       const META_PORTFOLIO_FALLBACK_LOGO = "/media/meta-logo.png";
+
+      function metaTpSyncIcon(kind) {
+        if (kind === "applied") {
+          return (
+            '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5l3 3 6-7"/></svg>'
+          );
+        }
+        return (
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 2h8v2.4L8.9 8 12 11.6V14H4v-2.4L7.1 8 4 4.4V2zm1.5 1.2L8 6.6l2.5-3.4h-5zm0 9.6h5L8 9.4l-2.5 3.4z"/></svg>'
+        );
+      }
+
+      function metaTpNumberSyncRows(item) {
+        const rows = [];
+        const photo = String((item && item.photoSyncStatus) || "");
+        const name = String((item && item.nameSyncStatus) || "");
+        if (photo === "applied" || photo === "pending") {
+          rows.push(
+            '<div class="meta-number-sync-row is-' +
+              photo +
+              '"><span>foto atualizada</span>' +
+              metaTpSyncIcon(photo) +
+              "</div>",
+          );
+        }
+        const profile = String((item && item.profileSyncStatus) || "");
+        if (profile === "applied" || profile === "pending") {
+          rows.push(
+            '<div class="meta-number-sync-row is-' +
+              profile +
+              '"><span>descrição atualizada</span>' +
+              metaTpSyncIcon(profile) +
+              "</div>",
+          );
+        }
+        if (name === "applied" || name === "pending") {
+          rows.push(
+            '<div class="meta-number-sync-row is-' +
+              name +
+              '"><span>nome atualizado</span>' +
+              metaTpSyncIcon(name) +
+              "</div>",
+          );
+        }
+        if (!rows.length) return "";
+        return '<div class="meta-number-sync" aria-label="Sincronização com a Meta">' + rows.join("") + "</div>";
+      }
 
       function metaTpShowPortfolioLogo(photoEl, logoEl, src, alt, isFallback) {
         photoEl.onload = () => {
@@ -35110,7 +35180,11 @@
         list.innerHTML = numbers
           .map((item) => {
             const phone = metaTpEsc(item.displayPhoneNumber || item.phoneNumberId);
-            const verified = metaTpEsc(item.verifiedName || "Sem nome de exibição");
+            const requested = String(item.requestedName || "").trim();
+            const requestedLine = requested
+              ? '<span class="meta-number-name">solicitado: ' + metaTpEsc(requested) + "</span>"
+              : "";
+            const editName = metaTpEsc(requested || item.verifiedName || "");
             const id = metaTpEsc(item.phoneNumberId);
             const photoUrl = String(item.profilePictureUrl || "").trim();
             const isLocalPhoto = /^\/integrations\/meta\/whatsapp\/phone-numbers\/photo(\?|$)/i.test(photoUrl);
@@ -35136,6 +35210,7 @@
             const dispatchChip = busy
               ? '<span class="meta-number-chip is-busy">Em disparo</span>'
               : '<span class="meta-number-chip is-ok">Livre</span>';
+            const syncRows = metaTpNumberSyncRows(item);
             const activate = ativo
               ? ""
               : '<div class="meta-number-activate">' +
@@ -35150,7 +35225,7 @@
               '<button type="button" class="meta-number-identity" data-meta-edit="' +
               id +
               '" data-meta-edit-name="' +
-              verified +
+              editName +
               '" data-meta-edit-phone="' +
               phone +
               '" aria-label="Editar perfil de ' +
@@ -35161,10 +35236,14 @@
               phone +
               '</strong><span class="meta-number-name">' +
               verified +
-              '</span><div class="meta-number-badges">' +
+              "</span>" +
+              requestedLine +
+              '<div class="meta-number-badges">' +
               statusChip +
               dispatchChip +
-              "</div></span></button>" +
+              "</div>" +
+              syncRows +
+              "</span></button>" +
               '<div class="meta-number-actions">' +
               activate +
               "</div></article>"
@@ -35232,7 +35311,8 @@
           metaTpSetStatus(String(payload.error || "Não foi possível ler o status da conexão."));
           return payload;
         }
-        metaTpSetStatus(metaTpFormatPublicStatus(payload));
+        metaTpSetStatus("");
+        metaTpLog(metaTpFormatPublicStatus(payload));
         try {
           await metaTpLoadPortfolio();
           const connected = String(payload.status || payload.uiStatus || "").toLowerCase();
@@ -35303,7 +35383,8 @@
             }
             metaTpSession.exchanged = true;
             metaTpLog("token exchange concluído");
-            metaTpSetStatus(metaTpFormatPublicStatus(payload));
+            metaTpSetStatus("");
+            metaTpLog(metaTpFormatPublicStatus(payload));
           }
 
           if (metaTpSession.exchanged && metaTpSession.wabaId) {
@@ -35322,7 +35403,8 @@
             }
             metaTpLog(payload.wabaId ? "WABA claimed" : "WABA ainda ausente");
             if (payload.phoneNumberId) metaTpLog("Phone claimed");
-            metaTpSetStatus(metaTpFormatPublicStatus(payload));
+            metaTpSetStatus("");
+            metaTpLog(metaTpFormatPublicStatus(payload));
             await metaTpLoadPortfolio();
           }
 
@@ -35338,7 +35420,8 @@
               return;
             }
             metaTpLog("connection status=" + String(payload.status || ""));
-            metaTpSetStatus(metaTpFormatPublicStatus(payload));
+            metaTpSetStatus("");
+            metaTpLog(metaTpFormatPublicStatus(payload));
             await metaTpLoadPortfolio();
             if (payload.status === "connected") {
               const sub = await metaTpFetchJson("/integrations/meta/whatsapp/subscribe-webhooks", {
@@ -35462,7 +35545,7 @@
         if (hintEl) {
           hintEl.textContent = isPortfolio
             ? "O card do Laboratório atualiza na hora. A Meta só replica o nome se o token for admin do Business, e a foto só se houver uma Página do Facebook."
-            : "Clique na logo ou no nome para editar. A Drax envia à Meta o nome (aprovação + PIN), a foto e as informações da empresa se o número estiver Ativo.";
+            : "O nome e a foto que o cliente vê no disparo são os da Meta. Foto e descrição entram na hora. O nome de exibição só muda depois da Meta aprovar — aí ative de novo com o PIN.";
         }
         if (file) file.disabled = false;
         if (nameEl) nameEl.value = name || "";
@@ -35611,13 +35694,11 @@
           metaTpEditStatus(String(payload.error || "Não foi possível salvar."));
           return false;
         }
-        const parts = [];
-        if (payload.photoUpdated) parts.push("foto atualizada");
-        if (payload.nameUpdated) parts.push("nome atualizado");
-        if (payload.namePending) parts.push("nome enviado para aprovação da Meta");
-        if (payload.profileUpdated) parts.push("perfil enviado à Meta");
-        if (payload.warning) parts.push(String(payload.warning));
-        metaTpSetStatus(parts.length ? (isPortfolio ? "Portfólio: " : "Número: ") + parts.join(" · ") : "Perfil atualizado.");
+        if (payload.warning) {
+          metaTpSetStatus(String(payload.warning));
+        } else {
+          metaTpSetStatus("");
+        }
         metaTpRenderPortfolio(payload);
         metaTpCloseEditNumber();
         return true;
