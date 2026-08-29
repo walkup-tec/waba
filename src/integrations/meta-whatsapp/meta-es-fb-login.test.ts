@@ -12,8 +12,10 @@ import {
   mentionsMissingConfigId,
   planMetaEsTechProviderClick,
   readMetaConfigIdFromEnv,
+  META_ES_JS_SDK_GRAPH_VERSION,
   resolveFbLoginOptionsForAttempt,
   resolveMetaEsConfigId,
+  resolveMetaEsJsSdkGraphVersion,
   shouldOpenMetaEsPopup,
   toPublicMetaEsConfig,
 } from "./meta-es-fb-login";
@@ -105,6 +107,17 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(json, /super-secret|EAABsecret|enc-key|APP_SECRET|accessToken/);
     assert.equal(resolveMetaEsConfigId(publicCfg), "1467449278208212");
     assert.equal(configIdLast4(publicCfg.configId || ""), "8212");
+  });
+
+  it("FB.init usa Graph latest independente de META_GRAPH_VERSION", () => {
+    assert.equal(META_ES_JS_SDK_GRAPH_VERSION, "v26.0");
+    assert.equal(resolveMetaEsJsSdkGraphVersion({ META_GRAPH_VERSION: "v22.0" }), "v26.0");
+    assert.equal(resolveMetaEsJsSdkGraphVersion({ META_ES_JS_SDK_GRAPH_VERSION: "v25.0" }), "v25.0");
+    const publicCfg = toPublicMetaEsConfig({
+      appId: "1279182514183979",
+      configId: "1590195526041278",
+    });
+    assert.equal(publicCfg.graphVersion, "v26.0");
   });
 
   it("lê META_CONFIG_ID com fallback META_ES_CONFIG_ID", () => {

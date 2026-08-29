@@ -188,7 +188,7 @@ class MetaWhatsappConnectionService {
             ok: true,
             appId: (0, meta_config_1.readMetaAppId)(),
             configId: (0, meta_config_1.readMetaConfigId)(),
-            graphVersion: (0, meta_config_1.readMetaGraphVersion)(),
+            graphVersion: (0, meta_config_1.readMetaJsSdkGraphVersion)(),
             callbackPath: "/integrations/meta/whatsapp/callback",
         };
     }

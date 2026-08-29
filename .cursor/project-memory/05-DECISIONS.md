@@ -4,11 +4,18 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-29 — Embedded Signup: FB.init na Graph latest
+
+- **Decisão:** O `graphVersion` público (FB.init / dialog/oauth) é `v26.0`, independente de `META_GRAPH_VERSION` do token exchange.
+- **Motivo:** Com extras v4 já no ar, o popup continuava branco em `/v22.0/dialog/oauth`. A Graph versiona o dialog; a implementação oficial do ES pede Graph latest.
+- **Impacto:** Marker `DEPLOY-2026-08-29-125800-es-fbinit-v26`. Docs: https://developers.facebook.com/docs/graph-api/guides/versioning/ e https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation/
+- **Data:** 2026-08-29
+
 ### 2026-08-29 — Embedded Signup v4: extras só com setup
 
 - **Decisão:** `FB.login` envia `extras: { setup }` (vazio ou prefill). Não envia `sessionInfoVersion`.
-- **Motivo:** Config Login for Business v4. A doc deixa `extras` vazio no v4; `sessionInfoVersion` é v2. Com o extra antigo o `dialog/oauth` ficava branco depois do login.
-- **Impacto:** Marker `DEPLOY-2026-08-29-114200-es-v4-extras`. Assistente empresa/WABA/número volta a renderizar na mesma janela. Docs: https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation/ e https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/versions
+- **Motivo:** Config Login for Business v4. A doc deixa `extras` vazio no v4; `sessionInfoVersion` é v2.
+- **Impacto:** Marker `DEPLOY-2026-08-29-114200-es-v4-extras`. Sozinho **não** abriu a 2ª tela; ver decisão FB.init v26.
 - **Data:** 2026-08-29
 
 ### 2026-08-28 — Inbox: um fio por contato no tenant

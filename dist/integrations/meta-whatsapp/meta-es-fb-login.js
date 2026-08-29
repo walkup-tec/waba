@@ -7,14 +7,17 @@
  * - https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation/
  * - https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/versions
  * - https://developers.facebook.com/docs/facebook-login/facebook-login-for-business/
- * - https://developers.facebook.com/docs/javascript/reference/FB.init/v22.0
+ * - https://developers.facebook.com/docs/graph-api/guides/versioning/
+ * - https://developers.facebook.com/docs/javascript/reference/FB.init/
  *
  * Embedded Signup v4: extras só com `setup` (objeto vazio ou prefill).
- * `sessionInfoVersion` é de v2 e no Login for Business v4 deixa o dialog/oauth em branco.
+ * FB.init deve usar a Graph latest: o dialog/oauth é versionado e o wizard
+ * Login for Business / ES v4 não renderiza no path /v22.0/.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = void 0;
+exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
 exports.readMetaConfigIdFromEnv = readMetaConfigIdFromEnv;
+exports.resolveMetaEsJsSdkGraphVersion = resolveMetaEsJsSdkGraphVersion;
 exports.resolveMetaEsConfigId = resolveMetaEsConfigId;
 exports.configIdLast4 = configIdLast4;
 exports.buildMetaEsSetupPrefill = buildMetaEsSetupPrefill;
@@ -26,6 +29,7 @@ exports.isGenericFacebookOauthUrl = isGenericFacebookOauthUrl;
 exports.isLegacyExchangePath = isLegacyExchangePath;
 exports.toPublicMetaEsConfig = toPublicMetaEsConfig;
 exports.planMetaEsTechProviderClick = planMetaEsTechProviderClick;
+exports.META_ES_JS_SDK_GRAPH_VERSION = "v26.0";
 exports.META_ES_UNAVAILABLE_MESSAGE = "Configuração do WhatsApp Embedded Signup indisponível.";
 exports.META_ES_TECH_PROVIDER_PATHS = {
     config: "/integrations/meta/whatsapp/config",
@@ -42,6 +46,9 @@ exports.META_ES_LEGACY_EXCHANGE_PATHS = [
 ];
 function readMetaConfigIdFromEnv(env = process.env) {
     return String(env.META_CONFIG_ID || env.META_ES_CONFIG_ID || "").trim();
+}
+function resolveMetaEsJsSdkGraphVersion(env = process.env) {
+    return String(env.META_ES_JS_SDK_GRAPH_VERSION || "").trim() || exports.META_ES_JS_SDK_GRAPH_VERSION;
 }
 function resolveMetaEsConfigId(payload) {
     return String(payload?.configId || "").trim();
@@ -111,7 +118,7 @@ function toPublicMetaEsConfig(input) {
         ok: Boolean(appId && configId),
         appId: appId || undefined,
         configId: configId || undefined,
-        graphVersion: String(input.graphVersion || "v22.0").trim() || "v22.0",
+        graphVersion: String(input.graphVersion || resolveMetaEsJsSdkGraphVersion()).trim() || exports.META_ES_JS_SDK_GRAPH_VERSION,
         callbackPath: exports.META_ES_TECH_PROVIDER_PATHS.callback,
     };
 }

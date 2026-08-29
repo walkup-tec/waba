@@ -4,7 +4,7 @@ import {
   isMetaTechProviderConfigured,
   readMetaAppId,
   readMetaConfigId,
-  readMetaGraphVersion,
+  readMetaJsSdkGraphVersion,
   readMetaOauthRedirectUri,
 } from "./meta-config";
 import {
@@ -58,7 +58,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
       ok: Boolean(appId && configId),
       appId: appId || undefined,
       configId: configId || undefined,
-      graphVersion: readMetaGraphVersion(),
+      graphVersion: readMetaJsSdkGraphVersion(),
       callbackPath: "/integrations/meta/whatsapp/callback",
       redirectUri: readMetaOauthRedirectUri() || undefined,
     });

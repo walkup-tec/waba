@@ -7402,6 +7402,7 @@ async function revertAquecedorPendingAfterFailedSend(supabase, pendingId, option
 }
 const META_GRAPH_BASE = String(process.env.META_GRAPH_BASE || "https://graph.facebook.com").replace(/\/+$/, "");
 const META_GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v22.0").trim();
+const META_JS_SDK_GRAPH_VERSION = String(process.env.META_ES_JS_SDK_GRAPH_VERSION || "v26.0").trim();
 function sanitizeMetaId(value) {
     return String(value || "").trim();
 }
@@ -10338,7 +10339,7 @@ app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
         appId: appId || undefined,
         configId: configId || undefined,
         redirectUri: redirectUri || undefined,
-        graphVersion: META_GRAPH_VERSION,
+        graphVersion: META_JS_SDK_GRAPH_VERSION,
     });
 });
 /** Config pública do Tech Provider. Sem secrets. Fonte: META_CONFIG_ID || META_ES_CONFIG_ID. */
@@ -10351,7 +10352,7 @@ app.get("/integrations/meta/whatsapp/config", (_req, res) => {
         ok: Boolean(appId && configId),
         appId: appId || undefined,
         configId: configId || undefined,
-        graphVersion: META_GRAPH_VERSION,
+        graphVersion: META_JS_SDK_GRAPH_VERSION,
         callbackPath: "/integrations/meta/whatsapp/callback",
     });
 });

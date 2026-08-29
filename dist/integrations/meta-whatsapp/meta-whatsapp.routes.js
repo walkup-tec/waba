@@ -44,7 +44,7 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             ok: Boolean(appId && configId),
             appId: appId || undefined,
             configId: configId || undefined,
-            graphVersion: (0, meta_config_1.readMetaGraphVersion)(),
+            graphVersion: (0, meta_config_1.readMetaJsSdkGraphVersion)(),
             callbackPath: "/integrations/meta/whatsapp/callback",
             redirectUri: (0, meta_config_1.readMetaOauthRedirectUri)() || undefined,
         });

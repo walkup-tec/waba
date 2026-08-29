@@ -4,7 +4,7 @@ import {
   readMetaAppId,
   readMetaBusinessId,
   readMetaConfigId,
-  readMetaGraphVersion,
+  readMetaJsSdkGraphVersion,
 } from "./meta-config";
 import { decryptMetaToken, encryptMetaToken, MetaTokenCryptoError } from "./meta-token-crypto";
 import { exchangeEmbeddedSignupCode, metaOauthExpiresAt } from "./meta-whatsapp-oauth";
@@ -265,7 +265,7 @@ export class MetaWhatsappConnectionService {
       ok: true,
       appId: readMetaAppId(),
       configId: readMetaConfigId(),
-      graphVersion: readMetaGraphVersion(),
+      graphVersion: readMetaJsSdkGraphVersion(),
       callbackPath: "/integrations/meta/whatsapp/callback",
     };
   }

@@ -6,6 +6,7 @@ exports.readMetaAppSecret = readMetaAppSecret;
 exports.readMetaBusinessId = readMetaBusinessId;
 exports.readMetaGraphBase = readMetaGraphBase;
 exports.readMetaGraphVersion = readMetaGraphVersion;
+exports.readMetaJsSdkGraphVersion = readMetaJsSdkGraphVersion;
 exports.readMetaOauthRedirectUri = readMetaOauthRedirectUri;
 exports.readMetaWebhookVerifyToken = readMetaWebhookVerifyToken;
 exports.isMetaTechProviderConfigured = isMetaTechProviderConfigured;
@@ -29,6 +30,15 @@ function readMetaGraphBase() {
 }
 function readMetaGraphVersion() {
     return readEnv("META_GRAPH_VERSION") || "v22.0";
+}
+/**
+ * Versão do JS SDK / dialog/oauth (FB.init). Independente de META_GRAPH_VERSION
+ * para o token exchange no servidor não prender o wizard do Embedded Signup em Graph antigo.
+ * Docs: https://developers.facebook.com/docs/graph-api/guides/versioning/
+ * https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation/
+ */
+function readMetaJsSdkGraphVersion() {
+    return readEnv("META_ES_JS_SDK_GRAPH_VERSION") || "v26.0";
 }
 function readMetaOauthRedirectUri() {
     return readEnv("META_OAUTH_REDIRECT_URI");

@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-29 12:58 — Embedded Signup: FB.init Graph v26
+- extras v4 já estava no ar e a 2ª tela continuava branca. Dialog versionado: `FB.init` saía em `/v22.0/dialog/oauth`.
+- Config público do SDK = `v26.0` (não herda `META_GRAPH_VERSION`). Marker: `DEPLOY-2026-08-29-125800-es-fbinit-v26`
+- LOG: `doc/LOG-2026-08-29__125800__es-fbinit-graph-v26.md`
+
 ## 2026-08-29 11:32 — Embedded Signup v4: extras sem sessionInfoVersion
 - Login para Empresas em branco após «Continuar»: `extras` v4 só com `setup`. `sessionInfoVersion` é v2.
 - Marker: `DEPLOY-2026-08-29-114200-es-v4-extras`

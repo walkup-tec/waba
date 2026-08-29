@@ -6,11 +6,15 @@
  * - https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation/
  * - https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/versions
  * - https://developers.facebook.com/docs/facebook-login/facebook-login-for-business/
- * - https://developers.facebook.com/docs/javascript/reference/FB.init/v22.0
+ * - https://developers.facebook.com/docs/graph-api/guides/versioning/
+ * - https://developers.facebook.com/docs/javascript/reference/FB.init/
  *
  * Embedded Signup v4: extras só com `setup` (objeto vazio ou prefill).
- * `sessionInfoVersion` é de v2 e no Login for Business v4 deixa o dialog/oauth em branco.
+ * FB.init deve usar a Graph latest: o dialog/oauth é versionado e o wizard
+ * Login for Business / ES v4 não renderiza no path /v22.0/.
  */
+
+export const META_ES_JS_SDK_GRAPH_VERSION = "v26.0";
 
 export const META_ES_UNAVAILABLE_MESSAGE =
   "Configuração do WhatsApp Embedded Signup indisponível.";
@@ -69,6 +73,10 @@ export type MetaEsClickPlan = {
 
 export function readMetaConfigIdFromEnv(env: NodeJS.ProcessEnv = process.env): string {
   return String(env.META_CONFIG_ID || env.META_ES_CONFIG_ID || "").trim();
+}
+
+export function resolveMetaEsJsSdkGraphVersion(env: NodeJS.ProcessEnv = process.env): string {
+  return String(env.META_ES_JS_SDK_GRAPH_VERSION || "").trim() || META_ES_JS_SDK_GRAPH_VERSION;
 }
 
 export function resolveMetaEsConfigId(payload: { configId?: unknown } | null | undefined): string {
@@ -162,7 +170,8 @@ export function toPublicMetaEsConfig(input: {
     ok: Boolean(appId && configId),
     appId: appId || undefined,
     configId: configId || undefined,
-    graphVersion: String(input.graphVersion || "v22.0").trim() || "v22.0",
+    graphVersion:
+      String(input.graphVersion || resolveMetaEsJsSdkGraphVersion()).trim() || META_ES_JS_SDK_GRAPH_VERSION,
     callbackPath: META_ES_TECH_PROVIDER_PATHS.callback,
   };
 }
