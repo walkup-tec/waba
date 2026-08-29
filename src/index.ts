@@ -136,6 +136,7 @@ import {
 } from "./instances/evo-connection-state.service";
 import {
   getWhatsappConnectingRestrictionMap,
+  markWhatsappRestrictionExplicit,
   purgeAutomaticWhatsappConnectingRestrictions,
   recheckWhatsappConnectingRestrictions,
   syncWhatsappConnectingRestriction,
@@ -1033,7 +1034,7 @@ setIntegrationProbeFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
     if (instanceNameHeldByUnfinishedCampaign(status.sourceInstance)) {
-      markCampaignInstanceBlocked(
+      markCampaignChipUnsendable(
         status.sourceInstance,
         "restriction-probe-held",
       );
@@ -1062,7 +1063,7 @@ setInboundValidationFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
     if (instanceNameHeldByUnfinishedCampaign(status.instanceName)) {
-      markCampaignInstanceBlocked(status.instanceName, "inbound-restriction-held");
+      markCampaignChipUnsendable(status.instanceName, "inbound-restriction-held");
       console.info(
         `[Campanha] ${status.instanceName} bloqueado para disparo (restrição inbound com chip em campanha) — troca automática.`,
       );
@@ -3319,6 +3320,12 @@ function markCampaignInstanceBlocked(instanceName: string, reason: string): void
   );
 }
 
+/** Inapto a enviar: vermelho na campanha, tag Restrição persistida, entra na troca 1:1. */
+function markCampaignChipUnsendable(instanceName: string, reason: string): void {
+  markCampaignInstanceBlocked(instanceName, reason);
+  void markWhatsappRestrictionExplicit(instanceName, reason);
+}
+
 function isCampaignInstanceBlocked(instanceName: string): boolean {
   const key = campaignBlockedInstanceKey(instanceName);
   if (!key) return false;
@@ -5077,7 +5084,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       const cooldownMs = outboundAckBroken ? 60 * 60 * 1000 : 15 * 60 * 1000;
       if (outboundAckBroken) {
         if (instanceNameHeldByUnfinishedCampaign(chosen.instancia_origem)) {
-          markCampaignInstanceBlocked(chosen.instancia_origem, "aquecedor-outbound-error");
+          markCampaignChipUnsendable(chosen.instancia_origem, "aquecedor-outbound-error");
         } else {
           await markAquecedorInstanceRestricted(
             chosen.instancia_origem,
@@ -7025,8 +7032,9 @@ function syntheticEvoInstanceTagRow(
 }
 
 /**
- * Confirma `open` dos nomes da campanha via connectionState, mesmo se fetchInstances/cache
- * vier vazio. Probe vazio não marca desconectado.
+ * Confirma se o chip da campanha ainda pode disparar.
+ * EVO `open` não basta: 403 / outbound ERROR / tag Restrição / restricted_wait
+ * deixam o chip vermelho e apto à troca 1:1.
  */
 async function enrichSelectedCampaignInstancesLive(
   config: DisparosConfig | undefined | null,
@@ -7036,6 +7044,9 @@ async function enrichSelectedCampaignInstancesLive(
   const selected = selectedDisparadorNamesFromConfig(config);
   const rows = evoRows.map(cloneEvoInstanceTagRow);
   if (!selected.length) return rows;
+
+  const restrictionMap = await getWhatsappConnectingRestrictionMap();
+  const lifecycleMap = await getAquecedorLifecycleStatusMap();
 
   for (const name of selected) {
     const resolved = resolveStoredNameToEvoTag(name, rows);
@@ -7064,8 +7075,15 @@ async function enrichSelectedCampaignInstancesLive(
       live = "";
       statusReason = null;
     }
+    const restrictionActive = probeKeys.some(
+      (n) => restrictionMap[n.toLowerCase()]?.active === true,
+    );
+    const lifecycleRestricted = probeKeys.some(
+      (n) => lifecycleMap[n.toLowerCase()]?.phase === "restricted_wait",
+    );
     if (isEvoWhatsAppRestrictedReason(statusReason)) {
       markCampaignInstanceBlocked(key, "statusReason-403");
+      if (!restrictionActive) markCampaignChipUnsendable(key, "statusReason-403");
     }
     let outboundBroken = false;
     if (
@@ -7075,14 +7093,16 @@ async function enrichSelectedCampaignInstancesLive(
     ) {
       const health = await probeAquecedorInstanceOutboundHealth(key);
       outboundBroken = health === "broken";
-      if (outboundBroken) markCampaignInstanceBlocked(key, "outbound-error");
+      if (outboundBroken) {
+        markCampaignInstanceBlocked(key, "outbound-error");
+        if (!restrictionActive) markCampaignChipUnsendable(key, "outbound-error");
+      }
     }
-    const open = campaignChipConnectedForDispatch({
-      liveState: live,
-      statusReason,
-      outboundBroken,
-      blocked: isCampaignInstanceBlocked(key) || isCampaignInstanceBlocked(name),
-    });
+    if (restrictionActive) {
+      markCampaignInstanceBlocked(key, "wa-restricao-explicita");
+    } else if (lifecycleRestricted) {
+      markCampaignInstanceBlocked(key, "restricted_wait");
+    }
     const idx = rows.findIndex(
       (r) =>
         r.instanceKey.toLowerCase() === key.toLowerCase() ||
@@ -7090,6 +7110,15 @@ async function enrichSelectedCampaignInstancesLive(
         r.nameKeys.has(name.toLowerCase()) ||
         r.nameKeys.has(key.toLowerCase()),
     );
+    const fetchConnected = idx >= 0 ? rows[idx].connected === true : resolved.connected === true;
+    const open = campaignChipConnectedForDispatch({
+      liveState: live,
+      statusReason,
+      outboundBroken,
+      blocked: isCampaignInstanceBlocked(key) || isCampaignInstanceBlocked(name),
+      restricted: restrictionActive || lifecycleRestricted,
+      fallbackConnected: fetchConnected,
+    });
     if (idx >= 0) {
       rows[idx].connected = open;
       continue;
@@ -7231,7 +7260,7 @@ function disparadorInstanceTagsForCampaign(
     if (prev) {
       accum.set(key, {
         displayName: prev.displayName,
-        connected: prev.connected || r.connected,
+        connected: prev.connected && r.connected,
       });
     } else {
       accum.set(key, { displayName: display, connected: r.connected });
@@ -7509,9 +7538,10 @@ async function resolveLiveSpareEvoNames(
             statusReason = aliasDetail.statusReason;
           }
           const open = campaignChipConnectedForDispatch({
-            liveState: live || (row.connected === true ? "open" : ""),
+            liveState: live,
             statusReason,
             blocked: false,
+            fallbackConnected: row.connected === true,
           });
           return { name, open };
         } catch {
@@ -13655,6 +13685,7 @@ async function pickDisparadorInstanceForConfig(
     digitKeys: Array.from(r.digitKeys),
   }));
   const usageMap = await loadInstanceUsageMap();
+  const restrictionMap = await getWhatsappConnectingRestrictionMap();
   const eligible: Array<{ instancia: string; numero: string }> = [];
   const campaignKey = String(opts?.campaignId || "").trim() || "__global_rr__";
   const canonicalSelected: string[] = [];
@@ -13667,6 +13698,11 @@ async function pickDisparadorInstanceForConfig(
     canonicalSelected.push(evoName);
     const usage = resolveUsageFromMap(usageMap, evoName) || resolveUsageFromMap(usageMap, name);
     if (usage && usage.useDisparador === false) continue;
+    if (isCampaignInstanceBlocked(evoName) || isCampaignInstanceBlocked(name)) continue;
+    const restrictionActive =
+      restrictionMap[evoName.toLowerCase()]?.active === true ||
+      restrictionMap[name.toLowerCase()]?.active === true;
+    if (restrictionActive) continue;
     if (opts?.skipHumanPaused) {
       const life =
         (await getAquecedorLifecycleStatusForInstance(evoName)) ||
@@ -13691,6 +13727,7 @@ async function pickDisparadorInstanceForConfig(
         statusReason,
         blocked: isCampaignInstanceBlocked(evoName) || isCampaignInstanceBlocked(name),
         outboundBroken: getCachedAquecedorOutboundHealth(evoName)?.class === "broken",
+        restricted: restrictionActive,
       })
     ) {
       continue;
@@ -14082,6 +14119,7 @@ async function releaseHumanPauseForSelectedCampaignInstances(campaign: {
 }): Promise<void> {
   const names = selectedInstanceNamesFromCampaign(campaign);
   if (!names.length) return;
+  const restrictionMap = await getWhatsappConnectingRestrictionMap();
   const usageMap = await loadInstanceUsageMap();
   const usagePatches: Array<{
     instanceName: string;
@@ -14089,10 +14127,10 @@ async function releaseHumanPauseForSelectedCampaignInstances(campaign: {
     useDisparador: boolean;
   }> = [];
   for (const name of names) {
+    if (isCampaignInstanceBlocked(name)) continue;
+    if (restrictionMap[name.toLowerCase()]?.active === true) continue;
     const life = await getAquecedorLifecycleStatusForInstance(name);
-    if (life?.phase === "restricted_wait") {
-      await clearAquecedorHumanPause(name);
-    }
+    if (life?.phase === "restricted_wait") continue;
     const current = getInstanceUsageFromMap(usageMap, name);
     if (current?.useDisparador === false) {
       usagePatches.push({
@@ -14537,7 +14575,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
             String(mediaSend.body || "").slice(0, 200),
           );
           if (isEvoSenderBanHttp(mediaSend.status, String(mediaSend.body || ""))) {
-            markCampaignInstanceBlocked(instancePick.instancia, "sendMedia-403");
+            markCampaignChipUnsendable(instancePick.instancia, "sendMedia-403");
           }
           await persistLeadFailed(lead, classifyEvoSendFailure(mediaSend.status, mediaSend.body));
           scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
@@ -14568,6 +14606,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           mediaAck.status,
           lead.phone,
         );
+        markCampaignChipUnsendable(instancePick.instancia, "campaign-media-ack-error");
         lead.mediaMessageId = undefined;
         lead.mediaInstanceName = undefined;
         await persistLeadFailed(lead, "send_error");
@@ -14617,7 +14656,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           String(sendResult.body || "").slice(0, 200),
         );
         if (isEvoSenderBanHttp(sendResult.status, String(sendResult.body || ""))) {
-          markCampaignInstanceBlocked(instancePick.instancia, "sendText-403");
+          markCampaignChipUnsendable(instancePick.instancia, "sendText-403");
         }
         const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
         await persistLeadFailed(lead, failKind);
@@ -14713,6 +14752,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         instancePick.instancia,
         lead.phone,
       );
+      markCampaignChipUnsendable(instancePick.instancia, "campaign-text-ack-error");
       await persistLeadFailed(lead, "send_error");
       scheduleNextCampaignDispatchDelay(campaignId, pacingConfig, instancePick.instancia);
       return;

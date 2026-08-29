@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildPushAnnouncementTemplate = exports.buildCampaignErrorReportedTemplate = exports.buildMasterBmInoperanteCampaignWhatsAppText = exports.buildMasterNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignTemplate = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS = exports.buildCampaignCompletedTemplate = exports.buildStaffWelcomeTemplate = exports.buildSubscriberWelcomeTemplate = exports.buildSupportTicketClosedTemplate = void 0;
+exports.buildPushAnnouncementTemplate = exports.buildCampaignErrorReportedTemplate = exports.buildMasterBmInoperanteCampaignWhatsAppText = exports.buildOperacionalCampaignReassignedWhatsAppText = exports.buildMasterCampaignReassignedWhatsAppText = exports.buildMasterNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignTemplate = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS = exports.buildCampaignCompletedTemplate = exports.buildStaffWelcomeTemplate = exports.buildSubscriberWelcomeTemplate = exports.buildSupportTicketClosedTemplate = void 0;
 const escapeHtml = (value) => String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -311,6 +311,62 @@ const buildMasterNewCampaignWhatsAppText = (input) => {
     ].join("\n");
 };
 exports.buildMasterNewCampaignWhatsAppText = buildMasterNewCampaignWhatsAppText;
+/** WhatsApp para masters — campanha transferida / reatribuída (não é campanha nova). */
+const buildMasterCampaignReassignedWhatsAppText = (input) => {
+    const campaignName = String(input.campaignName || "").trim() || "Campanha";
+    const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
+    const operadorName = String(input.assignedOperacionalName || "").trim() || "—";
+    const previousName = String(input.previousOperacionalName || "").trim();
+    const fromLine = previousName ? ` (antes: ${previousName})` : "";
+    return [
+        resolveMasterGreeting(input),
+        "",
+        `A campanha «${campaignName}» (${apiKindLabel}) foi transferida para o operacional ${operadorName}${fromLine}.`,
+    ].join("\n");
+};
+exports.buildMasterCampaignReassignedWhatsAppText = buildMasterCampaignReassignedWhatsAppText;
+/** WhatsApp para operacional que recebeu a campanha por transferência. */
+const buildOperacionalCampaignReassignedWhatsAppText = (input) => {
+    const campaignName = String(input.campaignName || "").trim() || "Campanha";
+    const subscriberId = String(input.subscriberId || "").trim() || "—";
+    const createdAtLabel = String(input.createdAtLabel || "").trim() || "—";
+    const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
+    const segmentLabel = String(input.segmentLabel || "").trim() || "—";
+    const plannedSendCount = Math.max(0, Math.round(Number(input.plannedSendCount) || 0));
+    const slaHours = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS;
+    const greeting = resolveOperacionalNewCampaignGreeting({
+        ...input,
+        recipientRole: "operacional",
+    });
+    const campaignUrl = String(input.campaignUrl || "").trim();
+    const panelAccessLine = campaignUrl
+        ? `Acesse seu painel operador:\n${campaignUrl}`
+        : "Acesse seu painel operador.";
+    const previousName = String(input.previousOperacionalName || "").trim();
+    const fromLine = previousName ? ` (antes com ${previousName})` : "";
+    return [
+        greeting,
+        "",
+        `Uma campanha do plano ${apiKindLabel} foi transferida para você${fromLine} e aguarda configuração no painel operacional.`,
+        "",
+        "Resumo da campanha:",
+        `- Data de criação: ${createdAtLabel}`,
+        `- ID do assinante: ${subscriberId}`,
+        `- Nome da campanha: ${campaignName}`,
+        `- Envios registrados: ${plannedSendCount}`,
+        `- Plano de atendimento: ${apiKindLabel}`,
+        `- Segmento: ${segmentLabel}`,
+        "",
+        `Por gentileza, acesse seu painel operador e inicie a configuração desta campanha. O prazo para atendimento é de até ${slaHours} horas a partir da atribuição.`,
+        "",
+        panelAccessLine,
+        "",
+        `Este aviso foi enviado ao operacional que recebeu a campanha no plano ${apiKindLabel}.`,
+        "",
+        "Equipe Drax Sistemas",
+    ].join("\n");
+};
+exports.buildOperacionalCampaignReassignedWhatsAppText = buildOperacionalCampaignReassignedWhatsAppText;
 /** WhatsApp para masters — BM inoperante registrada pelo operacional. */
 const buildMasterBmInoperanteCampaignWhatsAppText = (input) => {
     const campaignName = String(input.campaignName || "").trim() || "Nova campanha";

@@ -82,10 +82,12 @@ async function syncWhatsappConnectingRestriction(instanceName, liveState) {
         console.warn(`[WA-Restrição] removida tag automática de ${name} (live=${state || "—"}; connecting ≠ restrição).`);
         return null;
     }
-    // Restrição explícita: limpa se saiu de connecting/open com sucesso ou expirou.
+    // Restrição explícita: NÃO limpar só porque a Evolution está `open`.
+    // Banimento WhatsApp costuma manter a sessão EVO aberta; a campanha precisa
+    // continuar vendo o chip como inapto à troca 1:1 até o TTL (3h).
     const untilMs = new Date(existing.restrictedUntil).getTime();
     const now = Date.now();
-    if (!Number.isFinite(untilMs) || untilMs <= now || state === "open" || state === "close") {
+    if (!Number.isFinite(untilMs) || untilMs <= now) {
         delete store.instances[key];
         await saveStore(store);
         return null;

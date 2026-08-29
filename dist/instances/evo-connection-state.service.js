@@ -27,19 +27,12 @@ function isEvoLiveStateOpen(state) {
     return String(state || "").trim().toLowerCase() === "open";
 }
 /**
- * Chip da campanha só fica vermelho com close explícito.
- * Probe vazio/timeout e connecting não são «desconectado» — o fetchInstances e a aba
- * Instâncias tratam o mesmo caso como número ainda no ar.
+ * Chip da campanha só é «ativo» com sessão utilizável (`open`).
+ * `close` / `connecting` / probe vazio não contam como ativo — não dá para enviar.
+ * Timeout (string vazia) o caller preserva o `fetchInstances` via `fallbackConnected`.
  */
 function campaignChipConnectedFromLiveState(liveState) {
-    const s = String(liveState || "").trim().toLowerCase();
-    if (!s)
-        return true;
-    if (s === "open")
-        return true;
-    if (s === "connecting" || s === "pairing" || s === "qrcode")
-        return true;
-    return false;
+    return isEvoLiveStateOpen(liveState);
 }
 /** WhatsApp 403 = ban/restrição. Sessão EVO pode continuar `open` — o chip não pode ficar verde. */
 function pickEvoStatusReason(payload) {
@@ -60,7 +53,8 @@ function isEvoWhatsAppRestrictedReason(statusReason) {
 }
 /**
  * Verde na campanha = conexão utilizável para disparo.
- * Ban (403) / outbound quebrado / bloqueio de campanha vencem o `open` da Evolution.
+ * Ban (403) / outbound quebrado / bloqueio / tag Restrição vencem o `open` da Evolution.
+ * Chip inapto entra na troca 1:1 para não ficar travado sem enviar.
  */
 function campaignChipConnectedForDispatch(input) {
     if (isEvoWhatsAppRestrictedReason(input.statusReason))
@@ -69,7 +63,12 @@ function campaignChipConnectedForDispatch(input) {
         return false;
     if (input.blocked === true)
         return false;
-    return campaignChipConnectedFromLiveState(input.liveState);
+    if (input.restricted === true)
+        return false;
+    const live = String(input.liveState || "").trim();
+    if (!live)
+        return input.fallbackConnected === true;
+    return campaignChipConnectedFromLiveState(live);
 }
 function runEvoConnectionStateSelfCheck() {
     if (campaignChipConnectedForDispatch({ liveState: "open", statusReason: 403 }) !== false) {
@@ -81,11 +80,23 @@ function runEvoConnectionStateSelfCheck() {
     if (campaignChipConnectedForDispatch({ liveState: "open", blocked: true }) !== false) {
         throw new Error("bloqueio de campanha tem de deixar o chip vermelho");
     }
+    if (campaignChipConnectedForDispatch({ liveState: "open", restricted: true }) !== false) {
+        throw new Error("tag Restrição tem de deixar o chip vermelho e apto à troca");
+    }
     if (campaignChipConnectedForDispatch({ liveState: "open" }) !== true) {
         throw new Error("open sem 403 continua verde");
     }
-    if (campaignChipConnectedForDispatch({ liveState: "" }) !== true) {
-        throw new Error("probe vazio não é desconectado");
+    if (campaignChipConnectedForDispatch({ liveState: "" }) !== false) {
+        throw new Error("probe vazio não pode pintar desconectado como ativo");
+    }
+    if (campaignChipConnectedForDispatch({ liveState: "", fallbackConnected: true }) !== true) {
+        throw new Error("timeout com fetchInstances=open preserva ativo");
+    }
+    if (campaignChipConnectedForDispatch({ liveState: "", fallbackConnected: false }) !== false) {
+        throw new Error("timeout com fetchInstances=close permanece desconectado");
+    }
+    if (campaignChipConnectedForDispatch({ liveState: "connecting" }) !== false) {
+        throw new Error("connecting não é ativo na campanha");
     }
     if (campaignChipConnectedFromLiveState("close") !== false) {
         throw new Error("close continua vermelho");

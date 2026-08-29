@@ -4,10 +4,15 @@ Somente regras permanentes. Sem detalhes de implementação.
 
 ## Regras
 
+### Notificação WhatsApp — transferência de campanha
+
+- Transferir campanha notifica o operacional que recebeu e os masters **uma vez por número WhatsApp**.
+- Vários cadastros master no mesmo telefone não geram cópias. O texto de transferência não reutiliza o aviso de «nova campanha».
+
 ### Campanha — troca automática do número bloqueado
 
-- Chip **vermelho** (Evolution `close`, WhatsApp `statusReason` 403, outbound quebrado ou restrição com o chip já na campanha) é substituído 1:1 pelo número livre.
-- A lista de substituição é a mesma do botão «+ Instâncias». Sessão EVO `open` com banimento WhatsApp **não** conta como ativo.
+- Chip **vermelho e apto à troca 1:1** quando não dá para enviar: Evolution `close` / `connecting`, probe live vazio sobre instância já `close` no fetchInstances, WhatsApp `statusReason` 403, HTTP 403 no envio, outbound `MessageUpdate=ERROR`, tag **Restrição**, ou pausa `restricted_wait`.
+- Só `connectionState=open` (sem os status acima) conta como ativo na campanha. Timeout do probe **não** pinta de verde quem o fetchInstances já marcou desconectado.
 
 ### Campanha — «+ Instâncias»
 

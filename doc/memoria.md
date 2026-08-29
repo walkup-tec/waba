@@ -1,14 +1,30 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-29 13:52 — WhatsApp master sem cópia na transferência
+- Um envio por número WhatsApp; transferência não reusa o texto de campanha nova
+- Marker: `DEPLOY-2026-08-29-135200-master-wa-dedupe-transfer`
+- LOG: `doc/LOG-2026-08-29__135200__master-wa-dedupe-transfer.md`
+
 ## 2026-08-29 12:58 — Embedded Signup: FB.init Graph v26
 - extras v4 já estava no ar e a 2ª tela continuava branca. Dialog versionado: `FB.init` saía em `/v22.0/dialog/oauth`.
 - Config público do SDK = `v26.0` (não herda `META_GRAPH_VERSION`). Marker: `DEPLOY-2026-08-29-125800-es-fbinit-v26`
 - LOG: `doc/LOG-2026-08-29__125800__es-fbinit-graph-v26.md`
 
+## 2026-08-29 11:48 — Desconectado não aparece como ativo na campanha
+- Probe vazio não pinta `close` de verde; `connecting` não conta como ativo
+- Marker: `DEPLOY-2026-08-29-114800-desconectado-nao-ativo`
+- LOG: `doc/LOG-2026-08-29__114800__desconectado-nao-ativo-campanha.md`
+
 ## 2026-08-29 11:32 — Embedded Signup v4: extras sem sessionInfoVersion
 - Login para Empresas em branco após «Continuar»: `extras` v4 só com `setup`. `sessionInfoVersion` é v2.
 - Marker: `DEPLOY-2026-08-29-114200-es-v4-extras`
 - LOG: `doc/LOG-2026-08-29__113200__es-v4-extras-tela-branca.md`
+
+## 2026-08-29 11:25 — Restrição deixa o chip apto à troca na campanha
+- 403 / send 403 / outbound ERROR / tag Restrição / `restricted_wait` → vermelho + troca 1:1
+- Tag explícita não some com EVO `open`; tick não desfaz pausa desses chips
+- Marker: `DEPLOY-2026-08-29-112500-restricao-apto-troca`
+- LOG: `doc/LOG-2026-08-29__112500__restricao-apto-troca-campanha.md`
 
 ## 2026-08-28 14:28 — Inbox lista o fio em qualquer conexão do tenant
 - Lista por tenant + chips ligados, não por um único `connection_id`. Mesmo contato vira um fio. Resposta usa a conexão da conversa. Envio do Laboratório abre a aba Inbox.

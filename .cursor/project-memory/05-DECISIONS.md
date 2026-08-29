@@ -4,6 +4,24 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-29 — Um WhatsApp por número na transferência de campanha
+
+- **Decisão:** Notificação de campanha (atribuição/transferência) envia **um** WhatsApp por número, não por cadastro master. Transferência usa texto próprio, não «nova campanha gerada».
+- **Motivo:** Vários masters com o mesmo telefone recebiam a mesma mensagem repetida ao transferir operacional.
+- **Impacto:** Marker `DEPLOY-2026-08-29-135200-master-wa-dedupe-transfer`. Exige Redeploy EasyPanel.
+
+### 2026-08-29 — Desconectado não aparece como ativo na campanha
+
+- **Decisão:** Chip da campanha só é verde com `connectionState=open`. Probe vazio não sobrescreve `close` do fetchInstances. `connecting` não conta como ativo.
+- **Motivo:** O GET da campanha pintava de verde quando o connectionState falhava, mesmo com o número já desconectado.
+- **Impacto:** Marker `DEPLOY-2026-08-29-114800-desconectado-nao-ativo`. Exige Redeploy EasyPanel.
+
+### 2026-08-29 — Status de restrição deixa o chip apto à troca na campanha
+
+- **Decisão:** `statusReason` 403, HTTP 403 no envio, outbound `MessageUpdate=ERROR` e tag **Restrição** (persistida) pintam o chip de vermelho e entram na troca 1:1. O tick **não** desfaz pausa/restrição desses chips. Tag explícita **não** some só porque a Evolution está `open`.
+- **Motivo:** Banimento WhatsApp mantém EVO `open`; a campanha ficava com vários números travados sem enviar.
+- **Impacto:** Marker `DEPLOY-2026-08-29-112500-restricao-apto-troca`. Exige Redeploy EasyPanel.
+
 ### 2026-08-29 — Embedded Signup: FB.init na Graph latest
 
 - **Decisão:** O `graphVersion` público (FB.init / dialog/oauth) é `v26.0`, independente de `META_GRAPH_VERSION` do token exchange.

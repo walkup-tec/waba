@@ -32,6 +32,30 @@ const resolvePlannedSendCount = (intake) => {
     return Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
 };
 const resolveApiKind = (intake) => (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
+const notifyWhatsAppPhoneKey = (raw) => {
+    const digits = String(raw || "").replace(/\D/g, "");
+    if (digits.length < 10)
+        return "";
+    return digits.length >= 11 ? digits.slice(-11) : digits;
+};
+const resolveAssignmentNotifyEvent = (intake) => {
+    const history = Array.isArray(intake.assignmentHistory) ? intake.assignmentHistory : [];
+    const lastReason = String(history[history.length - 1]?.reason || "").trim();
+    if (lastReason === "manual_master" || lastReason === "timeout_30h" || lastReason === "bm_inoperante") {
+        return "reassigned";
+    }
+    return "assigned";
+};
+const resolvePreviousOperacionalName = (intake, userService) => {
+    const history = Array.isArray(intake.assignmentHistory) ? intake.assignmentHistory : [];
+    if (history.length < 2)
+        return "";
+    const previousEmail = String(history[history.length - 2]?.operacionalEmail || "").trim().toLowerCase();
+    if (!previousEmail)
+        return "";
+    const previous = userService.getByEmail(previousEmail);
+    return String(previous?.fullName || previousEmail).trim();
+};
 const buildSkippedRecipient = (input) => ({
     role: input.role,
     email: String(input.user.email || "").trim().toLowerCase(),
@@ -75,6 +99,8 @@ const notifyAssignedOperacionalAndMasters = async (intake) => {
     const createdAtLabel = formatCreatedAtLabel(intake.createdAt);
     const plannedSendCount = resolvePlannedSendCount(intake);
     const assignedOperacionalName = String(operacional.fullName || "").trim() || assignedEmail;
+    const previousOperacionalName = resolvePreviousOperacionalName(intake, userService);
+    const notifyEvent = resolveAssignmentNotifyEvent(intake);
     const campaignUrl = (0, waba_app_url_1.buildOperacionalAdminCampaignDeepLink)(intake.id);
     const templateBase = {
         campaignId: intake.id,
@@ -84,11 +110,14 @@ const notifyAssignedOperacionalAndMasters = async (intake) => {
         createdAtLabel,
         createdAtIso: intake.createdAt,
         assignedOperacionalName,
+        previousOperacionalName,
         apiKindLabel,
         segmentLabel,
         campaignUrl,
+        notifyEvent,
     };
     const recipients = [];
+    const notifiedPhones = new Set();
     const emailDelivery = await (0, waba_mail_delivery_1.deliverOperacionalNewCampaignEmail)({
         operacionalEmail: operacional.email,
         operacionalName: operacional.fullName,
@@ -107,6 +136,9 @@ const notifyAssignedOperacionalAndMasters = async (intake) => {
         whatsapp: String(operacional.whatsapp ?? "").trim(),
         ...templateBase,
     });
+    const operacionalPhoneKey = notifyWhatsAppPhoneKey(String(operacional.whatsapp ?? ""));
+    if (operacionalPhoneKey)
+        notifiedPhones.add(operacionalPhoneKey);
     const operacionalAggregatedStatus = emailDelivery.status === "sent" || operacionalWhatsappDelivery.status === "sent"
         ? "sent"
         : emailDelivery.status === "failed" || operacionalWhatsappDelivery.status === "failed"
@@ -131,10 +163,11 @@ const notifyAssignedOperacionalAndMasters = async (intake) => {
         whatsappInstanceName: operacionalWhatsappDelivery.instanceName,
     });
     const masters = userService.listMasterUsers();
-    console.log(`[mail] campanha ${intake.id} (${apiKindLabel}): WhatsApp para operacional ${assignedEmail} e ${masters.length} master(s).`);
+    console.log(`[mail] campanha ${intake.id} (${apiKindLabel}/${notifyEvent}): WhatsApp para operacional ${assignedEmail} e ${masters.length} master(s) (1 envio por número).`);
     for (const master of masters) {
         const masterWhatsapp = String(master.whatsapp ?? "").trim();
-        if (!masterWhatsapp.replace(/\D/g, "") || masterWhatsapp.replace(/\D/g, "").length < 10) {
+        const phoneKey = notifyWhatsAppPhoneKey(masterWhatsapp);
+        if (!phoneKey) {
             recipients.push(buildSkippedRecipient({
                 role: "master",
                 user: master,
@@ -142,6 +175,15 @@ const notifyAssignedOperacionalAndMasters = async (intake) => {
             }));
             continue;
         }
+        if (notifiedPhones.has(phoneKey)) {
+            recipients.push(buildSkippedRecipient({
+                role: "master",
+                user: master,
+                message: "WhatsApp já notificado nesta campanha (mesmo número).",
+            }));
+            continue;
+        }
+        notifiedPhones.add(phoneKey);
         const masterWhatsappDelivery = await (0, waba_operacional_campaign_whatsapp_service_1.deliverOperacionalNewCampaignWhatsApp)({
             recipientEmail: master.email,
             recipientName: master.fullName,
@@ -223,7 +265,8 @@ const notifyMastersOnBmInoperanteCampaign = async (intake) => {
     const updatedAtLabel = formatCreatedAtLabel(updatedAtIso);
     const userService = new waba_system_user_service_1.WabaSystemUserService();
     const masters = userService.listMasterUsers();
-    console.log(`[mail] campanha ${intake.id}: BM inoperante — WhatsApp para ${masters.length} master(s).`);
+    const notifiedPhones = new Set();
+    console.log(`[mail] campanha ${intake.id}: BM inoperante — WhatsApp para ${masters.length} master(s) (1 envio por número).`);
     const templateBase = {
         campaignId: intake.id,
         campaignName: intake.campaignName,
@@ -234,10 +277,16 @@ const notifyMastersOnBmInoperanteCampaign = async (intake) => {
     };
     for (const master of masters) {
         const masterWhatsapp = String(master.whatsapp ?? "").trim();
-        if (!masterWhatsapp.replace(/\D/g, "") || masterWhatsapp.replace(/\D/g, "").length < 10) {
+        const phoneKey = notifyWhatsAppPhoneKey(masterWhatsapp);
+        if (!phoneKey) {
             console.warn(`[mail] master ${master.email}: WhatsApp inválido — BM inoperante não enviado.`);
             continue;
         }
+        if (notifiedPhones.has(phoneKey)) {
+            console.info(`[mail] master ${master.email}: BM inoperante ignorado — mesmo WhatsApp já notificado.`);
+            continue;
+        }
+        notifiedPhones.add(phoneKey);
         const delivery = await (0, waba_operacional_campaign_whatsapp_service_1.deliverMasterBmInoperanteCampaignWhatsApp)({
             recipientEmail: master.email,
             recipientName: master.fullName,
