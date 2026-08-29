@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-29 11:32 — Embedded Signup v4: extras sem sessionInfoVersion
+- Login para Empresas em branco após «Continuar»: `extras` v4 só com `setup`. `sessionInfoVersion` é v2.
+- Marker: `DEPLOY-2026-08-29-114200-es-v4-extras`
+- LOG: `doc/LOG-2026-08-29__113200__es-v4-extras-tela-branca.md`
+
 ## 2026-08-28 14:28 — Inbox lista o fio em qualquer conexão do tenant
 - Lista por tenant + chips ligados, não por um único `connection_id`. Mesmo contato vira um fio. Resposta usa a conexão da conversa. Envio do Laboratório abre a aba Inbox.
 - Marker: `DEPLOY-2026-08-28-142800-inbox-tenant-thread`

@@ -4,8 +4,12 @@
  *
  * Docs:
  * - https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation/
+ * - https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/versions
  * - https://developers.facebook.com/docs/facebook-login/facebook-login-for-business/
  * - https://developers.facebook.com/docs/javascript/reference/FB.init/v22.0
+ *
+ * Embedded Signup v4: extras só com `setup` (objeto vazio ou prefill).
+ * `sessionInfoVersion` é de v2 e no Login for Business v4 deixa o dialog/oauth em branco.
  */
 
 export const META_ES_UNAVAILABLE_MESSAGE =
@@ -35,7 +39,7 @@ export type MetaEsFbLoginOptions = {
   config_id: string;
   response_type: "code";
   override_default_response_type: true;
-  extras: { setup: MetaEsSetupPrefill; sessionInfoVersion: "3" };
+  extras: { setup: MetaEsSetupPrefill };
 };
 
 export type MetaEsPublicConfig = {
@@ -98,7 +102,7 @@ export function buildMetaEsFbLoginOptions(
     config_id: id,
     response_type: "code",
     override_default_response_type: true,
-    extras: { setup: setup && Object.keys(setup).length ? setup : {}, sessionInfoVersion: "3" },
+    extras: { setup: setup && Object.keys(setup).length ? setup : {} },
   };
 }
 

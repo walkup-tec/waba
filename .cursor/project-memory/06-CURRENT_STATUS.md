@@ -34,7 +34,7 @@ Não usar como histórico de desenvolvimento.
 
 ## Pendências relevantes
 
-- Pendência de deploy: validar `GET /health` = `DEPLOY-2026-08-28-142800-inbox-tenant-thread` após Redeploy `waba_disparador` (Inbox lista o fio em qualquer conexão do tenant).
+- Pendência de deploy: validar `GET /health` = `DEPLOY-2026-08-29-114200-es-v4-extras` após Redeploy `waba_disparador` (Embedded Signup v4: Login para Empresas sem tela branca).
 - Após cada mudança de UI/runtime: `npm run build` + commit `dist/` antes do push (FTP sozinho **não** atualiza `waba.draxsistemas.com.br`)
 - Após deploy `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`: reenviar boas-vindas e confirmar JPEG nítido no WhatsApp
 - Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)

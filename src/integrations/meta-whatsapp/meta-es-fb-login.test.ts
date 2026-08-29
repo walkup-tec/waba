@@ -25,7 +25,8 @@ describe("meta-es-fb-login", () => {
     assert.equal(options.config_id, "1467449278208212");
     assert.equal(options.response_type, "code");
     assert.equal(options.override_default_response_type, true);
-    assert.deepEqual(options.extras, { setup: {}, sessionInfoVersion: "3" });
+    assert.deepEqual(options.extras, { setup: {} });
+    assert.equal("sessionInfoVersion" in options.extras, false);
     const prefill = buildMetaEsSetupPrefill({
       businessId: "1247508354180311",
       wabaId: "waba-1",
@@ -55,6 +56,7 @@ describe("meta-es-fb-login", () => {
     assert.equal(second.config_id, "1467449278208212");
     assert.equal(second.response_type, "code");
     assert.equal(second.override_default_response_type, true);
+    assert.deepEqual(second.extras, { setup: {} });
   });
 
   it("fluxo novo não chama OAuth genérico", () => {

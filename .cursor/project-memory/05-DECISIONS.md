@@ -4,6 +4,13 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-29 — Embedded Signup v4: extras só com setup
+
+- **Decisão:** `FB.login` envia `extras: { setup }` (vazio ou prefill). Não envia `sessionInfoVersion`.
+- **Motivo:** Config Login for Business v4. A doc deixa `extras` vazio no v4; `sessionInfoVersion` é v2. Com o extra antigo o `dialog/oauth` ficava branco depois do login.
+- **Impacto:** Marker `DEPLOY-2026-08-29-114200-es-v4-extras`. Assistente empresa/WABA/número volta a renderizar na mesma janela. Docs: https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation/ e https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/versions
+- **Data:** 2026-08-29
+
 ### 2026-08-28 — Inbox: um fio por contato no tenant
 
 - **Decisão:** A lista do Inbox não filtra um único `connection_id`. O upsert reutiliza `tenant_id + contact_wa_id`. A resposta Graph usa a conexão da conversa (`connected` ou `pending_confirmation`). Status webhook sem wamid local pode abrir o fio outbound se o chip estiver ligado.
