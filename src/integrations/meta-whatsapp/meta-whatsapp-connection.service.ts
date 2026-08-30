@@ -138,7 +138,10 @@ function withLocalIdentities(
   assets: MetaPortfolioAssetsPublic,
 ): MetaPortfolioAssetsPublic {
   const portfolio = assets.portfolio ? applyLocalPortfolioIdentity(tenantId, assets.portfolio) : null;
-  const portfolios = (assets.portfolios || []).map((item) => applyLocalPortfolioIdentity(tenantId, item));
+  const portfolios = (assets.portfolios || []).map((item) => ({
+    ...applyLocalPortfolioIdentity(tenantId, item),
+    numbers: applyLocalPhoneIdentities(tenantId, item.numbers || []),
+  }));
   return {
     ...assets,
     portfolios,
@@ -181,9 +184,16 @@ function storedNumbersFromConnection(open: MetaWhatsappConnectionRecord): MetaPo
   ];
 }
 
+function businessIdNotWaba(id: string | null | undefined, wabaId: string | null | undefined): string | null {
+  const biz = String(id || "").trim();
+  const waba = String(wabaId || "").trim();
+  if (!biz || (waba && biz === waba)) return null;
+  return biz;
+}
+
 function cardFromConnection(open: MetaWhatsappConnectionRecord): MetaPortfolioPublic {
   return {
-    id: open.metaBusinessId,
+    id: businessIdNotWaba(open.metaBusinessId, open.wabaId),
     name: open.verifiedName,
     primaryPageId: null,
     primaryPageName: open.verifiedName,
@@ -559,7 +569,6 @@ export class MetaWhatsappConnectionService {
 
     const requested = String(opts?.connectionId || "").trim();
     const open = rows.find((item) => item.id === requested) || rows[0];
-    const portfolios = rows.map((item) => cardFromConnection(item));
 
     const fallbackPortfolio = mapMetaBusinessToPortfolio(
       {
@@ -634,14 +643,25 @@ export class MetaWhatsappConnectionService {
     }
 
     const pack = (numbers: MetaPortfolioNumberPublic[]) => {
-      const selected = { ...portfolio, connectionId: open.id };
-      const cards = portfolios.map((item) =>
-        item.connectionId === open.id ? { ...item, ...selected, connectionId: open.id } : item,
-      );
+      const selected = {
+        ...portfolio,
+        id: businessIdNotWaba(portfolio.id, open.wabaId) || businessIdNotWaba(open.metaBusinessId, open.wabaId),
+        connectionId: open.id,
+      };
+      const cards = rows.map((row) => {
+        const isSelected = row.id === open.id;
+        const base = isSelected ? { ...cardFromConnection(row), ...selected, connectionId: row.id } : cardFromConnection(row);
+        return {
+          ...base,
+          id: businessIdNotWaba(base.id, row.wabaId) || businessIdNotWaba(row.metaBusinessId, row.wabaId),
+          numbers: isSelected ? numbers : storedNumbersFromConnection(row),
+        };
+      });
+      const selectedCard = cards.find((item) => item.connectionId === open.id) || cards[0];
       return withLocalIdentities(tenant.tenantId, {
         portfolios: cards,
         selectedConnectionId: open.id,
-        portfolio: selected.id ? selected : null,
+        portfolio: selectedCard?.id ? { ...selectedCard, numbers: undefined } : null,
         numbers,
       });
     };

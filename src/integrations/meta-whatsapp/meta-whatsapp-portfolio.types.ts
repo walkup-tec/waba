@@ -12,6 +12,7 @@ export type MetaPortfolioPublic = {
   profilePictureUrl: string | null;
   wabaId: string | null;
   connectionId?: string | null;
+  numbers?: MetaPortfolioNumberPublic[];
 };
 
 export type MetaPortfolioNumberPublic = {

@@ -987,8 +987,13 @@ describe("meta portfolio service", () => {
     );
     const assets = await service.listPortfolioAssets(auth, { connectionId: "conn-drax" });
     assert.equal((assets.portfolios || []).length, 2);
+    assert.equal(assets.portfolio?.id, "1041827648719609");
+    assert.notEqual(assets.portfolio?.id, "1247508354180311");
     assert.equal(assets.portfolio?.primaryPageName, "Drax Tecnologia e Sistemas");
     assert.ok(assets.numbers.some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
+    const walkupCard = (assets.portfolios || []).find((item) => item.id === "4141369862822598");
+    assert.ok(walkupCard);
+    assert.ok((walkupCard?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("95213-7761")));
   });
 });
 
