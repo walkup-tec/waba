@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_OWNED_PAGES_FIELDS = exports.META_BUSINESS_IDENTITY_FIELDS_MINIMAL = exports.META_BUSINESS_IDENTITY_FIELDS = exports.META_WABA_IDENTITY_FIELDS_MINIMAL = exports.META_WABA_IDENTITY_FIELDS = exports.META_PHONE_NAME_FIELDS = exports.META_PHONE_NUMBER_LIST_FIELDS = void 0;
+exports.graphPhotoDownloadUrl = graphPhotoDownloadUrl;
 exports.isMetaPhoneConnected = isMetaPhoneConnected;
 exports.namesEqual = namesEqual;
 exports.mapPhoneNameFields = mapPhoneNameFields;
@@ -9,6 +10,7 @@ exports.businessIdNotWaba = businessIdNotWaba;
 exports.mapMetaWabaIdentity = mapMetaWabaIdentity;
 exports.listMetaBusinessNodes = listMetaBusinessNodes;
 exports.pickMetaBusinessNode = pickMetaBusinessNode;
+exports.asPageRef = asPageRef;
 exports.mapMetaBusinessToPortfolio = mapMetaBusinessToPortfolio;
 exports.mergePortfolioIdentity = mergePortfolioIdentity;
 exports.mergePortfolioNumbers = mergePortfolioNumbers;
@@ -48,7 +50,7 @@ function preferredName(...values) {
     }
     return null;
 }
-function httpsUrl(value) {
+function httpsUrl(value, allowAccessToken = false) {
     const raw = text(value);
     if (!raw)
         return null;
@@ -56,7 +58,7 @@ function httpsUrl(value) {
         const parsed = new URL(raw);
         if (parsed.protocol !== "https:")
             return null;
-        if (parsed.searchParams.has("access_token"))
+        if (parsed.searchParams.has("access_token") && !allowAccessToken)
             return null;
         return parsed.toString();
     }
@@ -64,12 +66,20 @@ function httpsUrl(value) {
         return null;
     }
 }
-function pictureUrl(node) {
+function pictureUrl(node, allowAccessToken = false) {
     const row = asRecord(node);
     const data = asRecord(row.data);
     if (data.is_silhouette === true)
         return null;
-    return httpsUrl(data.url) || httpsUrl(row.url);
+    return httpsUrl(data.url, allowAccessToken) || httpsUrl(row.url, allowAccessToken);
+}
+/** URL só para o servidor baixar. Não devolver ao front se tiver access_token. */
+function graphPhotoDownloadUrl(json) {
+    const row = asRecord(json);
+    return (httpsUrl(row.profile_picture_uri, true) ||
+        pictureUrl(row, true) ||
+        pictureUrl(asRecord(row.data), true) ||
+        httpsUrl(row.url, true));
 }
 function isMetaPhoneConnected(metaStatus) {
     return String(metaStatus || "").trim().toUpperCase() === "CONNECTED";
@@ -121,14 +131,14 @@ function mapMetaWabaIdentity(json) {
     const owner = asRecord(row.owner_business_info);
     const behalf = asRecord(row.on_behalf_of_business_info);
     const biz = text(owner.id) ? owner : behalf;
-    const page = asRecord(asRecord(biz).primary_page);
+    const page = asPageRef(asRecord(biz).primary_page);
     return {
         wabaId: text(row.id),
         wabaName: text(row.name),
         businessId: text(asRecord(biz).id),
         businessName: text(asRecord(biz).name),
-        primaryPageId: text(page.id),
-        primaryPageName: text(page.name),
+        primaryPageId: page.id,
+        primaryPageName: page.name,
         profilePictureUrl: httpsUrl(asRecord(biz).profile_picture_uri) ||
             httpsUrl(row.profile_picture_uri) ||
             pictureUrl(page.picture),
@@ -149,6 +159,13 @@ function pickMetaBusinessNode(json, ids) {
     }
     return null;
 }
+function asPageRef(value) {
+    if (typeof value === "string" || typeof value === "number") {
+        return { id: text(value), name: null, picture: null };
+    }
+    const row = asRecord(value);
+    return { id: text(row.id), name: text(row.name), picture: row.picture };
+}
 function firstOwnedPageRecord(json) {
     const data = asRecord(json).data;
     const rows = Array.isArray(data) ? data : [];
@@ -161,15 +178,17 @@ function firstOwnedPageRecord(json) {
 }
 function mapMetaBusinessToPortfolio(json, fallback) {
     const row = asRecord(json);
-    const page = asRecord(row.primary_page);
+    const page = asPageRef(row.primary_page);
     const owned = firstOwnedPageRecord(row.owned_pages);
     const owner = asRecord(row.owner_business_info);
-    const pageNode = text(page.id) || text(page.name) || page.picture ? page : owned;
+    const pageNode = page.id || page.name || page.picture
+        ? page
+        : { id: text(owned.id), name: text(owned.name), picture: owned.picture };
     return {
         id: text(owner.id) || text(row.id) || text(fallback.id),
         name: preferredName(row.name, owner.name),
-        primaryPageId: text(asRecord(pageNode).id),
-        primaryPageName: text(asRecord(pageNode).name),
+        primaryPageId: pageNode.id,
+        primaryPageName: pageNode.name,
         profilePictureUrl: httpsUrl(row.profile_picture_uri) ||
             pictureUrl(row.picture) ||
             pictureUrl(asRecord(pageNode).picture),
@@ -205,19 +224,16 @@ function mergePortfolioIdentity(input) {
         connectionId: input.fallback.connectionId,
     };
 }
-function mergePortfolioNumbers(graphNumbers, stored) {
-    if (!graphNumbers.length)
-        return stored;
-    const extra = stored.filter((item) => {
-        const id = String(item.phoneNumberId || "").trim();
-        const phone = String(item.displayPhoneNumber || "").trim();
-        if (id && graphNumbers.some((row) => String(row.phoneNumberId || "") === id))
-            return false;
-        if (phone && graphNumbers.some((row) => String(row.displayPhoneNumber || "") === phone))
-            return false;
+function isListedPortfolioNumber(item) {
+    if (String(item.displayPhoneNumber || "").trim())
         return true;
-    });
-    return extra.length ? [...graphNumbers, ...extra] : graphNumbers;
+    return isMetaPhoneConnected(item.metaStatus);
+}
+function mergePortfolioNumbers(graphNumbers, stored) {
+    const fromGraph = graphNumbers.filter(isListedPortfolioNumber);
+    if (fromGraph.length)
+        return fromGraph;
+    return stored.filter(isListedPortfolioNumber);
 }
 function dedupePortfolioCards(cards) {
     if (cards.length < 2)

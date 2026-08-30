@@ -233,6 +233,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
       const assets = await service.registerPhoneFromAuth(resolveWabaRequestAuth(req), {
         phoneNumberId: String(req.body?.phoneNumberId || req.body?.phone_number_id || "").trim(),
         pin: String(req.body?.pin || "").trim(),
+        connectionId: String(req.body?.connectionId || req.body?.connection_id || "").trim(),
       });
       return sendPublic(res, 200, { ok: true, ...assets });
     } catch (error) {

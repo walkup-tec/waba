@@ -182,6 +182,26 @@ export function applyLocalPortfolioBusinessPhoto(
   return { ...portfolio, profilePictureUrl: local };
 }
 
+const BUSINESS_PHOTO_TTL_MS = 15 * 60 * 1000;
+
+export function isPortfolioBusinessPhotoFresh(
+  tenantId: string,
+  businessId: string,
+  ttlMs: number = BUSINESS_PHOTO_TTL_MS,
+): boolean {
+  const id = String(businessId || "").trim();
+  if (!id || !readPortfolioBusinessPhoto(tenantId, id)) return false;
+  const base = businessPhotoBase(tenantId, id);
+  if (!base || !existsSync(`${base}.json`)) return false;
+  try {
+    const row = JSON.parse(readFileSync(`${base}.json`, "utf8")) as { updatedAt?: unknown };
+    const age = Date.now() - Date.parse(String(row.updatedAt || ""));
+    return Number.isFinite(age) && age >= 0 && age < ttlMs;
+  } catch {
+    return false;
+  }
+}
+
 export function purgePortfolioIdentity(tenantId: string): void {
   try {
     const id = safeTenantId(tenantId);

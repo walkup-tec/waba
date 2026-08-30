@@ -12,6 +12,7 @@ exports.writePortfolioBusinessPhoto = writePortfolioBusinessPhoto;
 exports.readPortfolioBusinessPhoto = readPortfolioBusinessPhoto;
 exports.localPortfolioBusinessPhotoUrl = localPortfolioBusinessPhotoUrl;
 exports.applyLocalPortfolioBusinessPhoto = applyLocalPortfolioBusinessPhoto;
+exports.isPortfolioBusinessPhotoFresh = isPortfolioBusinessPhotoFresh;
 exports.purgePortfolioIdentity = purgePortfolioIdentity;
 const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
@@ -176,6 +177,23 @@ function applyLocalPortfolioBusinessPhoto(tenantId, portfolio) {
     if (!local)
         return portfolio;
     return { ...portfolio, profilePictureUrl: local };
+}
+const BUSINESS_PHOTO_TTL_MS = 15 * 60 * 1000;
+function isPortfolioBusinessPhotoFresh(tenantId, businessId, ttlMs = BUSINESS_PHOTO_TTL_MS) {
+    const id = String(businessId || "").trim();
+    if (!id || !readPortfolioBusinessPhoto(tenantId, id))
+        return false;
+    const base = businessPhotoBase(tenantId, id);
+    if (!base || !(0, node_fs_1.existsSync)(`${base}.json`))
+        return false;
+    try {
+        const row = JSON.parse((0, node_fs_1.readFileSync)(`${base}.json`, "utf8"));
+        const age = Date.now() - Date.parse(String(row.updatedAt || ""));
+        return Number.isFinite(age) && age >= 0 && age < ttlMs;
+    }
+    catch {
+        return false;
+    }
 }
 function purgePortfolioIdentity(tenantId) {
     try {

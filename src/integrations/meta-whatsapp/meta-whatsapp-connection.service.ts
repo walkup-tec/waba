@@ -35,6 +35,7 @@ import {
   isMetaPhoneConnected,
   mapPhoneNameFields,
   resolvePhoneNameSync,
+  graphPhotoDownloadUrl,
   META_PHONE_NUMBER_LIST_FIELDS,
   META_PHONE_NAME_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
@@ -42,12 +43,13 @@ import {
   fetchWabaOwner,
   fetchBusinessFromGraph,
   fetchAssignedBusinesses,
-  fetchKnownBusinessPortfolios,
   directoryFromAssigned,
   pickMetaBusinessNode,
 } from "./meta-whatsapp-portfolio-graph";
 import {
   applyLocalPortfolioBusinessPhoto,
+  localPortfolioBusinessPhotoUrl,
+  isPortfolioBusinessPhotoFresh,
   readPortfolioPhoto,
   readPortfolioBusinessPhoto,
   writePortfolioIdentity,
@@ -170,7 +172,7 @@ function withLocalIdentities(
 function storedNumbersFromConnection(open: MetaWhatsappConnectionRecord): MetaPortfolioNumberPublic[] {
   const phoneNumberId = String(open.phoneNumberId || "").trim();
   const display = String(open.displayPhoneNumber || "").trim();
-  if (!phoneNumberId && !display) return [];
+  if (!display) return [];
   return [
     {
       phoneNumberId: phoneNumberId || display,
@@ -181,7 +183,7 @@ function storedNumbersFromConnection(open: MetaWhatsappConnectionRecord): MetaPo
       codeVerificationStatus: null,
       uiStatus: open.status === "connected" ? "ativo" : "pendente",
       dispatchStatus: "livre",
-      canActivate: false,
+      canActivate: open.status !== "connected",
       nameNeedsRegister: false,
       nameStatus: null,
       newDisplayName: null,
@@ -217,17 +219,32 @@ type HydratedPortfolio = {
   directory: MetaPortfolioPublic[];
 };
 
+const BUSINESS_PHOTO_TTL_MS = 15 * 60 * 1000;
+
 async function cacheGraphBusinessPhoto(
   tenantId: string,
   businessId: string | null,
   url: string | null,
 ): Promise<string | null> {
   const id = String(businessId || "").trim();
-  if (process.env.NODE_TEST_CONTEXT) return url;
-  if (!id || !url || !/^https:\/\//i.test(url)) return url;
+  const local = id ? localPortfolioBusinessPhotoUrl(tenantId, id) : null;
+  if (process.env.NODE_TEST_CONTEXT) {
+    const raw = String(url || "").trim();
+    if (!raw || !/^https:\/\//i.test(raw)) return local;
+    try {
+      const parsed = new URL(raw);
+      if (parsed.searchParams.has("access_token")) return local;
+      return parsed.toString();
+    } catch {
+      return local;
+    }
+  }
+  if (!id) return local;
+  if (isPortfolioBusinessPhotoFresh(tenantId, id, BUSINESS_PHOTO_TTL_MS)) return local;
+  if (!url || !/^https:\/\//i.test(url)) return local;
   const downloaded = await fetchHttpsProfileImage(url);
-  if (!downloaded) return url;
-  return writePortfolioBusinessPhoto(tenantId, id, downloaded) || url;
+  if (!downloaded) return local;
+  return writePortfolioBusinessPhoto(tenantId, id, downloaded) || local;
 }
 
 async function hydrateOpenConnection(
@@ -269,15 +286,19 @@ async function hydrateOpenConnection(
   const resolvedBm =
     hint.businessId || businessIdNotWaba(storedBm, resolvedWaba || storedWaba) || "";
 
-  const assignedJson = await fetchAssignedBusinesses(graph, token);
-  const directory = [
-    ...directoryFromAssigned(assignedJson),
-    ...(await fetchKnownBusinessPortfolios(graph, token)),
-  ];
+  const [assignedJson, fetchedBm] = await Promise.all([
+    fetchAssignedBusinesses(graph, token),
+    resolvedBm
+      ? fetchBusinessFromGraph(graph, token, resolvedBm)
+      : Promise.resolve({
+          card: null as MetaPortfolioPublic | null,
+          isWaba: false,
+          wabaJson: null as unknown,
+          photoDownloadUrl: null as string | null,
+        }),
+  ]);
+  const directory = directoryFromAssigned(assignedJson);
   const matched = pickMetaBusinessNode(assignedJson, [resolvedBm, hint.businessId, storedBm]);
-  const fetchedBm = resolvedBm
-    ? await fetchBusinessFromGraph(graph, token, resolvedBm)
-    : { card: null, isWaba: false, wabaJson: null };
 
   let card = mergePortfolioIdentity({
     fallback,
@@ -293,16 +314,30 @@ async function hydrateOpenConnection(
       ...card,
       id: graphCard.id || card.id,
       name: graphCard.name || card.name,
-      primaryPageId: graphCard.primaryPageId || card.primaryPageId,
-      primaryPageName: graphCard.primaryPageName || card.primaryPageName,
+      primaryPageId: graphCard.primaryPageId || hint.primaryPageId || card.primaryPageId,
+      primaryPageName: graphCard.primaryPageName || hint.primaryPageName || card.primaryPageName,
       profilePictureUrl: graphCard.profilePictureUrl || card.profilePictureUrl,
       wabaId: graphCard.wabaId || card.wabaId || resolvedWaba || storedWaba,
       connectionId: open.id,
     };
   }
+  card = {
+    ...card,
+    primaryPageId: card.primaryPageId || hint.primaryPageId,
+    primaryPageName: card.primaryPageName || hint.primaryPageName,
+  };
 
-  const localPhoto = await cacheGraphBusinessPhoto(tenantId, card.id, card.profilePictureUrl);
-  card = { ...card, profilePictureUrl: localPhoto, wabaId: card.wabaId || resolvedWaba || storedWaba };
+  const photoDownloadUrl =
+    fetchedBm.photoDownloadUrl ||
+    graphPhotoDownloadUrl(matched) ||
+    graphPhotoDownloadUrl(waba.json) ||
+    card.profilePictureUrl;
+  const localPhoto = await cacheGraphBusinessPhoto(tenantId, card.id, photoDownloadUrl);
+  card = {
+    ...card,
+    profilePictureUrl: localPhoto || card.profilePictureUrl,
+    wabaId: card.wabaId || resolvedWaba || storedWaba,
+  };
 
   const wabaId = resolvedWaba || storedWaba;
   if (!wabaId) return { card, directory };
@@ -329,8 +364,6 @@ async function hydrateOpenConnection(
   return { card: { ...card, numbers }, directory };
 }
 
-const PHOTO_GRAPH_GRACE_MS = 90_000;
-
 async function cacheGraphPhonePhoto(
   tenantId: string,
   phoneNumberId: string,
@@ -339,10 +372,7 @@ async function cacheGraphPhonePhoto(
   if (process.env.NODE_TEST_CONTEXT) return;
   if (!url || !/^https:\/\//i.test(url)) return;
   const identity = readPhoneIdentity(tenantId, phoneNumberId);
-  if (identity?.photoExt && identity.photoMetaApplied) {
-    const age = Date.now() - Date.parse(identity.updatedAt);
-    if (Number.isFinite(age) && age >= 0 && age < PHOTO_GRAPH_GRACE_MS) return;
-  }
+  if (identity?.photoExt) return;
   const downloaded = await fetchHttpsProfileImage(url);
   if (!downloaded) return;
   writePhoneIdentity(tenantId, phoneNumberId, {
@@ -362,18 +392,20 @@ async function attachPhoneBusinessProfiles(
   const rest = numbers.slice(20);
   const withProfiles = await Promise.all(
     limited.map(async (row) => {
-      const nameNode = await graph({
-        token,
-        method: "GET",
-        path: row.phoneNumberId,
-        query: { fields: META_PHONE_NAME_FIELDS },
-      });
-      const profile = await graph({
-        token,
-        method: "GET",
-        path: `${row.phoneNumberId}/whatsapp_business_profile`,
-        query: { fields: "about,address,description,email,profile_picture_url,vertical" },
-      });
+      const [nameNode, profile] = await Promise.all([
+        graph({
+          token,
+          method: "GET",
+          path: row.phoneNumberId,
+          query: { fields: META_PHONE_NAME_FIELDS },
+        }),
+        graph({
+          token,
+          method: "GET",
+          path: `${row.phoneNumberId}/whatsapp_business_profile`,
+          query: { fields: "about,address,description,email,profile_picture_url,vertical" },
+        }),
+      ]);
       const named = nameNode.ok ? mapPhoneNameFields(nameNode.json) : {
         verifiedName: null,
         nameStatus: null,
@@ -391,7 +423,7 @@ async function attachPhoneBusinessProfiles(
         newNameStatus,
       });
       const mapped = profile.ok ? mapWhatsappBusinessProfile(profile.json) : null;
-      await cacheGraphPhonePhoto(tenantId, row.phoneNumberId, mapped?.profilePictureUrl || null);
+      void cacheGraphPhonePhoto(tenantId, row.phoneNumberId, mapped?.profilePictureUrl || null);
       return {
         ...row,
         verifiedName,
@@ -722,10 +754,9 @@ export class MetaWhatsappConnectionService {
     }
 
     const requested = String(opts?.connectionId || "").trim();
-    const hydrated: HydratedPortfolio[] = [];
-    for (const row of rows) {
-      hydrated.push(await hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row));
-    }
+    const hydrated = await Promise.all(
+      rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row)),
+    );
     const cards = dedupePortfolioCards(hydrated.map((item) => item.card));
     const selected =
       cards.find((item) => item.connectionId === requested) ||
@@ -757,13 +788,25 @@ export class MetaWhatsappConnectionService {
 
   async registerPhoneFromAuth(
     auth: WabaRequestAuth,
-    input: { phoneNumberId?: string; pin?: string },
+    input: { phoneNumberId?: string; pin?: string; connectionId?: string },
   ): Promise<MetaPortfolioAssetsPublic> {
     const tenant = requireTenant(auth);
-    const open = await this.repository.findOpenByTenant(tenant.tenantId);
+    const repo = this.repository as MetaWhatsappConnectionRepository;
+    const rows =
+      typeof repo.listOpenByTenant === "function"
+        ? await repo.listOpenByTenant(tenant.tenantId)
+        : [await this.repository.findOpenByTenant(tenant.tenantId)].filter(
+            (item): item is MetaWhatsappConnectionRecord => Boolean(item),
+          );
+    const connectionId = String(input.connectionId || "").trim();
+    const requestedPhone = String(input.phoneNumberId || "").trim();
+    const open =
+      (connectionId ? rows.find((item) => item.id === connectionId) : null) ||
+      rows.find((item) => String(item.phoneNumberId || "").trim() === requestedPhone) ||
+      rows[0] ||
+      null;
     if (!open) throw new MetaWhatsappError("no_pending_connection");
-
-    const phoneNumberId = String(input.phoneNumberId || open.phoneNumberId || "").trim();
+    const phoneNumberId = requestedPhone || String(open.phoneNumberId || "").trim();
     const pin = String(input.pin || "").trim();
     if (!phoneNumberId) throw new MetaWhatsappError("invalid_payload");
     if (!/^\d{6}$/.test(pin)) throw new MetaWhatsappError("invalid_pin");
@@ -797,7 +840,7 @@ export class MetaWhatsappConnectionService {
       connectionId: open.id,
     });
 
-    if (open.wabaId && open.phoneNumberId && open.status !== "connected") {
+    if (open.wabaId && open.phoneNumberId && open.status !== "connected" && rows[0]?.id === open.id) {
       try {
         await this.confirmFromAuth(auth);
       } catch {

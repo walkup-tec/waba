@@ -101,7 +101,7 @@ function withLocalIdentities(tenantId, assets) {
 function storedNumbersFromConnection(open) {
     const phoneNumberId = String(open.phoneNumberId || "").trim();
     const display = String(open.displayPhoneNumber || "").trim();
-    if (!phoneNumberId && !display)
+    if (!display)
         return [];
     return [
         {
@@ -113,7 +113,7 @@ function storedNumbersFromConnection(open) {
             codeVerificationStatus: null,
             uiStatus: open.status === "connected" ? "ativo" : "pendente",
             dispatchStatus: "livre",
-            canActivate: false,
+            canActivate: open.status !== "connected",
             nameNeedsRegister: false,
             nameStatus: null,
             newDisplayName: null,
@@ -142,16 +142,34 @@ function cardFromConnection(open) {
         connectionId: open.id,
     };
 }
+const BUSINESS_PHOTO_TTL_MS = 15 * 60 * 1000;
 async function cacheGraphBusinessPhoto(tenantId, businessId, url) {
     const id = String(businessId || "").trim();
-    if (process.env.NODE_TEST_CONTEXT)
-        return url;
-    if (!id || !url || !/^https:\/\//i.test(url))
-        return url;
+    const local = id ? (0, meta_whatsapp_portfolio_identity_store_1.localPortfolioBusinessPhotoUrl)(tenantId, id) : null;
+    if (process.env.NODE_TEST_CONTEXT) {
+        const raw = String(url || "").trim();
+        if (!raw || !/^https:\/\//i.test(raw))
+            return local;
+        try {
+            const parsed = new URL(raw);
+            if (parsed.searchParams.has("access_token"))
+                return local;
+            return parsed.toString();
+        }
+        catch {
+            return local;
+        }
+    }
+    if (!id)
+        return local;
+    if ((0, meta_whatsapp_portfolio_identity_store_1.isPortfolioBusinessPhotoFresh)(tenantId, id, BUSINESS_PHOTO_TTL_MS))
+        return local;
+    if (!url || !/^https:\/\//i.test(url))
+        return local;
     const downloaded = await (0, meta_whatsapp_phone_profile_1.fetchHttpsProfileImage)(url);
     if (!downloaded)
-        return url;
-    return (0, meta_whatsapp_portfolio_identity_store_1.writePortfolioBusinessPhoto)(tenantId, id, downloaded) || url;
+        return local;
+    return (0, meta_whatsapp_portfolio_identity_store_1.writePortfolioBusinessPhoto)(tenantId, id, downloaded) || local;
 }
 async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     const stored = storedNumbersFromConnection(open);
@@ -183,15 +201,19 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     const resolvedWaba = storedWaba ||
         (hint.businessId && hint.wabaId && hint.wabaId !== hint.businessId ? hint.wabaId : "");
     const resolvedBm = hint.businessId || (0, meta_whatsapp_portfolio_map_1.businessIdNotWaba)(storedBm, resolvedWaba || storedWaba) || "";
-    const assignedJson = await (0, meta_whatsapp_portfolio_graph_1.fetchAssignedBusinesses)(graph, token);
-    const directory = [
-        ...(0, meta_whatsapp_portfolio_graph_1.directoryFromAssigned)(assignedJson),
-        ...(await (0, meta_whatsapp_portfolio_graph_1.fetchKnownBusinessPortfolios)(graph, token)),
-    ];
+    const [assignedJson, fetchedBm] = await Promise.all([
+        (0, meta_whatsapp_portfolio_graph_1.fetchAssignedBusinesses)(graph, token),
+        resolvedBm
+            ? (0, meta_whatsapp_portfolio_graph_1.fetchBusinessFromGraph)(graph, token, resolvedBm)
+            : Promise.resolve({
+                card: null,
+                isWaba: false,
+                wabaJson: null,
+                photoDownloadUrl: null,
+            }),
+    ]);
+    const directory = (0, meta_whatsapp_portfolio_graph_1.directoryFromAssigned)(assignedJson);
     const matched = (0, meta_whatsapp_portfolio_graph_1.pickMetaBusinessNode)(assignedJson, [resolvedBm, hint.businessId, storedBm]);
-    const fetchedBm = resolvedBm
-        ? await (0, meta_whatsapp_portfolio_graph_1.fetchBusinessFromGraph)(graph, token, resolvedBm)
-        : { card: null, isWaba: false, wabaJson: null };
     let card = (0, meta_whatsapp_portfolio_map_1.mergePortfolioIdentity)({
         fallback,
         business: matched,
@@ -205,15 +227,28 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
             ...card,
             id: graphCard.id || card.id,
             name: graphCard.name || card.name,
-            primaryPageId: graphCard.primaryPageId || card.primaryPageId,
-            primaryPageName: graphCard.primaryPageName || card.primaryPageName,
+            primaryPageId: graphCard.primaryPageId || hint.primaryPageId || card.primaryPageId,
+            primaryPageName: graphCard.primaryPageName || hint.primaryPageName || card.primaryPageName,
             profilePictureUrl: graphCard.profilePictureUrl || card.profilePictureUrl,
             wabaId: graphCard.wabaId || card.wabaId || resolvedWaba || storedWaba,
             connectionId: open.id,
         };
     }
-    const localPhoto = await cacheGraphBusinessPhoto(tenantId, card.id, card.profilePictureUrl);
-    card = { ...card, profilePictureUrl: localPhoto, wabaId: card.wabaId || resolvedWaba || storedWaba };
+    card = {
+        ...card,
+        primaryPageId: card.primaryPageId || hint.primaryPageId,
+        primaryPageName: card.primaryPageName || hint.primaryPageName,
+    };
+    const photoDownloadUrl = fetchedBm.photoDownloadUrl ||
+        (0, meta_whatsapp_portfolio_map_1.graphPhotoDownloadUrl)(matched) ||
+        (0, meta_whatsapp_portfolio_map_1.graphPhotoDownloadUrl)(waba.json) ||
+        card.profilePictureUrl;
+    const localPhoto = await cacheGraphBusinessPhoto(tenantId, card.id, photoDownloadUrl);
+    card = {
+        ...card,
+        profilePictureUrl: localPhoto || card.profilePictureUrl,
+        wabaId: card.wabaId || resolvedWaba || storedWaba,
+    };
     const wabaId = resolvedWaba || storedWaba;
     if (!wabaId)
         return { card, directory };
@@ -237,18 +272,14 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     const numbers = await attachPhoneBusinessProfiles(graph, token, merged, tenantId);
     return { card: { ...card, numbers }, directory };
 }
-const PHOTO_GRAPH_GRACE_MS = 90000;
 async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {
     if (process.env.NODE_TEST_CONTEXT)
         return;
     if (!url || !/^https:\/\//i.test(url))
         return;
     const identity = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenantId, phoneNumberId);
-    if (identity?.photoExt && identity.photoMetaApplied) {
-        const age = Date.now() - Date.parse(identity.updatedAt);
-        if (Number.isFinite(age) && age >= 0 && age < PHOTO_GRAPH_GRACE_MS)
-            return;
-    }
+    if (identity?.photoExt)
+        return;
     const downloaded = await (0, meta_whatsapp_phone_profile_1.fetchHttpsProfileImage)(url);
     if (!downloaded)
         return;
@@ -263,18 +294,20 @@ async function attachPhoneBusinessProfiles(graph, token, numbers, tenantId) {
     const limited = numbers.slice(0, 20);
     const rest = numbers.slice(20);
     const withProfiles = await Promise.all(limited.map(async (row) => {
-        const nameNode = await graph({
-            token,
-            method: "GET",
-            path: row.phoneNumberId,
-            query: { fields: meta_whatsapp_portfolio_map_1.META_PHONE_NAME_FIELDS },
-        });
-        const profile = await graph({
-            token,
-            method: "GET",
-            path: `${row.phoneNumberId}/whatsapp_business_profile`,
-            query: { fields: "about,address,description,email,profile_picture_url,vertical" },
-        });
+        const [nameNode, profile] = await Promise.all([
+            graph({
+                token,
+                method: "GET",
+                path: row.phoneNumberId,
+                query: { fields: meta_whatsapp_portfolio_map_1.META_PHONE_NAME_FIELDS },
+            }),
+            graph({
+                token,
+                method: "GET",
+                path: `${row.phoneNumberId}/whatsapp_business_profile`,
+                query: { fields: "about,address,description,email,profile_picture_url,vertical" },
+            }),
+        ]);
         const named = nameNode.ok ? (0, meta_whatsapp_portfolio_map_1.mapPhoneNameFields)(nameNode.json) : {
             verifiedName: null,
             nameStatus: null,
@@ -292,7 +325,7 @@ async function attachPhoneBusinessProfiles(graph, token, numbers, tenantId) {
             newNameStatus,
         });
         const mapped = profile.ok ? (0, meta_whatsapp_phone_profile_1.mapWhatsappBusinessProfile)(profile.json) : null;
-        await cacheGraphPhonePhoto(tenantId, row.phoneNumberId, mapped?.profilePictureUrl || null);
+        void cacheGraphPhonePhoto(tenantId, row.phoneNumberId, mapped?.profilePictureUrl || null);
         return {
             ...row,
             verifiedName,
@@ -574,10 +607,7 @@ class MetaWhatsappConnectionService {
             });
         }
         const requested = String(opts?.connectionId || "").trim();
-        const hydrated = [];
-        for (const row of rows) {
-            hydrated.push(await hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row));
-        }
+        const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row)));
         const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(hydrated.map((item) => item.card));
         const selected = cards.find((item) => item.connectionId === requested) ||
             cards.find((item) => item.id && item.id === String(opts?.connectionId || "").trim()) ||
@@ -607,10 +637,19 @@ class MetaWhatsappConnectionService {
     }
     async registerPhoneFromAuth(auth, input) {
         const tenant = requireTenant(auth);
-        const open = await this.repository.findOpenByTenant(tenant.tenantId);
+        const repo = this.repository;
+        const rows = typeof repo.listOpenByTenant === "function"
+            ? await repo.listOpenByTenant(tenant.tenantId)
+            : [await this.repository.findOpenByTenant(tenant.tenantId)].filter((item) => Boolean(item));
+        const connectionId = String(input.connectionId || "").trim();
+        const requestedPhone = String(input.phoneNumberId || "").trim();
+        const open = (connectionId ? rows.find((item) => item.id === connectionId) : null) ||
+            rows.find((item) => String(item.phoneNumberId || "").trim() === requestedPhone) ||
+            rows[0] ||
+            null;
         if (!open)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("no_pending_connection");
-        const phoneNumberId = String(input.phoneNumberId || open.phoneNumberId || "").trim();
+        const phoneNumberId = requestedPhone || String(open.phoneNumberId || "").trim();
         const pin = String(input.pin || "").trim();
         if (!phoneNumberId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
@@ -644,7 +683,7 @@ class MetaWhatsappConnectionService {
             tenantId: tenant.tenantId,
             connectionId: open.id,
         });
-        if (open.wabaId && open.phoneNumberId && open.status !== "connected") {
+        if (open.wabaId && open.phoneNumberId && open.status !== "connected" && rows[0]?.id === open.id) {
             try {
                 await this.confirmFromAuth(auth);
             }

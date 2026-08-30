@@ -5,6 +5,7 @@ import {
   mergePortfolioIdentity,
   listMetaBusinessNodes,
   firstOwnedPageId,
+  graphPhotoDownloadUrl,
   META_OWNED_PAGES_FIELDS,
   type MetaWabaIdentityHint,
 } from "./meta-whatsapp-portfolio.map";
@@ -17,8 +18,11 @@ export const META_PORTFOLIO_BUSINESS_IDS = [
 ] as const;
 
 export const META_WABA_OWNER_FIELDS = "id,name,owner_business_info,on_behalf_of_business_info";
+export const META_WABA_PAGE_FIELDS =
+  "owner_business_info{id,name,primary_page{id,name}},on_behalf_of_business_info{id,name,primary_page{id,name}}";
 export const META_BUSINESS_NAME_FIELDS = "id,name";
 export const META_BUSINESS_PAGE_FIELDS = "primary_page{id,name}";
+export const META_BUSINESS_PAGE_ID_FIELDS = "primary_page{id}";
 export const META_BUSINESS_PHOTO_FIELDS = "profile_picture_uri";
 
 export type PortfolioGraphCaller = (input: {
@@ -76,34 +80,134 @@ export async function fetchWabaOwner(
   if (!id) return { hint: emptyHint, json: null, ok: false };
   const res = await getFields(graph, token, id, META_WABA_OWNER_FIELDS);
   if (!res.ok) return { hint: emptyHint, json: null, ok: false };
-  return { hint: mapMetaWabaIdentity(res.json), json: res.json, ok: true };
+  let json = res.json;
+  let hint = mapMetaWabaIdentity(json);
+  if (!hint.primaryPageName) {
+    const extra = await getFields(graph, token, id, META_WABA_PAGE_FIELDS);
+    if (extra.ok) {
+      const mergedJson = { ...asRecord(res.json), ...asRecord(extra.json) };
+      const extraHint = mapMetaWabaIdentity(mergedJson);
+      if (extraHint.primaryPageName || extraHint.primaryPageId) {
+        json = mergedJson;
+        hint = extraHint;
+      }
+    }
+  }
+  return { hint, json, ok: true };
 }
+
+async function mergePrimaryPageFromGraph(
+  graph: PortfolioGraphCaller,
+  token: string,
+  businessId: string,
+  card: MetaPortfolioPublic,
+  pageRes: MetaGraphJsonResult,
+): Promise<MetaPortfolioPublic> {
+  if (pageRes.ok) {
+    return mergePortfolioIdentity({ fallback: card, business: pageRes.json });
+  }
+  for (const fields of [META_BUSINESS_PAGE_ID_FIELDS, "primary_page"]) {
+    const retry = await getFields(graph, token, businessId, fields);
+    if (retry.ok) {
+      return mergePortfolioIdentity({ fallback: card, business: retry.json });
+    }
+  }
+  return card;
+}
+
+async function mergePageEdges(
+  graph: PortfolioGraphCaller,
+  token: string,
+  businessId: string,
+  card: MetaPortfolioPublic,
+  photoDownloadUrl: string | null,
+): Promise<{ card: MetaPortfolioPublic; photoDownloadUrl: string | null }> {
+  if (card.primaryPageName) return { card, photoDownloadUrl };
+  let next = card;
+  let photo = photoDownloadUrl;
+  for (const edge of ["owned_pages", "client_pages", "assigned_pages"]) {
+    const pages = await graph({
+      token,
+      method: "GET",
+      path: `${businessId}/${edge}`,
+      query: { fields: META_OWNED_PAGES_FIELDS },
+    });
+    if (!pages.ok || !firstOwnedPageId(pages.json)) continue;
+    next = mergePortfolioIdentity({ fallback: next, ownedPages: pages.json });
+    photo = photo || graphPhotoDownloadUrl(pages.json);
+    if (next.primaryPageName) break;
+  }
+  return { card: next, photoDownloadUrl: photo };
+}
+
+async function fillPageNameById(
+  graph: PortfolioGraphCaller,
+  token: string,
+  businessId: string,
+  card: MetaPortfolioPublic,
+): Promise<MetaPortfolioPublic> {
+  const pageId = String(card.primaryPageId || "").trim();
+  if (!pageId || card.primaryPageName || pageId === businessId) return card;
+  const named = await getFields(graph, token, pageId, "id,name");
+  if (!named.ok) return card;
+  const row = asRecord(named.json);
+  const pageName = text(row.name);
+  const namedId = text(row.id) || pageId;
+  if (!pageName || namedId === businessId) return card;
+  return mergePortfolioIdentity({
+    fallback: card,
+    business: { primary_page: { id: namedId, name: pageName } },
+  });
+}
+
+export type FetchBusinessGraphResult = {
+  card: MetaPortfolioPublic | null;
+  isWaba: boolean;
+  wabaJson: unknown;
+  photoDownloadUrl: string | null;
+};
 
 export async function fetchBusinessFromGraph(
   graph: PortfolioGraphCaller,
   token: string,
   businessId: string,
   seen: Set<string> = new Set(),
-): Promise<{ card: MetaPortfolioPublic | null; isWaba: boolean; wabaJson: unknown }> {
+): Promise<FetchBusinessGraphResult> {
   const id = String(businessId || "").trim();
-  if (!id || seen.has(id)) return { card: null, isWaba: false, wabaJson: null };
+  if (!id || seen.has(id)) return { card: null, isWaba: false, wabaJson: null, photoDownloadUrl: null };
   seen.add(id);
 
   const named = await getFields(graph, token, id, META_BUSINESS_NAME_FIELDS);
   const namedRow = asRecord(named.json);
   if (!named.ok || (!text(namedRow.id) && !text(namedRow.name))) {
-    return { card: null, isWaba: false, wabaJson: null };
+    return { card: null, isWaba: false, wabaJson: null, photoDownloadUrl: null };
   }
 
-  const ownerRes = await getFields(graph, token, id, META_WABA_OWNER_FIELDS);
+  const [ownerRes, page, photo] = await Promise.all([
+    getFields(graph, token, id, META_WABA_OWNER_FIELDS),
+    getFields(graph, token, id, META_BUSINESS_PAGE_FIELDS),
+    getFields(graph, token, id, META_BUSINESS_PHOTO_FIELDS),
+  ]);
   const combined = { ...asRecord(named.json), ...asRecord(ownerRes.ok ? ownerRes.json : null) };
   if (ownerRes.ok && isWabaGraphNode(combined)) {
-    const hint = mapMetaWabaIdentity(combined);
+    let hint = mapMetaWabaIdentity(combined);
+    if (!hint.primaryPageName) {
+      const extra = await getFields(graph, token, id, META_WABA_PAGE_FIELDS);
+      if (extra.ok) {
+        const extraHint = mapMetaWabaIdentity({ ...combined, ...asRecord(extra.json) });
+        if (extraHint.primaryPageName || extraHint.primaryPageId) hint = extraHint;
+      }
+    }
     if (hint.businessId && hint.businessId !== id) {
       const owner = await fetchBusinessFromGraph(graph, token, hint.businessId, seen);
       return {
         card: owner.card
-          ? { ...owner.card, wabaId: hint.wabaId || id }
+          ? {
+              ...owner.card,
+              wabaId: hint.wabaId || id,
+              primaryPageId: owner.card.primaryPageId || hint.primaryPageId,
+              primaryPageName: owner.card.primaryPageName || hint.primaryPageName,
+            }
           : {
               id: hint.businessId,
               name: hint.businessName,
@@ -114,38 +218,35 @@ export async function fetchBusinessFromGraph(
             },
         isWaba: true,
         wabaJson: ownerRes.json,
+        photoDownloadUrl: owner.photoDownloadUrl || graphPhotoDownloadUrl(ownerRes.json),
       };
     }
   }
 
   let card = mapMetaBusinessToPortfolio(named.json, { id });
-  const page = await getFields(graph, token, id, META_BUSINESS_PAGE_FIELDS);
-  if (page.ok) {
-    card = mergePortfolioIdentity({ fallback: card, business: page.json });
-  }
-  const photo = await getFields(graph, token, id, META_BUSINESS_PHOTO_FIELDS);
+  card = await mergePrimaryPageFromGraph(graph, token, id, card, page);
   if (photo.ok) {
     card = mergePortfolioIdentity({ fallback: card, business: photo.json });
   }
-  if (!card.primaryPageName) {
-    const owned = await graph({
+  let photoDownloadUrl =
+    graphPhotoDownloadUrl(photo.json) ||
+    graphPhotoDownloadUrl(page.json) ||
+    graphPhotoDownloadUrl(ownerRes.json) ||
+    card.profilePictureUrl;
+  const fromEdges = await mergePageEdges(graph, token, id, card, photoDownloadUrl);
+  card = fromEdges.card;
+  photoDownloadUrl = fromEdges.photoDownloadUrl;
+  card = await fillPageNameById(graph, token, id, card);
+  if (!card.profilePictureUrl && !photoDownloadUrl) {
+    const picture = await graph({
       token,
       method: "GET",
-      path: `${id}/owned_pages`,
-      query: { fields: META_OWNED_PAGES_FIELDS },
+      path: `${id}/picture`,
+      query: { redirect: "0", type: "large" },
     });
-    if (owned.ok && firstOwnedPageId(owned.json)) {
-      card = mergePortfolioIdentity({ fallback: card, ownedPages: owned.json });
-    } else {
-      const clients = await graph({
-        token,
-        method: "GET",
-        path: `${id}/client_pages`,
-        query: { fields: META_OWNED_PAGES_FIELDS },
-      });
-      if (clients.ok) {
-        card = mergePortfolioIdentity({ fallback: card, ownedPages: clients.json });
-      }
+    if (picture.ok) {
+      card = mergePortfolioIdentity({ fallback: card, picture: picture.json });
+      photoDownloadUrl = graphPhotoDownloadUrl(picture.json) || photoDownloadUrl;
     }
   }
   if (!card.profilePictureUrl && card.primaryPageId) {
@@ -157,9 +258,15 @@ export async function fetchBusinessFromGraph(
     });
     if (picture.ok) {
       card = mergePortfolioIdentity({ fallback: card, picture: picture.json });
+      photoDownloadUrl = photoDownloadUrl || graphPhotoDownloadUrl(picture.json);
     }
   }
-  return { card: { ...card, id: card.id || id }, isWaba: false, wabaJson: null };
+  return {
+    card: { ...card, id: card.id || id },
+    isWaba: false,
+    wabaJson: null,
+    photoDownloadUrl: photoDownloadUrl || card.profilePictureUrl,
+  };
 }
 
 export async function fetchAssignedBusinesses(

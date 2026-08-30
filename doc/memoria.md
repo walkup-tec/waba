@@ -1,5 +1,30 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-30 17:50 — Ativar número pendente no Laboratório
+- Linha pendente (Walkup `+55 11 95213-7761`) mostra PIN + Ativar. Register usa o token do portfólio selecionado.
+- LOG: `doc/LOG-2026-08-30__175000__laboratorio-ativar-numero.md`
+- Marker: `DEPLOY-2026-08-30-175000-master-laboratorio-ativar-numero`
+
+## 2026-08-30 17:45 — Nome da Página do portfólio
+- Graph pode devolver só o ID da Página; o card faz `GET /{page-id}` e tenta `assigned_pages`. GET da WABA não mistura `primary_page` aninhado.
+- LOG: `doc/LOG-2026-08-30__174500__laboratorio-pagina-portfolio.md`
+- Marker: `DEPLOY-2026-08-30-174500-master-laboratorio-pagina-portfolio`
+
+## 2026-08-30 17:40 — Foto do portfólio baixada da Meta
+- URL com token não vai ao front; servidor baixa e serve `/portfolio/photo`. Fallback `/{id}/picture`. Cache 15 min.
+- LOG: `doc/LOG-2026-08-30__174000__laboratorio-foto-portfolio.md`
+- Marker: `DEPLOY-2026-08-30-174000-master-laboratorio-foto-portfolio`
+
+## 2026-08-30 17:34 — Não listar número fantasma na Drax
+- ID `1350439411479507` sem telefone sai da lista; Graph com chip real não mistura órfão da conexão
+- LOG: `doc/LOG-2026-08-30__173400__laboratorio-numero-fantasma.md`
+- Marker: `DEPLOY-2026-08-30-173400-master-laboratorio-numero-fantasma`
+
+## 2026-08-30 17:28 — Portfólios carregam mais rápido
+- GET `/portfolio` sem cascata de BMs extras; Graph em paralelo; skeleton no Laboratório
+- LOG: `doc/LOG-2026-08-30__172800__laboratorio-portfolio-fast.md`
+- Marker: `DEPLOY-2026-08-30-172800-master-laboratorio-portfolio-fast`
+
 ## 2026-08-30 16:52 — UI profissional do portfólio no Laboratório
 - Painel único (rail + números), seleção com barra verde, pills distintas, iniciais no lugar do logo Meta
 - LOG: `doc/LOG-2026-08-30__165200__laboratorio-ui-pro.md`

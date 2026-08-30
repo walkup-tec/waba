@@ -215,6 +215,7 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             const assets = await service.registerPhoneFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
                 phoneNumberId: String(req.body?.phoneNumberId || req.body?.phone_number_id || "").trim(),
                 pin: String(req.body?.pin || "").trim(),
+                connectionId: String(req.body?.connectionId || req.body?.connection_id || "").trim(),
             });
             return sendPublic(res, 200, { ok: true, ...assets });
         }

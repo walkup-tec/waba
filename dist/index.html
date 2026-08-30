@@ -3415,6 +3415,23 @@
           font-size: 12px;
           color: rgba(148, 163, 184, 0.78);
         }
+        .meta-portfolio-card.is-skeleton {
+          pointer-events: none;
+          cursor: default;
+          min-height: 84px;
+          background: linear-gradient(
+            90deg,
+            rgba(148, 163, 184, 0.06) 0%,
+            rgba(148, 163, 184, 0.14) 45%,
+            rgba(148, 163, 184, 0.06) 100%
+          );
+          background-size: 200% 100%;
+          animation: meta-portfolio-pulse 1.1s ease-in-out infinite;
+        }
+        @keyframes meta-portfolio-pulse {
+          0% { background-position: 100% 0; }
+          100% { background-position: -100% 0; }
+        }
         .meta-portfolio-card-copy { flex: 1; min-width: 0; }
         .meta-portfolio-meta {
           display: grid;
@@ -3675,6 +3692,41 @@
           align-items: end;
           padding: 8px 0 4px 56px;
         }
+        .meta-number-card.is-pending .meta-number-activate {
+          flex-basis: auto;
+          flex: 0 0 auto;
+          padding: 0;
+          margin-left: auto;
+        }
+        .meta-number-phone-primary {
+          display: block;
+          font-size: 15px;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          color: #f8fafc;
+          font-variant-numeric: tabular-nums;
+        }
+        .meta-number-region {
+          display: block;
+          margin-top: 2px;
+          font-size: 12px;
+          color: rgba(148, 163, 184, 0.88);
+        }
+        .meta-number-group {
+          flex: 1;
+          min-width: 0;
+          font-size: 13px;
+          font-weight: 650;
+          color: #cbd5e1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .meta-number-photo.is-phone {
+          position: relative;
+          color: #86efac;
+        }
+        .meta-number-photo.is-phone svg { display: block; }
         .meta-number-activate label { display: grid; gap: 4px; font-size: 11px; color: rgba(226, 232, 240, 0.7); }
         .meta-number-activate input {
           width: 124px;
@@ -3752,6 +3804,12 @@
           .meta-number-badges { margin-left: 0; }
           .meta-number-inbox { margin-left: 0; padding-left: 0; border-left: 0; }
           .meta-number-activate { padding-left: 0; }
+          .meta-number-card.is-pending .meta-number-activate,
+          .meta-number-card.is-pending .meta-number-group {
+            flex-basis: 100%;
+            margin-left: 56px;
+          }
+          .meta-number-card.is-pending .meta-number-badges { margin-left: 56px; }
         }
         .meta-tpl-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-bottom:16px; }
         .meta-tpl-card { text-align:left; border:1px solid rgba(148,163,184,.2); background:rgba(15,23,42,.55); border-radius:14px; padding:14px; color:inherit; cursor:pointer; min-height:140px; }
@@ -35740,11 +35798,20 @@
         ];
       }
 
-      function metaTpNumberCardsHtml(numbers) {
+      function metaTpPhoneRegion(phone) {
+        const digits = String(phone || "").replace(/\D/g, "");
+        if (digits.startsWith("55")) return "BR Brasil";
+        return "";
+      }
+
+      function metaTpNumberCardsHtml(numbers, portfolio) {
+        const groupName = metaTpPortfolioTitle(portfolio || {});
+        const connectionId = String((portfolio && portfolio.connectionId) || "");
         return (numbers || [])
+          .filter((item) => String(item.displayPhoneNumber || "").trim())
           .map((item) => {
-            const phone = metaTpEsc(item.displayPhoneNumber || item.phoneNumberId);
-            const verified = metaTpEsc(item.verifiedName || "Sem nome de exibição");
+            const phone = metaTpEsc(item.displayPhoneNumber);
+            const verified = metaTpEsc(item.verifiedName || groupName || "Sem nome de exibição");
             const requested = String(item.requestedName || "").trim();
             const nameState = String(item.nameSyncStatus || "");
             const requestedPrefix =
@@ -35760,7 +35827,7 @@
                 (nameState === "ready" ? " — informe o PIN" : "") +
                 "</span>"
               : "";
-            const editName = metaTpEsc(requested || item.verifiedName || "");
+            const editName = metaTpEsc(requested || item.verifiedName || groupName || "");
             const id = metaTpEsc(item.phoneNumberId);
             const photoUrl = String(item.profilePictureUrl || "").trim();
             const isLocalPhoto = /^\/integrations\/meta\/whatsapp\/phone-numbers\/photo(\?|$)/i.test(photoUrl);
@@ -35770,11 +35837,16 @@
                 ? photoUrl
                 : "";
             const photoSrc = safePhoto || "";
+            const phoneIcon =
+              '<span class="meta-number-photo is-phone" aria-hidden="true">' +
+              '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.2 1.1l-2.3 2.2z"/></svg></span>';
             const avatar = safePhoto
               ? '<img class="meta-number-photo" alt="' + verified + '" src="' + metaTpEsc(photoSrc) + '" />'
-              : '<span class="meta-number-photo is-initials" aria-hidden="true">' +
-                metaTpEsc(metaTpInitials(item.verifiedName || item.displayPhoneNumber || "WA")) +
-                "</span>";
+              : item.uiStatus === "ativo"
+                ? '<span class="meta-number-photo is-initials" aria-hidden="true">' +
+                  metaTpEsc(metaTpInitials(item.verifiedName || item.displayPhoneNumber || "WA")) +
+                  "</span>"
+                : phoneIcon;
             const ativo = item.uiStatus === "ativo";
             const busy = item.dispatchStatus === "em_disparo";
             const statusChip = ativo
@@ -35784,7 +35856,8 @@
               ? '<span class="meta-number-chip is-busy">Em disparo</span>'
               : '<span class="meta-number-chip is-idle">Disponível</span>';
             const inboxOn = item.inboxEnabled === true;
-            const activate = item.canActivate
+            const showActivate = Boolean(id) && (item.canActivate || !ativo);
+            const activate = showActivate
               ? '<div class="meta-number-activate">' +
                 "<label>" +
                 (item.nameNeedsRegister
@@ -35795,8 +35868,10 @@
                 '" /></label>' +
                 '<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-activate="' +
                 id +
+                '" data-meta-connection="' +
+                metaTpEsc(connectionId) +
                 '">' +
-                (item.nameNeedsRegister && ativo ? "Aplicar nome na Meta" : "Ativar número") +
+                (item.nameNeedsRegister && ativo ? "Aplicar nome na Meta" : "Ativar") +
                 "</button></div>"
               : "";
             const editAttrs =
@@ -35807,6 +35882,33 @@
               '" data-meta-edit-phone="' +
               phone +
               '"';
+            if (!ativo) {
+              const region = metaTpPhoneRegion(item.displayPhoneNumber);
+              return (
+                '<article class="meta-number-card is-pending">' +
+                '<button type="button" class="meta-number-logo"' +
+                editAttrs +
+                ' aria-label="Editar perfil de ' +
+                verified +
+                '">' +
+                avatar +
+                "</button>" +
+                '<div class="meta-number-col meta-number-col-phone">' +
+                '<span class="meta-number-phone-primary">' +
+                phone +
+                "</span>" +
+                (region ? '<span class="meta-number-region">' + metaTpEsc(region) + "</span>" : "") +
+                requestedLine +
+                "</div>" +
+                '<span class="meta-number-group">' +
+                verified +
+                "</span>" +
+                activate +
+                '<div class="meta-number-badges">' +
+                statusChip +
+                "</div></article>"
+              );
+            }
             return (
               '<article class="meta-number-card">' +
               '<button type="button" class="meta-number-logo"' +
@@ -35934,7 +36036,7 @@
           selectedCount +
           "</span></header>" +
           (selectedNums.length
-            ? '<div class="meta-number-list">' + metaTpNumberCardsHtml(selectedNums) + "</div>"
+            ? '<div class="meta-number-list">' + metaTpNumberCardsHtml(selectedNums, selected) + "</div>"
             : '<p class="meta-portfolio-numbers-empty">Nenhum número neste portfólio.<span>Use o + no card à esquerda para adicionar um número.</span></p>') +
           "</div>";
         Array.prototype.forEach.call(listEl.querySelectorAll(".meta-portfolio-card"), function (cardEl, index) {
@@ -35994,7 +36096,27 @@
         metaTpRenderPortfolioCards(bundles, selectedBiz === "—" ? "" : selectedBiz);
       }
 
+      let metaTpPortfolioInflight = null;
+
+      function metaTpShowPortfolioLoading() {
+        const section = document.getElementById("meta-tp-portfolio");
+        const listEl = document.getElementById("meta-tp-portfolio-list");
+        if (!section || !listEl) return;
+        if (listEl.querySelector(".meta-portfolio-card:not(.is-skeleton)")) return;
+        section.hidden = false;
+        listEl.innerHTML =
+          '<div class="meta-portfolio-rail" aria-busy="true">' +
+          '<article class="meta-portfolio-card is-skeleton" aria-hidden="true"></article>' +
+          '<article class="meta-portfolio-card is-skeleton" aria-hidden="true"></article>' +
+          "</div>" +
+          '<div class="meta-portfolio-numbers">' +
+          '<p class="meta-portfolio-numbers-empty">Carregando números…</p>' +
+          "</div>";
+      }
+
       async function metaTpLoadPortfolio() {
+        if (metaTpPortfolioInflight) return metaTpPortfolioInflight;
+        metaTpPortfolioInflight = (async function () {
         const enabled =
           typeof window !== "undefined" &&
           window.WABA_FEATURE_FLAGS &&
@@ -36003,6 +36125,7 @@
           metaTpRenderPortfolio({ portfolio: null, numbers: [] });
           return;
         }
+        metaTpShowPortfolioLoading();
         try {
           const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/portfolio");
           if (!response.ok || payload.ok === false) {
@@ -36012,6 +36135,12 @@
           metaTpRenderPortfolio(payload);
         } catch {
           metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+        }
+        })();
+        try {
+          return await metaTpPortfolioInflight;
+        } finally {
+          metaTpPortfolioInflight = null;
         }
       }
 
@@ -36048,15 +36177,18 @@
       }
 
       async function metaTpRefreshStatusSilent() {
-        const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/status");
+        const statusReq = metaTpFetchJson("/integrations/meta/whatsapp/status");
+        const portfolioReq = metaTpLoadPortfolio();
+        const { response, payload } = await statusReq;
         if (!response.ok || payload.ok === false) {
           metaTpSetStatus(String(payload.error || "Não foi possível ler o status da conexão."));
+          await portfolioReq.catch(function () {});
           return payload;
         }
         metaTpSetStatus("");
         metaTpLog(metaTpFormatPublicStatus(payload));
         try {
-          await metaTpLoadPortfolio();
+          await portfolioReq;
           const connected = String(payload.status || payload.uiStatus || "").toLowerCase();
           if (connected === "connected" || connected === "conectado") {
             if (typeof window.wabaMetaLabSetStep === "function") window.wabaMetaLabSetStep(4);
@@ -36252,10 +36384,14 @@
         return window.wabaConnectMetaWhatsappOficial(event, setup);
       };
 
-      window.wabaActivateMetaWhatsappNumber = async function wabaActivateMetaWhatsappNumber(phoneNumberId, pin) {
+      window.wabaActivateMetaWhatsappNumber = async function wabaActivateMetaWhatsappNumber(phoneNumberId, pin, connectionId) {
         const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/phone-numbers/register", {
           method: "POST",
-          body: JSON.stringify({ phoneNumberId: phoneNumberId, pin: pin }),
+          body: JSON.stringify({
+            phoneNumberId: phoneNumberId,
+            pin: pin,
+            connectionId: connectionId || "",
+          }),
         });
         if (!response.ok || payload.ok === false) {
           metaTpLog("ativar: " + String(payload.error || "falha"));
@@ -36536,6 +36672,7 @@
         if (btn && portfolioRoot && portfolioRoot.contains(btn)) {
           event.preventDefault();
           const phoneNumberId = String(btn.getAttribute("data-meta-activate") || "").trim();
+          const connectionId = String(btn.getAttribute("data-meta-connection") || "").trim();
           const input = document.querySelector('[data-meta-pin="' + phoneNumberId + '"]');
           const pin = String((input && input.value) || "").trim();
           if (!/^\d{6}$/.test(pin)) {
@@ -36543,7 +36680,7 @@
             return;
           }
           if (input) input.value = "";
-          window.wabaActivateMetaWhatsappNumber(phoneNumberId, pin);
+          window.wabaActivateMetaWhatsappNumber(phoneNumberId, pin, connectionId);
           return;
         }
         const portfolioCard = target.closest(".meta-portfolio-card");
@@ -36644,11 +36781,10 @@
       });
 
       if (document.getElementById("tab-whatsapp-oficial")) {
-        window.setTimeout(function () {
-          if (typeof window.wabaRefreshMetaWhatsappStatus === "function") {
-            window.wabaRefreshMetaWhatsappStatus();
-          }
-        }, 400);
+        metaTpShowPortfolioLoading();
+        if (typeof window.wabaRefreshMetaWhatsappStatus === "function") {
+          window.wabaRefreshMetaWhatsappStatus();
+        }
       }
 
       let metaTplLabCache = [];
