@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-30 16:40 — Layout do Laboratório igual ao desenho
+- Portfólios à esquerda, números do selecionado à direita, `+` adiciona número naquele portfólio
+- LOG: `doc/LOG-2026-08-30__164000__laboratorio-layout-desenho.md`
+- Marker: `DEPLOY-2026-08-30-164500-master-laboratorio-layout-desenho`
+
 ## 2026-08-30 16:25 — Zerar Laboratório Oficial e recomeçar
 - DELETE `/integrations/meta/whatsapp/portfolio` desconecta todas as conexões do tenant e apaga identidade local. UI: Excluir tudo e recomeçar. Lista só mostra conexão gravada.
 - Marker: `DEPLOY-2026-08-30-162500-master-laboratorio-reset-zero`

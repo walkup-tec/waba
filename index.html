@@ -3263,66 +3263,66 @@
         .meta-lab-card .meta-onboard-steps { margin-bottom: 0; }
         .meta-portfolio { margin: 0 0 18px; }
         .meta-portfolio[hidden] { display: none; }
-        .meta-portfolio-list { display: grid; gap: 18px; margin: 0 0 14px; }
-        .meta-portfolio-block {
+        .meta-portfolio-shell,
+        .meta-portfolio-list {
           display: grid;
-          grid-template-columns: minmax(260px, 0.95fr) minmax(0, 1.35fr);
-          gap: 14px;
+          grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+          gap: 16px;
           align-items: start;
+          margin: 0 0 14px;
+        }
+        .meta-portfolio-rail {
+          display: grid;
+          gap: 12px;
         }
         .meta-portfolio-card {
           display: flex;
-          align-items: flex-start;
+          align-items: center;
           gap: 14px;
-          padding: 16px 18px;
-          border-radius: 14px;
-          border: 1px solid rgba(46, 228, 160, 0.22);
-          background: linear-gradient(180deg, rgba(8, 32, 28, 0.96), rgba(6, 24, 22, 0.88));
+          padding: 14px 16px;
+          border-radius: 22px;
+          border: 0;
+          background: #07141c;
           cursor: pointer;
           margin-bottom: 0;
         }
         .meta-portfolio-card.is-selected {
-          border-color: rgba(46, 228, 160, 0.55);
-          box-shadow: 0 0 0 1px rgba(46, 228, 160, 0.25);
+          background: #10202a;
         }
         .meta-portfolio-card h3 {
-          margin: 0 0 8px;
-          font-size: 1.08rem;
-          color: #4ade80;
+          margin: 0 0 6px;
+          font-size: 1.12rem;
+          font-weight: 800;
+          color: #2ee4a0;
         }
         .meta-portfolio-add {
-          width: 40px;
-          height: 40px;
+          width: 42px;
+          height: 42px;
           border: 0;
           border-radius: 999px;
           background: #2ee4a0;
-          color: #052e16;
-          font-size: 22px;
+          color: #041016;
+          font-size: 26px;
           font-weight: 800;
           line-height: 1;
           cursor: pointer;
           flex: 0 0 auto;
+          margin-left: auto;
         }
         .meta-portfolio-numbers {
           display: grid;
-          gap: 10px;
+          gap: 12px;
           min-width: 0;
+          padding: 10px 8px 10px 4px;
         }
-        .meta-portfolio-numbers-title {
-          margin: 0;
-          font-size: 0.82rem;
-          font-weight: 800;
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-          color: rgba(74, 222, 128, 0.9);
-        }
+        .meta-portfolio-numbers-title { display: none; }
         .meta-portfolio-card-copy { flex: 1; min-width: 0; }
         .meta-portfolio-logo {
-          width: 56px;
-          height: 56px;
-          border-radius: 12px;
-          background: #052e16;
-          color: #86efac;
+          width: 72px;
+          height: 72px;
+          border-radius: 16px;
+          background: #f8fafc;
+          color: #0f172a;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -3330,7 +3330,6 @@
           font-size: 18px;
           letter-spacing: -0.04em;
           flex: 0 0 auto;
-          border: 1px solid rgba(37, 211, 102, 0.35);
           overflow: hidden;
         }
         .meta-portfolio-logo img {
@@ -3341,44 +3340,44 @@
         }
         .meta-portfolio-logo.has-photo {
           padding: 0;
-          background: #052e16;
+          background: #f8fafc;
         }
         .meta-portfolio-logo.has-photo span { display: none; }
         .meta-portfolio-logo.has-meta-fallback img {
           object-fit: contain;
           background: #000;
         }
-        .meta-portfolio-card p { margin: 0 0 4px; font-size: 13px; color: rgba(226, 232, 240, 0.78); line-height: 1.4; }
+        .meta-portfolio-card p { margin: 0 0 3px; font-size: 13px; color: #f8fafc; line-height: 1.35; }
         .meta-portfolio-card p:last-child { margin-bottom: 0; }
         .meta-portfolio-toolbar {
           display: flex;
           flex-wrap: wrap;
           align-items: center;
-          justify-content: space-between;
+          justify-content: flex-end;
           gap: 10px;
           margin: 0 0 10px;
         }
-        .meta-portfolio-toolbar h3 { margin: 0; font-size: 0.95rem; }
-        .meta-number-list { display: grid; gap: 10px; }
+        .meta-portfolio-toolbar h3 { display: none; }
+        .meta-number-list { display: grid; gap: 14px; }
         .meta-number-card {
-          display: grid;
-          grid-template-columns: 52px minmax(118px,1.1fr) minmax(140px,1.5fr) minmax(96px,.85fr) minmax(96px,.85fr) minmax(92px,.75fr);
-          gap: 10px 14px;
+          display: flex;
+          flex-wrap: wrap;
           align-items: center;
-          padding: 12px 14px;
-          border-radius: 12px;
-          border: 1px solid rgba(148, 163, 184, 0.18);
-          background: rgba(15, 23, 42, 0.55);
+          gap: 14px;
+          padding: 4px 0;
+          border: 0;
+          background: transparent;
         }
         .meta-number-logo {
-          width: 52px;
-          height: 52px;
+          width: 56px;
+          height: 56px;
           margin: 0;
           padding: 0;
           border: 0;
-          border-radius: 12px;
+          border-radius: 999px;
           background: transparent;
           cursor: pointer;
+          flex: 0 0 auto;
         }
         .meta-number-logo:focus-visible {
           outline: 2px solid rgba(37, 211, 102, 0.7);
@@ -3387,16 +3386,10 @@
         .meta-number-col {
           min-width: 0;
           display: grid;
-          gap: 4px;
+          gap: 2px;
           align-content: center;
         }
-        .meta-number-col-label {
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.04em;
-          text-transform: uppercase;
-          color: rgba(148, 163, 184, 0.88);
-        }
+        .meta-number-col-label { display: none; }
         .meta-number-col-name {
           margin: 0;
           padding: 0;
@@ -3405,20 +3398,19 @@
           color: inherit;
           text-align: left;
           cursor: pointer;
+          flex: 1;
+          min-width: 0;
         }
         .meta-number-col-name:hover .meta-number-name,
         .meta-number-col-name:focus-visible .meta-number-name {
           color: #e2e8f0;
-          text-decoration: underline;
-          text-underline-offset: 2px;
         }
         .meta-number-photo {
-          width: 52px;
-          height: 52px;
-          border-radius: 12px;
+          width: 56px;
+          height: 56px;
+          border-radius: 999px;
           object-fit: cover;
-          background: #020617;
-          border: 1px solid rgba(148, 163, 184, 0.22);
+          background: #f8fafc;
           display: block;
         }
         .meta-number-photo.is-fallback {
@@ -3426,44 +3418,37 @@
           padding: 8px;
           background: #000;
         }
-        .meta-number-card strong { display: block; font-size: 15px; line-height: 1.25; }
-        .meta-number-card .meta-number-name { display: block; font-size: 13px; color: rgba(226, 232, 240, 0.86); }
+        .meta-number-card strong { display: none; }
+        .meta-number-card .meta-number-name { display: block; font-size: 16px; font-weight: 800; color: #f8fafc; }
+        .meta-number-card .meta-number-phone { display: block; margin-top: 2px; font-size: 13px; color: rgba(248, 250, 252, 0.78); }
         .meta-number-card .meta-number-requested { display: block; margin-top: 2px; font-size: 11px; color: rgba(226, 232, 240, 0.55); }
-        .meta-number-badges { display: flex; flex-wrap: wrap; gap: 6px; }
-        .meta-number-sync-cell {
+        .meta-number-badges {
           display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 12px;
-          font-weight: 600;
-          line-height: 1.2;
-        }
-        .meta-number-sync-cell.is-applied { color: #86efac; }
-        .meta-number-sync-cell.is-ready { color: #67e8f9; }
-        .meta-number-sync-cell.is-pending { color: #fde68a; }
-        .meta-number-sync-cell.is-declined { color: #fca5a5; }
-        .meta-number-sync-cell.is-empty { color: rgba(148, 163, 184, 0.7); font-weight: 500; }
-        .meta-number-sync-cell svg {
-          width: 14px;
-          height: 14px;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-left: auto;
           flex: 0 0 auto;
         }
+        .meta-number-sync-cell { display: none; }
         .meta-number-chip {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           border-radius: 999px;
           font-size: 11px;
-          font-weight: 700;
-          padding: 4px 8px;
-          background: rgba(148, 163, 184, 0.18);
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          padding: 7px 14px;
+          background: #2ee4a0;
+          color: #041016;
         }
-        .meta-number-chip.is-ok { background: rgba(37, 211, 102, 0.2); color: #86efac; }
-        .meta-number-chip.is-wait { background: rgba(250, 204, 21, 0.16); color: #fde68a; }
-        .meta-number-chip.is-busy { background: rgba(56, 189, 248, 0.16); color: #7dd3fc; }
+        .meta-number-chip.is-ok { background: #2ee4a0; color: #041016; }
+        .meta-number-chip.is-wait { background: #fbbf24; color: #041016; }
+        .meta-number-chip.is-busy { background: #38bdf8; color: #041016; }
         .meta-number-inbox {
-          justify-items: start;
+          display: flex;
           align-items: center;
-          align-content: center;
         }
         .meta-number-switch {
           width: 34px;
@@ -3501,17 +3486,18 @@
           outline-offset: 2px;
         }
         .meta-number-activate {
-          grid-column: 1 / -1;
+          flex-basis: 100%;
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
           align-items: end;
+          padding-left: 70px;
         }
         .meta-number-activate label { display: grid; gap: 4px; font-size: 11px; color: rgba(226, 232, 240, 0.7); }
         .meta-number-actions { display: contents; }
         .meta-number-edit {
           min-width: 0;
-          min-height: 40px;
+          min-height: 36px;
           padding: 8px 14px;
           font-size: 13px;
         }
@@ -3561,21 +3547,13 @@
         }
         .meta-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
         @media (max-width: 900px) {
-          .meta-number-card {
-            grid-template-columns: 52px minmax(0,1fr) minmax(0,1fr);
-          }
-          .meta-number-col-sync,
-          .meta-number-inbox {
-            grid-column: span 1;
-          }
-          .meta-portfolio-block { grid-template-columns: 1fr; }
+          .meta-portfolio-shell,
+          .meta-portfolio-list { grid-template-columns: 1fr; }
         }
         @media (max-width: 640px) {
-          .meta-number-card { grid-template-columns: 52px minmax(0, 1fr); }
-          .meta-number-col-sync,
-          .meta-number-inbox,
-          .meta-number-col-name { grid-column: 2; }
           .meta-portfolio-card { flex-wrap: wrap; }
+          .meta-number-badges { margin-left: 0; }
+          .meta-number-activate { padding-left: 0; }
         }
         .meta-tpl-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-bottom:16px; }
         .meta-tpl-card { text-align:left; border:1px solid rgba(148,163,184,.2); background:rgba(15,23,42,.55); border-radius:14px; padding:14px; color:inherit; cursor:pointer; min-height:140px; }
@@ -20744,28 +20722,13 @@
                 </article>
                 <article id="meta-tp-portfolio" class="meta-lab-card meta-portfolio" hidden>
                   <h3 class="meta-lab-card-title">Portfólio e seus números</h3>
-                  <div id="meta-tp-portfolio-list" class="meta-portfolio-list">
-                    <article class="meta-portfolio-card" aria-label="Portfólio empresarial">
-                      <div class="meta-portfolio-logo" id="meta-tp-portfolio-logo">
-                        <img id="meta-tp-portfolio-photo" alt="" hidden referrerpolicy="no-referrer" />
-                        <span id="meta-tp-portfolio-initials" aria-hidden="true">WP</span>
-                      </div>
-                      <div class="meta-portfolio-card-copy">
-                        <h3 id="meta-tp-portfolio-name">Portfólio</h3>
-                        <p>Identificação do portfólio empresarial: <span id="meta-tp-portfolio-id">—</span></p>
-                        <p>Página principal: <span id="meta-tp-portfolio-page">—</span></p>
-                        <p>WABA: <span id="meta-tp-portfolio-waba">—</span></p>
-                      </div>
-                      <button type="button" id="meta-tp-edit-portfolio" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit">Editar</button>
-                    </article>
-                  </div>
+                  <div id="meta-tp-portfolio-list" class="meta-portfolio-shell"></div>
                   <div class="meta-portfolio-toolbar">
-                    <h3>Adicionar número a um portfólio</h3>
-                    <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" onclick="return window.wabaAddMetaWhatsappNumber(event);">Adicionar número</button>
+                    <button type="button" id="meta-tp-edit-portfolio" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit">Editar portfólio</button>
                     <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" id="meta-tp-reset-lab" data-meta-reset-portfolio="1">Excluir tudo e recomeçar</button>
                   </div>
                   <div id="meta-tp-numbers" class="meta-number-list" hidden></div>
-                  <p id="meta-tp-numbers-empty" class="muted" hidden>Nenhum número neste portfólio ainda. Use Adicionar número, conclua o SMS no chip e ative com o PIN de 6 dígitos.</p>
+                  <p id="meta-tp-numbers-empty" class="muted" hidden>Nenhum número neste portfólio ainda.</p>
                 </article>
                 <div id="meta-tp-edit-modal" class="meta-edit-modal" hidden>
                   <div class="meta-edit-modal-card" role="dialog" aria-labelledby="meta-tp-edit-title">
@@ -35621,7 +35584,7 @@
               : '<span class="meta-number-chip is-wait">Pendente</span>';
             const dispatchChip = busy
               ? '<span class="meta-number-chip is-busy">Em disparo</span>'
-              : '<span class="meta-number-chip is-ok">Livre</span>';
+              : '<span class="meta-number-chip is-ok">Disponível</span>';
             const inboxOn = item.inboxEnabled === true;
             const activate = item.canActivate
               ? '<div class="meta-number-activate">' +
@@ -35655,30 +35618,22 @@
               '">' +
               avatar +
               "</button>" +
-              '<div class="meta-number-col">' +
-              '<span class="meta-number-col-label">Número</span>' +
-              "<strong>" +
-              phone +
-              "</strong>" +
-              '<div class="meta-number-badges">' +
-              statusChip +
-              dispatchChip +
-              "</div></div>" +
               '<button type="button" class="meta-number-col meta-number-col-name"' +
               editAttrs +
               ' aria-label="Editar nome de ' +
               verified +
               '">' +
-              '<span class="meta-number-col-label">Nome</span>' +
               '<span class="meta-number-name">' +
               verified +
               "</span>" +
+              '<span class="meta-number-phone">' +
+              phone +
+              "</span>" +
               requestedLine +
               "</button>" +
-              metaTpNumberSyncCell("Foto", item.photoSyncStatus) +
-              metaTpNumberSyncCell("Nome", item.nameSyncStatus) +
-              '<div class="meta-number-col meta-number-inbox">' +
-              '<span class="meta-number-col-label">Inbox</span>' +
+              '<div class="meta-number-badges">' +
+              statusChip +
+              dispatchChip +
               '<button type="button" class="meta-number-switch' +
               (inboxOn ? " is-on" : "") +
               '" role="switch" aria-checked="' +
@@ -35693,7 +35648,8 @@
               metaTpEsc(phone) +
               '" data-meta-inbox-name="' +
               metaTpEsc(requested || item.verifiedName || "") +
-              '"></button></div>' +
+              '"></button>' +
+              "</div>" +
               activate +
               "</article>"
             );
@@ -35705,20 +35661,23 @@
         const listEl = document.getElementById("meta-tp-portfolio-list");
         if (!listEl) return;
         const selectedKey = String(selectedId || "");
-        listEl.innerHTML = (portfolios || [])
+        const selected =
+          (portfolios || []).find(function (item) {
+            return metaTpBusinessIdLabel(item) === selectedKey;
+          }) || (portfolios || [])[0];
+        const selectedNums = selected && Array.isArray(selected.numbers) ? selected.numbers : [];
+        const rail = (portfolios || [])
           .map(function (item) {
             const bizId = metaTpBusinessIdLabel(item);
             const isSelected = bizId !== "—" && bizId === selectedKey;
             const name = metaTpPortfolioTitle(item);
             const page = item.primaryPageName || "—";
             const waba = String(item.wabaId || "").trim() || "—";
-            const nums = Array.isArray(item.numbers) ? item.numbers : [];
             return (
-              '<section class="meta-portfolio-block" data-meta-portfolio-id="' +
-              metaTpEsc(bizId === "—" ? "" : bizId) +
-              '">' +
               '<article class="meta-portfolio-card' +
               (isSelected ? " is-selected" : "") +
+              '" data-meta-portfolio-id="' +
+              metaTpEsc(bizId === "—" ? "" : bizId) +
               '" aria-label="Portfólio empresarial">' +
               '<div class="meta-portfolio-logo">' +
               '<img alt="" hidden referrerpolicy="no-referrer" />' +
@@ -35731,12 +35690,12 @@
               ">" +
               metaTpEsc(name) +
               "</h3>" +
-              "<p>Identificação do portfólio empresarial: <span" +
+              "<p>ID <span" +
               (isSelected ? ' id="meta-tp-portfolio-id"' : "") +
               ">" +
               metaTpEsc(bizId) +
               "</span></p>" +
-              "<p>Página principal: <span" +
+              "<p>Página: <span" +
               (isSelected ? ' id="meta-tp-portfolio-page"' : "") +
               ">" +
               metaTpEsc(page) +
@@ -35750,20 +35709,20 @@
               metaTpEsc(bizId === "—" ? "" : bizId) +
               '" data-meta-waba-id="' +
               metaTpEsc(waba === "—" ? "" : waba) +
-              '" aria-label="Adicionar número">+</button>' +
-              (isSelected
-                ? '<button type="button" id="meta-tp-edit-portfolio" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit">Editar</button>'
-                : "") +
-              "</article>" +
-              '<div class="meta-portfolio-numbers">' +
-              '<h4 class="meta-portfolio-numbers-title">Seus números</h4>' +
-              (nums.length
-                ? '<div class="meta-number-list">' + metaTpNumberCardsHtml(nums) + "</div>"
-                : '<p class="muted">Nenhum número neste portfólio ainda.</p>') +
-              "</div></section>"
+              '" aria-label="Adicionar número a este portfólio">+</button>' +
+              "</article>"
             );
           })
           .join("");
+        listEl.innerHTML =
+          '<div class="meta-portfolio-rail">' +
+          rail +
+          "</div>" +
+          '<div class="meta-portfolio-numbers">' +
+          (selectedNums.length
+            ? '<div class="meta-number-list">' + metaTpNumberCardsHtml(selectedNums) + "</div>"
+            : '<p class="muted">Nenhum número neste portfólio ainda.</p>') +
+          "</div>";
         Array.prototype.forEach.call(listEl.querySelectorAll(".meta-portfolio-card"), function (cardEl, index) {
           const item = portfolios[index];
           if (!item) return;
@@ -36371,13 +36330,16 @@
         }
         const portfolioCard = target.closest(".meta-portfolio-card");
         const listEl = document.getElementById("meta-tp-portfolio-list");
-        if (portfolioCard && listEl && listEl.contains(portfolioCard)) {
-          const block = portfolioCard.closest("[data-meta-portfolio-id]");
-          const nextId = String((block && block.getAttribute("data-meta-portfolio-id")) || "").trim();
-          if (nextId) metaTpSession.savedBusinessId = nextId;
-          Array.prototype.forEach.call(listEl.querySelectorAll(".meta-portfolio-card"), function (card) {
-            card.classList.toggle("is-selected", card === portfolioCard);
-          });
+        if (portfolioCard && listEl && listEl.contains(portfolioCard) && !target.closest(".meta-portfolio-add")) {
+          const nextId = String(portfolioCard.getAttribute("data-meta-portfolio-id") || "").trim();
+          if (nextId && nextId !== String(metaTpSession.savedBusinessId || "").trim()) {
+            metaTpSession.savedBusinessId = nextId;
+            const selected = (metaTpSession.portfolios || []).find(function (item) {
+              return metaTpBusinessIdLabel(item) === nextId;
+            });
+            if (selected) metaTpSession.savedWabaId = String(selected.wabaId || "");
+            metaTpRenderPortfolio({ portfolios: metaTpSession.portfolios });
+          }
         }
       });
 
