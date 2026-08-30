@@ -993,7 +993,10 @@ describe("meta portfolio service", () => {
     assert.ok(assets.numbers.some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
     const walkupCard = (assets.portfolios || []).find((item) => item.id === "4141369862822598");
     assert.ok(walkupCard);
+    assert.equal(walkupCard?.primaryPageName, "Grupo Walkup");
     assert.ok((walkupCard?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("95213-7761")));
+    const draxCard = (assets.portfolios || []).find((item) => item.id === "1041827648719609");
+    assert.ok((draxCard?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
   });
 });
 
