@@ -10,12 +10,16 @@ export const META_PHONE_NUMBER_LIST_FIELDS =
 export const META_PHONE_NAME_FIELDS = "verified_name,name_status,new_display_name,new_name_status";
 
 export const META_WABA_IDENTITY_FIELDS =
-  "id,name,owner_business_info{id,name,profile_picture_uri},on_behalf_of_business_info{id,name}";
+  "id,name,owner_business_info{id,name,profile_picture_uri,primary_page{id,name,picture}},on_behalf_of_business_info{id,name,profile_picture_uri,primary_page{id,name,picture}}";
+
+export const META_WABA_IDENTITY_FIELDS_MINIMAL =
+  "id,name,owner_business_info{id,name,primary_page{id,name}},on_behalf_of_business_info{id,name}";
 
 export const META_BUSINESS_IDENTITY_FIELDS =
-  "id,name,profile_picture_uri,picture,primary_page{id,name,picture},owned_pages.limit(5){id,name,picture}";
+  "id,name,profile_picture_uri,primary_page{id,name,picture}";
 
-export const META_BUSINESS_IDENTITY_FIELDS_MINIMAL = "id,name,primary_page{id,name}";
+export const META_BUSINESS_IDENTITY_FIELDS_MINIMAL =
+  "id,name,profile_picture_uri,primary_page{id,name}";
 
 export const META_OWNED_PAGES_FIELDS = "id,name,picture";
 
@@ -141,6 +145,8 @@ export type MetaWabaIdentityHint = {
   wabaName: string | null;
   businessId: string | null;
   businessName: string | null;
+  primaryPageId: string | null;
+  primaryPageName: string | null;
   profilePictureUrl: string | null;
 };
 
@@ -149,13 +155,37 @@ export function mapMetaWabaIdentity(json: unknown): MetaWabaIdentityHint {
   const owner = asRecord(row.owner_business_info);
   const behalf = asRecord(row.on_behalf_of_business_info);
   const biz = text(owner.id) ? owner : behalf;
+  const page = asRecord(asRecord(biz).primary_page);
   return {
     wabaId: text(row.id),
     wabaName: text(row.name),
     businessId: text(asRecord(biz).id),
     businessName: text(asRecord(biz).name),
-    profilePictureUrl: httpsUrl(asRecord(biz).profile_picture_uri) || httpsUrl(row.profile_picture_uri),
+    primaryPageId: text(page.id),
+    primaryPageName: text(page.name),
+    profilePictureUrl:
+      httpsUrl(asRecord(biz).profile_picture_uri) ||
+      httpsUrl(row.profile_picture_uri) ||
+      pictureUrl(page.picture),
   };
+}
+
+export function listMetaBusinessNodes(json: unknown): unknown[] {
+  const data = asRecord(json).data;
+  return Array.isArray(data) ? data : [];
+}
+
+export function pickMetaBusinessNode(
+  json: unknown,
+  ids: Array<string | null | undefined>,
+): unknown {
+  const wanted = new Set(ids.map((id) => String(id || "").trim()).filter(Boolean));
+  if (!wanted.size) return null;
+  for (const row of listMetaBusinessNodes(json)) {
+    const id = text(asRecord(row).id);
+    if (id && wanted.has(id)) return row;
+  }
+  return null;
 }
 
 function firstOwnedPageRecord(json: unknown): Record<string, unknown> {
@@ -214,9 +244,9 @@ export function mergePortfolioIdentity(input: {
   return {
     ...input.fallback,
     id: businessIdNotWaba(rawId, resolvedWaba),
-    name: preferredName(mapped.name, hint.businessName, hint.wabaName, input.fallback.name),
-    primaryPageId: mapped.primaryPageId || text(owned.id) || input.fallback.primaryPageId,
-    primaryPageName: mapped.primaryPageName || text(owned.name) || input.fallback.primaryPageName,
+    name: preferredName(mapped.name, hint.businessName, input.fallback.name),
+    primaryPageId: mapped.primaryPageId || hint.primaryPageId || text(owned.id) || input.fallback.primaryPageId,
+    primaryPageName: mapped.primaryPageName || hint.primaryPageName || text(owned.name) || input.fallback.primaryPageName,
     profilePictureUrl:
       mapped.profilePictureUrl ||
       hint.profilePictureUrl ||

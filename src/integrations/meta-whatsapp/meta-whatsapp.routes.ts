@@ -183,7 +183,10 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
           code: "config_invalid",
         });
       }
-      const photo = await service.readPortfolioPhotoFromAuth(resolveWabaRequestAuth(req));
+      const photo = await service.readPortfolioPhotoFromAuth(
+        resolveWabaRequestAuth(req),
+        String(req.query?.businessId || ""),
+      );
       if (!photo) {
         return sendPublic(res, 404, {
           ok: false,

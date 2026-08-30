@@ -103,6 +103,85 @@ export function applyLocalPortfolioIdentity(
   };
 }
 
+function safeBusinessId(businessId: string): string | null {
+  const id = String(businessId || "").trim();
+  return /^\d{5,20}$/.test(id) ? id : null;
+}
+
+function businessPhotoBase(tenantId: string, businessId: string): string | null {
+  const biz = safeBusinessId(businessId);
+  if (!biz) return null;
+  return path.join(identityDir(), `${safeTenantId(tenantId)}-${biz}`);
+}
+
+export function writePortfolioBusinessPhoto(
+  tenantId: string,
+  businessId: string,
+  photo: { ext: "png" | "jpg"; bytes: Buffer },
+): string | null {
+  const base = businessPhotoBase(tenantId, businessId);
+  if (!base) return null;
+  ensureDir();
+  for (const ext of ["png", "jpg"] as const) {
+    const previous = `${base}.${ext}`;
+    if (ext !== photo.ext && existsSync(previous)) unlinkSync(previous);
+  }
+  writeFileSync(`${base}.${photo.ext}`, photo.bytes);
+  const updatedAt = new Date().toISOString();
+  writeFileSync(`${base}.json`, JSON.stringify({ photoExt: photo.ext, updatedAt }), "utf8");
+  return `/integrations/meta/whatsapp/portfolio/photo?businessId=${encodeURIComponent(String(businessId).trim())}&v=${encodeURIComponent(updatedAt)}`;
+}
+
+export function readPortfolioBusinessPhoto(
+  tenantId: string,
+  businessId: string,
+): { mime: string; bytes: Buffer } | null {
+  const base = businessPhotoBase(tenantId, businessId);
+  if (!base) return null;
+  try {
+    const meta = existsSync(`${base}.json`)
+      ? (JSON.parse(readFileSync(`${base}.json`, "utf8")) as { photoExt?: unknown })
+      : {};
+    const ext = meta.photoExt === "png" || meta.photoExt === "jpg" ? meta.photoExt : existsSync(`${base}.png`) ? "png" : existsSync(`${base}.jpg`) ? "jpg" : null;
+    if (!ext) return null;
+    const file = `${base}.${ext}`;
+    if (!existsSync(file)) return null;
+    const bytes = readFileSync(file);
+    if (!bytes.length) return null;
+    return { mime: ext === "png" ? "image/png" : "image/jpeg", bytes };
+  } catch {
+    return null;
+  }
+}
+
+export function localPortfolioBusinessPhotoUrl(tenantId: string, businessId: string): string | null {
+  const base = businessPhotoBase(tenantId, businessId);
+  if (!base || !existsSync(`${base}.json`)) {
+    if (base && (existsSync(`${base}.png`) || existsSync(`${base}.jpg`))) {
+      return `/integrations/meta/whatsapp/portfolio/photo?businessId=${encodeURIComponent(String(businessId).trim())}`;
+    }
+    return null;
+  }
+  try {
+    const row = JSON.parse(readFileSync(`${base}.json`, "utf8")) as { updatedAt?: unknown; photoExt?: unknown };
+    if (row.photoExt !== "png" && row.photoExt !== "jpg") return null;
+    const updatedAt = String(row.updatedAt || "").trim();
+    return `/integrations/meta/whatsapp/portfolio/photo?businessId=${encodeURIComponent(String(businessId).trim())}${updatedAt ? `&v=${encodeURIComponent(updatedAt)}` : ""}`;
+  } catch {
+    return null;
+  }
+}
+
+export function applyLocalPortfolioBusinessPhoto(
+  tenantId: string,
+  portfolio: MetaPortfolioPublic,
+): MetaPortfolioPublic {
+  const id = String(portfolio.id || "").trim();
+  const local = id ? localPortfolioBusinessPhotoUrl(tenantId, id) : null;
+  if (!local) return portfolio;
+  return { ...portfolio, profilePictureUrl: local };
+}
+
 export function purgePortfolioIdentity(tenantId: string): void {
   try {
     const id = safeTenantId(tenantId);

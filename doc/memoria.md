@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-30 15:37 — Identidade do portfólio = Business Manager da Meta
+- Cards copiam `me/businesses`: nome, ID, `primary_page`, `profile_picture_uri` (Drax Sistemas / Grupo Walkup)
+- Não usar `verified_name` do WhatsApp nem o campo inválido `picture` no nó Business
+- Marker: `DEPLOY-2026-08-30-153700-master-laboratorio-identidade-bm`
+- LOG: `doc/LOG-2026-08-30__153700__laboratorio-identidade-business-manager.md`
+
 ## 2026-08-30 15:17 — Identidade do portfólio a partir da Meta
 - GET `/portfolio` busca nome, Business ID, página principal e foto na Graph (WABA `owner_business_info` + BM `primary_page`/`owned_pages`/`picture`)
 - WABA não aparece como card de portfólio; nome genérico "Portfólio empresarial" não substitui o nome real/página
