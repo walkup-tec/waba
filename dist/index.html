@@ -3263,6 +3263,7 @@
         .meta-lab-card .meta-onboard-steps { margin-bottom: 0; }
         .meta-portfolio { margin: 0 0 18px; }
         .meta-portfolio[hidden] { display: none; }
+        .meta-portfolio-cards { display: grid; gap: 10px; margin: 0 0 14px; }
         .meta-portfolio-card {
           display: flex;
           align-items: flex-start;
@@ -3271,7 +3272,16 @@
           border-radius: 14px;
           border: 1px solid rgba(148, 163, 184, 0.2);
           background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(6, 36, 24, 0.45));
-          margin-bottom: 14px;
+          margin-bottom: 0;
+          width: 100%;
+          text-align: left;
+          color: inherit;
+          cursor: pointer;
+          font: inherit;
+        }
+        .meta-portfolio-card.is-selected {
+          border-color: rgba(37, 211, 102, 0.55);
+          box-shadow: 0 0 0 1px rgba(37, 211, 102, 0.28);
         }
         .meta-portfolio-card-copy { flex: 1; min-width: 0; }
         .meta-portfolio-logo {
@@ -20701,18 +20711,7 @@
                 </article>
                 <article id="meta-tp-portfolio" class="meta-lab-card meta-portfolio" hidden>
                   <h3 class="meta-lab-card-title">Portfólio e seus números</h3>
-                  <article class="meta-portfolio-card" aria-label="Portfólio empresarial">
-                    <div class="meta-portfolio-logo" id="meta-tp-portfolio-logo">
-                      <img id="meta-tp-portfolio-photo" alt="" hidden referrerpolicy="no-referrer" />
-                      <span id="meta-tp-portfolio-initials" aria-hidden="true">WP</span>
-                    </div>
-                    <div class="meta-portfolio-card-copy">
-                      <h3 id="meta-tp-portfolio-name">Portfólio</h3>
-                      <p>Identificação do portfólio empresarial: <span id="meta-tp-portfolio-id">—</span></p>
-                      <p>Página principal: <span id="meta-tp-portfolio-page">—</span></p>
-                    </div>
-                    <button type="button" id="meta-tp-edit-portfolio" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit">Editar</button>
-                  </article>
+                  <div id="meta-tp-portfolio-cards" class="meta-portfolio-cards"></div>
                   <div class="meta-portfolio-toolbar">
                     <h3>Números deste portfólio</h3>
                     <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" onclick="return window.wabaAddMetaWhatsappNumber(event);">Adicionar número</button>
@@ -35316,6 +35315,7 @@
         finishEvent: "",
         advancing: false,
         addNumber: false,
+        selectedConnectionId: "",
       };
       let metaTpLogLines = [];
 
@@ -35463,44 +35463,104 @@
 
       function metaTpRenderPortfolio(assets) {
         const section = document.getElementById("meta-tp-portfolio");
+        const cardsEl = document.getElementById("meta-tp-portfolio-cards");
         const list = document.getElementById("meta-tp-numbers");
         const empty = document.getElementById("meta-tp-numbers-empty");
         const portfolio = assets && assets.portfolio;
         const numbers = Array.isArray(assets && assets.numbers) ? assets.numbers : [];
+        const cards =
+          Array.isArray(assets && assets.portfolios) && assets.portfolios.length
+            ? assets.portfolios
+            : portfolio
+              ? [portfolio]
+              : [];
         metaTpSession.numbers = numbers;
         if (!section) return;
-        if (!portfolio || !portfolio.id) {
+        if (!cards.length) {
           section.hidden = true;
+          if (cardsEl) cardsEl.innerHTML = "";
           return;
         }
         section.hidden = false;
-        metaTpSession.savedBusinessId = String(portfolio.id || "");
-        metaTpSession.savedWabaId = String(portfolio.wabaId || metaTpSession.savedWabaId || "");
-        const name = portfolio.name || "Portfólio empresarial";
-        const nameEl = document.getElementById("meta-tp-portfolio-name");
-        const idEl = document.getElementById("meta-tp-portfolio-id");
-        const pageEl = document.getElementById("meta-tp-portfolio-page");
-        const logoEl = document.getElementById("meta-tp-portfolio-logo");
-        const photoEl = document.getElementById("meta-tp-portfolio-photo");
-        const iniEl = document.getElementById("meta-tp-portfolio-initials");
-        if (nameEl) nameEl.textContent = name;
-        if (idEl) idEl.textContent = String(portfolio.id);
-        if (pageEl) pageEl.textContent = portfolio.primaryPageName || "—";
-        metaTpSession.portfolioPrimaryPageId = String(portfolio.primaryPageId || "").trim();
-        if (iniEl) iniEl.textContent = metaTpInitials(name);
-        const photoUrl = String(portfolio.profilePictureUrl || "").trim();
-        const isLocalPhoto = /^\/integrations\/meta\/whatsapp\/portfolio\/photo(\?|$)/i.test(photoUrl);
-        const safePhoto = isLocalPhoto
-          ? resolveWabaPublicPath(photoUrl)
-          : /^https:\/\//i.test(photoUrl)
-            ? photoUrl
-            : "";
-        if (photoEl && logoEl) {
-          if (safePhoto) {
-            metaTpShowPortfolioLogo(photoEl, logoEl, safePhoto, name, false);
-          } else {
-            metaTpShowPortfolioLogo(photoEl, logoEl, META_PORTFOLIO_FALLBACK_LOGO, "Meta", true);
-          }
+        const selectedId = String(
+          (assets && assets.selectedConnectionId) ||
+            (portfolio && portfolio.connectionId) ||
+            metaTpSession.selectedConnectionId ||
+            "",
+        );
+        metaTpSession.selectedConnectionId = selectedId;
+        const selected = cards.find(function (item) {
+          return String(item.connectionId || "") === selectedId;
+        }) || portfolio || cards[0];
+        metaTpSession.savedBusinessId = String((selected && selected.id) || "");
+        metaTpSession.savedWabaId = String((selected && selected.wabaId) || metaTpSession.savedWabaId || "");
+        metaTpSession.portfolioPrimaryPageId = String((selected && selected.primaryPageId) || "").trim();
+        if (cardsEl) {
+          cardsEl.innerHTML = cards
+            .map(function (item, index) {
+              const isSelected =
+                String(item.connectionId || "") === selectedId ||
+                (!selectedId && index === 0);
+              const name = item.name || "Portfólio empresarial";
+              const page = item.primaryPageName || "—";
+              const bizId = String(item.id || "—");
+              const connId = metaTpEsc(item.connectionId || "");
+              return (
+                '<button type="button" class="meta-portfolio-card' +
+                (isSelected ? " is-selected" : "") +
+                '" data-meta-portfolio-card="1" data-connection-id="' +
+                connId +
+                '" aria-pressed="' +
+                (isSelected ? "true" : "false") +
+                '" aria-label="Portfólio ' +
+                metaTpEsc(name) +
+                '">' +
+                '<div class="meta-portfolio-logo" data-meta-portfolio-logo>' +
+                '<img alt="" hidden referrerpolicy="no-referrer" data-meta-portfolio-photo />' +
+                '<span aria-hidden="true" data-meta-portfolio-initials>' +
+                metaTpEsc(metaTpInitials(name)) +
+                "</span></div>" +
+                '<div class="meta-portfolio-card-copy">' +
+                "<h3" +
+                (isSelected ? ' id="meta-tp-portfolio-name"' : "") +
+                ">" +
+                metaTpEsc(name) +
+                "</h3>" +
+                "<p>Identificação do portfólio empresarial: <span" +
+                (isSelected ? ' id="meta-tp-portfolio-id"' : "") +
+                ">" +
+                metaTpEsc(bizId) +
+                "</span></p>" +
+                "<p>Página principal: <span" +
+                (isSelected ? ' id="meta-tp-portfolio-page"' : "") +
+                ">" +
+                metaTpEsc(page) +
+                "</span></p></div>" +
+                (isSelected
+                  ? '<span id="meta-tp-edit-portfolio" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit">Editar</span>'
+                  : "") +
+                "</button>"
+              );
+            })
+            .join("");
+          Array.prototype.forEach.call(cardsEl.querySelectorAll("[data-meta-portfolio-card]"), function (cardEl, index) {
+            const item = cards[index];
+            if (!item) return;
+            const photoEl = cardEl.querySelector("[data-meta-portfolio-photo]");
+            const logoEl = cardEl.querySelector("[data-meta-portfolio-logo]");
+            const name = item.name || "Portfólio empresarial";
+            const photoUrl = String(item.profilePictureUrl || "").trim();
+            const isLocalPhoto = /^\/integrations\/meta\/whatsapp\/portfolio\/photo(\?|$)/i.test(photoUrl);
+            const safePhoto = isLocalPhoto
+              ? resolveWabaPublicPath(photoUrl)
+              : /^https:\/\//i.test(photoUrl)
+                ? photoUrl
+                : "";
+            if (photoEl && logoEl) {
+              if (safePhoto) metaTpShowPortfolioLogo(photoEl, logoEl, safePhoto, name, false);
+              else metaTpShowPortfolioLogo(photoEl, logoEl, META_PORTFOLIO_FALLBACK_LOGO, "Meta", true);
+            }
+          });
         }
         if (!list) return;
         if (!numbers.length) {
@@ -35643,7 +35703,10 @@
           return;
         }
         try {
-          const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/portfolio");
+          const query = metaTpSession.selectedConnectionId
+            ? "?connectionId=" + encodeURIComponent(metaTpSession.selectedConnectionId)
+            : "";
+          const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/portfolio" + query);
           if (!response.ok || payload.ok === false) {
             metaTpRenderPortfolio({ portfolio: null, numbers: [] });
             return;
@@ -36105,6 +36168,16 @@
         if (target.id === "meta-tp-edit-portfolio" || (target.closest && target.closest("#meta-tp-edit-portfolio"))) {
           event.preventDefault();
           metaTpOpenEditPortfolio();
+          return;
+        }
+        const portfolioCard = target.closest("[data-meta-portfolio-card]");
+        if (portfolioCard) {
+          event.preventDefault();
+          const nextId = String(portfolioCard.getAttribute("data-connection-id") || "").trim();
+          if (nextId && nextId !== metaTpSession.selectedConnectionId) {
+            metaTpSession.selectedConnectionId = nextId;
+            metaTpLoadPortfolio();
+          }
           return;
         }
         const numbers = document.getElementById("meta-tp-numbers");

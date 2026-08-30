@@ -83,9 +83,58 @@ function requireConfigured() {
     }
 }
 function withLocalIdentities(tenantId, assets) {
+    const portfolio = assets.portfolio ? (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioIdentity)(tenantId, assets.portfolio) : null;
+    const portfolios = (assets.portfolios || []).map((item) => (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioIdentity)(tenantId, item));
     return {
-        portfolio: assets.portfolio ? (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioIdentity)(tenantId, assets.portfolio) : null,
+        ...assets,
+        portfolios,
+        selectedConnectionId: assets.selectedConnectionId ?? null,
+        portfolio: portfolio,
         numbers: (0, meta_whatsapp_phone_identity_store_1.applyLocalPhoneIdentities)(tenantId, assets.numbers || []),
+    };
+}
+function storedNumbersFromConnection(open) {
+    const phoneNumberId = String(open.phoneNumberId || "").trim();
+    const display = String(open.displayPhoneNumber || "").trim();
+    if (!phoneNumberId && !display)
+        return [];
+    return [
+        {
+            phoneNumberId: phoneNumberId || display,
+            displayPhoneNumber: display || null,
+            verifiedName: open.verifiedName,
+            qualityRating: open.qualityRating,
+            metaStatus: null,
+            codeVerificationStatus: null,
+            uiStatus: open.status === "connected" ? "ativo" : "pendente",
+            dispatchStatus: "livre",
+            canActivate: false,
+            nameNeedsRegister: false,
+            nameStatus: null,
+            newDisplayName: null,
+            newNameStatus: null,
+            profilePictureUrl: null,
+            vertical: null,
+            description: null,
+            address: null,
+            email: null,
+            requestedName: null,
+            nameSyncStatus: null,
+            photoSyncStatus: null,
+            profileSyncStatus: null,
+            inboxEnabled: false,
+        },
+    ];
+}
+function cardFromConnection(open) {
+    return {
+        id: open.metaBusinessId,
+        name: open.verifiedName,
+        primaryPageId: null,
+        primaryPageName: open.verifiedName,
+        profilePictureUrl: null,
+        wabaId: open.wabaId,
+        connectionId: open.id,
     };
 }
 const PHOTO_GRAPH_GRACE_MS = 90000;
@@ -244,7 +293,7 @@ class MetaWhatsappConnectionService {
                 tokenType: exchanged.tokenType,
                 tokenExpiresAt: (0, meta_whatsapp_oauth_1.metaOauthExpiresAt)(exchanged.expiresIn),
                 configId: (0, meta_config_1.readMetaConfigId)() || null,
-                metaBusinessId: (0, meta_config_1.readMetaBusinessId)() || null,
+                metaBusinessId: null,
                 actorEmail: tenant.ownerEmail,
             });
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("token-stored", {
@@ -264,13 +313,17 @@ class MetaWhatsappConnectionService {
         if (input.tenantId || input.ownerEmail) {
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("ignored-client-tenant", { tenantId: tenant.tenantId });
         }
-        const open = await this.repository.findOpenByTenant(tenant.tenantId);
+        const incomingBusinessId = String(input.businessId || "").trim();
+        const open = (incomingBusinessId
+            ? await this.repository.findByBusinessId(tenant.tenantId, incomingBusinessId)
+            : null) ??
+            (await this.repository.latestPendingToken(tenant.tenantId));
         if (!open) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("no_pending_connection");
         }
-        const wabaId = String(open.wabaId || input.wabaId || "").trim();
-        const phoneNumberId = String(open.phoneNumberId || input.phoneNumberId || "").trim();
-        const businessId = String(open.metaBusinessId || input.businessId || "").trim();
+        const wabaId = String(input.wabaId || open.wabaId || "").trim();
+        const phoneNumberId = String(input.phoneNumberId || open.phoneNumberId || "").trim();
+        const businessId = String(input.businessId || open.metaBusinessId || "").trim();
         if (!wabaId && !phoneNumberId && !businessId) {
             return toMetaWhatsappPublicConnection(open);
         }
@@ -385,13 +438,28 @@ class MetaWhatsappConnectionService {
         });
         return toMetaWhatsappPublicConnection(connected);
     }
-    async listPortfolioAssets(auth) {
+    async listPortfolioAssets(auth, opts) {
         const tenant = requireTenant(auth);
-        const open = await this.repository.findOpenByTenant(tenant.tenantId);
-        if (!open) {
-            return withLocalIdentities(tenant.tenantId, { portfolio: null, numbers: [] });
+        const repo = this.repository;
+        const rows = typeof repo.listOpenByTenant === "function"
+            ? await repo.listOpenByTenant(tenant.tenantId)
+            : [await this.repository.findOpenByTenant(tenant.tenantId)].filter((item) => Boolean(item));
+        if (!rows.length) {
+            return withLocalIdentities(tenant.tenantId, {
+                portfolios: [],
+                selectedConnectionId: null,
+                portfolio: null,
+                numbers: [],
+            });
         }
-        const fallbackPortfolio = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)({ id: open.metaBusinessId, name: null, primary_page: null }, { id: open.metaBusinessId, wabaId: open.wabaId });
+        const requested = String(opts?.connectionId || "").trim();
+        const open = rows.find((item) => item.id === requested) || rows[0];
+        const portfolios = rows.map((item) => cardFromConnection(item));
+        const fallbackPortfolio = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)({
+            id: open.metaBusinessId,
+            name: open.verifiedName,
+            primary_page: { name: open.verifiedName },
+        }, { id: open.metaBusinessId, wabaId: open.wabaId, connectionId: open.id });
         let token = "";
         try {
             token = this.decrypt(open.accessTokenEncrypted);
@@ -403,7 +471,7 @@ class MetaWhatsappConnectionService {
         let portfolio = fallbackPortfolio;
         const businessId = String(open.metaBusinessId || "").trim();
         if (businessId) {
-            const identity = { id: open.metaBusinessId, wabaId: open.wabaId };
+            const identity = { id: open.metaBusinessId, wabaId: open.wabaId, connectionId: open.id };
             const business = await this.graph({
                 token,
                 method: "GET",
@@ -413,7 +481,15 @@ class MetaWhatsappConnectionService {
                 },
             });
             if (business.ok) {
-                portfolio = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(business.json, identity);
+                const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(business.json, identity);
+                portfolio = {
+                    ...fallbackPortfolio,
+                    ...mapped,
+                    name: mapped.name || fallbackPortfolio.name,
+                    primaryPageName: mapped.primaryPageName || fallbackPortfolio.primaryPageName,
+                    id: mapped.id || fallbackPortfolio.id,
+                    connectionId: open.id,
+                };
             }
             else if (business.status === 401) {
                 (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-failed", { tenantId: tenant.tenantId, reason: "business" });
@@ -427,7 +503,15 @@ class MetaWhatsappConnectionService {
                     query: { fields: "id,name,primary_page{id,name}" },
                 });
                 if (fallbackBusiness.ok) {
-                    portfolio = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(fallbackBusiness.json, identity);
+                    const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(fallbackBusiness.json, identity);
+                    portfolio = {
+                        ...fallbackPortfolio,
+                        ...mapped,
+                        name: mapped.name || fallbackPortfolio.name,
+                        primaryPageName: mapped.primaryPageName || fallbackPortfolio.primaryPageName,
+                        id: mapped.id || fallbackPortfolio.id,
+                        connectionId: open.id,
+                    };
                 }
                 else if (fallbackBusiness.status === 401) {
                     (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-failed", { tenantId: tenant.tenantId, reason: "business" });
@@ -442,12 +526,19 @@ class MetaWhatsappConnectionService {
                 }
             }
         }
+        const pack = (numbers) => {
+            const selected = { ...portfolio, connectionId: open.id };
+            const cards = portfolios.map((item) => item.connectionId === open.id ? { ...item, ...selected, connectionId: open.id } : item);
+            return withLocalIdentities(tenant.tenantId, {
+                portfolios: cards,
+                selectedConnectionId: open.id,
+                portfolio: selected.id ? selected : null,
+                numbers,
+            });
+        };
         const wabaId = String(open.wabaId || "").trim();
         if (!wabaId) {
-            return withLocalIdentities(tenant.tenantId, {
-                portfolio: portfolio.id ? portfolio : null,
-                numbers: [],
-            });
+            return pack(storedNumbersFromConnection(open));
         }
         const phones = await this.graph({
             token,
@@ -465,21 +556,16 @@ class MetaWhatsappConnectionService {
             });
             if (phones.status === 401)
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
-            return withLocalIdentities(tenant.tenantId, {
-                portfolio: portfolio.id ? portfolio : null,
-                numbers: [],
-            });
+            return pack(storedNumbersFromConnection(open));
         }
-        const numbers = await attachPhoneBusinessProfiles(this.graph, token, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)(phones.json), tenant.tenantId);
+        const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)(phones.json);
+        const numbers = await attachPhoneBusinessProfiles(this.graph, token, mapped.length ? mapped : storedNumbersFromConnection(open), tenant.tenantId);
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-listed", {
             tenantId: tenant.tenantId,
             hasBusiness: Boolean(portfolio.id),
             numbers: numbers.length,
         });
-        return withLocalIdentities(tenant.tenantId, {
-            portfolio: portfolio.id ? portfolio : null,
-            numbers,
-        });
+        return pack(numbers);
     }
     async registerPhoneFromAuth(auth, input) {
         const tenant = requireTenant(auth);

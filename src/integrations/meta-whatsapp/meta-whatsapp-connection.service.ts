@@ -2,7 +2,6 @@ import type { WabaRequestAuth } from "../../auth/waba-request-auth";
 import {
   isMetaTechProviderConfigured,
   readMetaAppId,
-  readMetaBusinessId,
   readMetaConfigId,
   readMetaJsSdkGraphVersion,
 } from "./meta-config";
@@ -21,7 +20,11 @@ import type {
   MetaWhatsappTenant,
   MetaWhatsappUiStatus,
 } from "./meta-whatsapp-connection.types";
-import type { MetaPortfolioAssetsPublic, MetaPortfolioNumberPublic } from "./meta-whatsapp-portfolio.types";
+import type {
+  MetaPortfolioAssetsPublic,
+  MetaPortfolioNumberPublic,
+  MetaPortfolioPublic,
+} from "./meta-whatsapp-portfolio.types";
 import {
   mapMetaBusinessToPortfolio,
   mapMetaPhoneListToPortfolioNumbers,
@@ -134,9 +137,59 @@ function withLocalIdentities(
   tenantId: string,
   assets: MetaPortfolioAssetsPublic,
 ): MetaPortfolioAssetsPublic {
+  const portfolio = assets.portfolio ? applyLocalPortfolioIdentity(tenantId, assets.portfolio) : null;
+  const portfolios = (assets.portfolios || []).map((item) => applyLocalPortfolioIdentity(tenantId, item));
   return {
-    portfolio: assets.portfolio ? applyLocalPortfolioIdentity(tenantId, assets.portfolio) : null,
+    ...assets,
+    portfolios,
+    selectedConnectionId: assets.selectedConnectionId ?? null,
+    portfolio: portfolio,
     numbers: applyLocalPhoneIdentities(tenantId, assets.numbers || []),
+  };
+}
+
+function storedNumbersFromConnection(open: MetaWhatsappConnectionRecord): MetaPortfolioNumberPublic[] {
+  const phoneNumberId = String(open.phoneNumberId || "").trim();
+  const display = String(open.displayPhoneNumber || "").trim();
+  if (!phoneNumberId && !display) return [];
+  return [
+    {
+      phoneNumberId: phoneNumberId || display,
+      displayPhoneNumber: display || null,
+      verifiedName: open.verifiedName,
+      qualityRating: open.qualityRating,
+      metaStatus: null,
+      codeVerificationStatus: null,
+      uiStatus: open.status === "connected" ? "ativo" : "pendente",
+      dispatchStatus: "livre",
+      canActivate: false,
+      nameNeedsRegister: false,
+      nameStatus: null,
+      newDisplayName: null,
+      newNameStatus: null,
+      profilePictureUrl: null,
+      vertical: null,
+      description: null,
+      address: null,
+      email: null,
+      requestedName: null,
+      nameSyncStatus: null,
+      photoSyncStatus: null,
+      profileSyncStatus: null,
+      inboxEnabled: false,
+    },
+  ];
+}
+
+function cardFromConnection(open: MetaWhatsappConnectionRecord): MetaPortfolioPublic {
+  return {
+    id: open.metaBusinessId,
+    name: open.verifiedName,
+    primaryPageId: null,
+    primaryPageName: open.verifiedName,
+    profilePictureUrl: null,
+    wabaId: open.wabaId,
+    connectionId: open.id,
   };
 }
 
@@ -327,7 +380,7 @@ export class MetaWhatsappConnectionService {
         tokenType: exchanged.tokenType,
         tokenExpiresAt: metaOauthExpiresAt(exchanged.expiresIn),
         configId: readMetaConfigId() || null,
-        metaBusinessId: readMetaBusinessId() || null,
+        metaBusinessId: null,
         actorEmail: tenant.ownerEmail,
       });
       logMetaWhatsappSafe("token-stored", {
@@ -358,13 +411,18 @@ export class MetaWhatsappConnectionService {
     if (input.tenantId || input.ownerEmail) {
       logMetaWhatsappSafe("ignored-client-tenant", { tenantId: tenant.tenantId });
     }
-    const open = await this.repository.findOpenByTenant(tenant.tenantId);
+    const incomingBusinessId = String(input.businessId || "").trim();
+    const open =
+      (incomingBusinessId
+        ? await this.repository.findByBusinessId(tenant.tenantId, incomingBusinessId)
+        : null) ??
+      (await this.repository.latestPendingToken(tenant.tenantId));
     if (!open) {
       throw new MetaWhatsappError("no_pending_connection");
     }
-    const wabaId = String(open.wabaId || input.wabaId || "").trim();
-    const phoneNumberId = String(open.phoneNumberId || input.phoneNumberId || "").trim();
-    const businessId = String(open.metaBusinessId || input.businessId || "").trim();
+    const wabaId = String(input.wabaId || open.wabaId || "").trim();
+    const phoneNumberId = String(input.phoneNumberId || open.phoneNumberId || "").trim();
+    const businessId = String(input.businessId || open.metaBusinessId || "").trim();
     if (!wabaId && !phoneNumberId && !businessId) {
       return toMetaWhatsappPublicConnection(open);
     }
@@ -478,16 +536,38 @@ export class MetaWhatsappConnectionService {
     return toMetaWhatsappPublicConnection(connected);
   }
 
-  async listPortfolioAssets(auth: WabaRequestAuth): Promise<MetaPortfolioAssetsPublic> {
+  async listPortfolioAssets(
+    auth: WabaRequestAuth,
+    opts?: { connectionId?: string },
+  ): Promise<MetaPortfolioAssetsPublic> {
     const tenant = requireTenant(auth);
-    const open = await this.repository.findOpenByTenant(tenant.tenantId);
-    if (!open) {
-      return withLocalIdentities(tenant.tenantId, { portfolio: null, numbers: [] });
+    const repo = this.repository as MetaWhatsappConnectionRepository;
+    const rows =
+      typeof repo.listOpenByTenant === "function"
+        ? await repo.listOpenByTenant(tenant.tenantId)
+        : [await this.repository.findOpenByTenant(tenant.tenantId)].filter(
+            (item): item is MetaWhatsappConnectionRecord => Boolean(item),
+          );
+    if (!rows.length) {
+      return withLocalIdentities(tenant.tenantId, {
+        portfolios: [],
+        selectedConnectionId: null,
+        portfolio: null,
+        numbers: [],
+      });
     }
 
+    const requested = String(opts?.connectionId || "").trim();
+    const open = rows.find((item) => item.id === requested) || rows[0];
+    const portfolios = rows.map((item) => cardFromConnection(item));
+
     const fallbackPortfolio = mapMetaBusinessToPortfolio(
-      { id: open.metaBusinessId, name: null, primary_page: null },
-      { id: open.metaBusinessId, wabaId: open.wabaId },
+      {
+        id: open.metaBusinessId,
+        name: open.verifiedName,
+        primary_page: { name: open.verifiedName },
+      },
+      { id: open.metaBusinessId, wabaId: open.wabaId, connectionId: open.id },
     );
 
     let token = "";
@@ -501,7 +581,7 @@ export class MetaWhatsappConnectionService {
     let portfolio = fallbackPortfolio;
     const businessId = String(open.metaBusinessId || "").trim();
     if (businessId) {
-      const identity = { id: open.metaBusinessId, wabaId: open.wabaId };
+      const identity = { id: open.metaBusinessId, wabaId: open.wabaId, connectionId: open.id };
       const business = await this.graph({
         token,
         method: "GET",
@@ -511,7 +591,15 @@ export class MetaWhatsappConnectionService {
         },
       });
       if (business.ok) {
-        portfolio = mapMetaBusinessToPortfolio(business.json, identity);
+        const mapped = mapMetaBusinessToPortfolio(business.json, identity);
+        portfolio = {
+          ...fallbackPortfolio,
+          ...mapped,
+          name: mapped.name || fallbackPortfolio.name,
+          primaryPageName: mapped.primaryPageName || fallbackPortfolio.primaryPageName,
+          id: mapped.id || fallbackPortfolio.id,
+          connectionId: open.id,
+        };
       } else if (business.status === 401) {
         logMetaWhatsappSafe("portfolio-list-failed", { tenantId: tenant.tenantId, reason: "business" });
         throw new MetaWhatsappError("invalid_token");
@@ -523,7 +611,15 @@ export class MetaWhatsappConnectionService {
           query: { fields: "id,name,primary_page{id,name}" },
         });
         if (fallbackBusiness.ok) {
-          portfolio = mapMetaBusinessToPortfolio(fallbackBusiness.json, identity);
+          const mapped = mapMetaBusinessToPortfolio(fallbackBusiness.json, identity);
+          portfolio = {
+            ...fallbackPortfolio,
+            ...mapped,
+            name: mapped.name || fallbackPortfolio.name,
+            primaryPageName: mapped.primaryPageName || fallbackPortfolio.primaryPageName,
+            id: mapped.id || fallbackPortfolio.id,
+            connectionId: open.id,
+          };
         } else if (fallbackBusiness.status === 401) {
           logMetaWhatsappSafe("portfolio-list-failed", { tenantId: tenant.tenantId, reason: "business" });
           throw new MetaWhatsappError("invalid_token");
@@ -537,12 +633,22 @@ export class MetaWhatsappConnectionService {
       }
     }
 
+    const pack = (numbers: MetaPortfolioNumberPublic[]) => {
+      const selected = { ...portfolio, connectionId: open.id };
+      const cards = portfolios.map((item) =>
+        item.connectionId === open.id ? { ...item, ...selected, connectionId: open.id } : item,
+      );
+      return withLocalIdentities(tenant.tenantId, {
+        portfolios: cards,
+        selectedConnectionId: open.id,
+        portfolio: selected.id ? selected : null,
+        numbers,
+      });
+    };
+
     const wabaId = String(open.wabaId || "").trim();
     if (!wabaId) {
-      return withLocalIdentities(tenant.tenantId, {
-        portfolio: portfolio.id ? portfolio : null,
-        numbers: [],
-      });
+      return pack(storedNumbersFromConnection(open));
     }
 
     const phones = await this.graph({
@@ -560,16 +666,14 @@ export class MetaWhatsappConnectionService {
         status: phones.status,
       });
       if (phones.status === 401) throw new MetaWhatsappError("invalid_token");
-      return withLocalIdentities(tenant.tenantId, {
-        portfolio: portfolio.id ? portfolio : null,
-        numbers: [],
-      });
+      return pack(storedNumbersFromConnection(open));
     }
 
+    const mapped = mapMetaPhoneListToPortfolioNumbers(phones.json);
     const numbers = await attachPhoneBusinessProfiles(
       this.graph,
       token,
-      mapMetaPhoneListToPortfolioNumbers(phones.json),
+      mapped.length ? mapped : storedNumbersFromConnection(open),
       tenant.tenantId,
     );
     logMetaWhatsappSafe("portfolio-listed", {
@@ -577,10 +681,7 @@ export class MetaWhatsappConnectionService {
       hasBusiness: Boolean(portfolio.id),
       numbers: numbers.length,
     });
-    return withLocalIdentities(tenant.tenantId, {
-      portfolio: portfolio.id ? portfolio : null,
-      numbers,
-    });
+    return pack(numbers);
   }
 
   async registerPhoneFromAuth(

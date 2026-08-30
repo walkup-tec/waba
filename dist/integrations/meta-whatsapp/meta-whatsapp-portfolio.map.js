@@ -88,6 +88,7 @@ function mapMetaBusinessToPortfolio(json, fallback) {
         primaryPageName: text(page.name),
         profilePictureUrl: httpsUrl(row.profile_picture_uri) || pictureUrl(page.picture),
         wabaId: text(fallback.wabaId),
+        connectionId: text(fallback.connectionId),
     };
 }
 function firstOwnedPageId(json) {

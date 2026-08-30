@@ -14,15 +14,36 @@ class FakeMetaRepo {
   lastEncrypted: string | null = null;
 
   async findOpenByTenant(tenantId: string): Promise<MetaWhatsappConnectionRecord | null> {
+    const rows = await this.listOpenByTenant(tenantId);
+    return rows[0] ?? null;
+  }
+
+  async listOpenByTenant(tenantId: string): Promise<MetaWhatsappConnectionRecord[]> {
+    return this.rows.filter(
+      (row) =>
+        row.tenantId === tenantId &&
+        !row.disconnectedAt &&
+        (row.status === "pending_token" ||
+          row.status === "pending_confirmation" ||
+          row.status === "connected"),
+    );
+  }
+
+  async findByBusinessId(tenantId: string, businessId: string): Promise<MetaWhatsappConnectionRecord | null> {
+    const bm = String(businessId || "").trim();
+    if (!bm) return null;
     return (
       this.rows.find(
-        (row) =>
-          row.tenantId === tenantId &&
-          !row.disconnectedAt &&
-          (row.status === "pending_token" ||
-            row.status === "pending_confirmation" ||
-            row.status === "connected"),
+        (row) => row.tenantId === tenantId && row.metaBusinessId === bm && !row.disconnectedAt,
       ) || null
+    );
+  }
+
+  async latestPendingToken(tenantId: string): Promise<MetaWhatsappConnectionRecord | null> {
+    return (
+      this.rows
+        .filter((row) => row.tenantId === tenantId && row.status === "pending_token" && !row.disconnectedAt)
+        .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0] || null
     );
   }
 
@@ -33,7 +54,14 @@ class FakeMetaRepo {
   async upsertPendingToken(input: UpsertPendingTokenInput): Promise<MetaWhatsappConnectionRecord> {
     this.upsertCalls += 1;
     this.lastEncrypted = input.accessTokenEncrypted;
-    const existing = await this.findOpenByTenant(input.tenantId);
+    const existingBm = String(input.metaBusinessId || "").trim();
+    let existing = existingBm ? await this.findByBusinessId(input.tenantId, existingBm) : null;
+    if (!existing) existing = await this.latestPendingToken(input.tenantId);
+    if (existing && existing.status === "connected") {
+      const rowBm = String(existing.metaBusinessId || "").trim();
+      if (rowBm && existingBm && rowBm !== existingBm) existing = null;
+      else if (rowBm && !existingBm) existing = null;
+    }
     const now = new Date().toISOString();
     if (existing) {
       existing.accessTokenEncrypted = input.accessTokenEncrypted;
@@ -139,6 +167,7 @@ describe("meta-whatsapp phase 3", () => {
     appSecret: process.env.META_APP_SECRET,
     configId: process.env.META_CONFIG_ID,
     enc: process.env.META_TOKEN_ENCRYPTION_KEY,
+    businessId: process.env.META_BUSINESS_ID,
   };
 
   before(() => {
@@ -157,6 +186,7 @@ describe("meta-whatsapp phase 3", () => {
     restore("META_APP_SECRET", previous.appSecret);
     restore("META_CONFIG_ID", previous.configId);
     restore("META_TOKEN_ENCRYPTION_KEY", previous.enc);
+    restore("META_BUSINESS_ID", previous.businessId);
   });
 
   it("usuário autenticado consegue iniciar o fluxo", () => {
@@ -193,6 +223,51 @@ describe("meta-whatsapp phase 3", () => {
     assert.doesNotMatch(json, /EAAB-secret-token-value|access_token|encrypted_token|system_user_token/);
     assert.equal(String(repo.lastEncrypted || "").startsWith("v1:"), true);
     assert.notEqual(repo.lastEncrypted, "EAAB-secret-token-value");
+  });
+
+  it("exchange não grava META_BUSINESS_ID do env como business do cliente", async () => {
+    process.env.META_BUSINESS_ID = "999999999999999";
+    const repo = new FakeMetaRepo();
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk);
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    assert.equal(repo.rows[0].metaBusinessId, null);
+    const claimed = await service.attachSessionAssets(authA, {
+      wabaId: "waba-incoming",
+      phoneNumberId: "phone-incoming",
+      businessId: "1041827648719609",
+    });
+    assert.equal(claimed.businessId, "1041827648719609");
+    assert.equal(claimed.wabaId, "waba-incoming");
+  });
+
+  it("segundo portfólio não sobrescreve token nem WABA do primeiro", async () => {
+    const repo = new FakeMetaRepo();
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk);
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    await service.attachSessionAssets(authA, {
+      wabaId: "1247508354180311",
+      phoneNumberId: "phone-drax",
+      businessId: "1041827648719609",
+      displayPhoneNumber: "+55 51 8200-1279",
+      verifiedName: "Drax Tecnologia e Sistemas",
+    });
+    repo.rows[0].status = "connected";
+    const firstToken = repo.rows[0].accessTokenEncrypted;
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    assert.equal(repo.rows.length, 2);
+    assert.equal(repo.rows[0].accessTokenEncrypted, firstToken);
+    assert.equal(repo.rows[0].wabaId, "1247508354180311");
+    await service.attachSessionAssets(authA, {
+      wabaId: "waba-walkup",
+      phoneNumberId: "phone-walkup",
+      businessId: "4141369862822598",
+      displayPhoneNumber: "+55 11 95213-7761",
+      verifiedName: "Grupo Walkup",
+    });
+    assert.equal(repo.rows[0].wabaId, "1247508354180311");
+    assert.equal(repo.rows[0].metaBusinessId, "1041827648719609");
+    assert.equal(repo.rows[1].wabaId, "waba-walkup");
+    assert.equal(repo.rows[1].metaBusinessId, "4141369862822598");
   });
 
   it("conexão é associada ao tenant da sessão, não ao body", async () => {

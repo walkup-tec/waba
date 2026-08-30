@@ -952,6 +952,44 @@ describe("meta portfolio service", () => {
     assert.equal(result.portfolio?.name, "Drax Sistemas");
     assert.match(String(result.warning || ""), /Meta/);
   });
+
+  it("lista vários portfólios e Graph vazio não apaga número gravado", async () => {
+    const drax = {
+      ...connectedRow(),
+      id: "conn-drax",
+      metaBusinessId: "1041827648719609",
+      wabaId: "1247508354180311",
+      displayPhoneNumber: "+55 51 8200-1279",
+      verifiedName: "Drax Tecnologia e Sistemas",
+    };
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "waba-walkup",
+      phoneNumberId: "phone-walkup",
+      displayPhoneNumber: "+55 11 95213-7761",
+      verifiedName: "Grupo Walkup",
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [drax, walkup];
+      },
+      async findOpenByTenant() {
+        return drax;
+      },
+    };
+    const graph = async () => ({ ok: true, status: 200, json: { data: [] } });
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth, { connectionId: "conn-drax" });
+    assert.equal((assets.portfolios || []).length, 2);
+    assert.equal(assets.portfolio?.primaryPageName, "Drax Tecnologia e Sistemas");
+    assert.ok(assets.numbers.some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
+  });
 });
 
 describe("meta graph json client", () => {

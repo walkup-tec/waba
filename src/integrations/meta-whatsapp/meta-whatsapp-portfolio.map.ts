@@ -98,7 +98,7 @@ export function resolvePhoneNameSync(input: {
 
 export function mapMetaBusinessToPortfolio(
   json: unknown,
-  fallback: { id?: string | null; wabaId?: string | null },
+  fallback: { id?: string | null; wabaId?: string | null; connectionId?: string | null },
 ): MetaPortfolioPublic {
   const row = asRecord(json);
   const page = asRecord(row.primary_page);
@@ -109,6 +109,7 @@ export function mapMetaBusinessToPortfolio(
     primaryPageName: text(page.name),
     profilePictureUrl: httpsUrl(row.profile_picture_uri) || pictureUrl(page.picture),
     wabaId: text(fallback.wabaId),
+    connectionId: text(fallback.connectionId),
   };
 }
 

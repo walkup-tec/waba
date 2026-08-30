@@ -165,7 +165,9 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
           code: "config_invalid",
         });
       }
-      const assets = await service.listPortfolioAssets(resolveWabaRequestAuth(req));
+      const assets = await service.listPortfolioAssets(resolveWabaRequestAuth(req), {
+        connectionId: String(req.query?.connectionId || ""),
+      });
       return sendPublic(res, 200, { ok: true, ...assets });
     } catch (error) {
       return handleMetaError(res, error);

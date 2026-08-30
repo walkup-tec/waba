@@ -108,12 +108,51 @@ export class MetaWhatsappConnectionRepository {
   }
 
   async findOpenByTenant(tenantId: string): Promise<MetaWhatsappConnectionRecord | null> {
+    const rows = await this.listOpenByTenant(tenantId);
+    return rows[0] ?? null;
+  }
+
+  async listOpenByTenant(tenantId: string): Promise<MetaWhatsappConnectionRecord[]> {
+    const id = String(tenantId || "").trim();
+    if (!id) return [];
     const { data, error } = await this.client()
       .from(TABLE)
       .select(COLUMNS)
-      .eq("tenant_id", tenantId)
+      .eq("tenant_id", id)
       .is("disconnected_at", null)
       .in("status", ["pending_token", "pending_confirmation", "connected"])
+      .order("updated_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => mapRow(asRow(row)));
+  }
+
+  async findByBusinessId(tenantId: string, businessId: string): Promise<MetaWhatsappConnectionRecord | null> {
+    const tenant = String(tenantId || "").trim();
+    const bm = String(businessId || "").trim();
+    if (!tenant || !bm) return null;
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("tenant_id", tenant)
+      .eq("meta_business_id", bm)
+      .is("disconnected_at", null)
+      .in("status", ["pending_token", "pending_confirmation", "connected"])
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+
+  async latestPendingToken(tenantId: string): Promise<MetaWhatsappConnectionRecord | null> {
+    const id = String(tenantId || "").trim();
+    if (!id) return null;
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("tenant_id", id)
+      .eq("status", "pending_token")
+      .is("disconnected_at", null)
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -133,7 +172,21 @@ export class MetaWhatsappConnectionRepository {
   }
 
   async upsertPendingToken(input: UpsertPendingTokenInput): Promise<MetaWhatsappConnectionRecord> {
-    const existing = await this.findOpenByTenant(input.tenantId);
+    const incomingBusinessId = String(input.metaBusinessId || "").trim();
+    let existing = incomingBusinessId
+      ? await this.findByBusinessId(input.tenantId, incomingBusinessId)
+      : null;
+    if (!existing) {
+      existing = await this.latestPendingToken(input.tenantId);
+    }
+    if (existing && existing.status === "connected") {
+      const existingBm = String(existing.metaBusinessId || "").trim();
+      if (existingBm && incomingBusinessId && existingBm !== incomingBusinessId) {
+        existing = null;
+      } else if (existingBm && !incomingBusinessId) {
+        existing = null;
+      }
+    }
     const now = new Date().toISOString();
     if (existing) {
       const { data, error } = await this.client()
