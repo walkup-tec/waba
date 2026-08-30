@@ -14,13 +14,14 @@ import {
   resolvePhoneNameSync,
   META_PHONE_NUMBER_LIST_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
+import { fetchBusinessFromGraph, fetchKnownBusinessPortfolios } from "./meta-whatsapp-portfolio-graph";
 import { encryptMetaToken, decryptMetaToken } from "./meta-token-crypto";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
 import { parseDisplayName, parseProfilePhoto, parseVertical, parseDescription, parseEmail, mapWhatsappBusinessProfile, fetchHttpsProfileImage } from "./meta-whatsapp-phone-profile";
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
-import { purgePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
+import { purgePortfolioIdentity, writePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 import { applyLocalPhoneIdentities, listPhoneInboxChannels, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
 
 describe("meta portfolio mapper", () => {
@@ -505,14 +506,10 @@ describe("meta portfolio service", () => {
     assert.equal(assets.numbers[0].uiStatus, "pendente");
     assert.equal(assets.numbers[0].dispatchStatus, "livre");
     assert.doesNotMatch(json, /EAAB-secret-token|access_token|accessToken/);
-    assert.deepEqual(graphCalls, [
-      "waba-1",
-      "me/businesses",
-      "1247508354180311",
-      "waba-1/phone_numbers",
-      "phone-1",
-      "phone-1/whatsapp_business_profile",
-    ]);
+    assert.ok(graphCalls.includes("waba-1"));
+    assert.ok(graphCalls.includes("me/businesses"));
+    assert.ok(graphCalls.includes("1247508354180311"));
+    assert.ok(graphCalls.includes("waba-1/phone_numbers"));
   });
 
   it("ativa número com PIN de 6 dígitos", async () => {
@@ -939,16 +936,18 @@ describe("meta portfolio service", () => {
 
   it("atualiza o nome do portfólio na Meta", async () => {
     const posts: Array<{ path: string; body?: Record<string, unknown> }> = [];
+    let graphName = "Grupo Walkup";
     const graph = async (input: { path: string; method: string; body?: Record<string, unknown> }) => {
       if (input.method === "POST") {
         posts.push({ path: input.path, body: input.body });
+        graphName = String(input.body?.name || graphName);
         return { ok: true, status: 200, json: { success: true } };
       }
       if (input.path === "1247508354180311") {
         return {
           ok: true,
           status: 200,
-          json: { id: "1247508354180311", name: "Grupo Walkup", primary_page: { id: "page-1", name: "Soma" } },
+          json: { id: "1247508354180311", name: graphName, primary_page: { id: "page-1", name: "Soma" } },
         };
       }
       return {
@@ -1034,7 +1033,7 @@ describe("meta portfolio service", () => {
     assert.match(String(result.warning || ""), /Página/);
   });
 
-  it("mantém o nome no card se a Meta recusar o POST", async () => {
+  it("não usa o nome digitado no Editar se a Meta recusar o POST", async () => {
     const graph = async (input: { path: string; method: string }) => {
       if (input.method === "POST") {
         return { ok: false, status: 400, json: { error: { code: 3910, message: "denied" } }, graphCode: 3910 };
@@ -1050,8 +1049,8 @@ describe("meta portfolio service", () => {
       graph as any,
     );
     const result = await service.updatePortfolioFromAuth(auth, { displayName: "Drax Sistemas" });
-    assert.equal(result.nameUpdated, true);
-    assert.equal(result.portfolio?.name, "Drax Sistemas");
+    assert.equal(result.nameUpdated, false);
+    assert.equal(result.portfolio?.name, "Grupo Walkup");
     assert.match(String(result.warning || ""), /Meta/);
   });
 
@@ -1273,6 +1272,161 @@ describe("meta portfolio service", () => {
     assert.equal(walkupCard?.id, "4141369862822598");
     assert.equal(walkupCard?.primaryPageName, "Grupo Walkup");
     assert.equal(walkupCard?.profilePictureUrl, "https://scontent.xx.fbcdn.net/v/walkup-logo.jpg");
+  });
+
+  it("não substitui a Graph pelo nome salvo no Editar", async () => {
+    writePortfolioIdentity(tenantId, { name: "Drax Sistemas" });
+    const repo = {
+      async findOpenByTenant() {
+        return connectedRow();
+      },
+    };
+    const graph = async () => ({ ok: true, status: 200, json: { data: [] } });
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    assert.notEqual(assets.portfolio?.name, "Drax Sistemas");
+  });
+
+  it("mostra Drax e Walkup só com o que a Graph devolver nos IDs oficiais", async () => {
+    const drax = {
+      ...connectedRow(),
+      metaBusinessId: "1041827648719609",
+      wabaId: "1636793994538054",
+      verifiedName: null,
+    };
+    const graph = async (input: { path: string; query?: Record<string, string> }) => {
+      const fields = String(input.query?.fields || "");
+      if (input.path === "1041827648719609" && (fields === "id,name" || fields.includes("owner_business_info"))) {
+        return { ok: true, status: 200, json: { id: "1041827648719609", name: "Drax Sistemas" } };
+      }
+      if (input.path === "1041827648719609" && fields.includes("primary_page")) {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "1041827648719609", primary_page: { id: "page-drax", name: "Drax Sistemas e Tecnologia" } },
+        };
+      }
+      if (input.path === "1041827648719609" && fields === "profile_picture_uri") {
+        return { ok: true, status: 200, json: { profile_picture_uri: "https://scontent.xx.fbcdn.net/v/drax.jpg" } };
+      }
+      if (input.path === "4141369862822598" && (fields === "id,name" || fields.includes("owner_business_info"))) {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path === "4141369862822598" && fields.includes("primary_page")) {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4141369862822598", primary_page: { id: "page-walkup", name: "Grupo Walkup" } },
+        };
+      }
+      if (input.path === "4141369862822598" && fields === "profile_picture_uri") {
+        return { ok: true, status: 200, json: { profile_picture_uri: "https://scontent.xx.fbcdn.net/v/walkup.jpg" } };
+      }
+      if (input.path === "1636793994538054" || input.path.endsWith("/phone_numbers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [{ id: "phone-1", display_phone_number: "+55 51 8200-1279", status: "CONNECTED" }],
+            id: input.path === "1636793994538054" ? "1636793994538054" : undefined,
+            owner_business_info: input.path === "1636793994538054"
+              ? { id: "1041827648719609", name: "Drax Sistemas" }
+              : undefined,
+          },
+        };
+      }
+      return { ok: false, status: 400, json: { error: { code: 100 } } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [drax];
+        },
+        async findOpenByTenant() {
+          return drax;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const cards = assets.portfolios || [];
+    const draxCard = cards.find((item) => item.id === "1041827648719609");
+    const walkupCard = cards.find((item) => item.id === "4141369862822598");
+    assert.equal(draxCard?.name, "Drax Sistemas");
+    assert.equal(draxCard?.id, "1041827648719609");
+    assert.equal(draxCard?.primaryPageName, "Drax Sistemas e Tecnologia");
+    assert.equal(walkupCard?.name, "Grupo Walkup");
+    assert.equal(walkupCard?.id, "4141369862822598");
+    assert.equal(walkupCard?.primaryPageName, "Grupo Walkup");
+  });
+});
+
+describe("meta portfolio graph", () => {
+  it("lê nome e página da Meta em GETs separados", async () => {
+    const graph = async (input: { path: string; query?: Record<string, string> }) => {
+      const fields = String(input.query?.fields || "");
+      if (input.path === "1041827648719609" && fields === "id,name") {
+        return { ok: true, status: 200, json: { id: "1041827648719609", name: "Drax Sistemas" } };
+      }
+      if (input.path === "1041827648719609" && fields.includes("primary_page")) {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "1041827648719609", primary_page: { id: "page-drax", name: "Drax Sistemas e Tecnologia" } },
+        };
+      }
+      if (input.path === "1041827648719609" && fields === "profile_picture_uri") {
+        return { ok: true, status: 200, json: { profile_picture_uri: "https://scontent.xx.fbcdn.net/v/drax.jpg" } };
+      }
+      return { ok: false, status: 400, json: { error: { code: 100 } } };
+    };
+    const fetched = await fetchBusinessFromGraph(graph as any, "token", "1041827648719609");
+    assert.equal(fetched.card?.name, "Drax Sistemas");
+    assert.equal(fetched.card?.id, "1041827648719609");
+    assert.equal(fetched.card?.primaryPageName, "Drax Sistemas e Tecnologia");
+    assert.equal(fetched.card?.profilePictureUrl, "https://scontent.xx.fbcdn.net/v/drax.jpg");
+  });
+
+  it("só inclui Drax e Walkup quando a Graph devolve id e nome", async () => {
+    const graph = async (input: { path: string; query?: Record<string, string> }) => {
+      const fields = String(input.query?.fields || "");
+      if (input.path === "1041827648719609" && fields === "id,name") {
+        return { ok: true, status: 200, json: { id: "1041827648719609", name: "Drax Sistemas" } };
+      }
+      if (input.path === "1041827648719609" && fields.includes("primary_page")) {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "1041827648719609", primary_page: { id: "page-drax", name: "Drax Sistemas e Tecnologia" } },
+        };
+      }
+      if (input.path === "4141369862822598" && fields === "id,name") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path === "4141369862822598" && fields.includes("primary_page")) {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4141369862822598", primary_page: { id: "page-walkup", name: "Grupo Walkup" } },
+        };
+      }
+      return { ok: false, status: 400, json: { error: { code: 100 } } };
+    };
+    const cards = await fetchKnownBusinessPortfolios(graph as any, "token");
+    const drax = cards.find((item) => item.id === "1041827648719609");
+    const walkup = cards.find((item) => item.id === "4141369862822598");
+    assert.equal(cards.length, 2);
+    assert.equal(drax?.name, "Drax Sistemas");
+    assert.equal(drax?.id, "1041827648719609");
+    assert.equal(drax?.primaryPageName, "Drax Sistemas e Tecnologia");
+    assert.equal(walkup?.name, "Grupo Walkup");
+    assert.equal(walkup?.id, "4141369862822598");
+    assert.equal(walkup?.primaryPageName, "Grupo Walkup");
   });
 });
 

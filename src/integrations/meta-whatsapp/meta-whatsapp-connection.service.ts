@@ -27,28 +27,26 @@ import type {
 } from "./meta-whatsapp-portfolio.types";
 import {
   mapMetaPhoneListToPortfolioNumbers,
-  mapMetaWabaIdentity,
-  mapMetaBusinessToPortfolio,
   mergePortfolioIdentity,
   mergePortfolioNumbers,
   dedupePortfolioCards,
   businessIdNotWaba,
-  pickMetaBusinessNode,
-  listMetaBusinessNodes,
   firstOwnedPageId,
   isMetaPhoneConnected,
   mapPhoneNameFields,
   resolvePhoneNameSync,
   META_PHONE_NUMBER_LIST_FIELDS,
   META_PHONE_NAME_FIELDS,
-  META_WABA_IDENTITY_FIELDS,
-  META_WABA_IDENTITY_FIELDS_MINIMAL,
-  META_BUSINESS_IDENTITY_FIELDS,
-  META_BUSINESS_IDENTITY_FIELDS_MINIMAL,
-  META_OWNED_PAGES_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
 import {
-  applyLocalPortfolioIdentity,
+  fetchWabaOwner,
+  fetchBusinessFromGraph,
+  fetchAssignedBusinesses,
+  fetchKnownBusinessPortfolios,
+  directoryFromAssigned,
+  pickMetaBusinessNode,
+} from "./meta-whatsapp-portfolio-graph";
+import {
   applyLocalPortfolioBusinessPhoto,
   readPortfolioPhoto,
   readPortfolioBusinessPhoto,
@@ -152,11 +150,7 @@ function withLocalIdentities(
   tenantId: string,
   assets: MetaPortfolioAssetsPublic,
 ): MetaPortfolioAssetsPublic {
-  const many = (assets.portfolios || []).length > 1;
-  const localizeCard = (item: MetaPortfolioPublic) => {
-    const withBizPhoto = applyLocalPortfolioBusinessPhoto(tenantId, item);
-    return many ? withBizPhoto : applyLocalPortfolioIdentity(tenantId, withBizPhoto);
-  };
+  const localizeCard = (item: MetaPortfolioPublic) => applyLocalPortfolioBusinessPhoto(tenantId, item);
   const portfolio = assets.portfolio ? localizeCard(assets.portfolio) : null;
   const portfolios = (assets.portfolios || []).map((item) => ({
     ...localizeCard(item),
@@ -221,28 +215,6 @@ type HydratedPortfolio = {
   directory: MetaPortfolioPublic[];
 };
 
-async function graphGetFields(
-  graph: MetaConnectionGraphCaller,
-  token: string,
-  path: string,
-  rich: string,
-  minimal: string,
-): Promise<MetaGraphJsonResult> {
-  const first = await graph({
-    token,
-    method: "GET",
-    path,
-    query: { fields: rich },
-  });
-  if (first.ok || first.status === 401) return first;
-  return graph({
-    token,
-    method: "GET",
-    path,
-    query: { fields: minimal },
-  });
-}
-
 async function cacheGraphBusinessPhoto(
   tenantId: string,
   businessId: string | null,
@@ -279,128 +251,56 @@ async function hydrateOpenConnection(
   const storedWaba = String(open.wabaId || "").trim();
   const storedBm = String(open.metaBusinessId || "").trim();
   const wabaLookup = storedWaba || storedBm;
-  let wabaJson: unknown;
-  if (wabaLookup) {
-    const wabaRes = await graphGetFields(
-      graph,
-      token,
-      wabaLookup,
-      META_WABA_IDENTITY_FIELDS,
-      META_WABA_IDENTITY_FIELDS_MINIMAL,
-    );
-    if (wabaRes.ok) wabaJson = wabaRes.json;
-    else {
-      logMetaWhatsappSafe("portfolio-list-partial", {
-        tenantId,
-        reason: wabaRes.status === 401 ? "waba-401" : "waba-identity",
-        status: wabaRes.status,
-        graphCode: wabaRes.graphCode,
-        connectionId: open.id,
-      });
-    }
+  const waba = wabaLookup ? await fetchWabaOwner(graph, token, wabaLookup) : { hint: { wabaId: null, wabaName: null, businessId: null, businessName: null, primaryPageId: null, primaryPageName: null, profilePictureUrl: null }, json: null, ok: false };
+  if (wabaLookup && !waba.ok) {
+    logMetaWhatsappSafe("portfolio-list-partial", {
+      tenantId,
+      reason: "waba-identity",
+      connectionId: open.id,
+    });
   }
 
-  const hint = mapMetaWabaIdentity(wabaJson);
+  const hint = waba.hint;
   const resolvedWaba =
     storedWaba ||
     (hint.businessId && hint.wabaId && hint.wabaId !== hint.businessId ? hint.wabaId : "");
   const resolvedBm =
     hint.businessId || businessIdNotWaba(storedBm, resolvedWaba || storedWaba) || "";
 
-  const assigned = await graph({
-    token,
-    method: "GET",
-    path: "me/businesses",
-    query: { fields: META_BUSINESS_IDENTITY_FIELDS, limit: "50" },
-  });
-  const directory = assigned.ok
-    ? listMetaBusinessNodes(assigned.json)
-        .map((row) => mapMetaBusinessToPortfolio(row, {}))
-        .filter((biz) => Boolean(biz.id && biz.name))
-    : [];
-  let businessJson = pickMetaBusinessNode(assigned.ok ? assigned.json : null, [
-    resolvedBm,
-    hint.businessId,
-    storedBm,
-  ]);
-
-  if (!businessJson && resolvedBm) {
-    const business = await graphGetFields(
-      graph,
-      token,
-      resolvedBm,
-      META_BUSINESS_IDENTITY_FIELDS,
-      META_BUSINESS_IDENTITY_FIELDS_MINIMAL,
-    );
-    if (business.ok) businessJson = business.json;
-    else {
-      logMetaWhatsappSafe("portfolio-list-partial", {
-        tenantId,
-        reason: business.status === 401 ? "business-401" : "business",
-        status: business.status,
-        graphCode: business.graphCode,
-        connectionId: open.id,
-      });
-    }
-  }
+  const assignedJson = await fetchAssignedBusinesses(graph, token);
+  const directory = [
+    ...directoryFromAssigned(assignedJson),
+    ...(await fetchKnownBusinessPortfolios(graph, token)),
+  ];
+  const matched = pickMetaBusinessNode(assignedJson, [resolvedBm, hint.businessId, storedBm]);
+  const fetchedBm = resolvedBm
+    ? await fetchBusinessFromGraph(graph, token, resolvedBm)
+    : { card: null, isWaba: false, wabaJson: null };
 
   let card = mergePortfolioIdentity({
     fallback,
-    business: businessJson,
-    waba: wabaJson,
+    business: matched,
+    waba: waba.json || fetchedBm.wabaJson,
   });
-
-  if (!card.primaryPageName && resolvedBm) {
-    const owned = await graph({
-      token,
-      method: "GET",
-      path: `${resolvedBm}/owned_pages`,
-      query: { fields: META_OWNED_PAGES_FIELDS },
-    });
-    if (owned.ok && firstOwnedPageId(owned.json)) {
-      card = mergePortfolioIdentity({
-        fallback: card,
-        business: businessJson,
-        waba: wabaJson,
-        ownedPages: owned.json,
-      });
-    } else {
-      const clients = await graph({
-        token,
-        method: "GET",
-        path: `${resolvedBm}/client_pages`,
-        query: { fields: META_OWNED_PAGES_FIELDS },
-      });
-      if (clients.ok) {
-        card = mergePortfolioIdentity({
-          fallback: card,
-          business: businessJson,
-          waba: wabaJson,
-          ownedPages: clients.json,
-        });
-      }
-    }
-  }
-
-  if (!card.profilePictureUrl && card.primaryPageId) {
-    const picture = await graph({
-      token,
-      method: "GET",
-      path: `${card.primaryPageId}/picture`,
-      query: { redirect: "0", type: "large" },
-    });
-    if (picture.ok) {
-      card = mergePortfolioIdentity({
-        fallback: card,
-        business: businessJson,
-        waba: wabaJson,
-        picture: picture.json,
-      });
-    }
+  const graphCard =
+    fetchedBm.card ||
+    directory.find((item) => item.id && (item.id === resolvedBm || item.id === hint.businessId)) ||
+    null;
+  if (graphCard && (graphCard.name || graphCard.primaryPageName || graphCard.profilePictureUrl || graphCard.id)) {
+    card = {
+      ...card,
+      id: graphCard.id || card.id,
+      name: graphCard.name || card.name,
+      primaryPageId: graphCard.primaryPageId || card.primaryPageId,
+      primaryPageName: graphCard.primaryPageName || card.primaryPageName,
+      profilePictureUrl: graphCard.profilePictureUrl || card.profilePictureUrl,
+      wabaId: graphCard.wabaId || card.wabaId || resolvedWaba || storedWaba,
+      connectionId: open.id,
+    };
   }
 
   const localPhoto = await cacheGraphBusinessPhoto(tenantId, card.id, card.profilePictureUrl);
-  card = { ...card, profilePictureUrl: localPhoto };
+  card = { ...card, profilePictureUrl: localPhoto, wabaId: card.wabaId || resolvedWaba || storedWaba };
 
   const wabaId = resolvedWaba || storedWaba;
   if (!wabaId) return { card, directory };
@@ -1172,8 +1072,8 @@ export class MetaWhatsappConnectionService {
 
     const open = await this.repository.findOpenByTenant(tenant.tenantId);
     if (!open) throw new MetaWhatsappError("no_pending_connection");
-    const businessId = String(open.metaBusinessId || "").trim();
-    if (!businessId) throw new MetaWhatsappError("invalid_payload");
+    const storedId = String(open.metaBusinessId || "").trim();
+    if (!storedId) throw new MetaWhatsappError("invalid_payload");
 
     let token = "";
     try {
@@ -1183,13 +1083,20 @@ export class MetaWhatsappConnectionService {
       throw new MetaWhatsappError("invalid_token");
     }
 
-    writePortfolioIdentity(tenant.tenantId, {
-      name: displayName || undefined,
-      photo: photo
-        ? { ext: photo.mime.includes("png") ? "png" : "jpg", bytes: photo.bytes }
-        : undefined,
-    });
-    const nameUpdated = Boolean(displayName);
+    const owner = await fetchWabaOwner(this.graph, token, storedId);
+    const businessId =
+      owner.hint.businessId ||
+      businessIdNotWaba(storedId, open.wabaId) ||
+      storedId;
+
+    const photoPayload = photo
+      ? { ext: (photo.mime.includes("png") ? "png" : "jpg") as "png" | "jpg", bytes: photo.bytes }
+      : undefined;
+    if (photoPayload) {
+      writePortfolioIdentity(tenant.tenantId, { photo: photoPayload });
+      writePortfolioBusinessPhoto(tenant.tenantId, businessId, photoPayload);
+    }
+    let nameUpdated = false;
     const photoUpdated = Boolean(photo);
     const warnings: string[] = [];
 
@@ -1200,6 +1107,7 @@ export class MetaWhatsappConnectionService {
         path: businessId,
         body: { name: displayName },
       });
+      nameUpdated = renamed.ok;
       if (!renamed.ok) {
         logMetaWhatsappSafe("portfolio-profile-failed", {
           tenantId: tenant.tenantId,

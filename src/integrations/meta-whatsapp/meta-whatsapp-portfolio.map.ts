@@ -327,7 +327,27 @@ export function dedupePortfolioCards(cards: MetaPortfolioPublic[]): MetaPortfoli
     }
     extras.push(card);
   }
-  return [...byBiz.values(), ...extras];
+  const merged = [...byBiz.values(), ...extras];
+  if (merged.length < 2) return merged;
+  const byWaba = new Map<string, MetaPortfolioPublic>();
+  const rest: MetaPortfolioPublic[] = [];
+  for (const card of merged) {
+    const waba = String(card.wabaId || "").trim();
+    if (!waba) {
+      rest.push(card);
+      continue;
+    }
+    const prev = byWaba.get(waba);
+    if (!prev) {
+      byWaba.set(waba, card);
+      continue;
+    }
+    const keep = businessIdNotWaba(prev.id, waba) ? prev : card;
+    const extra = keep === prev ? card : prev;
+    absorb(keep, extra);
+    byWaba.set(waba, keep);
+  }
+  return [...byWaba.values(), ...rest];
 }
 
 export function firstOwnedPageId(json: unknown): string | null {

@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-30 16:05 — Portfólio só com Graph (não Editar)
+- Nome local do Editar não entra no GET `/portfolio`. GET piecewise + IDs oficiais Drax `1041827648719609` e Walkup `4141369862822598`; card só se a Meta devolver `id`+`name`+página.
+- Testes mock: 37 ok. Marker: `DEPLOY-2026-08-30-161300-master-laboratorio-graph-piecewise`.
+- LOG: `doc/LOG-2026-08-30__160500__laboratorio-graph-piecewise-bm.md`
+
 ## 2026-08-30 15:37 — Identidade do portfólio = Business Manager da Meta
 - Cards copiam `me/businesses`: nome, ID, `primary_page`, `profile_picture_uri` (Drax Sistemas / Grupo Walkup)
 - Não usar `verified_name` do WhatsApp nem o campo inválido `picture` no nó Business
