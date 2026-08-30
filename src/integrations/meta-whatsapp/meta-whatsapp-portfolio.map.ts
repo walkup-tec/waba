@@ -9,6 +9,16 @@ export const META_PHONE_NUMBER_LIST_FIELDS =
 
 export const META_PHONE_NAME_FIELDS = "verified_name,name_status,new_display_name,new_name_status";
 
+export const META_WABA_IDENTITY_FIELDS =
+  "id,name,owner_business_info{id,name,profile_picture_uri},on_behalf_of_business_info{id,name}";
+
+export const META_BUSINESS_IDENTITY_FIELDS =
+  "id,name,profile_picture_uri,picture,primary_page{id,name,picture},owned_pages.limit(5){id,name,picture}";
+
+export const META_BUSINESS_IDENTITY_FIELDS_MINIMAL = "id,name,primary_page{id,name}";
+
+export const META_OWNED_PAGES_FIELDS = "id,name,picture";
+
 const NAME_READY = new Set(["APPROVED", "AVAILABLE_WITHOUT_REVIEW"]);
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -20,12 +30,32 @@ function text(value: unknown): string | null {
   return raw || null;
 }
 
+function isGenericMetaBusinessName(value: string | null | undefined): boolean {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return true;
+  return (
+    raw === "portfólio empresarial" ||
+    raw === "portfolio empresarial" ||
+    raw === "business portfolio" ||
+    raw === "whatsapp business account"
+  );
+}
+
+function preferredName(...values: unknown[]): string | null {
+  for (const value of values) {
+    const raw = text(value);
+    if (raw && !isGenericMetaBusinessName(raw)) return raw;
+  }
+  return null;
+}
+
 function httpsUrl(value: unknown): string | null {
   const raw = text(value);
   if (!raw) return null;
   try {
     const parsed = new URL(raw);
     if (parsed.protocol !== "https:") return null;
+    if (parsed.searchParams.has("access_token")) return null;
     return parsed.toString();
   } catch {
     return null;
@@ -96,31 +126,182 @@ export function resolvePhoneNameSync(input: {
   return { requestedName: null, nameSyncStatus: verified ? "applied" : null, nameNeedsRegister: false };
 }
 
+export function businessIdNotWaba(
+  id: string | null | undefined,
+  wabaId: string | null | undefined,
+): string | null {
+  const biz = String(id || "").trim();
+  const waba = String(wabaId || "").trim();
+  if (!biz || (waba && biz === waba)) return null;
+  return biz;
+}
+
+export type MetaWabaIdentityHint = {
+  wabaId: string | null;
+  wabaName: string | null;
+  businessId: string | null;
+  businessName: string | null;
+  profilePictureUrl: string | null;
+};
+
+export function mapMetaWabaIdentity(json: unknown): MetaWabaIdentityHint {
+  const row = asRecord(json);
+  const owner = asRecord(row.owner_business_info);
+  const behalf = asRecord(row.on_behalf_of_business_info);
+  const biz = text(owner.id) ? owner : behalf;
+  return {
+    wabaId: text(row.id),
+    wabaName: text(row.name),
+    businessId: text(asRecord(biz).id),
+    businessName: text(asRecord(biz).name),
+    profilePictureUrl: httpsUrl(asRecord(biz).profile_picture_uri) || httpsUrl(row.profile_picture_uri),
+  };
+}
+
+function firstOwnedPageRecord(json: unknown): Record<string, unknown> {
+  const data = asRecord(json).data;
+  const rows = Array.isArray(data) ? data : [];
+  for (const item of rows) {
+    const rec = asRecord(item);
+    if (text(rec.id) || text(rec.name)) return rec;
+  }
+  return {};
+}
+
 export function mapMetaBusinessToPortfolio(
   json: unknown,
   fallback: { id?: string | null; wabaId?: string | null; connectionId?: string | null },
 ): MetaPortfolioPublic {
   const row = asRecord(json);
   const page = asRecord(row.primary_page);
+  const owned = firstOwnedPageRecord(row.owned_pages);
+  const owner = asRecord(row.owner_business_info);
+  const pageNode = text(page.id) || text(page.name) || page.picture ? page : owned;
   return {
-    id: text(row.id) || text(fallback.id),
-    name: text(row.name),
-    primaryPageId: text(page.id),
-    primaryPageName: text(page.name),
-    profilePictureUrl: httpsUrl(row.profile_picture_uri) || pictureUrl(page.picture),
+    id: text(owner.id) || text(row.id) || text(fallback.id),
+    name: preferredName(row.name, owner.name),
+    primaryPageId: text(asRecord(pageNode).id),
+    primaryPageName: text(asRecord(pageNode).name),
+    profilePictureUrl:
+      httpsUrl(row.profile_picture_uri) ||
+      pictureUrl(row.picture) ||
+      pictureUrl(asRecord(pageNode).picture),
     wabaId: text(fallback.wabaId),
     connectionId: text(fallback.connectionId),
   };
 }
 
-export function firstOwnedPageId(json: unknown): string | null {
-  const data = asRecord(json).data;
-  const rows = Array.isArray(data) ? data : [];
-  for (const item of rows) {
-    const id = text(asRecord(item).id);
-    if (id) return id;
+export function mergePortfolioIdentity(input: {
+  fallback: MetaPortfolioPublic;
+  business?: unknown;
+  waba?: unknown;
+  ownedPages?: unknown;
+  picture?: unknown;
+}): MetaPortfolioPublic {
+  const hint = mapMetaWabaIdentity(input.waba);
+  const mapped = input.business
+    ? mapMetaBusinessToPortfolio(input.business, {
+        id: input.fallback.id,
+        wabaId: input.fallback.wabaId,
+        connectionId: input.fallback.connectionId,
+      })
+    : input.fallback;
+  const owned = firstOwnedPageRecord(input.ownedPages);
+  const resolvedWaba =
+    text(input.fallback.wabaId) ||
+    (hint.businessId && hint.wabaId && hint.wabaId !== hint.businessId ? hint.wabaId : null);
+  const rawId = hint.businessId || mapped.id || input.fallback.id;
+  return {
+    ...input.fallback,
+    id: businessIdNotWaba(rawId, resolvedWaba),
+    name: preferredName(mapped.name, hint.businessName, hint.wabaName, input.fallback.name),
+    primaryPageId: mapped.primaryPageId || text(owned.id) || input.fallback.primaryPageId,
+    primaryPageName: mapped.primaryPageName || text(owned.name) || input.fallback.primaryPageName,
+    profilePictureUrl:
+      mapped.profilePictureUrl ||
+      hint.profilePictureUrl ||
+      pictureUrl(owned.picture) ||
+      pictureUrl(input.picture) ||
+      input.fallback.profilePictureUrl,
+    wabaId: resolvedWaba || input.fallback.wabaId,
+    connectionId: input.fallback.connectionId,
+  };
+}
+
+export function mergePortfolioNumbers(
+  graphNumbers: MetaPortfolioNumberPublic[],
+  stored: MetaPortfolioNumberPublic[],
+): MetaPortfolioNumberPublic[] {
+  if (!graphNumbers.length) return stored;
+  const extra = stored.filter((item) => {
+    const id = String(item.phoneNumberId || "").trim();
+    const phone = String(item.displayPhoneNumber || "").trim();
+    if (id && graphNumbers.some((row) => String(row.phoneNumberId || "") === id)) return false;
+    if (phone && graphNumbers.some((row) => String(row.displayPhoneNumber || "") === phone)) return false;
+    return true;
+  });
+  return extra.length ? [...graphNumbers, ...extra] : graphNumbers;
+}
+
+export function dedupePortfolioCards(cards: MetaPortfolioPublic[]): MetaPortfolioPublic[] {
+  if (cards.length < 2) return cards;
+  const list = cards.map((card) => ({ ...card, numbers: (card.numbers || []).slice() }));
+
+  const absorb = (host: MetaPortfolioPublic, extra: MetaPortfolioPublic): void => {
+    host.name = host.name || extra.name;
+    host.primaryPageName = host.primaryPageName || extra.primaryPageName;
+    host.primaryPageId = host.primaryPageId || extra.primaryPageId;
+    host.profilePictureUrl = host.profilePictureUrl || extra.profilePictureUrl;
+    host.wabaId = host.wabaId || extra.wabaId;
+    host.numbers = mergePortfolioNumbers(host.numbers || [], extra.numbers || []);
+  };
+
+  const dropped = new Set<string>();
+  for (const card of list) {
+    const id = String(card.id || "").trim();
+    const conn = String(card.connectionId || "");
+    if (!id) continue;
+    const host = list.find((other) => other !== card && String(other.wabaId || "").trim() === id);
+    if (!host) continue;
+    absorb(host, card);
+    dropped.add(conn);
   }
-  return null;
+
+  const remaining = list.filter((card) => !dropped.has(String(card.connectionId || "")));
+  const byBiz = new Map<string, MetaPortfolioPublic>();
+  const noId: MetaPortfolioPublic[] = [];
+  for (const card of remaining) {
+    const id = String(card.id || "").trim();
+    if (!id) {
+      noId.push(card);
+      continue;
+    }
+    const prev = byBiz.get(id);
+    if (!prev) {
+      byBiz.set(id, card);
+      continue;
+    }
+    absorb(prev, card);
+  }
+
+  const usedWabas = new Set(
+    [...byBiz.values()].map((card) => String(card.wabaId || "").trim()).filter(Boolean),
+  );
+  const extras: MetaPortfolioPublic[] = [];
+  for (const card of noId) {
+    const waba = String(card.wabaId || "").trim();
+    const host = waba ? [...byBiz.values()].find((item) => String(item.wabaId || "").trim() === waba) : undefined;
+    if (host && usedWabas.has(waba)) {
+      absorb(host, card);
+      continue;
+    }
+    extras.push(card);
+  }
+  return [...byBiz.values(), ...extras];
+}
+
+export function firstOwnedPageId(json: unknown): string | null {
+  return text(firstOwnedPageRecord(json).id);
 }
 
 export function mapMetaPhoneToPortfolioNumber(

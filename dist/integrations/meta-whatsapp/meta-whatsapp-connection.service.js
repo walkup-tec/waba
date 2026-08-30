@@ -131,31 +131,10 @@ function storedNumbersFromConnection(open) {
         },
     ];
 }
-function businessIdNotWaba(id, wabaId) {
-    const biz = String(id || "").trim();
-    const waba = String(wabaId || "").trim();
-    if (!biz || (waba && biz === waba))
-        return null;
-    return biz;
-}
-function mergeStoredNumbers(graphNumbers, stored) {
-    if (!graphNumbers.length)
-        return stored;
-    const extra = stored.filter((item) => {
-        const id = String(item.phoneNumberId || "").trim();
-        const phone = String(item.displayPhoneNumber || "").trim();
-        if (id && graphNumbers.some((row) => String(row.phoneNumberId || "") === id))
-            return false;
-        if (phone && graphNumbers.some((row) => String(row.displayPhoneNumber || "") === phone))
-            return false;
-        return true;
-    });
-    return extra.length ? [...graphNumbers, ...extra] : graphNumbers;
-}
 function cardFromConnection(open) {
     const page = String(open.verifiedName || "").trim() || null;
     return {
-        id: businessIdNotWaba(open.metaBusinessId, open.wabaId),
+        id: (0, meta_whatsapp_portfolio_map_1.businessIdNotWaba)(open.metaBusinessId, open.wabaId),
         name: page,
         primaryPageId: null,
         primaryPageName: page,
@@ -164,10 +143,25 @@ function cardFromConnection(open) {
         connectionId: open.id,
     };
 }
+async function fetchBusinessIdentity(graph, token, businessId) {
+    const rich = await graph({
+        token,
+        method: "GET",
+        path: businessId,
+        query: { fields: meta_whatsapp_portfolio_map_1.META_BUSINESS_IDENTITY_FIELDS },
+    });
+    if (rich.ok || rich.status === 401)
+        return rich;
+    return graph({
+        token,
+        method: "GET",
+        path: businessId,
+        query: { fields: meta_whatsapp_portfolio_map_1.META_BUSINESS_IDENTITY_FIELDS_MINIMAL },
+    });
+}
 async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     const stored = storedNumbersFromConnection(open);
-    const fallback = cardFromConnection(open);
-    const pageFallback = String(open.verifiedName || "").trim() || null;
+    const fallback = { ...cardFromConnection(open), numbers: stored };
     let token = "";
     try {
         token = decrypt(open.accessTokenEncrypted);
@@ -178,32 +172,46 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
             reason: "decrypt",
             connectionId: open.id,
         });
-        return { ...fallback, numbers: stored };
+        return fallback;
     }
-    let card = fallback;
-    const businessId = String(open.metaBusinessId || "").trim();
-    if (businessId) {
-        const identity = { id: open.metaBusinessId, wabaId: open.wabaId, connectionId: open.id };
-        const business = await graph({
+    const storedWaba = String(open.wabaId || "").trim();
+    const storedBm = String(open.metaBusinessId || "").trim();
+    const wabaLookup = storedWaba || storedBm;
+    let wabaJson;
+    if (wabaLookup) {
+        const wabaRes = await graph({
             token,
             method: "GET",
-            path: businessId,
-            query: { fields: "id,name,profile_picture_uri,primary_page{id,name,picture}" },
+            path: wabaLookup,
+            query: { fields: meta_whatsapp_portfolio_map_1.META_WABA_IDENTITY_FIELDS },
         });
-        if (business.ok) {
-            const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(business.json, identity);
-            card = {
-                ...fallback,
-                ...mapped,
-                id: businessIdNotWaba(mapped.id, open.wabaId) || fallback.id,
-                name: mapped.name || fallback.name,
-                primaryPageName: mapped.primaryPageName || pageFallback,
-                primaryPageId: mapped.primaryPageId || fallback.primaryPageId,
-                profilePictureUrl: mapped.profilePictureUrl || fallback.profilePictureUrl,
-                wabaId: open.wabaId,
+        if (wabaRes.ok)
+            wabaJson = wabaRes.json;
+        else if (wabaRes.status !== 401) {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-partial", {
+                tenantId,
+                reason: "waba-identity",
+                status: wabaRes.status,
                 connectionId: open.id,
-            };
+            });
         }
+        else {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-partial", {
+                tenantId,
+                reason: "waba-401",
+                connectionId: open.id,
+            });
+        }
+    }
+    const hint = (0, meta_whatsapp_portfolio_map_1.mapMetaWabaIdentity)(wabaJson);
+    const resolvedWaba = storedWaba ||
+        (hint.businessId && hint.wabaId && hint.wabaId !== hint.businessId ? hint.wabaId : "");
+    const resolvedBm = hint.businessId || (0, meta_whatsapp_portfolio_map_1.businessIdNotWaba)(storedBm, resolvedWaba || storedWaba) || "";
+    let businessJson;
+    if (resolvedBm) {
+        const business = await fetchBusinessIdentity(graph, token, resolvedBm);
+        if (business.ok)
+            businessJson = business.json;
         else if (business.status !== 401) {
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-partial", {
                 tenantId,
@@ -220,9 +228,46 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
             });
         }
     }
-    const wabaId = String(open.wabaId || "").trim();
+    let card = (0, meta_whatsapp_portfolio_map_1.mergePortfolioIdentity)({
+        fallback,
+        business: businessJson,
+        waba: wabaJson,
+    });
+    if (!card.primaryPageName && resolvedBm) {
+        const pages = await graph({
+            token,
+            method: "GET",
+            path: `${resolvedBm}/owned_pages`,
+            query: { fields: meta_whatsapp_portfolio_map_1.META_OWNED_PAGES_FIELDS },
+        });
+        if (pages.ok) {
+            card = (0, meta_whatsapp_portfolio_map_1.mergePortfolioIdentity)({
+                fallback: card,
+                business: businessJson,
+                waba: wabaJson,
+                ownedPages: pages.json,
+            });
+        }
+    }
+    if (!card.profilePictureUrl && resolvedBm) {
+        const picture = await graph({
+            token,
+            method: "GET",
+            path: `${resolvedBm}/picture`,
+            query: { redirect: "0", type: "large" },
+        });
+        if (picture.ok) {
+            card = (0, meta_whatsapp_portfolio_map_1.mergePortfolioIdentity)({
+                fallback: card,
+                business: businessJson,
+                waba: wabaJson,
+                picture: picture.json,
+            });
+        }
+    }
+    const wabaId = resolvedWaba || storedWaba;
     if (!wabaId)
-        return { ...card, numbers: stored };
+        return card;
     const phones = await graph({
         token,
         method: "GET",
@@ -236,10 +281,10 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
             status: phones.status,
             connectionId: open.id,
         });
-        return { ...card, numbers: stored };
+        return card;
     }
     const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)(phones.json);
-    const merged = mergeStoredNumbers(mapped, stored);
+    const merged = (0, meta_whatsapp_portfolio_map_1.mergePortfolioNumbers)(mapped, stored);
     const numbers = await attachPhoneBusinessProfiles(graph, token, merged, tenantId);
     return { ...card, numbers };
 }
@@ -559,10 +604,11 @@ class MetaWhatsappConnectionService {
             });
         }
         const requested = String(opts?.connectionId || "").trim();
-        const cards = [];
+        const hydrated = [];
         for (const row of rows) {
-            cards.push(await hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row));
+            hydrated.push(await hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row));
         }
+        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(hydrated);
         const selected = cards.find((item) => item.connectionId === requested) ||
             cards.find((item) => item.id && item.id === String(opts?.connectionId || "").trim()) ||
             cards[0];

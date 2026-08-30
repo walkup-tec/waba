@@ -18,7 +18,7 @@ Corrigir Laboratório → Conexão (Portfólio Meta) em produção (`walkup-tec/
 2. Exchange grava `metaBusinessId: null`; o business vem do complete / `attachSessionAssets`.
 3. Attach localiza por `businessId` incoming, senão `pending_token`; IDs incoming vencem os antigos.
 4. `GET /portfolio` devolve `portfolios[]` + `portfolio`/`numbers` do selecionado. Graph vazia ou falha não-401 não apaga número gravado; nome da página cai no `verifiedName` persistido.
-5. UI: um card por portfólio; clique seleciona (`?connectionId=`); números do selecionado.
+5. UI: `#meta-tp-portfolio-list` com um card por Business ID; clique seleciona; números do selecionado. Se a API ainda vier só com `portfolio`, um card continua visível.
 
 ## Arquivos
 

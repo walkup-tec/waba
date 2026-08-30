@@ -35489,6 +35489,14 @@
         );
       }
 
+      function metaTpPortfolioTitle(item) {
+        const name = String((item && item.name) || "").trim();
+        const page = String((item && item.primaryPageName) || "").trim();
+        const generic = !name || /^(portf[oó]lio empresarial|business portfolio|whatsapp business account)$/i.test(name);
+        if (!generic) return name;
+        return page || name || "Portfólio empresarial";
+      }
+
       function metaTpShowPortfolioLogo(photoEl, logoEl, src, alt, isFallback) {
         photoEl.onload = () => {
           photoEl.hidden = false;
@@ -35669,7 +35677,7 @@
           .map(function (item) {
             const bizId = metaTpBusinessIdLabel(item);
             const isSelected = bizId !== "—" && bizId === selectedKey;
-            const name = item.name || item.primaryPageName || "Portfólio empresarial";
+            const name = metaTpPortfolioTitle(item);
             const page = item.primaryPageName || "—";
             const waba = String(item.wabaId || "").trim() || "—";
             const nums = Array.isArray(item.numbers) ? item.numbers : [];
@@ -35729,7 +35737,7 @@
           if (!item) return;
           const photoEl = cardEl.querySelector("img");
           const logoEl = cardEl.querySelector(".meta-portfolio-logo");
-          const name = item.name || item.primaryPageName || "Portfólio empresarial";
+          const name = metaTpPortfolioTitle(item);
           const photoUrl = String(item.profilePictureUrl || "").trim();
           const isLocalPhoto = /^\/integrations\/meta\/whatsapp\/portfolio\/photo(\?|$)/i.test(photoUrl);
           const safePhoto = isLocalPhoto

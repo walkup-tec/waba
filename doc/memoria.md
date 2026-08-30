@@ -1,8 +1,14 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-30 15:17 — Identidade do portfólio a partir da Meta
+- GET `/portfolio` busca nome, Business ID, página principal e foto na Graph (WABA `owner_business_info` + BM `primary_page`/`owned_pages`/`picture`)
+- WABA não aparece como card de portfólio; nome genérico "Portfólio empresarial" não substitui o nome real/página
+- Marker: `DEPLOY-2026-08-30-151700-master-laboratorio-portfolio-identidade`
+- LOG: `doc/LOG-2026-08-30__151700__laboratorio-portfolio-identidade-meta.md`
+
 ## 2026-08-30 16:19 — Laboratório com vários portfólios Meta
 - Várias conexões por tenant; segundo signup não sobrescreve token/WABA do primeiro
-- Graph vazia não apaga número gravado; UI com um card por portfólio
+- Graph vazia não apaga número gravado; UI: lista `#meta-tp-portfolio-list`, um card por Business ID, números do selecionado
 - Marker: `DEPLOY-2026-08-30-161900-master-laboratorio-multi-portfolio`
 - LOG: `doc/LOG-2026-08-30__161900__laboratorio-multi-portfolio.md`
 

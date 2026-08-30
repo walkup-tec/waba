@@ -7,6 +7,9 @@ import {
   mapMetaBusinessToPortfolio,
   mapMetaPhoneListToPortfolioNumbers,
   mapMetaPhoneToPortfolioNumber,
+  mapMetaWabaIdentity,
+  mergePortfolioIdentity,
+  dedupePortfolioCards,
   resolvePhoneNameSync,
   META_PHONE_NUMBER_LIST_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
@@ -81,6 +84,93 @@ describe("meta portfolio mapper", () => {
       {},
     );
     assert.equal(unsafe.profilePictureUrl, null);
+
+    const withToken = mapMetaBusinessToPortfolio(
+      { id: "1", profile_picture_uri: "https://graph.facebook.com/v/pic.jpg?access_token=EAABsecret" },
+      {},
+    );
+    assert.equal(withToken.profilePictureUrl, null);
+  });
+
+  it("usa nome, página e foto da WABA e das páginas owned", () => {
+    const fromWaba = mapMetaWabaIdentity({
+      id: "1247508354180311",
+      name: "Conta WABA Drax",
+      owner_business_info: {
+        id: "1041827648719609",
+        name: "Drax Sistemas",
+        profile_picture_uri: "https://scontent.xx.fbcdn.net/v/drax.jpg",
+      },
+    });
+    assert.equal(fromWaba.businessId, "1041827648719609");
+    assert.equal(fromWaba.businessName, "Drax Sistemas");
+    assert.equal(fromWaba.wabaName, "Conta WABA Drax");
+
+    const owned = mapMetaBusinessToPortfolio(
+      {
+        id: "1041827648719609",
+        name: "Drax Sistemas",
+        owned_pages: {
+          data: [{ id: "page-drax", name: "Drax Tecnologia e Sistemas", picture: { data: { url: "https://scontent.xx.fbcdn.net/v/page.jpg" } } }],
+        },
+      },
+      { wabaId: "1247508354180311" },
+    );
+    assert.equal(owned.primaryPageName, "Drax Tecnologia e Sistemas");
+    assert.equal(owned.primaryPageId, "page-drax");
+    assert.equal(owned.profilePictureUrl, "https://scontent.xx.fbcdn.net/v/page.jpg");
+
+    const merged = mergePortfolioIdentity({
+      fallback: {
+        id: "1247508354180311",
+        name: null,
+        primaryPageId: null,
+        primaryPageName: null,
+        profilePictureUrl: null,
+        wabaId: null,
+        connectionId: "conn-waba",
+      },
+      waba: {
+        id: "1247508354180311",
+        name: "Conta WABA Drax",
+        owner_business_info: { id: "1041827648719609", name: "Drax Sistemas" },
+      },
+      ownedPages: { data: [{ id: "page-drax", name: "Drax Tecnologia e Sistemas" }] },
+    });
+    assert.equal(merged.id, "1041827648719609");
+    assert.notEqual(merged.id, "1247508354180311");
+    assert.equal(merged.name, "Drax Sistemas");
+    assert.equal(merged.primaryPageName, "Drax Tecnologia e Sistemas");
+    assert.equal(merged.wabaId, "1247508354180311");
+  });
+
+  it("não mostra o WABA como card de portfólio quando já existe o Business", () => {
+    const cards = dedupePortfolioCards([
+      {
+        id: "1041827648719609",
+        name: "Drax Sistemas",
+        primaryPageId: "page-drax",
+        primaryPageName: "Drax Tecnologia e Sistemas",
+        profilePictureUrl: "https://scontent.xx.fbcdn.net/v/drax.jpg",
+        wabaId: "1247508354180311",
+        connectionId: "conn-drax",
+        numbers: [{ phoneNumberId: "phone-drax", displayPhoneNumber: "+55 51 8200-1279" } as any],
+      },
+      {
+        id: "1247508354180311",
+        name: null,
+        primaryPageId: null,
+        primaryPageName: null,
+        profilePictureUrl: null,
+        wabaId: "1247508354180311",
+        connectionId: "conn-waba",
+        numbers: [{ phoneNumberId: "phone-dup", displayPhoneNumber: "+55 51 8200-1279" } as any],
+      },
+    ]);
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0]?.id, "1041827648719609");
+    assert.equal(cards[0]?.name, "Drax Sistemas");
+    assert.equal((cards[0]?.numbers || []).length, 1);
   });
 
   it("CONNECTED fica ativo e livre até haver disparo", () => {
@@ -398,14 +488,16 @@ describe("meta portfolio service", () => {
     assert.equal(assets.portfolio?.name, "Grupo Walkup");
     assert.equal(assets.portfolio?.primaryPageName, "Soma Promotora");
     assert.equal(assets.portfolio?.profilePictureUrl, "https://scontent.xx.fbcdn.net/v/walkup.png");
-    assert.match(graphFields[0] || "", /profile_picture_uri/);
-    assert.match(graphFields[1] || "", /new_display_name/);
-    assert.equal(graphFields[1], META_PHONE_NUMBER_LIST_FIELDS);
+    assert.match(graphFields[0] || "", /owner_business_info/);
+    assert.match(graphFields[1] || "", /profile_picture_uri/);
+    assert.match(graphFields[2] || "", /new_display_name/);
+    assert.equal(graphFields[2], META_PHONE_NUMBER_LIST_FIELDS);
     assert.equal(assets.numbers.length, 1);
     assert.equal(assets.numbers[0].uiStatus, "pendente");
     assert.equal(assets.numbers[0].dispatchStatus, "livre");
     assert.doesNotMatch(json, /EAAB-secret-token|access_token|accessToken/);
     assert.deepEqual(graphCalls, [
+      "waba-1",
       "1247508354180311",
       "waba-1/phone_numbers",
       "phone-1",
@@ -997,6 +1089,95 @@ describe("meta portfolio service", () => {
     assert.ok((walkupCard?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("95213-7761")));
     const draxCard = (assets.portfolios || []).find((item) => item.id === "1041827648719609");
     assert.ok((draxCard?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
+  });
+
+  it("traz nome, ID, página e foto da Meta e não lista WABA como portfólio", async () => {
+    const drax = {
+      ...connectedRow(),
+      id: "conn-drax",
+      metaBusinessId: "1041827648719609",
+      wabaId: "1247508354180311",
+      displayPhoneNumber: "+55 51 8200-1279",
+      verifiedName: null,
+    };
+    const wabaAsPortfolio = {
+      ...connectedRow(),
+      id: "conn-waba",
+      metaBusinessId: "1247508354180311",
+      wabaId: null,
+      phoneNumberId: null,
+      displayPhoneNumber: null,
+      verifiedName: null,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [drax, wabaAsPortfolio];
+      },
+      async findOpenByTenant() {
+        return drax;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1247508354180311") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1247508354180311",
+            name: "Conta WABA Drax",
+            owner_business_info: {
+              id: "1041827648719609",
+              name: "Drax Sistemas",
+              profile_picture_uri: "https://scontent.xx.fbcdn.net/v/drax.jpg",
+            },
+          },
+        };
+      }
+      if (input.path === "1041827648719609") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1041827648719609",
+            name: "Drax Sistemas",
+            profile_picture_uri: "https://scontent.xx.fbcdn.net/v/drax.jpg",
+            primary_page: { id: "page-drax", name: "Drax Tecnologia e Sistemas" },
+          },
+        };
+      }
+      if (input.path === "1247508354180311/phone_numbers") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-drax",
+                display_phone_number: "+55 51 8200-1279",
+                verified_name: "Drax",
+                status: "CONNECTED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const cards = assets.portfolios || [];
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0]?.id, "1041827648719609");
+    assert.notEqual(cards[0]?.id, "1247508354180311");
+    assert.equal(cards[0]?.name, "Drax Sistemas");
+    assert.equal(cards[0]?.primaryPageName, "Drax Tecnologia e Sistemas");
+    assert.equal(cards[0]?.profilePictureUrl, "https://scontent.xx.fbcdn.net/v/drax.jpg");
+    assert.equal(cards[0]?.wabaId, "1247508354180311");
+    assert.ok((cards[0]?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
   });
 });
 
