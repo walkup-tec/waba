@@ -180,10 +180,13 @@ function applyLocalPortfolioBusinessPhoto(tenantId, portfolio) {
 function purgePortfolioIdentity(tenantId) {
     try {
         const id = safeTenantId(tenantId);
-        for (const file of [`${id}.json`, `${id}.png`, `${id}.jpg`]) {
-            const full = node_path_1.default.join(identityDir(), file);
-            if ((0, node_fs_1.existsSync)(full))
-                (0, node_fs_1.unlinkSync)(full);
+        const dir = identityDir();
+        if (!(0, node_fs_1.existsSync)(dir))
+            return;
+        for (const file of (0, node_fs_1.readdirSync)(dir)) {
+            if (file === `${id}.json` || file === `${id}.png` || file === `${id}.jpg` || file.startsWith(`${id}-`)) {
+                (0, node_fs_1.unlinkSync)(node_path_1.default.join(dir, file));
+            }
         }
     }
     catch {

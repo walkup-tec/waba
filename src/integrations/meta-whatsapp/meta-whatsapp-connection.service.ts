@@ -52,12 +52,14 @@ import {
   readPortfolioBusinessPhoto,
   writePortfolioIdentity,
   writePortfolioBusinessPhoto,
+  purgePortfolioIdentity,
 } from "./meta-whatsapp-portfolio-identity.store";
 import {
   applyLocalPhoneIdentities,
   readPhoneIdentity,
   readPhonePhoto,
   writePhoneIdentity,
+  purgePhoneIdentities,
 } from "./meta-whatsapp-phone-identity.store";
 import {
   parseDisplayName,
@@ -463,6 +465,34 @@ export class MetaWhatsappConnectionService {
     return toMetaWhatsappPublicConnection(row);
   }
 
+  async disconnectOfficialLabFromAuth(auth: WabaRequestAuth): Promise<{
+    disconnected: number;
+    portfolios: MetaPortfolioPublic[];
+    selectedConnectionId: string | null;
+    portfolio: MetaPortfolioPublic | null;
+    numbers: MetaPortfolioNumberPublic[];
+  }> {
+    const tenant = requireTenant(auth);
+    const repo = this.repository as MetaWhatsappConnectionRepository;
+    if (typeof repo.disconnectOpenByTenant !== "function") {
+      throw new MetaWhatsappError("persist_failed");
+    }
+    const disconnected = await repo.disconnectOpenByTenant(tenant.tenantId, tenant.ownerEmail);
+    purgePortfolioIdentity(tenant.tenantId);
+    purgePhoneIdentities(tenant.tenantId);
+    logMetaWhatsappSafe("portfolio-disconnected", {
+      tenantId: tenant.tenantId,
+      disconnected,
+    });
+    return {
+      disconnected,
+      portfolios: [],
+      selectedConnectionId: null,
+      portfolio: null,
+      numbers: [],
+    };
+  }
+
   async exchangeCodeAndStore(
     auth: WabaRequestAuth,
     input: { code?: string; redirectUri?: string; tenantId?: string; ownerEmail?: string },
@@ -696,10 +726,7 @@ export class MetaWhatsappConnectionService {
     for (const row of rows) {
       hydrated.push(await hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row));
     }
-    const cards = dedupePortfolioCards([
-      ...hydrated.map((item) => item.card),
-      ...hydrated.flatMap((item) => item.directory.filter((biz) => Boolean(biz.id))),
-    ]);
+    const cards = dedupePortfolioCards(hydrated.map((item) => item.card));
     const selected =
       cards.find((item) => item.connectionId === requested) ||
       cards.find((item) => item.id && item.id === String(opts?.connectionId || "").trim()) ||

@@ -20762,6 +20762,7 @@
                   <div class="meta-portfolio-toolbar">
                     <h3>Adicionar número a um portfólio</h3>
                     <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" onclick="return window.wabaAddMetaWhatsappNumber(event);">Adicionar número</button>
+                    <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" id="meta-tp-reset-lab" data-meta-reset-portfolio="1">Excluir tudo e recomeçar</button>
                   </div>
                   <div id="meta-tp-numbers" class="meta-number-list" hidden></div>
                   <p id="meta-tp-numbers-empty" class="muted" hidden>Nenhum número neste portfólio ainda. Use Adicionar número, conclua o SMS no chip e ative com o PIN de 6 dígitos.</p>
@@ -35393,9 +35394,40 @@
         metaTpSession.wabaId = "";
         metaTpSession.phoneNumberId = "";
         metaTpSession.businessId = "";
+        metaTpSession.savedBusinessId = "";
+        metaTpSession.savedWabaId = "";
+        metaTpSession.portfolioPrimaryPageId = "";
+        metaTpSession.numbers = [];
+        metaTpSession.portfolios = [];
         metaTpSession.finishEvent = "";
         metaTpSession.advancing = false;
         metaTpSession.addNumber = false;
+      }
+
+      async function metaTpResetOfficialLab() {
+        const ok = window.confirm(
+          "Isso apaga todos os portfólios e números deste Laboratório para você integrar de novo. O Business Manager na Meta não é excluído.",
+        );
+        if (!ok) return;
+        metaTpSetStatus("Apagando conexões deste Laboratório…");
+        try {
+          const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/portfolio", {
+            method: "DELETE",
+          });
+          if (!response.ok || payload.ok === false) {
+            metaTpSetStatus(String(payload.error || "Não foi possível apagar os portfólios."));
+            return;
+          }
+          metaTpResetSession();
+          metaTpRenderPortfolio({ portfolios: [], portfolio: null, numbers: [] });
+          if (typeof window.wabaMetaLabSetStep === "function") window.wabaMetaLabSetStep(1);
+          metaTpSetStatus("Laboratório zerado. Clique em Conectar Portfólio para começar de novo.");
+          if (typeof window.wabaRefreshMetaWhatsappStatus === "function") {
+            await window.wabaRefreshMetaWhatsappStatus();
+          }
+        } catch {
+          metaTpSetStatus("Não foi possível apagar os portfólios.");
+        }
       }
 
       function metaTpEsc(value) {
@@ -36257,6 +36289,11 @@
         if (target.id === "meta-tp-edit-portfolio" || (target.closest && target.closest("#meta-tp-edit-portfolio"))) {
           event.preventDefault();
           metaTpOpenEditPortfolio();
+          return;
+        }
+        if (target.id === "meta-tp-reset-lab" || (target.closest && target.closest("[data-meta-reset-portfolio]"))) {
+          event.preventDefault();
+          metaTpResetOfficialLab();
           return;
         }
         const addNumberBtn = target.closest("[data-meta-add-number]");

@@ -139,6 +139,23 @@ class FakeMetaRepo {
     row.disconnectedAt = null;
     return row;
   }
+
+  async disconnectOpenByTenant(tenantId: string, actorEmail: string): Promise<number> {
+    const now = new Date().toISOString();
+    let count = 0;
+    for (const row of this.rows) {
+      if (row.tenantId !== tenantId || row.disconnectedAt) continue;
+      if (row.status !== "pending_token" && row.status !== "pending_confirmation" && row.status !== "connected") {
+        continue;
+      }
+      row.status = "disconnected";
+      row.disconnectedAt = now;
+      row.updatedBy = actorEmail;
+      row.accessTokenEncrypted = "";
+      count += 1;
+    }
+    return count;
+  }
 }
 
 const authA: WabaRequestAuth = { email: "tenant-a@exemplo.com", role: "subscriber" };

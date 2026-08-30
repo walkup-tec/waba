@@ -159,6 +159,23 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             return handleMetaError(res, error);
         }
     });
+    app.delete("/integrations/meta/whatsapp/portfolio", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            warnClientTenantClaim(req);
+            const result = await service.disconnectOfficialLabFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req));
+            return sendPublic(res, 200, { ok: true, ...result });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
     app.get("/integrations/meta/whatsapp/portfolio/photo", async (req, res) => {
         try {
             if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {

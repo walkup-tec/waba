@@ -346,6 +346,27 @@ class MetaWhatsappConnectionService {
         const row = await this.repository.findOpenByTenant(tenant.tenantId);
         return toMetaWhatsappPublicConnection(row);
     }
+    async disconnectOfficialLabFromAuth(auth) {
+        const tenant = requireTenant(auth);
+        const repo = this.repository;
+        if (typeof repo.disconnectOpenByTenant !== "function") {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("persist_failed");
+        }
+        const disconnected = await repo.disconnectOpenByTenant(tenant.tenantId, tenant.ownerEmail);
+        (0, meta_whatsapp_portfolio_identity_store_1.purgePortfolioIdentity)(tenant.tenantId);
+        (0, meta_whatsapp_phone_identity_store_1.purgePhoneIdentities)(tenant.tenantId);
+        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-disconnected", {
+            tenantId: tenant.tenantId,
+            disconnected,
+        });
+        return {
+            disconnected,
+            portfolios: [],
+            selectedConnectionId: null,
+            portfolio: null,
+            numbers: [],
+        };
+    }
     async exchangeCodeAndStore(auth, input) {
         const tenant = requireTenant(auth);
         requireConfigured();
@@ -557,10 +578,7 @@ class MetaWhatsappConnectionService {
         for (const row of rows) {
             hydrated.push(await hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row));
         }
-        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)([
-            ...hydrated.map((item) => item.card),
-            ...hydrated.flatMap((item) => item.directory.filter((biz) => Boolean(biz.id))),
-        ]);
+        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(hydrated.map((item) => item.card));
         const selected = cards.find((item) => item.connectionId === requested) ||
             cards.find((item) => item.id && item.id === String(opts?.connectionId || "").trim()) ||
             cards[0];

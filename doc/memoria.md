@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-30 16:25 — Zerar Laboratório Oficial e recomeçar
+- DELETE `/integrations/meta/whatsapp/portfolio` desconecta todas as conexões do tenant e apaga identidade local. UI: Excluir tudo e recomeçar. Lista só mostra conexão gravada.
+- Marker: `DEPLOY-2026-08-30-162500-master-laboratorio-reset-zero`
+- LOG: `doc/LOG-2026-08-30__162500__laboratorio-reset-zero.md`
+
 ## 2026-08-30 16:05 — Portfólio só com Graph (não Editar)
 - Nome local do Editar não entra no GET `/portfolio`. GET piecewise + IDs oficiais Drax `1041827648719609` e Walkup `4141369862822598`; card só se a Meta devolver `id`+`name`+página.
 - Testes mock: 37 ok. Marker: `DEPLOY-2026-08-30-161300-master-laboratorio-graph-piecewise`.

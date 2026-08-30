@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it, before, after, afterEach } from "node:test";
+import { describe, it, before, after, afterEach, beforeEach } from "node:test";
 import { randomBytes } from "node:crypto";
 import { MetaWhatsappConnectionService } from "./meta-whatsapp-connection.service";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
@@ -416,6 +416,11 @@ describe("meta portfolio service", () => {
   });
 
   afterEach(() => {
+    purgePortfolioIdentity(tenantId);
+    purgePhoneIdentities(tenantId);
+  });
+
+  beforeEach(() => {
     purgePortfolioIdentity(tenantId);
     purgePhoneIdentities(tenantId);
   });
@@ -1291,7 +1296,7 @@ describe("meta portfolio service", () => {
     assert.notEqual(assets.portfolio?.name, "Drax Sistemas");
   });
 
-  it("mostra Drax e Walkup só com o que a Graph devolver nos IDs oficiais", async () => {
+  it("não cria card extra do Walkup sem conexão gravada", async () => {
     const drax = {
       ...connectedRow(),
       metaBusinessId: "1041827648719609",
@@ -1360,9 +1365,40 @@ describe("meta portfolio service", () => {
     assert.equal(draxCard?.name, "Drax Sistemas");
     assert.equal(draxCard?.id, "1041827648719609");
     assert.equal(draxCard?.primaryPageName, "Drax Sistemas e Tecnologia");
-    assert.equal(walkupCard?.name, "Grupo Walkup");
-    assert.equal(walkupCard?.id, "4141369862822598");
-    assert.equal(walkupCard?.primaryPageName, "Grupo Walkup");
+    assert.equal(walkupCard, undefined);
+  });
+
+  it("apaga todas as conexões do Laboratório para recomeçar do zero", async () => {
+    const row: MetaWhatsappConnectionRecord = { ...connectedRow(), status: "connected" };
+    const repo = {
+      rows: [row] as MetaWhatsappConnectionRecord[],
+      async findOpenByTenant() {
+        return this.rows.find((item) => !item.disconnectedAt) || null;
+      },
+      async listOpenByTenant() {
+        return this.rows.filter((item) => !item.disconnectedAt);
+      },
+      async disconnectOpenByTenant() {
+        const count = this.rows.filter((item) => !item.disconnectedAt).length;
+        this.rows.forEach((item) => {
+          item.status = "disconnected";
+          item.disconnectedAt = new Date().toISOString();
+          item.accessTokenEncrypted = "";
+        });
+        return count;
+      },
+    };
+    writePortfolioIdentity(tenantId, { name: "Drax Sistemas" });
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      (async () => ({ ok: true, status: 200, json: { data: [] } })) as any,
+    );
+    const result = await service.disconnectOfficialLabFromAuth(auth);
+    assert.equal(result.disconnected, 1);
+    assert.equal(result.portfolio, null);
+    assert.deepEqual(result.portfolios, []);
+    assert.equal(await repo.findOpenByTenant(), null);
   });
 });
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveDataDir } from "../../data-path";
 import type { MetaPortfolioPublic } from "./meta-whatsapp-portfolio.types";
@@ -185,9 +185,12 @@ export function applyLocalPortfolioBusinessPhoto(
 export function purgePortfolioIdentity(tenantId: string): void {
   try {
     const id = safeTenantId(tenantId);
-    for (const file of [`${id}.json`, `${id}.png`, `${id}.jpg`]) {
-      const full = path.join(identityDir(), file);
-      if (existsSync(full)) unlinkSync(full);
+    const dir = identityDir();
+    if (!existsSync(dir)) return;
+    for (const file of readdirSync(dir)) {
+      if (file === `${id}.json` || file === `${id}.png` || file === `${id}.jpg` || file.startsWith(`${id}-`)) {
+        unlinkSync(path.join(dir, file));
+      }
     }
   } catch {
     // ignore

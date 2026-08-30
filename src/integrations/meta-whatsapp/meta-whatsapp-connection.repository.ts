@@ -386,4 +386,25 @@ export class MetaWhatsappConnectionRepository {
       .eq("status", "connected");
     if (error) throw new Error(error.message);
   }
+
+  async disconnectOpenByTenant(tenantId: string, actorEmail: string): Promise<number> {
+    const id = String(tenantId || "").trim();
+    if (!id) return 0;
+    const now = new Date().toISOString();
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .update({
+        status: "disconnected",
+        disconnected_at: now,
+        updated_by: actorEmail,
+        access_token_encrypted: "",
+        last_error: null,
+      })
+      .eq("tenant_id", id)
+      .is("disconnected_at", null)
+      .in("status", ["pending_token", "pending_confirmation", "connected"])
+      .select("id");
+    if (error) throw new Error(error.message);
+    return (data || []).length;
+  }
 }
