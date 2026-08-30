@@ -3266,71 +3266,198 @@
         .meta-portfolio-shell,
         .meta-portfolio-list {
           display: grid;
-          grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-          gap: 16px;
-          align-items: start;
-          margin: 0 0 14px;
+          grid-template-columns: minmax(300px, 352px) minmax(0, 1fr);
+          gap: 0;
+          align-items: stretch;
+          margin: 0 0 12px;
+          min-height: 280px;
+          border: 1px solid rgba(148, 163, 184, 0.16);
+          border-radius: 16px;
+          overflow: hidden;
+          background: rgba(8, 18, 28, 0.72);
         }
         .meta-portfolio-rail {
           display: grid;
-          gap: 12px;
+          align-content: start;
+          gap: 8px;
+          padding: 12px;
+          background: rgba(2, 10, 16, 0.55);
+          border-right: 1px solid rgba(148, 163, 184, 0.12);
         }
         .meta-portfolio-card {
+          position: relative;
           display: flex;
           align-items: center;
-          gap: 14px;
-          padding: 14px 16px;
-          border-radius: 22px;
-          border: 0;
-          background: #07141c;
+          gap: 12px;
+          padding: 12px 10px 12px 14px;
+          border-radius: 12px;
+          border: 1px solid transparent;
+          background: transparent;
           cursor: pointer;
           margin-bottom: 0;
+          transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .meta-portfolio-card:hover {
+          background: rgba(15, 32, 40, 0.72);
         }
         .meta-portfolio-card.is-selected {
-          background: #10202a;
+          background: rgba(37, 211, 102, 0.08);
+          border-color: rgba(37, 211, 102, 0.28);
+        }
+        .meta-portfolio-card.is-selected::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 10px;
+          bottom: 10px;
+          width: 3px;
+          border-radius: 999px;
+          background: #25d366;
+        }
+        .meta-portfolio-card:focus-visible {
+          outline: 2px solid rgba(37, 211, 102, 0.7);
+          outline-offset: 2px;
         }
         .meta-portfolio-card h3 {
           margin: 0 0 6px;
-          font-size: 1.12rem;
-          font-weight: 800;
-          color: #2ee4a0;
+          font-size: 0.95rem;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          color: #cbd5e1;
         }
+        .meta-portfolio-card.is-selected h3 { color: #4ade80; }
         .meta-portfolio-add {
-          width: 42px;
-          height: 42px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
           border: 0;
           border-radius: 999px;
-          background: #2ee4a0;
-          color: #041016;
-          font-size: 26px;
-          font-weight: 800;
+          background: #25d366;
+          color: #052e16;
+          font-size: 20px;
+          font-weight: 600;
           line-height: 1;
           cursor: pointer;
           flex: 0 0 auto;
-          margin-left: auto;
+          margin-left: 2px;
+        }
+        .meta-portfolio-add:hover { filter: brightness(1.08); }
+        .meta-portfolio-add:focus-visible {
+          outline: 2px solid rgba(37, 211, 102, 0.8);
+          outline-offset: 2px;
         }
         .meta-portfolio-numbers {
-          display: grid;
-          gap: 12px;
+          display: flex;
+          flex-direction: column;
           min-width: 0;
-          padding: 10px 8px 10px 4px;
+          min-height: 100%;
+          background: rgba(10, 22, 32, 0.35);
+        }
+        .meta-portfolio-numbers-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 16px 12px;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .meta-portfolio-numbers-head p {
+          margin: 0 0 2px;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(148, 163, 184, 0.78);
+        }
+        .meta-portfolio-numbers-head h4 {
+          margin: 0;
+          font-size: 0.95rem;
+          font-weight: 700;
+          color: #f1f5f9;
+        }
+        .meta-portfolio-numbers-count {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 28px;
+          height: 24px;
+          padding: 0 8px;
+          border-radius: 999px;
+          background: rgba(148, 163, 184, 0.12);
+          color: #cbd5e1;
+          font-size: 12px;
+          font-weight: 700;
+          font-variant-numeric: tabular-nums;
         }
         .meta-portfolio-numbers-title { display: none; }
+        .meta-portfolio-numbers-empty {
+          margin: auto;
+          padding: 36px 20px;
+          text-align: center;
+          color: rgba(226, 232, 240, 0.72);
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        .meta-portfolio-numbers-empty::before {
+          content: "";
+          display: block;
+          width: 40px;
+          height: 40px;
+          margin: 0 auto 12px;
+          border-radius: 50%;
+          border: 1.5px dashed rgba(148, 163, 184, 0.38);
+        }
+        .meta-portfolio-numbers-empty span {
+          display: block;
+          margin-top: 4px;
+          font-size: 12px;
+          color: rgba(148, 163, 184, 0.78);
+        }
         .meta-portfolio-card-copy { flex: 1; min-width: 0; }
+        .meta-portfolio-meta {
+          display: grid;
+          gap: 2px;
+        }
+        .meta-portfolio-meta-row {
+          display: grid;
+          grid-template-columns: 52px minmax(0, 1fr);
+          gap: 8px;
+          align-items: baseline;
+          margin: 0;
+          font-size: 12px;
+          line-height: 1.4;
+          color: rgba(226, 232, 240, 0.88);
+        }
+        .meta-portfolio-meta-row span:first-child {
+          color: rgba(148, 163, 184, 0.7);
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+        .meta-portfolio-meta-row span:last-child {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+        }
         .meta-portfolio-logo {
-          width: 72px;
-          height: 72px;
-          border-radius: 16px;
-          background: #f8fafc;
-          color: #0f172a;
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
+          background: #12261c;
+          color: #86efac;
           display: flex;
           align-items: center;
           justify-content: center;
           font-weight: 800;
-          font-size: 18px;
+          font-size: 13px;
           letter-spacing: -0.04em;
           flex: 0 0 auto;
           overflow: hidden;
+          border: 1px solid rgba(37, 211, 102, 0.18);
         }
         .meta-portfolio-logo img {
           width: 100%;
@@ -3340,44 +3467,62 @@
         }
         .meta-portfolio-logo.has-photo {
           padding: 0;
-          background: #f8fafc;
+          background: #020617;
         }
         .meta-portfolio-logo.has-photo span { display: none; }
-        .meta-portfolio-logo.has-meta-fallback img {
-          object-fit: contain;
-          background: #000;
+        .meta-portfolio-logo.has-meta-fallback {
+          background: #12261c;
         }
-        .meta-portfolio-card p { margin: 0 0 3px; font-size: 13px; color: #f8fafc; line-height: 1.35; }
-        .meta-portfolio-card p:last-child { margin-bottom: 0; }
+        .meta-portfolio-logo.has-meta-fallback img { display: none; }
         .meta-portfolio-toolbar {
           display: flex;
           flex-wrap: wrap;
           align-items: center;
           justify-content: flex-end;
-          gap: 10px;
-          margin: 0 0 10px;
+          gap: 8px;
+          margin: 0;
         }
         .meta-portfolio-toolbar h3 { display: none; }
-        .meta-number-list { display: grid; gap: 14px; }
+        .meta-portfolio-toolbar .meta-onboard-cta-secondary {
+          min-height: 34px;
+          padding: 6px 12px;
+          font-size: 12px;
+          border-radius: 10px;
+        }
+        .meta-portfolio-toolbar #meta-tp-reset-lab {
+          color: #fca5a5;
+          border-color: rgba(248, 113, 113, 0.35);
+        }
+        .meta-number-list {
+          display: grid;
+          gap: 0;
+          padding: 6px 8px 10px;
+        }
         .meta-number-card {
           display: flex;
           flex-wrap: wrap;
           align-items: center;
-          gap: 14px;
-          padding: 4px 0;
+          gap: 12px;
+          padding: 12px;
           border: 0;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+          border-radius: 0;
           background: transparent;
+          transition: background 0.12s ease;
         }
+        .meta-number-card:last-child { border-bottom: 0; }
+        .meta-number-card:hover { background: rgba(15, 32, 40, 0.55); }
         .meta-number-logo {
-          width: 56px;
-          height: 56px;
+          width: 44px;
+          height: 44px;
           margin: 0;
           padding: 0;
           border: 0;
           border-radius: 999px;
-          background: transparent;
+          background: #12261c;
           cursor: pointer;
           flex: 0 0 auto;
+          overflow: hidden;
         }
         .meta-number-logo:focus-visible {
           outline: 2px solid rgba(37, 211, 102, 0.7);
@@ -3403,29 +3548,50 @@
         }
         .meta-number-col-name:hover .meta-number-name,
         .meta-number-col-name:focus-visible .meta-number-name {
-          color: #e2e8f0;
+          color: #bbf7d0;
         }
         .meta-number-photo {
-          width: 56px;
-          height: 56px;
+          width: 44px;
+          height: 44px;
           border-radius: 999px;
           object-fit: cover;
-          background: #f8fafc;
-          display: block;
+          background: #12261c;
+          color: #86efac;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: 800;
         }
-        .meta-number-photo.is-fallback {
+        .meta-number-photo.is-fallback,
+        .meta-number-photo.is-initials {
           object-fit: contain;
-          padding: 8px;
-          background: #000;
+          padding: 0;
+          background: #12261c;
+          border: 1px solid rgba(37, 211, 102, 0.18);
         }
-        .meta-number-card strong { display: none; }
-        .meta-number-card .meta-number-name { display: block; font-size: 16px; font-weight: 800; color: #f8fafc; }
-        .meta-number-card .meta-number-phone { display: block; margin-top: 2px; font-size: 13px; color: rgba(248, 250, 252, 0.78); }
+        .meta-number-card .meta-number-name {
+          display: block;
+          font-size: 14px;
+          font-weight: 650;
+          color: #f8fafc;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .meta-number-card .meta-number-phone {
+          display: block;
+          margin-top: 2px;
+          font-size: 12px;
+          color: rgba(148, 163, 184, 0.92);
+          font-variant-numeric: tabular-nums;
+        }
         .meta-number-card .meta-number-requested { display: block; margin-top: 2px; font-size: 11px; color: rgba(226, 232, 240, 0.55); }
         .meta-number-badges {
           display: flex;
           flex-wrap: wrap;
-          gap: 8px;
+          align-items: center;
+          gap: 6px;
           margin-left: auto;
           flex: 0 0 auto;
         }
@@ -3434,27 +3600,43 @@
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          min-width: 0;
           border-radius: 999px;
-          font-size: 11px;
-          font-weight: 800;
+          font-size: 10px;
+          font-weight: 700;
           letter-spacing: 0.04em;
           text-transform: uppercase;
-          padding: 7px 14px;
-          background: #2ee4a0;
-          color: #041016;
+          padding: 4px 9px;
+          border: 1px solid transparent;
         }
-        .meta-number-chip.is-ok { background: #2ee4a0; color: #041016; }
-        .meta-number-chip.is-wait { background: #fbbf24; color: #041016; }
-        .meta-number-chip.is-busy { background: #38bdf8; color: #041016; }
+        .meta-number-chip.is-ok { background: #25d366; color: #052e16; }
+        .meta-number-chip.is-idle {
+          background: transparent;
+          color: #86efac;
+          border-color: rgba(37, 211, 102, 0.35);
+        }
+        .meta-number-chip.is-wait { background: rgba(251, 191, 36, 0.14); color: #fde68a; }
+        .meta-number-chip.is-busy { background: rgba(56, 189, 248, 0.16); color: #7dd3fc; }
         .meta-number-inbox {
           display: flex;
           align-items: center;
+          gap: 8px;
+          margin-left: 4px;
+          padding-left: 10px;
+          border-left: 1px solid rgba(148, 163, 184, 0.14);
+        }
+        .meta-number-inbox-label {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(148, 163, 184, 0.82);
         }
         .meta-number-switch {
-          width: 34px;
-          height: 18px;
-          min-width: 34px;
-          max-width: 34px;
+          width: 36px;
+          height: 20px;
+          min-width: 36px;
+          max-width: 36px;
           align-self: center;
           border: 0;
           border-radius: 999px;
@@ -3469,11 +3651,11 @@
           position: absolute;
           top: 2px;
           left: 2px;
-          width: 14px;
-          height: 14px;
+          width: 16px;
+          height: 16px;
           border-radius: 50%;
           background: #e2e8f0;
-          transition: transform 0.12s ease;
+          transition: transform 0.15s ease;
         }
         .meta-number-switch.is-on {
           background: #16a34a;
@@ -3491,15 +3673,29 @@
           flex-wrap: wrap;
           gap: 8px;
           align-items: end;
-          padding-left: 70px;
+          padding: 8px 0 4px 56px;
         }
         .meta-number-activate label { display: grid; gap: 4px; font-size: 11px; color: rgba(226, 232, 240, 0.7); }
+        .meta-number-activate input {
+          width: 124px;
+          border: 1px solid rgba(148, 163, 184, 0.28);
+          border-radius: 10px;
+          background: rgba(2, 6, 23, 0.55);
+          color: #e2e8f0;
+          padding: 8px 10px;
+          font: inherit;
+          letter-spacing: 0.18em;
+        }
+        .meta-number-activate input:focus {
+          outline: none;
+          border-color: rgba(37, 211, 102, 0.55);
+        }
         .meta-number-actions { display: contents; }
         .meta-number-edit {
           min-width: 0;
-          min-height: 36px;
-          padding: 8px 14px;
-          font-size: 13px;
+          min-height: 34px;
+          padding: 6px 12px;
+          font-size: 12px;
         }
         .meta-edit-modal {
           position: fixed;
@@ -3549,10 +3745,12 @@
         @media (max-width: 900px) {
           .meta-portfolio-shell,
           .meta-portfolio-list { grid-template-columns: 1fr; }
+          .meta-portfolio-rail { border-right: 0; border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
         }
         @media (max-width: 640px) {
           .meta-portfolio-card { flex-wrap: wrap; }
           .meta-number-badges { margin-left: 0; }
+          .meta-number-inbox { margin-left: 0; padding-left: 0; border-left: 0; }
           .meta-number-activate { padding-left: 0; }
         }
         .meta-tpl-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-bottom:16px; }
@@ -20721,11 +20919,11 @@
                   </div>
                 </article>
                 <article id="meta-tp-portfolio" class="meta-lab-card meta-portfolio" hidden>
-                  <h3 class="meta-lab-card-title">Portfólio e seus números</h3>
+                  <h3 class="meta-lab-card-title">Portfólios</h3>
                   <div id="meta-tp-portfolio-list" class="meta-portfolio-shell"></div>
                   <div class="meta-portfolio-toolbar">
                     <button type="button" id="meta-tp-edit-portfolio" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit">Editar portfólio</button>
-                    <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" id="meta-tp-reset-lab" data-meta-reset-portfolio="1">Excluir tudo e recomeçar</button>
+                    <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" id="meta-tp-reset-lab" data-meta-reset-portfolio="1">Excluir e recomeçar</button>
                   </div>
                   <div id="meta-tp-numbers" class="meta-number-list" hidden></div>
                   <p id="meta-tp-numbers-empty" class="muted" hidden>Nenhum número neste portfólio ainda.</p>
@@ -35499,14 +35697,17 @@
           logoEl.classList.toggle("has-meta-fallback", Boolean(isFallback));
         };
         photoEl.onerror = () => {
-          if (!isFallback) {
-            metaTpShowPortfolioLogo(photoEl, logoEl, META_PORTFOLIO_FALLBACK_LOGO, "Meta", true);
-            return;
-          }
           photoEl.removeAttribute("src");
           photoEl.hidden = true;
           logoEl.classList.remove("has-photo", "has-meta-fallback");
         };
+        if (isFallback) {
+          photoEl.removeAttribute("src");
+          photoEl.hidden = true;
+          logoEl.classList.remove("has-photo");
+          logoEl.classList.add("has-meta-fallback");
+          return;
+        }
         photoEl.alt = alt;
         photoEl.src = src;
       }
@@ -35568,15 +35769,12 @@
               : /^https:\/\//i.test(photoUrl)
                 ? photoUrl
                 : "";
-            const photoSrc = safePhoto || resolveWabaPublicPath(META_PORTFOLIO_FALLBACK_LOGO);
-            const avatar =
-              '<img class="meta-number-photo' +
-              (safePhoto ? "" : " is-fallback") +
-              '" alt="' +
-              verified +
-              '" src="' +
-              metaTpEsc(photoSrc) +
-              '" />';
+            const photoSrc = safePhoto || "";
+            const avatar = safePhoto
+              ? '<img class="meta-number-photo" alt="' + verified + '" src="' + metaTpEsc(photoSrc) + '" />'
+              : '<span class="meta-number-photo is-initials" aria-hidden="true">' +
+                metaTpEsc(metaTpInitials(item.verifiedName || item.displayPhoneNumber || "WA")) +
+                "</span>";
             const ativo = item.uiStatus === "ativo";
             const busy = item.dispatchStatus === "em_disparo";
             const statusChip = ativo
@@ -35584,7 +35782,7 @@
               : '<span class="meta-number-chip is-wait">Pendente</span>';
             const dispatchChip = busy
               ? '<span class="meta-number-chip is-busy">Em disparo</span>'
-              : '<span class="meta-number-chip is-ok">Disponível</span>';
+              : '<span class="meta-number-chip is-idle">Disponível</span>';
             const inboxOn = item.inboxEnabled === true;
             const activate = item.canActivate
               ? '<div class="meta-number-activate">' +
@@ -35634,6 +35832,8 @@
               '<div class="meta-number-badges">' +
               statusChip +
               dispatchChip +
+              '<div class="meta-number-inbox">' +
+              '<span class="meta-number-inbox-label">Inbox</span>' +
               '<button type="button" class="meta-number-switch' +
               (inboxOn ? " is-on" : "") +
               '" role="switch" aria-checked="' +
@@ -35648,7 +35848,7 @@
               metaTpEsc(phone) +
               '" data-meta-inbox-name="' +
               metaTpEsc(requested || item.verifiedName || "") +
-              '"></button>' +
+              '"></button></div>' +
               "</div>" +
               activate +
               "</article>"
@@ -35678,7 +35878,11 @@
               (isSelected ? " is-selected" : "") +
               '" data-meta-portfolio-id="' +
               metaTpEsc(bizId === "—" ? "" : bizId) +
-              '" aria-label="Portfólio empresarial">' +
+              '" role="button" aria-pressed="' +
+              (isSelected ? "true" : "false") +
+              '" tabindex="0" aria-label="Portfólio ' +
+              metaTpEsc(name) +
+              '">' +
               '<div class="meta-portfolio-logo">' +
               '<img alt="" hidden referrerpolicy="no-referrer" />' +
               '<span aria-hidden="true">' +
@@ -35690,38 +35894,48 @@
               ">" +
               metaTpEsc(name) +
               "</h3>" +
-              "<p>ID <span" +
+              '<div class="meta-portfolio-meta">' +
+              '<p class="meta-portfolio-meta-row"><span>ID</span><span' +
               (isSelected ? ' id="meta-tp-portfolio-id"' : "") +
               ">" +
               metaTpEsc(bizId) +
               "</span></p>" +
-              "<p>Página: <span" +
+              '<p class="meta-portfolio-meta-row"><span>Página</span><span' +
               (isSelected ? ' id="meta-tp-portfolio-page"' : "") +
               ">" +
               metaTpEsc(page) +
               "</span></p>" +
-              "<p>WABA: <span" +
+              '<p class="meta-portfolio-meta-row"><span>WABA</span><span' +
               (isSelected ? ' id="meta-tp-portfolio-waba"' : "") +
               ">" +
               metaTpEsc(waba) +
-              "</span></p></div>" +
+              "</span></p></div></div>" +
               '<button type="button" class="meta-portfolio-add" data-meta-add-number="1" data-meta-business-id="' +
               metaTpEsc(bizId === "—" ? "" : bizId) +
               '" data-meta-waba-id="' +
               metaTpEsc(waba === "—" ? "" : waba) +
-              '" aria-label="Adicionar número a este portfólio">+</button>' +
+              '" title="Adicionar número a este portfólio" aria-label="Adicionar número a este portfólio">+</button>' +
               "</article>"
             );
           })
           .join("");
+        const selectedName = selected ? metaTpPortfolioTitle(selected) : "Portfólio";
+        const selectedCount = selectedNums.length;
         listEl.innerHTML =
           '<div class="meta-portfolio-rail">' +
           rail +
           "</div>" +
           '<div class="meta-portfolio-numbers">' +
+          '<header class="meta-portfolio-numbers-head">' +
+          "<div><p>Números deste portfólio</p><h4>" +
+          metaTpEsc(selectedName) +
+          "</h4></div>" +
+          '<span class="meta-portfolio-numbers-count">' +
+          selectedCount +
+          "</span></header>" +
           (selectedNums.length
             ? '<div class="meta-number-list">' + metaTpNumberCardsHtml(selectedNums) + "</div>"
-            : '<p class="muted">Nenhum número neste portfólio ainda.</p>') +
+            : '<p class="meta-portfolio-numbers-empty">Nenhum número neste portfólio.<span>Use o + no card à esquerda para adicionar um número.</span></p>') +
           "</div>";
         Array.prototype.forEach.call(listEl.querySelectorAll(".meta-portfolio-card"), function (cardEl, index) {
           const item = portfolios[index];
@@ -35738,7 +35952,11 @@
               : "";
           if (photoEl && logoEl) {
             if (safePhoto) metaTpShowPortfolioLogo(photoEl, logoEl, safePhoto, name, false);
-            else metaTpShowPortfolioLogo(photoEl, logoEl, META_PORTFOLIO_FALLBACK_LOGO, "Meta", true);
+            else {
+              photoEl.removeAttribute("src");
+              photoEl.hidden = true;
+              logoEl.classList.remove("has-photo", "has-meta-fallback");
+            }
           }
         });
       }
@@ -36341,6 +36559,17 @@
             metaTpRenderPortfolio({ portfolios: metaTpSession.portfolios });
           }
         }
+      });
+
+      window.addEventListener("keydown", function (event) {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const target = event.target;
+        if (!target || !target.closest) return;
+        if (target.closest(".meta-portfolio-add")) return;
+        const card = target.closest(".meta-portfolio-card");
+        if (!card) return;
+        event.preventDefault();
+        card.click();
       });
 
       window.addEventListener("input", function (event) {

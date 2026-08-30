@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-30 16:52 — UI profissional do portfólio no Laboratório
+- Painel único (rail + números), seleção com barra verde, pills distintas, iniciais no lugar do logo Meta
+- LOG: `doc/LOG-2026-08-30__165200__laboratorio-ui-pro.md`
+- Marker: `DEPLOY-2026-08-30-170000-master-laboratorio-ui-pro`
+
 ## 2026-08-30 16:40 — Layout do Laboratório igual ao desenho
 - Portfólios à esquerda, números do selecionado à direita, `+` adiciona número naquele portfólio
 - LOG: `doc/LOG-2026-08-30__164000__laboratorio-layout-desenho.md`
