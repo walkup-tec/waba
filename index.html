@@ -55307,38 +55307,6 @@
         bindRegisterInstanceModalActions();
         if (registerWizardStep === 1) nameInput.focus();
       }
-        const nameInput = document.getElementById("register-name-input");
-        const tokenInput = document.getElementById("register-token-input");
-        const numberInput = document.getElementById("register-number-input");
-        const qrPreview = document.getElementById("register-qrcode-preview");
-        const refreshQrBtn = document.getElementById("register-refresh-qrcode-btn");
-        const statusEl = document.getElementById("register-connect-status");
-        if (!overlay || !nameInput || !numberInput || !qrPreview) return;
-        const safeNumber = String(number || "").trim();
-        rememberRegisterConnectedNumber(safeNumber === "—" ? "" : safeNumber);
-        const showRefreshQr = options?.showRefreshQr !== false;
-        const startAtQr = Boolean(instanceName && options?.showRefreshQr !== false);
-        nameInput.value = instanceName || "";
-        if (tokenInput) tokenInput.value = generateTokenLike();
-        numberInput.value = safeNumber === "—" ? "" : safeNumber;
-        qrPreview.classList.remove("open");
-        qrPreview.innerHTML = "";
-        if (statusEl) {
-          statusEl.className = "connect-status";
-          statusEl.innerHTML = "";
-        }
-        if (refreshQrBtn) {
-          refreshQrBtn.hidden = true;
-        }
-        resetRegisterInboundPanel();
-        setRegisterWizardStep(startAtQr && instanceName ? 2 : 1, { force: true });
-        if (instanceName) beginRegisterWizardHide(instanceName);
-        overlay.classList.add("open");
-        overlay.setAttribute("aria-hidden", "false");
-        setRegisterWizardLock(true);
-        bindRegisterInstanceModalActions();
-        if (registerWizardStep === 1) nameInput.focus();
-      }
 
       function closeRegisterModal() {
         const overlay = document.getElementById("register-instance-overlay");
