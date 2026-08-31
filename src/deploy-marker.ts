@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-31-202500-protecao-extra-qr";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-31-213200-asaas-pix-qr124e";
