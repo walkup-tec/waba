@@ -19132,7 +19132,7 @@
 
               <div style="margin-top: 14px" class="muted">
                 Lista (top 100) com o status atual das instâncias.
-                Para disparar em campanha, use <strong>Proxy Campanha</strong> — o QRCode normal não liga a Proxy Brasil.
+                Para disparar em campanha, use <strong>Proteção</strong> — o QRCode normal não liga a Proxy Brasil.
               </div>
 
               <div class="instances-toolbar">
@@ -51273,7 +51273,7 @@
                       const title = !ok
                         ? "Desconectada — Evolution confirmou close"
                         : needsProxy
-                          ? "Conectada sem Proxy Brasil — use «Proxy Campanha» em Instâncias e escaneie o QR. Não dispara até a Proxy estar ligada."
+                          ? "Conectada sem Proxy Brasil — use «Proteção» em Instâncias e escaneie o QR. Não dispara até a Proxy estar ligada."
                           : "Instância conectada com Proxy Brasil (ativa na campanha)";
                       return `<span class="${cls}" title="${title}">${safe || "—"}</span>`;
                     });
@@ -51292,7 +51292,7 @@
                           ? "A substituição pelos conectados com Proxy Brasil é automática (o vermelho sai da campanha)."
                           : spareConnectedForSwap > 0
                             ? "Há número conectado com Proxy Brasil livre. Use «+ Instâncias» para substituir o vermelho (a campanha não passa do total configurado)."
-                            : "Não há instância livre com Proxy Brasil. Em Instâncias, use «Proxy Campanha», escaneie o QR e depois «+ Instâncias»."
+                            : "Não há instância livre com Proxy Brasil. Em Instâncias, use «Proteção», escaneie o QR e depois «+ Instâncias»."
                     }</div>`;
                   }
                   if (needsMoreInstancesForMinimum) {
@@ -51304,7 +51304,7 @@
                           ? "A substituição por um conectado com Proxy Brasil é automática (o vermelho sai da campanha)."
                           : spareConnectedForSwap > 0
                             ? "Há número conectado com Proxy Brasil livre. Use «+ Instâncias» para substituir o vermelho."
-                            : "Não há instância livre com Proxy Brasil. Em Instâncias, use «Proxy Campanha», escaneie o QR e depois «+ Instâncias»."
+                            : "Não há instância livre com Proxy Brasil. Em Instâncias, use «Proteção», escaneie o QR e depois «+ Instâncias»."
                     }</div>`;
                   }
       
@@ -54566,7 +54566,7 @@
                         needsProxyCampanha
                           ? "Conectada sem Proxy Brasil — gera QR para re-parear já com proxy. A sessão atual será encerrada."
                           : "Gera QR com Proxy Brasil para disparo de campanha. Se o número já estiver conectado, a sessão atual será encerrada."
-                      }">Proxy Campanha</button>`
+                      }">Proteção</button>`
                     : ""
                 }
                 <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="${
