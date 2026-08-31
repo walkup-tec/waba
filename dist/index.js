@@ -8680,14 +8680,19 @@ async function runRegistrarQrcode(input) {
             /* */
         }
     }
+    const qrSuccessMessage = campaignProxy
+        ? createWarning
+            ? "QRCode com Proxy Campanha gerado para a instância existente. Escaneie para parear já com Proxy Brasil."
+            : "QRCode gerado com Proxy Campanha. Escaneie para parear já com Proxy Brasil."
+        : createWarning
+            ? "QRCode gerado com sucesso para a instância existente."
+            : "Dados salvos e QRCode gerado com sucesso.";
     // Com número, o fluxo Device Cloud precisa do pairingCode — não retornar só com imagem QR.
     if ((qrFromCreate || pairingFromCreate) && (pairingFromCreate || !number)) {
         await rememberLifecycleAfterQr(instanceWasNew);
         return {
             ok: true,
-            message: createWarning
-                ? "QRCode gerado com sucesso para a instância existente."
-                : "Dados salvos e QRCode gerado com sucesso.",
+            message: qrSuccessMessage,
             warning: createWarning,
             qrCode: qrFromCreate || "",
             pairingCode: pairingFromCreate,
@@ -8713,9 +8718,7 @@ async function runRegistrarQrcode(input) {
         await rememberLifecycleAfterQr(instanceWasNew);
         return {
             ok: true,
-            message: createWarning
-                ? "QRCode gerado com sucesso para a instância existente."
-                : "Dados salvos e QRCode gerado com sucesso.",
+            message: qrSuccessMessage,
             warning: createWarning,
             qrCode: qrFetch.qrCode || "",
             pairingCode: qrFetch.pairingCode || null,

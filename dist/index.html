@@ -10660,6 +10660,31 @@
         border-color: rgba(110, 255, 200, 0.6);
       }
 
+      .instance-action-btn.btn-proxy-campanha.enabled {
+        background: rgba(180, 83, 9, 0.82);
+        border-color: rgba(251, 191, 36, 0.55);
+        color: #fef3c7;
+      }
+
+      .instance-action-btn.btn-proxy-campanha.enabled.btn-proxy-campanha--needed {
+        box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.55);
+      }
+
+      .register-campaign-proxy-banner {
+        margin-top: clamp(8px, 2vw, 12px);
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(251, 191, 36, 0.5);
+        background: rgba(180, 83, 9, 0.28);
+        color: #fef3c7;
+        font-size: var(--reg-text-sm, 0.82rem);
+        line-height: 1.45;
+      }
+
+      .register-wizard-modal.register-campaign-proxy .confirm-title {
+        color: #fde68a;
+      }
+
       .instance-action-btn.btn-delete.enabled {
         background: rgba(153, 27, 27, 0.65);
         border-color: rgba(251, 113, 133, 0.45);
@@ -19107,6 +19132,7 @@
 
               <div style="margin-top: 14px" class="muted">
                 Lista (top 100) com o status atual das instâncias.
+                Para disparar em campanha, use <strong>Proxy Campanha</strong> — o QRCode normal não liga a Proxy Brasil.
               </div>
 
               <div class="instances-toolbar">
@@ -23362,6 +23388,9 @@
           <div class="reg-wizard-pane" data-pane="2">
             <h3 class="reg-wizard-pane-title">Passo 2 — Escanear QR Code</h3>
             <p class="reg-wizard-pane-lead">No celular do número: WhatsApp → Aparelhos conectados → Conectar aparelho.</p>
+            <div id="register-campaign-proxy-banner" class="register-campaign-proxy-banner" hidden>
+              Proxy Campanha: este QR liga a Proxy Brasil. O WhatsApp atual será encerrado — escaneie de novo no celular. Sem isso, a campanha não dispara neste número.
+            </div>
             <div id="register-qrcode-preview" class="qrcode-preview"></div>
             <div id="register-connect-status" class="connect-status"></div>
           </div>
@@ -45943,6 +45972,7 @@
       let registerWizardStep = 1;
       let registerWizardHideInstanceName = "";
       let registerWizardValidationComplete = false;
+      let registerCampaignProxyMode = false;
 
       function setRegisterWizardLock(active) {
         try {
@@ -51243,7 +51273,7 @@
                       const title = !ok
                         ? "Desconectada — Evolution confirmou close"
                         : needsProxy
-                          ? "Conectada sem Proxy Brasil — reconecte no Aquecedor com Proxy Campanha. Não dispara até a Proxy estar ligada."
+                          ? "Conectada sem Proxy Brasil — use «Proxy Campanha» em Instâncias e escaneie o QR. Não dispara até a Proxy estar ligada."
                           : "Instância conectada com Proxy Brasil (ativa na campanha)";
                       return `<span class="${cls}" title="${title}">${safe || "—"}</span>`;
                     });
@@ -51262,7 +51292,7 @@
                           ? "A substituição pelos conectados com Proxy Brasil é automática (o vermelho sai da campanha)."
                           : spareConnectedForSwap > 0
                             ? "Há número conectado com Proxy Brasil livre. Use «+ Instâncias» para substituir o vermelho (a campanha não passa do total configurado)."
-                            : "Não há instância livre com Proxy Brasil. Conecte um número no Aquecedor com Proxy Campanha e use «+ Instâncias»."
+                            : "Não há instância livre com Proxy Brasil. Em Instâncias, use «Proxy Campanha», escaneie o QR e depois «+ Instâncias»."
                     }</div>`;
                   }
                   if (needsMoreInstancesForMinimum) {
@@ -51274,7 +51304,7 @@
                           ? "A substituição por um conectado com Proxy Brasil é automática (o vermelho sai da campanha)."
                           : spareConnectedForSwap > 0
                             ? "Há número conectado com Proxy Brasil livre. Use «+ Instâncias» para substituir o vermelho."
-                            : "Não há instância livre com Proxy Brasil. Conecte um número no Aquecedor com Proxy Campanha e use «+ Instâncias»."
+                            : "Não há instância livre com Proxy Brasil. Em Instâncias, use «Proxy Campanha», escaneie o QR e depois «+ Instâncias»."
                     }</div>`;
                   }
       
@@ -54309,6 +54339,30 @@
         }, { once: true });
       }
 
+      function instanceNeedsCampaignProxyReconnect(instanceName) {
+        const needle = String(instanceName || "").trim().toLowerCase();
+        if (!needle) return false;
+        const campaigns = Array.isArray(disparosCampaignItemsCache)
+          ? disparosCampaignItemsCache
+          : [];
+        for (const item of campaigns) {
+          const status = String(item?.status || "").trim().toLowerCase();
+          if (status !== "running" && status !== "paused") continue;
+          const tags = Array.isArray(item?.disparadorInstances)
+            ? item.disparadorInstances
+            : [];
+          for (const tag of tags) {
+            const name = String(tag?.instanceName || "").trim().toLowerCase();
+            if (name !== needle) continue;
+            const connected = tag?.connected === true;
+            const proxyOn = tag?.proxyEnabled === true;
+            const proxyUnknown = tag?.proxyEnabled == null;
+            if (connected && !proxyUnknown && !proxyOn) return true;
+          }
+        }
+        return false;
+      }
+
       function renderInstancesList() {
         const container = document.getElementById("instances-list");
         if (!container) return;
@@ -54432,6 +54486,14 @@
             : isDisconnected || isWaRestricted
               ? "instance-action-btn btn-qrcode enabled"
               : "instance-action-btn btn-qrcode disabled";
+          const needsProxyCampanha = instanceNeedsCampaignProxyReconnect(inst.instanceName);
+          const showProxyCampanha =
+            !reconnectLocked && (usage.useDisparador || needsProxyCampanha);
+          const proxyCampanhaClass = showProxyCampanha
+            ? `instance-action-btn btn-proxy-campanha enabled${
+                needsProxyCampanha ? " btn-proxy-campanha--needed" : ""
+              }`
+            : "instance-action-btn btn-proxy-campanha disabled";
           const deleteClass = actionsLocked
             ? "instance-action-btn btn-delete disabled"
             : "instance-action-btn btn-delete enabled";
@@ -54496,6 +54558,17 @@
                 }" data-number="${inst.originalNumber || ""}" ${
                   reconnectLocked || !(isDisconnected || isWaRestricted) ? "disabled" : ""
                 }>QRCode</button>
+                ${
+                  showProxyCampanha
+                    ? `<button class="${proxyCampanhaClass}" type="button" data-action="proxy-campanha" data-instance="${inst.instanceName}" data-enabled="1" data-connected="${
+                        !isDisconnected ? "1" : "0"
+                      }" data-number="${inst.originalNumber || ""}" title="${
+                        needsProxyCampanha
+                          ? "Conectada sem Proxy Brasil — gera QR para re-parear já com proxy. A sessão atual será encerrada."
+                          : "Gera QR com Proxy Brasil para disparo de campanha. Se o número já estiver conectado, a sessão atual será encerrada."
+                      }">Proxy Campanha</button>`
+                    : ""
+                }
                 <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="${
                   actionsLocked ? "0" : "1"
                 }" ${actionsLocked ? "disabled" : ""}>
@@ -55147,9 +55220,93 @@
         }
       }
 
+      function applyRegisterCampaignProxyUi() {
+        const overlay = document.getElementById("register-instance-overlay");
+        const modal = overlay?.querySelector(".register-wizard-modal");
+        const title = overlay?.querySelector(".confirm-title");
+        const subtitle = overlay?.querySelector(".reg-wizard-subtitle");
+        const pane2Title = overlay?.querySelector(
+          '.reg-wizard-pane[data-pane="2"] .reg-wizard-pane-title'
+        );
+        const pane2Lead = overlay?.querySelector(
+          '.reg-wizard-pane[data-pane="2"] .reg-wizard-pane-lead'
+        );
+        const banner = document.getElementById("register-campaign-proxy-banner");
+        const genBtn = document.getElementById("register-qrcode-btn");
+        if (registerCampaignProxyMode) {
+          modal?.classList.add("register-campaign-proxy");
+          if (title) title.textContent = "Proxy Campanha";
+          if (subtitle) {
+            subtitle.textContent =
+              "Este QR liga a Proxy Brasil. O WhatsApp atual será encerrado; escaneie de novo no celular.";
+          }
+          if (pane2Title) pane2Title.textContent = "Passo 2 — Escanear QR com Proxy Brasil";
+          if (pane2Lead) {
+            pane2Lead.textContent =
+              "No celular: WhatsApp → Aparelhos conectados → Conectar aparelho. Depois a campanha poderá disparar neste número.";
+          }
+          if (banner) banner.hidden = false;
+          if (genBtn) genBtn.textContent = "Gerar QR com proxy";
+        } else {
+          modal?.classList.remove("register-campaign-proxy");
+          if (title) title.textContent = "Conectar instância WhatsApp";
+          if (subtitle) {
+            subtitle.textContent =
+              "Siga os passos — o conteúdo se ajusta conforme cada etapa avança.";
+          }
+          if (pane2Title) pane2Title.textContent = "Passo 2 — Escanear QR Code";
+          if (pane2Lead) {
+            pane2Lead.textContent =
+              "No celular do número: WhatsApp → Aparelhos conectados → Conectar aparelho.";
+          }
+          if (banner) banner.hidden = true;
+          if (genBtn) genBtn.textContent = "Gerar QRCode";
+        }
+      }
+
+      function buildRegistrarQrcodePayload(fields) {
+        const payload = { ...(fields || {}) };
+        if (registerCampaignProxyMode) payload.campaignProxy = true;
+        return payload;
+      }
+
       function openRegisterModal(instanceName, number, options = {}) {
         registerModalDefaultName = instanceName || "";
+        registerCampaignProxyMode = options?.campaignProxy === true;
         const overlay = document.getElementById("register-instance-overlay");
+        const nameInput = document.getElementById("register-name-input");
+        const tokenInput = document.getElementById("register-token-input");
+        const numberInput = document.getElementById("register-number-input");
+        const qrPreview = document.getElementById("register-qrcode-preview");
+        const refreshQrBtn = document.getElementById("register-refresh-qrcode-btn");
+        const statusEl = document.getElementById("register-connect-status");
+        if (!overlay || !nameInput || !numberInput || !qrPreview) return;
+        const safeNumber = String(number || "").trim();
+        rememberRegisterConnectedNumber(safeNumber === "—" ? "" : safeNumber);
+        const showRefreshQr = options?.showRefreshQr !== false;
+        const startAtQr = Boolean(instanceName && options?.showRefreshQr !== false);
+        nameInput.value = instanceName || "";
+        if (tokenInput) tokenInput.value = generateTokenLike();
+        numberInput.value = safeNumber === "—" ? "" : safeNumber;
+        qrPreview.classList.remove("open");
+        qrPreview.innerHTML = "";
+        if (statusEl) {
+          statusEl.className = "connect-status";
+          statusEl.innerHTML = "";
+        }
+        if (refreshQrBtn) {
+          refreshQrBtn.hidden = true;
+        }
+        resetRegisterInboundPanel();
+        applyRegisterCampaignProxyUi();
+        setRegisterWizardStep(startAtQr && instanceName ? 2 : 1, { force: true });
+        if (instanceName) beginRegisterWizardHide(instanceName);
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        setRegisterWizardLock(true);
+        bindRegisterInstanceModalActions();
+        if (registerWizardStep === 1) nameInput.focus();
+      }
         const nameInput = document.getElementById("register-name-input");
         const tokenInput = document.getElementById("register-token-input");
         const numberInput = document.getElementById("register-number-input");
@@ -55206,6 +55363,8 @@
         registerConnectedInstanceNumber = "";
         registerInboundValidationId = "";
         registerWizardStep = 1;
+        registerCampaignProxyMode = false;
+        applyRegisterCampaignProxyUi();
         const hadHiddenInstance = Boolean(registerWizardHideInstanceName);
         const revealOnClose = registerWizardValidationComplete;
         registerWizardHideInstanceName = "";
@@ -56323,19 +56482,24 @@
       }
 
       async function submitAndPollRegistrarQrcode(body, maxWaitMs = 180000) {
+        const payload = body && typeof body === "object" ? body : {};
+        const wantsCampaignProxy =
+          payload.campaignProxy === true ||
+          String(payload.campaignProxy || "").trim() === "1";
         const response = await fetchWithTimeout(
           "/instancias/registrar-qrcode",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "same-origin",
-            body: JSON.stringify(body),
+            body: JSON.stringify(payload),
           },
           45000,
         );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
           const alreadyConnected =
+            !wantsCampaignProxy &&
             response.status === 409 &&
             /j[aá]\s+est[aá]\s+conectada/i.test(String(data?.error || data?.detail || ""));
           if (alreadyConnected) {
@@ -56469,12 +56633,14 @@
             '<span class="muted">Gerando novo QRCode de conexão...</span>';
           setRegisterConnectStatus("loading", "Gerando QRCode…");
 
-          const data = await submitAndPollRegistrarQrcode({
-            name: normalizedName,
-            token,
-            number,
-          });
-          if (data?.alreadyConnected) {
+          const data = await submitAndPollRegistrarQrcode(
+            buildRegistrarQrcodePayload({
+              name: normalizedName,
+              token,
+              number,
+            }),
+          );
+          if (data?.alreadyConnected && !registerCampaignProxyMode) {
             const okMsg =
               "WhatsApp já está conectado no sistema WABA - Drax. Atualizando a lista…";
             qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(okMsg)}</span>`;
@@ -56492,7 +56658,12 @@
           } else {
             const imgSrc = resolveQrImageSrcFromPayload(data);
             qrPreview.innerHTML = `<img src="${escapeAdminHtml(imgSrc)}" alt="QRCode de conexão" />`;
-            setRegisterConnectStatus("loading", "Escaneie o QR Code no WhatsApp do celular.");
+            setRegisterConnectStatus(
+              "loading",
+              registerCampaignProxyMode
+                ? "Escaneie o QR no WhatsApp. A Proxy Brasil ficará ligada neste número."
+                : "Escaneie o QR Code no WhatsApp do celular.",
+            );
           }
 
           startRegisterConnectPolling(normalizedName);
@@ -56509,10 +56680,32 @@
         }
       }
 
+      async function startProxyCampanhaQr(instanceName, number, isConnected) {
+        const name = String(instanceName || "").trim();
+        if (!name) return;
+        if (isConnected) {
+          const ok = await openAppConfirm({
+            title: "Reconectar com Proxy Campanha",
+            text: "A sessão atual do WhatsApp será encerrada. Escaneie o QR no celular para parear já com Proxy Brasil. Sem isso, a campanha não dispara neste número.",
+            confirmLabel: "Gerar QR com proxy",
+            cancelLabel: "Cancelar",
+            danger: true,
+          });
+          if (!ok) return;
+        }
+        openRegisterModal(name, number, { campaignProxy: true });
+        await refreshQrCodeInRegisterModal();
+      }
+
       async function callInstanceAction(action, instanceName, number = "") {
         try {
           if (!instanceName) return;
           // QR/Atualizar: nunca bloquear por tag Restrição (connecting) — usuário precisa do QR.
+
+          if (action === "proxy-campanha") {
+            await startProxyCampanhaQr(instanceName, number, false);
+            return;
+          }
 
           if (action === "qrcode" || action === "refresh") {
             openRegisterModal(instanceName, number);
@@ -56625,7 +56818,7 @@
             );
           }
         );
-        if (duplicatedActive) {
+        if (duplicatedActive && !registerCampaignProxyMode) {
           showToast(
             "Já existe uma instância ativa/conectada com este nome. Use outro nome.",
             "warning"
@@ -56643,13 +56836,15 @@
         actionBtn.setAttribute("disabled", "true");
 
         try {
-          const data = await submitAndPollRegistrarQrcode({
-            name: normalizedName,
-            token,
-            number,
-          });
+          const data = await submitAndPollRegistrarQrcode(
+            buildRegistrarQrcodePayload({
+              name: normalizedName,
+              token,
+              number,
+            }),
+          );
 
-          if (data?.alreadyConnected) {
+          if (data?.alreadyConnected && !registerCampaignProxyMode) {
             const okMsg =
               "WhatsApp já está conectado no sistema WABA - Drax. Atualizando a lista…";
             qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(okMsg)}</span>`;
@@ -56671,7 +56866,12 @@
           }
 
           startRegisterConnectPolling(normalizedName);
-          setRegisterConnectStatus("loading", "Escaneie o QR Code no WhatsApp do celular.");
+          setRegisterConnectStatus(
+            "loading",
+            registerCampaignProxyMode
+              ? "Escaneie o QR no WhatsApp. A Proxy Brasil ficará ligada neste número."
+              : "Escaneie o QR Code no WhatsApp do celular.",
+          );
           beginRegisterWizardHide(normalizedName);
         } catch (error) {
           const errMsg = resolveRegistrarQrcodeErrorMessage(error);
@@ -56679,7 +56879,9 @@
           setRegisterConnectStatus("error", errMsg);
           qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
         } finally {
-          actionBtn.textContent = "Gerar QRCode";
+          actionBtn.textContent = registerCampaignProxyMode
+            ? "Gerar QR com proxy"
+            : "Gerar QRCode";
           actionBtn.classList.remove("disabled");
           actionBtn.removeAttribute("disabled");
         }
@@ -59047,6 +59249,14 @@
         const number = btn.getAttribute("data-number") || "";
         if (action === "refresh") {
           void callInstanceAction("refresh", instanceName, number);
+          return;
+        }
+        if (action === "proxy-campanha") {
+          void startProxyCampanhaQr(
+            instanceName,
+            number,
+            btn.getAttribute("data-connected") === "1",
+          );
           return;
         }
         if (action === "safe-number") {
