@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { crc16CcittFalse, isValidPixEmvPayload, normalizePixEmvPayload } from "./pix-emv";
+import { crc16CcittFalse, isValidPixEmvPayload, looksLikePixEmvPayload, normalizePixEmvPayload } from "./pix-emv";
 import { formatDueDateInBrazil, isPixQrExpired, parseAsaasDateTimeToIso, stripPixQrEncodedImage } from "./asaas-pix-qr";
 
 describe("pix-emv", () => {
@@ -19,10 +19,17 @@ describe("pix-emv", () => {
     assert.equal(isValidPixEmvPayload("nao-e-pix"), false);
   });
 
-  it("remove quebras de linha sem alterar o EMV", () => {
+  it("remove quebras de linha sem alterar espaços do nome do recebedor", () => {
     const compact =
       "00020101021226730014br.gov.bcb.pix2551pix-h.asaas.com/pixqrcode/cobv/pay_76575613967995145204000053039865802BR5905ASAAS6009Joinville61088922827162070503***63045E7A";
     assert.equal(normalizePixEmvPayload(`${compact}\n`), compact);
+  });
+
+  it("aceita copia e cola Asaas com espaço no nome (não exige CRC local)", () => {
+    const payload =
+      "00020126580014br.gov.bcb.pix0136a9fe43bc-164d-44d1-91c2-2f9b4d6956e95204000053039865802BR5925Joao da Silva6009Joinville62290525JOAOSILVA00000055ASA6304E62B";
+    assert.equal(normalizePixEmvPayload(payload).includes("Joao da Silva"), true);
+    assert.equal(looksLikePixEmvPayload(payload), true);
   });
 });
 

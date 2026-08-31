@@ -1,5 +1,5 @@
 import { parseAsaasDateTimeToIso, stripPixQrEncodedImage } from "./asaas-pix-qr";
-import { isValidPixEmvPayload, normalizePixEmvPayload } from "./pix-emv";
+import { looksLikePixEmvPayload, normalizePixEmvPayload } from "./pix-emv";
 
 const DEFAULT_ASAAS_API_BASE_URL = "https://api-sandbox.asaas.com/v3";
 const ASAAS_USER_AGENT = "WABA-Drax/1.0";
@@ -322,17 +322,17 @@ export const fetchAsaasPaymentPixQrCode = async (paymentId: string): Promise<Asa
     if (delayMs > 0) await wait(delayMs);
     try {
       const pix = normalizeFetchedPixQrCode(await getAsaasPixQrCode(normalized));
-      if (isValidPixEmvPayload(String(pix.payload ?? ""))) {
+      if (looksLikePixEmvPayload(String(pix.payload ?? ""))) {
         return pix;
       }
-      lastError = "O Asaas devolveu um copia e cola PIX inválido (CRC/EMV).";
+      lastError = "O Asaas ainda não devolveu um copia e cola PIX utilizável.";
     } catch (error) {
       lastError = error instanceof Error ? error.message : "Falha ao obter QR Code PIX no Asaas.";
     }
   }
 
   throw new Error(
-    `${lastError} Gere um novo QR ou cadastre uma chave Pix ACTIVE no painel Asaas. Bancos como Inter recusam QR parceiro com o código QR124E.`,
+    `${lastError} Tente Gerar PIX de novo. Se persistir, abra a fatura Asaas ou cadastre uma chave Pix ACTIVE no painel.`,
   );
 };
 

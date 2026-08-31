@@ -17,7 +17,7 @@ import {
   updateAsaasPaymentDueDate,
 } from "./asaas.client";
 import { formatDueDateInBrazil, isPixQrExpired } from "./asaas-pix-qr";
-import { isValidPixEmvPayload } from "./pix-emv";
+import { looksLikePixEmvPayload } from "./pix-emv";
 import { formatBrazilMobileForAsaas } from "./phone";
 import { WabaDisparosBonusSettlementService } from "./waba-disparos-bonus-settlement.service";
 import { WabaFinanceiroSplitService } from "./waba-financeiro-split.service";
@@ -417,7 +417,7 @@ export class WabaBillingService {
     if (order.status !== "pending_payment") return false;
     if (force) return true;
     const payload = String(order.pixCopyPaste ?? "");
-    if (!isValidPixEmvPayload(payload)) return true;
+    if (!looksLikePixEmvPayload(payload)) return true;
     if (isPixQrExpired(order.pixExpiresAt)) return true;
     return false;
   }

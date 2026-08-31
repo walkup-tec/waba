@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isValidPixEmvPayload = exports.normalizePixEmvPayload = exports.crc16CcittFalse = void 0;
+exports.isValidPixEmvPayload = exports.looksLikePixEmvPayload = exports.normalizePixEmvPayload = exports.crc16CcittFalse = void 0;
 /** CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF) used by BR Code / PIX EMV. */
 const crc16CcittFalse = (value) => {
     let crc = 0xffff;
@@ -13,11 +13,13 @@ const crc16CcittFalse = (value) => {
     return crc.toString(16).toUpperCase().padStart(4, "0");
 };
 exports.crc16CcittFalse = crc16CcittFalse;
+/** Só remove quebra de linha nas bordas. Espaços no nome do recebedor (EMV 59) fazem parte do CRC. */
 const normalizePixEmvPayload = (payload) => String(payload ?? "")
-    .replace(/\s+/g, "")
+    .replace(/^\uFEFF/, "")
+    .replace(/[\r\n\t]+/g, "")
     .trim();
 exports.normalizePixEmvPayload = normalizePixEmvPayload;
-const isValidPixEmvPayload = (payload) => {
+const looksLikePixEmvPayload = (payload) => {
     const raw = (0, exports.normalizePixEmvPayload)(payload);
     if (raw.length < 20)
         return false;
@@ -25,11 +27,15 @@ const isValidPixEmvPayload = (payload) => {
         return false;
     if (!raw.toLowerCase().includes("br.gov.bcb.pix"))
         return false;
-    const crcTag = raw.lastIndexOf("6304");
-    if (crcTag < 0 || raw.length < crcTag + 8)
+    return /6304[0-9A-Fa-f]{4}$/.test(raw);
+};
+exports.looksLikePixEmvPayload = looksLikePixEmvPayload;
+const isValidPixEmvPayload = (payload) => {
+    const raw = (0, exports.normalizePixEmvPayload)(payload);
+    if (!(0, exports.looksLikePixEmvPayload)(raw))
         return false;
-    const computed = (0, exports.crc16CcittFalse)(raw.slice(0, crcTag + 4));
-    const expected = raw.slice(crcTag + 4, crcTag + 8).toUpperCase();
+    const computed = (0, exports.crc16CcittFalse)(raw.slice(0, -4));
+    const expected = raw.slice(-4).toUpperCase();
     return computed === expected;
 };
 exports.isValidPixEmvPayload = isValidPixEmvPayload;

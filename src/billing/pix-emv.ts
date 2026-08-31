@@ -10,19 +10,25 @@ export const crc16CcittFalse = (value: string): string => {
   return crc.toString(16).toUpperCase().padStart(4, "0");
 };
 
+/** Só remove quebra de linha nas bordas. Espaços no nome do recebedor (EMV 59) fazem parte do CRC. */
 export const normalizePixEmvPayload = (payload: string): string =>
   String(payload ?? "")
-    .replace(/\s+/g, "")
+    .replace(/^\uFEFF/, "")
+    .replace(/[\r\n\t]+/g, "")
     .trim();
 
-export const isValidPixEmvPayload = (payload: string): boolean => {
+export const looksLikePixEmvPayload = (payload: string): boolean => {
   const raw = normalizePixEmvPayload(payload);
   if (raw.length < 20) return false;
   if (!raw.startsWith("000201")) return false;
   if (!raw.toLowerCase().includes("br.gov.bcb.pix")) return false;
-  const crcTag = raw.lastIndexOf("6304");
-  if (crcTag < 0 || raw.length < crcTag + 8) return false;
-  const computed = crc16CcittFalse(raw.slice(0, crcTag + 4));
-  const expected = raw.slice(crcTag + 4, crcTag + 8).toUpperCase();
+  return /6304[0-9A-Fa-f]{4}$/.test(raw);
+};
+
+export const isValidPixEmvPayload = (payload: string): boolean => {
+  const raw = normalizePixEmvPayload(payload);
+  if (!looksLikePixEmvPayload(raw)) return false;
+  const computed = crc16CcittFalse(raw.slice(0, -4));
+  const expected = raw.slice(-4).toUpperCase();
   return computed === expected;
 };

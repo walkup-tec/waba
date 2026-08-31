@@ -292,7 +292,7 @@ class WabaBillingService {
         if (force)
             return true;
         const payload = String(order.pixCopyPaste ?? "");
-        if (!(0, pix_emv_1.isValidPixEmvPayload)(payload))
+        if (!(0, pix_emv_1.looksLikePixEmvPayload)(payload))
             return true;
         if ((0, asaas_pix_qr_1.isPixQrExpired)(order.pixExpiresAt))
             return true;
