@@ -177,6 +177,25 @@ export const registerWabaBillingRoutes = (app: Express) => {
     }
   });
 
+  app.post("/billing/disparos/orders/:orderId/refresh-pix", async (req, res) => {
+    try {
+      const current = billingService.getOrderStatus(req.params.orderId);
+      if (!current) return res.status(404).json({ error: "Pedido não encontrado." });
+      if (current.status !== "pending_payment") {
+        return res.status(200).json(current);
+      }
+      const refreshed = await billingService.refreshOrderPixQr(req.params.orderId);
+      return res.status(200).json(refreshed ?? current);
+    } catch (error) {
+      return res.status(400).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível gerar um novo QR Code PIX. Tente abrir a fatura Asaas.",
+      });
+    }
+  });
+
   app.get("/billing/alternativa-numbers/config", (_req, res) => {
     const purchaseEnabled = isAlternativaNumbersPurchaseEnabled();
     return res.status(200).json({

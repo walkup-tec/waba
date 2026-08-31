@@ -1,4 +1,9 @@
+import { parseAsaasDateTimeToIso, stripPixQrEncodedImage } from "./asaas-pix-qr";
+import { isValidPixEmvPayload, normalizePixEmvPayload } from "./pix-emv";
+
 const DEFAULT_ASAAS_API_BASE_URL = "https://api-sandbox.asaas.com/v3";
+const ASAAS_USER_AGENT = "WABA-Drax/1.0";
+const PIX_QR_RETRY_DELAYS_MS = [0, 400, 800, 1600, 2400];
 
 const resolveAsaasApiBaseUrl = (): string =>
   String(process.env.ASAAS_API_BASE_URL ?? DEFAULT_ASAAS_API_BASE_URL).trim().replace(/\/$/, "");
@@ -57,7 +62,11 @@ export const probeAsaasPaymentApi = async (): Promise<AsaasPaymentApiProbe> => {
 
   const response = await fetch(`${resolveAsaasApiBaseUrl()}/finance/balance`, {
     method: "GET",
-    headers: { access_token: resolveAsaasApiKey() },
+    headers: {
+      Accept: "application/json",
+      "User-Agent": ASAAS_USER_AGENT,
+      access_token: resolveAsaasApiKey(),
+    },
   });
 
   const payload = (await response.json().catch(() => ({}))) as unknown;
@@ -109,7 +118,9 @@ export const probeAsaasTransferPermission = async (): Promise<AsaasTransferPermi
   const response = await fetch(`${resolveAsaasApiBaseUrl()}/transfers`, {
     method: "POST",
     headers: {
+      Accept: "application/json",
       "Content-Type": "application/json",
+      "User-Agent": ASAAS_USER_AGENT,
       access_token: resolveAsaasTransferApiKey(),
     },
     body: JSON.stringify({
@@ -165,6 +176,8 @@ export const probeAsaasTransferPermission = async (): Promise<AsaasTransferPermi
   };
 };
 
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 const asaasRequestWithKey = async <T>(
   apiKey: string,
   method: string,
@@ -175,13 +188,19 @@ const asaasRequestWithKey = async <T>(
     throw new Error("Integração Asaas não configurada. Defina ASAAS_API_KEY no servidor.");
   }
 
+  const hasBody = body !== undefined;
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "User-Agent": ASAAS_USER_AGENT,
+    access_token: apiKey,
+  };
+  // Asaas GET com body (ou Content-Type em GET) pode responder 403.
+  if (hasBody) headers["Content-Type"] = "application/json";
+
   const response = await fetch(`${resolveAsaasApiBaseUrl()}${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      access_token: apiKey,
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers,
+    body: hasBody ? JSON.stringify(body) : undefined,
   });
 
   const payload = (await response.json().catch(() => ({}))) as unknown;
@@ -212,13 +231,27 @@ export type AsaasPayment = {
   id: string;
   invoiceUrl?: string;
   bankSlipUrl?: string;
+  invoiceNumber?: string;
   status?: string;
+  dueDate?: string;
   externalReference?: string;
 };
 
 export type AsaasPixQrCode = {
   encodedImage?: string;
   payload?: string;
+  expirationDate?: string;
+};
+
+export type AsaasPixAddressKey = {
+  id?: string;
+  key?: string;
+  type?: string;
+  status?: string;
+};
+
+type AsaasPixAddressKeyList = {
+  data?: AsaasPixAddressKey[];
 };
 
 export const createAsaasCustomer = async (input: {
@@ -267,6 +300,79 @@ export const getAsaasPixQrCode = async (paymentId: string): Promise<AsaasPixQrCo
     "GET",
     `/payments/${encodeURIComponent(normalized)}/pixQrCode`,
   );
+};
+
+const normalizeFetchedPixQrCode = (pix: AsaasPixQrCode): AsaasPixQrCode => {
+  const payload = normalizePixEmvPayload(String(pix.payload ?? ""));
+  return {
+    payload,
+    encodedImage: stripPixQrEncodedImage(String(pix.encodedImage ?? "")),
+    expirationDate: parseAsaasDateTimeToIso(String(pix.expirationDate ?? "")),
+  };
+};
+
+export const fetchAsaasPaymentPixQrCode = async (paymentId: string): Promise<AsaasPixQrCode> => {
+  const normalized = String(paymentId ?? "").trim();
+  if (!normalized) {
+    throw new Error("Cobrança Asaas sem identificador — não foi possível gerar o QR Code PIX.");
+  }
+
+  let lastError = "QR Code PIX ainda não estava pronto no Asaas.";
+  for (const delayMs of PIX_QR_RETRY_DELAYS_MS) {
+    if (delayMs > 0) await wait(delayMs);
+    try {
+      const pix = normalizeFetchedPixQrCode(await getAsaasPixQrCode(normalized));
+      if (isValidPixEmvPayload(String(pix.payload ?? ""))) {
+        return pix;
+      }
+      lastError = "O Asaas devolveu um copia e cola PIX inválido (CRC/EMV).";
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Falha ao obter QR Code PIX no Asaas.";
+    }
+  }
+
+  throw new Error(
+    `${lastError} Gere um novo QR ou cadastre uma chave Pix ACTIVE no painel Asaas. Bancos como Inter recusam QR parceiro com o código QR124E.`,
+  );
+};
+
+export const updateAsaasPaymentDueDate = async (paymentId: string, dueDate: string): Promise<AsaasPayment> => {
+  const normalized = String(paymentId ?? "").trim();
+  return asaasRequest<AsaasPayment>("PUT", `/payments/${encodeURIComponent(normalized)}`, {
+    dueDate,
+  });
+};
+
+export const listActiveAsaasPixAddressKeys = async (): Promise<AsaasPixAddressKey[]> => {
+  const response = await asaasRequest<AsaasPixAddressKeyList>(
+    "GET",
+    "/pix/addressKeys?status=ACTIVE&limit=100&offset=0",
+  );
+  return Array.isArray(response.data) ? response.data : [];
+};
+
+export const probeAsaasPixAddressKeys = async (): Promise<{
+  ok: boolean;
+  hasActiveKey: boolean;
+  message: string;
+}> => {
+  try {
+    const keys = await listActiveAsaasPixAddressKeys();
+    const hasActiveKey = keys.some((key) => String(key.status ?? "").toUpperCase() === "ACTIVE");
+    return {
+      ok: true,
+      hasActiveKey,
+      message: hasActiveKey
+        ? "Chave Pix ACTIVE encontrada na conta Asaas."
+        : "Nenhuma chave Pix ACTIVE na conta Asaas.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      hasActiveKey: false,
+      message: error instanceof Error ? error.message : "Falha ao listar chaves Pix no Asaas.",
+    };
+  }
 };
 
 export const resolveAsaasPaymentUrl = (payment: { invoiceUrl?: string; bankSlipUrl?: string }): string =>

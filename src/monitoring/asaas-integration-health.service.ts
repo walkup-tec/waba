@@ -2,6 +2,7 @@ import {
   isAsaasConfigured,
   isAsaasTransferConfigured,
   probeAsaasPaymentApi,
+  probeAsaasPixAddressKeys,
   probeAsaasTransferPermission,
   usesDedicatedAsaasTransferKey,
 } from "../billing/asaas.client";
@@ -102,6 +103,24 @@ export async function evaluateAsaasIntegrationHealth(): Promise<AsaasIntegration
         message: paymentProbe.message,
         action: paymentProbe.code === "ip_forbidden" ? "asaas_panel" : "env",
       });
+    } else {
+      const pixKeys = await probeAsaasPixAddressKeys();
+      if (pixKeys.ok && !pixKeys.hasActiveKey) {
+        issues.push({
+          code: "missing_pix_address_key",
+          severity: "critical",
+          message:
+            "Conta Asaas sem chave Pix ACTIVE. O QR fica na instituição parceira, expira às 23:59 e bancos como Inter recusam com QR124E. Cadastre uma chave Pix no painel Asaas.",
+          action: "asaas_panel",
+        });
+      } else if (!pixKeys.ok) {
+        issues.push({
+          code: "pix_address_keys_unreadable",
+          severity: "warning",
+          message: `Não foi possível listar chaves Pix no Asaas: ${pixKeys.message}`,
+          action: "asaas_panel",
+        });
+      }
     }
   }
 
@@ -121,7 +140,7 @@ export async function evaluateAsaasIntegrationHealth(): Promise<AsaasIntegration
   }
 
   return {
-    ok: issues.length === 0,
+    ok: !issues.some((issue) => issue.severity === "critical"),
     checkedAt: new Date().toISOString(),
     issues,
   };

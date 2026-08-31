@@ -70,6 +70,7 @@ class WabaAdminFinanceiroService {
             cpfCnpj: order.cpfCnpj,
             createdAt: order.createdAt,
             asaasPaymentId: order.asaasPaymentId ?? "",
+            asaasInvoiceNumber: order.asaasInvoiceNumber ?? "",
         };
     }
     listMasterUsersForSplit() {

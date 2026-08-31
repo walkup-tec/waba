@@ -4,6 +4,8 @@ exports.WabaBillingService = void 0;
 const node_crypto_1 = require("node:crypto");
 const asaas_identifiers_1 = require("./asaas-identifiers");
 const asaas_client_1 = require("./asaas.client");
+const asaas_pix_qr_1 = require("./asaas-pix-qr");
+const pix_emv_1 = require("./pix-emv");
 const phone_1 = require("./phone");
 const waba_disparos_bonus_settlement_service_1 = require("./waba-disparos-bonus-settlement.service");
 const waba_financeiro_split_service_1 = require("./waba-financeiro-split.service");
@@ -14,14 +16,8 @@ const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segmen
 const waba_oficial_pricing_overrides_1 = require("./waba-oficial-pricing-overrides");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const normalizeDigits = (value) => value.replace(/\D/g, "");
-const formatDueDate = (daysAhead) => {
-    const date = new Date();
-    date.setDate(date.getDate() + daysAhead);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-};
+const formatDueDate = (daysAhead) => (0, asaas_pix_qr_1.formatDueDateInBrazil)(daysAhead);
+const PIX_QR_REFRESH_COOLDOWN_MS = 60000;
 const centsToCurrency = (valueCents) => Number((valueCents / 100).toFixed(2));
 const isPaidAsaasStatus = (status) => {
     const normalized = String(status ?? "").trim().toUpperCase();
@@ -163,6 +159,8 @@ class WabaBillingService {
             paymentUrl: settled.paymentUrl ?? "",
             pixCopyPaste: settled.pixCopyPaste ?? "",
             pixQrCodeBase64: settled.pixQrCodeBase64 ?? "",
+            pixExpiresAt: settled.pixExpiresAt ?? "",
+            asaasInvoiceNumber: settled.asaasInvoiceNumber ?? "",
             paidAt: settled.paidAt ?? "",
             updatedAt: settled.updatedAt,
             asaasExternalReference: settled.asaasExternalReference,
@@ -275,6 +273,62 @@ class WabaBillingService {
             shipmentCount: shipmentCount > 0 ? shipmentCount : undefined,
         };
     }
+    async persistPixOnOrder(order, payment, extra) {
+        const pix = await (0, asaas_client_1.fetchAsaasPaymentPixQrCode)(payment.id);
+        return (this.orderRepository.update(order.id, {
+            asaasPaymentId: payment.id,
+            asaasInvoiceNumber: String(payment.invoiceNumber ?? order.asaasInvoiceNumber ?? "").trim(),
+            paymentUrl: (0, asaas_client_1.resolveAsaasPaymentUrl)(payment) || String(order.paymentUrl ?? "").trim(),
+            pixCopyPaste: String(pix.payload ?? ""),
+            pixQrCodeBase64: String(pix.encodedImage ?? ""),
+            pixExpiresAt: String(pix.expirationDate ?? ""),
+            pixRefreshedAt: new Date().toISOString(),
+            ...extra,
+        }) ?? order);
+    }
+    shouldRefreshPixQr(order, force = false) {
+        if (order.status !== "pending_payment")
+            return false;
+        if (force)
+            return true;
+        const payload = String(order.pixCopyPaste ?? "");
+        if (!(0, pix_emv_1.isValidPixEmvPayload)(payload))
+            return true;
+        if ((0, asaas_pix_qr_1.isPixQrExpired)(order.pixExpiresAt))
+            return true;
+        return false;
+    }
+    async refreshPixQrIfNeeded(order, force = false) {
+        if (!this.shouldRefreshPixQr(order, force))
+            return order;
+        const paymentId = String(order.asaasPaymentId ?? "").trim();
+        if (!paymentId)
+            return order;
+        const lastRefresh = Date.parse(String(order.pixRefreshedAt ?? ""));
+        if (!force &&
+            Number.isFinite(lastRefresh) &&
+            Date.now() - lastRefresh < PIX_QR_REFRESH_COOLDOWN_MS) {
+            return order;
+        }
+        try {
+            await (0, asaas_client_1.updateAsaasPaymentDueDate)(paymentId, formatDueDate(1));
+        }
+        catch (error) {
+            console.warn(`[AsaasPix] não foi possível renovar vencimento do pedido ${order.id}:`, error instanceof Error ? error.message : error);
+        }
+        const payment = await (0, asaas_client_1.getAsaasPayment)(paymentId);
+        return this.persistPixOnOrder(order, payment);
+    }
+    async refreshOrderPixQr(orderId) {
+        const order = this.orderRepository.getById(orderId);
+        if (!order)
+            return null;
+        if (order.status !== "pending_payment") {
+            return this.toPublicOrder(order);
+        }
+        const refreshed = await this.refreshPixQrIfNeeded(order, true);
+        return this.toPublicOrder(refreshed);
+    }
     async createDisparosPixCheckout(input) {
         if (!(0, asaas_client_1.isAsaasConfigured)()) {
             throw new Error("Pagamentos indisponíveis no momento. Configure ASAAS_API_KEY no servidor.");
@@ -323,24 +377,9 @@ class WabaBillingService {
                 : (0, asaas_identifiers_1.buildWabaPaymentDescription)(order.apiKind),
             externalReference: asaasExternalReference,
         });
-        const paymentUrl = (0, asaas_client_1.resolveAsaasPaymentUrl)(payment);
-        let pixCopyPaste = "";
-        let pixQrCodeBase64 = "";
-        try {
-            const pix = await (0, asaas_client_1.getAsaasPixQrCode)(payment.id);
-            pixCopyPaste = String(pix.payload ?? "").trim();
-            pixQrCodeBase64 = String(pix.encodedImage ?? "").trim();
-        }
-        catch {
-            /* invoiceUrl continua disponível como fallback */
-        }
-        const updated = this.orderRepository.update(order.id, {
+        const updated = await this.persistPixOnOrder(order, payment, {
             asaasCustomerId: customer.id,
-            asaasPaymentId: payment.id,
-            paymentUrl,
-            pixCopyPaste,
-            pixQrCodeBase64,
-        }) ?? order;
+        });
         return this.toPublicOrder(updated);
     }
     validateAlternativaNumbersCheckoutInput(input) {
@@ -399,24 +438,9 @@ class WabaBillingService {
             description: (0, asaas_identifiers_1.buildAlternativaNumbersPaymentDescription)(validated.quantity),
             externalReference: asaasExternalReference,
         });
-        const paymentUrl = (0, asaas_client_1.resolveAsaasPaymentUrl)(payment);
-        let pixCopyPaste = "";
-        let pixQrCodeBase64 = "";
-        try {
-            const pix = await (0, asaas_client_1.getAsaasPixQrCode)(payment.id);
-            pixCopyPaste = String(pix.payload ?? "").trim();
-            pixQrCodeBase64 = String(pix.encodedImage ?? "").trim();
-        }
-        catch {
-            /* invoiceUrl continua disponível como fallback */
-        }
-        const updated = this.orderRepository.update(order.id, {
+        const updated = await this.persistPixOnOrder(order, payment, {
             asaasCustomerId: customer.id,
-            asaasPaymentId: payment.id,
-            paymentUrl,
-            pixCopyPaste,
-            pixQrCodeBase64,
-        }) ?? order;
+        });
         return this.toPublicOrder(updated);
     }
     async reconcileOrderPayment(orderId) {
@@ -430,7 +454,9 @@ class WabaBillingService {
         const paymentUrl = (0, asaas_client_1.resolveAsaasPaymentUrl)(payment) || String(order.paymentUrl ?? "").trim();
         if (!isPaidAsaasStatus(payment.status)) {
             this.orderRepository.update(order.id, { paymentUrl });
-            return this.getOrderStatus(order.id);
+            const current = this.orderRepository.getById(order.id) ?? order;
+            const refreshed = await this.refreshPixQrIfNeeded(current);
+            return this.toPublicOrder(refreshed);
         }
         const paidOrder = this.orderRepository.update(order.id, {
             status: "paid",

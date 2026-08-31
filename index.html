@@ -14500,8 +14500,17 @@
       .disparos-pix-qr img {
         width: 220px;
         height: 220px;
-        border-radius: 10px;
+        border-radius: 0;
+        image-rendering: pixelated;
         background: #fff;
+        padding: 8px;
+        box-sizing: border-box;
+      }
+      .disparos-pix-expiry {
+        text-align: center;
+        font-size: 12px;
+        color: #fbbf24;
+        margin: 0 0 8px;
       }
       .disparos-pix-copy {
         width: 100%;
@@ -24254,6 +24263,7 @@
           <p class="disparos-billing-hint" id="disparos-pix-hint">
             Escaneie o QR Code ou copie o código. Aguardamos a confirmação do Asaas.
           </p>
+          <p class="disparos-pix-expiry" id="disparos-pix-expiry" hidden></p>
           <div class="disparos-pix-qr" id="disparos-pix-qr-wrap" hidden>
             <img id="disparos-pix-qr-image" alt="QR Code PIX" />
           </div>
@@ -24261,6 +24271,7 @@
           <textarea id="disparos-pix-copy" class="register-input disparos-pix-copy" readonly></textarea>
           <div class="register-actions">
             <button id="disparos-pix-copy-btn" class="instance-action-btn" type="button">Copiar código</button>
+            <button id="disparos-pix-refresh-btn" class="instance-action-btn" type="button">Gerar novo QR</button>
             <a
               id="disparos-pix-invoice-link"
               class="instance-action-btn btn-qrcode enabled"
@@ -45345,26 +45356,51 @@
             const order = await response.json();
             if (order.status === "paid") {
               showDisparosPixPaymentConfirmed(order.id);
+              return;
             }
+            fillDisparosPixCheckout(order);
           } catch {
             /* ignore polling errors */
           }
         }, 4000);
       }
 
-      function showDisparosPixCheckout(order) {
+      function formatDisparosPixExpiryLabel(iso) {
+        const raw = String(iso || "").trim();
+        if (!raw) return "";
+        const at = new Date(raw);
+        if (Number.isNaN(at.getTime())) return "";
+        const label = at.toLocaleString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        return `Pague até ${label} (Brasília). Se o banco recusar o QR (erro QR124E), gere um novo código.`;
+      }
+
+      function fillDisparosPixCheckout(order) {
         const qrWrap = document.getElementById("disparos-pix-qr-wrap");
         const qrImage = document.getElementById("disparos-pix-qr-image");
         const copyField = document.getElementById("disparos-pix-copy");
         const invoiceLink = document.getElementById("disparos-pix-invoice-link");
+        const expiryEl = document.getElementById("disparos-pix-expiry");
+        const payload = String(order.pixCopyPaste || "").replace(/\s+/g, "");
 
-        resetDisparosPixModal();
-        if (copyField) copyField.value = String(order.pixCopyPaste || "");
+        if (copyField && copyField.value !== payload) copyField.value = payload;
         if (qrImage && order.pixQrCodeBase64) {
-          qrImage.src = `data:image/png;base64,${order.pixQrCodeBase64}`;
+          const src = `data:image/png;base64,${order.pixQrCodeBase64}`;
+          if (qrImage.src !== src) qrImage.src = src;
           if (qrWrap) qrWrap.hidden = false;
         } else if (qrWrap) {
           qrWrap.hidden = true;
+        }
+
+        if (expiryEl) {
+          const text = formatDisparosPixExpiryLabel(order.pixExpiresAt);
+          expiryEl.textContent = text;
+          expiryEl.hidden = !text;
         }
 
         if (invoiceLink) {
@@ -45376,7 +45412,37 @@
             invoiceLink.hidden = true;
           }
         }
+      }
 
+      async function refreshDisparosPixQr() {
+        const orderId = String(disparosBillingCurrentOrderId || "").trim();
+        if (!orderId) {
+          showToast("Pedido PIX não encontrado para renovar o QR.", "error", 3600);
+          return;
+        }
+        const btn = document.getElementById("disparos-pix-refresh-btn");
+        if (btn) btn.disabled = true;
+        try {
+          const response = await fetch(
+            `/billing/disparos/orders/${encodeURIComponent(orderId)}/refresh-pix`,
+            { method: "POST", credentials: "same-origin" },
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível gerar um novo QR Code.");
+          }
+          fillDisparosPixCheckout(payload);
+          showToast("Novo QR Code PIX gerado. Pague com o código atualizado.", "success", 3600);
+        } catch (error) {
+          showToast(error?.message || "Falha ao gerar novo QR Code.", "error", 4800);
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      function showDisparosPixCheckout(order) {
+        resetDisparosPixModal();
+        fillDisparosPixCheckout(order);
         closeDisparosOverlay("disparos-billing-overlay");
         openDisparosOverlay("disparos-pix-overlay");
         startDisparosBillingPoll(order.id);
@@ -45910,7 +45976,7 @@
         });
         document.getElementById("disparos-pix-copy-btn")?.addEventListener("click", async () => {
           const copyField = document.getElementById("disparos-pix-copy");
-          const code = String(copyField?.value || "").trim();
+          const code = String(copyField?.value || "").replace(/\s+/g, "");
           if (!code) {
             showToast("Código PIX indisponível.", "error", 3200);
             return;
@@ -45922,6 +45988,9 @@
             copyField?.select();
             showToast("Selecione e copie o código manualmente.", "info", 3200);
           }
+        });
+        document.getElementById("disparos-pix-refresh-btn")?.addEventListener("click", () => {
+          void refreshDisparosPixQr();
         });
       }
 
