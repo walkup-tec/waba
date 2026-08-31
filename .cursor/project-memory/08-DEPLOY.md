@@ -54,7 +54,7 @@ A URL de login/disparador usa o container Docker (`COPY dist/`). Mudança só em
 
 | Marker | Tema |
 |--------|------|
-| `DEPLOY-2026-08-31-145200-campanha-mais-instancias-spare` | Campanha: «+ Instâncias» não confunde chips pelo perfil WhatsApp |
+| `DEPLOY-2026-08-31-150500-mais-instancias-spare-identity` | Campanha: «+ Instâncias» não confunde chips pelo perfil WhatsApp |
 | `DEPLOY-2026-08-31-114800-campanha-proxy-obrigatoria` | Campanha: só dispara com Proxy Brasil ligada |
 | `DEPLOY-2026-08-28-121400-inbox-envio-conversa` | Inbox: envio Cloud na conversa + resposta pelo compositor |
 | `DEPLOY-2026-08-28-111300-inbox-opt-in-numero` | Inbox: switch cinza, banner do número, webhook ao ligar |

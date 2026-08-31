@@ -8,7 +8,7 @@ Registrar apenas decisões permanentes.
 
 - **Decisão:** Identidade para «já está nesta campanha» / spare usa só chave EVO, alias técnico (`WB-5401`) e telefone (≥8 dígitos). Nome de perfil (`Walkup`, `Drax Sistemas`) não une chips diferentes.
 - **Motivo:** `WB-5401` e `wb-9224` compartilham o perfil Walkup; o «+ Instâncias» achava que o 9224 já estava na campanha e não fazia a troca do vermelho.
-- **Impacto:** Marker `DEPLOY-2026-08-31-145200-campanha-mais-instancias-spare`. Exige Redeploy EasyPanel.
+- **Impacto:** Marker `DEPLOY-2026-08-31-150500-mais-instancias-spare-identity`. Redeploy EasyPanel a cargo do operador (não disparar via API).
 - **Data:** 2026-08-31
 
 ### 2026-08-31 — Campanha só dispara com Proxy Brasil ligada

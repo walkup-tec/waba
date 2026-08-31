@@ -18,7 +18,7 @@ Leitura do GET/POST `/disparos/campanhas/:id/instancias` e da identidade de spar
 
 - `src/instances/campaign-instance-identity.ts`
 - `src/index.ts`
-- `src/deploy-marker.ts` → `DEPLOY-2026-08-31-145200-campanha-mais-instancias-spare`
+- `src/deploy-marker.ts` → `DEPLOY-2026-08-31-150500-mais-instancias-spare-identity`
 - `dist/` correspondente
 - `.cursor/project-memory/05-DECISIONS.md`, `06-CURRENT_STATUS.md`, `08-DEPLOY.md`, `INDEX.md`
 - `doc/memoria.md`
@@ -26,7 +26,7 @@ Leitura do GET/POST `/disparos/campanhas/:id/instancias` e da identidade de spar
 ## Como validar
 
 1. `node dist/instances/campaign-instance-identity.selfcheck.js` → `campaign-instance-identity ok`
-2. Após Redeploy: `GET /health` com marker `DEPLOY-2026-08-31-145200-campanha-mais-instancias-spare`
+2. Após Redeploy (EasyPanel, pelo operador): `GET /health` com marker `DEPLOY-2026-08-31-150500-mais-instancias-spare-identity`
 3. Funcional: Corbans com um chip vermelho e `wb-9224` (ou outro) conectado fora da seleção — «+ Instâncias» troca 1:1. Sem `sendText` de teste.
 
 ## Observações de segurança

@@ -3,7 +3,7 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 ## 2026-08-31 14:52 — «+ Instâncias» não misturava chips pelo perfil WhatsApp
 - Spare da campanha ignora `profileName` (`Walkup` / `Drax Sistemas`). Troca 1:1 do vermelho volta a achar o próximo número ativo.
 - LOG: `doc/LOG-2026-08-31__145200__campanha-mais-instancias-spare.md`
-- Marker: `DEPLOY-2026-08-31-145200-campanha-mais-instancias-spare`
+- Marker: `DEPLOY-2026-08-31-150500-mais-instancias-spare-identity`
 
 ## 2026-08-31 11:48 — Campanha só dispara com Proxy Brasil
 - Instância ativa = `open` + `/proxy/find` enabled. Removida a exceção que enviava sem proxy.
