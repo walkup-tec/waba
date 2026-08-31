@@ -28,6 +28,7 @@ import {
   getSubscriberSegmentByEmail,
   isBetsSubscriberEmail,
 } from "../subscribers/waba-subscriber-segment";
+import { applyOficialPerSendSurchargeToPackages } from "./waba-oficial-pricing-overrides";
 
 export type CreateAlternativaNumbersCheckoutInput = {
   customerName: string;
@@ -134,20 +135,25 @@ const isDisparosAlternativaSalePackage = (shipmentCount: number, valueCents: num
 const getDisparosSalePackages = (
   apiKind: "oficial" | "alternativa",
   segment: WabaSubscriberSegment = "outros",
+  ownerEmail = "",
 ): ReadonlyArray<{ shipments: number; valueCents: number }> => {
   if (segment === "bets") {
     if (apiKind === "alternativa") return [];
-    return DISPAROS_BETS_OFICIAL_SALE_PACKAGES;
+    return applyOficialPerSendSurchargeToPackages(DISPAROS_BETS_OFICIAL_SALE_PACKAGES, ownerEmail);
   }
-  return apiKind === "oficial" ? DISPAROS_OFICIAL_SALE_PACKAGES : DISPAROS_ALTERNATIVA_SALE_PACKAGES;
+  if (apiKind === "oficial") {
+    return applyOficialPerSendSurchargeToPackages(DISPAROS_OFICIAL_SALE_PACKAGES, ownerEmail);
+  }
+  return DISPAROS_ALTERNATIVA_SALE_PACKAGES;
 };
 
 const resolveDisparosCustomListValueCents = (
   apiKind: "oficial" | "alternativa",
   shipmentCount: number,
   segment: WabaSubscriberSegment = "outros",
+  ownerEmail = "",
 ): number | null => {
-  const salePackages = getDisparosSalePackages(apiKind, segment);
+  const salePackages = getDisparosSalePackages(apiKind, segment, ownerEmail);
   const lastTier = salePackages[salePackages.length - 1];
   if (!lastTier || shipmentCount <= lastTier.shipments) return null;
   const unitCents = lastTier.valueCents / lastTier.shipments;
@@ -158,18 +164,14 @@ const resolveListValueCentsForPackage = (
   apiKind: "oficial" | "alternativa",
   shipmentCount: number,
   segment: WabaSubscriberSegment = "outros",
+  ownerEmail = "",
 ): number | null => {
   if (segment === "bets" && apiKind === "alternativa") return null;
   if (shipmentCount <= 0) return null;
-  const tables =
-    apiKind === "oficial"
-      ? segment === "bets"
-        ? DISPAROS_BETS_OFICIAL_SALE_PACKAGES
-        : DISPAROS_OFICIAL_SALE_PACKAGES
-      : DISPAROS_ALTERNATIVA_SALE_PACKAGES;
+  const tables = getDisparosSalePackages(apiKind, segment, ownerEmail);
   const match = tables.find((pack) => pack.shipments === shipmentCount);
   if (match) return match.valueCents;
-  return resolveDisparosCustomListValueCents(apiKind, shipmentCount, segment);
+  return resolveDisparosCustomListValueCents(apiKind, shipmentCount, segment, ownerEmail);
 };
 
 const ASAAS_MIN_CHARGE_CENTS = 500;
@@ -265,7 +267,12 @@ export class WabaBillingService {
       throw new Error("Assinantes do segmento Bets contratam créditos apenas na API Oficial.");
     }
     const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
-    const listValueCents = resolveListValueCentsForPackage(apiKind, shipmentCount, segment);
+    const listValueCents = resolveListValueCentsForPackage(
+      apiKind,
+      shipmentCount,
+      segment,
+      String(input.ownerEmail ?? ""),
+    );
     if (!listValueCents) {
       throw new Error("Pacote de envios inválido.");
     }
@@ -314,7 +321,9 @@ export class WabaBillingService {
     const minCreditCents = resolveMinCreditCents(apiKind);
     const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
     const listValueCentsFromPackage =
-      shipmentCount > 0 ? resolveListValueCentsForPackage(apiKind, shipmentCount, segment) : null;
+      shipmentCount > 0
+        ? resolveListValueCentsForPackage(apiKind, shipmentCount, segment, ownerEmail)
+        : null;
 
     let listValueCents = listValueCentsFromPackage ?? Math.round(Number(input.valueCents ?? minCreditCents));
     if (!Number.isFinite(listValueCents) || listValueCents <= 0) {
@@ -323,7 +332,7 @@ export class WabaBillingService {
 
     if (shipmentCount > 0) {
       if (!listValueCentsFromPackage) {
-        const salePackages = getDisparosSalePackages(apiKind, segment);
+        const salePackages = getDisparosSalePackages(apiKind, segment, ownerEmail);
         const maxShipments = salePackages[salePackages.length - 1]?.shipments ?? 0;
         throw new Error(
           maxShipments > 0

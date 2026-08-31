@@ -29470,11 +29470,38 @@
       }
 
       function getDisparosPricingTiers(apiKind) {
+        let tiers;
         if (getSubscriberSegment() === "bets") {
           if (apiKind === "alternativa") return [];
-          return DISPAROS_PRICING_TIERS.betsOficial || [];
+          tiers = DISPAROS_PRICING_TIERS.betsOficial || [];
+        } else {
+          tiers = DISPAROS_PRICING_TIERS[apiKind] || [];
         }
-        return DISPAROS_PRICING_TIERS[apiKind] || [];
+        if (apiKind === "oficial") {
+          tiers = applyOficialPricingSurchargeForSession(tiers);
+        }
+        return Array.isArray(tiers) ? tiers : [];
+      }
+
+      const OFICIAL_PRICING_SURCHARGE_EMAILS = ["cleison.fel@gmail.com"];
+      const OFICIAL_PRICING_SURCHARGE_PER_SEND = 0.02;
+
+      function isOficialPricingSurchargeAccount() {
+        const email = String(wabaSessionEmail || "").trim().toLowerCase();
+        return OFICIAL_PRICING_SURCHARGE_EMAILS.includes(email);
+      }
+
+      function applyOficialPricingSurchargeForSession(tiers) {
+        if (!isOficialPricingSurchargeAccount()) return Array.isArray(tiers) ? tiers : [];
+        return (Array.isArray(tiers) ? tiers : []).map((tier) => {
+          const shipments = Math.max(0, Math.floor(Number(tier.shipments) || 0));
+          const pricePerSend = Number(tier.pricePerSend) + OFICIAL_PRICING_SURCHARGE_PER_SEND;
+          return {
+            ...tier,
+            pricePerSend: Number(pricePerSend.toFixed(2)),
+            totalCents: Math.round(shipments * pricePerSend * 100),
+          };
+        });
       }
 
       function resolveDisparosSaleTiersForDisplay(tiers) {
@@ -29494,16 +29521,22 @@
       }
 
       function resolveDisparosOficialCardPricingCopy() {
+        const tiers = getDisparosPricingTiers("oficial");
+        const priceLabel = formatDisparosPriceRangeFromTiers(tiers);
         if (isBetsSubscriberAccount()) {
           return {
-            priceLabel: formatDisparosPriceRangeFromTiers(DISPAROS_PRICING_TIERS.betsOficial),
+            priceLabel,
             subLabel: "Escolha o melhor pacote para você",
             subHtml: false,
           };
         }
+        const first = resolveDisparosSaleTiersForDisplay(tiers)[0];
+        const minCredits = first?.totalCents
+          ? formatDisparosMoneyFromCents(first.totalCents)
+          : "R$ 320,00";
         return {
-          priceLabel: formatDisparosPriceRangeFromTiers(DISPAROS_PRICING_TIERS.oficial),
-          subLabel: 'Valor mínimo de créditos: <strong>R$ 320,00</strong>',
+          priceLabel,
+          subLabel: `Valor mínimo de créditos: <strong>${minCredits}</strong>`,
           subHtml: true,
         };
       }

@@ -11,6 +11,7 @@ const waba_billing_order_repository_1 = require("./waba-billing-order.repository
 const waba_alternativa_numbers_service_1 = require("./waba-alternativa-numbers.service");
 const waba_coupon_service_1 = require("./waba-coupon.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
+const waba_oficial_pricing_overrides_1 = require("./waba-oficial-pricing-overrides");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const normalizeDigits = (value) => value.replace(/\D/g, "");
 const formatDueDate = (daysAhead) => {
@@ -69,36 +70,35 @@ const DISPAROS_ALTERNATIVA_SALE_PACKAGES = [
 ];
 const isDisparosOficialSalePackage = (shipmentCount, valueCents) => DISPAROS_OFICIAL_SALE_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
 const isDisparosAlternativaSalePackage = (shipmentCount, valueCents) => DISPAROS_ALTERNATIVA_SALE_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
-const getDisparosSalePackages = (apiKind, segment = "outros") => {
+const getDisparosSalePackages = (apiKind, segment = "outros", ownerEmail = "") => {
     if (segment === "bets") {
         if (apiKind === "alternativa")
             return [];
-        return DISPAROS_BETS_OFICIAL_SALE_PACKAGES;
+        return (0, waba_oficial_pricing_overrides_1.applyOficialPerSendSurchargeToPackages)(DISPAROS_BETS_OFICIAL_SALE_PACKAGES, ownerEmail);
     }
-    return apiKind === "oficial" ? DISPAROS_OFICIAL_SALE_PACKAGES : DISPAROS_ALTERNATIVA_SALE_PACKAGES;
+    if (apiKind === "oficial") {
+        return (0, waba_oficial_pricing_overrides_1.applyOficialPerSendSurchargeToPackages)(DISPAROS_OFICIAL_SALE_PACKAGES, ownerEmail);
+    }
+    return DISPAROS_ALTERNATIVA_SALE_PACKAGES;
 };
-const resolveDisparosCustomListValueCents = (apiKind, shipmentCount, segment = "outros") => {
-    const salePackages = getDisparosSalePackages(apiKind, segment);
+const resolveDisparosCustomListValueCents = (apiKind, shipmentCount, segment = "outros", ownerEmail = "") => {
+    const salePackages = getDisparosSalePackages(apiKind, segment, ownerEmail);
     const lastTier = salePackages[salePackages.length - 1];
     if (!lastTier || shipmentCount <= lastTier.shipments)
         return null;
     const unitCents = lastTier.valueCents / lastTier.shipments;
     return Math.round(shipmentCount * unitCents);
 };
-const resolveListValueCentsForPackage = (apiKind, shipmentCount, segment = "outros") => {
+const resolveListValueCentsForPackage = (apiKind, shipmentCount, segment = "outros", ownerEmail = "") => {
     if (segment === "bets" && apiKind === "alternativa")
         return null;
     if (shipmentCount <= 0)
         return null;
-    const tables = apiKind === "oficial"
-        ? segment === "bets"
-            ? DISPAROS_BETS_OFICIAL_SALE_PACKAGES
-            : DISPAROS_OFICIAL_SALE_PACKAGES
-        : DISPAROS_ALTERNATIVA_SALE_PACKAGES;
+    const tables = getDisparosSalePackages(apiKind, segment, ownerEmail);
     const match = tables.find((pack) => pack.shipments === shipmentCount);
     if (match)
         return match.valueCents;
-    return resolveDisparosCustomListValueCents(apiKind, shipmentCount, segment);
+    return resolveDisparosCustomListValueCents(apiKind, shipmentCount, segment, ownerEmail);
 };
 const ASAAS_MIN_CHARGE_CENTS = 500;
 class WabaBillingService {
@@ -178,7 +178,7 @@ class WabaBillingService {
             throw new Error("Assinantes do segmento Bets contratam créditos apenas na API Oficial.");
         }
         const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
-        const listValueCents = resolveListValueCentsForPackage(apiKind, shipmentCount, segment);
+        const listValueCents = resolveListValueCentsForPackage(apiKind, shipmentCount, segment, String(input.ownerEmail ?? ""));
         if (!listValueCents) {
             throw new Error("Pacote de envios inválido.");
         }
@@ -217,14 +217,16 @@ class WabaBillingService {
         const whatsapp = (0, phone_1.formatBrazilMobileForAsaas)(String(input.whatsapp ?? ""));
         const minCreditCents = resolveMinCreditCents(apiKind);
         const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
-        const listValueCentsFromPackage = shipmentCount > 0 ? resolveListValueCentsForPackage(apiKind, shipmentCount, segment) : null;
+        const listValueCentsFromPackage = shipmentCount > 0
+            ? resolveListValueCentsForPackage(apiKind, shipmentCount, segment, ownerEmail)
+            : null;
         let listValueCents = listValueCentsFromPackage ?? Math.round(Number(input.valueCents ?? minCreditCents));
         if (!Number.isFinite(listValueCents) || listValueCents <= 0) {
             throw new Error("Valor do pacote inválido.");
         }
         if (shipmentCount > 0) {
             if (!listValueCentsFromPackage) {
-                const salePackages = getDisparosSalePackages(apiKind, segment);
+                const salePackages = getDisparosSalePackages(apiKind, segment, ownerEmail);
                 const maxShipments = salePackages[salePackages.length - 1]?.shipments ?? 0;
                 throw new Error(maxShipments > 0
                     ? `Informe uma quantidade maior que ${maxShipments.toLocaleString("pt-BR")} envios.`
