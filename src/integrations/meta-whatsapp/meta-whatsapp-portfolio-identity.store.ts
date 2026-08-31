@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import path from "node:path";
 import { resolveDataDir } from "../../data-path";
 import type { MetaPortfolioPublic } from "./meta-whatsapp-portfolio.types";
+import { graphPhotoSourceKey } from "./meta-whatsapp-portfolio.map";
 
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 
@@ -118,6 +119,7 @@ export function writePortfolioBusinessPhoto(
   tenantId: string,
   businessId: string,
   photo: { ext: "png" | "jpg"; bytes: Buffer },
+  sourceUrl?: string | null,
 ): string | null {
   const base = businessPhotoBase(tenantId, businessId);
   if (!base) return null;
@@ -127,9 +129,29 @@ export function writePortfolioBusinessPhoto(
     if (ext !== photo.ext && existsSync(previous)) unlinkSync(previous);
   }
   writeFileSync(`${base}.${photo.ext}`, photo.bytes);
-  const updatedAt = new Date().toISOString();
-  writeFileSync(`${base}.json`, JSON.stringify({ photoExt: photo.ext, updatedAt }), "utf8");
+  const current = readPortfolioBusinessPhotoMeta(tenantId, businessId);
+  const sourcePath = graphPhotoSourceKey(sourceUrl) || current?.sourcePath || null;
+  const sameSource = Boolean(sourcePath && current?.sourcePath && sourcePath === current.sourcePath);
+  const updatedAt = sameSource && current?.updatedAt ? current.updatedAt : new Date().toISOString();
+  writeFileSync(`${base}.json`, JSON.stringify({ photoExt: photo.ext, updatedAt, sourcePath }), "utf8");
   return `/integrations/meta/whatsapp/portfolio/photo?businessId=${encodeURIComponent(String(businessId).trim())}&v=${encodeURIComponent(updatedAt)}`;
+}
+
+function readPortfolioBusinessPhotoMeta(
+  tenantId: string,
+  businessId: string,
+): { photoExt: "png" | "jpg" | null; updatedAt: string | null; sourcePath: string | null } | null {
+  const base = businessPhotoBase(tenantId, businessId);
+  if (!base || !existsSync(`${base}.json`)) return null;
+  try {
+    const row = JSON.parse(readFileSync(`${base}.json`, "utf8")) as Record<string, unknown>;
+    const photoExt = row.photoExt === "png" || row.photoExt === "jpg" ? row.photoExt : null;
+    const updatedAt = String(row.updatedAt || "").trim() || null;
+    const sourcePath = String(row.sourcePath || "").trim() || null;
+    return { photoExt, updatedAt, sourcePath };
+  } catch {
+    return null;
+  }
 }
 
 export function readPortfolioBusinessPhoto(
@@ -182,7 +204,7 @@ export function applyLocalPortfolioBusinessPhoto(
   return { ...portfolio, profilePictureUrl: local };
 }
 
-const BUSINESS_PHOTO_TTL_MS = 15 * 60 * 1000;
+const BUSINESS_PHOTO_TTL_MS = 30 * 1000;
 
 export function isPortfolioBusinessPhotoFresh(
   tenantId: string,
@@ -191,15 +213,27 @@ export function isPortfolioBusinessPhotoFresh(
 ): boolean {
   const id = String(businessId || "").trim();
   if (!id || !readPortfolioBusinessPhoto(tenantId, id)) return false;
-  const base = businessPhotoBase(tenantId, id);
-  if (!base || !existsSync(`${base}.json`)) return false;
-  try {
-    const row = JSON.parse(readFileSync(`${base}.json`, "utf8")) as { updatedAt?: unknown };
-    const age = Date.now() - Date.parse(String(row.updatedAt || ""));
-    return Number.isFinite(age) && age >= 0 && age < ttlMs;
-  } catch {
-    return false;
-  }
+  const meta = readPortfolioBusinessPhotoMeta(tenantId, id);
+  if (!meta?.updatedAt) return false;
+  const age = Date.now() - Date.parse(meta.updatedAt);
+  return Number.isFinite(age) && age >= 0 && age < ttlMs;
+}
+
+export function shouldRefreshPortfolioBusinessPhoto(
+  tenantId: string,
+  businessId: string,
+  sourceUrl: string | null,
+  ttlMs: number = BUSINESS_PHOTO_TTL_MS,
+): boolean {
+  const id = String(businessId || "").trim();
+  if (!id) return false;
+  if (!readPortfolioBusinessPhoto(tenantId, id)) return true;
+  const next = graphPhotoSourceKey(sourceUrl);
+  const stored = readPortfolioBusinessPhotoMeta(tenantId, id)?.sourcePath || null;
+  if (next && stored && next === stored) return false;
+  if (next && stored && next !== stored) return true;
+  if (next && !stored) return true;
+  return !isPortfolioBusinessPhotoFresh(tenantId, id, ttlMs);
 }
 
 export function purgePortfolioIdentity(tenantId: string): void {

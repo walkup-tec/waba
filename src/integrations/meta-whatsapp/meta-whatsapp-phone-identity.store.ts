@@ -11,6 +11,7 @@ const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
 export type MetaPhoneIdentity = {
   name: string | null;
   photoExt: "png" | "jpg" | null;
+  photoSource: string | null;
   vertical: string | null;
   description: string | null;
   address: string | null;
@@ -66,6 +67,7 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
     if (!existsSync(file)) return null;
     const row = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
     const photoExt = row.photoExt === "png" || row.photoExt === "jpg" ? row.photoExt : null;
+    const photoSource = String(row.photoSource || "").trim() || null;
     const name = String(row.name || "").trim() || null;
     const vertical = String(row.vertical || "").trim() || null;
     const description = row.description === undefined || row.description === null ? null : String(row.description);
@@ -80,6 +82,7 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
     return {
       name,
       photoExt,
+      photoSource,
       vertical,
       description,
       address,
@@ -102,6 +105,7 @@ export function writePhoneIdentity(
   input: {
     name?: string | null;
     photo?: { ext: "png" | "jpg"; bytes: Buffer } | null;
+    photoSource?: string | null;
     vertical?: string | null;
     description?: string | null;
     address?: string | null;
@@ -117,6 +121,7 @@ export function writePhoneIdentity(
   const current = readPhoneIdentity(tenantId, phoneNumberId) || {
     name: null,
     photoExt: null,
+    photoSource: null,
     vertical: null,
     description: null,
     address: null,
@@ -136,6 +141,7 @@ export function writePhoneIdentity(
   const next: MetaPhoneIdentity = {
     name: input.name !== undefined ? input.name : current.name,
     photoExt: current.photoExt,
+    photoSource: input.photoSource !== undefined ? input.photoSource : current.photoSource,
     vertical: input.vertical !== undefined ? input.vertical : current.vertical,
     description: input.description !== undefined ? input.description : current.description,
     address: input.address !== undefined ? input.address : current.address,
@@ -223,10 +229,10 @@ export function isPhoneInboxEnabled(identity: MetaPhoneIdentity | null): boolean
 }
 
 export function phoneInboxDisplayName(identity: MetaPhoneIdentity | null): string | null {
-  const saved = String(identity?.name || "").trim();
-  if (saved) return saved;
   const channel = String(identity?.channelName || "").trim();
-  return channel || null;
+  if (channel) return channel;
+  const saved = String(identity?.name || "").trim();
+  return saved || null;
 }
 
 export function listPhoneInboxChannels(tenantId: string): MetaPhoneInboxChannel[] {
@@ -328,48 +334,21 @@ export function applyLocalPhoneIdentities(
     const nameSync = resolvePhoneNameSync({
       verifiedName: row.verifiedName,
       nameStatus: row.nameStatus,
-      newDisplayName: row.newDisplayName || identity?.name || null,
+      newDisplayName: row.newDisplayName,
       newNameStatus: row.newNameStatus,
-      localName: identity?.name || null,
     });
     const connected = isMetaPhoneConnected(row.metaStatus);
-    if (!identity) {
-      return {
-        ...row,
-        requestedName: nameSync.requestedName,
-        nameSyncStatus: nameSync.nameSyncStatus,
-        nameNeedsRegister: nameSync.nameNeedsRegister,
-        canActivate: !connected || nameSync.nameNeedsRegister,
-        photoSyncStatus: null,
-        profileSyncStatus: null,
-        inboxEnabled: false,
-      };
-    }
-    const sync = phoneIdentitySyncStatus({
-      localPhoto: Boolean(identity.photoExt),
-      localDescription: String(identity.description || "").trim() || null,
-      metaDescription: row.description,
-      photoMetaApplied: identity.photoMetaApplied,
-      profileMetaApplied: identity.profileMetaApplied,
-    });
-    const photoApplied = sync.photoSyncStatus === "applied";
-    const profileApplied = sync.profileSyncStatus === "applied";
     const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
     return {
       ...row,
       requestedName: nameSync.requestedName,
-      verifiedName: row.verifiedName,
-      profilePictureUrl: localPhoto || null,
-      vertical: profileApplied ? identity.vertical || row.vertical : row.vertical,
-      description: profileApplied ? identity.description ?? row.description : row.description,
-      address: profileApplied ? identity.address ?? row.address : row.address,
-      email: profileApplied ? identity.email || row.email : row.email,
       nameSyncStatus: nameSync.nameSyncStatus,
       nameNeedsRegister: nameSync.nameNeedsRegister,
       canActivate: !connected || nameSync.nameNeedsRegister,
-      photoSyncStatus: photoApplied || localPhoto ? (photoApplied ? "applied" : sync.photoSyncStatus) : null,
-      profileSyncStatus: sync.profileSyncStatus,
+      profilePictureUrl: localPhoto || row.profilePictureUrl,
       inboxEnabled: isPhoneInboxEnabled(identity),
+      photoSyncStatus: localPhoto ? "applied" : row.photoSyncStatus,
+      profileSyncStatus: row.profileSyncStatus,
     };
   });
 }

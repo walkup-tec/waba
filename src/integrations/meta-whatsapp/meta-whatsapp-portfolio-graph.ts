@@ -19,11 +19,12 @@ export const META_PORTFOLIO_BUSINESS_IDS = [
 
 export const META_WABA_OWNER_FIELDS = "id,name,owner_business_info,on_behalf_of_business_info";
 export const META_WABA_PAGE_FIELDS =
-  "owner_business_info{id,name,primary_page{id,name}},on_behalf_of_business_info{id,name,primary_page{id,name}}";
+  "owner_business_info{id,name,profile_picture_uri,primary_page{id,name,picture}},on_behalf_of_business_info{id,name,profile_picture_uri,primary_page{id,name,picture}}";
 export const META_BUSINESS_NAME_FIELDS = "id,name";
-export const META_BUSINESS_PAGE_FIELDS = "primary_page{id,name}";
+export const META_BUSINESS_PAGE_FIELDS = "primary_page{id,name,picture}";
 export const META_BUSINESS_PAGE_ID_FIELDS = "primary_page{id}";
 export const META_BUSINESS_PHOTO_FIELDS = "profile_picture_uri";
+export const META_BUSINESS_OWNED_PAGES_FIELDS = "owned_pages.limit(10){id,name,picture}";
 
 export type PortfolioGraphCaller = (input: {
   token: string;
@@ -122,7 +123,9 @@ async function mergePageEdges(
   card: MetaPortfolioPublic,
   photoDownloadUrl: string | null,
 ): Promise<{ card: MetaPortfolioPublic; photoDownloadUrl: string | null }> {
-  if (card.primaryPageName) return { card, photoDownloadUrl };
+  if (card.primaryPageName && (card.profilePictureUrl || photoDownloadUrl)) {
+    return { card, photoDownloadUrl };
+  }
   let next = card;
   let photo = photoDownloadUrl;
   for (const edge of ["owned_pages", "client_pages", "assigned_pages"]) {
@@ -135,9 +138,60 @@ async function mergePageEdges(
     if (!pages.ok || !firstOwnedPageId(pages.json)) continue;
     next = mergePortfolioIdentity({ fallback: next, ownedPages: pages.json });
     photo = photo || graphPhotoDownloadUrl(pages.json);
-    if (next.primaryPageName) break;
+    if (next.primaryPageName && (next.profilePictureUrl || photo)) break;
   }
   return { card: next, photoDownloadUrl: photo };
+}
+
+async function mergeNestedOwnedPages(
+  graph: PortfolioGraphCaller,
+  token: string,
+  businessId: string,
+  card: MetaPortfolioPublic,
+  photoDownloadUrl: string | null,
+): Promise<{ card: MetaPortfolioPublic; photoDownloadUrl: string | null }> {
+  if (card.primaryPageName) return { card, photoDownloadUrl };
+  const nested = await getFields(graph, token, businessId, META_BUSINESS_OWNED_PAGES_FIELDS);
+  if (!nested.ok) return { card, photoDownloadUrl };
+  const owned = asRecord(nested.json).owned_pages;
+  if (!firstOwnedPageId(owned)) return { card, photoDownloadUrl };
+  return {
+    card: mergePortfolioIdentity({ fallback: card, ownedPages: owned }),
+    photoDownloadUrl: photoDownloadUrl || graphPhotoDownloadUrl(owned),
+  };
+}
+
+async function mergePagesFromUserAccounts(
+  graph: PortfolioGraphCaller,
+  token: string,
+  businessId: string,
+  card: MetaPortfolioPublic,
+  photoDownloadUrl: string | null,
+): Promise<{ card: MetaPortfolioPublic; photoDownloadUrl: string | null }> {
+  if (card.primaryPageName && (card.profilePictureUrl || photoDownloadUrl)) {
+    return { card, photoDownloadUrl };
+  }
+  const accounts = await graph({
+    token,
+    method: "GET",
+    path: "me/accounts",
+    query: { fields: "id,name,picture,business", limit: "50" },
+  });
+  if (!accounts.ok) return { card, photoDownloadUrl };
+  const biz = String(businessId || "").trim();
+  let matched: unknown = null;
+  for (const item of listMetaBusinessNodes(accounts.json)) {
+    const rec = asRecord(item);
+    if (text(asRecord(rec.business).id) === biz) {
+      matched = rec;
+      break;
+    }
+  }
+  if (!matched) return { card, photoDownloadUrl };
+  return {
+    card: mergePortfolioIdentity({ fallback: card, ownedPages: { data: [matched] } }),
+    photoDownloadUrl: photoDownloadUrl || graphPhotoDownloadUrl(matched),
+  };
 }
 
 async function fillPageNameById(
@@ -147,16 +201,18 @@ async function fillPageNameById(
   card: MetaPortfolioPublic,
 ): Promise<MetaPortfolioPublic> {
   const pageId = String(card.primaryPageId || "").trim();
-  if (!pageId || card.primaryPageName || pageId === businessId) return card;
-  const named = await getFields(graph, token, pageId, "id,name");
+  if (!pageId || pageId === businessId) return card;
+  if (card.primaryPageName && card.profilePictureUrl) return card;
+  const named = await getFields(graph, token, pageId, "id,name,picture");
   if (!named.ok) return card;
   const row = asRecord(named.json);
   const pageName = text(row.name);
   const namedId = text(row.id) || pageId;
-  if (!pageName || namedId === businessId) return card;
+  if (namedId === businessId) return card;
+  if (!pageName && !row.picture) return card;
   return mergePortfolioIdentity({
     fallback: card,
-    business: { primary_page: { id: namedId, name: pageName } },
+    business: { primary_page: { id: namedId, name: pageName, picture: row.picture } },
   });
 }
 
@@ -236,6 +292,12 @@ export async function fetchBusinessFromGraph(
   const fromEdges = await mergePageEdges(graph, token, id, card, photoDownloadUrl);
   card = fromEdges.card;
   photoDownloadUrl = fromEdges.photoDownloadUrl;
+  const fromNested = await mergeNestedOwnedPages(graph, token, id, card, photoDownloadUrl);
+  card = fromNested.card;
+  photoDownloadUrl = fromNested.photoDownloadUrl;
+  const fromAccounts = await mergePagesFromUserAccounts(graph, token, id, card, photoDownloadUrl);
+  card = fromAccounts.card;
+  photoDownloadUrl = fromAccounts.photoDownloadUrl;
   card = await fillPageNameById(graph, token, id, card);
   if (!card.profilePictureUrl && !photoDownloadUrl) {
     const picture = await graph({
@@ -277,7 +339,7 @@ export async function fetchAssignedBusinesses(
     token,
     method: "GET",
     path: "me/businesses",
-    query: { fields: "id,name,profile_picture_uri,primary_page{id,name}", limit: "50" },
+    query: { fields: "id,name,profile_picture_uri,picture,primary_page{id,name,picture}", limit: "50" },
   });
   if (rich.ok) return rich.json;
   const basic = await graph({

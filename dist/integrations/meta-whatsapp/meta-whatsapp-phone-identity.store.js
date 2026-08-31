@@ -57,6 +57,7 @@ function readPhoneIdentity(tenantId, phoneNumberId) {
             return null;
         const row = JSON.parse((0, node_fs_1.readFileSync)(file, "utf8"));
         const photoExt = row.photoExt === "png" || row.photoExt === "jpg" ? row.photoExt : null;
+        const photoSource = String(row.photoSource || "").trim() || null;
         const name = String(row.name || "").trim() || null;
         const vertical = String(row.vertical || "").trim() || null;
         const description = row.description === undefined || row.description === null ? null : String(row.description);
@@ -71,6 +72,7 @@ function readPhoneIdentity(tenantId, phoneNumberId) {
         return {
             name,
             photoExt,
+            photoSource,
             vertical,
             description,
             address,
@@ -92,6 +94,7 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
     const current = readPhoneIdentity(tenantId, phoneNumberId) || {
         name: null,
         photoExt: null,
+        photoSource: null,
         vertical: null,
         description: null,
         address: null,
@@ -110,6 +113,7 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
     const next = {
         name: input.name !== undefined ? input.name : current.name,
         photoExt: current.photoExt,
+        photoSource: input.photoSource !== undefined ? input.photoSource : current.photoSource,
         vertical: input.vertical !== undefined ? input.vertical : current.vertical,
         description: input.description !== undefined ? input.description : current.description,
         address: input.address !== undefined ? input.address : current.address,
@@ -178,11 +182,11 @@ function isPhoneInboxEnabled(identity) {
     return identity?.inboxEnabled === true;
 }
 function phoneInboxDisplayName(identity) {
-    const saved = String(identity?.name || "").trim();
-    if (saved)
-        return saved;
     const channel = String(identity?.channelName || "").trim();
-    return channel || null;
+    if (channel)
+        return channel;
+    const saved = String(identity?.name || "").trim();
+    return saved || null;
 }
 function listPhoneInboxChannels(tenantId) {
     try {
@@ -275,48 +279,21 @@ function applyLocalPhoneIdentities(tenantId, numbers) {
         const nameSync = (0, meta_whatsapp_portfolio_map_1.resolvePhoneNameSync)({
             verifiedName: row.verifiedName,
             nameStatus: row.nameStatus,
-            newDisplayName: row.newDisplayName || identity?.name || null,
+            newDisplayName: row.newDisplayName,
             newNameStatus: row.newNameStatus,
-            localName: identity?.name || null,
         });
         const connected = (0, meta_whatsapp_portfolio_map_1.isMetaPhoneConnected)(row.metaStatus);
-        if (!identity) {
-            return {
-                ...row,
-                requestedName: nameSync.requestedName,
-                nameSyncStatus: nameSync.nameSyncStatus,
-                nameNeedsRegister: nameSync.nameNeedsRegister,
-                canActivate: !connected || nameSync.nameNeedsRegister,
-                photoSyncStatus: null,
-                profileSyncStatus: null,
-                inboxEnabled: false,
-            };
-        }
-        const sync = phoneIdentitySyncStatus({
-            localPhoto: Boolean(identity.photoExt),
-            localDescription: String(identity.description || "").trim() || null,
-            metaDescription: row.description,
-            photoMetaApplied: identity.photoMetaApplied,
-            profileMetaApplied: identity.profileMetaApplied,
-        });
-        const photoApplied = sync.photoSyncStatus === "applied";
-        const profileApplied = sync.profileSyncStatus === "applied";
         const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
         return {
             ...row,
             requestedName: nameSync.requestedName,
-            verifiedName: row.verifiedName,
-            profilePictureUrl: localPhoto || null,
-            vertical: profileApplied ? identity.vertical || row.vertical : row.vertical,
-            description: profileApplied ? identity.description ?? row.description : row.description,
-            address: profileApplied ? identity.address ?? row.address : row.address,
-            email: profileApplied ? identity.email || row.email : row.email,
             nameSyncStatus: nameSync.nameSyncStatus,
             nameNeedsRegister: nameSync.nameNeedsRegister,
             canActivate: !connected || nameSync.nameNeedsRegister,
-            photoSyncStatus: photoApplied || localPhoto ? (photoApplied ? "applied" : sync.photoSyncStatus) : null,
-            profileSyncStatus: sync.profileSyncStatus,
+            profilePictureUrl: localPhoto || row.profilePictureUrl,
             inboxEnabled: isPhoneInboxEnabled(identity),
+            photoSyncStatus: localPhoto ? "applied" : row.photoSyncStatus,
+            profileSyncStatus: row.profileSyncStatus,
         };
     });
 }

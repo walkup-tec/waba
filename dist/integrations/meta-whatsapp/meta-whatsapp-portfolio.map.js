@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_OWNED_PAGES_FIELDS = exports.META_BUSINESS_IDENTITY_FIELDS_MINIMAL = exports.META_BUSINESS_IDENTITY_FIELDS = exports.META_WABA_IDENTITY_FIELDS_MINIMAL = exports.META_WABA_IDENTITY_FIELDS = exports.META_PHONE_NAME_FIELDS = exports.META_PHONE_NUMBER_LIST_FIELDS = void 0;
 exports.graphPhotoDownloadUrl = graphPhotoDownloadUrl;
+exports.graphPhotoSourceKey = graphPhotoSourceKey;
+exports.safePublicPhotoUrl = safePublicPhotoUrl;
 exports.isMetaPhoneConnected = isMetaPhoneConnected;
 exports.namesEqual = namesEqual;
 exports.mapPhoneNameFields = mapPhoneNameFields;
@@ -80,6 +82,24 @@ function graphPhotoDownloadUrl(json) {
         pictureUrl(row, true) ||
         pictureUrl(asRecord(row.data), true) ||
         httpsUrl(row.url, true));
+}
+/** Path estável da CDN da Meta — query string muda o tempo todo na mesma foto. */
+function graphPhotoSourceKey(url) {
+    const raw = String(url || "").trim();
+    if (!raw)
+        return null;
+    try {
+        const parsed = new URL(raw);
+        if (parsed.protocol !== "https:")
+            return null;
+        return parsed.pathname.replace(/\/+$/, "") || parsed.hostname;
+    }
+    catch {
+        return raw.slice(0, 160);
+    }
+}
+function safePublicPhotoUrl(value) {
+    return httpsUrl(value, false);
 }
 function isMetaPhoneConnected(metaStatus) {
     return String(metaStatus || "").trim().toUpperCase() === "CONNECTED";

@@ -13,11 +13,13 @@ exports.readPortfolioBusinessPhoto = readPortfolioBusinessPhoto;
 exports.localPortfolioBusinessPhotoUrl = localPortfolioBusinessPhotoUrl;
 exports.applyLocalPortfolioBusinessPhoto = applyLocalPortfolioBusinessPhoto;
 exports.isPortfolioBusinessPhotoFresh = isPortfolioBusinessPhotoFresh;
+exports.shouldRefreshPortfolioBusinessPhoto = shouldRefreshPortfolioBusinessPhoto;
 exports.purgePortfolioIdentity = purgePortfolioIdentity;
 const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const data_path_1 = require("../../data-path");
+const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 function identityDir() {
     return node_path_1.default.join((0, data_path_1.resolveDataDir)(), "meta-whatsapp", "portfolio-identity");
@@ -114,7 +116,7 @@ function businessPhotoBase(tenantId, businessId) {
         return null;
     return node_path_1.default.join(identityDir(), `${safeTenantId(tenantId)}-${biz}`);
 }
-function writePortfolioBusinessPhoto(tenantId, businessId, photo) {
+function writePortfolioBusinessPhoto(tenantId, businessId, photo, sourceUrl) {
     const base = businessPhotoBase(tenantId, businessId);
     if (!base)
         return null;
@@ -125,9 +127,27 @@ function writePortfolioBusinessPhoto(tenantId, businessId, photo) {
             (0, node_fs_1.unlinkSync)(previous);
     }
     (0, node_fs_1.writeFileSync)(`${base}.${photo.ext}`, photo.bytes);
-    const updatedAt = new Date().toISOString();
-    (0, node_fs_1.writeFileSync)(`${base}.json`, JSON.stringify({ photoExt: photo.ext, updatedAt }), "utf8");
+    const current = readPortfolioBusinessPhotoMeta(tenantId, businessId);
+    const sourcePath = (0, meta_whatsapp_portfolio_map_1.graphPhotoSourceKey)(sourceUrl) || current?.sourcePath || null;
+    const sameSource = Boolean(sourcePath && current?.sourcePath && sourcePath === current.sourcePath);
+    const updatedAt = sameSource && current?.updatedAt ? current.updatedAt : new Date().toISOString();
+    (0, node_fs_1.writeFileSync)(`${base}.json`, JSON.stringify({ photoExt: photo.ext, updatedAt, sourcePath }), "utf8");
     return `/integrations/meta/whatsapp/portfolio/photo?businessId=${encodeURIComponent(String(businessId).trim())}&v=${encodeURIComponent(updatedAt)}`;
+}
+function readPortfolioBusinessPhotoMeta(tenantId, businessId) {
+    const base = businessPhotoBase(tenantId, businessId);
+    if (!base || !(0, node_fs_1.existsSync)(`${base}.json`))
+        return null;
+    try {
+        const row = JSON.parse((0, node_fs_1.readFileSync)(`${base}.json`, "utf8"));
+        const photoExt = row.photoExt === "png" || row.photoExt === "jpg" ? row.photoExt : null;
+        const updatedAt = String(row.updatedAt || "").trim() || null;
+        const sourcePath = String(row.sourcePath || "").trim() || null;
+        return { photoExt, updatedAt, sourcePath };
+    }
+    catch {
+        return null;
+    }
 }
 function readPortfolioBusinessPhoto(tenantId, businessId) {
     const base = businessPhotoBase(tenantId, businessId);
@@ -178,22 +198,32 @@ function applyLocalPortfolioBusinessPhoto(tenantId, portfolio) {
         return portfolio;
     return { ...portfolio, profilePictureUrl: local };
 }
-const BUSINESS_PHOTO_TTL_MS = 15 * 60 * 1000;
+const BUSINESS_PHOTO_TTL_MS = 30 * 1000;
 function isPortfolioBusinessPhotoFresh(tenantId, businessId, ttlMs = BUSINESS_PHOTO_TTL_MS) {
     const id = String(businessId || "").trim();
     if (!id || !readPortfolioBusinessPhoto(tenantId, id))
         return false;
-    const base = businessPhotoBase(tenantId, id);
-    if (!base || !(0, node_fs_1.existsSync)(`${base}.json`))
+    const meta = readPortfolioBusinessPhotoMeta(tenantId, id);
+    if (!meta?.updatedAt)
         return false;
-    try {
-        const row = JSON.parse((0, node_fs_1.readFileSync)(`${base}.json`, "utf8"));
-        const age = Date.now() - Date.parse(String(row.updatedAt || ""));
-        return Number.isFinite(age) && age >= 0 && age < ttlMs;
-    }
-    catch {
+    const age = Date.now() - Date.parse(meta.updatedAt);
+    return Number.isFinite(age) && age >= 0 && age < ttlMs;
+}
+function shouldRefreshPortfolioBusinessPhoto(tenantId, businessId, sourceUrl, ttlMs = BUSINESS_PHOTO_TTL_MS) {
+    const id = String(businessId || "").trim();
+    if (!id)
         return false;
-    }
+    if (!readPortfolioBusinessPhoto(tenantId, id))
+        return true;
+    const next = (0, meta_whatsapp_portfolio_map_1.graphPhotoSourceKey)(sourceUrl);
+    const stored = readPortfolioBusinessPhotoMeta(tenantId, id)?.sourcePath || null;
+    if (next && stored && next === stored)
+        return false;
+    if (next && stored && next !== stored)
+        return true;
+    if (next && !stored)
+        return true;
+    return !isPortfolioBusinessPhotoFresh(tenantId, id, ttlMs);
 }
 function purgePortfolioIdentity(tenantId) {
     try {

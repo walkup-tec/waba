@@ -84,6 +84,23 @@ export function graphPhotoDownloadUrl(json: unknown): string | null {
   );
 }
 
+/** Path estável da CDN da Meta — query string muda o tempo todo na mesma foto. */
+export function graphPhotoSourceKey(url: string | null | undefined): string | null {
+  const raw = String(url || "").trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:") return null;
+    return parsed.pathname.replace(/\/+$/, "") || parsed.hostname;
+  } catch {
+    return raw.slice(0, 160);
+  }
+}
+
+export function safePublicPhotoUrl(value: unknown): string | null {
+  return httpsUrl(value, false);
+}
+
 export function isMetaPhoneConnected(metaStatus: string | null): boolean {
   return String(metaStatus || "").trim().toUpperCase() === "CONNECTED";
 }

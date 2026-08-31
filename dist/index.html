@@ -3537,7 +3537,7 @@
           border: 0;
           border-radius: 999px;
           background: #12261c;
-          cursor: pointer;
+          cursor: default;
           flex: 0 0 auto;
           overflow: hidden;
         }
@@ -3559,13 +3559,9 @@
           background: transparent;
           color: inherit;
           text-align: left;
-          cursor: pointer;
+          cursor: default;
           flex: 1;
           min-width: 0;
-        }
-        .meta-number-col-name:hover .meta-number-name,
-        .meta-number-col-name:focus-visible .meta-number-name {
-          color: #bbf7d0;
         }
         .meta-number-photo {
           width: 44px;
@@ -20985,69 +20981,11 @@
                   <h3 class="meta-lab-card-title">Portfólios</h3>
                   <div id="meta-tp-portfolio-list" class="meta-portfolio-shell"></div>
                   <div class="meta-portfolio-toolbar">
-                    <button type="button" id="meta-tp-edit-portfolio" class="meta-onboard-cta meta-onboard-cta-secondary meta-number-edit">Editar portfólio</button>
                     <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" id="meta-tp-reset-lab" data-meta-reset-portfolio="1">Excluir e recomeçar</button>
                   </div>
                   <div id="meta-tp-numbers" class="meta-number-list" hidden></div>
                   <p id="meta-tp-numbers-empty" class="muted" hidden>Nenhum número neste portfólio ainda.</p>
                 </article>
-                <div id="meta-tp-edit-modal" class="meta-edit-modal" hidden>
-                  <div class="meta-edit-modal-card" role="dialog" aria-labelledby="meta-tp-edit-title">
-                    <h3 id="meta-tp-edit-title">Editar número</h3>
-                    <p id="meta-tp-edit-phone" class="muted" style="margin:0;">—</p>
-                    <label>
-                      <span id="meta-tp-edit-name-label">Nome de exibição no WhatsApp</span>
-                      <input id="meta-tp-edit-name" type="text" maxlength="512" autocomplete="organization" />
-                    </label>
-                    <p id="meta-tp-edit-hint" class="muted" style="margin:8px 0 0;">A Meta precisa aprovar o novo nome. Depois ative o número de novo com o PIN de 6 dígitos.</p>
-                    <label>Foto de perfil
-                      <input id="meta-tp-edit-photo" type="file" accept="image/png,image/jpeg" />
-                    </label>
-                    <img id="meta-tp-edit-preview" class="meta-edit-preview" alt="Prévia da foto" hidden />
-                    <div id="meta-tp-edit-biz" class="meta-edit-biz" hidden>
-                      <label>Categoria
-                        <select id="meta-tp-edit-vertical">
-                          <option value="">Selecionar</option>
-                          <option value="OTHER">Outro</option>
-                          <option value="PROF_SERVICES">Serviços profissionais</option>
-                          <option value="RETAIL">Compras e varejo</option>
-                          <option value="RESTAURANT">Restaurante</option>
-                          <option value="BEAUTY">Beleza, spa e salão</option>
-                          <option value="HEALTH">Saúde e medicina</option>
-                          <option value="EDU">Educação</option>
-                          <option value="FINANCE">Finanças e bancos</option>
-                          <option value="AUTO">Automotivo</option>
-                          <option value="APPAREL">Roupas e vestuário</option>
-                          <option value="ENTERTAIN">Entretenimento</option>
-                          <option value="EVENT_PLAN">Eventos e serviços</option>
-                          <option value="GROCERY">Alimentos e mercearia</option>
-                          <option value="GOVT">Serviço público</option>
-                          <option value="HOTEL">Hotel e hospedagem</option>
-                          <option value="NONPROFIT">Organização sem fins lucrativos</option>
-                          <option value="TRAVEL">Viagem e transporte</option>
-                          <option value="ALCOHOL">Bebidas alcoólicas</option>
-                        </select>
-                      </label>
-                      <label>Descrição
-                        <textarea id="meta-tp-edit-description" maxlength="512" placeholder="Descrição da empresa"></textarea>
-                        <span id="meta-tp-edit-description-count" class="meta-edit-count">0/512</span>
-                      </label>
-                      <label>Endereço
-                        <input id="meta-tp-edit-address" type="text" maxlength="256" placeholder="Insira o endereço comercial" autocomplete="street-address" />
-                        <span id="meta-tp-edit-address-count" class="meta-edit-count">0/256</span>
-                      </label>
-                      <label>E-mail
-                        <input id="meta-tp-edit-email" type="email" maxlength="128" placeholder="Insira o e-mail comercial" autocomplete="email" />
-                        <span id="meta-tp-edit-email-count" class="meta-edit-count">0/128</span>
-                      </label>
-                    </div>
-                    <p id="meta-tp-edit-status" class="muted" style="margin:10px 0 0;" role="status"></p>
-                    <div class="meta-edit-actions">
-                      <button type="button" class="instance-action-btn btn-refresh enabled" id="meta-tp-edit-cancel">Cancelar</button>
-                      <button type="button" class="meta-onboard-cta" id="meta-tp-edit-save">Salvar</button>
-                    </div>
-                  </div>
-                </div>
                 <p id="meta-tp-connect-status" class="muted" style="margin:0 0 10px;" role="status" aria-live="polite" hidden></p>
                 <div class="meta-onboard-next">
                   <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaOpenLabTab('whatsapp-templates');">Ir para Templates</button>
@@ -35449,7 +35387,6 @@
             return true;
           }
           if (
-            el.id === "meta-tp-edit-save" ||
             el.id === "meta-cloud-lab-send" ||
             el.id === "meta-inbox-send" ||
             el.id === "meta-inbox-tpl-send"
@@ -35832,7 +35769,6 @@
                 (nameState === "ready" ? " — informe o PIN" : "") +
                 "</span>"
               : "";
-            const editName = metaTpEsc(requested || item.verifiedName || groupName || "");
             const id = metaTpEsc(item.phoneNumberId);
             const photoUrl = String(item.profilePictureUrl || "").trim();
             const isLocalPhoto = /^\/integrations\/meta\/whatsapp\/phone-numbers\/photo(\?|$)/i.test(photoUrl);
@@ -35879,25 +35815,13 @@
                 (item.nameNeedsRegister && ativo ? "Aplicar nome na Meta" : "Ativar") +
                 "</button></div>"
               : "";
-            const editAttrs =
-              ' data-meta-edit="' +
-              id +
-              '" data-meta-edit-name="' +
-              editName +
-              '" data-meta-edit-phone="' +
-              phone +
-              '"';
             if (!ativo) {
               const region = metaTpPhoneRegion(item.displayPhoneNumber);
               return (
                 '<article class="meta-number-card is-pending">' +
-                '<button type="button" class="meta-number-logo"' +
-                editAttrs +
-                ' aria-label="Editar perfil de ' +
-                verified +
-                '">' +
+                '<div class="meta-number-logo">' +
                 avatar +
-                "</button>" +
+                "</div>" +
                 '<div class="meta-number-col meta-number-col-phone">' +
                 '<span class="meta-number-phone-primary">' +
                 phone +
@@ -35916,18 +35840,10 @@
             }
             return (
               '<article class="meta-number-card">' +
-              '<button type="button" class="meta-number-logo"' +
-              editAttrs +
-              ' aria-label="Editar perfil de ' +
-              verified +
-              '">' +
+              '<div class="meta-number-logo">' +
               avatar +
-              "</button>" +
-              '<button type="button" class="meta-number-col meta-number-col-name"' +
-              editAttrs +
-              ' aria-label="Editar nome de ' +
-              verified +
-              '">' +
+              "</div>" +
+              '<div class="meta-number-col meta-number-col-name">' +
               '<span class="meta-number-name">' +
               verified +
               "</span>" +
@@ -35935,7 +35851,7 @@
               phone +
               "</span>" +
               requestedLine +
-              "</button>" +
+              "</div>" +
               '<div class="meta-number-badges">' +
               statusChip +
               dispatchChip +
@@ -35978,7 +35894,7 @@
             const bizId = metaTpBusinessIdLabel(item);
             const isSelected = bizId !== "—" && bizId === selectedKey;
             const name = metaTpPortfolioTitle(item);
-            const page = item.primaryPageName || "—";
+            const page = item.primaryPageName || item.primaryPageId || "—";
             const waba = String(item.wabaId || "").trim() || "—";
             return (
               '<article class="meta-portfolio-card' +
@@ -36102,6 +36018,42 @@
       }
 
       let metaTpPortfolioInflight = null;
+      let metaTpPortfolioFingerprint = "";
+      let metaTpLiveTimer = null;
+      const META_TP_LIVE_MS = 2500;
+
+      function metaTpAssetsFingerprint(assets) {
+        const list = (assets && assets.portfolios) || [];
+        return JSON.stringify(
+          list.map(function (item) {
+            return {
+              id: item.id || "",
+              name: item.name || "",
+              page: item.primaryPageName || "",
+              pageId: item.primaryPageId || "",
+              waba: item.wabaId || "",
+              photo: item.profilePictureUrl || "",
+              numbers: (item.numbers || []).map(function (row) {
+                return {
+                  id: row.phoneNumberId || "",
+                  name: row.verifiedName || "",
+                  requested: row.requestedName || "",
+                  phone: row.displayPhoneNumber || "",
+                  photo: row.profilePictureUrl || "",
+                  status: row.uiStatus || "",
+                  inbox: row.inboxEnabled === true,
+                  pin: row.nameNeedsRegister === true,
+                };
+              }),
+            };
+          }),
+        );
+      }
+
+      function metaTpLabTabVisible() {
+        const tab = document.getElementById("tab-whatsapp-oficial");
+        return Boolean(tab && !tab.classList.contains("tab-hidden") && tab.getAttribute("aria-hidden") !== "true");
+      }
 
       function metaTpShowPortfolioLoading() {
         const section = document.getElementById("meta-tp-portfolio");
@@ -36119,7 +36071,8 @@
           "</div>";
       }
 
-      async function metaTpLoadPortfolio() {
+      async function metaTpLoadPortfolio(opts) {
+        const silent = Boolean(opts && opts.silent);
         if (metaTpPortfolioInflight) return metaTpPortfolioInflight;
         metaTpPortfolioInflight = (async function () {
         const enabled =
@@ -36130,16 +36083,19 @@
           metaTpRenderPortfolio({ portfolio: null, numbers: [] });
           return;
         }
-        metaTpShowPortfolioLoading();
+        if (!silent) metaTpShowPortfolioLoading();
         try {
           const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/portfolio");
           if (!response.ok || payload.ok === false) {
-            metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+            if (!silent) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
             return;
           }
+          const next = metaTpAssetsFingerprint(payload);
+          if (silent && next === metaTpPortfolioFingerprint) return;
+          metaTpPortfolioFingerprint = next;
           metaTpRenderPortfolio(payload);
         } catch {
-          metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+          if (!silent) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
         }
         })();
         try {
@@ -36147,6 +36103,17 @@
         } finally {
           metaTpPortfolioInflight = null;
         }
+      }
+
+      function metaTpStartLiveSync() {
+        if (metaTpLiveTimer) return;
+        metaTpLiveTimer = window.setInterval(function () {
+          if (document.hidden || !metaTpLabTabVisible()) return;
+          metaTpLoadPortfolio({ silent: true });
+        }, META_TP_LIVE_MS);
+        document.addEventListener("visibilitychange", function () {
+          if (!document.hidden && metaTpLabTabVisible()) metaTpLoadPortfolio({ silent: true });
+        });
       }
 
       function metaTpFormatPublicStatus(payload) {
@@ -36408,207 +36375,9 @@
         return true;
       };
 
-      const metaTpEditState = { kind: "number", phoneNumberId: "", originalName: "", photoBase64: "", photoMime: "" };
-
-      function metaTpEditStatus(text) {
-        const el = document.getElementById("meta-tp-edit-status");
-        if (el) el.textContent = text || "";
-      }
-
-      function metaTpSetEditCopy(kind, subtitle, name) {
-        const titleEl = document.getElementById("meta-tp-edit-title");
-        const phoneEl = document.getElementById("meta-tp-edit-phone");
-        const labelEl = document.getElementById("meta-tp-edit-name-label");
-        const hintEl = document.getElementById("meta-tp-edit-hint");
-        const nameEl = document.getElementById("meta-tp-edit-name");
-        const isPortfolio = kind === "portfolio";
-        const file = document.getElementById("meta-tp-edit-photo");
-        if (titleEl) titleEl.textContent = isPortfolio ? "Editar portfólio" : "Editar número";
-        if (phoneEl) phoneEl.textContent = subtitle || "";
-        if (labelEl) labelEl.textContent = isPortfolio ? "Nome do portfólio" : "Nome de exibição no WhatsApp";
-        if (hintEl) {
-          hintEl.textContent = isPortfolio
-            ? "O card do Laboratório atualiza na hora. A Meta só replica o nome se o token for admin do Business, e a foto só se houver uma Página do Facebook."
-            : "O nome e a foto que o cliente vê no disparo são os da Meta. Foto e descrição entram na hora. O nome de exibição só muda depois da Meta aprovar — aí ative de novo com o PIN.";
-        }
-        if (file) file.disabled = false;
-        if (nameEl) nameEl.value = name || "";
-        const biz = document.getElementById("meta-tp-edit-biz");
-        if (biz) biz.hidden = isPortfolio;
-      }
-
-      function metaTpCloseEditNumber() {
-        const modal = document.getElementById("meta-tp-edit-modal");
-        if (modal) modal.hidden = true;
-        metaTpEditState.kind = "number";
-        metaTpEditState.phoneNumberId = "";
-        metaTpEditState.originalName = "";
-        metaTpEditState.photoBase64 = "";
-        metaTpEditState.photoMime = "";
-        const file = document.getElementById("meta-tp-edit-photo");
-        if (file) {
-          file.value = "";
-          file.disabled = false;
-        }
-        const preview = document.getElementById("meta-tp-edit-preview");
-        if (preview) {
-          preview.removeAttribute("src");
-          preview.hidden = true;
-        }
-        metaTpEditStatus("");
-      }
-
-      function metaTpFillCount(id, countId, max) {
-        const el = document.getElementById(id);
-        const count = document.getElementById(countId);
-        const len = String((el && el.value) || "").length;
-        if (count) count.textContent = len + "/" + max;
-      }
-
-      function metaTpFillBizFields(row) {
-        const verticalEl = document.getElementById("meta-tp-edit-vertical");
-        const descEl = document.getElementById("meta-tp-edit-description");
-        const addrEl = document.getElementById("meta-tp-edit-address");
-        const emailEl = document.getElementById("meta-tp-edit-email");
-        if (verticalEl) verticalEl.value = String((row && row.vertical) || "");
-        if (descEl) descEl.value = String((row && row.description) || "");
-        if (addrEl) addrEl.value = String((row && row.address) || "");
-        if (emailEl) emailEl.value = String((row && row.email) || "");
-        metaTpFillCount("meta-tp-edit-description", "meta-tp-edit-description-count", 512);
-        metaTpFillCount("meta-tp-edit-address", "meta-tp-edit-address-count", 256);
-        metaTpFillCount("meta-tp-edit-email", "meta-tp-edit-email-count", 128);
-      }
-
-      function metaTpOpenEditNumber(phoneNumberId, phone, name) {
-        metaTpEditState.kind = "number";
-        metaTpEditState.phoneNumberId = String(phoneNumberId || "").trim();
-        metaTpEditState.originalName = String(name && name !== "Sem nome de exibição" ? name : "").trim();
-        metaTpEditState.photoBase64 = "";
-        metaTpEditState.photoMime = "";
-        const row = (metaTpSession.numbers || []).find(function (item) {
-          return String(item.phoneNumberId) === metaTpEditState.phoneNumberId;
-        }) || {};
-        const modal = document.getElementById("meta-tp-edit-modal");
-        const file = document.getElementById("meta-tp-edit-photo");
-        const preview = document.getElementById("meta-tp-edit-preview");
-        metaTpSetEditCopy("number", phone || "", metaTpEditState.originalName);
-        metaTpFillBizFields(row);
-        if (file) file.value = "";
-        if (preview) {
-          preview.removeAttribute("src");
-          preview.hidden = true;
-        }
-        metaTpEditStatus("");
-        if (modal) modal.hidden = false;
-        const nameEl = document.getElementById("meta-tp-edit-name");
-        if (nameEl) nameEl.focus();
-      }
-
-      function metaTpOpenEditPortfolio() {
-        const nameEl = document.getElementById("meta-tp-portfolio-name");
-        const idEl = document.getElementById("meta-tp-portfolio-id");
-        const name = String((nameEl && nameEl.textContent) || "").trim();
-        const id = String((idEl && idEl.textContent) || "").trim();
-        metaTpEditState.kind = "portfolio";
-        metaTpEditState.phoneNumberId = "";
-        metaTpEditState.originalName = name;
-        metaTpEditState.photoBase64 = "";
-        metaTpEditState.photoMime = "";
-        const modal = document.getElementById("meta-tp-edit-modal");
-        const file = document.getElementById("meta-tp-edit-photo");
-        const preview = document.getElementById("meta-tp-edit-preview");
-        metaTpSetEditCopy("portfolio", id ? "ID " + id : "", name);
-        metaTpFillBizFields({});
-        if (file) file.value = "";
-        if (preview) {
-          preview.removeAttribute("src");
-          preview.hidden = true;
-        }
-        metaTpEditStatus("");
-        if (modal) modal.hidden = false;
-        const input = document.getElementById("meta-tp-edit-name");
-        if (input) input.focus();
-      }
-
-      window.wabaSaveMetaWhatsappNumberProfile = async function wabaSaveMetaWhatsappNumberProfile() {
-        const isPortfolio = metaTpEditState.kind === "portfolio";
-        const phoneNumberId = metaTpEditState.phoneNumberId;
-        const nameEl = document.getElementById("meta-tp-edit-name");
-        const displayName = String((nameEl && nameEl.value) || "").trim();
-        const nameChanged = Boolean(displayName && displayName !== metaTpEditState.originalName);
-        const vertical = String((document.getElementById("meta-tp-edit-vertical") || {}).value || "").trim();
-        const description = String((document.getElementById("meta-tp-edit-description") || {}).value || "").trim();
-        const address = String((document.getElementById("meta-tp-edit-address") || {}).value || "").trim();
-        const email = String((document.getElementById("meta-tp-edit-email") || {}).value || "").trim();
-        const bizChanged = !isPortfolio && Boolean(vertical || description || address || email);
-        if (!isPortfolio && !phoneNumberId) return false;
-        if (!nameChanged && !metaTpEditState.photoBase64 && !bizChanged) {
-          metaTpEditStatus("Altere o nome, a foto ou as informações da empresa.");
-          return false;
-        }
-        if (nameChanged && displayName.length < 3) {
-          metaTpEditStatus("O nome de exibição precisa ter pelo menos 3 caracteres.");
-          return false;
-        }
-        metaTpEditStatus("Salvando no card…");
-        const path = isPortfolio
-          ? "/integrations/meta/whatsapp/portfolio/profile"
-          : "/integrations/meta/whatsapp/phone-numbers/profile";
-        const body = isPortfolio
-          ? {
-              displayName: nameChanged ? displayName : "",
-              photoBase64: metaTpEditState.photoBase64,
-              photoMime: metaTpEditState.photoMime,
-            }
-          : {
-              phoneNumberId: phoneNumberId,
-              displayName: nameChanged ? displayName : "",
-              photoBase64: metaTpEditState.photoBase64,
-              photoMime: metaTpEditState.photoMime,
-              vertical: vertical,
-              description: description,
-              address: address,
-              email: email,
-            };
-        const { response, payload } = await metaTpFetchJson(path, {
-          method: "POST",
-          body: JSON.stringify(body),
-        });
-        if (!response.ok || payload.ok === false) {
-          metaTpEditStatus(String(payload.error || "Não foi possível salvar."));
-          return false;
-        }
-        if (payload.warning) {
-          metaTpSetStatus(String(payload.warning));
-        } else {
-          metaTpSetStatus("");
-        }
-        metaTpRenderPortfolio(payload);
-        metaTpCloseEditNumber();
-        if (!isPortfolio && typeof window.wabaRefreshMetaInbox === "function") {
-          window.wabaRefreshMetaInbox();
-        }
-        return true;
-      };
-
       window.addEventListener("click", function (event) {
         const target = event.target;
         if (!target || !target.closest) return;
-        if (target.id === "meta-tp-edit-cancel" || target.id === "meta-tp-edit-modal") {
-          event.preventDefault();
-          metaTpCloseEditNumber();
-          return;
-        }
-        if (target.id === "meta-tp-edit-save") {
-          event.preventDefault();
-          window.wabaSaveMetaWhatsappNumberProfile();
-          return;
-        }
-        if (target.id === "meta-tp-edit-portfolio" || (target.closest && target.closest("#meta-tp-edit-portfolio"))) {
-          event.preventDefault();
-          metaTpOpenEditPortfolio();
-          return;
-        }
         if (target.id === "meta-tp-reset-lab" || (target.closest && target.closest("[data-meta-reset-portfolio]"))) {
           event.preventDefault();
           metaTpResetOfficialLab();
@@ -36663,16 +36432,6 @@
             });
           return;
         }
-        const editBtn = target.closest("[data-meta-edit]");
-        if (editBtn && portfolioRoot && portfolioRoot.contains(editBtn)) {
-          event.preventDefault();
-          metaTpOpenEditNumber(
-            editBtn.getAttribute("data-meta-edit"),
-            editBtn.getAttribute("data-meta-edit-phone"),
-            editBtn.getAttribute("data-meta-edit-name"),
-          );
-          return;
-        }
         const btn = target.closest("[data-meta-activate]");
         if (btn && portfolioRoot && portfolioRoot.contains(btn)) {
           event.preventDefault();
@@ -36714,40 +36473,6 @@
         card.click();
       });
 
-      window.addEventListener("input", function (event) {
-        const id = event.target && event.target.id;
-        if (id === "meta-tp-edit-description") metaTpFillCount("meta-tp-edit-description", "meta-tp-edit-description-count", 512);
-        if (id === "meta-tp-edit-address") metaTpFillCount("meta-tp-edit-address", "meta-tp-edit-address-count", 256);
-        if (id === "meta-tp-edit-email") metaTpFillCount("meta-tp-edit-email", "meta-tp-edit-email-count", 128);
-      });
-
-      window.addEventListener("change", function (event) {
-        const input = event.target;
-        if (!input || input.id !== "meta-tp-edit-photo" || !input.files || !input.files[0]) return;
-        const file = input.files[0];
-        if (!/^image\/(jpeg|jpg|png)$/i.test(file.type)) {
-          metaTpEditStatus("Use uma foto JPEG ou PNG.");
-          return;
-        }
-        if (file.size > 5 * 1024 * 1024) {
-          metaTpEditStatus("A foto deve ter no máximo 5 MB.");
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = function () {
-          const dataUrl = String(reader.result || "");
-          metaTpEditState.photoBase64 = dataUrl;
-          metaTpEditState.photoMime = file.type;
-          const preview = document.getElementById("meta-tp-edit-preview");
-          if (preview) {
-            preview.src = dataUrl;
-            preview.hidden = false;
-          }
-          metaTpEditStatus("");
-        };
-        reader.readAsDataURL(file);
-      });
-
       window.addEventListener("message", function (event) {
         if (!window.__wabaMetaTechSignupActive) return;
         const origin = String(event.origin || "");
@@ -36787,6 +36512,7 @@
 
       if (document.getElementById("tab-whatsapp-oficial")) {
         metaTpShowPortfolioLoading();
+        metaTpStartLiveSync();
         if (typeof window.wabaRefreshMetaWhatsappStatus === "function") {
           window.wabaRefreshMetaWhatsappStatus();
         }
