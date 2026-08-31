@@ -78,6 +78,7 @@ const evo_connection_state_service_1 = require("./instances/evo-connection-state
 const whatsapp_connecting_restriction_service_1 = require("./instances/whatsapp-connecting-restriction.service");
 const evo_reconnect_purge_service_1 = require("./instances/evo-reconnect-purge.service");
 const campaign_instance_identity_1 = require("./instances/campaign-instance-identity");
+const campaign_instance_slots_1 = require("./instances/campaign-instance-slots");
 const evo_integration_probe_service_1 = require("./services/evo-integration-probe.service");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
 const waba_fazenda_pool_service_1 = require("./instances/waba-fazenda-pool.service");
@@ -875,6 +876,9 @@ function parseDisparosConfig(input) {
         whatsappTargetNumber: normalizeWhatsAppNumber(String(input?.whatsappTargetNumber || "")),
         responseUrl: normalizeDisparosResponseUrl(String(input?.responseUrl || "")),
         selectedDisparadorInstances,
+        instanceSlotCount: Math.floor(Number(input?.instanceSlotCount) || 0) >= 1
+            ? Math.floor(Number(input.instanceSlotCount))
+            : selectedDisparadorInstances.length,
         messengerImages: (0, waba_campaign_messenger_images_service_1.normalizeMessengerImagesConfig)(input?.messengerImages),
     };
 }
@@ -2369,6 +2373,7 @@ const DISPAROS_DEFAULTS = {
     whatsappTargetNumber: "",
     responseUrl: "",
     selectedDisparadorInstances: [],
+    instanceSlotCount: 0,
     messengerImages: [],
 };
 function isDisparosWindowOpen(config, now) {
@@ -5989,27 +5994,9 @@ function getCampaignInstanceHealth(config, evoRows) {
         missingConnectedForMinimum,
     };
 }
-/** Quantos números adicionar (com troca 1:1 dos offline) para sair do bloqueio. */
+/** Quantos números trocar (1:1 com os vermelhos). Nunca acresce além do teto da campanha. */
 function computeCampaignInstancesToAdd(health) {
-    const disconnected = Math.max(0, Number(health.disconnectedCount) || 0);
-    const connected = Math.max(0, Number(health.connectedCount) || 0);
-    const selected = Math.max(0, Number(health.selectedCount) || 0);
-    const minReq = Math.max(1, Number(health.minConnectedRequired) || 1);
-    // Cada adição troca 1 offline (selected estável) até acabar a fila de offline.
-    for (let k = 0; k <= disconnected; k += 1) {
-        const nextConnected = connected + k;
-        const nextDisconnected = disconnected - k;
-        const ratioOk = selected === 0 || nextDisconnected / selected < 0.5;
-        const minOk = nextConnected >= minReq;
-        if (ratioOk && minOk)
-            return k;
-    }
-    // Offline esgotados: ainda falta mínimo → só acrescenta.
-    const afterSwapConnected = connected + disconnected;
-    if (afterSwapConnected < minReq) {
-        return disconnected + (minReq - afterSwapConnected);
-    }
-    return Math.max(disconnected, 0);
+    return Math.max(0, Number(health.disconnectedCount) || 0);
 }
 /** Nomes do snapshot que estão desconectados/bloqueados (vermelhos). */
 function listDisconnectedStoredInstanceNames(selectedNames, evoRows) {
@@ -6019,48 +6006,62 @@ function listDisconnectedStoredInstanceNames(selectedNames, evoRows) {
         if (!stored)
             continue;
         const resolved = resolveStoredNameToEvoTag(stored, evoRows);
-        if (resolved.connected !== true)
+        if (resolved.connected !== true) {
             out.push(stored);
+            continue;
+        }
+        const key = String(resolved.instanceKey || stored).trim();
+        if ((0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled && key && (0, evo_instance_proxy_service_1.getConfirmedProxyFind)(key) === false) {
+            out.push(stored);
+        }
     }
     return out;
 }
 /**
- * Ao acrescentar números, remove a mesma quantidade de bloqueados/offline da seleção
- * (troca 1:1) para a campanha não ficar parada pelo ratio ≥50%.
+ * Troca 1:1: vermelho sai, substituto entra. Não passa do teto configurado.
  */
 function mergeCampaignInstancesReplacingBlocked(input) {
     const prevSelected = input.prevSelected
         .map((n) => String(n || "").trim())
         .filter(Boolean);
     const incoming = input.incoming.map((n) => String(n || "").trim()).filter(Boolean);
-    const prevKeySet = new Set(prevSelected.map((n) => {
-        const r = resolveStoredNameToEvoTag(n, input.evoRows);
-        return String(r.instanceKey || n).trim().toLowerCase();
-    }));
-    const added = [];
-    for (const name of incoming) {
-        const r = resolveStoredNameToEvoTag(name, input.evoRows);
-        const key = String(r.instanceKey || name).trim().toLowerCase();
-        if (!key || prevKeySet.has(key))
-            continue;
-        prevKeySet.add(key);
-        added.push(name);
-    }
     const disconnected = listDisconnectedStoredInstanceNames(prevSelected, input.evoRows);
-    const removedBlocked = disconnected.slice(0, added.length);
-    const removeSet = new Set(removedBlocked.map((n) => n.toLowerCase()));
-    const kept = prevSelected.filter((n) => !removeSet.has(n.toLowerCase()));
-    const selected = Array.from(new Set([...kept, ...added]));
-    return { selected, added, removedBlocked };
+    const slotCount = (0, campaign_instance_slots_1.resolveCampaignInstanceSlotCount)(prevSelected, input.slotCount);
+    const sameInstance = (a, b) => {
+        const ka = String(resolveStoredNameToEvoTag(a, input.evoRows).instanceKey || a)
+            .trim()
+            .toLowerCase();
+        const kb = String(resolveStoredNameToEvoTag(b, input.evoRows).instanceKey || b)
+            .trim()
+            .toLowerCase();
+        if (ka && kb && ka === kb)
+            return true;
+        return ka === String(b || "").trim().toLowerCase() || kb === String(a || "").trim().toLowerCase();
+    };
+    const merged = (0, campaign_instance_slots_1.mergeCampaignSlotsReplacingDisconnected)({
+        prevSelected,
+        incoming,
+        disconnected,
+        slotCount,
+        sameInstance,
+    });
+    return {
+        selected: merged.selected,
+        added: merged.added,
+        removedBlocked: merged.removed,
+    };
 }
 function campaignOwnerAuth(ownerEmail) {
     const email = String(ownerEmail || "").trim().toLowerCase();
     return { email, role: email.includes("@") ? "subscriber" : "guest" };
 }
 async function persistCampaignSelectedInstances(campaign, selected) {
+    const prevSelected = selectedInstanceNamesFromCampaign(campaign);
+    const slotCount = (0, campaign_instance_slots_1.resolveCampaignInstanceSlotCount)(prevSelected.length ? prevSelected : selected, campaign.configSnapshot?.instanceSlotCount);
     campaign.configSnapshot = parseDisparosConfig({
         ...(campaign.configSnapshot || DISPAROS_DEFAULTS),
         selectedDisparadorInstances: selected,
+        instanceSlotCount: slotCount,
     });
     const supabase = getSupabaseClient();
     if (supabase) {
@@ -6108,8 +6109,9 @@ function campaignSelectionIdentityKeys(selectedNames, evoRows) {
         const display = String(resolved.displayName || "").trim().toLowerCase();
         if (key)
             out.add(key);
-        if (display)
+        if (display && (0, campaign_instance_identity_1.isStableCampaignIdentityToken)(display, key, display)) {
             out.add(display);
+        }
         const row = evoRows.find((r) => String(r.instanceKey || "").trim().toLowerCase() === key);
         if (!row)
             continue;
@@ -6140,15 +6142,22 @@ function listSpareEvoRowsNotInCampaign(exceptCampaignId, selectedNames, evoRows)
         return true;
     });
 }
+function campaignInstanceHasProxyBrasil(instanceName) {
+    if (!(0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled)
+        return true;
+    return (0, evo_instance_proxy_service_1.getConfirmedProxyFind)(instanceName) === true;
+}
 function listConnectedSpareEvoNames(exceptCampaignId, selectedNames, evoRows, maxToAdd = 20) {
     const out = [];
     for (const row of listSpareEvoRowsNotInCampaign(exceptCampaignId, selectedNames, evoRows)) {
         const name = String(row.instanceKey || "").trim();
+        if (!name)
+            continue;
         if (isCampaignInstanceBlocked(name))
             continue;
-        const alias = String(row.displayName || "").trim();
-        const hasAlias = Boolean(alias) && alias.toLowerCase() !== name.toLowerCase();
-        if (row.connected !== true && !hasAlias)
+        if (row.connected !== true)
+            continue;
+        if (!campaignInstanceHasProxyBrasil(name))
             continue;
         out.push(name);
         if (out.length >= maxToAdd)
@@ -6201,7 +6210,18 @@ async function resolveLiveSpareEvoNames(exceptCampaignId, selectedNames, evoRows
                     blocked: false,
                     fallbackConnected: row.connected === true,
                 });
-                return { name, open };
+                if (!open || !name)
+                    return { name, open: false };
+                if (!(0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled)
+                    return { name, open: true };
+                const cachedOn = (0, evo_instance_proxy_service_1.getConfirmedProxyFind)(name) === true;
+                const proxyFind = cachedOn
+                    ? true
+                    : await (0, evo_instance_proxy_service_1.fetchEvoProxyFindEnabled)(name, callEvoAction, EVO_API_BASE, {
+                        timeoutMs: 6000,
+                        retries: 0,
+                    });
+                return { name, open: proxyFind === true };
             }
             catch {
                 return { name, open: row.connected === true };
@@ -6245,6 +6265,27 @@ function appendIncomingCampaignInstances(prevSelected, incoming, evoRows) {
     }
     return { added, selected };
 }
+async function deactivateInstancesRemovedFromCampaign(names) {
+    for (const raw of names) {
+        const name = String(raw || "").trim();
+        if (!name)
+            continue;
+        try {
+            const usageMap = await loadInstanceUsageMap();
+            const current = getInstanceUsageFromMap(usageMap, name);
+            await persistInstanceUsage([
+                {
+                    instanceName: name,
+                    useAquecedor: current?.useAquecedor !== false,
+                    useDisparador: false,
+                },
+            ]);
+        }
+        catch {
+            /* saída da campanha já persistida na seleção */
+        }
+    }
+}
 async function persistIncomingCampaignInstances(campaign, incoming, evoRows, opts) {
     const prevSelected = selectedInstanceNamesFromCampaign(campaign);
     for (const name of incoming) {
@@ -6275,24 +6316,19 @@ async function persistIncomingCampaignInstances(campaign, incoming, evoRows, opt
             prevSelected,
             incoming,
             evoRows,
+            slotCount: campaign.configSnapshot?.instanceSlotCount,
         });
-    const nextSelected = swapped.added.length
-        ? swapped.selected
-        : Array.from(new Set([...prevSelected, ...incoming.map((n) => String(n || "").trim()).filter(Boolean)]));
-    const added = swapped.added.length ? swapped.added : incoming.filter((n) => {
-        const key = String(n || "").trim().toLowerCase();
-        return key && !prevSelected.some((p) => p.toLowerCase() === key);
-    });
-    if (!added.length) {
+    if (!swapped.added.length) {
         return { added: [], removedBlocked: swapped.removedBlocked, selected: prevSelected };
     }
-    await persistCampaignSelectedInstances(campaign, nextSelected);
-    queueProxyBrasilPrepareForCampaignInstances(added);
+    await persistCampaignSelectedInstances(campaign, swapped.selected);
+    await deactivateInstancesRemovedFromCampaign(swapped.removedBlocked);
+    queueProxyBrasilPrepareForCampaignInstances(swapped.added);
     if (swapped.removedBlocked.length) {
         queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows, swapped.removedBlocked);
     }
-    console.warn(`[Campanha] ${campaign.id}: entram ${added.join(", ")}${swapped.removedBlocked.length ? ` · saem ${swapped.removedBlocked.join(", ")}` : ""}.`);
-    return { added, removedBlocked: swapped.removedBlocked, selected: nextSelected };
+    console.warn(`[Campanha] ${campaign.id}: entram ${swapped.added.join(", ")}${swapped.removedBlocked.length ? ` · saem ${swapped.removedBlocked.join(", ")}` : ""}.`);
+    return { added: swapped.added, removedBlocked: swapped.removedBlocked, selected: swapped.selected };
 }
 async function applyCampaignDisconnectedSwap(campaign, incoming, evoRows) {
     const prevSelected = Array.isArray(campaign.configSnapshot?.selectedDisparadorInstances)
@@ -6302,10 +6338,12 @@ async function applyCampaignDisconnectedSwap(campaign, incoming, evoRows) {
         prevSelected,
         incoming,
         evoRows,
+        slotCount: campaign.configSnapshot?.instanceSlotCount,
     });
     if (!swapped.added.length)
         return swapped;
     await persistCampaignSelectedInstances(campaign, swapped.selected);
+    await deactivateInstancesRemovedFromCampaign(swapped.removedBlocked);
     if (swapped.added.length) {
         queueProxyBrasilPrepareForCampaignInstances(swapped.added);
     }
@@ -6325,7 +6363,7 @@ async function tryAutoSwapDisconnectedCampaignInstances(campaign, evoRows) {
     if (Date.now() - lastAt < CAMPAIGN_AUTO_SWAP_COOLDOWN_MS) {
         return { swapped: false, spareCount: -1 };
     }
-    const toAdd = Math.max(computeCampaignInstancesToAdd(health), health.disconnectedCount);
+    const toAdd = health.disconnectedCount;
     const selectedNames = selectedDisparadorNamesFromConfig(campaign.configSnapshot);
     const heuristic = listConnectedSpareEvoNames(campaign.id, selectedNames, evoRows, toAdd);
     const incoming = heuristic.length
@@ -13877,10 +13915,18 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : [];
         const healthBefore = getCampaignInstanceHealth(prev, evoRowsAll);
-        const instancesToAdd = Math.max(computeCampaignInstancesToAdd(healthBefore), healthBefore.disconnectedCount);
+        const instancesToAdd = healthBefore.disconnectedCount;
         const disconnectedNames = listDisconnectedStoredInstanceNames(selectedNames, evoRowsAll);
         let incoming = [];
         if (auto) {
+            if (!disconnectedNames.length) {
+                return res.status(409).json({
+                    error: "Não há instância desconectada para substituir. A campanha permanece com " +
+                        selectedNames.length +
+                        " número(s).",
+                    instanceHealth: healthBefore,
+                });
+            }
             const pickLimit = Math.max(instancesToAdd, 1);
             const spareSameAsUi = listConnectedSpareEvoNames(campaign.id, selectedNames, evoRowsAll, pickLimit);
             incoming = spareSameAsUi.length
@@ -13890,7 +13936,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             if (!incoming.length) {
                 return res.status(409).json({
                     error: disconnectedNames.length
-                        ? `Não há instância livre para substituir ${disconnectedNames.join(", ")}. Conecte um número habilitado para disparos e use «+ Instâncias».`
+                        ? `Não há instância livre com Proxy Brasil para substituir ${disconnectedNames.join(", ")}. Conecte um número com Proxy Campanha e use «+ Instâncias».`
                         : "Não há instância fora desta campanha para incluir.",
                     instanceHealth: healthBefore,
                 });

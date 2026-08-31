@@ -16,8 +16,10 @@ Somente regras permanentes. Sem detalhes de implementação.
 
 ### Campanha — «+ Instâncias»
 
-- O botão inclui o número conectado livre que a tela já mostra e **substitui** o chip vermelho (bloqueado/offline).
-- Não redireciona para comprar números. Compra só vale quando realmente não há spare.
+- O botão **substitui** o chip vermelho (bloqueado/offline): o vermelho **sai** da campanha e fica desativado no disparador; o substituto entra no mesmo slot.
+- A campanha **não passa** da quantidade configurada (ex.: 4 números → no máximo 4).
+- Só entra substituto `open` **com Proxy Brasil ligada**. Toda instância que permanece na campanha precisa de Proxy Brasil para disparar.
+- Não redireciona para comprar números. Compra só vale quando realmente não há spare com Proxy.
 
 ### Campanha — intervalo entre mensagens
 

@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-31 15:30 — Teto de instâncias + troca 1:1 + Proxy no spare
+- Campanha configurada com N números não passa de N. Vermelho sai e desativa no disparador; substituto `open` com Proxy Brasil entra no mesmo slot.
+- Marker: `DEPLOY-2026-08-31-153000-campanha-slot-swap-proxy`
+
 ## 2026-08-31 14:52 — «+ Instâncias» não misturava chips pelo perfil WhatsApp
 - Spare da campanha ignora `profileName` (`Walkup` / `Drax Sistemas`). Troca 1:1 do vermelho volta a achar o próximo número ativo.
 - LOG: `doc/LOG-2026-08-31__145200__campanha-mais-instancias-spare.md`

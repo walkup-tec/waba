@@ -4,6 +4,13 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-31 — Teto de instâncias na troca 1:1
+
+- **Decisão:** Campanha configurada com N números não passa de N. «+ Instâncias» e o auto-swap só trocam vermelho por spare `open` com Proxy Brasil; o vermelho sai da seleção e `useDisparador` fica falso.
+- **Motivo:** Corbans (4 chips) não pode crescer; substituto não mistura pelo perfil WhatsApp; Proxy Brasil obrigatória em quem entra e em quem dispara.
+- **Impacto:** Marker `DEPLOY-2026-08-31-153000-campanha-slot-swap-proxy`.
+- **Data:** 2026-08-31
+
 ### 2026-08-31 — Spare da campanha não usa nome de perfil WhatsApp
 
 - **Decisão:** Identidade para «já está nesta campanha» / spare usa só chave EVO, alias técnico (`WB-5401`) e telefone (≥8 dígitos). Nome de perfil (`Walkup`, `Drax Sistemas`) não une chips diferentes.

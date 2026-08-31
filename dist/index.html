@@ -51485,8 +51485,7 @@
                     !isFinished &&
                     (needsMoreInstancesForMinimum ||
                       shouldPauseByDisconnectedRatio ||
-                      disconnectedCount > 0 ||
-                      spareConnectedForSwap > 0);
+                      disconnectedCount > 0);
                   const minConnectedRequired = Math.max(
                     1,
                     Math.floor(Number(health?.minConnectedRequired) || 1)
@@ -51534,10 +51533,10 @@
                   if (shouldPauseByDisconnectedRatio) {
                     tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}). ${
                       spareConnectedForSwap > 0 && isRunning
-                        ? "A substituição pelos conectados habilitados para disparos é automática (Proxy sai do desconectado e entra no novo)."
-                        : spareConnectedForSwap > 0
-                          ? "Há número conectado livre. Use «+ Instâncias» para adicioná-lo à campanha."
-                          : "Não há instância livre. Conecte um número habilitado para disparos e use «+ Instâncias»."
+                          ? "A substituição pelos conectados com Proxy Brasil é automática (o vermelho sai da campanha)."
+                          : spareConnectedForSwap > 0
+                            ? "Há número conectado com Proxy Brasil livre. Use «+ Instâncias» para substituir o vermelho (a campanha não passa do total configurado)."
+                            : "Não há instância livre com Proxy Brasil. Conecte um número no Aquecedor com Proxy Campanha e use «+ Instâncias»."
                     }</div>`;
                   }
                   if (needsMoreInstancesForMinimum) {
@@ -51546,10 +51545,10 @@
                   if (!needsMoreInstancesForMinimum && disconnectedCount > 0 && !shouldPauseByDisconnectedRatio) {
                     tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Há ${disconnectedCount} número(s) desconectado(s). ${
                       spareConnectedForSwap > 0 && isRunning
-                        ? "A substituição por um conectado habilitado para disparos é automática (Proxy sai do desconectado e entra no novo)."
-                        : spareConnectedForSwap > 0
-                          ? "Há número conectado livre. Use «+ Instâncias» para adicioná-lo à campanha."
-                          : "Não há instância livre. Conecte um número habilitado para disparos e use «+ Instâncias»."
+                          ? "A substituição por um conectado com Proxy Brasil é automática (o vermelho sai da campanha)."
+                          : spareConnectedForSwap > 0
+                            ? "Há número conectado com Proxy Brasil livre. Use «+ Instâncias» para substituir o vermelho."
+                            : "Não há instância livre com Proxy Brasil. Conecte um número no Aquecedor com Proxy Campanha e use «+ Instâncias»."
                     }</div>`;
                   }
       
