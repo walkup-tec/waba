@@ -5604,7 +5604,7 @@ function instanceNomeInstanciaForDisparadorTag(instanceKey, aliasesMap) {
     const alias = mapGetInsensitive(aliasesMap, key);
     return (alias || key).trim();
 }
-function buildEvoInstanceTagRowsFromList(instances, whatsappMap, aliasesMap) {
+function buildEvoInstanceTagRowsFromList(instances, _whatsappMap, aliasesMap) {
     const list = Array.isArray(instances) ? instances : [instances];
     const rows = [];
     for (const item of list) {
@@ -5635,15 +5635,16 @@ function buildEvoInstanceTagRowsFromList(instances, whatsappMap, aliasesMap) {
         ]) {
             addComparableNameKey(nameKeys, v);
         }
-        addComparableNameKey(nameKeys, inst?.profileName);
-        const whatsappOverride = mapGetInsensitive(whatsappMap, instanceKey);
         const alias = mapGetInsensitive(aliasesMap, instanceKey);
-        if (whatsappOverride)
-            addComparableNameKey(nameKeys, whatsappOverride);
         if (alias)
             addComparableNameKey(nameKeys, alias);
         const displayName = instanceNomeInstanciaForDisparadorTag(instanceKey, aliasesMap);
-        rows.push({ instanceKey, displayName, connected, nameKeys, digitKeys });
+        const stableKeys = new Set();
+        for (const k of nameKeys) {
+            if ((0, campaign_instance_identity_1.isStableCampaignIdentityToken)(k, instanceKey, displayName))
+                stableKeys.add(k);
+        }
+        rows.push({ instanceKey, displayName, connected, nameKeys: stableKeys, digitKeys });
     }
     return rows;
 }
@@ -6076,16 +6077,17 @@ async function persistCampaignSelectedInstances(campaign, selected) {
 }
 function evoRowIdentityKeys(row) {
     const out = new Set();
-    const instanceKey = String(row.instanceKey || "").trim().toLowerCase();
-    const displayName = String(row.displayName || "").trim().toLowerCase();
+    const instanceKey = String(row.instanceKey || "").trim();
+    const displayName = String(row.displayName || "").trim();
     if (instanceKey)
-        out.add(instanceKey);
-    if (displayName)
-        out.add(displayName);
+        out.add(instanceKey.toLowerCase());
+    if ((0, campaign_instance_identity_1.isStableCampaignIdentityToken)(displayName, instanceKey, displayName)) {
+        out.add(displayName.toLowerCase());
+    }
     for (const k of row.nameKeys || []) {
-        const n = String(k || "").trim().toLowerCase();
-        if (n)
-            out.add(n);
+        const n = String(k || "").trim();
+        if ((0, campaign_instance_identity_1.isStableCampaignIdentityToken)(n, instanceKey, displayName))
+            out.add(n.toLowerCase());
     }
     for (const d of row.digitKeys || []) {
         const digits = String(d || "").trim();

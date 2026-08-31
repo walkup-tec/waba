@@ -7,6 +7,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.digitKeysFromStoredLabel = digitKeysFromStoredLabel;
 exports.identityRowFromEvoFields = identityRowFromEvoFields;
 exports.resolveCampaignStoredNameToEvoKey = resolveCampaignStoredNameToEvoKey;
+exports.isStableCampaignIdentityToken = isStableCampaignIdentityToken;
 exports.campaignIdentityTokensFromRow = campaignIdentityTokensFromRow;
 exports.campaignRowSharesSelectionIdentity = campaignRowSharesSelectionIdentity;
 exports.uniqueProbeNamesForLiveState = uniqueProbeNamesForLiveState;
@@ -79,13 +80,42 @@ function resolveCampaignStoredNameToEvoKey(storedName, rows) {
     }
     return raw;
 }
+/**
+ * Token de identidade da campanha: chave EVO, alias técnico (WB-5401) ou telefone.
+ * Nome de perfil WhatsApp (`Walkup`, `Drax Sistemas`) não entra — vários chips compartilham.
+ */
+function isStableCampaignIdentityToken(token, instanceKey, displayName) {
+    const s = String(token || "").trim().toLowerCase();
+    if (!s || /\s/.test(s))
+        return false;
+    const ik = String(instanceKey || "").trim().toLowerCase();
+    const disp = String(displayName || "").trim().toLowerCase();
+    if (ik && s === ik)
+        return true;
+    if (/\d{4,}/.test(s))
+        return true;
+    if (disp && s === disp) {
+        if (ik && disp === ik)
+            return true;
+        if (/\d{4,}/.test(disp))
+            return true;
+        return false;
+    }
+    return false;
+}
 /** Tokens usados para saber se um spare já está na seleção (nome/alias/telefone ≥8 dígitos). */
 function campaignIdentityTokensFromRow(row) {
     const out = new Set();
-    for (const k of row.nameKeys)
-        addKey(out, k);
-    addKey(out, row.instanceKey);
-    addKey(out, row.displayName);
+    const instanceKey = String(row.instanceKey || "").trim();
+    const displayName = String(row.displayName || "").trim();
+    addKey(out, instanceKey);
+    if (isStableCampaignIdentityToken(displayName, instanceKey, displayName)) {
+        addKey(out, displayName);
+    }
+    for (const k of row.nameKeys) {
+        if (isStableCampaignIdentityToken(k, instanceKey, displayName))
+            addKey(out, k);
+    }
     for (const d of row.digitKeys) {
         const digits = String(d || "").trim();
         if (digits.length >= 8)
@@ -154,5 +184,26 @@ function runCampaignInstanceIdentitySelfCheck() {
     }
     if (campaignRowSharesSelectionIdentity([walkup5401, n1261, drax], walkup2102)) {
         throw new Error("walkup/2102 não pode ser tratado como já selecionado só porque existe walkup-5401");
+    }
+    const wb9224 = identityRowFromEvoFields({
+        instanceKey: "wb-9224",
+        displayName: "WB-9224",
+        phone: "5197979224",
+    });
+    if (campaignRowSharesSelectionIdentity([walkup5401], wb9224)) {
+        throw new Error("WB-9224 não pode ser o mesmo chip que WB-5401");
+    }
+    const walkupProfileA = identityRowFromEvoFields({
+        instanceKey: "walkup-5401",
+        displayName: "Walkup",
+        phone: "5198335401",
+    });
+    const walkupProfileB = identityRowFromEvoFields({
+        instanceKey: "wb-9224",
+        displayName: "Walkup",
+        phone: "5197979224",
+    });
+    if (campaignRowSharesSelectionIdentity([walkupProfileA], walkupProfileB)) {
+        throw new Error("perfil WhatsApp Walkup não pode unir chips diferentes");
     }
 }

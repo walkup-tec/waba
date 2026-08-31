@@ -4,6 +4,13 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-31 — Spare da campanha não usa nome de perfil WhatsApp
+
+- **Decisão:** Identidade para «já está nesta campanha» / spare usa só chave EVO, alias técnico (`WB-5401`) e telefone (≥8 dígitos). Nome de perfil (`Walkup`, `Drax Sistemas`) não une chips diferentes.
+- **Motivo:** `WB-5401` e `wb-9224` compartilham o perfil Walkup; o «+ Instâncias» achava que o 9224 já estava na campanha e não fazia a troca do vermelho.
+- **Impacto:** Marker `DEPLOY-2026-08-31-145200-campanha-mais-instancias-spare`. Exige Redeploy EasyPanel.
+- **Data:** 2026-08-31
+
 ### 2026-08-31 — Campanha só dispara com Proxy Brasil ligada
 
 - **Decisão:** Instância ativa na campanha = selecionada + `connectionState=open` + `/proxy/find` enabled. Removida a exceção que permitia enviar com sessão `open` sem proxy (`open-cannot-set-proxy`). `proxy/set` em sessão já `open` continua **proibido** (derruba pareamento). Prepare de número `open` sem proxy devolve falha e pede QR **Proxy Campanha**.

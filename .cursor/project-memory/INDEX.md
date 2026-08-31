@@ -21,6 +21,7 @@
 
 ## Últimas alterações
 
+- «+ Instâncias» identifica spare por chave/alias/telefone, não pelo nome de perfil WhatsApp.
 - Campanha só dispara com Proxy Brasil ligada (`open` + `/proxy/find` enabled).
 - Chip `open` sem proxy não é ativo; Ativar/tick pedem QR **Proxy Campanha**.
 - `proxy/set` em sessão já pareada continua proibido.

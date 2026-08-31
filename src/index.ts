@@ -148,6 +148,7 @@ import {
   splitCanonicalAndDuplicateNames,
 } from "./instances/evo-reconnect-purge.service";
 import {
+  isStableCampaignIdentityToken,
   resolveCampaignStoredNameToEvoKey,
   uniqueProbeNamesForLiveState,
 } from "./instances/campaign-instance-identity";
@@ -6892,7 +6893,7 @@ function instanceNomeInstanciaForDisparadorTag(
 
 function buildEvoInstanceTagRowsFromList(
   instances: any[],
-  whatsappMap: Map<string, string>,
+  _whatsappMap: Map<string, string>,
   aliasesMap: Map<string, string>
 ): EvoInstanceTagRow[] {
   const list = Array.isArray(instances) ? instances : [instances];
@@ -6926,17 +6927,18 @@ function buildEvoInstanceTagRowsFromList(
     ]) {
       addComparableNameKey(nameKeys, v);
     }
-    addComparableNameKey(nameKeys, inst?.profileName);
-    const whatsappOverride = mapGetInsensitive(whatsappMap, instanceKey);
     const alias = mapGetInsensitive(aliasesMap, instanceKey);
-    if (whatsappOverride) addComparableNameKey(nameKeys, whatsappOverride);
     if (alias) addComparableNameKey(nameKeys, alias);
 
     const displayName = instanceNomeInstanciaForDisparadorTag(
       instanceKey,
       aliasesMap
     );
-    rows.push({ instanceKey, displayName, connected, nameKeys, digitKeys });
+    const stableKeys = new Set<string>();
+    for (const k of nameKeys) {
+      if (isStableCampaignIdentityToken(k, instanceKey, displayName)) stableKeys.add(k);
+    }
+    rows.push({ instanceKey, displayName, connected, nameKeys: stableKeys, digitKeys });
   }
   return rows;
 }
@@ -7429,13 +7431,15 @@ async function persistCampaignSelectedInstances(
 
 function evoRowIdentityKeys(row: EvoInstanceTagRow): Set<string> {
   const out = new Set<string>();
-  const instanceKey = String(row.instanceKey || "").trim().toLowerCase();
-  const displayName = String(row.displayName || "").trim().toLowerCase();
-  if (instanceKey) out.add(instanceKey);
-  if (displayName) out.add(displayName);
+  const instanceKey = String(row.instanceKey || "").trim();
+  const displayName = String(row.displayName || "").trim();
+  if (instanceKey) out.add(instanceKey.toLowerCase());
+  if (isStableCampaignIdentityToken(displayName, instanceKey, displayName)) {
+    out.add(displayName.toLowerCase());
+  }
   for (const k of row.nameKeys || []) {
-    const n = String(k || "").trim().toLowerCase();
-    if (n) out.add(n);
+    const n = String(k || "").trim();
+    if (isStableCampaignIdentityToken(n, instanceKey, displayName)) out.add(n.toLowerCase());
   }
   for (const d of row.digitKeys || []) {
     const digits = String(d || "").trim();
