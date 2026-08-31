@@ -1,0 +1,73 @@
+# Heal Sinal Verde pós-redeploy (obrigatório) — arquivo isolado
+
+## Problema
+
+Redeploy Easypanel de `sinal-verde_acesso-sinalverde` remove publish host **`:30310`** e/ou Traefik aponta overlay → **502**. Browser/Easypanel pode mostrar JSON:
+
+`Cannot GET /api/errors/bad-gateway`
+
+Isso **não** é bug do CRM / login.
+
+## Isolamento Traefik (obrigatório desde 2026-07-20)
+
+| Arquivo | Conteúdo | Quem edita |
+|---------|----------|------------|
+| `/etc/easypanel/traefik/config/main.yaml` | Só WABA + Easypanel | Scripts WABA / Easypanel |
+| `/etc/easypanel/traefik/config/sinal-verde.yaml` | Só `acesso-sinalverde.com` | Scripts Sinal Verde |
+| `custom.yaml` | accessLog/api | Sem routers |
+
+**PROIBIDO** qualquer script SV editar `main.yaml` (exceto strip de chaves SV que o Easypanel recriou).
+
+Migração canônica: `scripts/traefik-split-sinal-verde-yaml-vps.sh run`
+
+Doc file provider: https://doc.traefik.io/traefik/reference/install-configuration/providers/others/file/
+
+## Solução permanente (3 camadas)
+
+| Camada | Unidade | Função |
+|--------|---------|--------|
+| Watch | `sinal-verde-overlay-guard-watch.service` | `docker events` → run (debounce) |
+| Timer | `sinal-verde-overlay-guard.timer` | a cada **~20s** |
+| Manual | `fix-sinal-verde-traefik-safe-vps.sh` / guard `run` | emergência |
+
+Scripts: `scripts/sinal-verde-overlay-guard-vps.sh` (v4+), `scripts/fix-sinal-verde-traefik-safe-vps.sh` (v5+)
+
+Backend canônico: `http://172.17.0.1:30310/` (publish host **:30310** → container **3000**).  
+**Proibido** usar host `:3000` — neste VPS `:3000` é a UI do **Easypanel**.  
+entryPoints: só **`http`** / **`https`**. Sem HUP / force Traefik.
+
+## Install no VPS (uma vez)
+
+```bash
+# 1) Separar yaml (se ainda não feito)
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/traefik-split-sinal-verde-yaml-vps.sh" \
+  -o /tmp/traefik-split-sinal-verde-yaml-vps.sh
+sed -i 's/\r$//' /tmp/traefik-split-sinal-verde-yaml-vps.sh
+bash /tmp/traefik-split-sinal-verde-yaml-vps.sh run
+
+# 2) Guard só em sinal-verde.yaml
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/sinal-verde-overlay-guard-vps.sh" \
+  -o /tmp/sv-guard.sh
+sed -i 's/\r$//' /tmp/sv-guard.sh
+bash /tmp/sv-guard.sh install
+systemctl is-active sinal-verde-overlay-guard-watch.service
+curl -sS -o /dev/null -w "sv:%{http_code}\n" --max-time 15 https://acesso-sinalverde.com/
+```
+
+## Após todo Redeploy do Sinal Verde
+
+Se ainda 502 por ~30–60s: normal até o watch/burst. Se persistir:
+
+```bash
+/root/waba-infra/sinal-verde-overlay-guard-vps.sh run
+# ou
+/root/waba-infra/fix-sinal-verde-traefik-safe-vps.sh
+```
+
+## Proibido
+
+- Editar `main.yaml` por causa do SV (regex amplo / inject perto de WABA)
+- Tratar `api/errors/bad-gateway` como rota do app
+- `docker service update --force easypanel-traefik` por hábito
+- Routers SV em `custom.yaml`
+- Assumir que heal do `waba_disparador` / paginadevendas cura o Sinal Verde

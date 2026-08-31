@@ -1,0 +1,16 @@
+---
+description: docker-compose.yaml - portas, volumes, saúde e rede segura
+alwaysApply: false
+globs: **/docker-compose*.yaml
+---
+
+# Docker Compose UCP
+
+Ao editar `docker-compose*.yaml`:
+
+- Não expor segredos em `environment`/`volumes` no repositório; use `env_file` e/ou `.env` fora do commit.
+- Defina `healthcheck` quando houver dependências (DB, Supabase, serviços externos).
+- Use `restart` coerente com criticidade e evite loops sem saída.
+- Atribua `networks`/isolamento quando fizer sentido para reduzir superfície.
+- Fixe versões de imagens e evite `latest`.
+

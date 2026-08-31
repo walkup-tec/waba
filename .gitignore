@@ -1,0 +1,14 @@
+node_modules
+node_modules.__broken_drive/
+tsconfig.build.local.json
+dist/**/*.test.js
+.env
+.env.v01
+.env.v02
+env.easypanel-producao-asaas.snippet
+data/
+ftp-bundle/
+.DS_Store
+Thumbs.db
+OnBoarding/
+

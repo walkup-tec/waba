@@ -1,0 +1,440 @@
+import { promises as fs, statSync } from "fs";
+import { isWabaAuthConfigured, isWabaMasterEmail } from "../auth/waba-auth.service";
+import type { WabaRequestAuth } from "../auth/waba-request-auth";
+import { resolveDataFile } from "../data-path";
+import { writeJsonFileResilient } from "../utils/write-json-file-resilient";
+
+export type InstanceOwnerRecord = {
+  ownerEmail: string;
+  createdAt: string;
+};
+
+type InstanceOwnersStore = {
+  instances: Record<string, InstanceOwnerRecord>;
+  /** Instâncias excluídas pelo usuário — não re-vincular órfãs da Evolution. */
+  deletedInstances?: Record<string, { deletedAt: string }>;
+};
+
+const OWNERS_FILE = resolveDataFile("instance-owners.json");
+
+const normalizeEmail = (value: string): string => value.trim().toLowerCase();
+
+const normalizeInstanceName = (value: string): string => String(value || "").trim();
+
+export class WabaInstanceOwnershipService {
+  private cache: InstanceOwnersStore | null = null;
+  private cacheLoadedAtMs = 0;
+  private writeChain: Promise<void> = Promise.resolve();
+
+  private runLocked<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.writeChain.then(fn, fn);
+    this.writeChain = next.then(
+      () => undefined,
+      () => undefined
+    );
+    return next;
+  }
+
+  private shouldReloadCacheFromDisk(): boolean {
+    if (!this.cache) return true;
+    try {
+      const fileMtimeMs = statSync(OWNERS_FILE).mtimeMs;
+      return fileMtimeMs > this.cacheLoadedAtMs + 1;
+    } catch {
+      return false;
+    }
+  }
+
+  private async loadStore(): Promise<InstanceOwnersStore> {
+    if (this.cache && !this.shouldReloadCacheFromDisk()) return this.cache;
+    try {
+      const raw = await fs.readFile(OWNERS_FILE, "utf-8");
+      const parsed = JSON.parse(raw || "{}") as Partial<InstanceOwnersStore>;
+      const instances =
+        parsed?.instances && typeof parsed.instances === "object" ? parsed.instances : {};
+      const deletedInstances =
+        parsed?.deletedInstances && typeof parsed.deletedInstances === "object"
+          ? parsed.deletedInstances
+          : {};
+      this.cache = { instances, deletedInstances };
+      try {
+        this.cacheLoadedAtMs = statSync(OWNERS_FILE).mtimeMs;
+      } catch {
+        this.cacheLoadedAtMs = Date.now();
+      }
+      return this.cache;
+    } catch {
+      this.cache = { instances: {} };
+      this.cacheLoadedAtMs = Date.now();
+      return this.cache;
+    }
+  }
+
+  private async saveStore(store: InstanceOwnersStore): Promise<void> {
+    this.cache = store;
+    await writeJsonFileResilient(OWNERS_FILE, store);
+    try {
+      this.cacheLoadedAtMs = statSync(OWNERS_FILE).mtimeMs;
+    } catch {
+      this.cacheLoadedAtMs = Date.now();
+    }
+  }
+
+  private findStoreKey(store: InstanceOwnersStore, instanceName: string): string | null {
+    const target = normalizeInstanceName(instanceName).toLowerCase();
+    if (!target) return null;
+    for (const key of Object.keys(store.instances)) {
+      if (key.toLowerCase() === target) return key;
+    }
+    return null;
+  }
+
+  private findDeletedKey(store: InstanceOwnersStore, instanceName: string): string | null {
+    const deleted = store.deletedInstances || {};
+    const target = normalizeInstanceName(instanceName).toLowerCase();
+    if (!target) return null;
+    for (const key of Object.keys(deleted)) {
+      if (key.toLowerCase() === target) return key;
+    }
+    return null;
+  }
+
+  async isInstanceDeleted(instanceName: string): Promise<boolean> {
+    const store = await this.loadStore();
+    return Boolean(this.findDeletedKey(store, instanceName));
+  }
+
+  async markInstancesDeleted(instanceNames: string[]): Promise<void> {
+    const names = instanceNames.map((n) => normalizeInstanceName(n)).filter(Boolean);
+    if (!names.length) return;
+    await this.runLocked(async () => {
+      const store = await this.loadStore();
+      if (!store.deletedInstances) store.deletedInstances = {};
+      const now = new Date().toISOString();
+      let changed = false;
+      for (const name of names) {
+        const existingKey = this.findDeletedKey(store, name);
+        const key = existingKey || name;
+        if (!store.deletedInstances[key]) {
+          store.deletedInstances[key] = { deletedAt: now };
+          changed = true;
+        }
+      }
+      if (changed) await this.saveStore(store);
+    });
+  }
+
+  private clearDeletedMark(store: InstanceOwnersStore, instanceName: string): boolean {
+    const deleted = store.deletedInstances || {};
+    const key = this.findDeletedKey(store, instanceName);
+    if (!key) return false;
+    delete deleted[key];
+    store.deletedInstances = deleted;
+    return true;
+  }
+
+  /** Sem login configurado (dev local): não filtra. Com auth: estrito por dono. */
+  private bypassOwnershipFilter(auth: WabaRequestAuth): boolean {
+    return !isWabaAuthConfigured();
+  }
+
+  async canAccessInstance(
+    auth: WabaRequestAuth,
+    instanceName: string,
+    extraCandidates: string[] = [],
+  ): Promise<boolean> {
+    if (this.bypassOwnershipFilter(auth)) return true;
+
+    const email = normalizeEmail(auth.email);
+    if (!email.includes("@")) return false;
+
+    if (auth.role === "master" || isWabaMasterEmail(email)) return true;
+
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of [instanceName, ...extraCandidates]) {
+      const name = normalizeInstanceName(raw);
+      const lower = name.toLowerCase();
+      if (!name || seen.has(lower)) continue;
+      seen.add(lower);
+      names.push(name);
+    }
+
+    for (const name of names) {
+      const owner = await this.getOwnerEmail(name);
+      if (owner === email) return true;
+    }
+
+    const primaryOwner = await this.getOwnerEmail(instanceName);
+    if (primaryOwner) return primaryOwner === email;
+
+    const owner = await this.resolveOwnerEmailForCandidates(names);
+    if (!owner) return false;
+    return owner === email;
+  }
+
+  /** Dono registrado para o nome técnico (case-insensitive). */
+  async getOwnerEmail(instanceName: string): Promise<string | null> {
+    const store = await this.loadStore();
+    const key = this.findStoreKey(store, instanceName);
+    if (!key) return null;
+    const owner = normalizeEmail(store.instances[key]?.ownerEmail || "");
+    return owner.includes("@") ? owner : null;
+  }
+
+  /** Resolve dono tentando várias chaves (alias, nome EVO, sufixo numérico). */
+  async resolveOwnerEmailForCandidates(instanceNames: string[]): Promise<string | null> {
+    const seen = new Set<string>();
+    for (const raw of instanceNames) {
+      const name = normalizeInstanceName(raw);
+      if (!name) continue;
+      const lower = name.toLowerCase();
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+      const owner = await this.getOwnerEmail(name);
+      if (owner) return owner;
+    }
+    const store = await this.loadStore();
+    const digitsFromQuery = instanceNames
+      .map((n) => String(n || "").replace(/\D/g, ""))
+      .filter((d) => d.length >= 8);
+    if (!digitsFromQuery.length) return null;
+    for (const [key, record] of Object.entries(store.instances)) {
+      const keyDigits = String(key || "").replace(/\D/g, "");
+      if (!keyDigits || keyDigits.length < 8) continue;
+      const matches = digitsFromQuery.some(
+        (d) =>
+          keyDigits === d ||
+          keyDigits.endsWith(d.slice(-8)) ||
+          d.endsWith(keyDigits.slice(-8)),
+      );
+      if (!matches) continue;
+      const owner = normalizeEmail(record?.ownerEmail || "");
+      if (owner.includes("@")) return owner;
+    }
+    return null;
+  }
+
+  async assignOwner(instanceName: string, ownerEmail: string): Promise<void> {
+    const name = normalizeInstanceName(instanceName);
+    const email = normalizeEmail(ownerEmail);
+    if (!name || !email.includes("@")) return;
+
+    await this.runLocked(async () => {
+      const store = await this.loadStore();
+      const existingKey = this.findStoreKey(store, name);
+      if (existingKey) {
+        store.instances[existingKey] = {
+          ownerEmail: email,
+          createdAt: store.instances[existingKey]?.createdAt || new Date().toISOString(),
+        };
+      } else {
+        store.instances[name] = {
+          ownerEmail: email,
+          createdAt: new Date().toISOString(),
+        };
+      }
+      this.clearDeletedMark(store, name);
+      await this.saveStore(store);
+    });
+  }
+
+  /**
+   * Vincula instância ao usuário na integração. Falha se já pertence a outro.
+   */
+  async claimOnRegister(
+    instanceName: string,
+    ownerEmail: string
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const name = normalizeInstanceName(instanceName);
+    const email = normalizeEmail(ownerEmail);
+    if (!name) return { ok: false, error: "Nome da instância inválido." };
+    if (!email.includes("@")) return { ok: false, error: "Sessão inválida para registrar instância." };
+
+    return this.runLocked(async () => {
+      const store = await this.loadStore();
+      // Reuso após purge: limpar tombstone para o nome poder ser registrado de novo.
+      this.clearDeletedMark(store, name);
+      const existingKey = this.findStoreKey(store, name);
+      if (existingKey) {
+        const currentOwner = normalizeEmail(store.instances[existingKey]?.ownerEmail || "");
+        if (currentOwner && currentOwner !== email) {
+          return {
+            ok: false as const,
+            error: "Esta instância já está vinculada a outro usuário.",
+          };
+        }
+        store.instances[existingKey] = {
+          ownerEmail: email,
+          createdAt: store.instances[existingKey]?.createdAt || new Date().toISOString(),
+        };
+      } else {
+        store.instances[name] = {
+          ownerEmail: email,
+          createdAt: new Date().toISOString(),
+        };
+      }
+      await this.saveStore(store);
+      return { ok: true as const };
+    });
+  }
+
+  async renameInstance(oldName: string, newName: string): Promise<void> {
+    const from = normalizeInstanceName(oldName);
+    const to = normalizeInstanceName(newName);
+    if (!from || !to || from.toLowerCase() === to.toLowerCase()) return;
+
+    await this.runLocked(async () => {
+      const store = await this.loadStore();
+      const key = this.findStoreKey(store, from);
+      if (!key) return;
+      const record = store.instances[key];
+      delete store.instances[key];
+      const destKey = this.findStoreKey(store, to);
+      if (destKey) {
+        store.instances[destKey] = record;
+      } else {
+        store.instances[to] = record;
+      }
+      await this.saveStore(store);
+    });
+  }
+
+  async removeOwner(instanceName: string): Promise<void> {
+    const name = normalizeInstanceName(instanceName);
+    if (!name) return;
+
+    await this.runLocked(async () => {
+      const store = await this.loadStore();
+      const key = this.findStoreKey(store, name);
+      if (!key) return;
+      delete store.instances[key];
+      await this.saveStore(store);
+    });
+  }
+
+  async filterItemsForAuth<T>(
+    auth: WabaRequestAuth,
+    items: T[],
+    readName: (item: T) => string
+  ): Promise<T[]> {
+    if (this.bypassOwnershipFilter(auth)) return items;
+
+    const email = normalizeEmail(auth.email);
+    if (!email.includes("@")) return [];
+    if (auth.role === "master" || isWabaMasterEmail(email)) return items;
+
+    const store = await this.loadStore();
+    return items.filter((item) => {
+      const name = normalizeInstanceName(readName(item));
+      if (!name) return false;
+      const key = this.findStoreKey(store, name);
+      if (!key) return false;
+      const owner = normalizeEmail(store.instances[key]?.ownerEmail || "");
+      return owner === email;
+    });
+  }
+
+  async filterInstanceNamesForAuth(
+    auth: WabaRequestAuth,
+    names: string[]
+  ): Promise<Set<string>> {
+    if (this.bypassOwnershipFilter(auth)) {
+      return new Set(names.map((n) => normalizeInstanceName(n)).filter(Boolean));
+    }
+
+    const email = normalizeEmail(auth.email);
+    if (auth.role === "master" || isWabaMasterEmail(email)) {
+      return new Set(names.map((n) => normalizeInstanceName(n)).filter(Boolean));
+    }
+    const store = await this.loadStore();
+    const allowed = new Set<string>();
+    for (const name of names) {
+      const normalized = normalizeInstanceName(name);
+      if (!normalized) continue;
+      const key = this.findStoreKey(store, normalized);
+      if (!key) continue;
+      const owner = normalizeEmail(store.instances[key]?.ownerEmail || "");
+      if (owner === email) allowed.add(normalized);
+    }
+    return allowed;
+  }
+
+  async listOwnedInstanceNames(ownerEmail: string): Promise<string[]> {
+    const email = normalizeEmail(ownerEmail);
+    if (!email.includes("@")) return [];
+    const store = await this.loadStore();
+    const names: string[] = [];
+    for (const [instanceName, record] of Object.entries(store.instances)) {
+      if (normalizeEmail(record?.ownerEmail || "") === email) {
+        names.push(instanceName);
+      }
+    }
+    return names.sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }
+
+  async listAllRegisteredInstanceNames(): Promise<string[]> {
+    const store = await this.loadStore();
+    return Object.keys(store.instances).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }
+
+  async listInstancesOwnedByEmails(ownerEmails: string[]): Promise<string[]> {
+    const allowed = new Set(
+      ownerEmails.map((email) => normalizeEmail(email)).filter((email) => email.includes("@")),
+    );
+    if (!allowed.size) return [];
+    const store = await this.loadStore();
+    const names: string[] = [];
+    for (const [instanceName, record] of Object.entries(store.instances)) {
+      if (allowed.has(normalizeEmail(record?.ownerEmail || ""))) {
+        names.push(instanceName);
+      }
+    }
+    return names.sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }
+
+  async filterStringListForAuth(auth: WabaRequestAuth, names: string[]): Promise<string[]> {
+    const allowed = await this.filterInstanceNamesForAuth(auth, names);
+    const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
+    return names.filter((name) => allowedLower.has(normalizeInstanceName(name).toLowerCase()));
+  }
+
+  /**
+   * Instâncias legadas no sistema WABA - Drax sem dono em instance-owners.json ficam invisíveis.
+   * O master reconcilia órfãs para o próprio e-mail na primeira listagem.
+   */
+  async reconcileOrphanInstancesForMaster(
+    auth: WabaRequestAuth,
+    instanceNames: string[],
+  ): Promise<number> {
+    if (!isWabaAuthConfigured()) return 0;
+
+    const email = normalizeEmail(auth.email);
+    if (!email.includes("@")) return 0;
+    const isMaster = auth.role === "master" || isWabaMasterEmail(email);
+    if (!isMaster) return 0;
+
+    let assigned = 0;
+    await this.runLocked(async () => {
+      const store = await this.loadStore();
+      let changed = false;
+      for (const rawName of instanceNames) {
+        const name = normalizeInstanceName(rawName);
+        if (!name) continue;
+        if (this.findDeletedKey(store, name)) continue;
+        const existingKey = this.findStoreKey(store, name);
+        if (existingKey) continue;
+        store.instances[name] = {
+          ownerEmail: email,
+          createdAt: new Date().toISOString(),
+        };
+        assigned += 1;
+        changed = true;
+      }
+      if (changed) await this.saveStore(store);
+    });
+    return assigned;
+  }
+}
+
+export const wabaInstanceOwnershipService = new WabaInstanceOwnershipService();

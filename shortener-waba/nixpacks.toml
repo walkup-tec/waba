@@ -1,0 +1,4 @@
+# Força o processo principal a ser só o Node (sem `npm start` como pai).
+# Útil quando o EasyPanel usa Nixpacks em vez do Dockerfile.
+[start]
+cmd = "node server.js"

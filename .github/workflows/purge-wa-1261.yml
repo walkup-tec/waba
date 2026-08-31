@@ -1,0 +1,32 @@
+# Purge número WA 1261 / 555182001261 no VPS (uma vez)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validar secret SSH
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY ausente"
+            exit 1
+          fi
+
+      - name: SSH — purge EVO + data WABA
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 8m
+          script: |
+            set -euo pipefail
+            REPO="https://raw.githubusercontent.com/walkup-tec/waba/master/scripts"
+            curl -fsSL "${REPO}/purge-wa-number-1261-vps.sh" -o /tmp/purge-wa-number-1261-vps.sh
+            sed -i 's/\r$//' /tmp/purge-wa-number-1261-vps.sh
+            chmod +x /tmp/purge-wa-number-1261-vps.sh
+            /tmp/purge-wa-number-1261-vps.sh run

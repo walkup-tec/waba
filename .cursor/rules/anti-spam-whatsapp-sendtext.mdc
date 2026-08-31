@@ -1,0 +1,26 @@
+---
+description: Proíbe rajadas de sendText/WhatsApp (anti-ban spam) em WABA/EVO
+alwaysApply: true
+---
+
+# Anti-spam WhatsApp / EVO (obrigatório)
+
+Incidente **2026-07-24**: probes manuais enviaram ~5 `sendText` em poucos minutos (6635/8918/1261) e o WhatsApp aplicou **block/restrição**.
+
+## Proibido
+
+- Disparar **mais de 1** `sendText` (ou equivalente) para o mesmo número/par em janela curta (&lt; 15 min) em diagnóstico, script ou “teste rápido”.
+- Reenviar a **mesma** mensagem com variantes de DDI/9º dígito só porque `findMessages` não confirmou.
+- Loops de probe `sendText` em paralelo ou em sequência rápida entre várias instâncias.
+- “Confirmar no celular” com rajada de testes — **uma** mensagem, esperar resposta humana.
+
+## Obrigatório
+
+- Diagnóstico de entrega: preferir `connectionState` / `findMessages` / logs; **no máximo 1** envio de teste, com texto único, e **parar**.
+- Aquecedor: no máximo **1 sendText aceito por ciclo**; falha de número (`exists:false`) pode tentar no máx. **2** formatos; após aceitar HTTP 2xx, **nunca** reenviar no mesmo ciclo.
+- Se mensagem só na origem: cooldown longo + sem insistir no par; não “forçar” variantes.
+
+## Doc
+
+- `doc/LOG-2026-07-24__111800__anti-spam-sendtext-ban.md`
+- Rule irmã operacional: aquecedor cooldown / delivery verify

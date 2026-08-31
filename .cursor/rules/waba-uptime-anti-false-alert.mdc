@@ -1,0 +1,20 @@
+---
+description: Monitor uptime — nunca alertar em falso positivo hairpin/Fetch failed
+alwaysApply: true
+---
+
+# Uptime Monitor — anti falso alerta
+
+O alerta «fora do ar» / Fetch failed **dentro do container** costuma ser **hairpin** (HTTPS público falha; site real OK).
+
+## Obrigatório no código (já no repo)
+
+1. Probe **local** `172.17.0.1:30210/30211/30180` (+ Traefik `:80` Host).
+2. **2 falhas consecutivas** antes de DOWN + WhatsApp (`WABA_UPTIME_MONITOR_CONFIRM_FAILURES`).
+3. **Re-probe** imediato antes de enviar alerta.
+
+## Se o usuário reportar falso alerta
+
+- Confirmar sites com curl HTTPS **de fora** (200) vs probe do container.
+- Não “consertar” senha/EVO; ajustar probe/confirmação.
+- Doc: `doc/LOG-2026-07-13__172000__uptime-anti-falso-alerta.md`

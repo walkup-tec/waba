@@ -1,0 +1,391 @@
+import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
+import {
+  buildCampaignReportDeepLink,
+  buildCampaignListDeepLink,
+  buildOperacionalAdminCampaignDeepLink,
+  resolveWabaAppLoginUrl,
+} from "./waba-app-url";
+import {
+  buildCampaignCompletedTemplate,
+  buildCampaignErrorReportedTemplate,
+  buildOperacionalNewCampaignTemplate,
+  buildStaffWelcomeTemplate,
+  buildSubscriberWelcomeTemplate,
+  buildSupportTicketClosedTemplate,
+} from "./waba-mail.templates";
+import { wabaMailService } from "./waba-mail.service";
+import {
+  deliverStaffWelcomeWhatsApp,
+  deliverSubscriberWelcomeWhatsApp,
+  notifyStaffWelcomeWhatsApp,
+  type WabaWhatsAppDeliveryResult,
+} from "./waba-welcome-whatsapp.service";
+
+export type WabaEmailDeliveryStatus = "sent" | "skipped" | "failed";
+
+export type WabaEmailDeliveryResult = {
+  status: WabaEmailDeliveryStatus;
+  message: string;
+  messageId?: string;
+};
+
+const subscriberRepository = new WabaSubscriberRepository();
+
+const resolveSubscriberName = (email: string): string => {
+  const subscriber = subscriberRepository.getByEmail(email);
+  return String(subscriber?.fullName || "").trim();
+};
+
+const deliverEmail = async (input: {
+  toEmail: string;
+  subject: string;
+  html: string;
+  logLabel: string;
+}): Promise<WabaEmailDeliveryResult> => {
+  const toEmail = String(input.toEmail || "")
+    .trim()
+    .toLowerCase();
+  if (!toEmail.includes("@")) {
+    return { status: "skipped", message: `${input.logLabel}: destinatário sem e-mail válido.` };
+  }
+  if (!wabaMailService.isConfigured()) {
+    return {
+      status: "skipped",
+      message: `${input.logLabel}: SMTP não configurado (MAIL_MODE=smtp, SMTP_*).`,
+    };
+  }
+
+  try {
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const delivery = await wabaMailService.send({
+          to: toEmail,
+          subject: input.subject,
+          html: input.html,
+        });
+        console.log(`[mail] ${input.logLabel} enviado para ${toEmail} (${delivery.messageId || "ok"}).`);
+        return {
+          status: "sent",
+          message: "E-mail enviado.",
+          messageId: delivery.messageId,
+        };
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : "Falha ao enviar e-mail.";
+        const retryable = /timeout|econnreset|econnrefused|421|450|451|452|454/i.test(message);
+        if (attempt < 2 && retryable) {
+          await new Promise((resolve) => setTimeout(resolve, 900));
+          continue;
+        }
+        console.error(`[mail] ${input.logLabel} falhou para ${toEmail}:`, message);
+        return { status: "failed", message };
+      }
+    }
+    const message =
+      lastError instanceof Error ? lastError.message : "Falha ao enviar e-mail.";
+    return { status: "failed", message };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Falha ao enviar e-mail.";
+    console.error(`[mail] ${input.logLabel} falhou para ${toEmail}:`, message);
+    return { status: "failed", message };
+  }
+};
+
+export const deliverSupportTicketClosedEmail = async (input: {
+  ownerEmail: string;
+  ownerName: string;
+  displayId: string;
+  ticketTitle: string;
+  masterResponse: string;
+}): Promise<WabaEmailDeliveryResult> => {
+  const ownerEmail = String(input.ownerEmail || "")
+    .trim()
+    .toLowerCase();
+  const ownerName = String(input.ownerName || "").trim() || resolveSubscriberName(ownerEmail);
+  const mail = buildSupportTicketClosedTemplate({
+    recipientName: ownerName,
+    recipientEmail: ownerEmail,
+    displayId: input.displayId,
+    ticketTitle: input.ticketTitle,
+    masterResponse: input.masterResponse,
+  });
+  return deliverEmail({
+    toEmail: ownerEmail,
+    subject: mail.subject,
+    html: mail.html,
+    logLabel: `chamado ${input.displayId || input.ownerEmail}`,
+  });
+};
+
+export const deliverCampaignCompletedEmail = async (input: {
+  ownerEmail: string;
+  campaignId: string;
+  campaignName: string;
+}): Promise<WabaEmailDeliveryResult> => {
+  const ownerEmail = String(input.ownerEmail || "")
+    .trim()
+    .toLowerCase();
+  const ownerName = resolveSubscriberName(ownerEmail);
+  const reportUrl = buildCampaignReportDeepLink(input.campaignId);
+  const mail = buildCampaignCompletedTemplate({
+    recipientName: ownerName,
+    recipientEmail: ownerEmail,
+    campaignName: input.campaignName,
+    reportUrl,
+  });
+  return deliverEmail({
+    toEmail: ownerEmail,
+    subject: mail.subject,
+    html: mail.html,
+    logLabel: `campanha ${input.campaignId}`,
+  });
+};
+
+export const deliverCampaignErrorReportedEmail = async (input: {
+  ownerEmail: string;
+  campaignId: string;
+  campaignName: string;
+}): Promise<WabaEmailDeliveryResult> => {
+  const ownerEmail = String(input.ownerEmail || "")
+    .trim()
+    .toLowerCase();
+  const ownerName = resolveSubscriberName(ownerEmail);
+  const campaignsUrl = buildCampaignListDeepLink();
+  const mail = buildCampaignErrorReportedTemplate({
+    recipientName: ownerName,
+    recipientEmail: ownerEmail,
+    campaignName: input.campaignName,
+    campaignsUrl,
+  });
+  return deliverEmail({
+    toEmail: ownerEmail,
+    subject: mail.subject,
+    html: mail.html,
+    logLabel: `campanha erro ${input.campaignId}`,
+  });
+};
+
+export const deliverSubscriberWelcomeEmail = async (input: {
+  email: string;
+  fullName: string;
+  password: string;
+  whatsapp: string;
+  phone: string;
+  cpfCnpj: string;
+  loginUrl?: string;
+}): Promise<WabaEmailDeliveryResult> => {
+  const email = String(input.email || "")
+    .trim()
+    .toLowerCase();
+  const loginUrl = String(input.loginUrl || resolveWabaAppLoginUrl()).trim() || resolveWabaAppLoginUrl();
+  const mail = buildSubscriberWelcomeTemplate({
+    recipientName: input.fullName,
+    recipientEmail: email,
+    password: String(input.password ?? ""),
+    whatsapp: input.whatsapp,
+    phone: input.phone,
+    cpfCnpj: input.cpfCnpj,
+    loginUrl,
+  });
+  return deliverEmail({
+    toEmail: email,
+    subject: mail.subject,
+    html: mail.html,
+    logLabel: `boas-vindas ${email}`,
+  });
+};
+
+export const notifySupportTicketClosedEmail = (input: {
+  ownerEmail: string;
+  ownerName: string;
+  displayId: string;
+  ticketTitle: string;
+  masterResponse: string;
+}): void => {
+  void deliverSupportTicketClosedEmail(input).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[mail] chamado finalizado (async):", message);
+  });
+};
+
+export const notifyCampaignCompletedEmail = (input: {
+  ownerEmail: string;
+  campaignId: string;
+  campaignName: string;
+}): void => {
+  void deliverCampaignCompletedEmail(input).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[mail] campanha finalizada (async):", message);
+  });
+};
+
+export const notifyCampaignErrorReportedEmail = (input: {
+  ownerEmail: string;
+  campaignId: string;
+  campaignName: string;
+}): void => {
+  void deliverCampaignErrorReportedEmail(input).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[mail] campanha erro reportado (async):", message);
+  });
+};
+
+export const deliverOperacionalNewCampaignEmail = async (input: {
+  operacionalEmail: string;
+  operacionalName: string;
+  campaignId: string;
+  campaignName: string;
+  subscriberId: string;
+  plannedSendCount: number;
+  createdAtLabel: string;
+  apiKindLabel: string;
+  segmentLabel?: string;
+}): Promise<WabaEmailDeliveryResult> => {
+  const operacionalEmail = String(input.operacionalEmail || "")
+    .trim()
+    .toLowerCase();
+  const operacionalName = String(input.operacionalName || "").trim();
+  const campaignUrl = buildOperacionalAdminCampaignDeepLink(input.campaignId);
+  const mail = buildOperacionalNewCampaignTemplate({
+    recipientName: operacionalName,
+    recipientEmail: operacionalEmail,
+    recipientRole: "operacional",
+    campaignId: input.campaignId,
+    campaignName: input.campaignName,
+    subscriberId: input.subscriberId,
+    plannedSendCount: input.plannedSendCount,
+    createdAtLabel: input.createdAtLabel,
+    apiKindLabel: input.apiKindLabel,
+    segmentLabel: input.segmentLabel,
+    campaignUrl,
+  });
+  return deliverEmail({
+    toEmail: operacionalEmail,
+    subject: mail.subject,
+    html: mail.html,
+    logLabel: `operacional nova campanha ${input.campaignId}`,
+  });
+};
+
+export const notifyOperacionalNewCampaignEmail = (input: {
+  operacionalEmail: string;
+  operacionalName: string;
+  campaignId: string;
+  campaignName: string;
+  subscriberId: string;
+  plannedSendCount: number;
+  createdAtLabel: string;
+  apiKindLabel: string;
+}): void => {
+  void deliverOperacionalNewCampaignEmail(input)
+    .then((result) => {
+      if (result.status === "skipped") {
+        console.warn(`[mail] ${result.message}`);
+      } else if (result.status === "failed") {
+        console.error(`[mail] operacional nova campanha (async): ${result.message}`);
+      }
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[mail] operacional nova campanha (async):", message);
+    });
+};
+
+export const deliverSubscriberWelcomeNotifications = async (input: {
+  email: string;
+  fullName: string;
+  password: string;
+  whatsapp: string;
+  phone: string;
+  cpfCnpj: string;
+  loginUrl?: string;
+}): Promise<{
+  email: WabaEmailDeliveryResult;
+  whatsapp: WabaWhatsAppDeliveryResult;
+}> => {
+  const loginUrl = String(input.loginUrl || resolveWabaAppLoginUrl()).trim() || resolveWabaAppLoginUrl();
+  const [email, whatsapp] = await Promise.all([
+    deliverSubscriberWelcomeEmail({ ...input, loginUrl }),
+    deliverSubscriberWelcomeWhatsApp({
+      email: input.email,
+      password: input.password,
+      whatsapp: input.whatsapp,
+      loginUrl,
+    }),
+  ]);
+  return { email, whatsapp };
+};
+
+export const notifySubscriberWelcomeEmail = (input: {
+  email: string;
+  fullName: string;
+  password: string;
+  whatsapp: string;
+  phone: string;
+  cpfCnpj: string;
+  loginUrl?: string;
+}): void => {
+  void deliverSubscriberWelcomeNotifications(input).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[mail] boas-vindas cadastro (async):", message);
+  });
+};
+
+export const deliverStaffWelcomeEmail = async (input: {
+  email: string;
+  fullName: string;
+  password: string;
+  whatsapp: string;
+  roleLabel: string;
+  loginUrl?: string;
+  operacionalDispatchesApiLabel?: string;
+  operacionalSegmentLabel?: string;
+}): Promise<WabaEmailDeliveryResult> => {
+  const email = String(input.email || "")
+    .trim()
+    .toLowerCase();
+  const loginUrl = String(input.loginUrl || resolveWabaAppLoginUrl()).trim() || resolveWabaAppLoginUrl();
+  const mail = buildStaffWelcomeTemplate({
+    recipientName: input.fullName,
+    recipientEmail: email,
+    password: String(input.password ?? ""),
+    whatsapp: input.whatsapp,
+    roleLabel: input.roleLabel,
+    loginUrl,
+    operacionalDispatchesApiLabel: input.operacionalDispatchesApiLabel,
+    operacionalSegmentLabel: input.operacionalSegmentLabel,
+  });
+  return deliverEmail({
+    toEmail: email,
+    subject: mail.subject,
+    html: mail.html,
+    logLabel: `boas-vindas equipe ${email}`,
+  });
+};
+
+export const notifyStaffWelcome = (input: {
+  email: string;
+  fullName: string;
+  password: string;
+  whatsapp: string;
+  roleLabel: string;
+  loginUrl?: string;
+  operacionalDispatchesApiLabel?: string;
+  operacionalSegmentLabel?: string;
+}): void => {
+  void deliverStaffWelcomeEmail(input).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[mail] boas-vindas equipe (async):", message);
+  });
+  notifyStaffWelcomeWhatsApp({
+    email: input.email,
+    password: input.password,
+    whatsapp: input.whatsapp,
+    fullName: input.fullName,
+    roleLabel: input.roleLabel,
+    loginUrl: input.loginUrl,
+    operacionalDispatchesApiLabel: input.operacionalDispatchesApiLabel,
+    operacionalSegmentLabel: input.operacionalSegmentLabel,
+  });
+};

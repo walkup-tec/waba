@@ -1,0 +1,50 @@
+---
+description: Após Redeploy do paginadevendas, heal permanente evita 502/bad-gateway em wabadisparos
+alwaysApply: true
+---
+
+# Heal paginadevendas pós-redeploy (obrigatório)
+
+## Problema
+
+Redeploy Easypanel de `waba_paginadevendas` remove publish host **`:30210`** e/ou Traefik aponta overlay → **502**. Browser/Easypanel pode mostrar JSON:
+
+`Cannot GET /api/errors/bad-gateway`
+
+Isso **não** é bug do formulário de cadastro.
+
+## Solução permanente (3 camadas)
+
+| Camada | Unidade | Função |
+|--------|---------|--------|
+| Watch | `waba-paginadevendas-heal-watch.service` | `docker events` → `burst` no redeploy |
+| Timer | `waba-paginadevendas-heal.timer` | a cada **~20s** |
+| Manual | `heal-paginadevendas-pos-redeploy-vps.sh run\|burst` | emergência |
+
+Script: `scripts/heal-paginadevendas-pos-redeploy-vps.sh` (v2+)
+
+## Install no VPS (uma vez)
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/heal-paginadevendas-pos-redeploy-vps.sh" \
+  -o /tmp/heal-paginadevendas-pos-redeploy-vps.sh
+sed -i 's/\r$//' /tmp/heal-paginadevendas-pos-redeploy-vps.sh
+chmod +x /tmp/heal-paginadevendas-pos-redeploy-vps.sh
+/tmp/heal-paginadevendas-pos-redeploy-vps.sh install
+systemctl is-active waba-paginadevendas-heal-watch.service
+curl -sS -o /dev/null -w "disparos:%{http_code}\n" --max-time 15 https://wabadisparos.com.br/
+```
+
+## Após todo Redeploy da landing
+
+Se ainda 502 por ~30–60s: normal até o watch/burst. Se persistir:
+
+```bash
+/root/waba-infra/heal-paginadevendas-pos-redeploy-vps.sh burst
+```
+
+## Proibido
+
+- Tratar `api/errors/bad-gateway` como rota do app
+- `docker service update --force easypanel-traefik` por hábito
+- Assumir que Redeploy do `waba_disparador` cura a landing (são serviços diferentes)

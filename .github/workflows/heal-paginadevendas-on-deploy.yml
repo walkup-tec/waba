@@ -1,0 +1,56 @@
+# Heal wabadisparos / paginadevendas após redeploy (watch deve já estar no VPS).
+# Triggers: workflow_dispatch + repository_dispatch (easypanel / manual).
+#
+# Secrets: VPS_SSH_PRIVATE_KEY (obrigatório), VPS_HOST (opcional)
+# Doc: .cursor/rules/waba-paginadevendas-heal-pos-redeploy.mdc
+
+name: Heal paginadevendas (pós-redeploy)
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [easypanel-paginadevendas-redeployed, heal-paginadevendas]
+
+concurrency:
+  group: heal-paginadevendas
+  cancel-in-progress: false
+
+jobs:
+  heal-pv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Validar secrets
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY ausente"
+            exit 1
+          fi
+
+      - name: Aguardar container subir
+        run: sleep 35
+
+      - name: SSH — install watch+timer e burst
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            REPO="https://raw.githubusercontent.com/walkup-tec/waba/master/scripts"
+            curl -fsSL "${REPO}/heal-paginadevendas-pos-redeploy-vps.sh" -o /tmp/heal-paginadevendas-pos-redeploy-vps.sh
+            sed -i 's/\r$//' /tmp/heal-paginadevendas-pos-redeploy-vps.sh
+            chmod +x /tmp/heal-paginadevendas-pos-redeploy-vps.sh
+            /tmp/heal-paginadevendas-pos-redeploy-vps.sh install
+            /tmp/heal-paginadevendas-pos-redeploy-vps.sh burst || true
+            sleep 15
+            /tmp/heal-paginadevendas-pos-redeploy-vps.sh burst
+            /tmp/heal-paginadevendas-pos-redeploy-vps.sh status
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+              --resolve wabadisparos.com.br:443:127.0.0.1 \
+              https://wabadisparos.com.br/ || echo 000)"
+            echo "https_disparos=${code}"
+            test "$code" = "200"
