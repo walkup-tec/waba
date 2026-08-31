@@ -269,6 +269,7 @@ import {
   instanceNameConflictsWithHeld,
   namesHeldByUnfinishedCampaigns,
   pickBalancedEligibleCampaignInstance,
+  PROXY_CAMPANHA_RECONNECT_HINT,
 } from "./proxy/proxy-brasil-campaign.rules";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 import {
@@ -7277,6 +7278,23 @@ function disparadorInstanceTagsForCampaign(
     );
 }
 
+function attachProxyEnabledToCampaignTags(
+  tags: Array<{ instanceName: string; connected: boolean; proxyEnabled?: boolean | null }>,
+  liveRows: EvoInstanceTagRow[],
+  proxyBrasilOn: boolean,
+): Array<{ instanceName: string; connected: boolean; proxyEnabled: boolean | null }> {
+  return tags.map((t) => {
+    const r = resolveStoredNameToEvoTag(t.instanceName, liveRows);
+    const key = String(r.instanceKey || t.instanceName || "").trim();
+    const confirmed = key ? getConfirmedProxyFind(key) : null;
+    return {
+      instanceName: t.instanceName,
+      connected: t.connected,
+      proxyEnabled: proxyBrasilOn ? confirmed : null,
+    };
+  });
+}
+
 function getCampaignInstanceHealth(
   config: DisparosConfig | undefined | null,
   evoRows: EvoInstanceTagRow[]
@@ -13743,7 +13761,6 @@ async function pickDisparadorInstanceForConfig(
         selectedInLiveCampaign: true,
         connection: "open",
         proxyFindEnabled: cachedOn ? true : proxyFind,
-        sessionAlreadyOpen: true,
       });
       if (!maySend.allowed) continue;
     }
@@ -14086,6 +14103,51 @@ async function prepareProxyBrasilForCampaignInstancesNow(instanceNames: string[]
 function selectedInstanceNamesFromCampaign(campaign: { configSnapshot?: DisparosConfig | null }): string[] {
   const raw = campaign?.configSnapshot?.selectedDisparadorInstances;
   return Array.isArray(raw) ? raw.map((n) => String(n || "").trim()).filter(Boolean) : [];
+}
+
+/** Instância ativa para disparo: selecionada, open e `/proxy/find` enabled. */
+async function campaignHasProxyBrasilReadySelectedInstance(campaign: {
+  configSnapshot?: DisparosConfig | null;
+}): Promise<boolean> {
+  if (!loadProxyBrasilConfig()?.enabled) return true;
+  const names = selectedInstanceNamesFromCampaign(campaign);
+  if (!names.length) return false;
+  let evoRows: EvoInstanceTagRow[] = [];
+  try {
+    evoRows = await fetchEvoInstanceTagRows();
+  } catch {
+    evoRows = [];
+  }
+  const identityRows = evoRows.map((r) => ({
+    instanceKey: r.instanceKey,
+    displayName: r.displayName,
+    nameKeys: Array.from(r.nameKeys),
+    digitKeys: Array.from(r.digitKeys),
+  }));
+  for (const rawName of names) {
+    const evoName =
+      resolveCampaignStoredNameToEvoKey(rawName, identityRows) || rawName;
+    let live = "";
+    for (const probe of uniqueProbeNamesForLiveState(evoName, rawName)) {
+      live = await fetchEvoInstanceLiveState(probe, { fresh: true });
+      if (isEvoLiveStateOpen(live)) break;
+    }
+    const cachedOn = getConfirmedProxyFind(evoName) === true;
+    const proxyFind = cachedOn
+      ? true
+      : await fetchEvoProxyFindEnabled(evoName, callEvoAction, EVO_API_BASE, {
+          timeoutMs: 6_000,
+          retries: 0,
+        });
+    const maySend = instanceMaySendWithProxyBrasil({
+      proxyConfigEnabled: true,
+      selectedInLiveCampaign: true,
+      connection: classifyProxyBrasilConnection(live),
+      proxyFindEnabled: cachedOn ? true : proxyFind,
+    });
+    if (maySend.allowed) return true;
+  }
+  return false;
 }
 
 function liveCampaignInstanceNamesForOwner(ownerEmail: string): string[] {
@@ -14487,6 +14549,15 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas e com Disparador ativo)."
           : "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo)."
       );
+      if (loadProxyBrasilConfig()?.enabled) {
+        const proxyReady = await campaignHasProxyBrasilReadySelectedInstance(campaign);
+        if (!proxyReady) {
+          await pauseCampaignDueToProxyPrepareFailure(
+            campaignId,
+            `Nenhuma instância selecionada está conectada com Proxy Brasil ligada. ${PROXY_CAMPANHA_RECONNECT_HINT} e ative de novo.`,
+          );
+        }
+      }
       lead.status = "pending";
       return;
     }
@@ -14505,7 +14576,6 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         selectedInLiveCampaign: true,
         connection: classifyProxyBrasilConnection(liveForReady),
         proxyFindEnabled: proxyFind,
-        sessionAlreadyOpen: isEvoLiveStateOpen(liveForReady),
       });
       if (!maySend.allowed) {
         console.warn(
@@ -14518,6 +14588,11 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
             campaignId,
             `Instância ${instancePick.instancia} saiu de open (${liveForReady || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`,
             { instanceName: instancePick.instancia, disableProxy: conn === "disconnected" },
+          );
+        } else if (maySend.reason === "proxy-off") {
+          await pauseCampaignDueToProxyPrepareFailure(
+            campaignId,
+            `Instância ${instancePick.instancia} está open sem Proxy Brasil. ${PROXY_CAMPANHA_RECONNECT_HINT} e ative de novo.`,
           );
         }
         lead.status = "pending";
@@ -14884,8 +14959,12 @@ async function runCampaignDispatchTick(): Promise<void> {
     await releaseHumanPauseForSelectedCampaignInstances(c);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
     if (health.needsMoreInstancesForMinimum) continue;
+    if (loadProxyBrasilConfig()?.enabled) {
+      const proxyReady = await campaignHasProxyBrasilReadySelectedInstance(c);
+      if (!proxyReady) continue;
+    }
     console.warn(
-      `[Campanha] ${c.id} retomada automaticamente: há número open suficiente para disparar.`,
+      `[Campanha] ${c.id} retomada automaticamente: há número open com Proxy Brasil para disparar.`,
     );
     c.status = "running";
     c.pauseReason = undefined;
@@ -15486,7 +15565,11 @@ app.get("/disparos/campanhas", async (req, res) => {
         const configForTags = useGlobal
           ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
           : configByCampaignId.get(item.id);
-        const tags = disparadorInstanceTagsForCampaign(configForTags, liveRows);
+        const tags = attachProxyEnabledToCampaignTags(
+          disparadorInstanceTagsForCampaign(configForTags, liveRows),
+          liveRows,
+          proxyBrasilOn,
+        );
         const instanceHealth = getCampaignInstanceHealth(configForTags, liveRows);
         const healthWithSpare: CampaignInstanceHealth = {
           ...instanceHealth,
@@ -15551,6 +15634,12 @@ app.get("/disparos/campanhas", async (req, res) => {
           const keys = proxyKeysByCampaignId.get(item.id) || [];
           item.proxyProtectionActive =
             keys.length > 0 && areAllInstanceNamesProxyConfirmedEnabled(keys);
+          const rowsForTags = liveRowsByCampaignId.get(item.id) || evoRowsAll;
+          item.disparadorInstances = attachProxyEnabledToCampaignTags(
+            Array.isArray(item.disparadorInstances) ? item.disparadorInstances : [],
+            rowsForTags,
+            true,
+          );
         }
       }
       queueConfirmProxyFindForInstanceNames(uniqueKeys, callEvoAction, EVO_API_BASE);
@@ -15945,7 +16034,6 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
             selectedInLiveCampaign: true,
             connection: classifyProxyBrasilConnection(live),
             proxyFindEnabled: proxyFind,
-            sessionAlreadyOpen: isEvoLiveStateOpen(live),
           });
           if (maySend.allowed) anyReady = true;
         }
@@ -16130,7 +16218,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         instanceHealth,
         stillNeedsMore: instanceHealth.needsMoreInstancesForMinimum,
         message:
-          `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números.`,
+          `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proxy Campanha para disparar com proteção.`,
       });
     } else {
       const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
@@ -16182,7 +16270,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       message:
         computeCampaignInstancesToAdd(instanceHealth) > 0
           ? `Adicionamos ${addedCount} número(s).${swapNote} Ainda há instâncias desconectadas ou abaixo do mínimo. Conecte outro número e use «+ Instâncias».`
-          : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números.`,
+          : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proxy Campanha para disparar com proteção.`,
     });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || "Erro ao adicionar instâncias na campanha." });

@@ -4,6 +4,13 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-31 — Campanha só dispara com Proxy Brasil ligada
+
+- **Decisão:** Instância ativa na campanha = selecionada + `connectionState=open` + `/proxy/find` enabled. Removida a exceção que permitia enviar com sessão `open` sem proxy (`open-cannot-set-proxy`). `proxy/set` em sessão já `open` continua **proibido** (derruba pareamento). Prepare de número `open` sem proxy devolve falha e pede QR **Proxy Campanha**.
+- **Motivo:** A regra permanente já exigia Proxy Brasil em toda instância ativa; o atalho de 28/08 deixou a campanha disparar sem proteção.
+- **Impacto:** Marker `DEPLOY-2026-08-31-114800-campanha-proxy-obrigatoria`. Após Redeploy, campanha sem Proxy pausa até reconectar no Aquecedor com Proxy Campanha. Exige Redeploy EasyPanel.
+- **Data:** 2026-08-31
+
 ### 2026-08-29 — Um WhatsApp por número na transferência de campanha
 
 - **Decisão:** Notificação de campanha (atribuição/transferência) envia **um** WhatsApp por número, não por cadastro master. Transferência usa texto próprio, não «nova campanha gerada».

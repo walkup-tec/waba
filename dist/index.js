@@ -5953,6 +5953,18 @@ function disparadorInstanceTagsForCampaign(config, evoRows) {
     }))
         .sort((a, b) => a.instanceName.localeCompare(b.instanceName, "pt-BR", { sensitivity: "base" }));
 }
+function attachProxyEnabledToCampaignTags(tags, liveRows, proxyBrasilOn) {
+    return tags.map((t) => {
+        const r = resolveStoredNameToEvoTag(t.instanceName, liveRows);
+        const key = String(r.instanceKey || t.instanceName || "").trim();
+        const confirmed = key ? (0, evo_instance_proxy_service_1.getConfirmedProxyFind)(key) : null;
+        return {
+            instanceName: t.instanceName,
+            connected: t.connected,
+            proxyEnabled: proxyBrasilOn ? confirmed : null,
+        };
+    });
+}
 function getCampaignInstanceHealth(config, evoRows) {
     const tags = disparadorInstanceTagsForCampaign(config, evoRows);
     const selectedCount = tags.length;
@@ -11771,7 +11783,6 @@ async function pickDisparadorInstanceForConfig(config, opts) {
                 selectedInLiveCampaign: true,
                 connection: "open",
                 proxyFindEnabled: cachedOn ? true : proxyFind,
-                sessionAlreadyOpen: true,
             });
             if (!maySend.allowed)
                 continue;
@@ -12058,6 +12069,52 @@ async function prepareProxyBrasilForCampaignInstancesNow(instanceNames) {
 function selectedInstanceNamesFromCampaign(campaign) {
     const raw = campaign?.configSnapshot?.selectedDisparadorInstances;
     return Array.isArray(raw) ? raw.map((n) => String(n || "").trim()).filter(Boolean) : [];
+}
+/** Instância ativa para disparo: selecionada, open e `/proxy/find` enabled. */
+async function campaignHasProxyBrasilReadySelectedInstance(campaign) {
+    if (!(0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled)
+        return true;
+    const names = selectedInstanceNamesFromCampaign(campaign);
+    if (!names.length)
+        return false;
+    let evoRows = [];
+    try {
+        evoRows = await fetchEvoInstanceTagRows();
+    }
+    catch {
+        evoRows = [];
+    }
+    const identityRows = evoRows.map((r) => ({
+        instanceKey: r.instanceKey,
+        displayName: r.displayName,
+        nameKeys: Array.from(r.nameKeys),
+        digitKeys: Array.from(r.digitKeys),
+    }));
+    for (const rawName of names) {
+        const evoName = (0, campaign_instance_identity_1.resolveCampaignStoredNameToEvoKey)(rawName, identityRows) || rawName;
+        let live = "";
+        for (const probe of (0, campaign_instance_identity_1.uniqueProbeNamesForLiveState)(evoName, rawName)) {
+            live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(probe, { fresh: true });
+            if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(live))
+                break;
+        }
+        const cachedOn = (0, evo_instance_proxy_service_1.getConfirmedProxyFind)(evoName) === true;
+        const proxyFind = cachedOn
+            ? true
+            : await (0, evo_instance_proxy_service_1.fetchEvoProxyFindEnabled)(evoName, callEvoAction, EVO_API_BASE, {
+                timeoutMs: 6000,
+                retries: 0,
+            });
+        const maySend = (0, proxy_brasil_campaign_rules_1.instanceMaySendWithProxyBrasil)({
+            proxyConfigEnabled: true,
+            selectedInLiveCampaign: true,
+            connection: (0, proxy_brasil_campaign_rules_1.classifyProxyBrasilConnection)(live),
+            proxyFindEnabled: cachedOn ? true : proxyFind,
+        });
+        if (maySend.allowed)
+            return true;
+    }
+    return false;
 }
 function liveCampaignInstanceNamesForOwner(ownerEmail) {
     const email = String(ownerEmail || "").trim().toLowerCase();
@@ -12398,6 +12455,12 @@ async function processOneCampaignDispatch(campaignId) {
             console.error(isAlternativaMotor
                 ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas e com Disparador ativo)."
                 : "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo).");
+            if ((0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled) {
+                const proxyReady = await campaignHasProxyBrasilReadySelectedInstance(campaign);
+                if (!proxyReady) {
+                    await pauseCampaignDueToProxyPrepareFailure(campaignId, `Nenhuma instância selecionada está conectada com Proxy Brasil ligada. ${proxy_brasil_campaign_rules_1.PROXY_CAMPANHA_RECONNECT_HINT} e ative de novo.`);
+                }
+            }
             lead.status = "pending";
             return;
         }
@@ -12410,13 +12473,15 @@ async function processOneCampaignDispatch(campaignId) {
                 selectedInLiveCampaign: true,
                 connection: (0, proxy_brasil_campaign_rules_1.classifyProxyBrasilConnection)(liveForReady),
                 proxyFindEnabled: proxyFind,
-                sessionAlreadyOpen: (0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveForReady),
             });
             if (!maySend.allowed) {
                 console.warn(`[Campanha] envio bloqueado sem Proxy Brasil (${maySend.reason}):`, instancePick.instancia);
                 if (maySend.reason === "not-open") {
                     const conn = (0, proxy_brasil_campaign_rules_1.classifyProxyBrasilConnection)(liveForReady);
                     await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} saiu de open (${liveForReady || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`, { instanceName: instancePick.instancia, disableProxy: conn === "disconnected" });
+                }
+                else if (maySend.reason === "proxy-off") {
+                    await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} está open sem Proxy Brasil. ${proxy_brasil_campaign_rules_1.PROXY_CAMPANHA_RECONNECT_HINT} e ative de novo.`);
                 }
                 lead.status = "pending";
                 return;
@@ -12717,7 +12782,12 @@ async function runCampaignDispatchTick() {
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
         if (health.needsMoreInstancesForMinimum)
             continue;
-        console.warn(`[Campanha] ${c.id} retomada automaticamente: há número open suficiente para disparar.`);
+        if ((0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled) {
+            const proxyReady = await campaignHasProxyBrasilReadySelectedInstance(c);
+            if (!proxyReady)
+                continue;
+        }
+        console.warn(`[Campanha] ${c.id} retomada automaticamente: há número open com Proxy Brasil para disparar.`);
         c.status = "running";
         c.pauseReason = undefined;
         const supabase = getSupabaseClient();
@@ -13239,7 +13309,7 @@ app.get("/disparos/campanhas", async (req, res) => {
             const configForTags = useGlobal
                 ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
                 : configByCampaignId.get(item.id);
-            const tags = disparadorInstanceTagsForCampaign(configForTags, liveRows);
+            const tags = attachProxyEnabledToCampaignTags(disparadorInstanceTagsForCampaign(configForTags, liveRows), liveRows, proxyBrasilOn);
             const instanceHealth = getCampaignInstanceHealth(configForTags, liveRows);
             const healthWithSpare = {
                 ...instanceHealth,
@@ -13290,6 +13360,8 @@ app.get("/disparos/campanhas", async (req, res) => {
                     const keys = proxyKeysByCampaignId.get(item.id) || [];
                     item.proxyProtectionActive =
                         keys.length > 0 && (0, evo_instance_proxy_service_1.areAllInstanceNamesProxyConfirmedEnabled)(keys);
+                    const rowsForTags = liveRowsByCampaignId.get(item.id) || evoRowsAll;
+                    item.disparadorInstances = attachProxyEnabledToCampaignTags(Array.isArray(item.disparadorInstances) ? item.disparadorInstances : [], rowsForTags, true);
                 }
             }
             (0, evo_instance_proxy_service_1.queueConfirmProxyFindForInstanceNames)(uniqueKeys, callEvoAction, EVO_API_BASE);
@@ -13678,7 +13750,6 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
                         selectedInLiveCampaign: true,
                         connection: (0, proxy_brasil_campaign_rules_1.classifyProxyBrasilConnection)(live),
                         proxyFindEnabled: proxyFind,
-                        sessionAlreadyOpen: (0, evo_connection_state_service_1.isEvoLiveStateOpen)(live),
                     });
                     if (maySend.allowed)
                         anyReady = true;
@@ -13845,7 +13916,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
                 removedBlocked: swapped.removedBlocked,
                 instanceHealth,
                 stillNeedsMore: instanceHealth.needsMoreInstancesForMinimum,
-                message: `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números.`,
+                message: `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proxy Campanha para disparar com proteção.`,
             });
         }
         else {
@@ -13888,7 +13959,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             stillNeedsMore,
             message: computeCampaignInstancesToAdd(instanceHealth) > 0
                 ? `Adicionamos ${addedCount} número(s).${swapNote} Ainda há instâncias desconectadas ou abaixo do mínimo. Conecte outro número e use «+ Instâncias».`
-                : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números.`,
+                : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proxy Campanha para disparar com proteção.`,
         });
     }
     catch (error) {

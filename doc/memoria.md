@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-31 11:48 — Campanha só dispara com Proxy Brasil
+- Instância ativa = `open` + `/proxy/find` enabled. Removida a exceção que enviava sem proxy.
+- `proxy/set` em sessão já pareada continua proibido; reconectar no Aquecedor com Proxy Campanha.
+- LOG: `doc/LOG-2026-08-31__114800__campanha-proxy-brasil-obrigatoria.md`
+- Marker: `DEPLOY-2026-08-31-114800-campanha-proxy-obrigatoria`
+
 ## 2026-08-30 17:50 — Ativar número pendente no Laboratório
 - Linha pendente (Walkup `+55 11 95213-7761`) mostra PIN + Ativar. Register usa o token do portfólio selecionado.
 - LOG: `doc/LOG-2026-08-30__175000__laboratorio-ativar-numero.md`

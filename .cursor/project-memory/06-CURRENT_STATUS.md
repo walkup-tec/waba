@@ -23,8 +23,8 @@ Não usar como histórico de desenvolvimento.
 - Botão **Início** removido do footer do dispositivo virtual
 - Campanha API Alternativa: imagem → texto sem URL; pareamento não é derrubado por proxy/set no tick nem ao ativar
 - Reconexão de número: apaga clones/sessão antiga na Evolution; preserva foguinhos e totais de envio
-- Campanha dispara quando a Evolution está `open`; pausa automática de saúde retoma sozinha
-- Campanha em execução: troca automática 1:1 do desconectado por conectado habilitado para disparos (Proxy sai/entra)
+- Campanha dispara só com instância `open` **e** Proxy Brasil ligada; chip `open` sem proxy não é ativo para envio
+- Campanha em execução: troca automática 1:1 do desconectado por conectado habilitado para disparos (Proxy sai/entra; quem entra sem Proxy não dispara até Proxy Campanha)
 - Laboratório: CARD 02 mostra nome e foto do portfólio e dos chips gravados na conta WABA (Meta é best-effort)
 
 ## Funcionalidades em andamento
@@ -34,7 +34,7 @@ Não usar como histórico de desenvolvimento.
 
 ## Pendências relevantes
 
-- Pendência de deploy: validar `GET /health` = `DEPLOY-2026-08-29-135200-master-wa-dedupe-transfer` após Redeploy `waba_disparador` (WhatsApp master 1x por número; chip desconectado não ativo; ES FB.init `graphVersion=v26.0`).
+- Pendência de deploy: validar `GET /health` = `DEPLOY-2026-08-31-114800-campanha-proxy-obrigatoria` após Redeploy `waba_disparador` (campanha só dispara com Proxy Brasil; chip open sem proxy não é ativo).
 - Após cada mudança de UI/runtime: `npm run build` + commit `dist/` antes do push (FTP sozinho **não** atualiza `waba.draxsistemas.com.br`)
 - Após deploy `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`: reenviar boas-vindas e confirmar JPEG nítido no WhatsApp
 - Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)

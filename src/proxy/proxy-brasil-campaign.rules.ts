@@ -63,13 +63,14 @@ export function classifyProxyBrasilConnection(state: string): ProxyBrasilConnect
   return "disconnected";
 }
 
+export const PROXY_CAMPANHA_RECONNECT_HINT =
+  "Reconecte no Aquecedor com Proxy Campanha";
+
 export function instanceMaySendWithProxyBrasil(input: {
   proxyConfigEnabled: boolean;
   selectedInLiveCampaign: boolean;
   connection: ProxyBrasilConnectionKind;
   proxyFindEnabled: boolean | null;
-  /** Sessão já open: proxy/set derruba o pareamento — o envio não pode ficar preso. */
-  sessionAlreadyOpen?: boolean;
 }): { allowed: boolean; reason: string } {
   if (!input.selectedInLiveCampaign) {
     return { allowed: false, reason: "not-selected" };
@@ -81,9 +82,6 @@ export function instanceMaySendWithProxyBrasil(input: {
     return { allowed: true, reason: "proxy-config-off" };
   }
   if (input.proxyFindEnabled !== true) {
-    if (input.sessionAlreadyOpen === true && input.connection === "open") {
-      return { allowed: true, reason: "open-cannot-set-proxy" };
-    }
     return { allowed: false, reason: "proxy-off" };
   }
   return { allowed: true, reason: "ok" };
@@ -232,14 +230,13 @@ export function runProxyBrasilCampaignRulesSelfCheck(): void {
       }),
     ],
     [
-      "send-allows-open-without-proxy-when-cannot-set",
-      true,
+      "send-blocks-open-without-proxy",
+      false,
       send({
         proxyConfigEnabled: true,
         selectedInLiveCampaign: true,
         connection: "open",
         proxyFindEnabled: false,
-        sessionAlreadyOpen: true,
       }),
     ],
     [

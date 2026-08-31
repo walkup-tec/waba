@@ -12,7 +12,7 @@ Somente regras permanentes. Sem detalhes de implementação.
 ### Campanha — troca automática do número bloqueado
 
 - Chip **vermelho e apto à troca 1:1** quando não dá para enviar: Evolution `close` / `connecting`, probe live vazio sobre instância já `close` no fetchInstances, WhatsApp `statusReason` 403, HTTP 403 no envio, outbound `MessageUpdate=ERROR`, tag **Restrição**, ou pausa `restricted_wait`.
-- Só `connectionState=open` (sem os status acima) conta como ativo na campanha. Timeout do probe **não** pinta de verde quem o fetchInstances já marcou desconectado.
+- Só `connectionState=open` **com Proxy Brasil ligada** conta como ativo para disparo. Timeout do probe **não** pinta de verde quem o fetchInstances já marcou desconectado.
 
 ### Campanha — «+ Instâncias»
 
@@ -87,15 +87,17 @@ Quando um número **conectar de novo** (QR / pairing):
 
 - Números bloqueados/offline aparecem em vermelho na campanha.
 - Com a campanha **em execução**, se houver instância **conectada** e **habilitada para disparos** fora da seleção, a troca é **automática** (1:1): o desconectado sai, o conectado entra.
-- Nessa troca, a Proxy Brasil **não** faz `proxy/set` no número que entra se a sessão já está `open` (isso derruba o pareamento). O que sai da seleção pode ter proxy desligada. Números que permanecem na campanha não são tocados. Para enviar com Proxy, o operador reconecta no Aquecedor com **Proxy Campanha**.
+- Nessa troca, a Proxy Brasil **não** faz `proxy/set` no número que entra se a sessão já está `open` (isso derruba o pareamento). O que sai da seleção pode ter proxy desligada. Números que permanecem na campanha não são tocados.
+- Instância que entra `open` **sem** Proxy Brasil **não dispara** até o operador reconectar no Aquecedor com **Proxy Campanha**.
 - O botão «+ Instâncias» só aparece quando **não há** instância conectada livre (ou a campanha está pausada à espera do operador). O usuário conecta um número habilitado para disparos e então usa o botão.
 - A tag «Proteção ativa» aparece quando a Proxy está confirmada nas instâncias **conectadas** da campanha.
 
-### Campanha — disparar se a Evolution está open
+### Campanha — disparar só com open e Proxy Brasil
 
-- A campanha **só** pausa automaticamente quando não há o mínimo de números com `connectionState=open` (hoje 1).
-- Se ao menos um número selecionado está `open`, a campanha deve **enviar**. Não pausar por cache vazio, falha de `fetchInstances` nem pela regra antiga de “50% desconectados” quando o mínimo já está cumprido.
-- Pausa automática por saúde **retoma sozinha** quando o mínimo volta a `open`. Pausa manual, créditos esgotados e «parar envios» continuam pausadas.
+- A campanha **só** dispara em instância selecionada com `connectionState=open` **e** `/proxy/find` enabled.
+- Sem Proxy Brasil, o chip `open` **não** é ativo para envio. A campanha pausa se nenhuma selecionada estiver open com Proxy; retoma sozinha quando isso volta.
+- Timeout do probe **não** pinta de verde quem o fetchInstances já marcou desconectado.
+- Pausa manual, créditos esgotados e «parar envios» continuam pausadas.
 
 ### Boas-vindas WhatsApp vs aquecedor
 

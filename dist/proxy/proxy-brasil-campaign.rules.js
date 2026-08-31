@@ -9,6 +9,7 @@
  * - connection unknown: não desliga (evita falso offline).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.PROXY_CAMPANHA_RECONNECT_HINT = void 0;
 exports.campaignStatusHoldsProxyBrasil = campaignStatusHoldsProxyBrasil;
 exports.normalizeProxyBrasilInstanceNames = normalizeProxyBrasilInstanceNames;
 exports.heldProxyBrasilInstanceNames = heldProxyBrasilInstanceNames;
@@ -68,6 +69,7 @@ function classifyProxyBrasilConnection(state) {
         return "unknown";
     return "disconnected";
 }
+exports.PROXY_CAMPANHA_RECONNECT_HINT = "Reconecte no Aquecedor com Proxy Campanha";
 function instanceMaySendWithProxyBrasil(input) {
     if (!input.selectedInLiveCampaign) {
         return { allowed: false, reason: "not-selected" };
@@ -79,9 +81,6 @@ function instanceMaySendWithProxyBrasil(input) {
         return { allowed: true, reason: "proxy-config-off" };
     }
     if (input.proxyFindEnabled !== true) {
-        if (input.sessionAlreadyOpen === true && input.connection === "open") {
-            return { allowed: true, reason: "open-cannot-set-proxy" };
-        }
         return { allowed: false, reason: "proxy-off" };
     }
     return { allowed: true, reason: "ok" };
@@ -187,14 +186,13 @@ function runProxyBrasilCampaignRulesSelfCheck() {
             }),
         ],
         [
-            "send-allows-open-without-proxy-when-cannot-set",
-            true,
+            "send-blocks-open-without-proxy",
+            false,
             send({
                 proxyConfigEnabled: true,
                 selectedInLiveCampaign: true,
                 connection: "open",
                 proxyFindEnabled: false,
-                sessionAlreadyOpen: true,
             }),
         ],
         [

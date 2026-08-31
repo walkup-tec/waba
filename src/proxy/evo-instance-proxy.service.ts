@@ -600,17 +600,17 @@ export async function prepareProxyBrasilSessionForCampaignSend(
           };
         }
         const entry = setPrepareStatus(name, {
-          status: "ready",
+          status: "failed",
           state: liveBefore,
           reason:
-            "sessão open: proxy/set omitido para preservar o pareamento. Para enviar, reconecte no Aquecedor com Proxy Campanha.",
+            "sessão open sem Proxy Brasil: proxy/set omitido para preservar o pareamento. Reconecte no Aquecedor com Proxy Campanha para disparar.",
           proxyApplied: false,
           restarted: false,
           needsProxyPairing: true,
         });
         console.warn(`[ProxyBrasil] ${name}: ${entry.reason}`);
         return {
-          ok: true,
+          ok: false,
           skipped: true,
           instanceName: name,
           status: entry.status,

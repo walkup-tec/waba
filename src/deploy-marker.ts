@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-30-175000-master-laboratorio-ativar-numero";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-31-114800-campanha-proxy-obrigatoria";

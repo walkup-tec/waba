@@ -54,6 +54,7 @@ A URL de login/disparador usa o container Docker (`COPY dist/`). Mudança só em
 
 | Marker | Tema |
 |--------|------|
+| `DEPLOY-2026-08-31-114800-campanha-proxy-obrigatoria` | Campanha: só dispara com Proxy Brasil ligada |
 | `DEPLOY-2026-08-28-121400-inbox-envio-conversa` | Inbox: envio Cloud na conversa + resposta pelo compositor |
 | `DEPLOY-2026-08-28-111300-inbox-opt-in-numero` | Inbox: switch cinza, banner do número, webhook ao ligar |
 | `DEPLOY-2026-08-28-110000-swap-bloqueado-2102` | Campanha: chip bloqueado WhatsApp (403) + spare 2102 |

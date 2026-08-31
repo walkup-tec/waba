@@ -16893,6 +16893,11 @@
         background: rgba(22, 163, 74, 0.45);
         border: 1px solid rgba(74, 222, 128, 0.55);
       }
+      .dis-campaign-instance-tag--no-proxy {
+        color: #fef3c7;
+        background: rgba(180, 83, 9, 0.42);
+        border: 1px solid rgba(251, 191, 36, 0.5);
+      }
       .dis-campaign-instance-tag--disconnected {
         color: #fecaca;
         background: rgba(153, 27, 27, 0.35);
@@ -51502,12 +51507,19 @@
                         .replace(/>/g, "&gt;")
                         .replace(/"/g, "&quot;");
                       const ok = t?.connected === true;
-                      const cls = ok
-                        ? "dis-campaign-instance-tag dis-campaign-instance-tag--connected"
-                        : "dis-campaign-instance-tag dis-campaign-instance-tag--disconnected";
-                      const title = ok
-                        ? "Instância conectada (connectionState=open)"
-                        : "Desconectada — Evolution confirmou close";
+                      const proxyOn = t?.proxyEnabled === true;
+                      const proxyUnknown = t?.proxyEnabled == null;
+                      const needsProxy = ok && !proxyUnknown && !proxyOn;
+                      const cls = !ok
+                        ? "dis-campaign-instance-tag dis-campaign-instance-tag--disconnected"
+                        : needsProxy
+                          ? "dis-campaign-instance-tag dis-campaign-instance-tag--no-proxy"
+                          : "dis-campaign-instance-tag dis-campaign-instance-tag--connected";
+                      const title = !ok
+                        ? "Desconectada — Evolution confirmou close"
+                        : needsProxy
+                          ? "Conectada sem Proxy Brasil — reconecte no Aquecedor com Proxy Campanha. Não dispara até a Proxy estar ligada."
+                          : "Instância conectada com Proxy Brasil (ativa na campanha)";
                       return `<span class="${cls}" title="${title}">${safe || "—"}</span>`;
                     });
                     tagsBlock = `<div class="dis-campaign-instance-tags" aria-label="Instâncias desta campanha">${parts.join("")}</div>`;
