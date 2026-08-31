@@ -95,18 +95,20 @@ export class MetaWhatsappMessagingService {
     if (conversationId && !existingConversation) {
       throw new MetaWhatsappError("conversation_not_found");
     }
+    const requestedConnection = String(body?.connectionId || body?.connection_id || "").trim();
     const preferredConnectionId = String(
-      existingConversation?.connectionId || body?.connectionId || body?.connection_id || "",
+      existingConversation?.connectionId || requestedConnection || "",
     ).trim();
     let connection;
     try {
       connection = await this.provider.requireConnected(tenantId, preferredConnectionId || undefined);
     } catch (error) {
-      if (
-        preferredConnectionId &&
+      const canFallbackToFirstConnected =
+        Boolean(preferredConnectionId) &&
+        !requestedConnection &&
         error instanceof MetaWhatsappError &&
-        error.code === "not_connected"
-      ) {
+        error.code === "not_connected";
+      if (canFallbackToFirstConnected) {
         connection = await this.provider.requireConnected(tenantId);
       } else {
         throw error;
@@ -114,12 +116,14 @@ export class MetaWhatsappMessagingService {
     }
     const requestedPhone = String(body?.phoneNumberId || body?.phone_number_id || "").trim();
     const sendPhoneNumberId =
-      resolveInboxSendPhoneNumberId({
-        tenantId,
-        connectionPhoneNumberId: connection.phoneNumberId,
-        requestedPhoneNumberId: requestedPhone,
-        conversationPhoneNumberId: existingConversation?.phoneNumberId,
-      }) || String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
+      !existingConversation && requestedPhone
+        ? requestedPhone
+        : resolveInboxSendPhoneNumberId({
+            tenantId,
+            connectionPhoneNumberId: connection.phoneNumberId,
+            requestedPhoneNumberId: requestedPhone,
+            conversationPhoneNumberId: existingConversation?.phoneNumberId,
+          }) || String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
     const botSend = body?.source === "bot";
 
     const atIso = new Date().toISOString();

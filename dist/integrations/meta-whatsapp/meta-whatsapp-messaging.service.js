@@ -66,15 +66,18 @@ class MetaWhatsappMessagingService {
         if (conversationId && !existingConversation) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("conversation_not_found");
         }
-        const preferredConnectionId = String(existingConversation?.connectionId || body?.connectionId || body?.connection_id || "").trim();
+        const requestedConnection = String(body?.connectionId || body?.connection_id || "").trim();
+        const preferredConnectionId = String(existingConversation?.connectionId || requestedConnection || "").trim();
         let connection;
         try {
             connection = await this.provider.requireConnected(tenantId, preferredConnectionId || undefined);
         }
         catch (error) {
-            if (preferredConnectionId &&
+            const canFallbackToFirstConnected = Boolean(preferredConnectionId) &&
+                !requestedConnection &&
                 error instanceof meta_whatsapp_errors_1.MetaWhatsappError &&
-                error.code === "not_connected") {
+                error.code === "not_connected";
+            if (canFallbackToFirstConnected) {
                 connection = await this.provider.requireConnected(tenantId);
             }
             else {
@@ -82,12 +85,14 @@ class MetaWhatsappMessagingService {
             }
         }
         const requestedPhone = String(body?.phoneNumberId || body?.phone_number_id || "").trim();
-        const sendPhoneNumberId = (0, meta_whatsapp_phone_identity_store_1.resolveInboxSendPhoneNumberId)({
-            tenantId,
-            connectionPhoneNumberId: connection.phoneNumberId,
-            requestedPhoneNumberId: requestedPhone,
-            conversationPhoneNumberId: existingConversation?.phoneNumberId,
-        }) || String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
+        const sendPhoneNumberId = !existingConversation && requestedPhone
+            ? requestedPhone
+            : (0, meta_whatsapp_phone_identity_store_1.resolveInboxSendPhoneNumberId)({
+                tenantId,
+                connectionPhoneNumberId: connection.phoneNumberId,
+                requestedPhoneNumberId: requestedPhone,
+                conversationPhoneNumberId: existingConversation?.phoneNumberId,
+            }) || String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
         const botSend = body?.source === "bot";
         const atIso = new Date().toISOString();
         const upserted = await this.conversations.upsertForContact({

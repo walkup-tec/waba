@@ -539,6 +539,65 @@ describe("fase 6 messaging service", () => {
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "not_connected",
     );
   });
+
+  it("teste de lab envia pelo connectionId e phoneNumberId escolhidos", async () => {
+    const email = "phase6-lab-from@example.com";
+    const tenantId = deriveStableMetaTenantId(email);
+    writePhoneIdentity(tenantId, "phone-drax", { inboxEnabled: true, channelName: "Drax" });
+    try {
+      const tokWalkup = encryptMetaToken("tok-walkup");
+      const tokDrax = encryptMetaToken("tok-drax");
+      const connections = new FakeConnections();
+      connections.rows.push(
+        connectedRow({
+          id: "conn-drax",
+          tenantId,
+          ownerEmail: email,
+          phoneNumberId: "phone-drax",
+          accessTokenEncrypted: tokDrax,
+        }),
+        connectedRow({
+          id: "conn-walkup",
+          tenantId,
+          ownerEmail: email,
+          phoneNumberId: "phone-walkup",
+          accessTokenEncrypted: tokWalkup,
+        }),
+      );
+      const conversations = new FakeConversations();
+      const messages = new FakeMessages();
+      const calls: Array<{ phoneNumberId: string; token: string }> = [];
+      const provider = new MetaCloudProvider(
+        connections as any,
+        async (input: { phoneNumberId: string; token: string }) => {
+          calls.push({ phoneNumberId: input.phoneNumberId, token: input.token });
+          return graphOk("wamid.FROM");
+        },
+        (encrypted: string) => (encrypted === tokWalkup ? "tok-walkup" : "tok-drax"),
+      );
+      const service = new MetaWhatsappMessagingService(provider, conversations as any, messages as any);
+      const result = await service.sendFromAuth(
+        { email, role: "subscriber" },
+        {
+          to: "5551999887766",
+          type: "text",
+          text: "ping walkup",
+          connectionId: "conn-walkup",
+          phoneNumberId: "phone-walkup",
+        },
+      );
+      assert.equal(result.messageId, "wamid.FROM");
+      assert.equal(result.connectionId, "conn-walkup");
+      assert.equal(result.phoneNumberId, "phone-walkup");
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0]?.phoneNumberId, "phone-walkup");
+      assert.equal(calls[0]?.token, "tok-walkup");
+      assert.equal(conversations.rows[0]?.connectionId, "conn-walkup");
+      assert.equal(conversations.rows[0]?.phoneNumberId, "phone-walkup");
+    } finally {
+      purgePhoneIdentities(tenantId);
+    }
+  });
 });
 
 describe("fase 6 inbox inbound/status", () => {
