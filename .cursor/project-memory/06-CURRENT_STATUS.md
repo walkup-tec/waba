@@ -34,7 +34,7 @@ Não usar como histórico de desenvolvimento.
 
 ## Pendências relevantes
 
-- Pendência de deploy: patch SSH em produção ainda é `DEPLOY-2026-08-31-ssh-patch-mais-instancias-spare`. Código local da troca 1:1 + teto + Proxy no spare: `DEPLOY-2026-08-31-153000-campanha-slot-swap-proxy` (GitHub `master` ainda sem estes commits).
+- Pendência de deploy: produção ainda precisa do patch de trim do extra vermelho (`DEPLOY-2026-08-31-160500-campanha-trim-extra-vermelho`). Corbans está com 5 chips (4 verdes + WB-7770); o teto é 4.
 - Após cada mudança de UI/runtime: `npm run build` + commit `dist/` antes do push (FTP sozinho **não** atualiza `waba.draxsistemas.com.br`)
 - Após deploy `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`: reenviar boas-vindas e confirmar JPEG nítido no WhatsApp
 - Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)
