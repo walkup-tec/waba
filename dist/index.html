@@ -23389,7 +23389,7 @@
             <h3 class="reg-wizard-pane-title">Passo 2 — Escanear QR Code</h3>
             <p class="reg-wizard-pane-lead">No celular do número: WhatsApp → Aparelhos conectados → Conectar aparelho.</p>
             <div id="register-campaign-proxy-banner" class="register-campaign-proxy-banner" hidden>
-              Proxy Campanha: este QR liga a Proxy Brasil. O WhatsApp atual será encerrado — escaneie de novo no celular. Sem isso, a campanha não dispara neste número.
+              A conectar o QRCode, a camada de proteção extra será ativada em sua linha
             </div>
             <div id="register-qrcode-preview" class="qrcode-preview"></div>
             <div id="register-connect-status" class="connect-status"></div>
@@ -55268,18 +55268,18 @@
         const genBtn = document.getElementById("register-qrcode-btn");
         if (registerCampaignProxyMode) {
           modal?.classList.add("register-campaign-proxy");
-          if (title) title.textContent = "Proxy Campanha";
+          if (title) title.textContent = "Proteção Extra";
           if (subtitle) {
             subtitle.textContent =
-              "Este QR liga a Proxy Brasil. O WhatsApp atual será encerrado; escaneie de novo no celular.";
+              "A conectar o QRCode, a camada de proteção extra será ativada em sua linha.";
           }
-          if (pane2Title) pane2Title.textContent = "Passo 2 — Escanear QR com Proxy Brasil";
+          if (pane2Title) pane2Title.textContent = "Passo 2 — Escanear QRCode";
           if (pane2Lead) {
             pane2Lead.textContent =
               "No celular: WhatsApp → Aparelhos conectados → Conectar aparelho. Depois a campanha poderá disparar neste número.";
           }
           if (banner) banner.hidden = false;
-          if (genBtn) genBtn.textContent = "Gerar QR com proxy";
+          if (genBtn) genBtn.textContent = "Gerar QRCode";
         } else {
           modal?.classList.remove("register-campaign-proxy");
           if (title) title.textContent = "Conectar instância WhatsApp";
@@ -56662,7 +56662,7 @@
             setRegisterConnectStatus(
               "loading",
               registerCampaignProxyMode
-                ? "Escaneie o QR no WhatsApp. A Proxy Brasil ficará ligada neste número."
+                ? "Escaneie o QR no WhatsApp. A proteção extra será ativada nesta linha."
                 : "Escaneie o QR Code no WhatsApp do celular.",
             );
           }
@@ -56686,9 +56686,9 @@
         if (!name) return;
         if (isConnected) {
           const ok = await openAppConfirm({
-            title: "Reconectar com Proxy Campanha",
-            text: "A sessão atual do WhatsApp será encerrada. Escaneie o QR no celular para parear já com Proxy Brasil. Sem isso, a campanha não dispara neste número.",
-            confirmLabel: "Gerar QR com proxy",
+            title: "Reconectar com Proteção Extra",
+            text: "A sessão atual do WhatsApp será encerrada. Escaneie o QR no celular para ativar a proteção extra nesta linha. Sem isso, a campanha não dispara neste número.",
+            confirmLabel: "Gerar QRCode",
             cancelLabel: "Cancelar",
             danger: true,
           });
@@ -56870,7 +56870,7 @@
           setRegisterConnectStatus(
             "loading",
             registerCampaignProxyMode
-              ? "Escaneie o QR no WhatsApp. A Proxy Brasil ficará ligada neste número."
+              ? "Escaneie o QR no WhatsApp. A proteção extra será ativada nesta linha."
               : "Escaneie o QR Code no WhatsApp do celular.",
           );
           beginRegisterWizardHide(normalizedName);
@@ -56880,9 +56880,7 @@
           setRegisterConnectStatus("error", errMsg);
           qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
         } finally {
-          actionBtn.textContent = registerCampaignProxyMode
-            ? "Gerar QR com proxy"
-            : "Gerar QRCode";
+          actionBtn.textContent = "Gerar QRCode";
           actionBtn.classList.remove("disabled");
           actionBtn.removeAttribute("disabled");
         }

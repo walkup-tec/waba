@@ -533,7 +533,7 @@ export async function prepareProxyBrasilSessionForCampaignSend(
       const entry = setPrepareStatus(name, {
         status: "failed",
         state: rb.state || extra?.state,
-        reason: `${reason} Sessão ${rb.restored ? "restaurada sem proxy" : "não restaurada — reconecte no QR"}. Para enviar com proxy, reconecte o QR com «Proxy Campanha» ligado.`,
+        reason: `${reason} Sessão ${rb.restored ? "restaurada sem proxy" : "não restaurada — reconecte no QR"}. Para enviar com proxy, reconecte o QR com «Proteção Extra».`,
         proxyApplied: extra?.proxyApplied,
         restarted: extra?.restarted,
         rolledBack: true,
@@ -587,7 +587,7 @@ export async function prepareProxyBrasilSessionForCampaignSend(
           const entry = setPrepareStatus(name, {
             status: "failed",
             state: stable.state || liveBefore,
-            reason: `Proxy ligado mas sessão instável (state=${stable.state || liveBefore}). Reconecte o QR com Proxy Campanha.`,
+            reason: `Proxy ligado mas sessão instável (state=${stable.state || liveBefore}). Reconecte o QR com Proteção Extra.`,
             needsProxyPairing: true,
           });
           return {
@@ -603,7 +603,7 @@ export async function prepareProxyBrasilSessionForCampaignSend(
           status: "failed",
           state: liveBefore,
           reason:
-            "sessão open sem Proxy Brasil: proxy/set omitido para preservar o pareamento. Reconecte no Aquecedor com Proxy Campanha para disparar.",
+            "sessão open sem Proxy Brasil: proxy/set omitido para preservar o pareamento. Reconecte no Aquecedor com Proteção Extra para disparar.",
           proxyApplied: false,
           restarted: false,
           needsProxyPairing: true,
@@ -626,7 +626,7 @@ export async function prepareProxyBrasilSessionForCampaignSend(
         const entry = setPrepareStatus(name, {
           status: "failed",
           state: liveBefore,
-          reason: `Proxy ligado com sessão morta (state=${liveBefore || "desconhecido"}). Reconecte o QR com Proxy Campanha.`,
+          reason: `Proxy ligado com sessão morta (state=${liveBefore || "desconhecido"}). Reconecte o QR com Proteção Extra.`,
           needsProxyPairing: true,
         });
         return {
@@ -724,7 +724,7 @@ export async function prepareProxyBrasilSessionForCampaignSend(
           status: "failed",
           state: waited.state || liveAfter || liveBefore,
           reason:
-            "Proxy ligado. A sessão caiu ao aplicar — reconecte o QR com Proxy Campanha e ative de novo.",
+            "Proxy ligado. A sessão caiu ao aplicar — reconecte o QR com Proteção Extra e ative de novo.",
           proxyApplied: true,
           needsProxyPairing: true,
         });

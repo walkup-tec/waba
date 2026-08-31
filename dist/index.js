@@ -8682,8 +8682,8 @@ async function runRegistrarQrcode(input) {
     }
     const qrSuccessMessage = campaignProxy
         ? createWarning
-            ? "QRCode com Proxy Campanha gerado para a instância existente. Escaneie para parear já com Proxy Brasil."
-            : "QRCode gerado com Proxy Campanha. Escaneie para parear já com Proxy Brasil."
+            ? "QRCode com Proteção Extra gerado para a instância existente. Escaneie para ativar a proteção nesta linha."
+            : "QRCode gerado com Proteção Extra. Escaneie para ativar a proteção nesta linha."
         : createWarning
             ? "QRCode gerado com sucesso para a instância existente."
             : "Dados salvos e QRCode gerado com sucesso.";
@@ -8935,7 +8935,7 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
         return res.json({
             ok: true,
             message: campaignProxy
-                ? "QRCode solicitado com Proxy Campanha. Escaneie para parear já com proxy."
+                ? "QRCode solicitado com Proteção Extra. Escaneie para ativar a proteção nesta linha."
                 : "QRCode solicitado com sucesso.",
             qrCode: qrFetch.qrCode,
             campaignProxy,
@@ -8963,6 +8963,8 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
             return res.status(400).json({ error: "Campo 'name' é obrigatório." });
         }
         const ownerEmail = String(auth.email || "").trim().toLowerCase();
+        const campaignProxy = req.body?.campaignProxy === true ||
+            String(req.body?.campaignProxy || "").trim() === "1";
         if ((0, waba_auth_service_1.isWabaAuthConfigured)()) {
             if (!ownerEmail.includes("@")) {
                 return res.status(401).json({ error: "Faça login para registrar uma instância." });
@@ -9023,7 +9025,8 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
                 });
                 if (existsWithSameName) {
                     const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
-                    if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveState)) {
+                    // Proteção Extra precisa gerar QR mesmo com sessão open (logout + re-parear com proxy).
+                    if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveState) && !campaignProxy) {
                         return res.status(409).json({
                             error: "Esta instância já está conectada no sistema WABA - Drax. Se precisar de novo QR, desconecte antes ou aguarde o status atualizar.",
                         });
@@ -9052,8 +9055,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
                     number,
                     ownerEmail,
                     ownershipAlreadyClaimed: true,
-                    campaignProxy: req.body?.campaignProxy === true ||
-                        String(req.body?.campaignProxy || "").trim() === "1",
+                    campaignProxy,
                 });
                 const updatedAt = Date.now();
                 if (result.ok) {
@@ -13805,7 +13807,7 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
                 }
                 if (!anyReady) {
                     return res.status(409).json({
-                        error: "Nenhuma instância selecionada está conectada com Proxy Brasil ligada. Reconecte no Aquecedor com Proxy Campanha e tente Ativar de novo.",
+                        error: "Nenhuma instância selecionada está conectada com Proxy Brasil ligada. Reconecte no Aquecedor com Proteção Extra e tente Ativar de novo.",
                     });
                 }
             }
@@ -13946,7 +13948,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             if (!swapped.added.length && !swapped.removedBlocked.length) {
                 return res.status(409).json({
                     error: disconnectedNames.length
-                        ? `Não há instância livre com Proxy Brasil para substituir ${disconnectedNames.join(", ")}. Conecte um número com Proxy Campanha e use «+ Instâncias».`
+                        ? `Não há instância livre com Proxy Brasil para substituir ${disconnectedNames.join(", ")}. Conecte um número com Proteção Extra e use «+ Instâncias».`
                         : "Não há instância fora desta campanha para incluir.",
                     instanceHealth: healthBefore,
                 });
@@ -13968,7 +13970,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
                 instanceHealth,
                 stillNeedsMore: instanceHealth.needsMoreInstancesForMinimum,
                 message: addedCount > 0
-                    ? `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proxy Campanha para disparar com proteção.`
+                    ? `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proteção Extra para disparar com proteção.`
                     : `A campanha permanece com ${swapped.selected.length} número(s).${swapNote}`,
             });
         }
@@ -14012,7 +14014,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             stillNeedsMore,
             message: computeCampaignInstancesToAdd(instanceHealth) > 0
                 ? `Adicionamos ${addedCount} número(s).${swapNote} Ainda há instâncias desconectadas ou abaixo do mínimo. Conecte outro número e use «+ Instâncias».`
-                : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proxy Campanha para disparar com proteção.`,
+                : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proteção Extra para disparar com proteção.`,
         });
     }
     catch (error) {

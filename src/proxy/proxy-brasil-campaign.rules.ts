@@ -64,7 +64,7 @@ export function classifyProxyBrasilConnection(state: string): ProxyBrasilConnect
 }
 
 export const PROXY_CAMPANHA_RECONNECT_HINT =
-  "Reconecte no Aquecedor com Proxy Campanha";
+  "Reconecte no Aquecedor com Proteção Extra";
 
 export function instanceMaySendWithProxyBrasil(input: {
   proxyConfigEnabled: boolean;

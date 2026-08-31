@@ -69,7 +69,7 @@ function classifyProxyBrasilConnection(state) {
         return "unknown";
     return "disconnected";
 }
-exports.PROXY_CAMPANHA_RECONNECT_HINT = "Reconecte no Aquecedor com Proxy Campanha";
+exports.PROXY_CAMPANHA_RECONNECT_HINT = "Reconecte no Aquecedor com Proteção Extra";
 function instanceMaySendWithProxyBrasil(input) {
     if (!input.selectedInLiveCampaign) {
         return { allowed: false, reason: "not-selected" };
