@@ -8,12 +8,16 @@ exports.resolveCampaignInstanceSlotCount = resolveCampaignInstanceSlotCount;
 exports.mergeCampaignSlotsReplacingDisconnected = mergeCampaignSlotsReplacingDisconnected;
 exports.sameInstanceByExactName = sameInstanceByExactName;
 exports.runCampaignInstanceSlotsSelfCheck = runCampaignInstanceSlotsSelfCheck;
-function resolveCampaignInstanceSlotCount(prevSelected, storedSlotCount) {
+function resolveCampaignInstanceSlotCount(prevSelected, storedSlotCount, connectedCount) {
+    const prev = prevSelected.map((s) => String(s || "").trim()).filter(Boolean).length;
     const stored = Math.max(0, Math.floor(Number(storedSlotCount) || 0));
-    if (stored >= 1)
-        return stored;
-    const n = prevSelected.map((s) => String(s || "").trim()).filter(Boolean).length;
-    return Math.max(n, 1);
+    let slot = stored >= 1 ? stored : Math.max(prev, 1);
+    const greens = Math.max(0, Math.floor(Number(connectedCount) || 0));
+    // Lista inflada (ex.: 4 verdes + 1 vermelho extra): teto volta ao conjunto conectado.
+    if (greens >= 1 && prev > greens && greens / prev >= 0.8) {
+        slot = Math.min(slot, greens);
+    }
+    return Math.max(slot, 1);
 }
 function mergeCampaignSlotsReplacingDisconnected(input) {
     const prev = uniqueTrim(input.prevSelected);
@@ -116,5 +120,24 @@ function runCampaignInstanceSlotsSelfCheck() {
     });
     if (overCap.selected.length !== 4 || overCap.selected.includes("e")) {
         throw new Error(`teto 4 com 5 na lista ${overCap.selected.join(",")}`);
+    }
+    if (resolveCampaignInstanceSlotCount(["1261", "WB-5401", "WB-7770", "wb-9224", "wb-walkup"], 5, 4) !== 4) {
+        throw new Error("Corbans 4 verdes + 1 extra: teto 4");
+    }
+    if (resolveCampaignInstanceSlotCount(["a", "b", "c", "d"], 4, 3) !== 4) {
+        throw new Error("3 verdes + 1 vermelho de 4: teto permanece 4");
+    }
+    const trimExtra = mergeCampaignSlotsReplacingDisconnected({
+        prevSelected: ["1261", "WB-5401", "WB-7770", "wb-9224", "wb-walkup"],
+        incoming: [],
+        disconnected: ["WB-7770"],
+        slotCount: 4,
+        sameInstance: same,
+    });
+    if (trimExtra.selected.length !== 4 ||
+        trimExtra.selected.includes("WB-7770") ||
+        trimExtra.added.length !== 0 ||
+        trimExtra.removed.join(",") !== "WB-7770") {
+        throw new Error(`trim extra ${trimExtra.selected.join(",")} out=${trimExtra.removed.join(",")}`);
     }
 }

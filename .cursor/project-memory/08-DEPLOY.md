@@ -54,7 +54,7 @@ A URL de login/disparador usa o container Docker (`COPY dist/`). Mudança só em
 
 | Marker | Tema |
 |--------|------|
-| `DEPLOY-2026-08-31-153000-campanha-slot-swap-proxy` | Campanha: teto de slots, troca 1:1, Proxy no spare |
+| `DEPLOY-2026-08-31-160500-campanha-trim-extra-vermelho` | Campanha: extra vermelho sai mesmo sem spare (volta ao teto) |
 | `DEPLOY-2026-08-31-114800-campanha-proxy-obrigatoria` | Campanha: só dispara com Proxy Brasil ligada |
 | `DEPLOY-2026-08-28-121400-inbox-envio-conversa` | Inbox: envio Cloud na conversa + resposta pelo compositor |
 | `DEPLOY-2026-08-28-111300-inbox-opt-in-numero` | Inbox: switch cinza, banner do número, webhook ao ligar |

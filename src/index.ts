@@ -7381,7 +7381,14 @@ function mergeCampaignInstancesReplacingBlocked(input: {
     .filter(Boolean);
   const incoming = input.incoming.map((n) => String(n || "").trim()).filter(Boolean);
   const disconnected = listDisconnectedStoredInstanceNames(prevSelected, input.evoRows);
-  const slotCount = resolveCampaignInstanceSlotCount(prevSelected, input.slotCount);
+  const greensN = prevSelected.filter(
+    (n) => !disconnected.some((d) => d.toLowerCase() === n.toLowerCase()),
+  ).length;
+  const slotCount = resolveCampaignInstanceSlotCount(
+    prevSelected,
+    input.slotCount,
+    greensN,
+  );
   const sameInstance = (a: string, b: string) => {
     const ka = String(resolveStoredNameToEvoTag(a, input.evoRows).instanceKey || a)
       .trim()
@@ -7419,6 +7426,7 @@ async function persistCampaignSelectedInstances(
   const slotCount = resolveCampaignInstanceSlotCount(
     prevSelected.length ? prevSelected : selected,
     campaign.configSnapshot?.instanceSlotCount,
+    selected.length,
   );
   campaign.configSnapshot = parseDisparosConfig({
     ...(campaign.configSnapshot || DISPAROS_DEFAULTS),
@@ -7691,7 +7699,13 @@ async function persistIncomingCampaignInstances(
           evoRows,
           slotCount: campaign.configSnapshot?.instanceSlotCount,
         });
-  if (!swapped.added.length) {
+  if (!swapped.added.length && !swapped.removedBlocked.length) {
+    return { added: [], removedBlocked: [], selected: prevSelected };
+  }
+  const selectionUnchanged =
+    swapped.selected.length === prevSelected.length &&
+    swapped.selected.every((n, i) => n.toLowerCase() === String(prevSelected[i] || "").toLowerCase());
+  if (selectionUnchanged) {
     return { added: [], removedBlocked: swapped.removedBlocked, selected: prevSelected };
   }
   await persistCampaignSelectedInstances(campaign, swapped.selected);
@@ -7726,7 +7740,7 @@ async function applyCampaignDisconnectedSwap(
     evoRows,
     slotCount: campaign.configSnapshot?.instanceSlotCount,
   });
-  if (!swapped.added.length) return swapped;
+  if (!swapped.added.length && !swapped.removedBlocked.length) return swapped;
   await persistCampaignSelectedInstances(campaign, swapped.selected);
   await deactivateInstancesRemovedFromCampaign(swapped.removedBlocked);
   if (swapped.added.length) {
@@ -7764,12 +7778,12 @@ async function tryAutoSwapDisconnectedCampaignInstances(
   const incoming = heuristic.length
     ? heuristic
     : await resolveLiveSpareEvoNames(campaign.id, selectedNames, evoRows, toAdd);
-  if (!incoming.length) {
-    return { swapped: false, spareCount: 0 };
-  }
   campaignAutoSwapAtMs.set(campaign.id, Date.now());
   const result = await applyCampaignDisconnectedSwap(campaign, incoming, evoRows);
-  return { swapped: result.added.length > 0, spareCount: incoming.length };
+  return {
+    swapped: result.added.length > 0 || result.removedBlocked.length > 0,
+    spareCount: incoming.length,
+  };
 }
 
 /** Texto exibido na UI para status pausada — prioriza regra de saúde atual. */
@@ -16237,18 +16251,12 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       console.warn(
         `[Campanha] ${id} +Instâncias auto: spare=[${incoming.join(", ") || "—"}] selected=[${selectedNames.join(", ")}] offline=[${disconnectedNames.join(", ") || "—"}]`,
       );
-      if (!incoming.length) {
+      const swapped = await persistIncomingCampaignInstances(campaign, incoming, evoRowsAll);
+      if (!swapped.added.length && !swapped.removedBlocked.length) {
         return res.status(409).json({
           error: disconnectedNames.length
             ? `Não há instância livre com Proxy Brasil para substituir ${disconnectedNames.join(", ")}. Conecte um número com Proxy Campanha e use «+ Instâncias».`
             : "Não há instância fora desta campanha para incluir.",
-          instanceHealth: healthBefore,
-        });
-      }
-      const swapped = await persistIncomingCampaignInstances(campaign, incoming, evoRowsAll);
-      if (!swapped.added.length) {
-        return res.status(400).json({
-          error: "Nenhuma instância nova foi adicionada. Verifique se o número está conectado.",
           instanceHealth: healthBefore,
         });
       }
@@ -16257,7 +16265,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       const removedCount = swapped.removedBlocked.length;
       const swapNote =
         removedCount > 0
-          ? ` Substituímos ${removedCount} número(s) bloqueado(s)/offline (${swapped.removedBlocked.join(", ")}).`
+          ? ` ${incoming.length ? "Substituímos" : "Saiu da campanha"} ${removedCount} número(s) bloqueado(s)/offline (${swapped.removedBlocked.join(", ")}).`
           : "";
       return res.json({
         ok: true,
@@ -16270,7 +16278,9 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         instanceHealth,
         stillNeedsMore: instanceHealth.needsMoreInstancesForMinimum,
         message:
-          `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proxy Campanha para disparar com proteção.`,
+          addedCount > 0
+            ? `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Se o número já está pareado, reconecte no Aquecedor com Proxy Campanha para disparar com proteção.`
+            : `A campanha permanece com ${swapped.selected.length} número(s).${swapNote}`,
       });
     } else {
       const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
