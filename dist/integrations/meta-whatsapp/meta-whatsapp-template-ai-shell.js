@@ -49,17 +49,17 @@ function asRecord(value) {
 function requireStaticHttpsUrl(raw) {
     const url = String(raw || "").trim();
     if (!url || url.length > 2000 || (0, meta_whatsapp_template_validate_1.placeholderIndexes)(url).length) {
-        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_https");
     }
     let parsed;
     try {
         parsed = new URL(url);
     }
     catch {
-        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_https");
     }
     if (parsed.protocol !== "https:")
-        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_https");
     return url;
 }
 function parseMetaTemplateAiShell(input) {
@@ -85,7 +85,7 @@ function parseMetaTemplateAiShell(input) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
     }
     if (MEDIA_NEEDS_HANDLE.has(mediaFormat) && !headerHandle) {
-        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_media_required");
     }
     return {
         modelName,

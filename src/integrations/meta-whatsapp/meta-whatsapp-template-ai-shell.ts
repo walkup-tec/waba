@@ -60,15 +60,15 @@ function asRecord(value: unknown): Record<string, unknown> {
 function requireStaticHttpsUrl(raw: string): string {
   const url = String(raw || "").trim();
   if (!url || url.length > 2_000 || placeholderIndexes(url).length) {
-    throw new MetaWhatsappError("template_invalid");
+    throw new MetaWhatsappError("template_url_https");
   }
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    throw new MetaWhatsappError("template_invalid");
+    throw new MetaWhatsappError("template_url_https");
   }
-  if (parsed.protocol !== "https:") throw new MetaWhatsappError("template_invalid");
+  if (parsed.protocol !== "https:") throw new MetaWhatsappError("template_url_https");
   return url;
 }
 
@@ -95,7 +95,7 @@ export function parseMetaTemplateAiShell(input: Record<string, unknown> | undefi
     throw new MetaWhatsappError("template_invalid");
   }
   if (MEDIA_NEEDS_HANDLE.has(mediaFormat) && !headerHandle) {
-    throw new MetaWhatsappError("template_invalid");
+    throw new MetaWhatsappError("template_media_required");
   }
   return {
     modelName,

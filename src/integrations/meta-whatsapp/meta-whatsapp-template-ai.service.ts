@@ -32,10 +32,34 @@ import { readMetaAppId } from "./meta-config";
 import { uploadMetaResumableImage } from "./meta-whatsapp-resumable-upload";
 
 const MEDIA_MIME: Record<string, Set<string>> = {
-  IMAGE: new Set(["image/jpeg", "image/jpg", "image/png"]),
+  IMAGE: new Set(["image/jpeg", "image/png"]),
   VIDEO: new Set(["video/mp4"]),
   DOCUMENT: new Set(["application/pdf"]),
 };
+
+const MIME_ALIASES: Record<string, string> = {
+  "image/jpg": "image/jpeg",
+  "image/pjpeg": "image/jpeg",
+  "image/x-png": "image/png",
+};
+
+export function resolveMetaHeaderMediaMime(
+  mediaFormat: string,
+  mime: string,
+  fileName: string,
+): string {
+  const format = String(mediaFormat || "").trim().toUpperCase();
+  const raw = String(mime || "").trim().toLowerCase();
+  const ext = String(fileName || "").toLowerCase().split(".").pop() || "";
+  const fromAlias = MIME_ALIASES[raw] || raw;
+  if (MEDIA_MIME[format]?.has(fromAlias)) return fromAlias;
+  if (format === "IMAGE" && (ext === "png" || ext === "jpg" || ext === "jpeg")) {
+    return ext === "png" ? "image/png" : "image/jpeg";
+  }
+  if (format === "VIDEO" && ext === "mp4") return "video/mp4";
+  if (format === "DOCUMENT" && ext === "pdf") return "application/pdf";
+  return fromAlias;
+}
 
 type HeaderUploader = (input: {
   token: string;
@@ -354,11 +378,12 @@ export class MetaWhatsappTemplateAiService {
     const connectionId = String(input.connectionId || "").trim();
     const mediaFormat = String(input.mediaFormat || "").trim().toUpperCase();
     const allowed = MEDIA_MIME[mediaFormat];
-    const mime = String(input.mime || "").trim().toLowerCase();
     const bytes = input.bytes;
     const fileName = String(input.fileName || "header").trim() || "header";
-    if (!connectionId || !allowed || !bytes?.length || !allowed.has(mime)) {
-      throw new MetaWhatsappError("invalid_payload");
+    const mime = resolveMetaHeaderMediaMime(mediaFormat, input.mime || "", fileName);
+    if (!connectionId) throw new MetaWhatsappError("invalid_payload");
+    if (!allowed || !bytes?.length || !allowed.has(mime)) {
+      throw new MetaWhatsappError("template_upload_failed");
     }
     const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
     const appId = readMetaAppId();
@@ -378,12 +403,12 @@ export class MetaWhatsappTemplateAiService {
         bytes,
       });
       const handle = String(uploaded.handle || "").trim();
-      if (!handle) throw new MetaWhatsappError("template_invalid");
+      if (!handle) throw new MetaWhatsappError("template_upload_failed");
       logMetaTemplate("AI", { tenantId: tenant.tenantId, connectionId, headerUpload: mediaFormat });
       return { handle, mediaFormat };
     } catch (error) {
       if (error instanceof MetaWhatsappError) throw error;
-      throw new MetaWhatsappError("template_invalid");
+      throw new MetaWhatsappError("template_upload_failed");
     }
   }
 }

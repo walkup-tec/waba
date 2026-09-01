@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetaWhatsappTemplateAiService = void 0;
+exports.resolveMetaHeaderMediaMime = resolveMetaHeaderMediaMime;
 const waba_openai_responses_client_1 = require("../openai/waba-openai-responses.client");
 const meta_whatsapp_tenant_1 = require("./meta-whatsapp-tenant");
 const meta_whatsapp_connection_repository_1 = require("./meta-whatsapp-connection.repository");
@@ -16,10 +17,31 @@ const meta_token_crypto_1 = require("./meta-token-crypto");
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_resumable_upload_1 = require("./meta-whatsapp-resumable-upload");
 const MEDIA_MIME = {
-    IMAGE: new Set(["image/jpeg", "image/jpg", "image/png"]),
+    IMAGE: new Set(["image/jpeg", "image/png"]),
     VIDEO: new Set(["video/mp4"]),
     DOCUMENT: new Set(["application/pdf"]),
 };
+const MIME_ALIASES = {
+    "image/jpg": "image/jpeg",
+    "image/pjpeg": "image/jpeg",
+    "image/x-png": "image/png",
+};
+function resolveMetaHeaderMediaMime(mediaFormat, mime, fileName) {
+    const format = String(mediaFormat || "").trim().toUpperCase();
+    const raw = String(mime || "").trim().toLowerCase();
+    const ext = String(fileName || "").toLowerCase().split(".").pop() || "";
+    const fromAlias = MIME_ALIASES[raw] || raw;
+    if (MEDIA_MIME[format]?.has(fromAlias))
+        return fromAlias;
+    if (format === "IMAGE" && (ext === "png" || ext === "jpg" || ext === "jpeg")) {
+        return ext === "png" ? "image/png" : "image/jpeg";
+    }
+    if (format === "VIDEO" && ext === "mp4")
+        return "video/mp4";
+    if (format === "DOCUMENT" && ext === "pdf")
+        return "application/pdf";
+    return fromAlias;
+}
 const windows = new Map();
 const FORBIDDEN_APPROVAL_PROMISE = /\b(será|vai ser|garantid[ao]|100%)\s+(aprovad[ao]|aceit[ao])/i;
 function requireTenant(auth) {
@@ -274,11 +296,13 @@ class MetaWhatsappTemplateAiService {
         const connectionId = String(input.connectionId || "").trim();
         const mediaFormat = String(input.mediaFormat || "").trim().toUpperCase();
         const allowed = MEDIA_MIME[mediaFormat];
-        const mime = String(input.mime || "").trim().toLowerCase();
         const bytes = input.bytes;
         const fileName = String(input.fileName || "header").trim() || "header";
-        if (!connectionId || !allowed || !bytes?.length || !allowed.has(mime)) {
+        const mime = resolveMetaHeaderMediaMime(mediaFormat, input.mime || "", fileName);
+        if (!connectionId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        if (!allowed || !bytes?.length || !allowed.has(mime)) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
         }
         const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
         const appId = (0, meta_config_1.readMetaAppId)();
@@ -301,14 +325,14 @@ class MetaWhatsappTemplateAiService {
             });
             const handle = String(uploaded.handle || "").trim();
             if (!handle)
-                throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
             (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", { tenantId: tenant.tenantId, connectionId, headerUpload: mediaFormat });
             return { handle, mediaFormat };
         }
         catch (error) {
             if (error instanceof meta_whatsapp_errors_1.MetaWhatsappError)
                 throw error;
-            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
         }
     }
 }

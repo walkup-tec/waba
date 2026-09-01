@@ -3889,6 +3889,42 @@
             padding: 12px 24px;
           }
         }
+        #meta-tpl-ai-overlay.confirm-overlay {
+          z-index: 2460;
+        }
+        .meta-tpl-ai-modal {
+          width: min(94vw, 440px);
+        }
+        .meta-tpl-ai-modal-brand {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 2px 0 12px;
+        }
+        .meta-tpl-ai-modal-brand img,
+        .meta-tpl-ai-modal-brand svg {
+          width: 44px;
+          height: 44px;
+        }
+        .meta-tpl-ai-modal-spinner {
+          display: flex;
+          justify-content: center;
+          margin: 2px 0 14px;
+        }
+        .meta-tpl-ai-modal-detail {
+          margin: 0 0 10px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: rgba(2, 6, 23, 0.55);
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          color: #cbd5e1;
+          font-size: 0.8rem;
+          line-height: 1.5;
+          text-align: left;
+        }
+        .meta-tpl-ai-modal.is-ok .confirm-title { color: #86efac; }
+        .meta-tpl-ai-modal.is-error .confirm-title { color: #fca5a5; }
+        .meta-tpl-ai-modal.is-processing .confirm-actions { display: none; }
         .meta-tpl-ai-alert { padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.5; }
         .meta-tpl-ai-alert.is-ok { color:#bbf7d0; background:rgba(22,163,74,.12); border:1px solid rgba(34,197,94,.25); }
         .meta-tpl-ai-alert.is-warn { color:#fde68a; background:rgba(217,119,6,.12); border:1px solid rgba(245,158,11,.25); }
@@ -23507,6 +23543,28 @@
       </div>
     </div>
 
+    <div id="meta-tpl-ai-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal meta-tpl-ai-modal" role="dialog" aria-modal="true" aria-labelledby="meta-tpl-ai-modal-title" aria-describedby="meta-tpl-ai-modal-text">
+        <div class="meta-tpl-ai-modal-brand" aria-hidden="true">
+          <img id="meta-tpl-ai-modal-logo" alt="" width="44" height="44" hidden />
+          <svg id="meta-tpl-ai-modal-logo-fallback" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18 6.5c3.4 0 5.8 1.7 6.9 5.1.8 2.4 1.1 5.5.3 8.4C24 24.3 21.6 27 18 27c-2.6 0-4.6-1.5-5.9-4.3-1.1-2.3-1.6-5.3-1.1-8.3C11.7 9.3 14.2 6.5 18 6.5Zm0-2.5C12.8 4 9.2 8 8.3 13.2c-.6 3.6 0 7.4 1.4 10.4C11.6 28.1 14.5 30.5 18 30.5c5.1 0 8.6-3.8 10-8.8 1-3.6.7-7.5-.3-10.6C26.2 6.4 22.8 4 18 4Z" fill="#0082FB"/>
+            <path d="M13.4 14.2c.6-2.4 2-4.1 4.1-4.1 1.6 0 2.8.9 3.4 2.7.6 1.8.6 4.1 0 5.9-.6 1.8-1.8 2.8-3.4 2.8-2.1 0-3.5-1.7-4.1-4.1-.3-1.4-.3-2.9 0-3.2Z" fill="#0082FB"/>
+          </svg>
+        </div>
+        <div class="meta-tpl-ai-modal-spinner" id="meta-tpl-ai-modal-spinner" hidden>
+          <div class="dis-campaign-spinner" aria-hidden="true"></div>
+        </div>
+        <div class="confirm-title" id="meta-tpl-ai-modal-title">Enviar templates à Meta</div>
+        <div class="confirm-text" id="meta-tpl-ai-modal-text"></div>
+        <div class="meta-tpl-ai-modal-detail" id="meta-tpl-ai-modal-detail" hidden></div>
+        <div class="confirm-actions" id="meta-tpl-ai-modal-actions">
+          <button id="meta-tpl-ai-modal-cancel" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="meta-tpl-ai-modal-ok" class="instance-action-btn btn-qrcode enabled" type="button">Enviar</button>
+        </div>
+      </div>
+    </div>
+
     <div id="register-instance-overlay" class="confirm-overlay" aria-hidden="true">
       <div class="confirm-modal register-modal register-wizard-modal" role="dialog" aria-modal="true">
         <div class="reg-wizard-header">
@@ -36803,7 +36861,7 @@
         if (mediaFormat !== "IMAGE" && mediaFormat !== "VIDEO" && mediaFormat !== "DOCUMENT") return "";
         const input = document.getElementById("meta-tpl-ai-media-file");
         const file = input && input.files && input.files[0];
-        if (!file) throw new Error("Selecione o arquivo da mídia do cabeçalho.");
+        if (!file) throw new Error("Selecione o arquivo da mídia. A Meta exige um exemplo via upload para cabeçalho de imagem, vídeo ou documento.");
         const body = new FormData();
         body.append("connectionId", connectionId);
         body.append("mediaFormat", mediaFormat);
@@ -36813,6 +36871,150 @@
           body,
         });
         return String(payload.handle || "").trim();
+      }
+
+      let metaTplAiModalResolver = null;
+      let metaTplAiModalPhase = "closed";
+
+      function metaTplAiModalEls() {
+        return {
+          overlay: document.getElementById("meta-tpl-ai-overlay"),
+          modal: document.querySelector("#meta-tpl-ai-overlay .meta-tpl-ai-modal"),
+          title: document.getElementById("meta-tpl-ai-modal-title"),
+          text: document.getElementById("meta-tpl-ai-modal-text"),
+          detail: document.getElementById("meta-tpl-ai-modal-detail"),
+          spinner: document.getElementById("meta-tpl-ai-modal-spinner"),
+          actions: document.getElementById("meta-tpl-ai-modal-actions"),
+          cancel: document.getElementById("meta-tpl-ai-modal-cancel"),
+          ok: document.getElementById("meta-tpl-ai-modal-ok"),
+          logo: document.getElementById("meta-tpl-ai-modal-logo"),
+          logoFallback: document.getElementById("meta-tpl-ai-modal-logo-fallback"),
+        };
+      }
+
+      function metaTplAiPrepareLogo() {
+        const { logo, logoFallback } = metaTplAiModalEls();
+        if (!logo) return;
+        const src = typeof resolveWabaPublicPath === "function"
+          ? resolveWabaPublicPath(META_PORTFOLIO_FALLBACK_LOGO)
+          : META_PORTFOLIO_FALLBACK_LOGO;
+        if (logo.getAttribute("data-src") === src) return;
+        logo.setAttribute("data-src", src);
+        logo.onload = () => {
+          logo.hidden = false;
+          if (logoFallback) logoFallback.hidden = true;
+        };
+        logo.onerror = () => {
+          logo.hidden = true;
+          if (logoFallback) logoFallback.hidden = false;
+        };
+        logo.src = src;
+      }
+
+      function metaTplAiOpenOverlay() {
+        const { overlay } = metaTplAiModalEls();
+        metaTplAiPrepareLogo();
+        if (!overlay) return;
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+      }
+
+      function metaTplAiSetPhase(phase, options) {
+        const opts = options || {};
+        const els = metaTplAiModalEls();
+        metaTplAiModalPhase = phase;
+        if (els.modal) {
+          els.modal.classList.toggle("is-processing", phase === "processing");
+          els.modal.classList.toggle("is-ok", phase === "success");
+          els.modal.classList.toggle("is-error", phase === "error");
+        }
+        if (els.title) els.title.textContent = String(opts.title || "");
+        if (els.text) els.text.textContent = String(opts.text || "");
+        if (els.detail) {
+          const detail = String(opts.detail || "").trim();
+          els.detail.hidden = !detail;
+          els.detail.innerHTML = detail;
+        }
+        if (els.spinner) els.spinner.hidden = phase !== "processing";
+        if (els.actions) els.actions.hidden = phase === "processing";
+        if (els.cancel) els.cancel.hidden = phase !== "confirm";
+        if (els.ok) {
+          els.ok.textContent = String(opts.okLabel || (phase === "confirm" ? "Enviar" : "Fechar"));
+          els.ok.classList.toggle("btn-qrcode", phase === "confirm" || phase === "success");
+          els.ok.classList.add("enabled");
+        }
+      }
+
+      function metaTplAiCloseOverlay() {
+        if (metaTplAiModalPhase === "processing") return;
+        const { overlay } = metaTplAiModalEls();
+        if (overlay) {
+          if (typeof blurFocusInsideOverlay === "function") blurFocusInsideOverlay(overlay);
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+        metaTplAiModalPhase = "closed";
+        const resolve = metaTplAiModalResolver;
+        metaTplAiModalResolver = null;
+        if (typeof resolve === "function") resolve(false);
+      }
+
+      function metaTplAiConfirmSubmit() {
+        return new Promise((resolve) => {
+          if (typeof metaTplAiModalResolver === "function") metaTplAiModalResolver(false);
+          metaTplAiModalResolver = resolve;
+          metaTplAiSetPhase("confirm", {
+            title: "Enviar templates à Meta",
+            text: "As três opções serão cadastradas no portfólio selecionado, cada uma em um envio separado. A Meta analisa cada template e pode levar até 24 horas para responder.",
+            okLabel: "Enviar",
+          });
+          metaTplAiOpenOverlay();
+        });
+      }
+
+      function metaTplAiShowProcessing() {
+        metaTplAiModalResolver = null;
+        metaTplAiSetPhase("processing", {
+          title: "Enviando para a Meta",
+          text: "Estamos enviando as três opções para análise. Aguarde — isso pode levar alguns segundos.",
+        });
+        metaTplAiOpenOverlay();
+      }
+
+      function metaTplAiShowResult(kind, title, text, detail) {
+        metaTplAiModalResolver = null;
+        metaTplAiSetPhase(kind === "ok" ? "success" : "error", {
+          title,
+          text,
+          detail: detail || "",
+          okLabel: "Fechar",
+        });
+        metaTplAiOpenOverlay();
+      }
+
+      function metaTplAiValidateButtonUrl(raw) {
+        const url = String(raw || "").trim();
+        if (!url) return "Informe a URL do botão com https://.";
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol !== "https:") {
+            return "A URL do botão precisa começar com https://. Links whatsapp:// ou sem https não são aceitos pela Meta.";
+          }
+        } catch {
+          return "A URL do botão não é válida. Use um endereço completo, por exemplo https://wa.me/5511999999999.";
+        }
+        return "";
+      }
+
+      function metaTplAiOnModalOk() {
+        if (metaTplAiModalPhase === "processing") return;
+        if (metaTplAiModalPhase === "confirm") {
+          const resolve = metaTplAiModalResolver;
+          metaTplAiModalResolver = null;
+          if (typeof resolve === "function") resolve(true);
+          return;
+        }
+        metaTplAiCloseOverlay();
       }
 
       function metaTplAiRenderResult(payload) {
@@ -36875,28 +37077,53 @@
         const status = document.getElementById("meta-tpl-ai-submit-status") || document.getElementById("meta-tpl-ai-status");
         const button = document.getElementById("meta-tpl-ai-submit-all");
         const shell = metaTplAiReadShell();
+        const needsMedia = shell.mediaFormat === "IMAGE" || shell.mediaFormat === "VIDEO" || shell.mediaFormat === "DOCUMENT";
+        const mediaInput = document.getElementById("meta-tpl-ai-media-file");
+        const hasMediaFile = Boolean(mediaInput && mediaInput.files && mediaInput.files[0]);
         if (!connectionId) {
+          metaTplAiShowResult("error", "Não foi possível enviar", "Selecione primeiro o portfólio.");
           if (status) status.textContent = "Selecione primeiro o portfólio.";
           return;
         }
         if (!analysisId || !Array.isArray(metaTplLabAiResult?.options) || metaTplLabAiResult.options.length !== 3) {
+          metaTplAiShowResult("error", "Não foi possível enviar", "Gere primeiro as três opções Utility para este portfólio.");
           if (status) status.textContent = "Gere primeiro as três opções Utility para este portfólio.";
           return;
         }
         if (!shell.modelName) {
+          metaTplAiShowResult("error", "Não foi possível enviar", "Informe o nome do modelo.");
           if (status) status.textContent = "Informe o nome do modelo.";
           return;
         }
-        if (!shell.buttonUrl) {
-          if (status) status.textContent = "Informe a URL https do botão.";
+        const urlError = metaTplAiValidateButtonUrl(shell.buttonUrl);
+        if (urlError) {
+          metaTplAiShowResult("error", "Não foi possível enviar", urlError);
+          if (status) status.textContent = urlError;
           return;
         }
-        const confirmed = window.confirm(
-          "Cadastrar os três templates no portfólio selecionado? Cada opção será enviada separadamente para análise da Meta.",
-        );
+        if (needsMedia && !hasMediaFile) {
+          const mediaError = "Selecione o arquivo da mídia. A Meta exige um exemplo via upload para cabeçalho de imagem, vídeo ou documento.";
+          metaTplAiShowResult("error", "Não foi possível enviar", mediaError);
+          if (status) status.textContent = mediaError;
+          return;
+        }
+        const confirmed = await metaTplAiConfirmSubmit();
         if (!confirmed) return;
         if (button) button.disabled = true;
-        if (status) status.textContent = "Cadastrando os três templates na Meta…";
+        if (status) status.textContent = "Enviando os três templates para a Meta…";
+        metaTplAiShowProcessing();
+        if (isMetaTemplateAiUiPreview()) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1100));
+          if (status) status.textContent = "Três templates enviados à Meta. A análise pode levar até 24 horas.";
+          metaTplAiShowResult(
+            "ok",
+            "Templates enviados à Meta",
+            "Os três templates foram encaminhados para análise. A Meta costuma responder em até 24 horas. Enquanto isso, o status fica pendente — use Atualizar da Meta para ver se foram aprovados, rejeitados ou se pedem algum ajuste.",
+            "✓ Opção 1: PENDING<br>✓ Opção 2: PENDING<br>✓ Opção 3: PENDING",
+          );
+          if (button) button.disabled = false;
+          return;
+        }
         try {
           const headerHandle = await metaTplAiUploadHeaderIfNeeded(connectionId, shell.mediaFormat);
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/submit-all", {
@@ -36915,22 +37142,37 @@
           });
           const result = document.getElementById("meta-tpl-ai-batch-result");
           const rows = Array.isArray(payload.results) ? payload.results : [];
+          const detail = rows
+            .map((item) => `${item.ok ? "✓" : "✕"} Opção ${Number(item.index || 0) + 1}: ${escapeAdminHtml(String(item.status || item.error || "erro"))}`)
+            .join("<br>");
           if (result) {
             result.innerHTML =
               `<div class="meta-tpl-ai-alert ${payload.failed ? "is-warn" : "is-ok"}"><strong>${escapeAdminHtml(String(payload.submitted || 0))} de 3 cadastrados</strong><br>` +
-              rows
-                .map((item) => `${item.ok ? "✓" : "✕"} Opção ${Number(item.index || 0) + 1}: ${escapeAdminHtml(String(item.status || item.error || "erro"))}`)
-                .join("<br>") +
+              detail +
               `</div>`;
           }
-          if (status) {
-            status.textContent = payload.failed
-              ? "Cadastro parcial. Consulte o resultado abaixo."
-              : "Três templates enviados. Aguarde a análise da Meta e clique em Atualizar da Meta.";
+          if (payload.failed) {
+            if (status) status.textContent = "Cadastro parcial. Consulte o resultado no modal.";
+            metaTplAiShowResult(
+              "error",
+              "Envio parcial",
+              "Parte dos templates chegou à Meta, mas nem todas as opções foram aceitas. A Meta ainda pode levar até 24 horas para concluir a análise das que foram enviadas.",
+              detail,
+            );
+          } else {
+            if (status) status.textContent = "Três templates enviados à Meta. A análise pode levar até 24 horas.";
+            metaTplAiShowResult(
+              "ok",
+              "Templates enviados à Meta",
+              "Os três templates foram encaminhados para análise. A Meta costuma responder em até 24 horas. Enquanto isso, o status fica pendente — use Atualizar da Meta para ver se foram aprovados, rejeitados ou se pedem algum ajuste.",
+              detail,
+            );
           }
           await window.wabaLoadMetaTemplatesLab();
         } catch (error) {
-          if (status) status.textContent = error && error.message ? error.message : "Não foi possível cadastrar as opções.";
+          const message = error && error.message ? error.message : "Não foi possível cadastrar as opções.";
+          if (status) status.textContent = message;
+          metaTplAiShowResult("error", "Não foi possível enviar", message);
         } finally {
           if (button) button.disabled = false;
         }
@@ -60437,10 +60679,20 @@
       }
       document.getElementById("app-confirm-cancel-btn")?.addEventListener("click", () => closeAppConfirm(false));
       document.getElementById("app-confirm-ok-btn")?.addEventListener("click", () => closeAppConfirm(true));
+      const metaTplAiOverlay = document.getElementById("meta-tpl-ai-overlay");
+      if (metaTplAiOverlay) {
+        metaTplAiOverlay.addEventListener("click", (e) => {
+          if (e.target === metaTplAiOverlay) metaTplAiCloseOverlay();
+        });
+      }
+      document.getElementById("meta-tpl-ai-modal-cancel")?.addEventListener("click", () => metaTplAiCloseOverlay());
+      document.getElementById("meta-tpl-ai-modal-ok")?.addEventListener("click", () => metaTplAiOnModalOk());
       document.addEventListener("keydown", (e) => {
         if (e.key !== "Escape") return;
         const overlay = document.getElementById("app-confirm-overlay");
         if (overlay?.classList.contains("open")) closeAppConfirm(false);
+        const metaOverlay = document.getElementById("meta-tpl-ai-overlay");
+        if (metaOverlay?.classList.contains("open")) metaTplAiCloseOverlay();
       });
 
       const disCampaignDeleteOverlay = document.getElementById("dis-campaign-delete-overlay");

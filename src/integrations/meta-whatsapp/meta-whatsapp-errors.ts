@@ -11,6 +11,9 @@ export type MetaWhatsappErrorCode =
   | "invalid_payload"
   | "send_failed"
   | "template_invalid"
+  | "template_url_https"
+  | "template_media_required"
+  | "template_upload_failed"
   | "template_not_found"
   | "template_not_ready"
   | "conversation_not_found"
@@ -39,6 +42,12 @@ const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   invalid_payload: "Os dados da mensagem não são válidos.",
   send_failed: "Não foi possível enviar a mensagem.",
   template_invalid: "Os dados do template não são válidos. Confira nome, idioma, categoria, corpo e exemplos das variáveis.",
+  template_url_https:
+    "A URL do botão precisa começar com https://. Links whatsapp://, http:// ou sem endereço completo não são aceitos pela Meta.",
+  template_media_required:
+    "Selecione o arquivo da mídia. A Meta exige um exemplo via upload para cabeçalho de imagem, vídeo ou documento.",
+  template_upload_failed:
+    "Não foi possível enviar o arquivo da mídia para a Meta. Para imagem, use JPEG ou PNG e tente novamente.",
   template_not_found: "Este template não pertence à conexão WhatsApp desta conta.",
   template_not_ready: "Este template ainda não está aprovado para envio.",
   conversation_not_found: "Conversa não encontrada nesta conta.",

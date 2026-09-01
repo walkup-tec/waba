@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { MetaWhatsappTemplateAiService } from "./meta-whatsapp-template-ai.service";
+import {
+  MetaWhatsappTemplateAiService,
+  resolveMetaHeaderMediaMime,
+} from "./meta-whatsapp-template-ai.service";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
@@ -365,20 +368,42 @@ describe("Assistente IA de templates Utility", () => {
   });
 
   it("recusa URL não https ou botão fora do select do Mensageiro", () => {
-    assert.throws(() =>
-      parseMetaTemplateAiShell({
-        modelName: "retorno_lead",
-        buttonText: "Quero saber mais",
-        buttonUrl: "http://example.com",
-      }),
+    assert.throws(
+      () =>
+        parseMetaTemplateAiShell({
+          modelName: "retorno_lead",
+          buttonText: "Quero saber mais",
+          buttonUrl: "http://example.com",
+        }),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_https",
     );
-    assert.throws(() =>
-      parseMetaTemplateAiShell({
-        modelName: "retorno_lead",
-        buttonText: "Consultar solicitação",
-        buttonUrl: "https://example.com",
-      }),
+    assert.throws(
+      () =>
+        parseMetaTemplateAiShell({
+          modelName: "retorno_lead",
+          buttonText: "Consultar solicitação",
+          buttonUrl: "https://example.com",
+        }),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_invalid",
     );
+  });
+
+  it("exige arquivo de mídia e aceita PNG com MIME genérico", () => {
+    assert.throws(
+      () =>
+        parseMetaTemplateAiShell({
+          modelName: "dg01",
+          buttonText: "Quero saber mais",
+          buttonUrl: "https://wa.me/5511999999999",
+          mediaFormat: "IMAGE",
+        }),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_media_required",
+    );
+    assert.equal(
+      resolveMetaHeaderMediaMime("IMAGE", "application/octet-stream", "ChatGPT Image.png"),
+      "image/png",
+    );
+    assert.equal(resolveMetaHeaderMediaMime("IMAGE", "image/x-png", "foto.png"), "image/png");
   });
 });
 describe("OpenAI Responses com Structured Outputs", () => {

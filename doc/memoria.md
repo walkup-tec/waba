@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 18:48 — Modal de envio à Meta (sem alert nativo)
+- `window.confirm` do cadastro das 3 opções saiu; overlay no estilo do sistema com processando (logo Meta), erro e sucesso (prazo de até 24 h).
+- A tentativa DG01+Imagem falhou na validação local (`template_invalid`), em geral handle da mídia ou URL sem https — não foi recusa da análise da Meta.
+- Marker: `DEPLOY-2026-09-01-184800-modal-envio-meta`
+- LOG: `doc/LOG-2026-09-01__184800__modal-envio-templates-meta.md`
+
 ## 2026-09-01 18:12 — Cabeçalho editável e arquivo no layout
 - Campo Cabeçalho deixa de ser bloqueado ao escolher mídia.
 - Botão Escolher arquivo no estilo do sistema, sem o controle nativo cinza.
