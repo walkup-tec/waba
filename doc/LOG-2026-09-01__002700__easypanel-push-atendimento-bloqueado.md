@@ -53,3 +53,10 @@ easypanel, github-master, push, atendimento, deploy-marker, GITHUB_TOKEN
 - Commits locais prontos em `push-easypanel-atendimento` / tip `e4b85ef` (Inbox + Atendimento + helpers), base `949b8e3`.
 - Aguardando PAT com **Contents: Read and write** para `git push` em `master`.
 
+## 2026-09-01 00:36 — Push GitHub master OK
+
+- `git push` → `949b8e3..9489cc7` em `walkup-tec/waba` `master`.
+- Commits: Inbox `verified_name` + Atendimento + helpers/docs.
+- Auth: Fine-grained PAT com Contents Write + `GIT_ASKPASS` user `walkup-tec` (Bearer em `http.extraheader` conflitava).
+- Marker esperado após EasyPanel Redeploy: `DEPLOY-2026-09-01-001200-meta-atendimento-chat`.
+
