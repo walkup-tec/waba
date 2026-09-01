@@ -28608,6 +28608,10 @@
       }
 
       async function initWabaAuthGate() {
+        if (isMetaInboxUiPreview()) {
+          unlockWabaApp({ authConfigured: false, authenticated: true });
+          return true;
+        }
         let session = {};
         const postDeployReload = (() => {
           try {
@@ -37205,6 +37209,8 @@
 
       const metaInbox = {
         active: false,
+        uiPreview: false,
+        previewData: null,
         filter: "all",
         channelId: "",
         channels: [],
@@ -37218,6 +37224,59 @@
         listFp: "",
         templates: [],
       };
+
+      function isMetaInboxUiPreview() {
+        const localHost = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+        return localHost && new URLSearchParams(location.search).get("ui-preview") === "atendimento";
+      }
+
+      function metaInboxPreviewPayload(conversation) {
+        const now = new Date();
+        return {
+          conversation,
+          messages: [
+            { id: "demo-m1", direction: "inbound", type: "text", text: "Olá! Quero conhecer melhor os planos.", status: "accepted", createdAt: new Date(now.getTime() - 8 * 60000).toISOString() },
+            { id: "demo-m2", direction: "outbound", source: "bot", type: "text", text: "Olá! Temos opções para diferentes necessidades. Como posso ajudar?", status: "read", createdAt: new Date(now.getTime() - 7 * 60000).toISOString() },
+            { id: "demo-m3", direction: "inbound", type: "text", text: "Gostaria de falar sobre o plano profissional.", status: "accepted", createdAt: new Date(now.getTime() - 4 * 60000).toISOString() },
+          ],
+        };
+      }
+
+      function metaInboxRenderPreview() {
+        const demo = metaInbox.previewData;
+        if (!demo) return;
+        let rows = demo.conversations.slice();
+        if (metaInbox.channelId) rows = rows.filter((item) => item.phoneNumberId === metaInbox.channelId);
+        if (metaInbox.filter === "unread") rows = rows.filter((item) => Number(item.unreadCount || 0) > 0);
+        metaInboxRenderChannels(demo.channels);
+        metaInboxRenderList(rows, false);
+        const selected = rows.find((item) => item.id === metaInbox.selectedId) || rows[0];
+        if (selected) {
+          metaInbox.selectedId = selected.id;
+          metaInboxRenderThread(metaInboxPreviewPayload(selected));
+        }
+        metaInboxBanner("Demonstração visual · dados fictícios", false);
+      }
+
+      function initMetaInboxUiPreview() {
+        const now = new Date();
+        const channels = [
+          { phoneNumberId: "demo-drax", name: "Drax Sistemas", displayPhoneNumber: "+55 51 98200-1279", unreadCount: 2 },
+          { phoneNumberId: "demo-walkup", name: "Grupo Walkup", displayPhoneNumber: "+55 11 95213-7761", unreadCount: 1 },
+        ];
+        const conversations = [
+          { id: "demo-joao", phoneNumberId: "demo-drax", contactName: "João da Silva", contactWaId: "5551988888888", contactPhone: "+55 51 98888-8888", channelName: "Drax Sistemas", channelPhone: "+55 51 98200-1279", lastMessagePreview: "Gostaria de conhecer os planos.", lastMessageAt: new Date(now.getTime() - 2 * 60000).toISOString(), unreadCount: 2, status: "open", agentKind: "bot", assignedTo: null, customerCareWindow: { state: "OPEN" } },
+          { id: "demo-maria", phoneNumberId: "demo-walkup", contactName: "Maria Eduarda", contactWaId: "5511977777777", contactPhone: "+55 11 97777-7777", channelName: "Grupo Walkup", channelPhone: "+55 11 95213-7761", lastMessagePreview: "Preciso de ajuda com meu atendimento.", lastMessageAt: new Date(now.getTime() - 5 * 60000).toISOString(), unreadCount: 1, status: "pending", agentKind: "human", assignedTo: "Marcelo", customerCareWindow: { state: "OPEN" } },
+          { id: "demo-carlos", phoneNumberId: "demo-drax", contactName: "Carlos Alberto", contactWaId: "5551966666666", contactPhone: "+55 51 96666-6666", channelName: "Drax Sistemas", channelPhone: "+55 51 98200-1279", lastMessagePreview: "Obrigado pelo atendimento!", lastMessageAt: new Date(now.getTime() - 18 * 60000).toISOString(), unreadCount: 0, status: "closed", agentKind: "human", assignedTo: "Ana", customerCareWindow: { state: "CLOSED" } },
+        ];
+        metaInbox.uiPreview = true;
+        metaInbox.active = true;
+        metaInbox.previewData = { channels, conversations };
+        metaInbox.selectedId = conversations[0].id;
+        document.body.classList.add("waba-laboratorio-visible");
+        setActiveTab("whatsapp-inbox", { skipPolicyCheck: true });
+        metaInboxRenderPreview();
+      }
 
       function metaInboxChannelName(item) {
         return String((item && (item.channelName || item.name)) || "WhatsApp Oficial");
@@ -37633,6 +37692,10 @@
           metaInbox.channelId = channelId;
           metaInbox.offset = 0;
           metaInbox.listFp = "";
+          if (metaInbox.uiPreview) {
+            metaInboxRenderPreview();
+            return;
+          }
           await metaInboxLoadList(false);
           return;
         }
@@ -37641,6 +37704,13 @@
           metaInbox.filter = filter;
           metaInbox.offset = 0;
           metaInbox.listFp = "";
+          document.querySelectorAll("[data-meta-inbox-filter]").forEach((button) => {
+            button.classList.toggle("is-active", button.getAttribute("data-meta-inbox-filter") === filter);
+          });
+          if (metaInbox.uiPreview) {
+            metaInboxRenderPreview();
+            return;
+          }
           await metaInboxLoadList(false);
           return;
         }
@@ -37653,6 +37723,10 @@
           if (shell) shell.classList.remove("has-side");
           if (sideButton) sideButton.setAttribute("aria-expanded", "false");
           if (side) side.setAttribute("aria-hidden", "true");
+          if (metaInbox.uiPreview) {
+            metaInboxRenderPreview();
+            return;
+          }
           await metaInboxJson(`/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(openId)}/read`, {
             method: "POST",
             body: "{}",
@@ -60515,6 +60589,10 @@
 
       void initWabaAuthGate().then(async (unlocked) => {
         if (!unlocked) return;
+        if (isMetaInboxUiPreview()) {
+          initMetaInboxUiPreview();
+          return;
+        }
 
         await Promise.all([loadAquecedorEntitlement(), loadDisparosCredits()]);
 

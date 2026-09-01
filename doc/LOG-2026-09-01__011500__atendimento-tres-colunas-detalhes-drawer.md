@@ -28,6 +28,9 @@ Os dados do contato ficam ocultos para preservar espaço e aparecem sob demanda.
 - `npm run build`
 - Validação visual desktop e viewport mobile.
 - Selecionar número, contato, abrir/fechar dados do contato e voltar à lista.
+- Preview local direto, sem login: `/?ui-preview=atendimento`.
+- O preview só é aceito em `localhost` ou `127.0.0.1` e usa dados fictícios;
+  não cria uma rota de bypass em produção.
 
 ## Segurança
 
