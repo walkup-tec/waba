@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 20:14 — Produção sem modal: GitHub master atrasado
+- `GET /health` produção: `DEPLOY-2026-09-01-181200-header-editavel-arquivo` (`e433ba1`).
+- HTML público ainda tem `window.confirm` e o texto antigo; sem `#meta-tpl-ai-overlay`.
+- Modal e commits seguintes estavam só no Cursor; EasyPanel lê `walkup-tec/waba` `master`.
+- LOG: `doc/LOG-2026-09-01__201400__deploy-sem-modal-github-atrasado.md`
+
 ## 2026-09-01 20:12 — Cabeçalho fixo, sem campo no front
 - Campo Cabeçalho saiu da UI. A Meta recebe sempre HEADER TEXT «Informação de utilidade». Com mídia, o HEADER continua sendo a mídia (a Meta aceita só um).
 - Marker: `DEPLOY-2026-09-01-201200-cabecalho-fixo-utilidade`
