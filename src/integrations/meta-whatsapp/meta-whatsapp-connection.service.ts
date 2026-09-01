@@ -46,14 +46,17 @@ import {
   fetchAssignedBusinesses,
   directoryFromAssigned,
   pickMetaBusinessNode,
+  fillPageNameById,
 } from "./meta-whatsapp-portfolio-graph";
 import {
   applyLocalPortfolioBusinessPhoto,
+  applyLocalPortfolioBusinessIdentity,
   localPortfolioBusinessPhotoUrl,
   shouldRefreshPortfolioBusinessPhoto,
   readPortfolioPhoto,
   readPortfolioBusinessPhoto,
   writePortfolioBusinessPhoto,
+  writePortfolioBusinessIdentity,
   purgePortfolioIdentity,
 } from "./meta-whatsapp-portfolio-identity.store";
 import {
@@ -149,7 +152,8 @@ function withLocalIdentities(
   tenantId: string,
   assets: MetaPortfolioAssetsPublic,
 ): MetaPortfolioAssetsPublic {
-  const localizeCard = (item: MetaPortfolioPublic) => applyLocalPortfolioBusinessPhoto(tenantId, item);
+  const localizeCard = (item: MetaPortfolioPublic) =>
+    applyLocalPortfolioBusinessPhoto(tenantId, applyLocalPortfolioBusinessIdentity(tenantId, item));
   const portfolio = assets.portfolio ? localizeCard(assets.portfolio) : null;
   const portfolios = (assets.portfolios || []).map((item) => ({
     ...localizeCard(item),
@@ -321,6 +325,10 @@ async function hydrateOpenConnection(
     primaryPageId: card.primaryPageId || hint.primaryPageId,
     primaryPageName: card.primaryPageName || hint.primaryPageName,
   };
+  if (card.primaryPageId && !card.primaryPageName) {
+    card = await fillPageNameById(graph, token, card.id || resolvedBm, card);
+  }
+  card = applyLocalPortfolioBusinessIdentity(tenantId, card);
 
   const photoDownloadUrl =
     fetchedBm.photoDownloadUrl ||
@@ -333,6 +341,7 @@ async function hydrateOpenConnection(
     profilePictureUrl: localPhoto || card.profilePictureUrl,
     wabaId: card.wabaId || resolvedWaba || storedWaba,
   };
+  writePortfolioBusinessIdentity(tenantId, card);
 
   const wabaId = resolvedWaba || storedWaba;
   if (!wabaId) return { card, directory };

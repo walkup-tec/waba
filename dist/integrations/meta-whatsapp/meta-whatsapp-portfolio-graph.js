@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.pickMetaBusinessNode = exports.META_BUSINESS_OWNED_PAGES_FIELDS = exports.META_BUSINESS_PHOTO_FIELDS = exports.META_BUSINESS_PAGE_ID_FIELDS = exports.META_BUSINESS_PAGE_FIELDS = exports.META_BUSINESS_NAME_FIELDS = exports.META_WABA_PAGE_FIELDS = exports.META_WABA_OWNER_FIELDS = exports.META_PORTFOLIO_BUSINESS_IDS = void 0;
 exports.isWabaGraphNode = isWabaGraphNode;
 exports.fetchWabaOwner = fetchWabaOwner;
+exports.fillPageNameById = fillPageNameById;
 exports.fetchBusinessFromGraph = fetchBusinessFromGraph;
 exports.fetchAssignedBusinesses = fetchAssignedBusinesses;
 exports.directoryFromAssigned = directoryFromAssigned;
@@ -237,6 +238,13 @@ async function fetchBusinessFromGraph(graph, token, businessId, seen = new Set()
     card = fromAccounts.card;
     photoDownloadUrl = fromAccounts.photoDownloadUrl;
     card = await fillPageNameById(graph, token, id, card);
+    if (!card.primaryPageName || !card.name) {
+        const combined = await getFields(graph, token, id, meta_whatsapp_portfolio_map_1.META_BUSINESS_IDENTITY_FIELDS);
+        if (combined.ok) {
+            card = (0, meta_whatsapp_portfolio_map_1.mergePortfolioIdentity)({ fallback: card, business: combined.json });
+            photoDownloadUrl = photoDownloadUrl || (0, meta_whatsapp_portfolio_map_1.graphPhotoDownloadUrl)(combined.json);
+        }
+    }
     if (!card.profilePictureUrl && !photoDownloadUrl) {
         const picture = await graph({
             token,
@@ -288,7 +296,7 @@ async function fetchAssignedBusinesses(graph, token) {
 function directoryFromAssigned(json) {
     return (0, meta_whatsapp_portfolio_map_1.listMetaBusinessNodes)(json)
         .map((row) => (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(row, {}))
-        .filter((biz) => Boolean(biz.id && biz.name));
+        .filter((biz) => Boolean(biz.id && (biz.name || biz.primaryPageName || biz.primaryPageId)));
 }
 var meta_whatsapp_portfolio_map_2 = require("./meta-whatsapp-portfolio.map");
 Object.defineProperty(exports, "pickMetaBusinessNode", { enumerable: true, get: function () { return meta_whatsapp_portfolio_map_2.pickMetaBusinessNode; } });

@@ -34,7 +34,7 @@ function text(value: unknown): string | null {
   return raw || null;
 }
 
-function isGenericMetaBusinessName(value: string | null | undefined): boolean {
+export function isGenericMetaBusinessName(value: string | null | undefined): boolean {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return true;
   return (
@@ -283,7 +283,7 @@ export function mergePortfolioIdentity(input: {
   return {
     ...input.fallback,
     id: businessIdNotWaba(rawId, resolvedWaba),
-    name: preferredName(mapped.name, hint.businessName, input.fallback.name),
+    name: preferredName(mapped.name, hint.businessName, hint.wabaName, input.fallback.name),
     primaryPageId: mapped.primaryPageId || hint.primaryPageId || text(owned.id) || input.fallback.primaryPageId,
     primaryPageName: mapped.primaryPageName || hint.primaryPageName || text(owned.name) || input.fallback.primaryPageName,
     profilePictureUrl:

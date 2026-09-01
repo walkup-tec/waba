@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import path from "node:path";
 import { resolveDataDir } from "../../data-path";
 import type { MetaPortfolioPublic } from "./meta-whatsapp-portfolio.types";
-import { graphPhotoSourceKey } from "./meta-whatsapp-portfolio.map";
+import { graphPhotoSourceKey, isGenericMetaBusinessName } from "./meta-whatsapp-portfolio.map";
 
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 
@@ -115,6 +115,69 @@ function businessPhotoBase(tenantId: string, businessId: string): string | null 
   return path.join(identityDir(), `${safeTenantId(tenantId)}-${biz}`);
 }
 
+export type MetaPortfolioBusinessIdentity = {
+  name: string | null;
+  primaryPageId: string | null;
+  primaryPageName: string | null;
+  wabaId: string | null;
+  photoExt: "png" | "jpg" | null;
+  updatedAt: string;
+  sourcePath: string | null;
+};
+
+function readBusinessMeta(
+  tenantId: string,
+  businessId: string,
+): MetaPortfolioBusinessIdentity | null {
+  const base = businessPhotoBase(tenantId, businessId);
+  if (!base || !existsSync(`${base}.json`)) return null;
+  try {
+    const row = JSON.parse(readFileSync(`${base}.json`, "utf8")) as Record<string, unknown>;
+    const photoExt = row.photoExt === "png" || row.photoExt === "jpg" ? row.photoExt : null;
+    return {
+      name: String(row.name || "").trim() || null,
+      primaryPageId: String(row.primaryPageId || "").trim() || null,
+      primaryPageName: String(row.primaryPageName || "").trim() || null,
+      wabaId: String(row.wabaId || "").trim() || null,
+      photoExt,
+      updatedAt: String(row.updatedAt || "").trim() || new Date().toISOString(),
+      sourcePath: String(row.sourcePath || "").trim() || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeBusinessMeta(
+  tenantId: string,
+  businessId: string,
+  patch: Partial<MetaPortfolioBusinessIdentity>,
+): MetaPortfolioBusinessIdentity | null {
+  const base = businessPhotoBase(tenantId, businessId);
+  if (!base) return null;
+  ensureDir();
+  const current = readBusinessMeta(tenantId, businessId) || {
+    name: null,
+    primaryPageId: null,
+    primaryPageName: null,
+    wabaId: null,
+    photoExt: null,
+    updatedAt: "",
+    sourcePath: null,
+  };
+  const next: MetaPortfolioBusinessIdentity = {
+    name: patch.name !== undefined ? patch.name : current.name,
+    primaryPageId: patch.primaryPageId !== undefined ? patch.primaryPageId : current.primaryPageId,
+    primaryPageName: patch.primaryPageName !== undefined ? patch.primaryPageName : current.primaryPageName,
+    wabaId: patch.wabaId !== undefined ? patch.wabaId : current.wabaId,
+    photoExt: patch.photoExt !== undefined ? patch.photoExt : current.photoExt,
+    updatedAt: patch.updatedAt || new Date().toISOString(),
+    sourcePath: patch.sourcePath !== undefined ? patch.sourcePath : current.sourcePath,
+  };
+  writeFileSync(`${base}.json`, JSON.stringify(next), "utf8");
+  return next;
+}
+
 export function writePortfolioBusinessPhoto(
   tenantId: string,
   businessId: string,
@@ -129,11 +192,11 @@ export function writePortfolioBusinessPhoto(
     if (ext !== photo.ext && existsSync(previous)) unlinkSync(previous);
   }
   writeFileSync(`${base}.${photo.ext}`, photo.bytes);
-  const current = readPortfolioBusinessPhotoMeta(tenantId, businessId);
+  const current = readBusinessMeta(tenantId, businessId);
   const sourcePath = graphPhotoSourceKey(sourceUrl) || current?.sourcePath || null;
   const sameSource = Boolean(sourcePath && current?.sourcePath && sourcePath === current.sourcePath);
   const updatedAt = sameSource && current?.updatedAt ? current.updatedAt : new Date().toISOString();
-  writeFileSync(`${base}.json`, JSON.stringify({ photoExt: photo.ext, updatedAt, sourcePath }), "utf8");
+  writeBusinessMeta(tenantId, businessId, { photoExt: photo.ext, updatedAt, sourcePath });
   return `/integrations/meta/whatsapp/portfolio/photo?businessId=${encodeURIComponent(String(businessId).trim())}&v=${encodeURIComponent(updatedAt)}`;
 }
 
@@ -141,17 +204,46 @@ function readPortfolioBusinessPhotoMeta(
   tenantId: string,
   businessId: string,
 ): { photoExt: "png" | "jpg" | null; updatedAt: string | null; sourcePath: string | null } | null {
-  const base = businessPhotoBase(tenantId, businessId);
-  if (!base || !existsSync(`${base}.json`)) return null;
-  try {
-    const row = JSON.parse(readFileSync(`${base}.json`, "utf8")) as Record<string, unknown>;
-    const photoExt = row.photoExt === "png" || row.photoExt === "jpg" ? row.photoExt : null;
-    const updatedAt = String(row.updatedAt || "").trim() || null;
-    const sourcePath = String(row.sourcePath || "").trim() || null;
-    return { photoExt, updatedAt, sourcePath };
-  } catch {
-    return null;
-  }
+  const meta = readBusinessMeta(tenantId, businessId);
+  if (!meta) return null;
+  return { photoExt: meta.photoExt, updatedAt: meta.updatedAt, sourcePath: meta.sourcePath };
+}
+
+export function writePortfolioBusinessIdentity(
+  tenantId: string,
+  portfolio: MetaPortfolioPublic,
+): void {
+  const id = String(portfolio.id || "").trim();
+  if (!safeBusinessId(id)) return;
+  const name = isGenericMetaBusinessName(portfolio.name) ? null : String(portfolio.name || "").trim() || null;
+  const primaryPageId = String(portfolio.primaryPageId || "").trim() || null;
+  const primaryPageName = String(portfolio.primaryPageName || "").trim() || null;
+  const wabaId = String(portfolio.wabaId || "").trim() || null;
+  const patch: Partial<MetaPortfolioBusinessIdentity> = {};
+  if (name) patch.name = name;
+  if (primaryPageId) patch.primaryPageId = primaryPageId;
+  if (primaryPageName) patch.primaryPageName = primaryPageName;
+  if (wabaId) patch.wabaId = wabaId;
+  if (!Object.keys(patch).length) return;
+  writeBusinessMeta(tenantId, id, patch);
+}
+
+export function applyLocalPortfolioBusinessIdentity(
+  tenantId: string,
+  portfolio: MetaPortfolioPublic,
+): MetaPortfolioPublic {
+  const id = String(portfolio.id || "").trim();
+  if (!id) return portfolio;
+  const stored = readBusinessMeta(tenantId, id);
+  if (!stored) return portfolio;
+  const liveName = isGenericMetaBusinessName(portfolio.name) ? null : portfolio.name;
+  return {
+    ...portfolio,
+    name: liveName || stored.name || portfolio.name,
+    primaryPageId: portfolio.primaryPageId || stored.primaryPageId,
+    primaryPageName: portfolio.primaryPageName || stored.primaryPageName,
+    wabaId: portfolio.wabaId || stored.wabaId,
+  };
 }
 
 export function readPortfolioBusinessPhoto(

@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 16:40 — Card portfólio traz Página e nome da Meta
+- BM genérico «Portfólio empresarial» não descarta mais a Página de `me/businesses`.
+- Nome da WABA preenche o título; última leitura Graph é reaproveitada.
+- Marker: `DEPLOY-2026-09-01-164000-portfolio-pagina-nome-meta`
+- LOG: `doc/LOG-2026-09-01__164000__portfolio-pagina-nome-meta.md`
+
 ## 2026-09-01 16:24 — Push GitHub master para EasyPanel
 - Causa: commits só no Cursor; EasyPanel olha `walkup-tec/waba` `master`.
 - Push `ddffa22` via `scripts/git-push-github-master.sh`.

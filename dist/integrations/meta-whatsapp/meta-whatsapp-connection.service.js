@@ -85,7 +85,7 @@ function requireConfigured() {
     }
 }
 function withLocalIdentities(tenantId, assets) {
-    const localizeCard = (item) => (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessPhoto)(tenantId, item);
+    const localizeCard = (item) => (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessPhoto)(tenantId, (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessIdentity)(tenantId, item));
     const portfolio = assets.portfolio ? localizeCard(assets.portfolio) : null;
     const portfolios = (assets.portfolios || []).map((item) => ({
         ...localizeCard(item),
@@ -240,6 +240,10 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
         primaryPageId: card.primaryPageId || hint.primaryPageId,
         primaryPageName: card.primaryPageName || hint.primaryPageName,
     };
+    if (card.primaryPageId && !card.primaryPageName) {
+        card = await (0, meta_whatsapp_portfolio_graph_1.fillPageNameById)(graph, token, card.id || resolvedBm, card);
+    }
+    card = (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessIdentity)(tenantId, card);
     const photoDownloadUrl = fetchedBm.photoDownloadUrl ||
         (0, meta_whatsapp_portfolio_map_1.graphPhotoDownloadUrl)(matched) ||
         (0, meta_whatsapp_portfolio_map_1.graphPhotoDownloadUrl)(waba.json) ||
@@ -250,6 +254,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
         profilePictureUrl: localPhoto || card.profilePictureUrl,
         wabaId: card.wabaId || resolvedWaba || storedWaba,
     };
+    (0, meta_whatsapp_portfolio_identity_store_1.writePortfolioBusinessIdentity)(tenantId, card);
     const wabaId = resolvedWaba || storedWaba;
     if (!wabaId)
         return { card, directory };

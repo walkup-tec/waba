@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_OWNED_PAGES_FIELDS = exports.META_BUSINESS_IDENTITY_FIELDS_MINIMAL = exports.META_BUSINESS_IDENTITY_FIELDS = exports.META_WABA_IDENTITY_FIELDS_MINIMAL = exports.META_WABA_IDENTITY_FIELDS = exports.META_PHONE_NAME_FIELDS = exports.META_PHONE_NUMBER_LIST_FIELDS = void 0;
+exports.isGenericMetaBusinessName = isGenericMetaBusinessName;
 exports.graphPhotoDownloadUrl = graphPhotoDownloadUrl;
 exports.graphPhotoSourceKey = graphPhotoSourceKey;
 exports.safePublicPhotoUrl = safePublicPhotoUrl;
@@ -232,7 +233,7 @@ function mergePortfolioIdentity(input) {
     return {
         ...input.fallback,
         id: businessIdNotWaba(rawId, resolvedWaba),
-        name: preferredName(mapped.name, hint.businessName, input.fallback.name),
+        name: preferredName(mapped.name, hint.businessName, hint.wabaName, input.fallback.name),
         primaryPageId: mapped.primaryPageId || hint.primaryPageId || text(owned.id) || input.fallback.primaryPageId,
         primaryPageName: mapped.primaryPageName || hint.primaryPageName || text(owned.name) || input.fallback.primaryPageName,
         profilePictureUrl: mapped.profilePictureUrl ||

@@ -17,7 +17,7 @@ import {
   resolvePhoneNameSync,
   META_PHONE_NUMBER_LIST_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
-import { fetchBusinessFromGraph, fetchKnownBusinessPortfolios, fetchWabaOwner } from "./meta-whatsapp-portfolio-graph";
+import { fetchBusinessFromGraph, fetchKnownBusinessPortfolios, fetchWabaOwner, directoryFromAssigned } from "./meta-whatsapp-portfolio-graph";
 import { encryptMetaToken, decryptMetaToken } from "./meta-token-crypto";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
@@ -182,6 +182,40 @@ describe("meta portfolio mapper", () => {
     assert.equal(merged.name, "Drax Sistemas");
     assert.equal(merged.primaryPageName, "Drax Tecnologia e Sistemas");
     assert.equal(merged.wabaId, "1247508354180311");
+  });
+
+  it("usa o nome da WABA e a Página quando o Business vem como Portfólio empresarial", () => {
+    const fromWabaName = mergePortfolioIdentity({
+      fallback: {
+        id: "3887084984861602",
+        name: null,
+        primaryPageId: null,
+        primaryPageName: null,
+        profilePictureUrl: null,
+        wabaId: "405969599269224",
+        connectionId: "conn-new",
+      },
+      waba: {
+        id: "405969599269224",
+        name: "Drax Sistemas",
+        owner_business_info: { id: "3887084984861602", name: "Portfólio empresarial" },
+      },
+    });
+    assert.equal(fromWabaName.name, "Drax Sistemas");
+    assert.equal(fromWabaName.id, "3887084984861602");
+
+    const assigned = directoryFromAssigned({
+      data: [
+        {
+          id: "3887084984861602",
+          name: "Portfólio empresarial",
+          primary_page: { id: "page-drax", name: "Drax Sistemas e Tecnologia" },
+        },
+      ],
+    });
+    assert.equal(assigned.length, 1);
+    assert.equal(assigned[0]?.id, "3887084984861602");
+    assert.equal(assigned[0]?.primaryPageName, "Drax Sistemas e Tecnologia");
   });
 
   it("não mostra o WABA como card de portfólio quando já existe o Business", () => {
@@ -1137,6 +1171,125 @@ describe("meta portfolio service", () => {
     );
     const assets = await service.listPortfolioAssets(auth);
     assert.notEqual(assets.portfolio?.name, "Drax Sistemas");
+  });
+
+  it("traz Página e nome da Meta mesmo quando o Business se chama Portfólio empresarial", async () => {
+    const row = {
+      ...connectedRow(),
+      metaBusinessId: "3887084984861602",
+      wabaId: "405969599269224",
+    };
+    const graph = async (input: { path: string; query?: Record<string, string> }) => {
+      if (input.path === "405969599269224") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "405969599269224",
+            name: "Drax Sistemas",
+            owner_business_info: { id: "3887084984861602", name: "Portfólio empresarial" },
+          },
+        };
+      }
+      if (input.path === "me/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "3887084984861602",
+                name: "Portfólio empresarial",
+                primary_page: { id: "page-drax", name: "Drax Sistemas e Tecnologia" },
+                profile_picture_uri: "https://scontent.xx.fbcdn.net/v/drax-logo.jpg",
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "3887084984861602") {
+        return { ok: true, status: 200, json: { id: "3887084984861602", name: "Portfólio empresarial" } };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return { ok: true, status: 200, json: { data: [] } };
+      }
+      return { ok: false, status: 400, json: { error: { code: 100 } } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [row];
+        },
+        async findOpenByTenant() {
+          return row;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    assert.equal(assets.portfolio?.id, "3887084984861602");
+    assert.equal(assets.portfolio?.name, "Drax Sistemas");
+    assert.equal(assets.portfolio?.primaryPageName, "Drax Sistemas e Tecnologia");
+    assert.equal(assets.portfolio?.wabaId, "405969599269224");
+  });
+
+  it("reaproveita nome e Página da última leitura da Graph se a Meta vier vazia", async () => {
+    const row = {
+      ...connectedRow(),
+      metaBusinessId: "3887084984861602",
+      wabaId: "405969599269224",
+    };
+    let empty = false;
+    const graph = async (input: { path: string }) => {
+      if (empty) return { ok: true, status: 200, json: { data: [] } };
+      if (input.path === "405969599269224") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "405969599269224",
+            name: "Drax Sistemas",
+            owner_business_info: {
+              id: "3887084984861602",
+              name: "Drax Sistemas",
+              primary_page: { id: "page-drax", name: "Drax Sistemas e Tecnologia" },
+            },
+          },
+        };
+      }
+      if (input.path === "3887084984861602") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "3887084984861602",
+            name: "Drax Sistemas",
+            primary_page: { id: "page-drax", name: "Drax Sistemas e Tecnologia" },
+          },
+        };
+      }
+      if (input.path.endsWith("/phone_numbers")) return { ok: true, status: 200, json: { data: [] } };
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [row];
+        },
+        async findOpenByTenant() {
+          return row;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const first = await service.listPortfolioAssets(auth);
+    assert.equal(first.portfolio?.primaryPageName, "Drax Sistemas e Tecnologia");
+    empty = true;
+    const second = await service.listPortfolioAssets(auth);
+    assert.equal(second.portfolio?.name, "Drax Sistemas");
+    assert.equal(second.portfolio?.primaryPageName, "Drax Sistemas e Tecnologia");
   });
 
   it("não cria card extra do Walkup sem conexão gravada", async () => {

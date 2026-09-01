@@ -7,6 +7,7 @@ import {
   firstOwnedPageId,
   graphPhotoDownloadUrl,
   META_OWNED_PAGES_FIELDS,
+  META_BUSINESS_IDENTITY_FIELDS,
   type MetaWabaIdentityHint,
 } from "./meta-whatsapp-portfolio.map";
 import type { MetaPortfolioPublic } from "./meta-whatsapp-portfolio.types";
@@ -194,7 +195,7 @@ async function mergePagesFromUserAccounts(
   };
 }
 
-async function fillPageNameById(
+export async function fillPageNameById(
   graph: PortfolioGraphCaller,
   token: string,
   businessId: string,
@@ -299,6 +300,13 @@ export async function fetchBusinessFromGraph(
   card = fromAccounts.card;
   photoDownloadUrl = fromAccounts.photoDownloadUrl;
   card = await fillPageNameById(graph, token, id, card);
+  if (!card.primaryPageName || !card.name) {
+    const combined = await getFields(graph, token, id, META_BUSINESS_IDENTITY_FIELDS);
+    if (combined.ok) {
+      card = mergePortfolioIdentity({ fallback: card, business: combined.json });
+      photoDownloadUrl = photoDownloadUrl || graphPhotoDownloadUrl(combined.json);
+    }
+  }
   if (!card.profilePictureUrl && !photoDownloadUrl) {
     const picture = await graph({
       token,
@@ -354,7 +362,7 @@ export async function fetchAssignedBusinesses(
 export function directoryFromAssigned(json: unknown): MetaPortfolioPublic[] {
   return listMetaBusinessNodes(json)
     .map((row) => mapMetaBusinessToPortfolio(row, {}))
-    .filter((biz) => Boolean(biz.id && biz.name));
+    .filter((biz) => Boolean(biz.id && (biz.name || biz.primaryPageName || biz.primaryPageId)));
 }
 
 export { pickMetaBusinessNode } from "./meta-whatsapp-portfolio.map";
