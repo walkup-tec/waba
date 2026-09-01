@@ -3840,9 +3840,6 @@
         .meta-tpl-ai-alert { padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.5; }
         .meta-tpl-ai-alert.is-ok { color:#bbf7d0; background:rgba(22,163,74,.12); border:1px solid rgba(34,197,94,.25); }
         .meta-tpl-ai-alert.is-warn { color:#fde68a; background:rgba(217,119,6,.12); border:1px solid rgba(245,158,11,.25); }
-        .meta-tpl-manual-editor { margin-top:10px; border-top:1px solid rgba(148,163,184,.14); padding-top:10px; }
-        .meta-tpl-manual-editor summary { width:max-content; color:#94a3b8; font-size:12px; cursor:pointer; user-select:none; }
-        .meta-tpl-manual-editor[open] summary { margin-bottom:12px; color:#e2e8f0; }
         .meta-tpl-status-filter {
           width:132px;
           height:32px;
@@ -21252,57 +21249,6 @@
                   </div>
                 </div>
               </div>
-              <details class="meta-tpl-manual-editor">
-                <summary>Opções avançadas de edição individual</summary>
-              <div class="meta-tpl-ai-head" style="margin-top:4px;">
-                <div><strong>Edição individual opcional</strong><span>Use uma opção no formulário caso queira ajustá-la ou cadastrá-la separadamente.</span></div>
-              </div>
-              <div class="aquecedor-field">
-                <label for="meta-tpl-lab-name">Nome</label>
-                <input id="meta-tpl-lab-name" type="text" autocomplete="off" placeholder="retorno_lead" />
-              </div>
-              <div class="disparos-grid disparos-grid-2" style="margin-top: 8px;">
-                <div class="aquecedor-field">
-                  <label for="meta-tpl-lab-language">Idioma</label>
-                  <input id="meta-tpl-lab-language" type="text" value="pt_BR" autocomplete="off" />
-                </div>
-                <div class="aquecedor-field">
-                  <label for="meta-tpl-lab-category">Categoria</label>
-                  <select id="meta-tpl-lab-category">
-                    <option value="UTILITY">UTILITY</option>
-                    <option value="MARKETING">MARKETING</option>
-                    <option value="AUTHENTICATION">AUTHENTICATION</option>
-                  </select>
-                </div>
-              </div>
-              <div class="aquecedor-field" style="margin-top: 8px;">
-                <label for="meta-tpl-lab-header">Cabeçalho (opcional)</label>
-                <input id="meta-tpl-lab-header" type="text" autocomplete="off" placeholder="Texto do HEADER" />
-              </div>
-              <div class="aquecedor-field" style="margin-top: 8px;">
-                <label for="meta-tpl-lab-body">Corpo</label>
-                <textarea id="meta-tpl-lab-body" rows="3" placeholder="Olá {{1}}, recebemos sua solicitação."></textarea>
-              </div>
-              <div class="aquecedor-field" style="margin-top: 8px;">
-                <label for="meta-tpl-lab-examples">Exemplos das variáveis (um por linha)</label>
-                <textarea id="meta-tpl-lab-examples" rows="2" placeholder="Ana"></textarea>
-                <span class="muted">Obrigatório se o corpo tiver {{1}}, {{2}}… Não geramos exemplos automáticos.</span>
-              </div>
-              <div class="aquecedor-field" style="margin-top: 8px;">
-                <label for="meta-tpl-lab-footer">Rodapé (opcional)</label>
-                <input id="meta-tpl-lab-footer" type="text" autocomplete="off" />
-              </div>
-              <div class="disparos-inline-actions" style="margin-top: 10px;">
-                <button
-                  id="meta-tpl-lab-create"
-                  type="button"
-                  class="instance-action-btn btn-qrcode enabled"
-                  onclick="return window.wabaCreateMetaTemplateLab(event);"
-                >
-                  Criar template
-                </button>
-              </div>
-              </details>
             </section>
 
             <section class="panel col-12">
@@ -36727,7 +36673,7 @@
       async function metaTplGenerateUtilityOptions() {
         const connectionId = metaTplLabSelectedConnectionId();
         const baseText = String((document.getElementById("meta-tpl-ai-base-text") || {}).value || "").trim();
-        const language = String((document.getElementById("meta-tpl-lab-language") || {}).value || "pt_BR").trim();
+        const language = "pt_BR";
         const status = document.getElementById("meta-tpl-ai-status");
         const button = document.getElementById("meta-tpl-ai-generate");
         if (!connectionId) {
@@ -36963,64 +36909,6 @@
           metaTplLabSetStatus("Sincronizado. páginas=" + String(payload.pages || 1));
         } catch (error) {
           metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível sincronizar.");
-        } finally {
-          if (btn) btn.disabled = false;
-        }
-        return false;
-      };
-
-      window.wabaCreateMetaTemplateLab = async function wabaCreateMetaTemplateLab(event) {
-        if (event && typeof event.preventDefault === "function") event.preventDefault();
-        const name = String((document.getElementById("meta-tpl-lab-name") || {}).value || "").trim();
-        const language = String((document.getElementById("meta-tpl-lab-language") || {}).value || "").trim();
-        const category = String((document.getElementById("meta-tpl-lab-category") || {}).value || "").trim();
-        const header = String((document.getElementById("meta-tpl-lab-header") || {}).value || "").trim();
-        const body = String((document.getElementById("meta-tpl-lab-body") || {}).value || "").trim();
-        const footer = String((document.getElementById("meta-tpl-lab-footer") || {}).value || "").trim();
-        const connectionId = metaTplLabSelectedConnectionId();
-        if (!connectionId) {
-          metaTplLabSetStatus("Selecione primeiro o portfólio.");
-          return false;
-        }
-        const exampleLines = String((document.getElementById("meta-tpl-lab-examples") || {}).value || "")
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean);
-        const components = [];
-        if (header) components.push({ type: "HEADER", format: "TEXT", text: header });
-        if (body) {
-          const bodyComp = { type: "BODY", text: body };
-          if (/\{\{\d+\}\}/.test(body)) {
-            if (!exampleLines.length) {
-              metaTplLabSetStatus("Informe os exemplos das variáveis. Não enviamos exemplos automáticos.");
-              return false;
-            }
-            bodyComp.example = { body_text: [exampleLines] };
-          }
-          components.push(bodyComp);
-        }
-        if (footer) components.push({ type: "FOOTER", text: footer });
-        const btn = document.getElementById("meta-tpl-lab-create");
-        if (btn) btn.disabled = true;
-        metaTplLabSetStatus("Criando template na Meta…");
-        try {
-          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates", {
-            method: "POST",
-            body: JSON.stringify({
-              name,
-              language,
-              category,
-              components,
-              connectionId,
-              ...(metaTplLabAiAnalysisId ? { aiAnalysisId: metaTplLabAiAnalysisId } : {}),
-            }),
-          });
-          metaTplLabSetStatus(
-            "Template criado. status=" + String((payload.template && payload.template.status) || "—"),
-          );
-          await window.wabaLoadMetaTemplatesLab();
-        } catch (error) {
-          metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível criar.");
         } finally {
           if (btn) btn.disabled = false;
         }

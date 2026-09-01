@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 17:00 — Removido formulário de edição individual de template
+- Bloco «Opções avançadas de edição individual» saiu do Laboratório Cloud.
+- Cadastro fica só no assistente IA (3 opções → Enviar para Meta).
+- Marker: `DEPLOY-2026-09-01-170000-sem-edicao-individual-template`
+- LOG: `doc/LOG-2026-09-01__170000__remove-edicao-individual-template.md`
+
 ## 2026-09-01 16:40 — Card portfólio traz Página e nome da Meta
 - BM genérico «Portfólio empresarial» não descarta mais a Página de `me/businesses`.
 - Nome da WABA preenche o título; última leitura Graph é reaproveitada.
