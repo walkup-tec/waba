@@ -4,10 +4,12 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 - Fluxo: portfólio obrigatório → texto base → 3 opções Utility → revisão humana → Meta.
 - Confirmação única cadastra as 3 opções separadamente; lista pode filtrar Aprovados.
 - Select de status compacto, escuro e alinhado à paleta ciano do sistema.
+- UI em duas colunas: Texto base/Gerar → 3 opções/Enviar para Meta.
+- Templates aceitam WABA `pending_confirmation` com WABA/token válidos.
+- Marker: `DEPLOY-2026-09-01-145500-meta-template-ai-duas-colunas`
 - Mesmas envs OpenAI; Responses API com JSON Schema estrito + Ajv.
 - Marketing não é convertido artificialmente; decisão final sempre da Meta.
 - SQL: `doc/SQL-2026-09-01__create-meta-template-ai-analyses.sql`
-- Marker: `DEPLOY-2026-09-01-134000-meta-template-ai-utility-3-opcoes`
 - LOG: `doc/LOG-2026-09-01__134000__meta-template-assistente-ia-utility.md`
 
 ## 2026-09-01 12:40 — Removido Teste de envio Cloud API

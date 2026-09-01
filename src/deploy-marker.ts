@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-01-144000-meta-template-filtro-compacto";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-01-145500-meta-template-ai-duas-colunas";

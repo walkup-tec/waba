@@ -73,7 +73,11 @@ export class MetaWhatsappTemplateService {
     const row = requested
       ? await this.connections.findByIdForTenant(tenantId, requested)
       : await this.connections.findConnectedByTenant(tenantId);
-    if (!row || row.status !== "connected" || !row.wabaId) {
+    if (
+      !row ||
+      (row.status !== "connected" && row.status !== "pending_confirmation") ||
+      !row.wabaId
+    ) {
       throw new MetaWhatsappError("not_connected");
     }
     if (row.tenantId !== tenantId) throw new MetaWhatsappError("not_connected");

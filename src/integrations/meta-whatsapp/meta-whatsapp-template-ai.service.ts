@@ -69,7 +69,7 @@ export class MetaWhatsappTemplateAiService {
     if (
       !row ||
       row.tenantId !== tenantId ||
-      row.status !== "connected" ||
+      (row.status !== "connected" && row.status !== "pending_confirmation") ||
       row.disconnectedAt ||
       !row.wabaId
     ) {

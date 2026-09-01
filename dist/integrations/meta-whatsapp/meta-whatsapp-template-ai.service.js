@@ -50,7 +50,7 @@ class MetaWhatsappTemplateAiService {
         const row = await this.connections.findByIdForTenant(tenantId, id);
         if (!row ||
             row.tenantId !== tenantId ||
-            row.status !== "connected" ||
+            (row.status !== "connected" && row.status !== "pending_confirmation") ||
             row.disconnectedAt ||
             !row.wabaId) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");

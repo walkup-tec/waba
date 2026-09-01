@@ -78,8 +78,9 @@ function serviceFor(
   email: string,
   output: unknown,
   templateService?: { createFromAuth(auth: unknown, input: Record<string, unknown>): Promise<any> },
+  connectionOverrides: Partial<MetaWhatsappConnectionRecord> = {},
 ) {
-  const row = connection(email);
+  const row = connection(email, connectionOverrides);
   const stored: Array<Record<string, unknown>> = [];
   let savedResult: MetaTemplateAiModelOutput | null = null;
   return {
@@ -190,6 +191,18 @@ describe("Assistente IA de templates Utility", () => {
         ),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "not_connected",
     );
+  });
+
+  it("gera opções para WABA em pending_confirmation com token e WABA definidos", async () => {
+    const email = "ai-pending-confirmation@example.com";
+    const { service } = serviceFor(email, utilityOutput(), undefined, {
+      status: "pending_confirmation",
+    });
+    const result = await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização de solicitação existente." },
+    );
+    assert.equal(result.options.length, 3);
   });
 
   it("limita chamadas por tenant e usuário", async () => {

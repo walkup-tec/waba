@@ -3818,12 +3818,19 @@
         .meta-tpl-ai-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
         .meta-tpl-ai-head strong { display:block; font-size:14px; color:#f8fafc; }
         .meta-tpl-ai-head span { display:block; margin-top:3px; font-size:11px; color:#94a3b8; }
+        .meta-tpl-ai-workspace { display:grid; grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr); gap:14px; align-items:start; }
+        .meta-tpl-ai-pane { min-width:0; padding:12px; border-radius:13px; background:rgba(7,15,30,.42); border:1px solid rgba(148,163,184,.12); }
+        .meta-tpl-ai-pane-title { margin:0 0 10px; color:#e2e8f0; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+        .meta-tpl-ai-box textarea { background:#0b1729; color:#e2e8f0; border:1px solid #334155; }
+        .meta-tpl-ai-box textarea::placeholder { color:#64748b; }
+        .meta-tpl-ai-placeholder { display:flex; min-height:154px; align-items:center; justify-content:center; text-align:center; color:#64748b; font-size:12px; line-height:1.5; padding:20px; }
         .meta-tpl-ai-result { display:grid; gap:12px; margin-top:12px; }
         .meta-tpl-ai-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
         .meta-tpl-ai-metric { padding:10px; border-radius:12px; background:rgba(15,23,42,.62); border:1px solid rgba(148,163,184,.14); }
         .meta-tpl-ai-metric span { display:block; color:#94a3b8; font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
         .meta-tpl-ai-metric strong { display:block; margin-top:4px; color:#f8fafc; font-size:14px; }
         .meta-tpl-ai-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+        .meta-tpl-ai-pane-output .meta-tpl-ai-options { grid-template-columns:1fr; }
         .meta-tpl-ai-option { display:flex; flex-direction:column; gap:9px; padding:12px; border-radius:14px; background:#0f172a; border:1px solid rgba(148,163,184,.18); }
         .meta-tpl-ai-option h4 { margin:0; font-size:13px; color:#f8fafc; }
         .meta-tpl-ai-option p { margin:0; color:#cbd5e1; font-size:12px; line-height:1.5; white-space:pre-wrap; }
@@ -3847,6 +3854,7 @@
         .meta-tpl-status-filter:focus { outline:2px solid rgba(34,211,238,.35); outline-offset:1px; }
         .meta-tpl-status-filter option { background:#0f2631; color:#e2e8f0; }
         @media (max-width:900px) {
+          .meta-tpl-ai-workspace { grid-template-columns:1fr; }
           .meta-tpl-ai-options { grid-template-columns:1fr; }
           .meta-tpl-ai-summary { grid-template-columns:1fr; }
         }
@@ -21220,18 +21228,28 @@
                     <span>Gera três versões a partir do seu texto. A decisão final é da Meta.</span>
                   </div>
                 </div>
-                <div class="aquecedor-field">
-                  <label for="meta-tpl-ai-base-text">2. Texto base</label>
-                  <textarea id="meta-tpl-ai-base-text" rows="4" maxlength="4000" placeholder="Ex.: A proposta solicitada pelo cliente teve uma atualização."></textarea>
+                <div class="meta-tpl-ai-workspace">
+                  <div class="meta-tpl-ai-pane">
+                    <p class="meta-tpl-ai-pane-title">Texto base</p>
+                    <div class="aquecedor-field">
+                      <label for="meta-tpl-ai-base-text">2. Informe a mensagem</label>
+                      <textarea id="meta-tpl-ai-base-text" rows="8" maxlength="4000" placeholder="Ex.: A proposta solicitada pelo cliente teve uma atualização."></textarea>
+                    </div>
+                    <div class="disparos-inline-actions" style="margin-top:10px;">
+                      <button id="meta-tpl-ai-generate" type="button" class="instance-action-btn btn-qrcode enabled">Gerar</button>
+                    </div>
+                    <p id="meta-tpl-ai-status" class="muted" role="status" aria-live="polite" style="margin:10px 0 0;"></p>
+                  </div>
+                  <div class="meta-tpl-ai-pane meta-tpl-ai-pane-output">
+                    <p class="meta-tpl-ai-pane-title">3 opções geradas</p>
+                    <div id="meta-tpl-ai-result" class="meta-tpl-ai-result">
+                      <div class="meta-tpl-ai-placeholder">As três opções aparecerão aqui para sua conferência antes de qualquer envio à Meta.</div>
+                    </div>
+                  </div>
                 </div>
-                <div class="disparos-inline-actions" style="margin-top:10px;">
-                  <button id="meta-tpl-ai-generate" type="button" class="instance-action-btn btn-qrcode enabled">Gerar 3 opções Utility</button>
-                </div>
-                <p id="meta-tpl-ai-status" class="muted" role="status" aria-live="polite" style="margin:10px 0 0;"></p>
-                <div id="meta-tpl-ai-result" class="meta-tpl-ai-result" hidden></div>
               </div>
               <div class="meta-tpl-ai-head" style="margin-top:4px;">
-                <div><strong>3. Revisar e enviar à Meta</strong><span>Escolha uma opção, ajuste se necessário e confirme abaixo.</span></div>
+                <div><strong>Edição individual opcional</strong><span>Use uma opção no formulário caso queira ajustá-la ou cadastrá-la separadamente.</span></div>
               </div>
               <div class="aquecedor-field">
                 <label for="meta-tpl-lab-name">Nome</label>
@@ -36705,7 +36723,7 @@
                     `<article class="meta-tpl-ai-option"><h4>Opção ${index + 1}</h4><p>${escapeAdminHtml(String(option.body || ""))}</p><small>${escapeAdminHtml(String(option.rationale || ""))}</small><button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-ai-option="${index}">Usar esta opção</button></article>`,
                 )
                 .join("")}</div>` +
-              `<div class="disparos-inline-actions"><button type="button" id="meta-tpl-ai-submit-all" class="instance-action-btn btn-qrcode enabled">Cadastrar os 3 templates na Meta</button></div>` +
+              `<div class="disparos-inline-actions"><button type="button" id="meta-tpl-ai-submit-all" class="instance-action-btn btn-qrcode enabled">Enviar para Meta</button></div>` +
               `<div id="meta-tpl-ai-batch-result"></div>`
             : "") +
           `<p class="muted" style="margin:0;">${escapeAdminHtml(String(payload.disclaimer || "A análise final é realizada pela Meta."))}</p>`;
@@ -37127,7 +37145,10 @@
         metaTplLabAiResult = null;
         metaTplLabAiAnalysisId = "";
         const result = document.getElementById("meta-tpl-ai-result");
-        if (result) result.hidden = true;
+        if (result) {
+          result.hidden = false;
+          result.innerHTML = '<div class="meta-tpl-ai-placeholder">As três opções aparecerão aqui para sua conferência antes de qualquer envio à Meta.</div>';
+        }
         void window.wabaLoadMetaTemplatesLab();
       });
       document.getElementById("meta-tpl-lab-status-filter")?.addEventListener("change", function () {

@@ -353,6 +353,16 @@ describe("fase 7 listagem e tenant", () => {
     );
   });
 
+  it("WABA pending_confirmation pode gerenciar templates", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow({ status: "pending_confirmation" }));
+    const templates = new FakeTemplates();
+    templates.rows.push(templateRow());
+    const service = new MetaWhatsappTemplateService(connections as any, templates as any);
+    const listed = await service.listFromAuth(auth(EMAIL_A), "conn-a");
+    assert.equal(listed.length, 1);
+  });
+
   it("lista templates somente do portfólio escolhido", async () => {
     const connections = new FakeConnections();
     connections.rows.push(
