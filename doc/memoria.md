@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 17:32 — Enviar para META 15% menor e mais margem
+- CTA do rodapé reduzido ~15%; `margin-top` 22px → 38px.
+- Marker: `DEPLOY-2026-09-01-173200-enviar-meta-menor`
+- LOG: `doc/LOG-2026-09-01__173200__enviar-meta-menor-margem.md`
+
 ## 2026-09-01 17:29 — CTA do rodapé: Enviar para META
 - `#meta-tpl-ai-submit-all` passou a **Enviar para META**. O Gerar da coluna Texto base permanece.
 - Marker: `DEPLOY-2026-09-01-173000-enviar-para-meta`
