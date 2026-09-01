@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 00:30 — Push GitHub master do atendimento Meta
+- Commits no `walkup-tec/waba` `master`: Inbox `verified_name` + aba Atendimento.
+- Marker: `DEPLOY-2026-09-01-001200-meta-atendimento-chat`
+- EasyPanel `waba_disparador` deve redeployar a partir deste push.
+- LOG: `doc/LOG-2026-09-01__002700__easypanel-push-atendimento-bloqueado.md`
+
 ## 2026-08-31 15:30 — Teto de instâncias + troca 1:1 + Proxy no spare
 - Campanha configurada com N números não passa de N. Vermelho sai e desativa no disparador; substituto `open` com Proxy Brasil entra no mesmo slot.
 - Marker: `DEPLOY-2026-08-31-153000-campanha-slot-swap-proxy`

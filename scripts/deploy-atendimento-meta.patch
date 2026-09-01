@@ -1,0 +1,1105 @@
+From 0dc215e662cb073617fad49dee50a891d530f0d9 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 1 Sep 2026 00:00:09 +0000
+Subject: [PATCH 1/2] fix(meta): Inbox usa verified_name atual da Meta
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Sincroniza channelName ao atualizar portfólio e no webhook de nome,
+prioriza verified_name na listagem do Inbox e ao ligar o switch.
+
+Co-authored-by: marcelo.mozart <marcelo.mozart@icloud.com>
+---
+ dist/deploy-marker.js                         |  2 +-
+ dist/index.html                               |  2 +-
+ .../meta-whatsapp-inbox.service.js            | 35 ++++++++---
+ .../meta-whatsapp-phone-identity.store.js     | 42 ++++++++++++-
+ .../meta-whatsapp-webhook.service.js          |  4 ++
+ index.html                                    |  2 +-
+ src/deploy-marker.ts                          |  2 +-
+ .../meta-whatsapp-inbox.service.ts            | 42 ++++++++++---
+ .../meta-whatsapp-phone-identity.store.ts     | 59 ++++++++++++++++++-
+ .../meta-whatsapp-portfolio.test.ts           | 32 ++++++++++
+ .../meta-whatsapp-webhook.service.ts          |  4 ++
+ 11 files changed, 199 insertions(+), 27 deletions(-)
+
+diff --git a/dist/deploy-marker.js b/dist/deploy-marker.js
+index b47cf81..cec6357 100644
+--- a/dist/deploy-marker.js
++++ b/dist/deploy-marker.js
+@@ -2,4 +2,4 @@
+ /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.WABA_DEPLOY_MARKER = void 0;
+-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-08-31-221500-meta-cloud-lab-origem";
++exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-08-31-233000-meta-inbox-nome-whatsapp";
+diff --git a/dist/index.html b/dist/index.html
+index b28c943..b020e2c 100644
+--- a/dist/index.html
++++ b/dist/index.html
+@@ -36038,7 +36038,7 @@
+               '" data-meta-inbox-phone="' +
+               metaTpEsc(phone) +
+               '" data-meta-inbox-name="' +
+-              metaTpEsc(requested || item.verifiedName || "") +
++              metaTpEsc(item.verifiedName || requested || "") +
+               '"></button></div>' +
+               "</div>" +
+               activate +
+diff --git a/dist/integrations/meta-whatsapp/meta-whatsapp-inbox.service.js b/dist/integrations/meta-whatsapp/meta-whatsapp-inbox.service.js
+index 7ce2d17..fcad054 100644
+--- a/dist/integrations/meta-whatsapp/meta-whatsapp-inbox.service.js
++++ b/dist/integrations/meta-whatsapp/meta-whatsapp-inbox.service.js
+@@ -32,8 +32,21 @@ function clampPage(raw, fallback, max) {
+         return fallback;
+     return Math.min(max, Math.max(0, Math.floor(n)));
+ }
+-function channelLabel(channel, fallbackPhone) {
+-    return String(channel?.name || channel?.displayPhoneNumber || fallbackPhone || "WhatsApp Oficial").trim();
++function channelLabel(channel, verifiedName) {
++    const meta = String(verifiedName || "").trim();
++    if (meta)
++        return meta;
++    return String(channel?.name || channel?.displayPhoneNumber || "WhatsApp Oficial").trim();
++}
++function verifiedNamesByPhone(connections) {
++    const map = new Map();
++    for (const row of connections) {
++        const id = String(row.phoneNumberId || "").trim();
++        const name = String(row.verifiedName || "").trim();
++        if (id && name)
++            map.set(id, name);
++    }
++    return map;
+ }
+ function canServeInbox(row, tenantId) {
+     return Boolean(row &&
+@@ -43,11 +56,13 @@ function canServeInbox(row, tenantId) {
+         row.phoneNumberId &&
+         (row.status === "connected" || row.status === "pending_confirmation"));
+ }
+-function withChannel(row, channelsById, connectionPhone, connectionName) {
++function withChannel(row, channelsById, connectionPhone, connectionName, verifiedByPhone) {
+     const id = String(row.phoneNumberId || "").trim();
+     const snapshot = id ? channelsById.get(id) : undefined;
++    const verified = (id && verifiedByPhone.get(id)) ||
++        (id && id === String(connectionPhone || "") ? connectionName : null);
+     return (0, meta_whatsapp_inbox_types_1.toPublicInboxConversation)(row, (0, meta_whatsapp_customer_care_window_1.resolveCustomerCareWindow)({ lastInboundAt: row.lastInboundAt }), {
+-        name: channelLabel(snapshot, snapshot?.displayPhoneNumber || connectionName),
++        name: channelLabel(snapshot, verified),
+         phone: snapshot?.displayPhoneNumber || (id && id === String(connectionPhone || "") ? connectionPhone : null),
+         photoUrl: snapshot?.profilePictureUrl || null,
+     });
+@@ -97,7 +112,8 @@ class MetaWhatsappInboxService {
+         const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();
+         const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
+         const offset = clampPage(query?.offset, 0, 10000);
+-        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId);
++        const verifiedByPhone = verifiedNamesByPhone(open);
++        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone);
+         const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
+         const enabledIds = snapshots.filter((row) => row.inboxEnabled).map((row) => row.phoneNumberId);
+         const connPhones = open.map((row) => row.phoneNumberId).filter((id) => Boolean(id));
+@@ -140,7 +156,7 @@ class MetaWhatsappInboxService {
+             const isConnection = id === String(matching.phoneNumberId || "");
+             return {
+                 phoneNumberId: id,
+-                name: channelLabel(snap, isConnection ? matching.verifiedName : id),
++                name: channelLabel(snap, verifiedByPhone.get(id) || (isConnection ? matching.verifiedName : null)),
+                 displayPhoneNumber: snap?.displayPhoneNumber || (isConnection ? matching.displayPhoneNumber : null),
+                 profilePictureUrl: snap?.profilePictureUrl || null,
+                 unreadCount: unreadByPhone.get(id) || 0,
+@@ -154,7 +170,7 @@ class MetaWhatsappInboxService {
+             poll,
+             conversations: page.map((row) => {
+                 const origin = byConn.get(row.connectionId) || connection;
+-                return withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName);
++                return withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName, verifiedByPhone);
+             }),
+             channels,
+             selectedPhoneNumberId: selectedPhone || null,
+@@ -170,10 +186,11 @@ class MetaWhatsappInboxService {
+         const limit = Math.min(80, Math.max(1, clampPage(query?.limit, 80, 80) || 80));
+         const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
+         (0, meta_whatsapp_inbox_log_1.logMetaInbox)("THREAD", { tenantId: tenant.tenantId, count: messages.length });
+-        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId);
++        const verifiedByPhone = verifiedNamesByPhone(open);
++        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone);
+         const channelsById = new Map(snapshots.map((item) => [item.phoneNumberId, item]));
+         return {
+-            conversation: withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName),
++            conversation: withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName, verifiedByPhone),
+             messages: messages.map(meta_whatsapp_inbox_types_1.toPublicInboxMessage),
+         };
+     }
+diff --git a/dist/integrations/meta-whatsapp/meta-whatsapp-phone-identity.store.js b/dist/integrations/meta-whatsapp/meta-whatsapp-phone-identity.store.js
+index 4d83a44..a715b6f 100644
+--- a/dist/integrations/meta-whatsapp/meta-whatsapp-phone-identity.store.js
++++ b/dist/integrations/meta-whatsapp/meta-whatsapp-phone-identity.store.js
+@@ -10,6 +10,7 @@ exports.localPhonePhotoUrl = localPhonePhotoUrl;
+ exports.phoneIdentitySyncStatus = phoneIdentitySyncStatus;
+ exports.isPhoneInboxEnabled = isPhoneInboxEnabled;
+ exports.phoneInboxDisplayName = phoneInboxDisplayName;
++exports.syncInboxChannelNameFromMeta = syncInboxChannelNameFromMeta;
+ exports.listPhoneInboxChannels = listPhoneInboxChannels;
+ exports.listEnabledInboxPhoneIds = listEnabledInboxPhoneIds;
+ exports.inboxQueryPhoneIds = inboxQueryPhoneIds;
+@@ -181,14 +182,45 @@ function phoneIdentitySyncStatus(input) {
+ function isPhoneInboxEnabled(identity) {
+     return identity?.inboxEnabled === true;
+ }
+-function phoneInboxDisplayName(identity) {
++function phoneInboxDisplayName(identity, verifiedNameFromMeta) {
++    const meta = String(verifiedNameFromMeta || "").trim();
++    if (meta)
++        return meta;
+     const channel = String(identity?.channelName || "").trim();
+     if (channel)
+         return channel;
+     const saved = String(identity?.name || "").trim();
+     return saved || null;
+ }
+-function listPhoneInboxChannels(tenantId) {
++/** Mantém o rótulo do Inbox alinhado ao verified_name da Meta (ignora nome local do Editar). */
++function syncInboxChannelNameFromMeta(tenantId, phoneNumberId, verifiedName, displayPhoneNumber) {
++    const id = String(phoneNumberId || "").trim();
++    const name = String(verifiedName || "").trim();
++    if (!id || !name)
++        return;
++    const current = readPhoneIdentity(tenantId, id);
++    if (!current || current.inboxEnabled !== true)
++        return;
++    const phone = displayPhoneNumber !== undefined ? String(displayPhoneNumber || "").trim() || null : undefined;
++    if (current.channelName === name && (phone === undefined || current.displayPhoneNumber === phone)) {
++        return;
++    }
++    writePhoneIdentity(tenantId, id, {
++        channelName: name,
++        ...(phone !== undefined ? { displayPhoneNumber: phone } : {}),
++    });
++}
++function lookupVerifiedName(verifiedNameByPhone, phoneNumberId) {
++    if (!verifiedNameByPhone)
++        return undefined;
++    if (verifiedNameByPhone instanceof Map) {
++        return verifiedNameByPhone.get(phoneNumberId);
++    }
++    const record = verifiedNameByPhone;
++    const name = String(record[phoneNumberId] || "").trim();
++    return name || undefined;
++}
++function listPhoneInboxChannels(tenantId, verifiedNameByPhone) {
+     try {
+         const dir = tenantDir(tenantId);
+         if (!(0, node_fs_1.existsSync)(dir))
+@@ -201,9 +233,10 @@ function listPhoneInboxChannels(tenantId) {
+             const identity = readPhoneIdentity(tenantId, phoneNumberId);
+             if (!identity)
+                 continue;
++            const metaVerified = lookupVerifiedName(verifiedNameByPhone, phoneNumberId);
+             out.push({
+                 phoneNumberId,
+-                name: phoneInboxDisplayName(identity),
++                name: phoneInboxDisplayName(identity, metaVerified),
+                 displayPhoneNumber: identity.displayPhoneNumber,
+                 profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
+                 inboxEnabled: isPhoneInboxEnabled(identity),
+@@ -284,6 +317,9 @@ function applyLocalPhoneIdentities(tenantId, numbers) {
+         });
+         const connected = (0, meta_whatsapp_portfolio_map_1.isMetaPhoneConnected)(row.metaStatus);
+         const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
++        if (isPhoneInboxEnabled(identity) && row.verifiedName) {
++            syncInboxChannelNameFromMeta(tenantId, row.phoneNumberId, row.verifiedName, row.displayPhoneNumber);
++        }
+         return {
+             ...row,
+             requestedName: nameSync.requestedName,
+diff --git a/dist/integrations/meta-whatsapp/meta-whatsapp-webhook.service.js b/dist/integrations/meta-whatsapp/meta-whatsapp-webhook.service.js
+index 65fac22..eccbc32 100644
+--- a/dist/integrations/meta-whatsapp/meta-whatsapp-webhook.service.js
++++ b/dist/integrations/meta-whatsapp/meta-whatsapp-webhook.service.js
+@@ -7,6 +7,7 @@ const meta_whatsapp_webhook_events_repository_1 = require("./meta-whatsapp-webho
+ const meta_whatsapp_webhook_log_1 = require("./meta-whatsapp-webhook-log");
+ const meta_whatsapp_webhook_signature_1 = require("./meta-whatsapp-webhook-signature");
+ const meta_config_1 = require("./meta-config");
++const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
+ const NOOP_INBOX = {
+     persistInbound: async () => undefined,
+     applyStatus: async () => undefined,
+@@ -115,6 +116,9 @@ class MetaWhatsappWebhookService {
+                 qualityRating: event.qualityRating,
+                 verifiedName: event.verifiedName,
+             });
++            if (event.eventType === "phone_number_name_update" && event.phoneNumberId && event.verifiedName) {
++                (0, meta_whatsapp_phone_identity_store_1.syncInboxChannelNameFromMeta)(connection.tenantId, event.phoneNumberId, event.verifiedName);
++            }
+         }
+         if (event.eventType === "messages") {
+             try {
+diff --git a/index.html b/index.html
+index b28c943..b020e2c 100644
+--- a/index.html
++++ b/index.html
+@@ -36038,7 +36038,7 @@
+               '" data-meta-inbox-phone="' +
+               metaTpEsc(phone) +
+               '" data-meta-inbox-name="' +
+-              metaTpEsc(requested || item.verifiedName || "") +
++              metaTpEsc(item.verifiedName || requested || "") +
+               '"></button></div>' +
+               "</div>" +
+               activate +
+diff --git a/src/deploy-marker.ts b/src/deploy-marker.ts
+index d4c4b43..a8e5c97 100644
+--- a/src/deploy-marker.ts
++++ b/src/deploy-marker.ts
+@@ -1,3 +1,3 @@
+ ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
+ 
+-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-31-221500-meta-cloud-lab-origem";
++export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-31-233000-meta-inbox-nome-whatsapp";
+diff --git a/src/integrations/meta-whatsapp/meta-whatsapp-inbox.service.ts b/src/integrations/meta-whatsapp/meta-whatsapp-inbox.service.ts
+index 48d6bcf..63d2ccc 100644
+--- a/src/integrations/meta-whatsapp/meta-whatsapp-inbox.service.ts
++++ b/src/integrations/meta-whatsapp/meta-whatsapp-inbox.service.ts
+@@ -42,8 +42,22 @@ function clampPage(raw: unknown, fallback: number, max: number): number {
+   return Math.min(max, Math.max(0, Math.floor(n)));
+ }
+ 
+-function channelLabel(channel: MetaPhoneInboxChannel | undefined, fallbackPhone: string | null): string {
+-  return String(channel?.name || channel?.displayPhoneNumber || fallbackPhone || "WhatsApp Oficial").trim();
++function channelLabel(channel: MetaPhoneInboxChannel | undefined, verifiedName?: string | null): string {
++  const meta = String(verifiedName || "").trim();
++  if (meta) return meta;
++  return String(channel?.name || channel?.displayPhoneNumber || "WhatsApp Oficial").trim();
++}
++
++function verifiedNamesByPhone(
++  connections: Array<{ phoneNumberId: string | null; verifiedName: string | null }>,
++): Map<string, string> {
++  const map = new Map<string, string>();
++  for (const row of connections) {
++    const id = String(row.phoneNumberId || "").trim();
++    const name = String(row.verifiedName || "").trim();
++    if (id && name) map.set(id, name);
++  }
++  return map;
+ }
+ 
+ function canServeInbox(row: { tenantId: string; status: string; wabaId: string | null; phoneNumberId: string | null; disconnectedAt: string | null } | null, tenantId: string): boolean {
+@@ -62,11 +76,15 @@ function withChannel(
+   channelsById: Map<string, MetaPhoneInboxChannel>,
+   connectionPhone: string | null,
+   connectionName: string | null,
++  verifiedByPhone: Map<string, string>,
+ ) {
+   const id = String(row.phoneNumberId || "").trim();
+   const snapshot = id ? channelsById.get(id) : undefined;
++  const verified =
++    (id && verifiedByPhone.get(id)) ||
++    (id && id === String(connectionPhone || "") ? connectionName : null);
+   return toPublicInboxConversation(row, resolveCustomerCareWindow({ lastInboundAt: row.lastInboundAt }), {
+-    name: channelLabel(snapshot, snapshot?.displayPhoneNumber || connectionName),
++    name: channelLabel(snapshot, verified),
+     phone: snapshot?.displayPhoneNumber || (id && id === String(connectionPhone || "") ? connectionPhone : null),
+     photoUrl: snapshot?.profilePictureUrl || null,
+   });
+@@ -122,7 +140,8 @@ export class MetaWhatsappInboxService {
+     const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();
+     const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
+     const offset = clampPage(query?.offset, 0, 10_000);
+-    const snapshots = listPhoneInboxChannels(tenant.tenantId);
++    const verifiedByPhone = verifiedNamesByPhone(open);
++    const snapshots = listPhoneInboxChannels(tenant.tenantId, verifiedByPhone);
+     const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
+     const enabledIds = snapshots.filter((row) => row.inboxEnabled).map((row) => row.phoneNumberId);
+     const connPhones = open.map((row) => row.phoneNumberId).filter((id): id is string => Boolean(id));
+@@ -164,7 +183,7 @@ export class MetaWhatsappInboxService {
+       const isConnection = id === String(matching.phoneNumberId || "");
+       return {
+         phoneNumberId: id,
+-        name: channelLabel(snap, isConnection ? matching.verifiedName : id),
++        name: channelLabel(snap, verifiedByPhone.get(id) || (isConnection ? matching.verifiedName : null)),
+         displayPhoneNumber: snap?.displayPhoneNumber || (isConnection ? matching.displayPhoneNumber : null),
+         profilePictureUrl: snap?.profilePictureUrl || null,
+         unreadCount: unreadByPhone.get(id) || 0,
+@@ -178,7 +197,7 @@ export class MetaWhatsappInboxService {
+       poll,
+       conversations: page.map((row) => {
+         const origin = byConn.get(row.connectionId) || connection;
+-        return withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName);
++        return withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName, verifiedByPhone);
+       }),
+       channels,
+       selectedPhoneNumberId: selectedPhone || null,
+@@ -202,10 +221,17 @@ export class MetaWhatsappInboxService {
+     const limit = Math.min(80, Math.max(1, clampPage(query?.limit, 80, 80) || 80));
+     const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
+     logMetaInbox("THREAD", { tenantId: tenant.tenantId, count: messages.length });
+-    const snapshots = listPhoneInboxChannels(tenant.tenantId);
++    const verifiedByPhone = verifiedNamesByPhone(open);
++    const snapshots = listPhoneInboxChannels(tenant.tenantId, verifiedByPhone);
+     const channelsById = new Map(snapshots.map((item) => [item.phoneNumberId, item]));
+     return {
+-      conversation: withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName),
++      conversation: withChannel(
++        row,
++        channelsById,
++        origin.displayPhoneNumber,
++        origin.verifiedName,
++        verifiedByPhone,
++      ),
+       messages: messages.map(toPublicInboxMessage),
+     };
+   }
+diff --git a/src/integrations/meta-whatsapp/meta-whatsapp-phone-identity.store.ts b/src/integrations/meta-whatsapp/meta-whatsapp-phone-identity.store.ts
+index 8b2fa8f..3724efc 100644
+--- a/src/integrations/meta-whatsapp/meta-whatsapp-phone-identity.store.ts
++++ b/src/integrations/meta-whatsapp/meta-whatsapp-phone-identity.store.ts
+@@ -228,14 +228,58 @@ export function isPhoneInboxEnabled(identity: MetaPhoneIdentity | null): boolean
+   return identity?.inboxEnabled === true;
+ }
+ 
+-export function phoneInboxDisplayName(identity: MetaPhoneIdentity | null): string | null {
++export function phoneInboxDisplayName(
++  identity: MetaPhoneIdentity | null,
++  verifiedNameFromMeta?: string | null,
++): string | null {
++  const meta = String(verifiedNameFromMeta || "").trim();
++  if (meta) return meta;
+   const channel = String(identity?.channelName || "").trim();
+   if (channel) return channel;
+   const saved = String(identity?.name || "").trim();
+   return saved || null;
+ }
+ 
+-export function listPhoneInboxChannels(tenantId: string): MetaPhoneInboxChannel[] {
++/** Mantém o rótulo do Inbox alinhado ao verified_name da Meta (ignora nome local do Editar). */
++export function syncInboxChannelNameFromMeta(
++  tenantId: string,
++  phoneNumberId: string,
++  verifiedName: string | null | undefined,
++  displayPhoneNumber?: string | null,
++): void {
++  const id = String(phoneNumberId || "").trim();
++  const name = String(verifiedName || "").trim();
++  if (!id || !name) return;
++  const current = readPhoneIdentity(tenantId, id);
++  if (!current || current.inboxEnabled !== true) return;
++  const phone =
++    displayPhoneNumber !== undefined ? String(displayPhoneNumber || "").trim() || null : undefined;
++  if (current.channelName === name && (phone === undefined || current.displayPhoneNumber === phone)) {
++    return;
++  }
++  writePhoneIdentity(tenantId, id, {
++    channelName: name,
++    ...(phone !== undefined ? { displayPhoneNumber: phone } : {}),
++  });
++}
++
++function lookupVerifiedName(
++  verifiedNameByPhone: ReadonlyMap<string, string> | Record<string, string | null | undefined> | undefined,
++  phoneNumberId: string,
++): string | undefined {
++  if (!verifiedNameByPhone) return undefined;
++  if (verifiedNameByPhone instanceof Map) {
++    return verifiedNameByPhone.get(phoneNumberId);
++  }
++  const record = verifiedNameByPhone as Record<string, string | null | undefined>;
++  const name = String(record[phoneNumberId] || "").trim();
++  return name || undefined;
++}
++
++export function listPhoneInboxChannels(
++  tenantId: string,
++  verifiedNameByPhone?: ReadonlyMap<string, string> | Record<string, string | null | undefined>,
++): MetaPhoneInboxChannel[] {
+   try {
+     const dir = tenantDir(tenantId);
+     if (!existsSync(dir)) return [];
+@@ -245,9 +289,10 @@ export function listPhoneInboxChannels(tenantId: string): MetaPhoneInboxChannel[
+       const phoneNumberId = file.slice(0, -5);
+       const identity = readPhoneIdentity(tenantId, phoneNumberId);
+       if (!identity) continue;
++      const metaVerified = lookupVerifiedName(verifiedNameByPhone, phoneNumberId);
+       out.push({
+         phoneNumberId,
+-        name: phoneInboxDisplayName(identity),
++        name: phoneInboxDisplayName(identity, metaVerified),
+         displayPhoneNumber: identity.displayPhoneNumber,
+         profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
+         inboxEnabled: isPhoneInboxEnabled(identity),
+@@ -339,6 +384,14 @@ export function applyLocalPhoneIdentities(
+     });
+     const connected = isMetaPhoneConnected(row.metaStatus);
+     const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
++    if (isPhoneInboxEnabled(identity) && row.verifiedName) {
++      syncInboxChannelNameFromMeta(
++        tenantId,
++        row.phoneNumberId,
++        row.verifiedName,
++        row.displayPhoneNumber,
++      );
++    }
+     return {
+       ...row,
+       requestedName: nameSync.requestedName,
+diff --git a/src/integrations/meta-whatsapp/meta-whatsapp-portfolio.test.ts b/src/integrations/meta-whatsapp/meta-whatsapp-portfolio.test.ts
+index 18eaeea..2e5a370 100644
+--- a/src/integrations/meta-whatsapp/meta-whatsapp-portfolio.test.ts
++++ b/src/integrations/meta-whatsapp/meta-whatsapp-portfolio.test.ts
+@@ -810,6 +810,38 @@ describe("meta portfolio service", () => {
+       displayPhoneNumber: "+55 51 8200-1279",
+     });
+     assert.equal(listPhoneInboxChannels(tenantId)[0]?.name, "Grupo Walkup");
++    applyLocalPhoneIdentities(tenantId, [
++      {
++        phoneNumberId: "phone-1",
++        displayPhoneNumber: "+55 51 8200-1279",
++        verifiedName: "Mms Marketing E Sistemas Digitais Ltda",
++        qualityRating: null,
++        metaStatus: "CONNECTED",
++        codeVerificationStatus: "VERIFIED",
++        uiStatus: "ativo",
++        dispatchStatus: "livre",
++        canActivate: false,
++        nameNeedsRegister: false,
++        nameStatus: null,
++        newDisplayName: null,
++        newNameStatus: null,
++        profilePictureUrl: null,
++        vertical: null,
++        description: null,
++        address: null,
++        email: null,
++        requestedName: null,
++        nameSyncStatus: null,
++        photoSyncStatus: null,
++        profileSyncStatus: null,
++        inboxEnabled: true,
++      },
++    ]);
++    assert.equal(listPhoneInboxChannels(tenantId)[0]?.name, "Mms Marketing E Sistemas Digitais Ltda");
++    assert.equal(
++      listPhoneInboxChannels(tenantId, new Map([["phone-1", "Nome Meta ao vivo"]]))[0]?.name,
++      "Nome Meta ao vivo",
++    );
+   });
+ 
+   it("lista vários portfólios e Graph vazio não apaga número gravado", async () => {
+diff --git a/src/integrations/meta-whatsapp/meta-whatsapp-webhook.service.ts b/src/integrations/meta-whatsapp/meta-whatsapp-webhook.service.ts
+index 60db734..aca3802 100644
+--- a/src/integrations/meta-whatsapp/meta-whatsapp-webhook.service.ts
++++ b/src/integrations/meta-whatsapp/meta-whatsapp-webhook.service.ts
+@@ -11,6 +11,7 @@ import { isValidMetaHubSignature, timingSafeEqualString } from "./meta-whatsapp-
+ import { readMetaAppSecret, readMetaWebhookVerifyToken } from "./meta-config";
+ import type { MetaWhatsappWebhookInboxPort } from "./meta-whatsapp-webhook-inbox.service";
+ import type { MetaWhatsappWebhookTemplatePort } from "./meta-whatsapp-webhook-template.service";
++import { syncInboxChannelNameFromMeta } from "./meta-whatsapp-phone-identity.store";
+ 
+ const NOOP_INBOX: MetaWhatsappWebhookInboxPort = {
+   persistInbound: async () => undefined,
+@@ -149,6 +150,9 @@ export class MetaWhatsappWebhookService {
+         qualityRating: event.qualityRating,
+         verifiedName: event.verifiedName,
+       });
++      if (event.eventType === "phone_number_name_update" && event.phoneNumberId && event.verifiedName) {
++        syncInboxChannelNameFromMeta(connection.tenantId, event.phoneNumberId, event.verifiedName);
++      }
+     }
+     if (event.eventType === "messages") {
+       try {
+-- 
+2.43.0
+
+
+From 92f6d8dfd9da9cd0743f5ef7a9f072dca20d12e5 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 1 Sep 2026 00:17:43 +0000
+Subject: [PATCH 2/2] feat(meta): atendimento unificado estilo chatbot
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Layout de chat com vários números oficiais. Ligar Inbox no chip
+abre o atendimento filtrado naquele número.
+
+Co-authored-by: marcelo.mozart <marcelo.mozart@icloud.com>
+---
+ dist/deploy-marker.js            |   2 +-
+ dist/index.html                  | 119 ++++++++++++++++++-------------
+ dist/menus/waba-menu-registry.js |   2 +-
+ index.html                       | 119 ++++++++++++++++++-------------
+ src/deploy-marker.ts             |   2 +-
+ src/menus/waba-menu-registry.ts  |   2 +-
+ 6 files changed, 142 insertions(+), 104 deletions(-)
+
+diff --git a/dist/deploy-marker.js b/dist/deploy-marker.js
+index cec6357..08dd487 100644
+--- a/dist/deploy-marker.js
++++ b/dist/deploy-marker.js
+@@ -2,4 +2,4 @@
+ /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.WABA_DEPLOY_MARKER = void 0;
+-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-08-31-233000-meta-inbox-nome-whatsapp";
++exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-01-001200-meta-atendimento-chat";
+diff --git a/dist/index.html b/dist/index.html
+index b020e2c..9c2108e 100644
+--- a/dist/index.html
++++ b/dist/index.html
+@@ -3814,33 +3814,35 @@
+         .meta-tpl-card-status.is-approved { background:rgba(37,211,102,.2); color:#86efac; }
+         .meta-tpl-card h4 { margin:0 0 6px; font-size:14px; }
+         .meta-tpl-card p { margin:0; font-size:12px; color:rgba(226,232,240,.7); }
+-        .meta-chat { display:grid; grid-template-columns:minmax(280px,34%) minmax(0,1fr); min-height:calc(100vh - 168px); max-height:calc(100vh - 132px); border:1px solid rgba(148,163,184,.16); border-radius:16px; overflow:hidden; background:#0b141a; }
++        .meta-chat { display:grid; grid-template-columns:minmax(300px,32%) minmax(0,1fr); min-height:calc(100vh - 148px); max-height:calc(100vh - 118px); border:1px solid rgba(148,163,184,.14); border-radius:20px; overflow:hidden; background:#0e1621; box-shadow: 0 18px 50px rgba(0,0,0,.28); }
+         .meta-chat-list, .meta-chat-thread { display:flex; flex-direction:column; min-height:0; }
+         .meta-chat-list { background:#111b21; border-right:1px solid rgba(255,255,255,.06); }
+-        .meta-chat-list-head, .meta-chat-thread-head { display:flex; align-items:center; gap:10px; padding:12px 14px; background:#202c33; min-height:62px; }
+-        .meta-chat-search { margin:8px 12px 10px; }
+-        .meta-chat-search input, .meta-inbox-composer textarea { width:100%; border:0; border-radius:10px; background:#202c33; color:#e9edef; padding:10px 12px; }
++        .meta-chat-list-head, .meta-chat-thread-head { display:flex; align-items:center; gap:10px; padding:14px 16px; background:#1a242c; min-height:64px; }
++        .meta-chat-search { margin:0 12px 10px; }
++        .meta-chat-search input, .meta-inbox-composer textarea { width:100%; border:0; border-radius:14px; background:#202c33; color:#e9edef; padding:11px 14px; }
++        .meta-chat-search input::placeholder, .meta-inbox-composer textarea::placeholder { color:#8696a0; }
+         .meta-chat-filters { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 10px; }
+         .meta-chat-filters button { border:0; border-radius:999px; background:#202c33; color:#8696a0; font-size:12px; padding:6px 10px; cursor:pointer; }
+-        .meta-chat-filters button.is-active { background:#005c4b; color:#fff; }
++        .meta-chat-filters button.is-active { background:#00a884; color:#052e16; font-weight:700; }
+         .meta-chat-channels {
+           display: flex;
+-          flex-direction: column;
++          flex-wrap: nowrap;
+           gap: 8px;
+-          padding: 0 12px 10px;
+-          overflow: visible;
++          padding: 0 12px 12px;
++          overflow-x: auto;
++          scrollbar-width: thin;
+         }
+         .meta-chat-channel {
+           display: grid;
+-          grid-template-columns: 28px minmax(0, 1fr);
++          grid-template-columns: 36px minmax(0, 1fr);
+           gap: 8px;
+           align-items: center;
+-          width: 100%;
+-          max-width: 100%;
+-          min-width: 0;
++          min-width: 168px;
++          max-width: 220px;
++          flex: 0 0 auto;
+           box-sizing: border-box;
+-          border: 1px solid rgba(255,255,255,.06);
+-          border-radius: 12px;
++          border: 1px solid rgba(255,255,255,.08);
++          border-radius: 16px;
+           background: #202c33;
+           color: #e9edef;
+           padding: 8px 10px 8px 8px;
+@@ -3849,17 +3851,19 @@
+         }
+         .meta-chat-channel.is-all {
+           grid-template-columns: minmax(0, 1fr);
+-          padding: 8px 12px;
++          min-width: 92px;
++          max-width: 110px;
++          padding: 10px 12px;
+         }
+-        .meta-chat-channel.is-active { border-color: #00a884; background: #005c4b; }
++        .meta-chat-channel.is-active { border-color: #00a884; background: #005c4b; box-shadow: 0 0 0 1px rgba(0,168,132,.35); }
+         .meta-chat-channel-photo {
+-          width: 28px;
+-          height: 28px;
+-          border-radius: 8px;
++          width: 36px;
++          height: 36px;
++          border-radius: 12px;
+           object-fit: cover;
+           background: #111b21;
+         }
+-        .meta-chat-channel-photo.is-fallback { object-fit: contain; padding: 3px; }
++        .meta-chat-channel-photo.is-fallback { object-fit: contain; padding: 4px; }
+         .meta-chat-channel-copy { display:grid; gap:1px; min-width:0; }
+         .meta-chat-channel-name,
+         .meta-chat-channel-phone {
+@@ -3882,16 +3886,18 @@
+           width:7px; height:7px; border-radius:50%; background:#25d366; flex:0 0 auto;
+         }
+         .meta-inbox-banner {
+-          margin: 0 0 8px;
+-          padding: 10px 12px;
+-          border-radius: 10px;
++          margin: 0;
++          padding: 10px 16px;
++          border-radius: 0;
+           background: #111b21;
+-          color: #e9edef;
++          color: #cbd5e1;
+           font-size: 13px;
+           font-weight: 600;
+           line-height: 1.4;
++          border-bottom: 1px solid rgba(255,255,255,.06);
+         }
+         .meta-inbox-banner.is-empty { color: #fbbf24; background: rgba(251, 191, 36, 0.08); }
++        .meta-bot-shell { padding: 0 !important; overflow: hidden; }
+         .meta-inbox-item-main { min-width:0; }
+         .meta-inbox-item-meta { font-size:11px; color:#8696a0; }
+         .meta-inbox-msg-label {
+@@ -3915,20 +3921,27 @@
+         .meta-inbox-item-title { font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+         .meta-inbox-item-preview { font-size:13px; color:#8696a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+         .meta-chat-unread { min-width:18px; height:18px; border-radius:999px; background:#25d366; color:#052e16; font-size:11px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; padding:0 5px; }
+-        .meta-chat-thread { background:#0b141a; }
++        .meta-chat-thread {
++          background-color: #0b141a;
++          background-image:
++            radial-gradient(circle at 18% 12%, rgba(0,168,132,.08), transparent 28%),
++            radial-gradient(circle at 82% 88%, rgba(37,211,102,.05), transparent 32%);
++        }
+         .meta-chat-thread-title { font-weight:700; font-size:15px; }
+         .meta-chat-thread-sub { font-size:12px; color:#8696a0; }
+-        .meta-chat-empty { margin:auto; text-align:center; color:#8696a0; padding:24px; }
+-        .meta-inbox-msg { max-width:min(78%,520px); margin:4px 16px; padding:7px 9px 5px; border-radius:8px; font-size:14px; line-height:1.4; color:#e9edef; width:fit-content; }
+-        .meta-inbox-msg.is-in { background:#202c33; border-top-left-radius:2px; }
+-        .meta-inbox-msg.is-out { margin-left:auto; background:#005c4b; border-top-right-radius:2px; }
++        .meta-chat-empty { margin:auto; text-align:center; color:#8696a0; padding:32px 24px; max-width: 320px; line-height: 1.5; }
++        .meta-chat-empty strong { display:block; color:#e9edef; font-size:16px; margin-bottom:8px; }
++        .meta-inbox-msg { max-width:min(78%,520px); margin:6px 16px; padding:8px 11px 6px; border-radius:14px; font-size:14px; line-height:1.45; color:#e9edef; width:fit-content; box-shadow: 0 1px 0 rgba(0,0,0,.18); }
++        .meta-inbox-msg.is-in { background:#202c33; border-top-left-radius:4px; }
++        .meta-inbox-msg.is-out { margin-left:auto; background:#005c4b; border-top-right-radius:4px; }
+         .meta-chat-meta { display:flex; justify-content:flex-end; gap:6px; margin-top:2px; font-size:11px; color:rgba(233,237,239,.72); }
+         .meta-chat-tick.is-read { color:#53bdeb; }
+         .meta-chat-tick.is-fail { color:#f87171; font-weight:700; }
+-        .meta-inbox-composer { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; padding:10px 12px; background:#202c33; }
++        .meta-inbox-composer { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; padding:12px 14px 14px; background:#1a242c; }
+         .meta-inbox-composer-lock { flex: 1 0 100%; padding: 0 0 2px; }
+-        .meta-inbox-composer textarea { flex:1; min-height:44px; max-height:120px; resize:none; }
+-        .meta-chat-send { width:44px; height:44px; border:0; border-radius:50%; background:#00a884; color:#fff; font-size:18px; cursor:pointer; flex:0 0 auto; }
++        .meta-inbox-composer textarea { flex:1; min-height:46px; max-height:120px; resize:none; }
++        .meta-chat-send { width:46px; height:46px; border:0; border-radius:50%; background:#00a884; color:#fff; font-size:18px; cursor:pointer; flex:0 0 auto; }
++        .meta-chat-send:hover { filter: brightness(1.08); }
+         .meta-chat-side { display:none; width:min(320px,100%); background:#111b21; border-left:1px solid rgba(255,255,255,.06); padding:14px; overflow:auto; }
+         .meta-chat.has-side { grid-template-columns:minmax(260px,30%) minmax(0,1fr) minmax(240px,28%); }
+         .meta-chat.has-side .meta-chat-side { display:block; }
+@@ -18163,7 +18176,7 @@
+                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                     </svg>
+                   </span>
+-                  <span class="tab-label">Inbox</span>
++                  <span class="tab-label">Atendimento</span>
+                 </button>
+                 <button
+                   id="tab-btn-whatsapp-automation"
+@@ -18626,7 +18639,7 @@
+               role="menuitemradio"
+               aria-checked="false"
+             >
+-              Inbox
++              Atendimento
+             </button>
+             <button
+               class="tab-button waba-prod-only"
+@@ -21024,7 +21037,7 @@
+                 <p id="meta-tp-connect-status" class="muted" style="margin:0 0 10px;" role="status" aria-live="polite" hidden></p>
+                 <div class="meta-onboard-next">
+                   <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaOpenLabTab('whatsapp-templates');">Ir para Templates</button>
+-                  <button type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaOpenLabTab('whatsapp-inbox');">Abrir Inbox</button>
++                  <button type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaOpenLabTab('whatsapp-inbox');">Abrir atendimento</button>
+                   <button id="meta-tp-refresh-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaRefreshMetaWhatsappStatus(event);">Atualizar</button>
+                   <button id="meta-tp-subscribe-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaSubscribeMetaWhatsappWebhooks(event);">Inscrever webhooks</button>
+                 </div>
+@@ -21065,13 +21078,13 @@
+ 
+                 <div id="tab-whatsapp-inbox" class="tab-panel tab-hidden" aria-hidden="true">
+           <div class="row g-3">
+-            <section class="panel col-12" style="padding:10px;">
+-              <p id="meta-inbox-banner" class="meta-inbox-banner" role="status" aria-live="polite">Carregando</p>
++            <section class="panel col-12 meta-bot-shell">
++              <p id="meta-inbox-banner" class="meta-inbox-banner" role="status" aria-live="polite">Carregando números com Inbox ligado…</p>
+               <div id="meta-chat-shell" class="meta-chat">
+                 <div class="meta-chat-list">
+-                  <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Conversas</div><div class="meta-chat-thread-sub">Inbox unificado · o número ligado aparece abaixo</div></div></div>
++                  <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Atendimento</div><div class="meta-chat-thread-sub">Todos os números oficiais com Inbox ligado</div></div></div>
+                   <div class="meta-chat-search"><input id="meta-inbox-search" type="search" placeholder="Buscar conversa" autocomplete="off" /></div>
+-                  <div id="meta-inbox-channels" class="meta-chat-channels" aria-label="Canais do Inbox"></div>
++                  <div id="meta-inbox-channels" class="meta-chat-channels" aria-label="Números no atendimento"></div>
+                   <div class="meta-chat-filters">
+                     <button type="button" class="is-active" data-meta-inbox-filter="all">Todas</button>
+                     <button type="button" data-meta-inbox-filter="unread">Não lidas</button>
+@@ -21080,7 +21093,7 @@
+                     <button type="button" data-meta-inbox-filter="closed">Finalizadas</button>
+                     <button type="button" data-meta-inbox-filter="mine">Minhas</button>
+                   </div>
+-                  <div id="meta-inbox-list" class="meta-inbox-scroll"><div class="meta-chat-empty">Nenhuma conversa ainda.</div></div>
++                  <div id="meta-inbox-list" class="meta-inbox-scroll"><div class="meta-chat-empty"><strong>Nenhuma conversa ainda</strong>Ligue Inbox no chip do Laboratório. Quem escrever para esse número entra aqui.</div></div>
+                   <div style="padding:8px;"><button id="meta-inbox-more" type="button" class="instance-action-btn btn-refresh enabled" hidden>Carregar mais</button></div>
+                 </div>
+                 <div class="meta-chat-thread">
+@@ -21089,14 +21102,14 @@
+                     <div class="meta-chat-avatar" id="meta-inbox-thread-avatar">WA</div>
+                     <div style="flex:1;min-width:0;">
+                       <div class="meta-chat-thread-title" id="meta-inbox-thread-title">Conversa</div>
+-                      <div class="meta-chat-thread-sub" id="meta-inbox-thread-sub">Inbox do WhatsApp Oficial</div>
++                      <div class="meta-chat-thread-sub" id="meta-inbox-thread-sub">Selecione um contato à esquerda</div>
+                     </div>
+                     <button type="button" class="instance-action-btn btn-refresh enabled" id="meta-inbox-toggle-side">Detalhes</button>
+                   </div>
+-                  <div id="meta-inbox-thread" class="meta-inbox-scroll"><div class="meta-chat-empty">Escolha uma conversa à esquerda.</div></div>
++                  <div id="meta-inbox-thread" class="meta-inbox-scroll"><div class="meta-chat-empty"><strong>Atendimento unificado</strong>As pessoas que enviarem mensagem para qualquer número com Inbox ligado aparecem nesta lista. Responda aqui — a Meta entrega na janela de 24h.</div></div>
+                   <div class="meta-inbox-composer">
+-                    <div class="meta-inbox-composer-lock" id="meta-inbox-channel-lock">Escolha uma conversa para responder no canal de origem.</div>
+-                    <textarea id="meta-inbox-text" placeholder="Mensagem" maxlength="4096" rows="1"></textarea>
++                    <div class="meta-inbox-composer-lock" id="meta-inbox-channel-lock">Escolha uma conversa para responder pelo número que recebeu a mensagem.</div>
++                    <textarea id="meta-inbox-text" placeholder="Escreva uma resposta…" maxlength="4096" rows="1"></textarea>
+                     <button id="meta-inbox-send" type="button" class="meta-chat-send" aria-label="Enviar">➤</button>
+                   </div>
+                 </div>
+@@ -36591,7 +36604,13 @@
+                 return;
+               }
+               metaTpSetStatus("");
+-              if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
++              if (enabled) {
++                if (typeof metaInbox !== "undefined") metaInbox.channelId = phoneNumberId;
++                if (typeof window.wabaOpenLabTab === "function") window.wabaOpenLabTab("whatsapp-inbox");
++                else if (typeof window.wabaStartMetaInbox === "function") window.wabaStartMetaInbox();
++              } else if (typeof window.wabaRefreshMetaInbox === "function") {
++                window.wabaRefreshMetaInbox();
++              }
+             })
+             .catch(() => {
+               inboxToggle.classList.toggle("is-on", previous);
+@@ -37191,8 +37210,8 @@
+         const items = [
+           '<button type="button" class="meta-chat-channel is-all' +
+             allActive +
+-            '" data-meta-inbox-channel="" aria-label="Todos os canais"><span class="meta-chat-channel-copy"><span class="meta-chat-channel-name">Todos</span><span class="meta-chat-channel-phone">' +
+-            (allUnread ? allUnread + " não lidas" : "Todos os canais") +
++            '" data-meta-inbox-channel="" aria-label="Todos os números"><span class="meta-chat-channel-copy"><span class="meta-chat-channel-name">Todos</span><span class="meta-chat-channel-phone">' +
++            (allUnread ? allUnread + " não lidas" : rows.length ? rows.length + " números" : "Nenhum Inbox") +
+             "</span></span></button>",
+         ];
+         rows.forEach((item) => {
+@@ -37237,10 +37256,10 @@
+       function metaInboxConnectedNumbersText(channels) {
+         const rows = Array.isArray(channels) ? channels : [];
+         if (!rows.length) {
+-          return "Nenhum número ligado ao Inbox. No Laboratório, ligue o switch Inbox (cinza → verde) no chip que deve receber e enviar.";
++          return "Nenhum número no atendimento. No Laboratório, ligue Inbox (cinza → verde) em cada chip que deve receber conversa.";
+         }
+         return (
+-          "Números no Inbox: " +
++          "Números no atendimento: " +
+           rows
+             .map((item) => {
+               const phone = metaInboxChannelPhone(item);
+@@ -37298,7 +37317,7 @@
+         if (!append) box.innerHTML = "";
+         if (!rows.length && !append) {
+           box.innerHTML =
+-            '<div class="meta-chat-empty">Nenhuma conversa neste canal. Ligue o Inbox no número, no Laboratório, se ele ainda não aparecer.</div>';
++            '<div class="meta-chat-empty"><strong>Nenhuma conversa neste número</strong>Assim que alguém enviar WhatsApp para ele, a conversa aparece aqui.</div>';
+           return;
+         }
+         const html = rows
+diff --git a/dist/menus/waba-menu-registry.js b/dist/menus/waba-menu-registry.js
+index b98c657..eeafe00 100644
+--- a/dist/menus/waba-menu-registry.js
++++ b/dist/menus/waba-menu-registry.js
+@@ -121,7 +121,7 @@ exports.WABA_MENU_REGISTRY = [
+     },
+     {
+         id: "whatsapp-inbox",
+-        label: "Inbox",
++        label: "Atendimento",
+         tab: "whatsapp-inbox",
+         section: "lab-api-oficial",
+         sectionLabel: SECTION_LABELS["lab-api-oficial"],
+diff --git a/index.html b/index.html
+index b020e2c..9c2108e 100644
+--- a/index.html
++++ b/index.html
+@@ -3814,33 +3814,35 @@
+         .meta-tpl-card-status.is-approved { background:rgba(37,211,102,.2); color:#86efac; }
+         .meta-tpl-card h4 { margin:0 0 6px; font-size:14px; }
+         .meta-tpl-card p { margin:0; font-size:12px; color:rgba(226,232,240,.7); }
+-        .meta-chat { display:grid; grid-template-columns:minmax(280px,34%) minmax(0,1fr); min-height:calc(100vh - 168px); max-height:calc(100vh - 132px); border:1px solid rgba(148,163,184,.16); border-radius:16px; overflow:hidden; background:#0b141a; }
++        .meta-chat { display:grid; grid-template-columns:minmax(300px,32%) minmax(0,1fr); min-height:calc(100vh - 148px); max-height:calc(100vh - 118px); border:1px solid rgba(148,163,184,.14); border-radius:20px; overflow:hidden; background:#0e1621; box-shadow: 0 18px 50px rgba(0,0,0,.28); }
+         .meta-chat-list, .meta-chat-thread { display:flex; flex-direction:column; min-height:0; }
+         .meta-chat-list { background:#111b21; border-right:1px solid rgba(255,255,255,.06); }
+-        .meta-chat-list-head, .meta-chat-thread-head { display:flex; align-items:center; gap:10px; padding:12px 14px; background:#202c33; min-height:62px; }
+-        .meta-chat-search { margin:8px 12px 10px; }
+-        .meta-chat-search input, .meta-inbox-composer textarea { width:100%; border:0; border-radius:10px; background:#202c33; color:#e9edef; padding:10px 12px; }
++        .meta-chat-list-head, .meta-chat-thread-head { display:flex; align-items:center; gap:10px; padding:14px 16px; background:#1a242c; min-height:64px; }
++        .meta-chat-search { margin:0 12px 10px; }
++        .meta-chat-search input, .meta-inbox-composer textarea { width:100%; border:0; border-radius:14px; background:#202c33; color:#e9edef; padding:11px 14px; }
++        .meta-chat-search input::placeholder, .meta-inbox-composer textarea::placeholder { color:#8696a0; }
+         .meta-chat-filters { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 10px; }
+         .meta-chat-filters button { border:0; border-radius:999px; background:#202c33; color:#8696a0; font-size:12px; padding:6px 10px; cursor:pointer; }
+-        .meta-chat-filters button.is-active { background:#005c4b; color:#fff; }
++        .meta-chat-filters button.is-active { background:#00a884; color:#052e16; font-weight:700; }
+         .meta-chat-channels {
+           display: flex;
+-          flex-direction: column;
++          flex-wrap: nowrap;
+           gap: 8px;
+-          padding: 0 12px 10px;
+-          overflow: visible;
++          padding: 0 12px 12px;
++          overflow-x: auto;
++          scrollbar-width: thin;
+         }
+         .meta-chat-channel {
+           display: grid;
+-          grid-template-columns: 28px minmax(0, 1fr);
++          grid-template-columns: 36px minmax(0, 1fr);
+           gap: 8px;
+           align-items: center;
+-          width: 100%;
+-          max-width: 100%;
+-          min-width: 0;
++          min-width: 168px;
++          max-width: 220px;
++          flex: 0 0 auto;
+           box-sizing: border-box;
+-          border: 1px solid rgba(255,255,255,.06);
+-          border-radius: 12px;
++          border: 1px solid rgba(255,255,255,.08);
++          border-radius: 16px;
+           background: #202c33;
+           color: #e9edef;
+           padding: 8px 10px 8px 8px;
+@@ -3849,17 +3851,19 @@
+         }
+         .meta-chat-channel.is-all {
+           grid-template-columns: minmax(0, 1fr);
+-          padding: 8px 12px;
++          min-width: 92px;
++          max-width: 110px;
++          padding: 10px 12px;
+         }
+-        .meta-chat-channel.is-active { border-color: #00a884; background: #005c4b; }
++        .meta-chat-channel.is-active { border-color: #00a884; background: #005c4b; box-shadow: 0 0 0 1px rgba(0,168,132,.35); }
+         .meta-chat-channel-photo {
+-          width: 28px;
+-          height: 28px;
+-          border-radius: 8px;
++          width: 36px;
++          height: 36px;
++          border-radius: 12px;
+           object-fit: cover;
+           background: #111b21;
+         }
+-        .meta-chat-channel-photo.is-fallback { object-fit: contain; padding: 3px; }
++        .meta-chat-channel-photo.is-fallback { object-fit: contain; padding: 4px; }
+         .meta-chat-channel-copy { display:grid; gap:1px; min-width:0; }
+         .meta-chat-channel-name,
+         .meta-chat-channel-phone {
+@@ -3882,16 +3886,18 @@
+           width:7px; height:7px; border-radius:50%; background:#25d366; flex:0 0 auto;
+         }
+         .meta-inbox-banner {
+-          margin: 0 0 8px;
+-          padding: 10px 12px;
+-          border-radius: 10px;
++          margin: 0;
++          padding: 10px 16px;
++          border-radius: 0;
+           background: #111b21;
+-          color: #e9edef;
++          color: #cbd5e1;
+           font-size: 13px;
+           font-weight: 600;
+           line-height: 1.4;
++          border-bottom: 1px solid rgba(255,255,255,.06);
+         }
+         .meta-inbox-banner.is-empty { color: #fbbf24; background: rgba(251, 191, 36, 0.08); }
++        .meta-bot-shell { padding: 0 !important; overflow: hidden; }
+         .meta-inbox-item-main { min-width:0; }
+         .meta-inbox-item-meta { font-size:11px; color:#8696a0; }
+         .meta-inbox-msg-label {
+@@ -3915,20 +3921,27 @@
+         .meta-inbox-item-title { font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+         .meta-inbox-item-preview { font-size:13px; color:#8696a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+         .meta-chat-unread { min-width:18px; height:18px; border-radius:999px; background:#25d366; color:#052e16; font-size:11px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; padding:0 5px; }
+-        .meta-chat-thread { background:#0b141a; }
++        .meta-chat-thread {
++          background-color: #0b141a;
++          background-image:
++            radial-gradient(circle at 18% 12%, rgba(0,168,132,.08), transparent 28%),
++            radial-gradient(circle at 82% 88%, rgba(37,211,102,.05), transparent 32%);
++        }
+         .meta-chat-thread-title { font-weight:700; font-size:15px; }
+         .meta-chat-thread-sub { font-size:12px; color:#8696a0; }
+-        .meta-chat-empty { margin:auto; text-align:center; color:#8696a0; padding:24px; }
+-        .meta-inbox-msg { max-width:min(78%,520px); margin:4px 16px; padding:7px 9px 5px; border-radius:8px; font-size:14px; line-height:1.4; color:#e9edef; width:fit-content; }
+-        .meta-inbox-msg.is-in { background:#202c33; border-top-left-radius:2px; }
+-        .meta-inbox-msg.is-out { margin-left:auto; background:#005c4b; border-top-right-radius:2px; }
++        .meta-chat-empty { margin:auto; text-align:center; color:#8696a0; padding:32px 24px; max-width: 320px; line-height: 1.5; }
++        .meta-chat-empty strong { display:block; color:#e9edef; font-size:16px; margin-bottom:8px; }
++        .meta-inbox-msg { max-width:min(78%,520px); margin:6px 16px; padding:8px 11px 6px; border-radius:14px; font-size:14px; line-height:1.45; color:#e9edef; width:fit-content; box-shadow: 0 1px 0 rgba(0,0,0,.18); }
++        .meta-inbox-msg.is-in { background:#202c33; border-top-left-radius:4px; }
++        .meta-inbox-msg.is-out { margin-left:auto; background:#005c4b; border-top-right-radius:4px; }
+         .meta-chat-meta { display:flex; justify-content:flex-end; gap:6px; margin-top:2px; font-size:11px; color:rgba(233,237,239,.72); }
+         .meta-chat-tick.is-read { color:#53bdeb; }
+         .meta-chat-tick.is-fail { color:#f87171; font-weight:700; }
+-        .meta-inbox-composer { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; padding:10px 12px; background:#202c33; }
++        .meta-inbox-composer { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; padding:12px 14px 14px; background:#1a242c; }
+         .meta-inbox-composer-lock { flex: 1 0 100%; padding: 0 0 2px; }
+-        .meta-inbox-composer textarea { flex:1; min-height:44px; max-height:120px; resize:none; }
+-        .meta-chat-send { width:44px; height:44px; border:0; border-radius:50%; background:#00a884; color:#fff; font-size:18px; cursor:pointer; flex:0 0 auto; }
++        .meta-inbox-composer textarea { flex:1; min-height:46px; max-height:120px; resize:none; }
++        .meta-chat-send { width:46px; height:46px; border:0; border-radius:50%; background:#00a884; color:#fff; font-size:18px; cursor:pointer; flex:0 0 auto; }
++        .meta-chat-send:hover { filter: brightness(1.08); }
+         .meta-chat-side { display:none; width:min(320px,100%); background:#111b21; border-left:1px solid rgba(255,255,255,.06); padding:14px; overflow:auto; }
+         .meta-chat.has-side { grid-template-columns:minmax(260px,30%) minmax(0,1fr) minmax(240px,28%); }
+         .meta-chat.has-side .meta-chat-side { display:block; }
+@@ -18163,7 +18176,7 @@
+                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                     </svg>
+                   </span>
+-                  <span class="tab-label">Inbox</span>
++                  <span class="tab-label">Atendimento</span>
+                 </button>
+                 <button
+                   id="tab-btn-whatsapp-automation"
+@@ -18626,7 +18639,7 @@
+               role="menuitemradio"
+               aria-checked="false"
+             >
+-              Inbox
++              Atendimento
+             </button>
+             <button
+               class="tab-button waba-prod-only"
+@@ -21024,7 +21037,7 @@
+                 <p id="meta-tp-connect-status" class="muted" style="margin:0 0 10px;" role="status" aria-live="polite" hidden></p>
+                 <div class="meta-onboard-next">
+                   <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaOpenLabTab('whatsapp-templates');">Ir para Templates</button>
+-                  <button type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaOpenLabTab('whatsapp-inbox');">Abrir Inbox</button>
++                  <button type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaOpenLabTab('whatsapp-inbox');">Abrir atendimento</button>
+                   <button id="meta-tp-refresh-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaRefreshMetaWhatsappStatus(event);">Atualizar</button>
+                   <button id="meta-tp-subscribe-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaSubscribeMetaWhatsappWebhooks(event);">Inscrever webhooks</button>
+                 </div>
+@@ -21065,13 +21078,13 @@
+ 
+                 <div id="tab-whatsapp-inbox" class="tab-panel tab-hidden" aria-hidden="true">
+           <div class="row g-3">
+-            <section class="panel col-12" style="padding:10px;">
+-              <p id="meta-inbox-banner" class="meta-inbox-banner" role="status" aria-live="polite">Carregando</p>
++            <section class="panel col-12 meta-bot-shell">
++              <p id="meta-inbox-banner" class="meta-inbox-banner" role="status" aria-live="polite">Carregando números com Inbox ligado…</p>
+               <div id="meta-chat-shell" class="meta-chat">
+                 <div class="meta-chat-list">
+-                  <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Conversas</div><div class="meta-chat-thread-sub">Inbox unificado · o número ligado aparece abaixo</div></div></div>
++                  <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Atendimento</div><div class="meta-chat-thread-sub">Todos os números oficiais com Inbox ligado</div></div></div>
+                   <div class="meta-chat-search"><input id="meta-inbox-search" type="search" placeholder="Buscar conversa" autocomplete="off" /></div>
+-                  <div id="meta-inbox-channels" class="meta-chat-channels" aria-label="Canais do Inbox"></div>
++                  <div id="meta-inbox-channels" class="meta-chat-channels" aria-label="Números no atendimento"></div>
+                   <div class="meta-chat-filters">
+                     <button type="button" class="is-active" data-meta-inbox-filter="all">Todas</button>
+                     <button type="button" data-meta-inbox-filter="unread">Não lidas</button>
+@@ -21080,7 +21093,7 @@
+                     <button type="button" data-meta-inbox-filter="closed">Finalizadas</button>
+                     <button type="button" data-meta-inbox-filter="mine">Minhas</button>
+                   </div>
+-                  <div id="meta-inbox-list" class="meta-inbox-scroll"><div class="meta-chat-empty">Nenhuma conversa ainda.</div></div>
++                  <div id="meta-inbox-list" class="meta-inbox-scroll"><div class="meta-chat-empty"><strong>Nenhuma conversa ainda</strong>Ligue Inbox no chip do Laboratório. Quem escrever para esse número entra aqui.</div></div>
+                   <div style="padding:8px;"><button id="meta-inbox-more" type="button" class="instance-action-btn btn-refresh enabled" hidden>Carregar mais</button></div>
+                 </div>
+                 <div class="meta-chat-thread">
+@@ -21089,14 +21102,14 @@
+                     <div class="meta-chat-avatar" id="meta-inbox-thread-avatar">WA</div>
+                     <div style="flex:1;min-width:0;">
+                       <div class="meta-chat-thread-title" id="meta-inbox-thread-title">Conversa</div>
+-                      <div class="meta-chat-thread-sub" id="meta-inbox-thread-sub">Inbox do WhatsApp Oficial</div>
++                      <div class="meta-chat-thread-sub" id="meta-inbox-thread-sub">Selecione um contato à esquerda</div>
+                     </div>
+                     <button type="button" class="instance-action-btn btn-refresh enabled" id="meta-inbox-toggle-side">Detalhes</button>
+                   </div>
+-                  <div id="meta-inbox-thread" class="meta-inbox-scroll"><div class="meta-chat-empty">Escolha uma conversa à esquerda.</div></div>
++                  <div id="meta-inbox-thread" class="meta-inbox-scroll"><div class="meta-chat-empty"><strong>Atendimento unificado</strong>As pessoas que enviarem mensagem para qualquer número com Inbox ligado aparecem nesta lista. Responda aqui — a Meta entrega na janela de 24h.</div></div>
+                   <div class="meta-inbox-composer">
+-                    <div class="meta-inbox-composer-lock" id="meta-inbox-channel-lock">Escolha uma conversa para responder no canal de origem.</div>
+-                    <textarea id="meta-inbox-text" placeholder="Mensagem" maxlength="4096" rows="1"></textarea>
++                    <div class="meta-inbox-composer-lock" id="meta-inbox-channel-lock">Escolha uma conversa para responder pelo número que recebeu a mensagem.</div>
++                    <textarea id="meta-inbox-text" placeholder="Escreva uma resposta…" maxlength="4096" rows="1"></textarea>
+                     <button id="meta-inbox-send" type="button" class="meta-chat-send" aria-label="Enviar">➤</button>
+                   </div>
+                 </div>
+@@ -36591,7 +36604,13 @@
+                 return;
+               }
+               metaTpSetStatus("");
+-              if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
++              if (enabled) {
++                if (typeof metaInbox !== "undefined") metaInbox.channelId = phoneNumberId;
++                if (typeof window.wabaOpenLabTab === "function") window.wabaOpenLabTab("whatsapp-inbox");
++                else if (typeof window.wabaStartMetaInbox === "function") window.wabaStartMetaInbox();
++              } else if (typeof window.wabaRefreshMetaInbox === "function") {
++                window.wabaRefreshMetaInbox();
++              }
+             })
+             .catch(() => {
+               inboxToggle.classList.toggle("is-on", previous);
+@@ -37191,8 +37210,8 @@
+         const items = [
+           '<button type="button" class="meta-chat-channel is-all' +
+             allActive +
+-            '" data-meta-inbox-channel="" aria-label="Todos os canais"><span class="meta-chat-channel-copy"><span class="meta-chat-channel-name">Todos</span><span class="meta-chat-channel-phone">' +
+-            (allUnread ? allUnread + " não lidas" : "Todos os canais") +
++            '" data-meta-inbox-channel="" aria-label="Todos os números"><span class="meta-chat-channel-copy"><span class="meta-chat-channel-name">Todos</span><span class="meta-chat-channel-phone">' +
++            (allUnread ? allUnread + " não lidas" : rows.length ? rows.length + " números" : "Nenhum Inbox") +
+             "</span></span></button>",
+         ];
+         rows.forEach((item) => {
+@@ -37237,10 +37256,10 @@
+       function metaInboxConnectedNumbersText(channels) {
+         const rows = Array.isArray(channels) ? channels : [];
+         if (!rows.length) {
+-          return "Nenhum número ligado ao Inbox. No Laboratório, ligue o switch Inbox (cinza → verde) no chip que deve receber e enviar.";
++          return "Nenhum número no atendimento. No Laboratório, ligue Inbox (cinza → verde) em cada chip que deve receber conversa.";
+         }
+         return (
+-          "Números no Inbox: " +
++          "Números no atendimento: " +
+           rows
+             .map((item) => {
+               const phone = metaInboxChannelPhone(item);
+@@ -37298,7 +37317,7 @@
+         if (!append) box.innerHTML = "";
+         if (!rows.length && !append) {
+           box.innerHTML =
+-            '<div class="meta-chat-empty">Nenhuma conversa neste canal. Ligue o Inbox no número, no Laboratório, se ele ainda não aparecer.</div>';
++            '<div class="meta-chat-empty"><strong>Nenhuma conversa neste número</strong>Assim que alguém enviar WhatsApp para ele, a conversa aparece aqui.</div>';
+           return;
+         }
+         const html = rows
+diff --git a/src/deploy-marker.ts b/src/deploy-marker.ts
+index a8e5c97..e97d243 100644
+--- a/src/deploy-marker.ts
++++ b/src/deploy-marker.ts
+@@ -1,3 +1,3 @@
+ ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
+ 
+-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-31-233000-meta-inbox-nome-whatsapp";
++export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-01-001200-meta-atendimento-chat";
+diff --git a/src/menus/waba-menu-registry.ts b/src/menus/waba-menu-registry.ts
+index 27c7555..0c96297 100644
+--- a/src/menus/waba-menu-registry.ts
++++ b/src/menus/waba-menu-registry.ts
+@@ -135,7 +135,7 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
+   },
+   {
+     id: "whatsapp-inbox",
+-    label: "Inbox",
++    label: "Atendimento",
+     tab: "whatsapp-inbox",
+     section: "lab-api-oficial",
+     sectionLabel: SECTION_LABELS["lab-api-oficial"],
+-- 
+2.43.0
+
