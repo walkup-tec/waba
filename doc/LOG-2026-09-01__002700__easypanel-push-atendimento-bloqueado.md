@@ -43,3 +43,13 @@ O JSON deve ter `deployMarker` = `DEPLOY-2026-09-01-001200-meta-atendimento-chat
 ## Palavras-chave
 
 easypanel, github-master, push, atendimento, deploy-marker, GITHUB_TOKEN
+
+## 2026-09-01 00:31 — Secret chegou; Contents ainda Read-only
+
+- `GITHUB_TOKEN` fine-grained presente (`github_pat_…`, user `walkup-tec`).
+- `GET /repos/walkup-tec/waba` → 200; campo `permissions.push` do *usuário* é true (não reflete o token).
+- Header real do token: `x-accepted-github-permissions: contents=read`.
+- `POST /git/blobs` → 403 `Resource not accessible by personal access token` (exige `contents=write`).
+- Commits locais prontos em `push-easypanel-atendimento` / tip `e4b85ef` (Inbox + Atendimento + helpers), base `949b8e3`.
+- Aguardando PAT com **Contents: Read and write** para `git push` em `master`.
+

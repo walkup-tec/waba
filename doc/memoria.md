@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 00:31 — GITHUB_TOKEN sem Contents Write
+- Token fine-grained autentica, mas `contents=read` → push/blob 403.
+- Commits prontos localmente (`e4b85ef` sobre `949b8e3`). Falta PAT Contents Read and write.
+- LOG: `doc/LOG-2026-09-01__002700__easypanel-push-atendimento-bloqueado.md`
+
 ## 2026-09-01 00:30 — Push GitHub master do atendimento Meta
 - Commits no `walkup-tec/waba` `master`: Inbox `verified_name` + aba Atendimento.
 - Marker: `DEPLOY-2026-09-01-001200-meta-atendimento-chat`
