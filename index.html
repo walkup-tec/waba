@@ -3814,9 +3814,9 @@
         .meta-tpl-card-status.is-approved { background:rgba(37,211,102,.2); color:#86efac; }
         .meta-tpl-card h4 { margin:0 0 6px; font-size:14px; }
         .meta-tpl-card p { margin:0; font-size:12px; color:rgba(226,232,240,.7); }
-        .meta-chat { display:grid; grid-template-columns:minmax(300px,32%) minmax(0,1fr); min-height:calc(100vh - 148px); max-height:calc(100vh - 118px); border:1px solid rgba(148,163,184,.14); border-radius:20px; overflow:hidden; background:#0e1621; box-shadow: 0 18px 50px rgba(0,0,0,.28); }
-        .meta-chat-list, .meta-chat-thread { display:flex; flex-direction:column; min-height:0; }
-        .meta-chat-list { background:#111b21; border-right:1px solid rgba(255,255,255,.06); }
+        .meta-chat { position:relative; display:grid; grid-template-columns:minmax(210px,23%) minmax(300px,31%) minmax(0,1fr); min-height:calc(100vh - 148px); max-height:calc(100vh - 118px); border:1px solid rgba(148,163,184,.14); border-radius:20px; overflow:hidden; background:#0e1621; box-shadow: 0 18px 50px rgba(0,0,0,.28); }
+        .meta-chat-numbers, .meta-chat-list, .meta-chat-thread { display:flex; flex-direction:column; min-height:0; }
+        .meta-chat-numbers, .meta-chat-list { background:#111b21; border-right:1px solid rgba(255,255,255,.06); }
         .meta-chat-list-head, .meta-chat-thread-head { display:flex; align-items:center; gap:10px; padding:14px 16px; background:#1a242c; min-height:64px; }
         .meta-chat-search { margin:0 12px 10px; }
         .meta-chat-search input, .meta-inbox-composer textarea { width:100%; border:0; border-radius:14px; background:#202c33; color:#e9edef; padding:11px 14px; }
@@ -3824,22 +3824,13 @@
         .meta-chat-filters { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 10px; }
         .meta-chat-filters button { border:0; border-radius:999px; background:#202c33; color:#8696a0; font-size:12px; padding:6px 10px; cursor:pointer; }
         .meta-chat-filters button.is-active { background:#00a884; color:#052e16; font-weight:700; }
-        .meta-chat-channels {
-          display: flex;
-          flex-wrap: nowrap;
-          gap: 8px;
-          padding: 0 12px 12px;
-          overflow-x: auto;
-          scrollbar-width: thin;
-        }
+        .meta-chat-channels { display:flex; flex-direction:column; gap:7px; padding:12px; overflow-y:auto; scrollbar-width:thin; }
         .meta-chat-channel {
           display: grid;
           grid-template-columns: 36px minmax(0, 1fr);
           gap: 8px;
           align-items: center;
-          min-width: 168px;
-          max-width: 220px;
-          flex: 0 0 auto;
+          width:100%;
           box-sizing: border-box;
           border: 1px solid rgba(255,255,255,.08);
           border-radius: 16px;
@@ -3849,12 +3840,7 @@
           cursor: pointer;
           text-align: left;
         }
-        .meta-chat-channel.is-all {
-          grid-template-columns: minmax(0, 1fr);
-          min-width: 92px;
-          max-width: 110px;
-          padding: 10px 12px;
-        }
+        .meta-chat-channel.is-all { grid-template-columns:minmax(0,1fr); padding:10px 12px; }
         .meta-chat-channel.is-active { border-color: #00a884; background: #005c4b; box-shadow: 0 0 0 1px rgba(0,168,132,.35); }
         .meta-chat-channel-photo {
           width: 36px;
@@ -3942,16 +3928,32 @@
         .meta-inbox-composer textarea { flex:1; min-height:46px; max-height:120px; resize:none; }
         .meta-chat-send { width:46px; height:46px; border:0; border-radius:50%; background:#00a884; color:#fff; font-size:18px; cursor:pointer; flex:0 0 auto; }
         .meta-chat-send:hover { filter: brightness(1.08); }
-        .meta-chat-side { display:none; width:min(320px,100%); background:#111b21; border-left:1px solid rgba(255,255,255,.06); padding:14px; overflow:auto; }
-        .meta-chat.has-side { grid-template-columns:minmax(260px,30%) minmax(0,1fr) minmax(240px,28%); }
-        .meta-chat.has-side .meta-chat-side { display:block; }
+        .meta-chat-details-btn { border:1px solid rgba(255,255,255,.1); border-radius:10px; background:#202c33; color:#e9edef; padding:8px 10px; cursor:pointer; }
+        .meta-chat-details-btn:hover { border-color:#00a884; }
+        .meta-chat-side { position:absolute; z-index:8; inset:0 0 0 auto; display:block; width:min(360px,92%); box-sizing:border-box; background:#111b21; border-left:1px solid rgba(255,255,255,.1); padding:0 16px 18px; overflow:auto; box-shadow:-18px 0 45px rgba(0,0,0,.38); transform:translateX(105%); visibility:hidden; transition:transform .2s ease,visibility .2s; }
+        .meta-chat.has-side .meta-chat-side { transform:translateX(0); visibility:visible; }
+        .meta-chat-side-head { position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; min-height:64px; margin:0 -16px 16px; padding:0 16px; background:#1a242c; border-bottom:1px solid rgba(255,255,255,.06); }
+        .meta-chat-side-close { width:34px; height:34px; border:0; border-radius:50%; background:#202c33; color:#e9edef; font-size:20px; cursor:pointer; }
+        .meta-contact-card { display:grid; gap:14px; }
+        .meta-contact-card-hero { display:flex; align-items:center; gap:12px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,.07); }
+        .meta-contact-card-hero .meta-chat-avatar { width:52px; height:52px; font-size:16px; }
+        .meta-contact-card-section { display:grid; gap:8px; }
+        .meta-contact-card-label { color:#8696a0; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+        .meta-contact-card-row { display:flex; justify-content:space-between; gap:14px; color:#cbd5e1; font-size:13px; }
+        .meta-contact-card-row strong { color:#e9edef; text-align:right; overflow-wrap:anywhere; }
         .meta-chat-back { display:none; border:0; background:transparent; color:#e9edef; font-size:18px; cursor:pointer; }
+        @media (max-width:1260px) and (min-width:981px) {
+          .meta-chat { grid-template-columns:minmax(190px,23%) minmax(270px,32%) minmax(0,1fr); }
+        }
         @media (max-width:980px) {
           .meta-onboard-steps { grid-template-columns:repeat(2,minmax(0,1fr)); }
           .meta-chat { grid-template-columns:1fr; min-height:72vh; }
-          .meta-chat.has-side { grid-template-columns:1fr; }
-          .meta-chat-side { display:none !important; }
+          .meta-chat-numbers { border-right:0; border-bottom:1px solid rgba(255,255,255,.06); }
+          .meta-chat-channels { flex-direction:row; overflow-x:auto; overflow-y:hidden; }
+          .meta-chat-channel { min-width:180px; width:auto; flex:0 0 auto; }
+          .meta-chat-channel.is-all { min-width:110px; }
           .meta-chat-back { display:inline-flex; }
+          .meta-chat.is-thread-open .meta-chat-numbers,
           .meta-chat.is-thread-open .meta-chat-list { display:none; }
           .meta-chat:not(.is-thread-open) .meta-chat-thread { display:none; }
         }
@@ -21081,10 +21083,18 @@
             <section class="panel col-12 meta-bot-shell">
               <p id="meta-inbox-banner" class="meta-inbox-banner" role="status" aria-live="polite">Carregando números com Inbox ligado…</p>
               <div id="meta-chat-shell" class="meta-chat">
-                <div class="meta-chat-list">
-                  <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Atendimento</div><div class="meta-chat-thread-sub">Todos os números oficiais com Inbox ligado</div></div></div>
-                  <div class="meta-chat-search"><input id="meta-inbox-search" type="search" placeholder="Buscar conversa" autocomplete="off" /></div>
+                <div class="meta-chat-numbers">
+                  <div class="meta-chat-list-head">
+                    <div>
+                      <div class="meta-chat-thread-title">Números</div>
+                      <div class="meta-chat-thread-sub">Inboxes oficiais ativos</div>
+                    </div>
+                  </div>
                   <div id="meta-inbox-channels" class="meta-chat-channels" aria-label="Números no atendimento"></div>
+                </div>
+                <div class="meta-chat-list">
+                  <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Contatos</div><div class="meta-chat-thread-sub">Conversas recebidas</div></div></div>
+                  <div class="meta-chat-search"><input id="meta-inbox-search" type="search" placeholder="Buscar contato ou conversa" autocomplete="off" /></div>
                   <div class="meta-chat-filters">
                     <button type="button" class="is-active" data-meta-inbox-filter="all">Todas</button>
                     <button type="button" data-meta-inbox-filter="unread">Não lidas</button>
@@ -21104,7 +21114,7 @@
                       <div class="meta-chat-thread-title" id="meta-inbox-thread-title">Conversa</div>
                       <div class="meta-chat-thread-sub" id="meta-inbox-thread-sub">Selecione um contato à esquerda</div>
                     </div>
-                    <button type="button" class="instance-action-btn btn-refresh enabled" id="meta-inbox-toggle-side">Detalhes</button>
+                    <button type="button" class="meta-chat-details-btn" id="meta-inbox-toggle-side" aria-expanded="false" aria-controls="meta-inbox-side" disabled>Dados do contato</button>
                   </div>
                   <div id="meta-inbox-thread" class="meta-inbox-scroll"><div class="meta-chat-empty"><strong>Atendimento unificado</strong>As pessoas que enviarem mensagem para qualquer número com Inbox ligado aparecem nesta lista. Responda aqui — a Meta entrega na janela de 24h.</div></div>
                   <div class="meta-inbox-composer">
@@ -21113,7 +21123,7 @@
                     <button id="meta-inbox-send" type="button" class="meta-chat-send" aria-label="Enviar">➤</button>
                   </div>
                 </div>
-                <aside class="meta-chat-side" id="meta-inbox-side"></aside>
+                <aside class="meta-chat-side" id="meta-inbox-side" aria-label="Dados do contato" aria-hidden="true"></aside>
               </div>
             </section>
           </div>
@@ -24532,7 +24542,21 @@
           const sideBtn = event.target && event.target.closest && event.target.closest("#meta-inbox-toggle-side");
           if (sideBtn) {
             const shell = document.getElementById("meta-chat-shell");
-            if (shell) shell.classList.toggle("has-side");
+            const side = document.getElementById("meta-inbox-side");
+            if (shell) {
+              const open = shell.classList.toggle("has-side");
+              sideBtn.setAttribute("aria-expanded", open ? "true" : "false");
+              if (side) side.setAttribute("aria-hidden", open ? "false" : "true");
+            }
+          }
+          const sideClose = event.target && event.target.closest && event.target.closest("#meta-inbox-side-close");
+          if (sideClose) {
+            const shell = document.getElementById("meta-chat-shell");
+            const button = document.getElementById("meta-inbox-toggle-side");
+            const side = document.getElementById("meta-inbox-side");
+            if (shell) shell.classList.remove("has-side");
+            if (button) button.setAttribute("aria-expanded", "false");
+            if (side) side.setAttribute("aria-hidden", "true");
           }
           const back = event.target && event.target.closest && event.target.closest("#meta-inbox-back");
           if (back) {
@@ -37386,6 +37410,8 @@
             (channelPhone ? " · " + escapeAdminHtml(channelPhone) : "") +
             "</strong>";
         }
+        const detailButton = document.getElementById("meta-inbox-toggle-side");
+        if (detailButton) detailButton.disabled = false;
         const messages = Array.isArray(payload.messages) ? payload.messages : [];
         box.innerHTML = messages
           .map((msg) => {
@@ -37422,25 +37448,40 @@
           .map((item) => `<option value="${escapeAdminHtml(item.name)}|${escapeAdminHtml(item.language)}">${escapeAdminHtml(item.name)} (${escapeAdminHtml(item.language)})</option>`)
           .join("");
         if (side) {
+          const contactLabel = conv.contactName || conv.contactWaId || "Contato";
+          const contactInitials = String(contactLabel)
+            .trim()
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((part) => part.charAt(0))
+            .join("")
+            .toUpperCase() || "WA";
           side.innerHTML =
-            `<p><strong>Perfil</strong><br>${escapeAdminHtml(conv.contactName || "—")}</p>` +
-            `<p><strong>Canal de origem</strong><br>${escapeAdminHtml(channel)}${channelPhone ? "<br>" + escapeAdminHtml(channelPhone) : ""}</p>` +
-            `<p><strong>wa_id</strong><br>${escapeAdminHtml(conv.contactWaId || "—")}</p>` +
-            `<p><strong>Telefone</strong><br>${escapeAdminHtml(conv.contactPhone || "—")}</p>` +
-            `<p><strong>${escapeAdminHtml(metaInboxWindowLabel(windowState))}</strong></p>` +
+            `<div class="meta-chat-side-head"><strong>Dados do contato</strong><button type="button" class="meta-chat-side-close" id="meta-inbox-side-close" aria-label="Fechar dados do contato">×</button></div>` +
+            `<div class="meta-contact-card">` +
+            `<div class="meta-contact-card-hero"><div class="meta-chat-avatar">${escapeAdminHtml(contactInitials)}</div><div><strong>${escapeAdminHtml(contactLabel)}</strong><div class="meta-chat-thread-sub">${escapeAdminHtml(conv.contactPhone || conv.contactWaId || "Telefone não informado")}</div></div></div>` +
+            `<section class="meta-contact-card-section"><div class="meta-contact-card-label">Origem</div>` +
+            `<div class="meta-contact-card-row"><span>Número receptor</span><strong>${escapeAdminHtml(channel)}</strong></div>` +
+            `<div class="meta-contact-card-row"><span>Telefone oficial</span><strong>${escapeAdminHtml(channelPhone || "—")}</strong></div></section>` +
+            `<section class="meta-contact-card-section"><div class="meta-contact-card-label">Atendimento</div>` +
+            `<div class="meta-contact-card-row"><span>Janela</span><strong>${escapeAdminHtml(metaInboxWindowLabel(windowState))}</strong></div>` +
+            `<div class="meta-contact-card-row"><span>Status</span><strong>${escapeAdminHtml(metaInboxStatusLabel(conv.status))}</strong></div>` +
+            `<div class="meta-contact-card-row"><span>Responsável</span><strong>${escapeAdminHtml(conv.assignedTo || "Livre")}</strong></div>` +
+            `<div class="meta-contact-card-row"><span>WhatsApp ID</span><strong>${escapeAdminHtml(conv.contactWaId || "—")}</strong></div></section>` +
             closedHint +
-            `<p>Status: ${escapeAdminHtml(metaInboxStatusLabel(conv.status))}<br>Atendente: ${escapeAdminHtml(conv.assignedTo || "livre")}</p>` +
+            `<section class="meta-contact-card-section"><div class="meta-contact-card-label">Ações</div>` +
             `<div class="disparos-inline-actions" style="flex-wrap:wrap; gap:6px; margin: 8px 0;">` +
             `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-status="open">Reabrir</button>` +
             `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-status="pending">Pendente</button>` +
             `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-status="closed">Finalizar</button>` +
             `<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-inbox-assign="assume">Assumir</button>` +
             `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-assign="release">Liberar</button>` +
-            `</div>` +
+            `</div></section>` +
+            `<section class="meta-contact-card-section"><div class="meta-contact-card-label">Mensagem ativa</div>` +
             `<label class="muted" for="meta-inbox-template">Template aprovado</label>` +
             `<select id="meta-inbox-template" class="form-control">${tplOptions || "<option value=''>Nenhum template aprovado</option>"}</select>` +
             `<textarea id="meta-inbox-tpl-params" rows="2" placeholder="Parâmetros do corpo, um por linha" style="margin-top:6px;width:100%;"></textarea>` +
-            `<button type="button" class="instance-action-btn btn-qrcode enabled" id="meta-inbox-tpl-send" style="margin-top:6px;">Enviar template</button>`;
+            `<button type="button" class="instance-action-btn btn-qrcode enabled" id="meta-inbox-tpl-send" style="margin-top:6px;">Enviar template</button></section></div>`;
         }
       }
 
@@ -37606,6 +37647,12 @@
         const openId = target.getAttribute("data-meta-inbox-open");
         if (openId) {
           metaInbox.selectedId = openId;
+          const shell = document.getElementById("meta-chat-shell");
+          const sideButton = document.getElementById("meta-inbox-toggle-side");
+          const side = document.getElementById("meta-inbox-side");
+          if (shell) shell.classList.remove("has-side");
+          if (sideButton) sideButton.setAttribute("aria-expanded", "false");
+          if (side) side.setAttribute("aria-hidden", "true");
           await metaInboxJson(`/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(openId)}/read`, {
             method: "POST",
             body: "{}",

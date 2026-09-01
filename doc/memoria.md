@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 01:15 — Atendimento em três colunas
+- Layout: Números → Contatos → Conversa.
+- Dados do contato em painel lateral recolhível para não poluir a tela.
+- Marker: `DEPLOY-2026-09-01-011500-meta-atendimento-tres-colunas`
+- LOG: `doc/LOG-2026-09-01__011500__atendimento-tres-colunas-detalhes-drawer.md`
+
 ## 2026-09-01 00:56 — Inbox inbound: webhook em todas as WABAs
 - Causa: `subscribed_apps` só na conexão mais recente → 2º número oficial sem webhook.
 - Fix: inscrever todas as WABAs ao ligar Inbox / abrir Atendimento; toggle manda `connectionId`.
