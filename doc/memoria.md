@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 16:24 — Push GitHub master para EasyPanel
+- Causa: commits só no Cursor; EasyPanel olha `walkup-tec/waba` `master`.
+- Push `ddffa22` via `scripts/git-push-github-master.sh`.
+- Marker esperado: `DEPLOY-2026-09-01-162200-ia-3-utility-do-texto-base`
+- LOG: `doc/LOG-2026-09-01__162400__push-github-master-easypanel-utility.md`
+
 ## 2026-09-01 16:22 — Marker personalizado do assistente Utility
 - Marker: `DEPLOY-2026-09-01-162200-ia-3-utility-do-texto-base`
 - Validar em `GET /health` após o deploy (`deployMarker`).
