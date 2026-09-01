@@ -3840,6 +3840,25 @@
         .meta-tpl-ai-shell { display:grid; gap:10px; margin:0 0 14px; padding:12px; border-radius:13px; background:rgba(7,15,30,.42); border:1px solid rgba(148,163,184,.12); }
         .meta-tpl-ai-shell-title { margin:0; color:#e2e8f0; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
         .meta-tpl-ai-shell-hint { margin:0; color:#94a3b8; font-size:11px; line-height:1.45; }
+        .meta-tpl-ai-file-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+        }
+        .meta-tpl-ai-file-row .instance-action-btn {
+          height: 38px;
+          padding: 0 14px;
+          border-radius: 10px;
+          font-size: 0.78rem;
+          flex: 0 0 auto;
+        }
+        .meta-tpl-ai-file-name {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
         .meta-tpl-ai-submit-bar {
           margin-top: 38px;
           display: grid;
@@ -12128,7 +12147,7 @@
         font-weight: 600;
       }
 
-      .aquecedor-field input:not([type="checkbox"]):not([type="radio"]) {
+      .aquecedor-field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
         width: 100%;
         box-sizing: border-box;
         height: 38px;
@@ -12151,7 +12170,7 @@
         line-height: 1.2;
         outline: none;
       }
-      .aquecedor-field input:not([type="checkbox"]):not([type="radio"]):focus {
+      .aquecedor-field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus {
         border-color: var(--accent);
         box-shadow: 0 0 0 1px var(--accent);
       }
@@ -21289,8 +21308,12 @@
                       </select>
                     </div>
                     <div class="aquecedor-field" id="meta-tpl-ai-media-file-wrap" hidden>
-                      <label for="meta-tpl-ai-media-file">Arquivo da mídia</label>
-                      <input id="meta-tpl-ai-media-file" type="file" />
+                      <label for="meta-tpl-ai-media-file-btn">Arquivo da mídia</label>
+                      <div class="meta-tpl-ai-file-row">
+                        <input id="meta-tpl-ai-media-file" type="file" hidden />
+                        <button id="meta-tpl-ai-media-file-btn" type="button" class="instance-action-btn btn-refresh enabled">Escolher arquivo</button>
+                        <span id="meta-tpl-ai-media-file-name" class="muted meta-tpl-ai-file-name">Nenhum arquivo.</span>
+                      </div>
                       <span class="muted">A Meta exige um exemplo via upload resumable para cabeçalho de mídia.</span>
                     </div>
                     <div class="aquecedor-field">
@@ -36750,16 +36773,19 @@
         const format = String((document.getElementById("meta-tpl-ai-media-format") || {}).value || "NONE").trim().toUpperCase();
         const fileWrap = document.getElementById("meta-tpl-ai-media-file-wrap");
         const file = document.getElementById("meta-tpl-ai-media-file");
-        const header = document.getElementById("meta-tpl-ai-header");
         const needsFile = format === "IMAGE" || format === "VIDEO" || format === "DOCUMENT";
         if (fileWrap) fileWrap.hidden = !needsFile;
         if (file) {
           file.accept = format === "VIDEO" ? "video/mp4" : format === "DOCUMENT" ? "application/pdf" : "image/jpeg,image/png,.jpg,.jpeg,.png";
         }
-        if (header) {
-          header.disabled = format !== "NONE";
-          if (format !== "NONE") header.value = "";
-        }
+      }
+
+      function metaTplAiSyncMediaFileName() {
+        const input = document.getElementById("meta-tpl-ai-media-file");
+        const label = document.getElementById("meta-tpl-ai-media-file-name");
+        if (!label) return;
+        const name = input && input.files && input.files[0] ? String(input.files[0].name || "").trim() : "";
+        label.textContent = name || "Nenhum arquivo.";
       }
 
       function metaTplAiReadShell() {
@@ -37189,6 +37215,10 @@
         metaTplLabRenderTable(metaTplLabCache);
       });
       document.getElementById("meta-tpl-ai-media-format")?.addEventListener("change", metaTplAiSyncMediaFields);
+      document.getElementById("meta-tpl-ai-media-file-btn")?.addEventListener("click", function () {
+        document.getElementById("meta-tpl-ai-media-file")?.click();
+      });
+      document.getElementById("meta-tpl-ai-media-file")?.addEventListener("change", metaTplAiSyncMediaFileName);
       document.getElementById("meta-tpl-ai-button-text")?.addEventListener("change", function () {
         if (metaTplLabAiResult) metaTplAiRenderResult(metaTplLabAiResult);
       });

@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 18:12 — Cabeçalho editável e arquivo no layout
+- Campo Cabeçalho deixa de ser bloqueado ao escolher mídia.
+- Botão Escolher arquivo no estilo do sistema, sem o controle nativo cinza.
+- Marker: `DEPLOY-2026-09-01-181200-header-editavel-arquivo`
+- LOG: `doc/LOG-2026-09-01__181200__cabecalho-editavel-arquivo.md`
+
 ## 2026-09-01 17:48 — Nenhuma como primeira opção do select
 - Tipo de variável: Nenhuma, Nome, Número (Nenhuma é o valor inicial).
 - Marker: `DEPLOY-2026-09-01-174800-variavel-nenhuma-primeiro`
