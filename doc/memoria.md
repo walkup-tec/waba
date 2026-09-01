@@ -2,9 +2,9 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
 ## 2026-09-01 01:15 — Atendimento em três colunas
 - Layout: Números → Contatos → Conversa.
-- Dados do contato em painel lateral recolhível para não poluir a tela.
+- Dados do contato em painel lateral recolhível, acionado por ícone discreto.
 - Preview local direto: `?ui-preview=atendimento` (somente localhost, dados fictícios).
-- Marker: `DEPLOY-2026-09-01-012000-meta-atendimento-preview-direto`
+- Marker: `DEPLOY-2026-09-01-011600-meta-atendimento-icone-contato`
 - LOG: `doc/LOG-2026-09-01__011500__atendimento-tres-colunas-detalhes-drawer.md`
 
 ## 2026-09-01 00:56 — Inbox inbound: webhook em todas as WABAs

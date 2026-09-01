@@ -11,6 +11,8 @@ Os dados do contato ficam ocultos para preservar espaço e aparecem sob demanda.
 - Coluna **Contatos** com busca, filtros e conversas recebidas.
 - Coluna **Conversa** com histórico e envio de mensagens.
 - Botão **Dados do contato** abre um painel lateral sobreposto e recolhível.
+- O acionador é um ícone circular discreto de cadastro/contato, com tooltip e
+  rótulo acessível para leitores de tela.
 - O painel reúne origem, telefone receptor, janela de atendimento, status,
   responsável, ações e envio por template.
 - Em telas menores, números e contatos precedem a conversa; ao abrir um contato,
