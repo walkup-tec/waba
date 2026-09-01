@@ -82,6 +82,17 @@ class FakeConversations {
     return this.rows.find((row) => row.tenantId === tenantId && row.contactWaId === contactWaId) || null;
   }
 
+  async findByTenantPhoneContact(tenantId: string, phoneNumberId: string, contactWaId: string) {
+    return (
+      this.rows.find(
+        (row) =>
+          row.tenantId === tenantId &&
+          row.phoneNumberId === phoneNumberId &&
+          row.contactWaId === contactWaId,
+      ) || null
+    );
+  }
+
   async findByTenantConnectionContact(tenantId: string, connectionId: string, contactWaId: string) {
     return (
       this.rows.find(
@@ -103,13 +114,14 @@ class FakeConversations {
     atIso: string;
   }) {
     this.upserts.push({ contactWaId: input.contactWaId, inbound: input.inbound });
-    const existing =
-      (await this.findByTenantContact(input.tenantId, input.contactWaId)) ||
-      (await this.findByTenantConnectionContact(
-        input.tenantId,
-        input.connectionId,
-        input.contactWaId,
-      ));
+    const phoneNumberId = String(input.phoneNumberId || "").trim();
+    const existing = phoneNumberId
+      ? await this.findByTenantPhoneContact(input.tenantId, phoneNumberId, input.contactWaId)
+      : await this.findByTenantConnectionContact(
+          input.tenantId,
+          input.connectionId,
+          input.contactWaId,
+        );
     if (existing) {
       existing.lastMessageAt = input.atIso;
       if (input.inbound) {

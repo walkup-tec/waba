@@ -19,8 +19,9 @@ _A preencher conforme mapeamento definitivo._
 
 | Data | Migração | Impacto |
 |------|----------|---------|
-| — | — | — |
+| 2026-09-01 | `doc/SQL-2026-09-01__split-meta-inbox-by-phone-number.sql` | Separa fios e mensagens do mesmo contato por número oficial receptor |
 
 ## Índices relevantes
 
-_A preencher._
+- `uq_meta_whatsapp_conversations_tenant_phone_contact`: unicidade por
+  `tenant_id + phone_number_id + contact_wa_id`.

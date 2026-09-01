@@ -33,10 +33,11 @@ comment on column public.meta_whatsapp_conversations.last_inbound_at is
   'Último inbound conhecido. Usado só para observar janela de 24h; não bloqueia envio.';
 
 comment on column public.meta_whatsapp_conversations.contact_wa_id is
-  'wa_id do contato. Unique por tenant+conexão para não duplicar lead.';
+  'wa_id do contato. Unique por tenant+número receptor para separar empresas/canais.';
 
-create unique index if not exists uq_meta_whatsapp_conversations_tenant_conn_contact
-  on public.meta_whatsapp_conversations (tenant_id, connection_id, contact_wa_id);
+create unique index if not exists uq_meta_whatsapp_conversations_tenant_phone_contact
+  on public.meta_whatsapp_conversations (tenant_id, phone_number_id, contact_wa_id)
+  where phone_number_id is not null;
 
 create index if not exists idx_meta_whatsapp_conversations_tenant_last
   on public.meta_whatsapp_conversations (tenant_id, last_message_at desc);

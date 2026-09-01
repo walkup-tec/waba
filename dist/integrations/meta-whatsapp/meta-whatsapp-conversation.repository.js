@@ -76,6 +76,23 @@ class MetaWhatsappConversationRepository {
             throw new Error(error.message);
         return data ? mapRow(asRow(data)) : null;
     }
+    async findByTenantPhoneContact(tenantId, phoneNumberId, contactWaId) {
+        const phone = String(phoneNumberId || "").trim();
+        if (!phone)
+            return null;
+        const { data, error } = await this.client()
+            .from(TABLE)
+            .select(COLUMNS)
+            .eq("tenant_id", tenantId)
+            .eq("phone_number_id", phone)
+            .eq("contact_wa_id", contactWaId)
+            .order("last_message_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (error)
+            throw new Error(error.message);
+        return data ? mapRow(asRow(data)) : null;
+    }
     async findByTenantConnectionContact(tenantId, connectionId, contactWaId) {
         const { data, error } = await this.client()
             .from(TABLE)
@@ -89,8 +106,10 @@ class MetaWhatsappConversationRepository {
         return data ? mapRow(asRow(data)) : null;
     }
     async upsertForContact(input) {
-        const existing = (await this.findByTenantContact(input.tenantId, input.contactWaId)) ||
-            (await this.findByTenantConnectionContact(input.tenantId, input.connectionId, input.contactWaId));
+        const phoneNumberId = String(input.phoneNumberId || "").trim();
+        const existing = phoneNumberId
+            ? await this.findByTenantPhoneContact(input.tenantId, phoneNumberId, input.contactWaId)
+            : await this.findByTenantConnectionContact(input.tenantId, input.connectionId, input.contactWaId);
         if (existing) {
             const unread = input.inbound ? existing.unreadCount + 1 : existing.unreadCount;
             const { data, error } = await this.client()

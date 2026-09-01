@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 11:35 — Inbox separa fio por número oficial
+- Conversa = `tenant_id + phone_number_id + contact_wa_id`.
+- Drax e Walkup não compartilham mais o fio do mesmo contato.
+- Migration: `doc/SQL-2026-09-01__split-meta-inbox-by-phone-number.sql`
+- Marker: `DEPLOY-2026-09-01-113500-meta-inbox-fio-por-numero`
+- LOG: `doc/LOG-2026-09-01__113500__meta-inbox-separar-conversa-por-numero.md`
+
 ## 2026-09-01 01:15 — Atendimento em três colunas
 - Layout: Números → Contatos → Conversa.
 - Dados do contato em painel lateral recolhível, acionado por ícone discreto.

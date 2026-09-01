@@ -156,6 +156,16 @@ class FakeConversations {
       null
     );
   }
+  async findByTenantPhoneContact(tenantId: string, phoneNumberId: string, contactWaId: string) {
+    return (
+      this.rows.find(
+        (row) =>
+          row.tenantId === tenantId &&
+          row.phoneNumberId === phoneNumberId &&
+          row.contactWaId === contactWaId,
+      ) || null
+    );
+  }
   async findByTenantConnectionContact(tenantId: string, connectionId: string, contactWaId: string) {
     return (
       this.rows.find(
@@ -242,9 +252,10 @@ class FakeConversations {
     atIso: string;
     lastMessagePreview?: string | null;
   }) {
-    const existing =
-      (await this.findByTenantContact(input.tenantId, input.contactWaId)) ||
-      (await this.findByTenantConnectionContact(input.tenantId, input.connectionId, input.contactWaId));
+    const phoneNumberId = String(input.phoneNumberId || "").trim();
+    const existing = phoneNumberId
+      ? await this.findByTenantPhoneContact(input.tenantId, phoneNumberId, input.contactWaId)
+      : await this.findByTenantConnectionContact(input.tenantId, input.connectionId, input.contactWaId);
     if (existing) {
       existing.lastMessageAt = input.atIso;
       if (input.phoneNumberId) existing.phoneNumberId = input.phoneNumberId;
@@ -518,6 +529,59 @@ describe("fase 8 DTO público", () => {
 });
 
 describe("fase 8 canais do Inbox", () => {
+  it("separa o mesmo contato por número oficial receptor", async () => {
+    purgePhoneIdentities(TENANT_A);
+    writePhoneIdentity(TENANT_A, "phone-drax", { inboxEnabled: true, channelName: "Drax" });
+    writePhoneIdentity(TENANT_A, "phone-walkup", { inboxEnabled: true, channelName: "Walkup" });
+    const conversations = new FakeConversations();
+    const messages = new FakeMessages();
+    const webhookInbox = new MetaWhatsappWebhookInboxService(conversations as any, messages as any);
+    const baseEvent = {
+      eventType: "messages",
+      wabaId: "waba-a",
+      status: null,
+      timestamp: "1710000000",
+      recipientId: null,
+      conversationId: null,
+      pricingCategory: null,
+      errorCode: null,
+      qualityRating: null,
+      verifiedName: null,
+      messageType: "text",
+      fromWaId: "5551999111111",
+      contactName: "Marcelo",
+    };
+
+    await webhookInbox.persistInbound({
+      connection: connectedRow({ id: "conn-drax", phoneNumberId: "phone-drax" }),
+      event: {
+        ...baseEvent,
+        eventKey: "msg:drax",
+        phoneNumberId: "phone-drax",
+        messageId: "wamid.DRAX",
+        textContent: "Mensagem para Drax",
+      } as any,
+    });
+    await webhookInbox.persistInbound({
+      connection: connectedRow({ id: "conn-walkup", phoneNumberId: "phone-walkup" }),
+      event: {
+        ...baseEvent,
+        eventKey: "msg:walkup",
+        phoneNumberId: "phone-walkup",
+        messageId: "wamid.WALKUP",
+        textContent: "Mensagem para Walkup",
+      } as any,
+    });
+
+    assert.equal(conversations.rows.length, 2);
+    assert.deepEqual(
+      conversations.rows.map((row) => row.phoneNumberId).sort(),
+      ["phone-drax", "phone-walkup"],
+    );
+    assert.notEqual(messages.rows[0]?.conversationId, messages.rows[1]?.conversationId);
+    purgePhoneIdentities(TENANT_A);
+  });
+
   it("só incorpora o número no Inbox depois de ligar o switch", async () => {
     purgePhoneIdentities(TENANT_A);
     const connections = new FakeConnections();
