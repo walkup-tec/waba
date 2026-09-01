@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 18:55 — Logo Meta do modal = infinito do sistema
+- SVG do botão Conectar Portfólio no modal de envio; saiu o desenho + PNG que pareciam dois ícones.
+- Marker: `DEPLOY-2026-09-01-185500-logo-meta-infinito`
+- LOG: `doc/LOG-2026-09-01__185500__logo-meta-modal-infinito.md`
+
 ## 2026-09-01 18:48 — Modal de envio à Meta (sem alert nativo)
 - `window.confirm` do cadastro das 3 opções saiu; overlay no estilo do sistema com processando (logo Meta), erro e sucesso (prazo de até 24 h).
 - A tentativa DG01+Imagem falhou na validação local (`template_invalid`), em geral handle da mídia ou URL sem https — não foi recusa da análise da Meta.
