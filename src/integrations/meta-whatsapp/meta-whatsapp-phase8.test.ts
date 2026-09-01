@@ -623,7 +623,8 @@ describe("fase 8 canais do Inbox", () => {
     const afterSend = await inbox.listConversations(auth(EMAIL_A), {});
     assert.equal(afterSend.conversations.length, 1);
     assert.equal(afterSend.channels[0]?.displayPhoneNumber, "+55 51 8200-1279");
-    assert.equal(afterSend.channels[0]?.name, "Drax Sistema");
+    // verified_name da conexão tem prioridade sobre channelName local do switch
+    assert.equal(afterSend.channels[0]?.name, "Loja");
     assert.match(String(afterSend.conversations[0]?.channelPhone || ""), /8200-1279/);
 
     await webhookInbox.persistInbound({
@@ -660,6 +661,7 @@ describe("fase 8 canais do Inbox", () => {
   });
 
   it("envio Cloud e resposta no Inbox usam o chip ligado mesmo se a conexão tiver outro phone id", async () => {
+    purgePhoneIdentities(TENANT_A);
     writePhoneIdentity(TENANT_A, "phone-chip", {
       inboxEnabled: true,
       channelName: "Drax Sistema",

@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 00:56 — Inbox inbound: webhook em todas as WABAs
+- Causa: `subscribed_apps` só na conexão mais recente → 2º número oficial sem webhook.
+- Fix: inscrever todas as WABAs ao ligar Inbox / abrir Atendimento; toggle manda `connectionId`.
+- Marker: `DEPLOY-2026-09-01-005600-meta-inbox-webhook-all-wabas`
+- LOG: `doc/LOG-2026-09-01__005600__inbox-inbound-subscribed-apps-all-wabas.md`
+
 ## 2026-09-01 00:38 — Rule push GitHub automático (GITHUB_TOKEN)
 - Rule alwaysApply: `.cursor/rules/waba-github-easypanel-push.mdc`
 - Skill: `.cursor/skills/waba-github-push/` — script `scripts/git-push-github-master.sh`

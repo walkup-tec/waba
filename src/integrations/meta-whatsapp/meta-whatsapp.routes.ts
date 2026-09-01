@@ -258,14 +258,20 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
         enabled: enabledRaw === true || enabledRaw === false ? enabledRaw : undefined,
         displayPhoneNumber: String(req.body?.displayPhoneNumber || req.body?.display_phone_number || "").trim(),
         channelName: String(req.body?.channelName || req.body?.channel_name || "").trim(),
+        connectionId: String(req.body?.connectionId || req.body?.connection_id || "").trim(),
       });
-      let webhooks: { subscribed: boolean; alreadySubscribed: boolean; detail?: string } | undefined;
+      let webhooks: { subscribed: boolean; alreadySubscribed: boolean; detail?: string; wabaCount?: number } | undefined;
       if (result.inboxEnabled) {
-        webhooks = await service.subscribeWebhooksFromAuth(auth).catch(() => ({
-          subscribed: false,
-          alreadySubscribed: false,
-          detail: "Falha ao inscrever webhooks.",
-        }));
+        webhooks = await service
+          .subscribeWebhooksFromAuth(auth, {
+            connectionId: String(req.body?.connectionId || req.body?.connection_id || "").trim(),
+            phoneNumberId: result.phoneNumberId,
+          })
+          .catch(() => ({
+            subscribed: false,
+            alreadySubscribed: false,
+            detail: "Falha ao inscrever webhooks.",
+          }));
       }
       return sendPublic(res, 200, { ok: true, ...result, webhooks });
     } catch (error) {

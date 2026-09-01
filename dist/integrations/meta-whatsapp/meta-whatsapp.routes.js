@@ -240,10 +240,16 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
                 enabled: enabledRaw === true || enabledRaw === false ? enabledRaw : undefined,
                 displayPhoneNumber: String(req.body?.displayPhoneNumber || req.body?.display_phone_number || "").trim(),
                 channelName: String(req.body?.channelName || req.body?.channel_name || "").trim(),
+                connectionId: String(req.body?.connectionId || req.body?.connection_id || "").trim(),
             });
             let webhooks;
             if (result.inboxEnabled) {
-                webhooks = await service.subscribeWebhooksFromAuth(auth).catch(() => ({
+                webhooks = await service
+                    .subscribeWebhooksFromAuth(auth, {
+                    connectionId: String(req.body?.connectionId || req.body?.connection_id || "").trim(),
+                    phoneNumberId: result.phoneNumberId,
+                })
+                    .catch(() => ({
                     subscribed: false,
                     alreadySubscribed: false,
                     detail: "Falha ao inscrever webhooks.",

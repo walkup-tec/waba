@@ -4,6 +4,7 @@ exports.MetaWhatsappConnectionService = void 0;
 exports.toMetaWhatsappUiStatus = toMetaWhatsappUiStatus;
 exports.toMetaWhatsappPublicConnection = toMetaWhatsappPublicConnection;
 exports.stripMetaSecrets = stripMetaSecrets;
+exports.pickConnectionsForWebhookSubscribe = pickConnectionsForWebhookSubscribe;
 const meta_config_1 = require("./meta-config");
 const meta_token_crypto_1 = require("./meta-token-crypto");
 const meta_whatsapp_oauth_1 = require("./meta-whatsapp-oauth");
@@ -358,14 +359,46 @@ function wabaIdFromPhoneJson(json) {
     }
     return "";
 }
+/** Uma conexão elegível por WABA (preferred connectionId / phoneNumberId primeiro). */
+function pickConnectionsForWebhookSubscribe(open, opts) {
+    const preferredId = String(opts?.connectionId || "").trim();
+    const phone = String(opts?.phoneNumberId || "").trim();
+    const eligible = open.filter((row) => {
+        if (row.disconnectedAt)
+            return false;
+        if (!String(row.wabaId || "").trim())
+            return false;
+        return row.status === "connected" || row.status === "pending_confirmation";
+    });
+    const score = (row) => {
+        let n = 0;
+        if (preferredId && row.id === preferredId)
+            n += 2;
+        if (phone && String(row.phoneNumberId || "").trim() === phone)
+            n += 1;
+        return n;
+    };
+    const sorted = [...eligible].sort((a, b) => score(b) - score(a) || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+    const seen = new Set();
+    const out = [];
+    for (const row of sorted) {
+        const waba = String(row.wabaId || "").trim();
+        if (seen.has(waba))
+            continue;
+        seen.add(waba);
+        out.push(row);
+    }
+    return out;
+}
 class MetaWhatsappConnectionService {
-    constructor(repository = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), oauth = { exchangeEmbeddedSignupCode: meta_whatsapp_oauth_1.exchangeEmbeddedSignupCode }, graph = (input) => (0, meta_whatsapp_graph_client_1.callMetaGraphJson)(input), decrypt = meta_token_crypto_1.decryptMetaToken, uploadImage = meta_whatsapp_resumable_upload_1.uploadMetaResumableImage, setPagePicture = meta_whatsapp_resumable_upload_1.publishMetaPageProfilePicture) {
+    constructor(repository = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), oauth = { exchangeEmbeddedSignupCode: meta_whatsapp_oauth_1.exchangeEmbeddedSignupCode }, graph = (input) => (0, meta_whatsapp_graph_client_1.callMetaGraphJson)(input), decrypt = meta_token_crypto_1.decryptMetaToken, uploadImage = meta_whatsapp_resumable_upload_1.uploadMetaResumableImage, setPagePicture = meta_whatsapp_resumable_upload_1.publishMetaPageProfilePicture, webhookSubscriptions = new meta_whatsapp_webhook_subscription_service_1.MetaWhatsappWebhookSubscriptionService()) {
         this.repository = repository;
         this.oauth = oauth;
         this.graph = graph;
         this.decrypt = decrypt;
         this.uploadImage = uploadImage;
         this.setPagePicture = setPagePicture;
+        this.webhookSubscriptions = webhookSubscriptions;
     }
     startAuthenticatedFlow(auth) {
         const tenant = requireTenant(auth);
@@ -711,7 +744,12 @@ class MetaWhatsappConnectionService {
         if (!phoneNumberId || typeof input.enabled !== "boolean") {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         }
-        const open = await this.repository.findOpenByTenant(tenant.tenantId);
+        const openRows = await this.repository.listOpenByTenant(tenant.tenantId);
+        const preferredId = String(input.connectionId || "").trim();
+        const open = (preferredId ? openRows.find((row) => row.id === preferredId) : undefined) ||
+            openRows.find((row) => String(row.phoneNumberId || "").trim() === phoneNumberId) ||
+            openRows[0] ||
+            null;
         if (!open)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("no_pending_connection");
         const current = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenant.tenantId, phoneNumberId);
@@ -736,22 +774,41 @@ class MetaWhatsappConnectionService {
             channelName: saved.channelName,
         };
     }
-    async subscribeWebhooksFromAuth(auth) {
+    async subscribeWebhooksFromAuth(auth, opts) {
         const tenant = requireTenant(auth);
-        const open = await this.repository.findOpenByTenant(tenant.tenantId);
-        if (!open?.wabaId ||
-            (open.status !== "connected" && open.status !== "pending_confirmation")) {
+        const openRows = await this.repository.listOpenByTenant(tenant.tenantId);
+        const targets = pickConnectionsForWebhookSubscribe(openRows, opts);
+        if (!targets.length) {
             return {
                 subscribed: false,
                 alreadySubscribed: false,
                 detail: "WABA ainda não confirmada.",
+                wabaCount: 0,
             };
         }
-        const result = await new meta_whatsapp_webhook_subscription_service_1.MetaWhatsappWebhookSubscriptionService().ensureSubscribed(open);
+        let anyOk = false;
+        let allAlready = true;
+        const details = [];
+        for (const connection of targets) {
+            const result = await this.webhookSubscriptions.ensureSubscribed(connection);
+            if (result.ok)
+                anyOk = true;
+            if (!result.alreadySubscribed)
+                allAlready = false;
+            if (result.detail)
+                details.push(result.detail);
+            if (!result.ok) {
+                (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("webhook-subscribe-failed", {
+                    tenantId: tenant.tenantId,
+                    connectionId: connection.id,
+                });
+            }
+        }
         return {
-            subscribed: result.subscribed,
-            alreadySubscribed: result.alreadySubscribed,
-            detail: result.detail,
+            subscribed: anyOk,
+            alreadySubscribed: anyOk && allAlready,
+            detail: anyOk ? undefined : details[0] || "Falha ao inscrever webhooks.",
+            wabaCount: targets.length,
         };
     }
     async readPortfolioPhotoFromAuth(auth, businessId) {

@@ -5,6 +5,7 @@ import { MetaWhatsappConversationRepository } from "./meta-whatsapp-conversation
 import { MetaWhatsappMessageRepository } from "./meta-whatsapp-message.repository";
 import { MetaWhatsappMessagingService } from "./meta-whatsapp-messaging.service";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
+import { MetaWhatsappWebhookSubscriptionService } from "./meta-whatsapp-webhook-subscription.service";
 import { logMetaInbox } from "./meta-whatsapp-inbox-log";
 import { readMetaInboxPollMs } from "./meta-config";
 import { resolveCustomerCareWindow } from "./meta-whatsapp-customer-care-window";
@@ -19,9 +20,13 @@ import {
 } from "./meta-whatsapp-inbox.types";
 import type { MetaConversationRecord, MetaConversationStatus } from "./meta-whatsapp-messaging.types";
 import type { MetaSendPublicResult } from "./meta-whatsapp-messaging.service";
+import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
+import { pickConnectionsForWebhookSubscribe } from "./meta-whatsapp-connection.service";
 
 const FILTERS = new Set<MetaInboxFilter>(["all", "unread", "open", "pending", "closed", "mine"]);
 const STATUSES = new Set<MetaConversationStatus>(["open", "pending", "closed"]);
+const inboxWebhookEnsureAt = new Map<string, number>();
+const INBOX_WEBHOOK_ENSURE_MS = 60_000;
 
 function requireTenant(auth: WabaRequestAuth) {
   try {
@@ -124,6 +129,27 @@ export class MetaWhatsappInboxService {
     return row;
   }
 
+  /** Garante subscribed_apps em todas as WABAs abertas (throttle 60s) para inbound chegar no Atendimento. */
+  private async ensureWebhooksForOpenConnections(
+    tenantId: string,
+    open: MetaWhatsappConnectionRecord[],
+  ): Promise<void> {
+    const now = Date.now();
+    const last = inboxWebhookEnsureAt.get(tenantId) || 0;
+    if (now - last < INBOX_WEBHOOK_ENSURE_MS) return;
+    inboxWebhookEnsureAt.set(tenantId, now);
+    const targets = pickConnectionsForWebhookSubscribe(open);
+    if (!targets.length) return;
+    const sub = new MetaWhatsappWebhookSubscriptionService();
+    for (const connection of targets) {
+      try {
+        await sub.ensureSubscribed(connection);
+      } catch {
+        logMetaInbox("ERROR", { reason: "webhook_ensure_fail", tenantId, connectionId: connection.id });
+      }
+    }
+  }
+
   async requireConnected(tenantId: string) {
     const connected = await this.connections.findConnectedByTenant(tenantId);
     if (canServeInbox(connected, tenantId) && connected) return connected;
@@ -135,6 +161,7 @@ export class MetaWhatsappInboxService {
   async listConversations(auth: WabaRequestAuth, query: Record<string, unknown> | undefined) {
     const tenant = requireTenant(auth);
     const open = await this.inboxConnections(tenant.tenantId);
+    void this.ensureWebhooksForOpenConnections(tenant.tenantId, open);
     const connection = open[0];
     const filter = parseFilter(query?.filter);
     const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();

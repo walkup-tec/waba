@@ -756,7 +756,14 @@ describe("meta portfolio service", () => {
   it("liga o Inbox sem consultar a Graph", async () => {
     let graphCalls = 0;
     const service = new MetaWhatsappConnectionService(
-      { async findOpenByTenant() { return connectedRow(); } } as any,
+      {
+        async findOpenByTenant() {
+          return connectedRow();
+        },
+        async listOpenByTenant() {
+          return [connectedRow()];
+        },
+      } as any,
       { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
       (async () => {
         graphCalls += 1;

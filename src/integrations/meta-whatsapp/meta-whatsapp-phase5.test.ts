@@ -9,6 +9,10 @@ import {
 } from "./meta-whatsapp-webhook-signature";
 import { parseMetaWebhookPayload, hashRawPayload } from "./meta-whatsapp-webhook-parser";
 import { MetaWhatsappWebhookSubscriptionService } from "./meta-whatsapp-webhook-subscription.service";
+import {
+  MetaWhatsappConnectionService,
+  pickConnectionsForWebhookSubscribe,
+} from "./meta-whatsapp-connection.service";
 
 function sign(secret: string, raw: Buffer): string {
   return `sha256=${computeMetaHubSignatureHex(secret, raw)}`;
@@ -418,6 +422,59 @@ describe("meta webhook subscription", () => {
     assert.equal(result.alreadySubscribed, false);
     assert.deepEqual(calls, ["GET:waba-1/subscribed_apps", "POST:waba-1/subscribed_apps"]);
     assert.equal(bodies[1], undefined);
+  });
+});
+
+describe("multi-WABA webhook subscribe para Inbox", () => {
+  it("pickConnectionsForWebhookSubscribe deduplica por WABA e prioriza connectionId", () => {
+    const a = connectedRow({ id: "conn-a", wabaId: "waba-a", phoneNumberId: "phone-a", updatedAt: "2026-01-01T00:00:00.000Z" });
+    const b = connectedRow({ id: "conn-b", wabaId: "waba-b", phoneNumberId: "phone-b", updatedAt: "2026-01-02T00:00:00.000Z" });
+    const aDup = connectedRow({ id: "conn-a2", wabaId: "waba-a", phoneNumberId: "phone-a2", updatedAt: "2026-01-03T00:00:00.000Z" });
+    const picked = pickConnectionsForWebhookSubscribe([a, b, aDup], { connectionId: "conn-a", phoneNumberId: "phone-a" });
+    assert.equal(picked.length, 2);
+    assert.equal(picked[0]?.id, "conn-a");
+    assert.equal(picked.some((row) => row.wabaId === "waba-b"), true);
+  });
+
+  it("subscribeWebhooksFromAuth inscreve todas as WABAs abertas", async () => {
+    const ensured: string[] = [];
+    const repo = {
+      async listOpenByTenant() {
+        return [
+          connectedRow({ id: "conn-a", wabaId: "waba-a", phoneNumberId: "phone-a" }),
+          connectedRow({ id: "conn-b", wabaId: "waba-b", phoneNumberId: "phone-b" }),
+        ];
+      },
+      async findOpenByTenant() {
+        return connectedRow({ id: "conn-b", wabaId: "waba-b", phoneNumberId: "phone-b" });
+      },
+    };
+    const webhookSubscriptions = {
+      async ensureSubscribed(connection: MetaWhatsappConnectionRecord) {
+        ensured.push(String(connection.wabaId));
+        return { ok: true, alreadySubscribed: false, subscribed: true };
+      },
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      (async () => ({ ok: true, status: 200, json: {} })) as any,
+      undefined as any,
+      undefined as any,
+      undefined as any,
+      webhookSubscriptions as any,
+    );
+    const auth = {
+      email: "tenant@example.com",
+      role: "subscriber",
+    } as any;
+    const result = await service.subscribeWebhooksFromAuth(auth, {
+      connectionId: "conn-a",
+      phoneNumberId: "phone-a",
+    });
+    assert.equal(result.subscribed, true);
+    assert.equal(result.wabaCount, 2);
+    assert.deepEqual(ensured.sort(), ["waba-a", "waba-b"]);
   });
 });
 

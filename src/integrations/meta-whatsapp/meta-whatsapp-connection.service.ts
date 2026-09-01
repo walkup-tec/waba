@@ -463,6 +463,36 @@ function wabaIdFromPhoneJson(json: unknown): string {
   return "";
 }
 
+/** Uma conexão elegível por WABA (preferred connectionId / phoneNumberId primeiro). */
+export function pickConnectionsForWebhookSubscribe(
+  open: MetaWhatsappConnectionRecord[],
+  opts?: { connectionId?: string | null; phoneNumberId?: string | null },
+): MetaWhatsappConnectionRecord[] {
+  const preferredId = String(opts?.connectionId || "").trim();
+  const phone = String(opts?.phoneNumberId || "").trim();
+  const eligible = open.filter((row) => {
+    if (row.disconnectedAt) return false;
+    if (!String(row.wabaId || "").trim()) return false;
+    return row.status === "connected" || row.status === "pending_confirmation";
+  });
+  const score = (row: MetaWhatsappConnectionRecord): number => {
+    let n = 0;
+    if (preferredId && row.id === preferredId) n += 2;
+    if (phone && String(row.phoneNumberId || "").trim() === phone) n += 1;
+    return n;
+  };
+  const sorted = [...eligible].sort((a, b) => score(b) - score(a) || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+  const seen = new Set<string>();
+  const out: MetaWhatsappConnectionRecord[] = [];
+  for (const row of sorted) {
+    const waba = String(row.wabaId || "").trim();
+    if (seen.has(waba)) continue;
+    seen.add(waba);
+    out.push(row);
+  }
+  return out;
+}
+
 export class MetaWhatsappConnectionService {
   constructor(
     private readonly repository = new MetaWhatsappConnectionRepository(),
@@ -471,6 +501,7 @@ export class MetaWhatsappConnectionService {
     private readonly decrypt = decryptMetaToken,
     private readonly uploadImage = uploadMetaResumableImage,
     private readonly setPagePicture = publishMetaPageProfilePicture,
+    private readonly webhookSubscriptions = new MetaWhatsappWebhookSubscriptionService(),
   ) {}
 
   startAuthenticatedFlow(auth: WabaRequestAuth): {
@@ -870,6 +901,7 @@ export class MetaWhatsappConnectionService {
       enabled?: boolean;
       displayPhoneNumber?: string;
       channelName?: string;
+      connectionId?: string;
     },
   ): Promise<{
     phoneNumberId: string;
@@ -882,7 +914,13 @@ export class MetaWhatsappConnectionService {
     if (!phoneNumberId || typeof input.enabled !== "boolean") {
       throw new MetaWhatsappError("invalid_payload");
     }
-    const open = await this.repository.findOpenByTenant(tenant.tenantId);
+    const openRows = await this.repository.listOpenByTenant(tenant.tenantId);
+    const preferredId = String(input.connectionId || "").trim();
+    const open =
+      (preferredId ? openRows.find((row) => row.id === preferredId) : undefined) ||
+      openRows.find((row) => String(row.phoneNumberId || "").trim() === phoneNumberId) ||
+      openRows[0] ||
+      null;
     if (!open) throw new MetaWhatsappError("no_pending_connection");
     const current = readPhoneIdentity(tenant.tenantId, phoneNumberId);
     const displayPhoneNumber =
@@ -909,28 +947,46 @@ export class MetaWhatsappConnectionService {
     };
   }
 
-  async subscribeWebhooksFromAuth(auth: WabaRequestAuth): Promise<{
+  async subscribeWebhooksFromAuth(
+    auth: WabaRequestAuth,
+    opts?: { connectionId?: string | null; phoneNumberId?: string | null },
+  ): Promise<{
     subscribed: boolean;
     alreadySubscribed: boolean;
     detail?: string;
+    wabaCount?: number;
   }> {
     const tenant = requireTenant(auth);
-    const open = await this.repository.findOpenByTenant(tenant.tenantId);
-    if (
-      !open?.wabaId ||
-      (open.status !== "connected" && open.status !== "pending_confirmation")
-    ) {
+    const openRows = await this.repository.listOpenByTenant(tenant.tenantId);
+    const targets = pickConnectionsForWebhookSubscribe(openRows, opts);
+    if (!targets.length) {
       return {
         subscribed: false,
         alreadySubscribed: false,
         detail: "WABA ainda não confirmada.",
+        wabaCount: 0,
       };
     }
-    const result = await new MetaWhatsappWebhookSubscriptionService().ensureSubscribed(open);
+    let anyOk = false;
+    let allAlready = true;
+    const details: string[] = [];
+    for (const connection of targets) {
+      const result = await this.webhookSubscriptions.ensureSubscribed(connection);
+      if (result.ok) anyOk = true;
+      if (!result.alreadySubscribed) allAlready = false;
+      if (result.detail) details.push(result.detail);
+      if (!result.ok) {
+        logMetaWhatsappSafe("webhook-subscribe-failed", {
+          tenantId: tenant.tenantId,
+          connectionId: connection.id,
+        });
+      }
+    }
     return {
-      subscribed: result.subscribed,
-      alreadySubscribed: result.alreadySubscribed,
-      detail: result.detail,
+      subscribed: anyOk,
+      alreadySubscribed: anyOk && allAlready,
+      detail: anyOk ? undefined : details[0] || "Falha ao inscrever webhooks.",
+      wabaCount: targets.length,
     };
   }
 
