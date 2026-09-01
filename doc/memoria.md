@@ -1,9 +1,14 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 16:22 — Marker personalizado do assistente Utility
+- Marker: `DEPLOY-2026-09-01-162200-ia-3-utility-do-texto-base`
+- Validar em `GET /health` após o deploy (`deployMarker`).
+- LOG: `doc/LOG-2026-09-01__162200__personalizar-deploy-marker-utility.md`
+
 ## 2026-09-01 15:50 — IA reescreve texto base em 3 Utility
 - Não recusa texto promocional: mantém o tema e ancora em evento anterior.
 - Três abordagens: atualização, resultado, acompanhamento + botão QUICK_REPLY.
-- Marker: `DEPLOY-2026-09-01-155000-meta-template-ai-reescrever-utility`
+- Marker: `DEPLOY-2026-09-01-162200-ia-3-utility-do-texto-base`
 - LOG: `doc/LOG-2026-09-01__155000__meta-template-ia-reescrever-utility.md`
 
 ## 2026-09-01 13:40 — Assistente IA de templates Utility
