@@ -18,10 +18,32 @@ import {
   META_TEMPLATE_AI_SCHEMA_NAME,
   validateMetaTemplateAiOutput,
 } from "./meta-whatsapp-template-ai.schema";
+import {
+  componentsFromAiOptionAndShell,
+  parseMetaTemplateAiShell,
+  templateNameForOption,
+} from "./meta-whatsapp-template-ai-shell";
 import type { MetaTemplateAiOption, MetaTemplateAiPublicResult } from "./meta-whatsapp-template-ai.types";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
 import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
+import { decryptMetaToken } from "./meta-token-crypto";
+import { readMetaAppId } from "./meta-config";
+import { uploadMetaResumableImage } from "./meta-whatsapp-resumable-upload";
+
+const MEDIA_MIME: Record<string, Set<string>> = {
+  IMAGE: new Set(["image/jpeg", "image/jpg", "image/png"]),
+  VIDEO: new Set(["video/mp4"]),
+  DOCUMENT: new Set(["application/pdf"]),
+};
+
+type HeaderUploader = (input: {
+  token: string;
+  appId: string;
+  fileName: string;
+  mime: string;
+  bytes: Buffer;
+}) => Promise<{ handle: string }>;
 
 type StructuredCaller = (request: Parameters<typeof callOpenAiStructured>[0]) => Promise<OpenAiStructuredResult>;
 
@@ -83,6 +105,8 @@ export class MetaWhatsappTemplateAiService {
     private readonly analyses = new MetaWhatsappTemplateAiRepository(),
     private readonly openAi: StructuredCaller = callOpenAiStructured,
     private readonly templates = new MetaWhatsappTemplateService(),
+    private readonly decrypt = decryptMetaToken,
+    private readonly uploadHeader = uploadMetaResumableImage as HeaderUploader,
   ) {}
 
   private async requirePortfolio(
@@ -113,7 +137,11 @@ export class MetaWhatsappTemplateAiService {
     const connectionId = String(input?.connectionId || input?.connection_id || "").trim();
     const baseText = String(input?.baseText || input?.base_text || "").trim();
     const language = String(input?.language || "pt_BR").trim() || "pt_BR";
+    const variableType = String(input?.variableType || input?.variable_type || "nome").trim().toLowerCase();
     if (!baseText || baseText.length > 4_000 || language.length > 20) {
+      throw new MetaWhatsappError("invalid_payload");
+    }
+    if (variableType !== "nome" && variableType !== "numero") {
       throw new MetaWhatsappError("invalid_payload");
     }
     const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
@@ -126,6 +154,7 @@ export class MetaWhatsappTemplateAiService {
         input: JSON.stringify({
           requestedCategory: "UTILITY",
           language,
+          variableType,
           baseText,
         }),
         schemaName: META_TEMPLATE_AI_SCHEMA_NAME,
@@ -220,6 +249,7 @@ export class MetaWhatsappTemplateAiService {
     const connectionId = String(input?.connectionId || input?.connection_id || "").trim();
     const analysisId = String(input?.analysisId || input?.analysis_id || "").trim();
     if (!connectionId || !analysisId) throw new MetaWhatsappError("invalid_payload");
+    const shell = parseMetaTemplateAiShell(input);
     await this.requirePortfolio(tenant.tenantId, connectionId);
     const analysis = await this.analyses.findForSubmission(
       tenant.tenantId,
@@ -251,10 +281,11 @@ export class MetaWhatsappTemplateAiService {
     );
     for (let index = 0; index < analysis.result.options.length; index += 1) {
       const option = analysis.result.options[index];
-      if (alreadySubmitted.has(option.name)) {
+      const name = templateNameForOption(shell.modelName, index);
+      if (alreadySubmitted.has(name)) {
         results.push({
           index,
-          name: option.name,
+          name,
           ok: true,
           status: "ALREADY_SUBMITTED",
           templateId: null,
@@ -266,14 +297,15 @@ export class MetaWhatsappTemplateAiService {
         const template = await this.templates.createFromAuth(auth, {
           connectionId,
           aiAnalysisId: analysisId,
-          name: option.name,
+          aiOptionIndex: index,
+          name,
           language: analysis.language,
           category: "UTILITY",
-          components: componentsFromAiOption(option),
+          components: componentsFromAiOptionAndShell(option, shell),
         });
         results.push({
           index,
-          name: option.name,
+          name,
           ok: true,
           status: template.status,
           templateId: template.id,
@@ -282,7 +314,7 @@ export class MetaWhatsappTemplateAiService {
       } catch (error) {
         results.push({
           index,
-          name: option.name,
+          name,
           ok: false,
           status: null,
           templateId: null,
@@ -306,5 +338,52 @@ export class MetaWhatsappTemplateAiService {
       failed: results.length - submitted,
       results,
     };
+  }
+
+  async uploadHeaderMediaFromAuth(
+    auth: WabaRequestAuth,
+    input: {
+      connectionId?: string;
+      mediaFormat?: string;
+      fileName?: string;
+      mime?: string;
+      bytes?: Buffer;
+    },
+  ): Promise<{ handle: string; mediaFormat: string }> {
+    const tenant = requireTenant(auth);
+    const connectionId = String(input.connectionId || "").trim();
+    const mediaFormat = String(input.mediaFormat || "").trim().toUpperCase();
+    const allowed = MEDIA_MIME[mediaFormat];
+    const mime = String(input.mime || "").trim().toLowerCase();
+    const bytes = input.bytes;
+    const fileName = String(input.fileName || "header").trim() || "header";
+    if (!connectionId || !allowed || !bytes?.length || !allowed.has(mime)) {
+      throw new MetaWhatsappError("invalid_payload");
+    }
+    const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
+    const appId = readMetaAppId();
+    if (!appId) throw new MetaWhatsappError("config_invalid");
+    let token = "";
+    try {
+      token = this.decrypt(connection.accessTokenEncrypted);
+    } catch {
+      throw new MetaWhatsappError("invalid_token");
+    }
+    try {
+      const uploaded = await this.uploadHeader({
+        token,
+        appId,
+        fileName,
+        mime,
+        bytes,
+      });
+      const handle = String(uploaded.handle || "").trim();
+      if (!handle) throw new MetaWhatsappError("template_invalid");
+      logMetaTemplate("AI", { tenantId: tenant.tenantId, connectionId, headerUpload: mediaFormat });
+      return { handle, mediaFormat };
+    } catch (error) {
+      if (error instanceof MetaWhatsappError) throw error;
+      throw new MetaWhatsappError("template_invalid");
+    }
   }
 }

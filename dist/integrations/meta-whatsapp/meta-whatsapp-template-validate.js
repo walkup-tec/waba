@@ -7,7 +7,7 @@ const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const NAME_RE = /^[a-z0-9_]{1,512}$/;
 const CREATE_CATEGORIES = new Set(["MARKETING", "UTILITY", "AUTHENTICATION"]);
 const COMPONENT_TYPES = new Set(["HEADER", "BODY", "FOOTER", "BUTTONS"]);
-const HEADER_FORMATS = new Set(["TEXT"]);
+const HEADER_FORMATS = new Set(["TEXT", "IMAGE", "VIDEO", "DOCUMENT", "LOCATION"]);
 const BUTTON_TYPES = new Set(["QUICK_REPLY", "URL", "PHONE_NUMBER"]);
 function asRecord(value) {
     return value && typeof value === "object" && !Array.isArray(value)
@@ -95,6 +95,16 @@ function sanitizeComponent(raw) {
         const format = String(row.format || "TEXT").trim().toUpperCase();
         if (!HEADER_FORMATS.has(format))
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+        if (format === "LOCATION")
+            return { type, format };
+        if (format === "IMAGE" || format === "VIDEO" || format === "DOCUMENT") {
+            const example = asRecord(row.example);
+            const handles = Array.isArray(example.header_handle) ? example.header_handle : [];
+            const handle = String(handles[0] || "").trim();
+            if (!handle)
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+            return { type, format, example: { header_handle: [handle] } };
+        }
         const text = String(row.text || "").trim();
         if (!text)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");

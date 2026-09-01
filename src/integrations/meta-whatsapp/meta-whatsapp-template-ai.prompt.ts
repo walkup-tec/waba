@@ -1,4 +1,4 @@
-export const META_TEMPLATE_AI_PROMPT_VERSION = "1.1";
+export const META_TEMPLATE_AI_PROMPT_VERSION = "1.2";
 export const META_TEMPLATE_AI_POLICY_VERSION =
   String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-reframe-2026-09").trim();
 
@@ -45,10 +45,11 @@ Como formatar:
   1) atualização da solicitação;
   2) resultado disponível;
   3) acompanhamento.
-- Cada opção: BODY objetivo + um botão QUICK_REPLY operacional (ex.: Consultar
-  solicitação, Ver resultado, Acompanhar solicitação).
-- Use {{1}} para o nome do destinatário. variableExamples deve ter um exemplo
-  para cada placeholder, na ordem. Sem placeholder, [].
+- Cada opção: BODY objetivo. O botão na Meta será sempre URL (Acessar site),
+  estático; não invente QUICK_REPLY nem um destino diferente.
+- Use {{1}} conforme variableType do pedido: "nome" = primeiro nome;
+  "numero" = número (telefone ou protocolo). variableExamples deve ter um
+  exemplo para cada placeholder, na ordem. Sem placeholder, [].
 - Nomes: somente letras minúsculas, números e underscore, únicos entre as 3.
 
 EXEMPLO DE REESCRITA (siga o padrão, não copie se o tema for outro):

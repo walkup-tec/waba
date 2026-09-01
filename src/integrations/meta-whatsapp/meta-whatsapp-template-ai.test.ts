@@ -12,6 +12,11 @@ import {
   validateMetaTemplateAiOutput,
 } from "./meta-whatsapp-template-ai.schema";
 import { buildMetaTemplateAiInstructions } from "./meta-whatsapp-template-ai.prompt";
+import {
+  componentsFromAiOptionAndShell,
+  parseMetaTemplateAiShell,
+  templateNameForOption,
+} from "./meta-whatsapp-template-ai-shell";
 
 const previousKey = process.env.OPENAI_API_KEY;
 const previousLimit = process.env.META_TEMPLATE_AI_RATE_LIMIT_PER_MINUTE;
@@ -153,6 +158,20 @@ function serviceFor(
   };
 }
 
+function submitShell(overrides: Record<string, unknown> = {}) {
+  return {
+    connectionId: "conn-utility",
+    analysisId: "analysis-1",
+    modelName: "retorno_lead",
+    variableType: "nome",
+    mediaFormat: "NONE",
+    headerText: "Atualização da solicitação",
+    buttonText: "Quero saber mais",
+    buttonUrl: "https://waba.draxsistemas.com.br/retorno",
+    ...overrides,
+  };
+}
+
 describe("Assistente IA de templates Utility", () => {
   it("gera exatamente três opções e persiste a análise no portfólio escolhido", async () => {
     const email = "ai-utility@example.com";
@@ -252,7 +271,7 @@ describe("Assistente IA de templates Utility", () => {
     }
   });
 
-  it("cadastra as três opções com botão QUICK_REPLY e preserva falha individual", async () => {
+  it("cadastra as três opções com botão URL estático e preserva falha individual", async () => {
     const email = "ai-submit-three@example.com";
     const calls: Array<Record<string, unknown>> = [];
     const { service } = serviceFor(email, utilityOutput(), {
@@ -269,17 +288,23 @@ describe("Assistente IA de templates Utility", () => {
     );
     const result = await service.submitAllFromAuth(
       { email, role: "subscriber" },
-      { connectionId: "conn-utility", analysisId: "analysis-1" },
+      submitShell(),
     );
     assert.equal(calls.length, 3);
     assert.equal(result.total, 3);
     assert.equal(result.submitted, 2);
     assert.equal(result.failed, 1);
     assert.equal(result.results[1]?.ok, false);
+    assert.equal(calls[0]?.name, "retorno_lead_1");
     const firstButtons = (calls[0]?.components as Array<Record<string, any>> | undefined)
       ?.find((item) => item.type === "BUTTONS");
-    assert.equal(firstButtons?.buttons?.[0]?.type, "QUICK_REPLY");
-    assert.equal(firstButtons?.buttons?.[0]?.text, "Consultar solicitação");
+    assert.equal(firstButtons?.buttons?.[0]?.type, "URL");
+    assert.equal(firstButtons?.buttons?.[0]?.text, "Quero saber mais");
+    assert.equal(firstButtons?.buttons?.[0]?.url, "https://waba.draxsistemas.com.br/retorno");
+    const header = (calls[0]?.components as Array<Record<string, any>> | undefined)
+      ?.find((item) => item.type === "HEADER");
+    assert.equal(header?.format, "TEXT");
+    assert.equal(header?.text, "Atualização da solicitação");
   });
   it("instrui a IA a reescrever o tema central em três Utility, sem recusar o texto base", () => {
     const instructions = buildMetaTemplateAiInstructions();
@@ -288,6 +313,8 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(instructions, /atualização da solicitação/i);
     assert.match(instructions, /resultado disponível/i);
     assert.match(instructions, /acompanhamento/i);
+    assert.match(instructions, /Acessar site/i);
+    assert.match(instructions, /variableType/i);
     assert.doesNotMatch(instructions, /retorne options=\[\]/);
   });
 
@@ -303,6 +330,40 @@ describe("Assistente IA de templates Utility", () => {
     );
     const valid = validateMetaTemplateAiOutput(utilityOutput());
     assert.equal(valid.options.length, 3);
+  });
+
+  it("monta HEADER de mídia e botão URL estático no envelope da Meta", () => {
+    const shell = parseMetaTemplateAiShell({
+      modelName: "Retorno Lead",
+      variableType: "numero",
+      mediaFormat: "IMAGE",
+      buttonText: "Mais informações",
+      buttonUrl: "https://waba.draxsistemas.com.br/retorno",
+      headerHandle: "4::abc",
+    });
+    assert.equal(templateNameForOption(shell.modelName, 0), "retorno_lead_1");
+    const components = componentsFromAiOptionAndShell(utilityOutput().options[0], shell);
+    assert.equal(components[0]?.type, "HEADER");
+    assert.equal(components[0]?.format, "IMAGE");
+    assert.deepEqual((components[0] as { example?: { header_handle?: string[] } }).example?.header_handle, ["4::abc"]);
+    assert.equal(components[2]?.type, "BUTTONS");
+  });
+
+  it("recusa URL não https ou botão fora do select do Mensageiro", () => {
+    assert.throws(() =>
+      parseMetaTemplateAiShell({
+        modelName: "retorno_lead",
+        buttonText: "Quero saber mais",
+        buttonUrl: "http://example.com",
+      }),
+    );
+    assert.throws(() =>
+      parseMetaTemplateAiShell({
+        modelName: "retorno_lead",
+        buttonText: "Consultar solicitação",
+        buttonUrl: "https://example.com",
+      }),
+    );
   });
 });
 describe("OpenAI Responses com Structured Outputs", () => {

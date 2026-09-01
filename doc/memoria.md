@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 17:30 — Envelope Meta no assistente de template
+- Campos acima da IA: nome do modelo, variável Nome/Número, mídia, cabeçalho, texto e URL do botão.
+- Cadastro envia HEADER + BODY + botão URL estático (Acessar site). GIF da Meta é só Marketing; aqui IMAGE/VIDEO/DOCUMENT/LOCATION/Nenhuma.
+- Marker: `DEPLOY-2026-09-01-173000-template-ai-envelope-meta`
+- LOG: `doc/LOG-2026-09-01__173000__template-ai-envelope-meta.md`
+
 ## 2026-09-01 17:00 — Removido formulário de edição individual de template
 - Bloco «Opções avançadas de edição individual» saiu do Laboratório Cloud.
 - Cadastro fica só no assistente IA (3 opções → Enviar para Meta).

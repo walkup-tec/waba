@@ -93,6 +93,7 @@ export class MetaWhatsappTemplateAiRepository {
     analysisId: string;
     templateId: string;
     metaTemplateId: string | null;
+    optionIndex?: number;
     submittedTemplate: unknown;
     submittedCategory: string;
     metaStatus: string | null;
@@ -113,7 +114,9 @@ export class MetaWhatsappTemplateAiRepository {
     const options = Array.isArray((analysis as any).result_json?.options)
       ? ((analysis as any).result_json.options as Array<{ name?: unknown }>)
       : [];
-    const optionIndex = options.findIndex((item) => String(item?.name || "") === submittedName);
+    const optionIndex = Number.isInteger(input.optionIndex)
+      ? Number(input.optionIndex)
+      : options.findIndex((item) => String(item?.name || "") === submittedName);
     const { error } = await this.client()
       .from(SUBMISSIONS_TABLE)
       .upsert(

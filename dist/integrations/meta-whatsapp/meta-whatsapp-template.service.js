@@ -123,12 +123,14 @@ class MetaWhatsappTemplateService {
         const analysisId = String(body?.aiAnalysisId || body?.ai_analysis_id || "").trim();
         if (analysisId) {
             try {
+                const optionIndexRaw = Number(body?.aiOptionIndex ?? body?.ai_option_index);
                 await this.analyses.linkSubmission({
                     tenantId: tenant.tenantId,
                     connectionId: connection.id,
                     analysisId,
                     templateId: row.id,
                     metaTemplateId: row.metaTemplateId,
+                    optionIndex: Number.isInteger(optionIndexRaw) ? optionIndexRaw : undefined,
                     submittedTemplate: {
                         name: validated.name,
                         language: validated.language,

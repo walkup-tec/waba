@@ -1,6 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerMetaWhatsappIntegrationRoutes = void 0;
+const multer_1 = __importDefault(require("multer"));
 const waba_request_auth_1 = require("../../auth/waba-request-auth");
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_connection_service_1 = require("./meta-whatsapp-connection.service");
@@ -17,6 +21,10 @@ const templateService = new meta_whatsapp_template_service_1.MetaWhatsappTemplat
 const inboxService = new meta_whatsapp_inbox_service_1.MetaWhatsappInboxService();
 const automationService = new meta_whatsapp_automation_service_1.MetaWhatsappAutomationService();
 const templateAiService = new meta_whatsapp_template_ai_service_1.MetaWhatsappTemplateAiService();
+const uploadTemplateHeader = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 16 * 1024 * 1024 },
+});
 function sendPublic(res, status, payload) {
     return res.status(status).json((0, meta_whatsapp_connection_service_1.stripMetaSecrets)(payload));
 }
@@ -347,6 +355,33 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
         catch (error) {
             return handleMetaError(res, error);
         }
+    });
+    app.post("/integrations/meta/whatsapp/templates/ai/header-media", (req, res) => {
+        uploadTemplateHeader.single("file")(req, res, async (err) => {
+            if (err) {
+                const tooBig = err instanceof multer_1.default.MulterError && err.code === "LIMIT_FILE_SIZE";
+                return sendPublic(res, 400, {
+                    ok: false,
+                    error: tooBig ? "Arquivo maior que 16 MB." : "Não foi possível enviar a mídia.",
+                    code: "invalid_payload",
+                });
+            }
+            try {
+                warnClientTenantClaim(req);
+                const file = req.file;
+                const result = await templateAiService.uploadHeaderMediaFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
+                    connectionId: String(req.body?.connectionId || req.body?.connection_id || ""),
+                    mediaFormat: String(req.body?.mediaFormat || req.body?.media_format || ""),
+                    fileName: file?.originalname,
+                    mime: file?.mimetype,
+                    bytes: file?.buffer,
+                });
+                return sendPublic(res, 200, { ok: true, ...result });
+            }
+            catch (error) {
+                return handleMetaError(res, error);
+            }
+        });
     });
     app.get("/integrations/meta/whatsapp/inbox/conversations", async (req, res) => {
         try {

@@ -3837,6 +3837,10 @@
         .meta-tpl-ai-option small { color:#94a3b8; line-height:1.4; }
         .meta-tpl-ai-option-btn { display:inline-flex; align-self:flex-start; margin-top:2px; padding:6px 10px; border-radius:999px; border:1px solid rgba(52,211,153,.38); color:#a7f3d0; font-size:11px; font-weight:700; letter-spacing:.01em; }
         .meta-tpl-ai-option button { margin-top:auto; }
+        .meta-tpl-ai-shell { display:grid; gap:10px; margin:0 0 14px; padding:12px; border-radius:13px; background:rgba(7,15,30,.42); border:1px solid rgba(148,163,184,.12); }
+        .meta-tpl-ai-shell-title { margin:0; color:#e2e8f0; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+        .meta-tpl-ai-shell-hint { margin:0; color:#94a3b8; font-size:11px; line-height:1.45; }
+        .meta-tpl-ai-submit-bar { margin-top:14px; display:grid; gap:10px; }
         .meta-tpl-ai-alert { padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.5; }
         .meta-tpl-ai-alert.is-ok { color:#bbf7d0; background:rgba(22,163,74,.12); border:1px solid rgba(34,197,94,.25); }
         .meta-tpl-ai-alert.is-warn { color:#fde68a; background:rgba(217,119,6,.12); border:1px solid rgba(245,158,11,.25); }
@@ -21229,6 +21233,56 @@
                     <span>Reescreve o texto base em três versões Utility. A decisão final é da Meta.</span>
                   </div>
                 </div>
+                <div class="meta-tpl-ai-shell">
+                  <p class="meta-tpl-ai-shell-title">Dados do template</p>
+                  <p class="meta-tpl-ai-shell-hint">Valem para as três opções. O botão na Meta é sempre Acessar site, com URL estática.</p>
+                  <div class="disparos-grid disparos-grid-2">
+                    <div class="aquecedor-field">
+                      <label for="meta-tpl-ai-model-name">Nome do modelo</label>
+                      <input id="meta-tpl-ai-model-name" type="text" autocomplete="off" maxlength="500" placeholder="retorno_lead" />
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="meta-tpl-ai-variable-type">Tipo de variável</label>
+                      <select id="meta-tpl-ai-variable-type">
+                        <option value="nome">Nome</option>
+                        <option value="numero">Número</option>
+                      </select>
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="meta-tpl-ai-media-format">Mídia</label>
+                      <select id="meta-tpl-ai-media-format">
+                        <option value="NONE">Nenhuma</option>
+                        <option value="IMAGE">Imagem</option>
+                        <option value="VIDEO">Vídeo</option>
+                        <option value="DOCUMENT">Documento</option>
+                        <option value="LOCATION">Localização</option>
+                      </select>
+                    </div>
+                    <div class="aquecedor-field" id="meta-tpl-ai-media-file-wrap" hidden>
+                      <label for="meta-tpl-ai-media-file">Arquivo da mídia</label>
+                      <input id="meta-tpl-ai-media-file" type="file" />
+                      <span class="muted">A Meta exige um exemplo via upload resumable para cabeçalho de mídia.</span>
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="meta-tpl-ai-header">Cabeçalho</label>
+                      <input id="meta-tpl-ai-header" type="text" maxlength="60" autocomplete="off" placeholder="Texto do HEADER" />
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="meta-tpl-ai-button-text">Texto do botão</label>
+                      <select id="meta-tpl-ai-button-text">
+                        <option value="Quero saber mais">Quero saber mais</option>
+                        <option value="Mais informações">Mais informações</option>
+                        <option value="Solicitar agora">Solicitar agora</option>
+                        <option value="Me inscrever">Me inscrever</option>
+                        <option value="Comprar agora">Comprar agora</option>
+                      </select>
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="meta-tpl-ai-button-url">URL do botão</label>
+                      <input id="meta-tpl-ai-button-url" type="url" autocomplete="off" maxlength="2000" placeholder="https://exemplo.com/retorno" />
+                    </div>
+                  </div>
+                </div>
                 <div class="meta-tpl-ai-workspace">
                   <div class="meta-tpl-ai-pane">
                     <p class="meta-tpl-ai-pane-title">Texto base</p>
@@ -21247,6 +21301,14 @@
                       <div class="meta-tpl-ai-placeholder">As três opções aparecerão aqui para sua conferência antes de qualquer envio à Meta.</div>
                     </div>
                   </div>
+                </div>
+                <div class="meta-tpl-ai-submit-bar">
+                  <div class="disparos-inline-actions">
+                    <button id="meta-tpl-ai-submit-all" type="button" class="instance-action-btn btn-qrcode enabled">Gerar</button>
+                  </div>
+                  <p class="meta-tpl-ai-shell-hint">Envia as três opções geradas, com nome, mídia, cabeçalho e botão URL, para análise da Meta.</p>
+                  <p id="meta-tpl-ai-submit-status" class="muted" role="status" aria-live="polite" style="margin:0;"></p>
+                  <div id="meta-tpl-ai-batch-result"></div>
                 </div>
               </div>
             </section>
@@ -36650,21 +36712,67 @@
         return String((document.getElementById("meta-tpl-lab-portfolio") || {}).value || "").trim();
       }
 
+      function metaTplAiSelectedButtonText() {
+        return String((document.getElementById("meta-tpl-ai-button-text") || {}).value || "").trim();
+      }
+
+      function metaTplAiSyncMediaFields() {
+        const format = String((document.getElementById("meta-tpl-ai-media-format") || {}).value || "NONE").trim().toUpperCase();
+        const fileWrap = document.getElementById("meta-tpl-ai-media-file-wrap");
+        const file = document.getElementById("meta-tpl-ai-media-file");
+        const header = document.getElementById("meta-tpl-ai-header");
+        const needsFile = format === "IMAGE" || format === "VIDEO" || format === "DOCUMENT";
+        if (fileWrap) fileWrap.hidden = !needsFile;
+        if (file) {
+          file.accept = format === "VIDEO" ? "video/mp4" : format === "DOCUMENT" ? "application/pdf" : "image/jpeg,image/png,.jpg,.jpeg,.png";
+        }
+        if (header) {
+          header.disabled = format !== "NONE";
+          if (format !== "NONE") header.value = "";
+        }
+      }
+
+      function metaTplAiReadShell() {
+        return {
+          modelName: String((document.getElementById("meta-tpl-ai-model-name") || {}).value || "").trim(),
+          variableType: String((document.getElementById("meta-tpl-ai-variable-type") || {}).value || "nome").trim(),
+          mediaFormat: String((document.getElementById("meta-tpl-ai-media-format") || {}).value || "NONE").trim(),
+          headerText: String((document.getElementById("meta-tpl-ai-header") || {}).value || "").trim(),
+          buttonText: metaTplAiSelectedButtonText(),
+          buttonUrl: String((document.getElementById("meta-tpl-ai-button-url") || {}).value || "").trim(),
+        };
+      }
+
+      async function metaTplAiUploadHeaderIfNeeded(connectionId, mediaFormat) {
+        if (mediaFormat !== "IMAGE" && mediaFormat !== "VIDEO" && mediaFormat !== "DOCUMENT") return "";
+        const input = document.getElementById("meta-tpl-ai-media-file");
+        const file = input && input.files && input.files[0];
+        if (!file) throw new Error("Selecione o arquivo da mídia do cabeçalho.");
+        const body = new FormData();
+        body.append("connectionId", connectionId);
+        body.append("mediaFormat", mediaFormat);
+        body.append("file", file);
+        const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/header-media", {
+          method: "POST",
+          body,
+        });
+        return String(payload.handle || "").trim();
+      }
+
       function metaTplAiRenderResult(payload) {
         const root = document.getElementById("meta-tpl-ai-result");
         if (!root) return;
         metaTplLabAiResult = payload;
         metaTplLabAiAnalysisId = String(payload.analysisId || "");
         const options = Array.isArray(payload.options) ? payload.options : [];
+        const buttonText = metaTplAiSelectedButtonText();
         root.innerHTML = options.length === 3
           ? `<div class="meta-tpl-ai-options">${options
                 .map(
                   (option, index) =>
-                    `<article class="meta-tpl-ai-option"><h4>Opção ${index + 1}${option.title ? ` — ${escapeAdminHtml(String(option.title))}` : ""}</h4><p>${escapeAdminHtml(String(option.body || ""))}</p>${option.buttonText ? `<span class="meta-tpl-ai-option-btn">${escapeAdminHtml(String(option.buttonText))}</span>` : ""}</article>`,
+                    `<article class="meta-tpl-ai-option"><h4>Opção ${index + 1}${option.title ? ` — ${escapeAdminHtml(String(option.title))}` : ""}</h4><p>${escapeAdminHtml(String(option.body || ""))}</p>${buttonText ? `<span class="meta-tpl-ai-option-btn">${escapeAdminHtml(buttonText)}</span>` : ""}</article>`,
                 )
                 .join("")}</div>` +
-              `<div class="disparos-inline-actions"><button type="button" id="meta-tpl-ai-submit-all" class="instance-action-btn btn-qrcode enabled">Enviar para Meta</button></div>` +
-              `<div id="meta-tpl-ai-batch-result"></div>` +
               `<p class="muted" style="margin:0;">A análise final é realizada pela Meta.</p>`
           : `<div class="meta-tpl-ai-alert is-warn"><strong>Não foi possível gerar as três opções Utility</strong><br>${escapeAdminHtml(String(payload.reason || "Tente gerar novamente com o mesmo texto base."))}</div>`;
         root.hidden = false;
@@ -36674,6 +36782,7 @@
         const connectionId = metaTplLabSelectedConnectionId();
         const baseText = String((document.getElementById("meta-tpl-ai-base-text") || {}).value || "").trim();
         const language = "pt_BR";
+        const variableType = String((document.getElementById("meta-tpl-ai-variable-type") || {}).value || "nome").trim();
         const status = document.getElementById("meta-tpl-ai-status");
         const button = document.getElementById("meta-tpl-ai-generate");
         if (!connectionId) {
@@ -36689,7 +36798,7 @@
         try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/generate", {
             method: "POST",
-            body: JSON.stringify({ connectionId, baseText, language }),
+            body: JSON.stringify({ connectionId, baseText, language, variableType }),
           });
           metaTplAiRenderResult(payload);
           if (status) {
@@ -36707,10 +36816,23 @@
       async function metaTplSubmitAllAiOptions() {
         const connectionId = metaTplLabSelectedConnectionId();
         const analysisId = String(metaTplLabAiAnalysisId || "").trim();
-        const status = document.getElementById("meta-tpl-ai-status");
+        const status = document.getElementById("meta-tpl-ai-submit-status") || document.getElementById("meta-tpl-ai-status");
         const button = document.getElementById("meta-tpl-ai-submit-all");
-        if (!connectionId || !analysisId || !Array.isArray(metaTplLabAiResult?.options) || metaTplLabAiResult.options.length !== 3) {
+        const shell = metaTplAiReadShell();
+        if (!connectionId) {
+          if (status) status.textContent = "Selecione primeiro o portfólio.";
+          return;
+        }
+        if (!analysisId || !Array.isArray(metaTplLabAiResult?.options) || metaTplLabAiResult.options.length !== 3) {
           if (status) status.textContent = "Gere primeiro as três opções Utility para este portfólio.";
+          return;
+        }
+        if (!shell.modelName) {
+          if (status) status.textContent = "Informe o nome do modelo.";
+          return;
+        }
+        if (!shell.buttonUrl) {
+          if (status) status.textContent = "Informe a URL https do botão.";
           return;
         }
         const confirmed = window.confirm(
@@ -36720,9 +36842,20 @@
         if (button) button.disabled = true;
         if (status) status.textContent = "Cadastrando os três templates na Meta…";
         try {
+          const headerHandle = await metaTplAiUploadHeaderIfNeeded(connectionId, shell.mediaFormat);
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/submit-all", {
             method: "POST",
-            body: JSON.stringify({ connectionId, analysisId }),
+            body: JSON.stringify({
+              connectionId,
+              analysisId,
+              modelName: shell.modelName,
+              variableType: shell.variableType,
+              mediaFormat: shell.mediaFormat,
+              headerText: shell.headerText,
+              buttonText: shell.buttonText,
+              buttonUrl: shell.buttonUrl,
+              headerHandle,
+            }),
           });
           const result = document.getElementById("meta-tpl-ai-batch-result");
           const rows = Array.isArray(payload.results) ? payload.results : [];
@@ -36767,6 +36900,12 @@
         metaTplLabFillPortfolioSelect();
         const select = document.getElementById("meta-tpl-lab-portfolio");
         if (select) select.value = "demo-connection";
+        const modelName = document.getElementById("meta-tpl-ai-model-name");
+        if (modelName) modelName.value = "retorno_lead";
+        const header = document.getElementById("meta-tpl-ai-header");
+        if (header) header.value = "Atualização da solicitação";
+        const buttonUrl = document.getElementById("meta-tpl-ai-button-url");
+        if (buttonUrl) buttonUrl.value = "https://waba.draxsistemas.com.br/";
         const base = document.getElementById("meta-tpl-ai-base-text");
         if (base) base.value = "Oi! Vi que sua margem consignável está disponível no Governo do Amazonas — e achei importante te avisar antes que alguém na frente aproveite primeiro.\nVai 1 minuto para consultar o valor no seu CPF.\nAcesse agora 👇";
         metaTplAiRenderResult({
@@ -36849,10 +36988,16 @@
       }
 
       async function metaTplLabFetchJson(path, options) {
+        const extra = options || {};
+        const isForm = typeof FormData !== "undefined" && extra.body instanceof FormData;
         const response = await fetch(resolveWabaPublicPath(path), {
           credentials: "same-origin",
-          headers: { Accept: "application/json", ...(options && options.body ? { "Content-Type": "application/json" } : {}) },
-          ...options,
+          ...extra,
+          headers: {
+            Accept: "application/json",
+            ...(extra.body && !isForm ? { "Content-Type": "application/json" } : {}),
+            ...(extra.headers || {}),
+          },
         });
         const payload = await response.json().catch(() => ({}));
         if (metaTplLabHasSecret(payload)) {
@@ -37013,6 +37158,11 @@
       document.getElementById("meta-tpl-lab-status-filter")?.addEventListener("change", function () {
         metaTplLabRenderTable(metaTplLabCache);
       });
+      document.getElementById("meta-tpl-ai-media-format")?.addEventListener("change", metaTplAiSyncMediaFields);
+      document.getElementById("meta-tpl-ai-button-text")?.addEventListener("change", function () {
+        if (metaTplLabAiResult) metaTplAiRenderResult(metaTplLabAiResult);
+      });
+      metaTplAiSyncMediaFields();
 
       let metaAutoLabFlowId = "";
       let metaAutoLabRules = [];

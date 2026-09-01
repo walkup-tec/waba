@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import multer from "multer";
 import { resolveWabaRequestAuth } from "../../auth/waba-request-auth";
 import {
   isMetaTechProviderConfigured,
@@ -25,6 +26,10 @@ const templateService = new MetaWhatsappTemplateService();
 const inboxService = new MetaWhatsappInboxService();
 const automationService = new MetaWhatsappAutomationService();
 const templateAiService = new MetaWhatsappTemplateAiService();
+const uploadTemplateHeader = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 16 * 1024 * 1024 },
+});
 
 function sendPublic(res: Response, status: number, payload: unknown) {
   return res.status(status).json(stripMetaSecrets(payload));
@@ -385,6 +390,33 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     } catch (error) {
       return handleMetaError(res, error);
     }
+  });
+
+  app.post("/integrations/meta/whatsapp/templates/ai/header-media", (req: Request, res: Response) => {
+    uploadTemplateHeader.single("file")(req, res, async (err) => {
+      if (err) {
+        const tooBig = err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE";
+        return sendPublic(res, 400, {
+          ok: false,
+          error: tooBig ? "Arquivo maior que 16 MB." : "Não foi possível enviar a mídia.",
+          code: "invalid_payload",
+        });
+      }
+      try {
+        warnClientTenantClaim(req);
+        const file = req.file;
+        const result = await templateAiService.uploadHeaderMediaFromAuth(resolveWabaRequestAuth(req), {
+          connectionId: String(req.body?.connectionId || req.body?.connection_id || ""),
+          mediaFormat: String(req.body?.mediaFormat || req.body?.media_format || ""),
+          fileName: file?.originalname,
+          mime: file?.mimetype,
+          bytes: file?.buffer,
+        });
+        return sendPublic(res, 200, { ok: true, ...result });
+      } catch (error) {
+        return handleMetaError(res, error);
+      }
+    });
   });
 
   app.get("/integrations/meta/whatsapp/inbox/conversations", async (req: Request, res: Response) => {

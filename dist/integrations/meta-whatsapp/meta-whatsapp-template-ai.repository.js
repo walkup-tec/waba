@@ -82,7 +82,9 @@ class MetaWhatsappTemplateAiRepository {
         const options = Array.isArray(analysis.result_json?.options)
             ? analysis.result_json.options
             : [];
-        const optionIndex = options.findIndex((item) => String(item?.name || "") === submittedName);
+        const optionIndex = Number.isInteger(input.optionIndex)
+            ? Number(input.optionIndex)
+            : options.findIndex((item) => String(item?.name || "") === submittedName);
         const { error } = await this.client()
             .from(SUBMISSIONS_TABLE)
             .upsert({

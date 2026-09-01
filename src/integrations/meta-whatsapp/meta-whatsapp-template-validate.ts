@@ -4,7 +4,7 @@ import { MetaWhatsappError } from "./meta-whatsapp-errors";
 const NAME_RE = /^[a-z0-9_]{1,512}$/;
 const CREATE_CATEGORIES = new Set(["MARKETING", "UTILITY", "AUTHENTICATION"]);
 const COMPONENT_TYPES = new Set(["HEADER", "BODY", "FOOTER", "BUTTONS"]);
-const HEADER_FORMATS = new Set(["TEXT"]);
+const HEADER_FORMATS = new Set(["TEXT", "IMAGE", "VIDEO", "DOCUMENT", "LOCATION"]);
 const BUTTON_TYPES = new Set(["QUICK_REPLY", "URL", "PHONE_NUMBER"]);
 
 export type ValidatedTemplateCreate = {
@@ -93,6 +93,14 @@ function sanitizeComponent(raw: unknown): Record<string, unknown> {
   if (type === "HEADER") {
     const format = String(row.format || "TEXT").trim().toUpperCase();
     if (!HEADER_FORMATS.has(format)) throw new MetaWhatsappError("template_invalid");
+    if (format === "LOCATION") return { type, format };
+    if (format === "IMAGE" || format === "VIDEO" || format === "DOCUMENT") {
+      const example = asRecord(row.example);
+      const handles = Array.isArray(example.header_handle) ? example.header_handle : [];
+      const handle = String(handles[0] || "").trim();
+      if (!handle) throw new MetaWhatsappError("template_invalid");
+      return { type, format, example: { header_handle: [handle] } };
+    }
     const text = String(row.text || "").trim();
     if (!text) throw new MetaWhatsappError("template_invalid");
     const out: Record<string, unknown> = { type, format, text };
