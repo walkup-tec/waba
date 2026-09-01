@@ -21366,7 +21366,8 @@
                     </div>
                     <div class="aquecedor-field">
                       <label for="meta-tpl-ai-button-url">URL do botão</label>
-                      <input id="meta-tpl-ai-button-url" type="url" autocomplete="off" maxlength="2000" placeholder="https://exemplo.com/retorno" />
+                      <input id="meta-tpl-ai-button-url" type="url" autocomplete="off" maxlength="2000" placeholder="https://seusite.com.br/retorno" />
+                      <span class="muted">Use um site https. A Meta recusa wa.me, whatsapp.com e encurtadores no botão.</span>
                     </div>
                   </div>
                 </div>
@@ -36978,8 +36979,19 @@
           if (parsed.protocol !== "https:") {
             return "A URL do botão precisa começar com https://. Links whatsapp:// ou sem https não são aceitos pela Meta.";
           }
+          const host = String(parsed.hostname || "").toLowerCase();
+          if (
+            host === "wa.me" ||
+            host.endsWith(".wa.me") ||
+            host === "whatsapp.com" ||
+            host.endsWith(".whatsapp.com") ||
+            host === "whatsapp.net" ||
+            host.endsWith(".whatsapp.net")
+          ) {
+            return "A Meta não aceita wa.me, whatsapp.com nem whatsapp.net no botão URL. Use o site https do seu atendimento ou retorno.";
+          }
         } catch {
-          return "A URL do botão não é válida. Use um endereço completo, por exemplo https://wa.me/5511999999999.";
+          return "A URL do botão não é válida. Use um endereço completo, por exemplo https://waba.draxsistemas.com.br/retorno.";
         }
         return "";
       }

@@ -3,7 +3,7 @@ import { resolveMetaWhatsappTenant } from "./meta-whatsapp-tenant";
 import { decryptMetaToken } from "./meta-token-crypto";
 import { MetaWhatsappConnectionRepository } from "./meta-whatsapp-connection.repository";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
-import { publicMetaGraphTemplateMessage } from "./meta-whatsapp-graph-errors";
+import { publicMetaGraphTemplateMessage, safePublicGraphTemplateDetail } from "./meta-whatsapp-graph-errors";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
 import { MetaWhatsappTemplateRepository } from "./meta-whatsapp-template.repository";
 import {
@@ -29,17 +29,30 @@ function requireTenant(auth: WabaRequestAuth) {
   }
 }
 
-function throwFromGraph(result: { status: number; kind: "permanent" | "transient"; timeout?: boolean }): never {
-  logMetaTemplate("ERROR", { status: result.status, kind: result.kind, timeout: result.timeout === true });
+function throwFromGraph(result: {
+  status: number;
+  kind: "permanent" | "transient";
+  timeout?: boolean;
+  graphCode?: string | null;
+  json?: unknown;
+}): never {
+  const detail = safePublicGraphTemplateDetail(result.json);
+  logMetaTemplate("ERROR", {
+    status: result.status,
+    kind: result.kind,
+    timeout: result.timeout === true,
+    graphCode: result.graphCode || null,
+    graphDetail: detail || null,
+  });
   if (result.status === 401) throw new MetaWhatsappError("invalid_token");
   if (result.status === 400) {
     const error = new MetaWhatsappError("template_invalid");
-    error.message = publicMetaGraphTemplateMessage(result.kind, result.status);
+    error.message = publicMetaGraphTemplateMessage(result.kind, result.status, result.json);
     throw error;
   }
   const status = result.timeout || result.status === 429 || result.status >= 500 || result.status === 0 ? 503 : 424;
   const error = new MetaWhatsappError("send_failed", status);
-  error.message = publicMetaGraphTemplateMessage(result.kind, result.status);
+  error.message = publicMetaGraphTemplateMessage(result.kind, result.status, result.json);
   throw error;
 }
 

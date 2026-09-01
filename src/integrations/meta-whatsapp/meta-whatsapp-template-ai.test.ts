@@ -373,7 +373,7 @@ describe("Assistente IA de templates Utility", () => {
       modelName: "dg01",
       variableType: "nenhuma",
       buttonText: "Quero saber mais",
-      buttonUrl: "https://wa.me/5511999999999",
+      buttonUrl: "https://waba.draxsistemas.com.br/retorno",
       headerText: "Texto do HEADER",
     });
     assert.equal(shell.headerText, META_TEMPLATE_AI_FIXED_HEADER_TEXT);
@@ -381,6 +381,27 @@ describe("Assistente IA de templates Utility", () => {
     const header = components.find((item) => item.type === "HEADER");
     assert.equal(header?.format, "TEXT");
     assert.equal(header?.text, "Informação de utilidade");
+  });
+
+  it("recusa wa.me e whatsapp.com no botão URL", () => {
+    assert.throws(
+      () =>
+        parseMetaTemplateAiShell({
+          modelName: "retorno_lead",
+          buttonText: "Quero saber mais",
+          buttonUrl: "https://wa.me/5511999999999",
+        }),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_restricted",
+    );
+    assert.throws(
+      () =>
+        parseMetaTemplateAiShell({
+          modelName: "retorno_lead",
+          buttonText: "Quero saber mais",
+          buttonUrl: "https://api.whatsapp.com/send?phone=5511999999999",
+        }),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_restricted",
+    );
   });
 
   it("recusa URL não https ou botão fora do select do Mensageiro", () => {
@@ -410,7 +431,7 @@ describe("Assistente IA de templates Utility", () => {
         parseMetaTemplateAiShell({
           modelName: "dg01",
           buttonText: "Quero saber mais",
-          buttonUrl: "https://wa.me/5511999999999",
+          buttonUrl: "https://waba.draxsistemas.com.br/retorno",
           mediaFormat: "IMAGE",
         }),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_media_required",

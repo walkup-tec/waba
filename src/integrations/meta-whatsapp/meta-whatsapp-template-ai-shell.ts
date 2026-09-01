@@ -1,5 +1,5 @@
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
-import { placeholderIndexes } from "./meta-whatsapp-template-validate";
+import { isMetaRestrictedTemplateButtonHost, placeholderIndexes } from "./meta-whatsapp-template-validate";
 import type { MetaTemplateAiOption } from "./meta-whatsapp-template-ai.types";
 
 /** Mesmas opções do select de botão do Mensageiro (API Alternativa). */
@@ -72,6 +72,9 @@ function requireStaticHttpsUrl(raw: string): string {
     throw new MetaWhatsappError("template_url_https");
   }
   if (parsed.protocol !== "https:") throw new MetaWhatsappError("template_url_https");
+  if (isMetaRestrictedTemplateButtonHost(parsed.hostname)) {
+    throw new MetaWhatsappError("template_url_restricted");
+  }
   return url;
 }
 

@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 20:45 — 0 de 3: Meta recusou botão wa.me
+- Graph 400 nas 3 opções + modal genérico. Causa típica: URL do botão em `wa.me` / `whatsapp.com` (host restrito). O detalhe da Graph era descartado.
+- Agora o sistema bloqueia esses hosts antes do POST e mostra `error_user_msg` seguro no modal.
+- Marker: `DEPLOY-2026-09-01-204500-url-whatsapp-bloqueada`
+- LOG: `doc/LOG-2026-09-01__204500__url-whatsapp-bloqueada.md`
+
 ## 2026-09-01 20:14 — Produção sem modal: GitHub master atrasado
 - `GET /health` produção: `DEPLOY-2026-09-01-181200-header-editavel-arquivo` (`e433ba1`).
 - HTML público ainda tem `window.confirm` e o texto antigo; sem `#meta-tpl-ai-overlay`.

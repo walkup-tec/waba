@@ -20,6 +20,21 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+export function isMetaRestrictedTemplateButtonHost(hostname: string): boolean {
+  const host = String(hostname || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, "");
+  return (
+    host === "wa.me" ||
+    host.endsWith(".wa.me") ||
+    host === "whatsapp.com" ||
+    host.endsWith(".whatsapp.com") ||
+    host === "whatsapp.net" ||
+    host.endsWith(".whatsapp.net")
+  );
+}
+
 export function placeholderIndexes(text: string): number[] {
   const found = new Set<number>();
   const re = /\{\{(\d+)\}\}/g;
@@ -58,6 +73,16 @@ function sanitizeButton(raw: unknown): Record<string, unknown> {
   if (type === "URL") {
     const url = String(row.url || "").trim();
     if (!url) throw new MetaWhatsappError("template_invalid");
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new MetaWhatsappError("template_url_https");
+    }
+    if (parsed.protocol !== "https:") throw new MetaWhatsappError("template_url_https");
+    if (isMetaRestrictedTemplateButtonHost(parsed.hostname)) {
+      throw new MetaWhatsappError("template_url_restricted");
+    }
     out.url = url;
     if (placeholderIndexes(url).length) {
       const examples = Array.isArray(row.example) ? row.example : [];

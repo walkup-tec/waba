@@ -323,6 +323,25 @@ describe("fase 7 validação de template", () => {
     assert.equal(validated.language, "pt_BR");
     assert.equal(validated.category, "UTILITY");
   });
+
+  it("recusa wa.me no botão URL antes de chamar a Graph", () => {
+    assert.throws(
+      () =>
+        validateTemplateCreate({
+          name: "retorno_lead",
+          language: "pt_BR",
+          category: "UTILITY",
+          components: [
+            { type: "BODY", text: "Olá, recebemos sua solicitação." },
+            {
+              type: "BUTTONS",
+              buttons: [{ type: "URL", text: "Quero saber mais", url: "https://wa.me/5511999999999" }],
+            },
+          ],
+        }),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_restricted",
+    );
+  });
 });
 
 describe("fase 7 listagem e tenant", () => {
@@ -505,6 +524,27 @@ describe("fase 7 criação e erros Graph", () => {
     await assert.rejects(
       () => service.createFromAuth(auth(EMAIL_A), VALID_CREATE),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_invalid" && error.status === 400,
+    );
+  });
+
+  it("Graph 400 devolve o detalhe da Meta no modal", async () => {
+    const { service } = serviceWithGraph(async () =>
+      graphErr(400, {
+        graphCode: "100",
+        json: {
+          error: {
+            code: 100,
+            message: "(#100) Invalid parameter",
+            error_user_msg: "Replace any of the following restricted domains: wa.me, whatsapp.com",
+          },
+        },
+      }),
+    );
+    await assert.rejects(
+      () => service.createFromAuth(auth(EMAIL_A), VALID_CREATE),
+      (error: unknown) =>
+        error instanceof MetaWhatsappError &&
+        /wa\.me|whatsapp\.com/i.test(error.message),
     );
   });
 

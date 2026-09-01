@@ -12,6 +12,7 @@ export type MetaWhatsappErrorCode =
   | "send_failed"
   | "template_invalid"
   | "template_url_https"
+  | "template_url_restricted"
   | "template_media_required"
   | "template_upload_failed"
   | "template_not_found"
@@ -44,6 +45,8 @@ const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   template_invalid: "Os dados do template não são válidos. Confira nome, idioma, categoria, corpo e exemplos das variáveis.",
   template_url_https:
     "A URL do botão precisa começar com https://. Links whatsapp://, http:// ou sem endereço completo não são aceitos pela Meta.",
+  template_url_restricted:
+    "A Meta não aceita wa.me, whatsapp.com nem whatsapp.net no botão URL. Use o site https do seu atendimento ou retorno.",
   template_media_required:
     "Selecione o arquivo da mídia. A Meta exige um exemplo via upload para cabeçalho de imagem, vídeo ou documento.",
   template_upload_failed:
