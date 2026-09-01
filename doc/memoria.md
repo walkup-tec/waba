@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 17:48 — Nenhuma como primeira opção do select
+- Tipo de variável: Nenhuma, Nome, Número (Nenhuma é o valor inicial).
+- Marker: `DEPLOY-2026-09-01-174800-variavel-nenhuma-primeiro`
+- LOG: `doc/LOG-2026-09-01__174800__variavel-nenhuma-primeiro.md`
+
 ## 2026-09-01 17:45 — Tipo de variável: Nenhuma
 - Select ganhou **Nenhuma**; o BODY vai à Meta sem `{{1}}` e sem exemplos de variável.
 - Marker: `DEPLOY-2026-09-01-174500-variavel-nenhuma`
