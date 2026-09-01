@@ -9,7 +9,9 @@ import { callOpenAiStructured } from "../openai/waba-openai-responses.client";
 import {
   META_TEMPLATE_AI_OUTPUT_SCHEMA,
   META_TEMPLATE_AI_SCHEMA_NAME,
+  validateMetaTemplateAiOutput,
 } from "./meta-whatsapp-template-ai.schema";
+import { buildMetaTemplateAiInstructions } from "./meta-whatsapp-template-ai.prompt";
 
 const previousKey = process.env.OPENAI_API_KEY;
 const previousLimit = process.env.META_TEMPLATE_AI_RATE_LIMIT_PER_MINUTE;
@@ -58,18 +60,39 @@ function connection(email: string, overrides: Partial<MetaWhatsappConnectionReco
 function utilityOutput(): MetaTemplateAiModelOutput {
   return {
     recommendedCategory: "UTILITY",
-    utilityCompatibility: 92,
-    riskLevel: "LOW",
+    utilityCompatibility: 88,
+    riskLevel: "MEDIUM",
     eligibleForUtility: true,
-    reason: "Atualização diretamente relacionada à solicitação existente.",
+    assumedPriorEvent: "O destinatário solicitou previamente uma consulta de margem consignável.",
+    reason: "O texto original tinha urgência comercial; as opções foram reescritas como atualização da solicitação existente.",
     issues: [],
     suggestions: ["Manter o texto operacional."],
-    options: [1, 2, 3].map((number) => ({
-      name: `atualizacao_proposta_${number}`,
-      body: `Sua proposta solicitada teve uma atualização. Consulte os detalhes no atendimento. Versão ${number}.`,
-      variableExamples: [],
-      rationale: "Versão objetiva e vinculada à solicitação.",
-    })),
+    options: [
+      {
+        name: "consulta_margem_atualizacao_1",
+        title: "atualização de solicitação",
+        body: "Olá, {{1}}.\nHá uma atualização referente à consulta de margem consignável solicitada anteriormente.\nConsulte as informações da sua solicitação abaixo.",
+        buttonText: "Consultar solicitação",
+        variableExamples: ["Maria"],
+        rationale: "Atualização objetiva da solicitação já aberta.",
+      },
+      {
+        name: "consulta_margem_resultado_2",
+        title: "resultado disponível",
+        body: "Olá, {{1}}.\nO resultado da consulta referente à sua solicitação de margem consignável está disponível.\nAcesse para consultar os detalhes.",
+        buttonText: "Ver resultado",
+        variableExamples: ["Maria"],
+        rationale: "Informa que o resultado da consulta já solicitada está disponível.",
+      },
+      {
+        name: "consulta_margem_acompanhamento_3",
+        title: "acompanhamento",
+        body: "Olá, {{1}}.\nSua solicitação de consulta de margem consignável recebeu uma atualização.\nVocê pode acompanhar as informações pelo botão abaixo.",
+        buttonText: "Acompanhar solicitação",
+        variableExamples: ["Maria"],
+        rationale: "Acompanhamento operacional do processo existente.",
+      },
+    ],
     disclaimer: "Avaliação interna por IA. A análise final é realizada pela Meta.",
   };
 }
@@ -144,27 +167,28 @@ describe("Assistente IA de templates Utility", () => {
     assert.equal(stored[0]?.connectionId, "conn-utility");
   });
 
-  it("não gera Utility disfarçada quando a finalidade é Marketing", async () => {
-    const email = "ai-marketing@example.com";
-    const output: MetaTemplateAiModelOutput = {
-      ...utilityOutput(),
-      recommendedCategory: "MARKETING",
-      utilityCompatibility: 10,
-      riskLevel: "HIGH",
-      eligibleForUtility: false,
-      reason: "O texto promove uma nova oferta.",
-      options: [],
-    };
+  it("reescreve texto promocional em três opções Utility ancoradas em evento anterior", async () => {
+    const email = "ai-marketing-reframe@example.com";
+    const output = utilityOutput();
     const { service } = serviceFor(email, output);
     const result = await service.generateFromAuth(
       { email, role: "subscriber" },
-      { connectionId: "conn-utility", baseText: "Nova oferta de empréstimo. Contrate agora." },
+      {
+        connectionId: "conn-utility",
+        baseText:
+          "Oi! Vi que sua margem consignável está disponível no Governo do Amazonas — e achei importante te avisar antes que alguém na frente aproveite primeiro.",
+      },
     );
-    assert.equal(result.eligibleForUtility, false);
-    assert.equal(result.options.length, 0);
+    assert.equal(result.eligibleForUtility, true);
+    assert.equal(result.options.length, 3);
+    assert.match(result.assumedPriorEvent, /solicitou previamente/i);
+    assert.match(result.options[0]?.body || "", /solicitada anteriormente/i);
+    assert.equal(result.options[0]?.buttonText, "Consultar solicitação");
+    assert.equal(result.options[1]?.buttonText, "Ver resultado");
+    assert.equal(result.options[2]?.buttonText, "Acompanhar solicitação");
   });
 
-  it("rejeita resposta inconsistente ou com menos de três opções", async () => {
+  it("rejeita resposta sem as três opções Utility", async () => {
     const email = "ai-invalid@example.com";
     const output = utilityOutput();
     output.options = output.options.slice(0, 2);
@@ -228,13 +252,13 @@ describe("Assistente IA de templates Utility", () => {
     }
   });
 
-  it("cadastra as três opções separadamente e preserva falha individual", async () => {
+  it("cadastra as três opções com botão QUICK_REPLY e preserva falha individual", async () => {
     const email = "ai-submit-three@example.com";
-    const calls: string[] = [];
+    const calls: Array<Record<string, unknown>> = [];
     const { service } = serviceFor(email, utilityOutput(), {
       async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+        calls.push(input);
         const name = String(input.name || "");
-        calls.push(name);
         if (name.endsWith("_2")) throw new MetaWhatsappError("template_invalid");
         return { id: `local-${name}`, status: "PENDING" };
       },
@@ -252,6 +276,33 @@ describe("Assistente IA de templates Utility", () => {
     assert.equal(result.submitted, 2);
     assert.equal(result.failed, 1);
     assert.equal(result.results[1]?.ok, false);
+    const firstButtons = (calls[0]?.components as Array<Record<string, any>> | undefined)
+      ?.find((item) => item.type === "BUTTONS");
+    assert.equal(firstButtons?.buttons?.[0]?.type, "QUICK_REPLY");
+    assert.equal(firstButtons?.buttons?.[0]?.text, "Consultar solicitação");
+  });
+  it("instrui a IA a reescrever o tema central em três Utility, sem recusar o texto base", () => {
+    const instructions = buildMetaTemplateAiInstructions();
+    assert.match(instructions, /Não recuse a geração/i);
+    assert.match(instructions, /evento anterior/i);
+    assert.match(instructions, /atualização da solicitação/i);
+    assert.match(instructions, /resultado disponível/i);
+    assert.match(instructions, /acompanhamento/i);
+    assert.doesNotMatch(instructions, /retorne options=\[\]/);
+  });
+
+  it("rejeita JSON sem as três opções ou com finalidade Marketing", () => {
+    assert.throws(() => validateMetaTemplateAiOutput({ ...utilityOutput(), options: [] }));
+    assert.throws(() =>
+      validateMetaTemplateAiOutput({
+        ...utilityOutput(),
+        recommendedCategory: "MARKETING",
+        eligibleForUtility: false,
+        options: [],
+      }),
+    );
+    const valid = validateMetaTemplateAiOutput(utilityOutput());
+    assert.equal(valid.options.length, 3);
   });
 });
 describe("OpenAI Responses com Structured Outputs", () => {

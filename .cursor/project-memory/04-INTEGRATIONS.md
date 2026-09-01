@@ -40,8 +40,8 @@ Sessão WABA (cookie) para master/staff/assinante; rotas admin restritas a maste
 - Embedded Signup (v4): `FB.login` com `config_id` e `extras: { setup }`. `FB.init` usa Graph `v26.0` (`graphVersion` público / `META_ES_JS_SDK_GRAPH_VERSION`). Token exchange no servidor pode ficar em `META_GRAPH_VERSION`. Sem `sessionInfoVersion` (isso é v2).
 - Webhook inbound: `POST /webhooks/meta/whatsapp`. Só persiste se o chip estiver ligado. Conexão `connected` ou `pending_confirmation`.
 - Assistente Utility: `POST /integrations/meta/whatsapp/templates/ai/generate`;
-  exige `connectionId`, usa Structured Outputs e retorna três rascunhos sem
-  submeter à Meta.
+  exige `connectionId`, usa Structured Outputs e sempre devolve 3 rascunhos
+  Utility (BODY + QUICK_REPLY) sem submeter à Meta. Categoria: https://developers.facebook.com/docs/whatsapp/updates-to-pricing/new-template-guidelines/
 - Docs: Business Profile — https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/ ; display name — https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names ; Phone Number API — https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-phone-number/whatsapp-business-account-phone-number-api ; Webhooks — https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks/ ; Send — https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-messages/
 
 ### Boas-vindas assinante

@@ -36,6 +36,30 @@ function isEnabled() {
         return false;
     return Boolean(String(process.env.OPENAI_API_KEY || "").trim());
 }
+function componentsFromAiOption(option) {
+    const placeholders = [...new Set([...option.body.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1])))].sort((a, b) => a - b);
+    const maxPlaceholder = placeholders.length ? Math.max(...placeholders) : 0;
+    if (placeholders.some((value, index) => value !== index + 1)) {
+        throw new Error("Variáveis não sequenciais.");
+    }
+    if (maxPlaceholder !== option.variableExamples.length) {
+        throw new Error("Exemplos incompatíveis com variáveis.");
+    }
+    const buttonText = String(option.buttonText || "").trim();
+    if (!buttonText)
+        throw new Error("Botão operacional ausente.");
+    return [
+        {
+            type: "BODY",
+            text: option.body,
+            ...(maxPlaceholder ? { example: { body_text: [option.variableExamples] } } : {}),
+        },
+        {
+            type: "BUTTONS",
+            buttons: [{ type: "QUICK_REPLY", text: buttonText }],
+        },
+    ];
+}
 class MetaWhatsappTemplateAiService {
     constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), analyses = new meta_whatsapp_template_ai_repository_1.MetaWhatsappTemplateAiRepository(), openAi = waba_openai_responses_client_1.callOpenAiStructured, templates = new meta_whatsapp_template_service_1.MetaWhatsappTemplateService()) {
         this.connections = connections;
@@ -80,7 +104,7 @@ class MetaWhatsappTemplateAiService {
                 }),
                 schemaName: meta_whatsapp_template_ai_schema_1.META_TEMPLATE_AI_SCHEMA_NAME,
                 schema: meta_whatsapp_template_ai_schema_1.META_TEMPLATE_AI_OUTPUT_SCHEMA,
-                maxOutputTokens: 2400,
+                maxOutputTokens: 3200,
                 timeoutMs: Number(process.env.META_TEMPLATE_AI_TIMEOUT_MS || 20000),
                 maxAttempts: 3,
             });
@@ -95,35 +119,17 @@ class MetaWhatsappTemplateAiService {
             if (FORBIDDEN_APPROVAL_PROMISE.test(serialized)) {
                 throw new Error("A IA prometeu aprovação.");
             }
-            if (result.eligibleForUtility) {
-                const names = new Set();
-                for (const option of result.options) {
-                    if (names.has(option.name))
-                        throw new Error("Nomes duplicados.");
-                    names.add(option.name);
-                    const placeholders = [...new Set([...option.body.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1])))].sort((a, b) => a - b);
-                    const maxPlaceholder = placeholders.length ? Math.max(...placeholders) : 0;
-                    if (placeholders.some((value, index) => value !== index + 1)) {
-                        throw new Error("Variáveis não sequenciais.");
-                    }
-                    if (maxPlaceholder !== option.variableExamples.length) {
-                        throw new Error("Exemplos incompatíveis com variáveis.");
-                    }
-                    (0, meta_whatsapp_template_validate_1.validateTemplateCreate)({
-                        name: option.name,
-                        language,
-                        category: "UTILITY",
-                        components: [
-                            {
-                                type: "BODY",
-                                text: option.body,
-                                ...(maxPlaceholder
-                                    ? { example: { body_text: [option.variableExamples] } }
-                                    : {}),
-                            },
-                        ],
-                    });
-                }
+            const names = new Set();
+            for (const option of result.options) {
+                if (names.has(option.name))
+                    throw new Error("Nomes duplicados.");
+                names.add(option.name);
+                (0, meta_whatsapp_template_validate_1.validateTemplateCreate)({
+                    name: option.name,
+                    language,
+                    category: "UTILITY",
+                    components: componentsFromAiOption(option),
+                });
             }
         }
         catch {
@@ -199,22 +205,13 @@ class MetaWhatsappTemplateAiService {
                 continue;
             }
             try {
-                const components = [
-                    {
-                        type: "BODY",
-                        text: option.body,
-                        ...(option.variableExamples.length
-                            ? { example: { body_text: [option.variableExamples] } }
-                            : {}),
-                    },
-                ];
                 const template = await this.templates.createFromAuth(auth, {
                     connectionId,
                     aiAnalysisId: analysisId,
                     name: option.name,
                     language: analysis.language,
                     category: "UTILITY",
-                    components,
+                    components: componentsFromAiOption(option),
                 });
                 results.push({
                     index,

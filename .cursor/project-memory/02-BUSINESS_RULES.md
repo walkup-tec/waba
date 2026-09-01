@@ -38,11 +38,14 @@ Somente regras permanentes. Sem detalhes de implementação.
 - Inbox do chip nasce **desligado**. Só entra no Inbox (enviar e receber) depois que o operador ligar o switch.
 - O Inbox mostra o número (e o nome) dos chips com switch verde. Sem chip ligado, avisa para ligar no Laboratório.
 - Assistente de templates Utility exige selecionar o portfólio/WABA e informar
-  um texto base. Quando elegível, gera três versões para escolha e revisão humana.
+  um texto base. A IA preserva o tema central, ancora a mensagem em um evento
+  anterior do destinatário e gera três versões Utility (atualização, resultado
+  e acompanhamento) para revisão humana.
 - Após confirmação humana, as três opções são cadastradas como templates
   distintos e acompanhadas individualmente até aprovação/rejeição pela Meta.
-- A IA não envia templates automaticamente nem garante aprovação. Se a finalidade
-  central for Marketing, não deve convertê-la artificialmente em Utility.
+- A IA não envia templates automaticamente nem garante aprovação. Texto
+  promocional não é recusado: é reescrito de forma operacional, sem apenas
+  trocar palavras.
 - O nome no Inbox segue o nome salvo no Laboratório (pedido no perfil do chip). O card continua mostrando o `verified_name` da Graph até o PIN de register.
 - Mensagem enviada pelo Laboratório ou recebida no webhook entra na conversa do chip ligado. O compositor do Inbox responde esse mesmo contato pela Cloud API.
 - O Inbox lista o fio pelo tenant e pelos chips ligados, não só pela conexão Meta mais recente.

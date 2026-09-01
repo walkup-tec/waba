@@ -26,8 +26,8 @@ Não usar como histórico de desenvolvimento.
 - Campanha dispara só com instância `open` **e** Proxy Brasil ligada; chip `open` sem proxy não é ativo para envio
 - Campanha em execução: troca automática 1:1 do desconectado por conectado habilitado para disparos (Proxy sai/entra; quem entra sem Proxy não dispara até Proxy Campanha)
 - Laboratório: CARD 02 mostra nome e foto do portfólio e dos chips gravados na conta WABA (Meta é best-effort)
-- Templates Meta: Assistente IA Utility integrado ao formulário, com portfólio
-  obrigatório, texto base, três opções e revisão humana.
+- Templates Meta: Assistente IA Utility reescreve o texto base em três versões
+  (atualização, resultado, acompanhamento), com botão operacional e revisão humana.
 
 ## Funcionalidades em andamento
 

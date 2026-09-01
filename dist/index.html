@@ -3835,6 +3835,7 @@
         .meta-tpl-ai-option h4 { margin:0; font-size:13px; color:#f8fafc; }
         .meta-tpl-ai-option p { margin:0; color:#cbd5e1; font-size:12px; line-height:1.5; white-space:pre-wrap; }
         .meta-tpl-ai-option small { color:#94a3b8; line-height:1.4; }
+        .meta-tpl-ai-option-btn { display:inline-flex; align-self:flex-start; margin-top:2px; padding:6px 10px; border-radius:999px; border:1px solid rgba(52,211,153,.38); color:#a7f3d0; font-size:11px; font-weight:700; letter-spacing:.01em; }
         .meta-tpl-ai-option button { margin-top:auto; }
         .meta-tpl-ai-alert { padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.5; }
         .meta-tpl-ai-alert.is-ok { color:#bbf7d0; background:rgba(22,163,74,.12); border:1px solid rgba(34,197,94,.25); }
@@ -21228,7 +21229,7 @@
                 <div class="meta-tpl-ai-head">
                   <div>
                     <strong>✨ Assistente de Utility com IA</strong>
-                    <span>Gera três versões a partir do seu texto. A decisão final é da Meta.</span>
+                    <span>Reescreve o texto base em três versões Utility. A decisão final é da Meta.</span>
                   </div>
                 </div>
                 <div class="meta-tpl-ai-workspace">
@@ -21236,7 +21237,7 @@
                     <p class="meta-tpl-ai-pane-title">Texto base</p>
                     <div class="aquecedor-field">
                       <label for="meta-tpl-ai-base-text">2. Informe a mensagem</label>
-                      <textarea id="meta-tpl-ai-base-text" rows="8" maxlength="4000" placeholder="Ex.: A proposta solicitada pelo cliente teve uma atualização."></textarea>
+                      <textarea id="meta-tpl-ai-base-text" rows="8" maxlength="4000" placeholder="Cole a mensagem. A IA mantém o tema e reescreve em três templates Utility."></textarea>
                     </div>
                     <div class="disparos-inline-actions" style="margin-top:10px;">
                       <button id="meta-tpl-ai-generate" type="button" class="instance-action-btn btn-qrcode enabled">Gerar</button>
@@ -36709,17 +36710,17 @@
         metaTplLabAiResult = payload;
         metaTplLabAiAnalysisId = String(payload.analysisId || "");
         const options = Array.isArray(payload.options) ? payload.options : [];
-        root.innerHTML = options.length
+        root.innerHTML = options.length === 3
           ? `<div class="meta-tpl-ai-options">${options
                 .map(
                   (option, index) =>
-                    `<article class="meta-tpl-ai-option"><h4>Opção ${index + 1}</h4><p>${escapeAdminHtml(String(option.body || ""))}</p></article>`,
+                    `<article class="meta-tpl-ai-option"><h4>Opção ${index + 1}${option.title ? ` — ${escapeAdminHtml(String(option.title))}` : ""}</h4><p>${escapeAdminHtml(String(option.body || ""))}</p>${option.buttonText ? `<span class="meta-tpl-ai-option-btn">${escapeAdminHtml(String(option.buttonText))}</span>` : ""}</article>`,
                 )
                 .join("")}</div>` +
               `<div class="disparos-inline-actions"><button type="button" id="meta-tpl-ai-submit-all" class="instance-action-btn btn-qrcode enabled">Enviar para Meta</button></div>` +
               `<div id="meta-tpl-ai-batch-result"></div>` +
               `<p class="muted" style="margin:0;">A análise final é realizada pela Meta.</p>`
-          : `<div class="meta-tpl-ai-alert is-warn"><strong>Não foi possível gerar opções Utility</strong><br>${escapeAdminHtml(String(payload.reason || "O texto apresenta características de Marketing."))}</div>`;
+          : `<div class="meta-tpl-ai-alert is-warn"><strong>Não foi possível gerar as três opções Utility</strong><br>${escapeAdminHtml(String(payload.reason || "Tente gerar novamente com o mesmo texto base."))}</div>`;
         root.hidden = false;
       }
 
@@ -36738,7 +36739,7 @@
           return;
         }
         if (button) button.disabled = true;
-        if (status) status.textContent = "Analisando finalidade e gerando três opções…";
+        if (status) status.textContent = "Reescrevendo o texto em três versões Utility…";
         try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/generate", {
             method: "POST",
@@ -36746,9 +36747,9 @@
           });
           metaTplAiRenderResult(payload);
           if (status) {
-            status.textContent = payload.eligibleForUtility
+            status.textContent = Array.isArray(payload.options) && payload.options.length === 3
               ? "Três opções geradas. Confira todas antes de enviar para a Meta."
-              : "O texto base não é elegível para Utility nesta análise.";
+              : "Não foi possível montar as três opções. Tente gerar novamente.";
           }
         } catch (error) {
           if (status) status.textContent = error && error.message ? error.message : "Não foi possível usar a IA.";
@@ -36762,7 +36763,7 @@
         const analysisId = String(metaTplLabAiAnalysisId || "").trim();
         const status = document.getElementById("meta-tpl-ai-status");
         const button = document.getElementById("meta-tpl-ai-submit-all");
-        if (!connectionId || !analysisId || !metaTplLabAiResult?.eligibleForUtility) {
+        if (!connectionId || !analysisId || !Array.isArray(metaTplLabAiResult?.options) || metaTplLabAiResult.options.length !== 3) {
           if (status) status.textContent = "Gere primeiro as três opções Utility para este portfólio.";
           return;
         }
@@ -36821,18 +36822,19 @@
         const select = document.getElementById("meta-tpl-lab-portfolio");
         if (select) select.value = "demo-connection";
         const base = document.getElementById("meta-tpl-ai-base-text");
-        if (base) base.value = "A proposta solicitada pelo cliente teve uma atualização.";
+        if (base) base.value = "Oi! Vi que sua margem consignável está disponível no Governo do Amazonas — e achei importante te avisar antes que alguém na frente aproveite primeiro.\nVai 1 minuto para consultar o valor no seu CPF.\nAcesse agora 👇";
         metaTplAiRenderResult({
           analysisId: "demo-analysis",
           eligibleForUtility: true,
-          utilityCompatibility: 92,
-          riskLevel: "LOW",
+          assumedPriorEvent: "O destinatário solicitou previamente uma consulta/simulação de margem consignável.",
+          utilityCompatibility: 86,
+          riskLevel: "MEDIUM",
           recommendedCategory: "UTILITY",
-          reason: "A comunicação acompanha uma solicitação previamente realizada pelo cliente.",
+          reason: "O texto original tinha urgência comercial. As opções foram reescritas como atualização, resultado e acompanhamento da consulta já solicitada.",
           options: [
-            { name: "atualizacao_proposta_1", body: "A proposta referente à sua solicitação teve uma atualização. Consulte os detalhes no canal de acompanhamento.", variableExamples: [], rationale: "Objetiva e vinculada à solicitação existente." },
-            { name: "atualizacao_proposta_2", body: "Informamos que houve uma atualização na proposta solicitada. Acesse o acompanhamento para consultar os detalhes.", variableExamples: [], rationale: "Mantém caráter estritamente operacional." },
-            { name: "atualizacao_proposta_3", body: "Sua solicitação de proposta foi atualizada. Os detalhes estão disponíveis para consulta no acompanhamento.", variableExamples: [], rationale: "Destaca somente a atualização do processo." },
+            { name: "consulta_margem_atualizacao_1", title: "atualização de solicitação", body: "Olá, {{1}}.\nHá uma atualização referente à consulta de margem consignável solicitada anteriormente.\nConsulte as informações da sua solicitação abaixo.", buttonText: "Consultar solicitação", variableExamples: ["Maria"], rationale: "Atualização da solicitação existente." },
+            { name: "consulta_margem_resultado_2", title: "resultado disponível", body: "Olá, {{1}}.\nO resultado da consulta referente à sua solicitação de margem consignável está disponível.\nAcesse para consultar os detalhes.", buttonText: "Ver resultado", variableExamples: ["Maria"], rationale: "Resultado da consulta já pedida." },
+            { name: "consulta_margem_acompanhamento_3", title: "acompanhamento", body: "Olá, {{1}}.\nSua solicitação de consulta de margem consignável recebeu uma atualização.\nVocê pode acompanhar as informações pelo botão abaixo.", buttonText: "Acompanhar solicitação", variableExamples: ["Maria"], rationale: "Acompanhamento operacional." },
           ],
           disclaimer: "Avaliação interna por IA. A análise e a classificação finais são realizadas pela Meta.",
         });

@@ -11,10 +11,11 @@ exports.META_TEMPLATE_AI_OUTPUT_SCHEMA = {
     type: "object",
     additionalProperties: false,
     properties: {
-        recommendedCategory: { type: "string", enum: ["UTILITY", "MARKETING"] },
+        recommendedCategory: { type: "string", enum: ["UTILITY"] },
         utilityCompatibility: { type: "integer", minimum: 0, maximum: 100 },
         riskLevel: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] },
-        eligibleForUtility: { type: "boolean" },
+        eligibleForUtility: { type: "boolean", enum: [true] },
+        assumedPriorEvent: { type: "string", minLength: 1, maxLength: 400 },
         reason: { type: "string", minLength: 1, maxLength: 1200 },
         issues: {
             type: "array",
@@ -38,14 +39,16 @@ exports.META_TEMPLATE_AI_OUTPUT_SCHEMA = {
         },
         options: {
             type: "array",
-            minItems: 0,
+            minItems: 3,
             maxItems: 3,
             items: {
                 type: "object",
                 additionalProperties: false,
                 properties: {
                     name: { type: "string", pattern: "^[a-z0-9_]{1,512}$" },
+                    title: { type: "string", minLength: 1, maxLength: 80 },
                     body: { type: "string", minLength: 1, maxLength: 1024 },
+                    buttonText: { type: "string", minLength: 1, maxLength: 25 },
                     variableExamples: {
                         type: "array",
                         maxItems: 10,
@@ -53,7 +56,7 @@ exports.META_TEMPLATE_AI_OUTPUT_SCHEMA = {
                     },
                     rationale: { type: "string", minLength: 1, maxLength: 600 },
                 },
-                required: ["name", "body", "variableExamples", "rationale"],
+                required: ["name", "title", "body", "buttonText", "variableExamples", "rationale"],
             },
         },
         disclaimer: { type: "string", minLength: 1, maxLength: 500 },
@@ -63,6 +66,7 @@ exports.META_TEMPLATE_AI_OUTPUT_SCHEMA = {
         "utilityCompatibility",
         "riskLevel",
         "eligibleForUtility",
+        "assumedPriorEvent",
         "reason",
         "issues",
         "suggestions",
@@ -74,11 +78,8 @@ const ajv = new ajv_1.default({ allErrors: true, strict: true });
 const validate = ajv.compile(exports.META_TEMPLATE_AI_OUTPUT_SCHEMA);
 function validateMetaTemplateAiOutput(value) {
     if (validate(value)) {
-        if (value.eligibleForUtility && (value.recommendedCategory !== "UTILITY" || value.options.length !== 3)) {
-            throw new Error("Resposta da IA inconsistente para Utility.");
-        }
-        if (!value.eligibleForUtility && value.options.length !== 0) {
-            throw new Error("A IA não pode disfarçar Marketing como Utility.");
+        if (value.recommendedCategory !== "UTILITY" || value.eligibleForUtility !== true || value.options.length !== 3) {
+            throw new Error("A IA deve devolver exatamente 3 opções Utility.");
         }
         return value;
     }

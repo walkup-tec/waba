@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 15:50 — IA reescreve texto base em 3 Utility
+- Não recusa texto promocional: mantém o tema e ancora em evento anterior.
+- Três abordagens: atualização, resultado, acompanhamento + botão QUICK_REPLY.
+- Marker: `DEPLOY-2026-09-01-155000-meta-template-ai-reescrever-utility`
+- LOG: `doc/LOG-2026-09-01__155000__meta-template-ia-reescrever-utility.md`
+
 ## 2026-09-01 13:40 — Assistente IA de templates Utility
 - Fluxo: portfólio obrigatório → texto base → 3 opções Utility → revisão humana → Meta.
 - Confirmação única cadastra as 3 opções separadamente; lista pode filtrar Aprovados.

@@ -10,7 +10,9 @@ export type MetaTemplateAiIssue = {
 
 export type MetaTemplateAiOption = {
   name: string;
+  title: string;
   body: string;
+  buttonText: string;
   variableExamples: string[];
   rationale: string;
 };
@@ -20,6 +22,7 @@ export type MetaTemplateAiModelOutput = {
   utilityCompatibility: number;
   riskLevel: MetaTemplateAiRisk;
   eligibleForUtility: boolean;
+  assumedPriorEvent: string;
   reason: string;
   issues: MetaTemplateAiIssue[];
   suggestions: string[];

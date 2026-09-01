@@ -6,13 +6,14 @@ Registrar apenas decisões permanentes.
 
 ### 2026-09-01 — Assistente Utility com três opções e decisão humana
 
-- **Decisão:** Selecionar portfólio, informar texto base e gerar três versões
-  Utility quando a finalidade for elegível. A IA apenas preenche o formulário;
-  revisão e submissão à Meta são humanas.
-- **Motivo:** aumentar aderência às diretrizes sem prometer aprovação nem
-  transformar artificialmente Marketing em Utility.
-- **Impacto:** mesmas envs OpenAI, Structured Outputs, histórico GPT × Meta e
-  rate limit por tenant/usuário.
+- **Decisão:** A IA sempre reescreve o texto base em três templates Utility
+  (atualização, resultado, acompanhamento), ancorados em um evento anterior do
+  destinatário. Texto promocional não é recusado; não basta trocar palavras.
+  Revisão e submissão à Meta continuam humanas. A Meta decide a categoria final.
+- **Motivo:** o operador precisa formatar a mensagem no padrão Utility, não
+  receber um bloqueio de classificação.
+- **Impacto:** prompt 1.1, JSON Schema exige 3 opções + botão QUICK_REPLY,
+  risco pode permanecer MEDIUM/HIGH quando o original era promocional.
 - **Data:** 2026-09-01
 
 ### 2026-08-31 — Teto de instâncias na troca 1:1
