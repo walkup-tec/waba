@@ -20,6 +20,7 @@ _A preencher conforme mapeamento definitivo._
 | Data | Migração | Impacto |
 |------|----------|---------|
 | 2026-09-01 | `doc/SQL-2026-09-01__split-meta-inbox-by-phone-number.sql` | Separa fios/mensagens por receptor e alinha `connection_id` ao número oficial |
+| 2026-09-01 | `doc/SQL-2026-09-01__create-meta-template-ai-analyses.sql` | Registra previsão da IA, opções, submissão humana e resultado posterior da Meta |
 
 ## Índices relevantes
 

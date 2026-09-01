@@ -353,6 +353,28 @@ describe("fase 7 listagem e tenant", () => {
     );
   });
 
+  it("lista templates somente do portfólio escolhido", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow(),
+      connectedRow({
+        id: "conn-b",
+        wabaId: "waba-b",
+        phoneNumberId: "phone-b",
+        updatedAt: "2026-09-02T00:00:00.000Z",
+      }),
+    );
+    const templates = new FakeTemplates();
+    templates.rows.push(
+      templateRow(),
+      templateRow({ id: "local-b", connectionId: "conn-b", wabaId: "waba-b", name: "template_b" }),
+    );
+    const service = new MetaWhatsappTemplateService(connections as any, templates as any);
+    const listed = await service.listFromAuth(auth(EMAIL_A), "conn-b");
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0]?.name, "template_b");
+  });
+
   it("sessão guest não define tenant pelo body", async () => {
     const service = new MetaWhatsappTemplateService(new FakeConnections() as any, new FakeTemplates() as any);
     await assert.rejects(

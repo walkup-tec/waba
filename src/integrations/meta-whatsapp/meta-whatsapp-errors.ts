@@ -21,7 +21,10 @@ export type MetaWhatsappErrorCode =
   | "profile_update_failed"
   | "phone_not_registered"
   | "portfolio_update_failed"
-  | "portfolio_photo_no_page";
+  | "portfolio_photo_no_page"
+  | "template_ai_unavailable"
+  | "template_ai_rate_limited"
+  | "template_ai_invalid_output";
 
 const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   unauthenticated: "Faça login para conectar o WhatsApp Oficial.",
@@ -49,6 +52,9 @@ const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   portfolio_update_failed: "Não foi possível atualizar o nome ou a foto deste portfólio na Meta.",
   portfolio_photo_no_page:
     "A Meta não deixa gravar a foto no Business Manager. Este portfólio ainda não tem uma Página do Facebook. Ligue uma página principal ou altere só o nome.",
+  template_ai_unavailable: "O Assistente de Templates está temporariamente indisponível.",
+  template_ai_rate_limited: "Limite de análises por IA atingido. Aguarde um minuto e tente novamente.",
+  template_ai_invalid_output: "A IA não conseguiu gerar opções seguras e válidas. Revise o texto base e tente novamente.",
 };
 
 export class MetaWhatsappError extends Error {
@@ -65,6 +71,9 @@ export class MetaWhatsappError extends Error {
 
 function defaultStatus(code: MetaWhatsappErrorCode): number {
   if (code === "unauthenticated") return 401;
+  if (code === "template_ai_rate_limited") return 429;
+  if (code === "template_ai_unavailable") return 503;
+  if (code === "template_ai_invalid_output") return 422;
   if (code === "config_invalid" || code === "persist_failed") return 503;
   if (
     code === "exchange_failed" ||

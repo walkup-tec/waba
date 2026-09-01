@@ -26,6 +26,8 @@ Não usar como histórico de desenvolvimento.
 - Campanha dispara só com instância `open` **e** Proxy Brasil ligada; chip `open` sem proxy não é ativo para envio
 - Campanha em execução: troca automática 1:1 do desconectado por conectado habilitado para disparos (Proxy sai/entra; quem entra sem Proxy não dispara até Proxy Campanha)
 - Laboratório: CARD 02 mostra nome e foto do portfólio e dos chips gravados na conta WABA (Meta é best-effort)
+- Templates Meta: Assistente IA Utility integrado ao formulário, com portfólio
+  obrigatório, texto base, três opções e revisão humana.
 
 ## Funcionalidades em andamento
 
@@ -36,6 +38,8 @@ Não usar como histórico de desenvolvimento.
 
 - Pendência de deploy: produção ainda precisa do patch de trim do extra vermelho (`DEPLOY-2026-08-31-160500-campanha-trim-extra-vermelho`). Corbans está com 5 chips (4 verdes + WB-7770); o teto é 4.
 - Após cada mudança de UI/runtime: `npm run build` + commit `dist/` antes do push (FTP sozinho **não** atualiza `waba.draxsistemas.com.br`)
+- Aplicar `doc/SQL-2026-09-01__create-meta-template-ai-analyses.sql` no Supabase
+  antes de habilitar o Assistente IA em produção.
 - Após deploy `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`: reenviar boas-vindas e confirmar JPEG nítido no WhatsApp
 - Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)
 - Provisionar host Linux+KVM para `REDROID_MODE=docker`

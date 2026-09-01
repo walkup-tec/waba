@@ -17,12 +17,14 @@ import { MetaWhatsappMessagingService } from "./meta-whatsapp-messaging.service"
 import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 import { MetaWhatsappInboxService } from "./meta-whatsapp-inbox.service";
 import { MetaWhatsappAutomationService } from "./meta-whatsapp-automation.service";
+import { MetaWhatsappTemplateAiService } from "./meta-whatsapp-template-ai.service";
 
 const service = new MetaWhatsappConnectionService();
 const messagingService = new MetaWhatsappMessagingService();
 const templateService = new MetaWhatsappTemplateService();
 const inboxService = new MetaWhatsappInboxService();
 const automationService = new MetaWhatsappAutomationService();
+const templateAiService = new MetaWhatsappTemplateAiService();
 
 function sendPublic(res: Response, status: number, payload: unknown) {
   return res.status(status).json(stripMetaSecrets(payload));
@@ -323,7 +325,10 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
 
   app.get("/integrations/meta/whatsapp/templates", async (req: Request, res: Response) => {
     try {
-      const templates = await templateService.listFromAuth(resolveWabaRequestAuth(req));
+      const templates = await templateService.listFromAuth(
+        resolveWabaRequestAuth(req),
+        String(req.query.connectionId || req.query.connection_id || ""),
+      );
       return sendPublic(res, 200, { ok: true, templates });
     } catch (error) {
       return handleMetaError(res, error);
@@ -346,7 +351,23 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
   app.post("/integrations/meta/whatsapp/templates/sync", async (req: Request, res: Response) => {
     try {
       warnClientTenantClaim(req);
-      const result = await templateService.syncFromAuth(resolveWabaRequestAuth(req));
+      const result = await templateService.syncFromAuth(
+        resolveWabaRequestAuth(req),
+        String(req.body?.connectionId || req.body?.connection_id || ""),
+      );
+      return sendPublic(res, 200, { ok: true, ...result });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
+  app.post("/integrations/meta/whatsapp/templates/ai/generate", async (req: Request, res: Response) => {
+    try {
+      warnClientTenantClaim(req);
+      const result = await templateAiService.generateFromAuth(
+        resolveWabaRequestAuth(req),
+        req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {},
+      );
       return sendPublic(res, 200, { ok: true, ...result });
     } catch (error) {
       return handleMetaError(res, error);

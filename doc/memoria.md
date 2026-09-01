@@ -1,5 +1,13 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 13:40 — Assistente IA de templates Utility
+- Fluxo: portfólio obrigatório → texto base → 3 opções Utility → revisão humana → Meta.
+- Mesmas envs OpenAI; Responses API com JSON Schema estrito + Ajv.
+- Marketing não é convertido artificialmente; decisão final sempre da Meta.
+- SQL: `doc/SQL-2026-09-01__create-meta-template-ai-analyses.sql`
+- Marker: `DEPLOY-2026-09-01-134000-meta-template-ai-utility-3-opcoes`
+- LOG: `doc/LOG-2026-09-01__134000__meta-template-assistente-ia-utility.md`
+
 ## 2026-09-01 12:40 — Removido Teste de envio Cloud API
 - Painel e JavaScript de envio textual de diagnóstico removidos do Laboratório.
 - Templates e Atendimento permanecem funcionais.

@@ -4,6 +4,17 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-09-01 — Assistente Utility com três opções e decisão humana
+
+- **Decisão:** Selecionar portfólio, informar texto base e gerar três versões
+  Utility quando a finalidade for elegível. A IA apenas preenche o formulário;
+  revisão e submissão à Meta são humanas.
+- **Motivo:** aumentar aderência às diretrizes sem prometer aprovação nem
+  transformar artificialmente Marketing em Utility.
+- **Impacto:** mesmas envs OpenAI, Structured Outputs, histórico GPT × Meta e
+  rate limit por tenant/usuário.
+- **Data:** 2026-09-01
+
 ### 2026-08-31 — Teto de instâncias na troca 1:1
 
 - **Decisão:** Campanha configurada com N números não passa de N. «+ Instâncias» e o auto-swap só trocam vermelho por spare `open` com Proxy Brasil; o vermelho sai da seleção e `useDisparador` fica falso.

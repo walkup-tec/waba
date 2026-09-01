@@ -32,3 +32,7 @@ Em produção, o container serve o conteúdo de `dist/` (incluindo `dist/index.h
 
 - Persistência local JSON em `/app/data` (produção com volume).
 - Assinantes: `WabaSubscriberRepository` (`waba-subscribers.json`).
+- Assistente de templates: UI integrada → rota Meta autenticada → service tenant-aware
+  → OpenAI Responses com Structured Outputs → validação local → Supabase.
+- A IA gera apenas rascunhos; somente o fluxo humano existente chama a Graph API
+  para criar o template na Meta.

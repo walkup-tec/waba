@@ -11,6 +11,7 @@ const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.re
 const meta_whatsapp_template_graph_client_1 = require("./meta-whatsapp-template-graph.client");
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
 const meta_whatsapp_template_types_1 = require("./meta-whatsapp-template.types");
+const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -44,14 +45,18 @@ function warnIgnored(body, tenantId) {
     }
 }
 class MetaWhatsappTemplateService {
-    constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), templates = new meta_whatsapp_template_repository_1.MetaWhatsappTemplateRepository(), graph = undefined, decrypt = meta_token_crypto_1.decryptMetaToken) {
+    constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), templates = new meta_whatsapp_template_repository_1.MetaWhatsappTemplateRepository(), graph = undefined, decrypt = meta_token_crypto_1.decryptMetaToken, analyses = new meta_whatsapp_template_ai_repository_1.MetaWhatsappTemplateAiRepository()) {
         this.connections = connections;
         this.templates = templates;
         this.graph = graph;
         this.decrypt = decrypt;
+        this.analyses = analyses;
     }
-    async requireConnectedWaba(tenantId) {
-        const row = await this.connections.findConnectedByTenant(tenantId);
+    async requireConnectedWaba(tenantId, connectionId) {
+        const requested = String(connectionId || "").trim();
+        const row = requested
+            ? await this.connections.findByIdForTenant(tenantId, requested)
+            : await this.connections.findConnectedByTenant(tenantId);
         if (!row || row.status !== "connected" || !row.wabaId) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
         }
@@ -59,9 +64,9 @@ class MetaWhatsappTemplateService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
         return row;
     }
-    async listFromAuth(auth) {
+    async listFromAuth(auth, connectionId) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnectedWaba(tenant.tenantId);
+        const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
         const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("LIST", { tenantId: tenant.tenantId, count: rows.length });
         return rows.map(meta_whatsapp_template_types_1.toPublicTemplate);
@@ -69,7 +74,7 @@ class MetaWhatsappTemplateService {
     async createFromAuth(auth, body) {
         const tenant = requireTenant(auth);
         warnIgnored(body, tenant.tenantId);
-        const connection = await this.requireConnectedWaba(tenant.tenantId);
+        const connection = await this.requireConnectedWaba(tenant.tenantId, String(body?.connectionId || body?.connection_id || ""));
         const validated = (0, meta_whatsapp_template_validate_1.validateTemplateCreate)(body);
         let token = "";
         try {
@@ -113,11 +118,35 @@ class MetaWhatsappTemplateService {
             language: validated.language,
             status: row.status,
         });
+        const analysisId = String(body?.aiAnalysisId || body?.ai_analysis_id || "").trim();
+        if (analysisId) {
+            try {
+                await this.analyses.linkSubmission({
+                    tenantId: tenant.tenantId,
+                    connectionId: connection.id,
+                    analysisId,
+                    templateId: row.id,
+                    metaTemplateId: row.metaTemplateId,
+                    submittedTemplate: {
+                        name: validated.name,
+                        language: validated.language,
+                        category: validated.category,
+                        components: validated.components,
+                    },
+                    submittedCategory: validated.category,
+                    metaStatus: row.status,
+                    metaCategory: row.category,
+                });
+            }
+            catch {
+                (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", { reason: "ai_analysis_link_failed", tenantId: tenant.tenantId });
+            }
+        }
         return (0, meta_whatsapp_template_types_1.toPublicTemplate)(row);
     }
-    async syncFromAuth(auth) {
+    async syncFromAuth(auth, connectionId) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnectedWaba(tenant.tenantId);
+        const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
         let token = "";
         try {
             token = this.decrypt(connection.accessTokenEncrypted);
@@ -138,7 +167,7 @@ class MetaWhatsappTemplateService {
         for (const item of listed.items) {
             if (!item)
                 continue;
-            upserted.push(await this.templates.upsertFromGraph({
+            const saved = await this.templates.upsertFromGraph({
                 tenantId: tenant.tenantId,
                 connectionId: connection.id,
                 wabaId: String(connection.wabaId),
@@ -151,7 +180,21 @@ class MetaWhatsappTemplateService {
                 qualityScore: item.qualityScore,
                 rejectedReason: item.rejectedReason,
                 lastSyncedAt: now,
-            }));
+            });
+            upserted.push(saved);
+            try {
+                await this.analyses.patchMetaOutcome({
+                    tenantId: tenant.tenantId,
+                    templateId: saved.id,
+                    metaTemplateId: saved.metaTemplateId,
+                    metaStatus: saved.status,
+                    metaCategory: saved.category,
+                    rejectedReason: saved.rejectedReason,
+                });
+            }
+            catch {
+                (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", { reason: "ai_outcome_sync_failed", tenantId: tenant.tenantId });
+            }
         }
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
             tenantId: tenant.tenantId,

@@ -19,6 +19,7 @@ import {
   type MetaTemplateRecord,
 } from "./meta-whatsapp-template.types";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
+import { MetaWhatsappTemplateAiRepository } from "./meta-whatsapp-template-ai.repository";
 
 function requireTenant(auth: WabaRequestAuth) {
   try {
@@ -61,10 +62,17 @@ export class MetaWhatsappTemplateService {
     private readonly templates = new MetaWhatsappTemplateRepository(),
     private readonly graph: TemplateGraphCaller | undefined = undefined,
     private readonly decrypt = decryptMetaToken,
+    private readonly analyses = new MetaWhatsappTemplateAiRepository(),
   ) {}
 
-  async requireConnectedWaba(tenantId: string): Promise<MetaWhatsappConnectionRecord> {
-    const row = await this.connections.findConnectedByTenant(tenantId);
+  async requireConnectedWaba(
+    tenantId: string,
+    connectionId?: string,
+  ): Promise<MetaWhatsappConnectionRecord> {
+    const requested = String(connectionId || "").trim();
+    const row = requested
+      ? await this.connections.findByIdForTenant(tenantId, requested)
+      : await this.connections.findConnectedByTenant(tenantId);
     if (!row || row.status !== "connected" || !row.wabaId) {
       throw new MetaWhatsappError("not_connected");
     }
@@ -72,9 +80,9 @@ export class MetaWhatsappTemplateService {
     return row;
   }
 
-  async listFromAuth(auth: WabaRequestAuth): Promise<MetaTemplatePublic[]> {
+  async listFromAuth(auth: WabaRequestAuth, connectionId?: string): Promise<MetaTemplatePublic[]> {
     const tenant = requireTenant(auth);
-    const connection = await this.requireConnectedWaba(tenant.tenantId);
+    const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
     const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
     logMetaTemplate("LIST", { tenantId: tenant.tenantId, count: rows.length });
     return rows.map(toPublicTemplate);
@@ -86,7 +94,10 @@ export class MetaWhatsappTemplateService {
   ): Promise<MetaTemplatePublic> {
     const tenant = requireTenant(auth);
     warnIgnored(body, tenant.tenantId);
-    const connection = await this.requireConnectedWaba(tenant.tenantId);
+    const connection = await this.requireConnectedWaba(
+      tenant.tenantId,
+      String(body?.connectionId || body?.connection_id || ""),
+    );
     const validated = validateTemplateCreate(body);
     let token = "";
     try {
@@ -129,12 +140,38 @@ export class MetaWhatsappTemplateService {
       language: validated.language,
       status: row.status,
     });
+    const analysisId = String(body?.aiAnalysisId || body?.ai_analysis_id || "").trim();
+    if (analysisId) {
+      try {
+        await this.analyses.linkSubmission({
+          tenantId: tenant.tenantId,
+          connectionId: connection.id,
+          analysisId,
+          templateId: row.id,
+          metaTemplateId: row.metaTemplateId,
+          submittedTemplate: {
+            name: validated.name,
+            language: validated.language,
+            category: validated.category,
+            components: validated.components,
+          },
+          submittedCategory: validated.category,
+          metaStatus: row.status,
+          metaCategory: row.category,
+        });
+      } catch {
+        logMetaTemplate("ERROR", { reason: "ai_analysis_link_failed", tenantId: tenant.tenantId });
+      }
+    }
     return toPublicTemplate(row);
   }
 
-  async syncFromAuth(auth: WabaRequestAuth): Promise<{ templates: MetaTemplatePublic[]; pages: number }> {
+  async syncFromAuth(
+    auth: WabaRequestAuth,
+    connectionId?: string,
+  ): Promise<{ templates: MetaTemplatePublic[]; pages: number }> {
     const tenant = requireTenant(auth);
-    const connection = await this.requireConnectedWaba(tenant.tenantId);
+    const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
     let token = "";
     try {
       token = this.decrypt(connection.accessTokenEncrypted);
@@ -153,22 +190,33 @@ export class MetaWhatsappTemplateService {
     const upserted: MetaTemplateRecord[] = [];
     for (const item of listed.items) {
       if (!item) continue;
-      upserted.push(
-        await this.templates.upsertFromGraph({
+      const saved = await this.templates.upsertFromGraph({
+        tenantId: tenant.tenantId,
+        connectionId: connection.id,
+        wabaId: String(connection.wabaId),
+        metaTemplateId: item.metaTemplateId,
+        name: item.name,
+        language: item.language,
+        category: item.category,
+        status: item.status,
+        components: item.components,
+        qualityScore: item.qualityScore,
+        rejectedReason: item.rejectedReason,
+        lastSyncedAt: now,
+      });
+      upserted.push(saved);
+      try {
+        await this.analyses.patchMetaOutcome({
           tenantId: tenant.tenantId,
-          connectionId: connection.id,
-          wabaId: String(connection.wabaId),
-          metaTemplateId: item.metaTemplateId,
-          name: item.name,
-          language: item.language,
-          category: item.category,
-          status: item.status,
-          components: item.components,
-          qualityScore: item.qualityScore,
-          rejectedReason: item.rejectedReason,
-          lastSyncedAt: now,
-        }),
-      );
+          templateId: saved.id,
+          metaTemplateId: saved.metaTemplateId,
+          metaStatus: saved.status,
+          metaCategory: saved.category,
+          rejectedReason: saved.rejectedReason,
+        });
+      } catch {
+        logMetaTemplate("ERROR", { reason: "ai_outcome_sync_failed", tenantId: tenant.tenantId });
+      }
     }
     logMetaTemplate("SYNC", {
       tenantId: tenant.tenantId,

@@ -41,7 +41,8 @@
     "test:meta-lab-tokens": "node --require ts-node/register --test src/auth/waba-meta-oficial-token-access.test.ts",
     "test:meta-es-login": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-es-fb-login.test.ts",
     "test:pix-emv": "node --require ts-node/register --test src/billing/pix-emv.test.ts",
-    "test:meta-portfolio": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-portfolio.test.ts"
+    "test:meta-portfolio": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-portfolio.test.ts",
+    "test:meta-template-ai": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-template-ai.test.ts"
   },
   "keywords": [
     "n8n",
@@ -60,6 +61,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.0",
+    "ajv": "^8.20.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "multer": "^2.1.1",

@@ -2,4 +2,4 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WABA_DEPLOY_MARKER = void 0;
-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-01-124000-meta-sem-teste-envio-cloud";
+exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-01-134000-meta-template-ai-utility-3-opcoes";

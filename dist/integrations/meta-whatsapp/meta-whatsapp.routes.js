@@ -10,11 +10,13 @@ const meta_whatsapp_messaging_service_1 = require("./meta-whatsapp-messaging.ser
 const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.service");
 const meta_whatsapp_inbox_service_1 = require("./meta-whatsapp-inbox.service");
 const meta_whatsapp_automation_service_1 = require("./meta-whatsapp-automation.service");
+const meta_whatsapp_template_ai_service_1 = require("./meta-whatsapp-template-ai.service");
 const service = new meta_whatsapp_connection_service_1.MetaWhatsappConnectionService();
 const messagingService = new meta_whatsapp_messaging_service_1.MetaWhatsappMessagingService();
 const templateService = new meta_whatsapp_template_service_1.MetaWhatsappTemplateService();
 const inboxService = new meta_whatsapp_inbox_service_1.MetaWhatsappInboxService();
 const automationService = new meta_whatsapp_automation_service_1.MetaWhatsappAutomationService();
+const templateAiService = new meta_whatsapp_template_ai_service_1.MetaWhatsappTemplateAiService();
 function sendPublic(res, status, payload) {
     return res.status(status).json((0, meta_whatsapp_connection_service_1.stripMetaSecrets)(payload));
 }
@@ -299,7 +301,7 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
     });
     app.get("/integrations/meta/whatsapp/templates", async (req, res) => {
         try {
-            const templates = await templateService.listFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req));
+            const templates = await templateService.listFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(req.query.connectionId || req.query.connection_id || ""));
             return sendPublic(res, 200, { ok: true, templates });
         }
         catch (error) {
@@ -319,7 +321,17 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
     app.post("/integrations/meta/whatsapp/templates/sync", async (req, res) => {
         try {
             warnClientTenantClaim(req);
-            const result = await templateService.syncFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req));
+            const result = await templateService.syncFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(req.body?.connectionId || req.body?.connection_id || ""));
+            return sendPublic(res, 200, { ok: true, ...result });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
+    app.post("/integrations/meta/whatsapp/templates/ai/generate", async (req, res) => {
+        try {
+            warnClientTenantClaim(req);
+            const result = await templateAiService.generateFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), req.body && typeof req.body === "object" ? req.body : {});
             return sendPublic(res, 200, { ok: true, ...result });
         }
         catch (error) {

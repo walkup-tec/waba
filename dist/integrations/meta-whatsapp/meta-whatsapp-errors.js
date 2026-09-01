@@ -27,6 +27,9 @@ const PUBLIC_MESSAGES = {
     phone_not_registered: "Ative o número com o PIN de 6 dígitos antes de mudar nome ou foto. O cliente do disparo só vê o que a Meta já aplicou.",
     portfolio_update_failed: "Não foi possível atualizar o nome ou a foto deste portfólio na Meta.",
     portfolio_photo_no_page: "A Meta não deixa gravar a foto no Business Manager. Este portfólio ainda não tem uma Página do Facebook. Ligue uma página principal ou altere só o nome.",
+    template_ai_unavailable: "O Assistente de Templates está temporariamente indisponível.",
+    template_ai_rate_limited: "Limite de análises por IA atingido. Aguarde um minuto e tente novamente.",
+    template_ai_invalid_output: "A IA não conseguiu gerar opções seguras e válidas. Revise o texto base e tente novamente.",
 };
 class MetaWhatsappError extends Error {
     constructor(code, status) {
@@ -40,6 +43,12 @@ exports.MetaWhatsappError = MetaWhatsappError;
 function defaultStatus(code) {
     if (code === "unauthenticated")
         return 401;
+    if (code === "template_ai_rate_limited")
+        return 429;
+    if (code === "template_ai_unavailable")
+        return 503;
+    if (code === "template_ai_invalid_output")
+        return 422;
     if (code === "config_invalid" || code === "persist_failed")
         return 503;
     if (code === "exchange_failed" ||

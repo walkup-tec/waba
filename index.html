@@ -3814,6 +3814,28 @@
         .meta-tpl-card-status.is-approved { background:rgba(37,211,102,.2); color:#86efac; }
         .meta-tpl-card h4 { margin:0 0 6px; font-size:14px; }
         .meta-tpl-card p { margin:0; font-size:12px; color:rgba(226,232,240,.7); }
+        .meta-tpl-ai-box { margin:12px 0 16px; padding:14px; border:1px solid rgba(129,140,248,.28); background:linear-gradient(145deg,rgba(79,70,229,.12),rgba(15,23,42,.55)); border-radius:16px; }
+        .meta-tpl-ai-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+        .meta-tpl-ai-head strong { display:block; font-size:14px; color:#f8fafc; }
+        .meta-tpl-ai-head span { display:block; margin-top:3px; font-size:11px; color:#94a3b8; }
+        .meta-tpl-ai-result { display:grid; gap:12px; margin-top:12px; }
+        .meta-tpl-ai-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+        .meta-tpl-ai-metric { padding:10px; border-radius:12px; background:rgba(15,23,42,.62); border:1px solid rgba(148,163,184,.14); }
+        .meta-tpl-ai-metric span { display:block; color:#94a3b8; font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
+        .meta-tpl-ai-metric strong { display:block; margin-top:4px; color:#f8fafc; font-size:14px; }
+        .meta-tpl-ai-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+        .meta-tpl-ai-option { display:flex; flex-direction:column; gap:9px; padding:12px; border-radius:14px; background:#0f172a; border:1px solid rgba(148,163,184,.18); }
+        .meta-tpl-ai-option h4 { margin:0; font-size:13px; color:#f8fafc; }
+        .meta-tpl-ai-option p { margin:0; color:#cbd5e1; font-size:12px; line-height:1.5; white-space:pre-wrap; }
+        .meta-tpl-ai-option small { color:#94a3b8; line-height:1.4; }
+        .meta-tpl-ai-option button { margin-top:auto; }
+        .meta-tpl-ai-alert { padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.5; }
+        .meta-tpl-ai-alert.is-ok { color:#bbf7d0; background:rgba(22,163,74,.12); border:1px solid rgba(34,197,94,.25); }
+        .meta-tpl-ai-alert.is-warn { color:#fde68a; background:rgba(217,119,6,.12); border:1px solid rgba(245,158,11,.25); }
+        @media (max-width:900px) {
+          .meta-tpl-ai-options { grid-template-columns:1fr; }
+          .meta-tpl-ai-summary { grid-template-columns:1fr; }
+        }
         .meta-chat { position:relative; display:grid; grid-template-columns:minmax(210px,23%) minmax(300px,31%) minmax(0,1fr); min-height:calc(100vh - 148px); max-height:calc(100vh - 118px); border:1px solid rgba(148,163,184,.14); border-radius:20px; overflow:hidden; background:#0e1621; box-shadow: 0 18px 50px rgba(0,0,0,.28); }
         .meta-chat-numbers, .meta-chat-list, .meta-chat-thread { display:flex; flex-direction:column; min-height:0; }
         .meta-chat-numbers, .meta-chat-list { background:#111b21; border-right:1px solid rgba(255,255,255,.06); }
@@ -21160,10 +21182,36 @@
               <p id="meta-tpl-lab-status" class="muted" style="margin: 10px 0 0;" role="status" aria-live="polite"></p>
             </section>
 
-            <section class="panel col-12 col-lg-6">
+            <section class="panel col-12">
               <div class="panel-header">
                 <div class="panel-title">Criar template</div>
-                <span class="muted">Sem editor visual</span>
+                <span class="muted">Revisão humana antes da Meta</span>
+              </div>
+              <div class="aquecedor-field">
+                <label for="meta-tpl-lab-portfolio">1. Portfólio</label>
+                <select id="meta-tpl-lab-portfolio">
+                  <option value="">Selecione um portfólio</option>
+                </select>
+              </div>
+              <div class="meta-tpl-ai-box">
+                <div class="meta-tpl-ai-head">
+                  <div>
+                    <strong>✨ Assistente de Utility com IA</strong>
+                    <span>Gera três versões a partir do seu texto. A decisão final é da Meta.</span>
+                  </div>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-ai-base-text">2. Texto base</label>
+                  <textarea id="meta-tpl-ai-base-text" rows="4" maxlength="4000" placeholder="Ex.: A proposta solicitada pelo cliente teve uma atualização."></textarea>
+                </div>
+                <div class="disparos-inline-actions" style="margin-top:10px;">
+                  <button id="meta-tpl-ai-generate" type="button" class="instance-action-btn btn-qrcode enabled">Gerar 3 opções Utility</button>
+                </div>
+                <p id="meta-tpl-ai-status" class="muted" role="status" aria-live="polite" style="margin:10px 0 0;"></p>
+                <div id="meta-tpl-ai-result" class="meta-tpl-ai-result" hidden></div>
+              </div>
+              <div class="meta-tpl-ai-head" style="margin-top:4px;">
+                <div><strong>3. Revisar e enviar à Meta</strong><span>Escolha uma opção, ajuste se necessário e confirme abaixo.</span></div>
               </div>
               <div class="aquecedor-field">
                 <label for="meta-tpl-lab-name">Nome</label>
@@ -21212,7 +21260,7 @@
               </div>
             </section>
 
-            <section class="panel col-12 col-lg-6">
+            <section class="panel col-12">
               <div class="panel-header">
                 <div class="panel-title">Visualizar / usar em teste</div>
                 <span class="muted">Somente desta WABA</span>
@@ -28588,7 +28636,7 @@
       }
 
       async function initWabaAuthGate() {
-        if (isMetaInboxUiPreview()) {
+        if (isMetaInboxUiPreview() || isMetaTemplateAiUiPreview()) {
           unlockWabaApp({ authConfigured: false, authenticated: true });
           return true;
         }
@@ -36038,6 +36086,7 @@
               : { portfolios: metaTpSession.portfolios, portfolio: null, numbers: [] };
         const bundles = metaTpPortfolioBundles(source);
         metaTpSession.portfolios = bundles;
+        if (typeof metaTplLabFillPortfolioSelect === "function") metaTplLabFillPortfolioSelect();
         if (!section) return;
         if (!bundles.length) {
           section.hidden = true;
@@ -36570,6 +36619,169 @@
 
       let metaTplLabCache = [];
       let metaTplLabSelected = null;
+      let metaTplLabAiResult = null;
+      let metaTplLabAiAnalysisId = "";
+
+      function metaTplLabPortfolioOptions() {
+        return (metaTpSession.portfolios || [])
+          .map(function (portfolio) {
+            return {
+              connectionId: String((portfolio && portfolio.connectionId) || "").trim(),
+              label: metaTpPortfolioTitle(portfolio || {}),
+              wabaId: String((portfolio && portfolio.wabaId) || "").trim(),
+            };
+          })
+          .filter(function (item) {
+            return item.connectionId && item.wabaId;
+          });
+      }
+
+      function metaTplLabFillPortfolioSelect() {
+        const select = document.getElementById("meta-tpl-lab-portfolio");
+        if (!select) return;
+        const previous = String(select.value || "").trim();
+        const options = metaTplLabPortfolioOptions();
+        select.innerHTML = '<option value="">Selecione um portfólio</option>';
+        options.forEach(function (item) {
+          const option = document.createElement("option");
+          option.value = item.connectionId;
+          option.textContent = item.label;
+          select.appendChild(option);
+        });
+        if (options.some((item) => item.connectionId === previous)) {
+          select.value = previous;
+        } else if (options.length === 1) {
+          select.value = options[0].connectionId;
+        }
+      }
+
+      function metaTplLabSelectedConnectionId() {
+        return String((document.getElementById("meta-tpl-lab-portfolio") || {}).value || "").trim();
+      }
+
+      function metaTplAiRiskLabel(value) {
+        return value === "LOW" ? "Baixo" : value === "MEDIUM" ? "Médio" : "Alto";
+      }
+
+      function metaTplAiRenderResult(payload) {
+        const root = document.getElementById("meta-tpl-ai-result");
+        if (!root) return;
+        metaTplLabAiResult = payload;
+        metaTplLabAiAnalysisId = String(payload.analysisId || "");
+        const eligible = payload.eligibleForUtility === true;
+        const alertClass = eligible ? "is-ok" : "is-warn";
+        const options = Array.isArray(payload.options) ? payload.options : [];
+        root.innerHTML =
+          `<div class="meta-tpl-ai-summary">` +
+          `<div class="meta-tpl-ai-metric"><span>Compatibilidade Utility</span><strong>${escapeAdminHtml(String(payload.utilityCompatibility || 0))}%</strong></div>` +
+          `<div class="meta-tpl-ai-metric"><span>Risco de reclassificação</span><strong>${escapeAdminHtml(metaTplAiRiskLabel(payload.riskLevel))}</strong></div>` +
+          `<div class="meta-tpl-ai-metric"><span>Categoria provável</span><strong>${escapeAdminHtml(String(payload.recommendedCategory || "—"))}</strong></div>` +
+          `</div>` +
+          `<div class="meta-tpl-ai-alert ${alertClass}"><strong>${eligible ? "✓ Compatível na análise interna" : "⚠ Características de Marketing"}</strong><br>${escapeAdminHtml(String(payload.reason || ""))}</div>` +
+          (options.length
+            ? `<div class="meta-tpl-ai-options">${options
+                .map(
+                  (option, index) =>
+                    `<article class="meta-tpl-ai-option"><h4>Opção ${index + 1}</h4><p>${escapeAdminHtml(String(option.body || ""))}</p><small>${escapeAdminHtml(String(option.rationale || ""))}</small><button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-ai-option="${index}">Usar esta opção</button></article>`,
+                )
+                .join("")}</div>`
+            : "") +
+          `<p class="muted" style="margin:0;">${escapeAdminHtml(String(payload.disclaimer || "A análise final é realizada pela Meta."))}</p>`;
+        root.hidden = false;
+      }
+
+      async function metaTplGenerateUtilityOptions() {
+        const connectionId = metaTplLabSelectedConnectionId();
+        const baseText = String((document.getElementById("meta-tpl-ai-base-text") || {}).value || "").trim();
+        const language = String((document.getElementById("meta-tpl-lab-language") || {}).value || "pt_BR").trim();
+        const status = document.getElementById("meta-tpl-ai-status");
+        const button = document.getElementById("meta-tpl-ai-generate");
+        if (!connectionId) {
+          if (status) status.textContent = "Selecione primeiro o portfólio.";
+          return;
+        }
+        if (!baseText) {
+          if (status) status.textContent = "Informe o texto base.";
+          return;
+        }
+        if (button) button.disabled = true;
+        if (status) status.textContent = "Analisando finalidade e gerando três opções…";
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/generate", {
+            method: "POST",
+            body: JSON.stringify({ connectionId, baseText, language }),
+          });
+          metaTplAiRenderResult(payload);
+          if (status) {
+            status.textContent = payload.eligibleForUtility
+              ? "Três opções geradas. Escolha uma para revisar."
+              : "O texto base não é elegível para Utility nesta análise.";
+          }
+        } catch (error) {
+          if (status) status.textContent = error && error.message ? error.message : "Não foi possível usar a IA.";
+        } finally {
+          if (button) button.disabled = false;
+        }
+      }
+
+      function metaTplApplyAiOption(index) {
+        const option = metaTplLabAiResult && Array.isArray(metaTplLabAiResult.options)
+          ? metaTplLabAiResult.options[index]
+          : null;
+        if (!option) return;
+        const setValue = (id, value) => {
+          const element = document.getElementById(id);
+          if (element) element.value = value;
+        };
+        setValue("meta-tpl-lab-name", String(option.name || ""));
+        setValue("meta-tpl-lab-category", "UTILITY");
+        setValue("meta-tpl-lab-header", "");
+        setValue("meta-tpl-lab-body", String(option.body || ""));
+        setValue("meta-tpl-lab-examples", (option.variableExamples || []).join("\n"));
+        setValue("meta-tpl-lab-footer", "");
+        metaTplLabSetStatus("Opção aplicada. Revise o texto antes de criar na Meta.");
+        document.getElementById("meta-tpl-lab-name")?.focus();
+      }
+
+      function isMetaTemplateAiUiPreview() {
+        const localHost = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+        return localHost && new URLSearchParams(location.search).get("ui-preview") === "template-ai";
+      }
+
+      function initMetaTemplateAiUiPreview() {
+        metaTpSession.portfolios = [
+          {
+            id: "demo-business",
+            name: "Drax Sistemas",
+            wabaId: "demo-waba",
+            connectionId: "demo-connection",
+            numbers: [],
+          },
+        ];
+        document.body.classList.add("waba-laboratorio-visible");
+        setActiveTab("whatsapp-templates", { skipPolicyCheck: true });
+        metaTplLabFillPortfolioSelect();
+        const select = document.getElementById("meta-tpl-lab-portfolio");
+        if (select) select.value = "demo-connection";
+        const base = document.getElementById("meta-tpl-ai-base-text");
+        if (base) base.value = "A proposta solicitada pelo cliente teve uma atualização.";
+        metaTplAiRenderResult({
+          analysisId: "demo-analysis",
+          eligibleForUtility: true,
+          utilityCompatibility: 92,
+          riskLevel: "LOW",
+          recommendedCategory: "UTILITY",
+          reason: "A comunicação acompanha uma solicitação previamente realizada pelo cliente.",
+          options: [
+            { name: "atualizacao_proposta_1", body: "A proposta referente à sua solicitação teve uma atualização. Consulte os detalhes no canal de acompanhamento.", variableExamples: [], rationale: "Objetiva e vinculada à solicitação existente." },
+            { name: "atualizacao_proposta_2", body: "Informamos que houve uma atualização na proposta solicitada. Acesse o acompanhamento para consultar os detalhes.", variableExamples: [], rationale: "Mantém caráter estritamente operacional." },
+            { name: "atualizacao_proposta_3", body: "Sua solicitação de proposta foi atualizada. Os detalhes estão disponíveis para consulta no acompanhamento.", variableExamples: [], rationale: "Destaca somente a atualização do processo." },
+          ],
+          disclaimer: "Avaliação interna por IA. A análise e a classificação finais são realizadas pela Meta.",
+        });
+        const status = document.getElementById("meta-tpl-ai-status");
+        if (status) status.textContent = "Preview visual com dados fictícios.";
+      }
 
       function metaTplLabHasSecret(payload) {
         return /access_token|accessTokenEncrypted|app_secret|verify_token|Bearer |META_TOKEN/i.test(
@@ -36643,9 +36855,21 @@
 
       window.wabaLoadMetaTemplatesLab = async function wabaLoadMetaTemplatesLab(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
+        metaTplLabFillPortfolioSelect();
+        if (!metaTplLabPortfolioOptions().length && typeof metaTpLoadPortfolio === "function") {
+          await metaTpLoadPortfolio({ silent: true }).catch(() => null);
+          metaTplLabFillPortfolioSelect();
+        }
+        const connectionId = metaTplLabSelectedConnectionId();
+        if (!connectionId && metaTplLabPortfolioOptions().length > 1) {
+          metaTplLabRenderTable([]);
+          metaTplLabSetStatus("Selecione um portfólio para carregar e criar templates.");
+          return false;
+        }
         metaTplLabSetStatus("Carregando templates…");
         try {
-          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
+          const query = connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : "";
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates" + query);
           metaTplLabRenderTable(payload.templates);
           metaTplLabSetStatus(payload.templates && payload.templates.length ? "" : "Lista local vazia.");
         } catch (error) {
@@ -36658,12 +36882,17 @@
       window.wabaSyncMetaTemplatesLab = async function wabaSyncMetaTemplatesLab(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         const btn = document.getElementById("meta-tpl-lab-sync");
+        const connectionId = metaTplLabSelectedConnectionId();
+        if (!connectionId) {
+          metaTplLabSetStatus("Selecione primeiro o portfólio.");
+          return false;
+        }
         if (btn) btn.disabled = true;
         metaTplLabSetStatus("Sincronizando com a Meta…");
         try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/sync", {
             method: "POST",
-            body: "{}",
+            body: JSON.stringify({ connectionId }),
           });
           metaTplLabRenderTable(payload.templates);
           metaTplLabSetStatus("Sincronizado. páginas=" + String(payload.pages || 1));
@@ -36683,6 +36912,11 @@
         const header = String((document.getElementById("meta-tpl-lab-header") || {}).value || "").trim();
         const body = String((document.getElementById("meta-tpl-lab-body") || {}).value || "").trim();
         const footer = String((document.getElementById("meta-tpl-lab-footer") || {}).value || "").trim();
+        const connectionId = metaTplLabSelectedConnectionId();
+        if (!connectionId) {
+          metaTplLabSetStatus("Selecione primeiro o portfólio.");
+          return false;
+        }
         const exampleLines = String((document.getElementById("meta-tpl-lab-examples") || {}).value || "")
           .split(/\r?\n/)
           .map((line) => line.trim())
@@ -36707,7 +36941,14 @@
         try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates", {
             method: "POST",
-            body: JSON.stringify({ name, language, category, components }),
+            body: JSON.stringify({
+              name,
+              language,
+              category,
+              components,
+              connectionId,
+              ...(metaTplLabAiAnalysisId ? { aiAnalysisId: metaTplLabAiAnalysisId } : {}),
+            }),
           });
           metaTplLabSetStatus(
             "Template criado. status=" + String((payload.template && payload.template.status) || "—"),
@@ -36788,12 +37029,31 @@
       };
 
       document.addEventListener("click", function onMetaTplLabClick(event) {
-        const target = event.target && event.target.closest ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-test]") : null;
+        const target = event.target && event.target.closest
+          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-test], [data-meta-tpl-ai-option], #meta-tpl-ai-generate")
+          : null;
         if (!target) return;
+        if (target.id === "meta-tpl-ai-generate") {
+          void metaTplGenerateUtilityOptions();
+          return;
+        }
+        const aiOption = target.getAttribute("data-meta-tpl-ai-option");
+        if (aiOption != null) {
+          metaTplApplyAiOption(Number(aiOption));
+          return;
+        }
         const viewIndex = target.getAttribute("data-meta-tpl-view");
         const testIndex = target.getAttribute("data-meta-tpl-test");
         if (viewIndex != null) window.wabaViewMetaTemplateLab(Number(viewIndex));
         if (testIndex != null) window.wabaTestMetaTemplateLab(Number(testIndex));
+      });
+
+      document.getElementById("meta-tpl-lab-portfolio")?.addEventListener("change", function () {
+        metaTplLabAiResult = null;
+        metaTplLabAiAnalysisId = "";
+        const result = document.getElementById("meta-tpl-ai-result");
+        if (result) result.hidden = true;
+        void window.wabaLoadMetaTemplatesLab();
       });
 
       let metaAutoLabFlowId = "";
@@ -60420,6 +60680,10 @@
 
       void initWabaAuthGate().then(async (unlocked) => {
         if (!unlocked) return;
+        if (isMetaTemplateAiUiPreview()) {
+          initMetaTemplateAiUiPreview();
+          return;
+        }
         if (isMetaInboxUiPreview()) {
           initMetaInboxUiPreview();
           return;
