@@ -24,6 +24,7 @@ Implementar no fluxo existente de templates um assistente que:
   cada tentativa é vinculada à mesma análise para comparação posterior.
 - Com confirmação humana, o sistema cadastra as três sequencialmente e informa
   sucesso/falha por opção. O filtro **Aprovados** mostra as aprovadas após sync.
+- O filtro de status usa select compacto no tema escuro/ciano do Laboratório.
 - Rate limit por tenant/usuário, timeout, retry transitório e logs sem texto/segredos.
 - Análise e três opções persistidas para posterior comparação com o status e
   categoria retornados pela Meta.
