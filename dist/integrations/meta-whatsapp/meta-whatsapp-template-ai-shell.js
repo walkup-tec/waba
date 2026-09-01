@@ -4,6 +4,7 @@ exports.META_TEMPLATE_AI_BUTTON_LABELS = void 0;
 exports.sanitizeMetaTemplateName = sanitizeMetaTemplateName;
 exports.templateNameForOption = templateNameForOption;
 exports.parseMetaTemplateAiShell = parseMetaTemplateAiShell;
+exports.stripTemplatePlaceholders = stripTemplatePlaceholders;
 exports.componentsFromAiOptionAndShell = componentsFromAiOptionAndShell;
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
@@ -15,7 +16,7 @@ exports.META_TEMPLATE_AI_BUTTON_LABELS = [
     "Me inscrever",
     "Comprar agora",
 ];
-const VARIABLE_TYPES = new Set(["nome", "numero"]);
+const VARIABLE_TYPES = new Set(["nenhuma", "nome", "numero"]);
 const MEDIA_FORMATS = new Set([
     "NONE",
     "IMAGE",
@@ -104,11 +105,27 @@ function exampleForVariable(shell, provided) {
     const text = String(provided || "").trim();
     return text || "Maria";
 }
+function stripTemplatePlaceholders(text) {
+    return String(text || "")
+        .replace(/\{\{\d+\}\}/g, "")
+        .replace(/[ \t]+([,.;:!?])/g, "$1")
+        .replace(/,(?=[.!?])/g, "")
+        .replace(/[ \t]{2,}/g, " ")
+        .replace(/^[ \t]+/gm, "")
+        .replace(/[ \t]+$/gm, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
 function componentsFromAiOptionAndShell(option, shell) {
-    const placeholders = (0, meta_whatsapp_template_validate_1.placeholderIndexes)(option.body);
+    const bodyText = shell.variableType === "nenhuma"
+        ? stripTemplatePlaceholders(option.body)
+        : option.body;
+    const placeholders = shell.variableType === "nenhuma" ? [] : (0, meta_whatsapp_template_validate_1.placeholderIndexes)(bodyText);
     if (placeholders.some((value, index) => value !== index + 1)) {
         throw new Error("Variáveis não sequenciais.");
     }
+    if (!bodyText)
+        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
     const examples = placeholders.map((_, index) => exampleForVariable(shell, option.variableExamples[index]));
     const components = [];
     if (MEDIA_NEEDS_HANDLE.has(shell.mediaFormat)) {
@@ -126,7 +143,7 @@ function componentsFromAiOptionAndShell(option, shell) {
     }
     components.push({
         type: "BODY",
-        text: option.body,
+        text: bodyText,
         ...(examples.length ? { example: { body_text: [examples] } } : {}),
     });
     components.push({

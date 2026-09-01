@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_TEMPLATE_AI_POLICY_VERSION = exports.META_TEMPLATE_AI_PROMPT_VERSION = void 0;
 exports.buildMetaTemplateAiInstructions = buildMetaTemplateAiInstructions;
-exports.META_TEMPLATE_AI_PROMPT_VERSION = "1.2";
+exports.META_TEMPLATE_AI_PROMPT_VERSION = "1.3";
 exports.META_TEMPLATE_AI_POLICY_VERSION = String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-reframe-2026-09").trim();
 const DEFAULT_POLICY = `
 Critérios permanentes da categoria Utility (WhatsApp Business Platform):
@@ -49,7 +49,8 @@ Como formatar:
 - Cada opção: BODY objetivo. O botão na Meta será sempre URL (Acessar site),
   estático; não invente QUICK_REPLY nem um destino diferente.
 - Use {{1}} conforme variableType do pedido: "nome" = primeiro nome;
-  "numero" = número (telefone ou protocolo). variableExamples deve ter um
+  "numero" = número (telefone ou protocolo); "nenhuma" = corpo 100% estático,
+  sem {{1}}, {{2}} nem qualquer placeholder. variableExamples deve ter um
   exemplo para cada placeholder, na ordem. Sem placeholder, [].
 - Nomes: somente letras minúsculas, números e underscore, únicos entre as 3.
 

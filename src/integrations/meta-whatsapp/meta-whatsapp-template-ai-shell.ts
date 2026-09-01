@@ -11,10 +11,10 @@ export const META_TEMPLATE_AI_BUTTON_LABELS = [
   "Comprar agora",
 ] as const;
 
-export type MetaTemplateAiVariableType = "nome" | "numero";
+export type MetaTemplateAiVariableType = "nenhuma" | "nome" | "numero";
 export type MetaTemplateAiMediaFormat = "NONE" | "IMAGE" | "VIDEO" | "DOCUMENT" | "LOCATION";
 
-const VARIABLE_TYPES = new Set<MetaTemplateAiVariableType>(["nome", "numero"]);
+const VARIABLE_TYPES = new Set<MetaTemplateAiVariableType>(["nenhuma", "nome", "numero"]);
 const MEDIA_FORMATS = new Set<MetaTemplateAiMediaFormat>([
   "NONE",
   "IMAGE",
@@ -117,14 +117,30 @@ function exampleForVariable(shell: MetaTemplateAiShell, provided: string | undef
   return text || "Maria";
 }
 
+export function stripTemplatePlaceholders(text: string): string {
+  return String(text || "")
+    .replace(/\{\{\d+\}\}/g, "")
+    .replace(/[ \t]+([,.;:!?])/g, "$1")
+    .replace(/,(?=[.!?])/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/^[ \t]+/gm, "")
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function componentsFromAiOptionAndShell(
   option: MetaTemplateAiOption,
   shell: MetaTemplateAiShell,
 ): Record<string, unknown>[] {
-  const placeholders = placeholderIndexes(option.body);
+  const bodyText = shell.variableType === "nenhuma"
+    ? stripTemplatePlaceholders(option.body)
+    : option.body;
+  const placeholders = shell.variableType === "nenhuma" ? [] : placeholderIndexes(bodyText);
   if (placeholders.some((value, index) => value !== index + 1)) {
     throw new Error("Variáveis não sequenciais.");
   }
+  if (!bodyText) throw new MetaWhatsappError("template_invalid");
   const examples = placeholders.map((_, index) => exampleForVariable(shell, option.variableExamples[index]));
   const components: Record<string, unknown>[] = [];
   if (MEDIA_NEEDS_HANDLE.has(shell.mediaFormat)) {
@@ -140,7 +156,7 @@ export function componentsFromAiOptionAndShell(
   }
   components.push({
     type: "BODY",
-    text: option.body,
+    text: bodyText,
     ...(examples.length ? { example: { body_text: [examples] } } : {}),
   });
   components.push({

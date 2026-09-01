@@ -103,7 +103,7 @@ class MetaWhatsappTemplateAiService {
         if (!baseText || baseText.length > 4000 || language.length > 20) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         }
-        if (variableType !== "nome" && variableType !== "numero") {
+        if (variableType !== "nome" && variableType !== "numero" && variableType !== "nenhuma") {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         }
         const connection = await this.requirePortfolio(tenant.tenantId, connectionId);

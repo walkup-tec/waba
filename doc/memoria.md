@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 17:45 — Tipo de variável: Nenhuma
+- Select ganhou **Nenhuma**; o BODY vai à Meta sem `{{1}}` e sem exemplos de variável.
+- Marker: `DEPLOY-2026-09-01-174500-variavel-nenhuma`
+- LOG: `doc/LOG-2026-09-01__174500__tipo-variavel-nenhuma.md`
+
 ## 2026-09-01 17:32 — Enviar para META 15% menor e mais margem
 - CTA do rodapé reduzido ~15%; `margin-top` 22px → 38px.
 - Marker: `DEPLOY-2026-09-01-173200-enviar-meta-menor`

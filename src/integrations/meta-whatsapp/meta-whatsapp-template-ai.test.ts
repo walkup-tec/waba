@@ -315,6 +315,7 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(instructions, /acompanhamento/i);
     assert.match(instructions, /Acessar site/i);
     assert.match(instructions, /variableType/i);
+    assert.match(instructions, /nenhuma/i);
     assert.doesNotMatch(instructions, /retorne options=\[\]/);
   });
 
@@ -347,6 +348,20 @@ describe("Assistente IA de templates Utility", () => {
     assert.equal(components[0]?.format, "IMAGE");
     assert.deepEqual((components[0] as { example?: { header_handle?: string[] } }).example?.header_handle, ["4::abc"]);
     assert.equal(components[2]?.type, "BUTTONS");
+  });
+
+  it("não envia placeholders no BODY quando o tipo de variável é Nenhuma", () => {
+    const shell = parseMetaTemplateAiShell({
+      modelName: "retorno_lead",
+      variableType: "nenhuma",
+      buttonText: "Quero saber mais",
+      buttonUrl: "https://waba.draxsistemas.com.br/retorno",
+    });
+    const components = componentsFromAiOptionAndShell(utilityOutput().options[0], shell);
+    const body = components.find((item) => item.type === "BODY") as { text?: string; example?: unknown };
+    assert.equal(body?.example, undefined);
+    assert.equal(String(body?.text || "").includes("{{"), false);
+    assert.match(String(body?.text || ""), /^Olá\./);
   });
 
   it("recusa URL não https ou botão fora do select do Mensageiro", () => {
