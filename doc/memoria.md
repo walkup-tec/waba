@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 17:28 — Botão Gerar do rodapé maior e centralizado
+- CTA `#meta-tpl-ai-submit-all` maior e no centro; o Gerar da coluna Texto base permanece o mesmo.
+- Marker: `DEPLOY-2026-09-01-173000-gerar-centro-maior`
+- LOG: `doc/LOG-2026-09-01__172800__gerar-template-centro-maior.md`
+
 ## 2026-09-01 17:30 — Envelope Meta no assistente de template
 - Campos acima da IA: nome do modelo, variável Nome/Número, mídia, cabeçalho, texto e URL do botão.
 - Cadastro envia HEADER + BODY + botão URL estático (Acessar site). GIF da Meta é só Marketing; aqui IMAGE/VIDEO/DOCUMENT/LOCATION/Nenhuma.

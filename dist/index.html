@@ -3840,7 +3840,36 @@
         .meta-tpl-ai-shell { display:grid; gap:10px; margin:0 0 14px; padding:12px; border-radius:13px; background:rgba(7,15,30,.42); border:1px solid rgba(148,163,184,.12); }
         .meta-tpl-ai-shell-title { margin:0; color:#e2e8f0; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
         .meta-tpl-ai-shell-hint { margin:0; color:#94a3b8; font-size:11px; line-height:1.45; }
-        .meta-tpl-ai-submit-bar { margin-top:14px; display:grid; gap:10px; }
+        .meta-tpl-ai-submit-bar {
+          margin-top: 22px;
+          display: grid;
+          gap: 10px;
+          justify-items: center;
+          text-align: center;
+        }
+        .meta-tpl-ai-submit-bar .disparos-inline-actions {
+          justify-content: center;
+          width: 100%;
+        }
+        #meta-tpl-ai-submit-all.instance-action-btn {
+          min-width: 260px;
+          padding: 14px 56px;
+          font-size: 1.05rem;
+          line-height: 1.2;
+          border-radius: 12px;
+          letter-spacing: 0.02em;
+        }
+        .meta-tpl-ai-submit-bar .meta-tpl-ai-shell-hint {
+          max-width: 420px;
+          text-align: center;
+        }
+        @media (max-width: 640px) {
+          #meta-tpl-ai-submit-all.instance-action-btn {
+            min-width: 0;
+            width: min(100%, 320px);
+            padding: 14px 28px;
+          }
+        }
         .meta-tpl-ai-alert { padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.5; }
         .meta-tpl-ai-alert.is-ok { color:#bbf7d0; background:rgba(22,163,74,.12); border:1px solid rgba(34,197,94,.25); }
         .meta-tpl-ai-alert.is-warn { color:#fde68a; background:rgba(217,119,6,.12); border:1px solid rgba(245,158,11,.25); }
