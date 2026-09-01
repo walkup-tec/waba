@@ -28,6 +28,7 @@ class MetaWhatsappTemplateAiRepository {
             waba_id: input.wabaId,
             created_by: input.createdBy,
             base_text: input.baseText,
+            language: input.language,
             requested_category: "UTILITY",
             recommended_category: input.result.recommendedCategory,
             utility_compatibility: input.result.utilityCompatibility,
@@ -45,6 +46,25 @@ class MetaWhatsappTemplateAiRepository {
         if (error)
             throw new Error(error.message);
         return String(data?.id || "");
+    }
+    async findForSubmission(tenantId, connectionId, analysisId) {
+        const { data, error } = await this.client()
+            .from(TABLE)
+            .select("id, language, eligible_for_utility, result_json")
+            .eq("id", analysisId)
+            .eq("tenant_id", tenantId)
+            .eq("connection_id", connectionId)
+            .maybeSingle();
+        if (error)
+            throw new Error(error.message);
+        if (!data)
+            return null;
+        return {
+            id: String(data.id),
+            language: String(data.language || "pt_BR"),
+            eligibleForUtility: data.eligible_for_utility === true,
+            result: data.result_json,
+        };
     }
     async linkSubmission(input) {
         const { data: analysis, error: analysisError } = await this.client()
@@ -81,6 +101,19 @@ class MetaWhatsappTemplateAiRepository {
         }, { onConflict: "tenant_id,analysis_id,template_id" });
         if (error)
             throw new Error(error.message);
+    }
+    async listSubmittedNames(tenantId, connectionId, analysisId) {
+        const { data, error } = await this.client()
+            .from(SUBMISSIONS_TABLE)
+            .select("submitted_template_json")
+            .eq("tenant_id", tenantId)
+            .eq("connection_id", connectionId)
+            .eq("analysis_id", analysisId);
+        if (error)
+            throw new Error(error.message);
+        return new Set((data || [])
+            .map((row) => String(row?.submitted_template_json?.name || "").trim())
+            .filter(Boolean));
     }
     async patchMetaOutcome(input) {
         let query = this.client()

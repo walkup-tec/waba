@@ -26,6 +26,7 @@ export class MetaWhatsappTemplateAiRepository {
     wabaId: string;
     createdBy: string;
     baseText: string;
+    language: string;
     result: MetaTemplateAiModelOutput;
     model: string;
     responseId: string | null;
@@ -40,6 +41,7 @@ export class MetaWhatsappTemplateAiRepository {
         waba_id: input.wabaId,
         created_by: input.createdBy,
         base_text: input.baseText,
+        language: input.language,
         requested_category: "UTILITY",
         recommended_category: input.result.recommendedCategory,
         utility_compatibility: input.result.utilityCompatibility,
@@ -56,6 +58,33 @@ export class MetaWhatsappTemplateAiRepository {
       .single();
     if (error) throw new Error(error.message);
     return String((data as { id?: unknown } | null)?.id || "");
+  }
+
+  async findForSubmission(
+    tenantId: string,
+    connectionId: string,
+    analysisId: string,
+  ): Promise<{
+    id: string;
+    language: string;
+    eligibleForUtility: boolean;
+    result: MetaTemplateAiModelOutput;
+  } | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select("id, language, eligible_for_utility, result_json")
+      .eq("id", analysisId)
+      .eq("tenant_id", tenantId)
+      .eq("connection_id", connectionId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return null;
+    return {
+      id: String((data as any).id),
+      language: String((data as any).language || "pt_BR"),
+      eligibleForUtility: (data as any).eligible_for_utility === true,
+      result: (data as any).result_json as MetaTemplateAiModelOutput,
+    };
   }
 
   async linkSubmission(input: {
@@ -105,6 +134,25 @@ export class MetaWhatsappTemplateAiRepository {
         { onConflict: "tenant_id,analysis_id,template_id" },
       );
     if (error) throw new Error(error.message);
+  }
+
+  async listSubmittedNames(
+    tenantId: string,
+    connectionId: string,
+    analysisId: string,
+  ): Promise<Set<string>> {
+    const { data, error } = await this.client()
+      .from(SUBMISSIONS_TABLE)
+      .select("submitted_template_json")
+      .eq("tenant_id", tenantId)
+      .eq("connection_id", connectionId)
+      .eq("analysis_id", analysisId);
+    if (error) throw new Error(error.message);
+    return new Set(
+      (data || [])
+        .map((row: any) => String(row?.submitted_template_json?.name || "").trim())
+        .filter(Boolean),
+    );
   }
 
   async patchMetaOutcome(input: {

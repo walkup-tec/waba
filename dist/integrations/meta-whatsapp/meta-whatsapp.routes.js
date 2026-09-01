@@ -338,6 +338,16 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             return handleMetaError(res, error);
         }
     });
+    app.post("/integrations/meta/whatsapp/templates/ai/submit-all", async (req, res) => {
+        try {
+            warnClientTenantClaim(req);
+            const result = await templateAiService.submitAllFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), req.body && typeof req.body === "object" ? req.body : {});
+            return sendPublic(res, 200, { ok: true, ...result });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
     app.get("/integrations/meta/whatsapp/inbox/conversations", async (req, res) => {
         try {
             const result = await inboxService.listConversations((0, waba_request_auth_1.resolveWabaRequestAuth)(req), req.query);

@@ -31,6 +31,7 @@ export type MetaTemplateAiPublicResult = MetaTemplateAiModelOutput & {
   analysisId: string | null;
   connectionId: string;
   wabaId: string;
+  language: string;
   model: string;
   policyVersion: string;
   analyzedAt: string;

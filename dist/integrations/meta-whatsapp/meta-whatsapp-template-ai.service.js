@@ -10,6 +10,7 @@ const meta_whatsapp_template_ai_prompt_1 = require("./meta-whatsapp-template-ai.
 const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
 const meta_whatsapp_template_ai_schema_1 = require("./meta-whatsapp-template-ai.schema");
 const meta_whatsapp_template_log_1 = require("./meta-whatsapp-template-log");
+const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.service");
 const windows = new Map();
 const FORBIDDEN_APPROVAL_PROMISE = /\b(será|vai ser|garantid[ao]|100%)\s+(aprovad[ao]|aceit[ao])/i;
 function requireTenant(auth) {
@@ -36,10 +37,11 @@ function isEnabled() {
     return Boolean(String(process.env.OPENAI_API_KEY || "").trim());
 }
 class MetaWhatsappTemplateAiService {
-    constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), analyses = new meta_whatsapp_template_ai_repository_1.MetaWhatsappTemplateAiRepository(), openAi = waba_openai_responses_client_1.callOpenAiStructured) {
+    constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), analyses = new meta_whatsapp_template_ai_repository_1.MetaWhatsappTemplateAiRepository(), openAi = waba_openai_responses_client_1.callOpenAiStructured, templates = new meta_whatsapp_template_service_1.MetaWhatsappTemplateService()) {
         this.connections = connections;
         this.analyses = analyses;
         this.openAi = openAi;
+        this.templates = templates;
     }
     async requirePortfolio(tenantId, connectionId) {
         const id = String(connectionId || "").trim();
@@ -136,6 +138,7 @@ class MetaWhatsappTemplateAiService {
                 wabaId: String(connection.wabaId),
                 createdBy: auth.email,
                 baseText,
+                language,
                 result,
                 model: ai.model,
                 responseId: ai.responseId,
@@ -159,9 +162,95 @@ class MetaWhatsappTemplateAiService {
             analysisId,
             connectionId: connection.id,
             wabaId: String(connection.wabaId),
+            language,
             model: ai.model,
             policyVersion: meta_whatsapp_template_ai_prompt_1.META_TEMPLATE_AI_POLICY_VERSION,
             analyzedAt,
+        };
+    }
+    async submitAllFromAuth(auth, input) {
+        const tenant = requireTenant(auth);
+        const connectionId = String(input?.connectionId || input?.connection_id || "").trim();
+        const analysisId = String(input?.analysisId || input?.analysis_id || "").trim();
+        if (!connectionId || !analysisId)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        await this.requirePortfolio(tenant.tenantId, connectionId);
+        const analysis = await this.analyses.findForSubmission(tenant.tenantId, connectionId, analysisId);
+        if (!analysis ||
+            !analysis.eligibleForUtility ||
+            analysis.result.recommendedCategory !== "UTILITY" ||
+            !Array.isArray(analysis.result.options) ||
+            analysis.result.options.length !== 3) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_ai_invalid_output");
+        }
+        const results = [];
+        const alreadySubmitted = await this.analyses.listSubmittedNames(tenant.tenantId, connectionId, analysisId);
+        for (let index = 0; index < analysis.result.options.length; index += 1) {
+            const option = analysis.result.options[index];
+            if (alreadySubmitted.has(option.name)) {
+                results.push({
+                    index,
+                    name: option.name,
+                    ok: true,
+                    status: "ALREADY_SUBMITTED",
+                    templateId: null,
+                    error: null,
+                });
+                continue;
+            }
+            try {
+                const components = [
+                    {
+                        type: "BODY",
+                        text: option.body,
+                        ...(option.variableExamples.length
+                            ? { example: { body_text: [option.variableExamples] } }
+                            : {}),
+                    },
+                ];
+                const template = await this.templates.createFromAuth(auth, {
+                    connectionId,
+                    aiAnalysisId: analysisId,
+                    name: option.name,
+                    language: analysis.language,
+                    category: "UTILITY",
+                    components,
+                });
+                results.push({
+                    index,
+                    name: option.name,
+                    ok: true,
+                    status: template.status,
+                    templateId: template.id,
+                    error: null,
+                });
+            }
+            catch (error) {
+                results.push({
+                    index,
+                    name: option.name,
+                    ok: false,
+                    status: null,
+                    templateId: null,
+                    error: error instanceof meta_whatsapp_errors_1.MetaWhatsappError
+                        ? error.message
+                        : "Não foi possível cadastrar esta opção.",
+                });
+            }
+        }
+        const submitted = results.filter((item) => item.ok).length;
+        (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
+            tenantId: tenant.tenantId,
+            connectionId,
+            batchSubmit: true,
+            submitted,
+            failed: results.length - submitted,
+        });
+        return {
+            total: results.length,
+            submitted,
+            failed: results.length - submitted,
+            results,
         };
     }
 }

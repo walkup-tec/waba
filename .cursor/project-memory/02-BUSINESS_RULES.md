@@ -39,6 +39,8 @@ Somente regras permanentes. Sem detalhes de implementação.
 - O Inbox mostra o número (e o nome) dos chips com switch verde. Sem chip ligado, avisa para ligar no Laboratório.
 - Assistente de templates Utility exige selecionar o portfólio/WABA e informar
   um texto base. Quando elegível, gera três versões para escolha e revisão humana.
+- Após confirmação humana, as três opções são cadastradas como templates
+  distintos e acompanhadas individualmente até aprovação/rejeição pela Meta.
 - A IA não envia templates automaticamente nem garante aprovação. Se a finalidade
   central for Marketing, não deve convertê-la artificialmente em Utility.
 - O nome no Inbox segue o nome salvo no Laboratório (pedido no perfil do chip). O card continua mostrando o `verified_name` da Graph até o PIN de register.

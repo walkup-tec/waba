@@ -74,9 +74,14 @@ function utilityOutput(): MetaTemplateAiModelOutput {
   };
 }
 
-function serviceFor(email: string, output: unknown) {
+function serviceFor(
+  email: string,
+  output: unknown,
+  templateService?: { createFromAuth(auth: unknown, input: Record<string, unknown>): Promise<any> },
+) {
   const row = connection(email);
   const stored: Array<Record<string, unknown>> = [];
+  let savedResult: MetaTemplateAiModelOutput | null = null;
   return {
     stored,
     service: new MetaWhatsappTemplateAiService(
@@ -88,7 +93,22 @@ function serviceFor(email: string, output: unknown) {
       {
         async create(input: Record<string, unknown>) {
           stored.push(input);
+          savedResult = input.result as MetaTemplateAiModelOutput;
           return "analysis-1";
+        },
+        async findForSubmission(tenantId: string, connectionId: string, analysisId: string) {
+          if (tenantId !== row.tenantId || connectionId !== row.id || analysisId !== "analysis-1" || !savedResult) {
+            return null;
+          }
+          return {
+            id: analysisId,
+            language: "pt_BR",
+            eligibleForUtility: savedResult.eligibleForUtility,
+            result: savedResult,
+          };
+        },
+        async listSubmittedNames() {
+          return new Set<string>();
         },
       } as any,
       async () => ({
@@ -97,6 +117,14 @@ function serviceFor(email: string, output: unknown) {
         responseId: "resp-1",
         latencyMs: 12,
       }),
+      (templateService || {
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          return {
+            id: `template-${String(input.name)}`,
+            status: "PENDING",
+          };
+        },
+      }) as any,
     ),
   };
 }
@@ -185,6 +213,32 @@ describe("Assistente IA de templates Utility", () => {
     } finally {
       process.env.META_TEMPLATE_AI_RATE_LIMIT_PER_MINUTE = "5";
     }
+  });
+
+  it("cadastra as três opções separadamente e preserva falha individual", async () => {
+    const email = "ai-submit-three@example.com";
+    const calls: string[] = [];
+    const { service } = serviceFor(email, utilityOutput(), {
+      async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+        const name = String(input.name || "");
+        calls.push(name);
+        if (name.endsWith("_2")) throw new MetaWhatsappError("template_invalid");
+        return { id: `local-${name}`, status: "PENDING" };
+      },
+    });
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", analysisId: "analysis-1" },
+    );
+    assert.equal(calls.length, 3);
+    assert.equal(result.total, 3);
+    assert.equal(result.submitted, 2);
+    assert.equal(result.failed, 1);
+    assert.equal(result.results[1]?.ok, false);
   });
 });
 describe("OpenAI Responses com Structured Outputs", () => {

@@ -21,6 +21,7 @@ import {
 import type { MetaTemplateAiPublicResult } from "./meta-whatsapp-template-ai.types";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
+import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 
 type StructuredCaller = (request: Parameters<typeof callOpenAiStructured>[0]) => Promise<OpenAiStructuredResult>;
 
@@ -55,6 +56,7 @@ export class MetaWhatsappTemplateAiService {
     private readonly connections = new MetaWhatsappConnectionRepository(),
     private readonly analyses = new MetaWhatsappTemplateAiRepository(),
     private readonly openAi: StructuredCaller = callOpenAiStructured,
+    private readonly templates = new MetaWhatsappTemplateService(),
   ) {}
 
   private async requirePortfolio(
@@ -161,6 +163,7 @@ export class MetaWhatsappTemplateAiService {
         wabaId: String(connection.wabaId),
         createdBy: auth.email,
         baseText,
+        language,
         result,
         model: ai.model,
         responseId: ai.responseId,
@@ -184,9 +187,127 @@ export class MetaWhatsappTemplateAiService {
       analysisId,
       connectionId: connection.id,
       wabaId: String(connection.wabaId),
+      language,
       model: ai.model,
       policyVersion: META_TEMPLATE_AI_POLICY_VERSION,
       analyzedAt,
+    };
+  }
+
+  async submitAllFromAuth(
+    auth: WabaRequestAuth,
+    input: Record<string, unknown> | undefined,
+  ): Promise<{
+    total: number;
+    submitted: number;
+    failed: number;
+    results: Array<{
+      index: number;
+      name: string;
+      ok: boolean;
+      status: string | null;
+      templateId: string | null;
+      error: string | null;
+    }>;
+  }> {
+    const tenant = requireTenant(auth);
+    const connectionId = String(input?.connectionId || input?.connection_id || "").trim();
+    const analysisId = String(input?.analysisId || input?.analysis_id || "").trim();
+    if (!connectionId || !analysisId) throw new MetaWhatsappError("invalid_payload");
+    await this.requirePortfolio(tenant.tenantId, connectionId);
+    const analysis = await this.analyses.findForSubmission(
+      tenant.tenantId,
+      connectionId,
+      analysisId,
+    );
+    if (
+      !analysis ||
+      !analysis.eligibleForUtility ||
+      analysis.result.recommendedCategory !== "UTILITY" ||
+      !Array.isArray(analysis.result.options) ||
+      analysis.result.options.length !== 3
+    ) {
+      throw new MetaWhatsappError("template_ai_invalid_output");
+    }
+
+    const results: Array<{
+      index: number;
+      name: string;
+      ok: boolean;
+      status: string | null;
+      templateId: string | null;
+      error: string | null;
+    }> = [];
+    const alreadySubmitted = await this.analyses.listSubmittedNames(
+      tenant.tenantId,
+      connectionId,
+      analysisId,
+    );
+    for (let index = 0; index < analysis.result.options.length; index += 1) {
+      const option = analysis.result.options[index];
+      if (alreadySubmitted.has(option.name)) {
+        results.push({
+          index,
+          name: option.name,
+          ok: true,
+          status: "ALREADY_SUBMITTED",
+          templateId: null,
+          error: null,
+        });
+        continue;
+      }
+      try {
+        const components: Record<string, unknown>[] = [
+          {
+            type: "BODY",
+            text: option.body,
+            ...(option.variableExamples.length
+              ? { example: { body_text: [option.variableExamples] } }
+              : {}),
+          },
+        ];
+        const template = await this.templates.createFromAuth(auth, {
+          connectionId,
+          aiAnalysisId: analysisId,
+          name: option.name,
+          language: analysis.language,
+          category: "UTILITY",
+          components,
+        });
+        results.push({
+          index,
+          name: option.name,
+          ok: true,
+          status: template.status,
+          templateId: template.id,
+          error: null,
+        });
+      } catch (error) {
+        results.push({
+          index,
+          name: option.name,
+          ok: false,
+          status: null,
+          templateId: null,
+          error: error instanceof MetaWhatsappError
+            ? error.message
+            : "Não foi possível cadastrar esta opção.",
+        });
+      }
+    }
+    const submitted = results.filter((item) => item.ok).length;
+    logMetaTemplate("AI", {
+      tenantId: tenant.tenantId,
+      connectionId,
+      batchSubmit: true,
+      submitted,
+      failed: results.length - submitted,
+    });
+    return {
+      total: results.length,
+      submitted,
+      failed: results.length - submitted,
+      results,
     };
   }
 }

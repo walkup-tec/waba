@@ -21158,6 +21158,12 @@
                 >
                   Recarregar lista
                 </button>
+                <select id="meta-tpl-lab-status-filter" class="form-control" style="width:auto;min-width:150px;">
+                  <option value="ALL">Todos os status</option>
+                  <option value="APPROVED">Aprovados</option>
+                  <option value="PENDING">Em análise</option>
+                  <option value="REJECTED">Reprovados</option>
+                </select>
               </div>
               <div class="aquecedor-command-log" style="margin-top: 0; overflow-x: auto;">
                 <table class="meta-tpl-lab-table" style="width:100%; border-collapse:collapse; font-size:13px;">
@@ -36684,7 +36690,9 @@
                   (option, index) =>
                     `<article class="meta-tpl-ai-option"><h4>Opção ${index + 1}</h4><p>${escapeAdminHtml(String(option.body || ""))}</p><small>${escapeAdminHtml(String(option.rationale || ""))}</small><button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-ai-option="${index}">Usar esta opção</button></article>`,
                 )
-                .join("")}</div>`
+                .join("")}</div>` +
+              `<div class="disparos-inline-actions"><button type="button" id="meta-tpl-ai-submit-all" class="instance-action-btn btn-qrcode enabled">Cadastrar os 3 templates na Meta</button></div>` +
+              `<div id="meta-tpl-ai-batch-result"></div>`
             : "") +
           `<p class="muted" style="margin:0;">${escapeAdminHtml(String(payload.disclaimer || "A análise final é realizada pela Meta."))}</p>`;
         root.hidden = false;
@@ -36741,6 +36749,49 @@
         setValue("meta-tpl-lab-footer", "");
         metaTplLabSetStatus("Opção aplicada. Revise o texto antes de criar na Meta.");
         document.getElementById("meta-tpl-lab-name")?.focus();
+      }
+
+      async function metaTplSubmitAllAiOptions() {
+        const connectionId = metaTplLabSelectedConnectionId();
+        const analysisId = String(metaTplLabAiAnalysisId || "").trim();
+        const status = document.getElementById("meta-tpl-ai-status");
+        const button = document.getElementById("meta-tpl-ai-submit-all");
+        if (!connectionId || !analysisId || !metaTplLabAiResult?.eligibleForUtility) {
+          if (status) status.textContent = "Gere primeiro as três opções Utility para este portfólio.";
+          return;
+        }
+        const confirmed = window.confirm(
+          "Cadastrar os três templates no portfólio selecionado? Cada opção será enviada separadamente para análise da Meta.",
+        );
+        if (!confirmed) return;
+        if (button) button.disabled = true;
+        if (status) status.textContent = "Cadastrando os três templates na Meta…";
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/submit-all", {
+            method: "POST",
+            body: JSON.stringify({ connectionId, analysisId }),
+          });
+          const result = document.getElementById("meta-tpl-ai-batch-result");
+          const rows = Array.isArray(payload.results) ? payload.results : [];
+          if (result) {
+            result.innerHTML =
+              `<div class="meta-tpl-ai-alert ${payload.failed ? "is-warn" : "is-ok"}"><strong>${escapeAdminHtml(String(payload.submitted || 0))} de 3 cadastrados</strong><br>` +
+              rows
+                .map((item) => `${item.ok ? "✓" : "✕"} Opção ${Number(item.index || 0) + 1}: ${escapeAdminHtml(String(item.status || item.error || "erro"))}`)
+                .join("<br>") +
+              `</div>`;
+          }
+          if (status) {
+            status.textContent = payload.failed
+              ? "Cadastro parcial. Consulte o resultado abaixo."
+              : "Três templates enviados. Aguarde a análise da Meta e clique em Atualizar da Meta.";
+          }
+          await window.wabaLoadMetaTemplatesLab();
+        } catch (error) {
+          if (status) status.textContent = error && error.message ? error.message : "Não foi possível cadastrar as opções.";
+        } finally {
+          if (button) button.disabled = false;
+        }
       }
 
       function isMetaTemplateAiUiPreview() {
@@ -36805,15 +36856,21 @@
       function metaTplLabRenderTable(templates) {
         const tbody = document.getElementById("meta-tpl-lab-tbody");
         if (!tbody) return;
-        const rows = Array.isArray(templates) ? templates : [];
-        metaTplLabCache = rows;
+        const allRows = Array.isArray(templates) ? templates : [];
+        metaTplLabCache = allRows;
+        const filter = String((document.getElementById("meta-tpl-lab-status-filter") || {}).value || "ALL");
+        const rows = allRows
+          .map((item, originalIndex) => ({ item, originalIndex }))
+          .filter((entry) => filter === "ALL" || String(entry.item?.status || "").toUpperCase() === filter);
         if (!rows.length) {
           tbody.innerHTML =
-            '<tr><td class="muted" colspan="7" style="padding:10px;">Nenhum template local. Use Atualizar da Meta ou Criar template.</td></tr>';
+            '<tr><td class="muted" colspan="7" style="padding:10px;">Nenhum template para este filtro. Use Atualizar da Meta para consultar o resultado.</td></tr>';
           return;
         }
         tbody.innerHTML = rows
-          .map((item, index) => {
+          .map((entry) => {
+            const item = entry.item;
+            const index = entry.originalIndex;
             const name = escapeAdminHtml(String(item?.name || ""));
             const language = escapeAdminHtml(String(item?.language || "—"));
             const category = escapeAdminHtml(String(item?.category || "—"));
@@ -37030,11 +37087,15 @@
 
       document.addEventListener("click", function onMetaTplLabClick(event) {
         const target = event.target && event.target.closest
-          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-test], [data-meta-tpl-ai-option], #meta-tpl-ai-generate")
+          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-test], [data-meta-tpl-ai-option], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all")
           : null;
         if (!target) return;
         if (target.id === "meta-tpl-ai-generate") {
           void metaTplGenerateUtilityOptions();
+          return;
+        }
+        if (target.id === "meta-tpl-ai-submit-all") {
+          void metaTplSubmitAllAiOptions();
           return;
         }
         const aiOption = target.getAttribute("data-meta-tpl-ai-option");
@@ -37054,6 +37115,9 @@
         const result = document.getElementById("meta-tpl-ai-result");
         if (result) result.hidden = true;
         void window.wabaLoadMetaTemplatesLab();
+      });
+      document.getElementById("meta-tpl-lab-status-filter")?.addEventListener("change", function () {
+        metaTplLabRenderTable(metaTplLabCache);
       });
 
       let metaAutoLabFlowId = "";

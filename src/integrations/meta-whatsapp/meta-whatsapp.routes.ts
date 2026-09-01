@@ -374,6 +374,19 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  app.post("/integrations/meta/whatsapp/templates/ai/submit-all", async (req: Request, res: Response) => {
+    try {
+      warnClientTenantClaim(req);
+      const result = await templateAiService.submitAllFromAuth(
+        resolveWabaRequestAuth(req),
+        req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {},
+      );
+      return sendPublic(res, 200, { ok: true, ...result });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
   app.get("/integrations/meta/whatsapp/inbox/conversations", async (req: Request, res: Response) => {
     try {
       const result = await inboxService.listConversations(

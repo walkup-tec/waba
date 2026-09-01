@@ -20,8 +20,10 @@ Implementar no fluxo existente de templates um assistente que:
   validator Meta existente.
 - Portfólio é obrigatório; conexão e WABA são verificadas dentro do tenant.
 - Opção escolhida apenas preenche o formulário. O endpoint da IA não chama a Meta.
-- As três opções podem ser submetidas individualmente; cada tentativa é vinculada
-  à mesma análise para comparação posterior, sem envio em lote.
+- As três opções são submetidas como templates distintos, em chamadas sequenciais;
+  cada tentativa é vinculada à mesma análise para comparação posterior.
+- Com confirmação humana, o sistema cadastra as três sequencialmente e informa
+  sucesso/falha por opção. O filtro **Aprovados** mostra as aprovadas após sync.
 - Rate limit por tenant/usuário, timeout, retry transitório e logs sem texto/segredos.
 - Análise e três opções persistidas para posterior comparação com o status e
   categoria retornados pela Meta.

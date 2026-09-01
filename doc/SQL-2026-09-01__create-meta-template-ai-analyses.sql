@@ -8,6 +8,7 @@ create table if not exists public.meta_whatsapp_template_ai_analyses (
   waba_id text not null,
   created_by text not null,
   base_text text not null,
+  language text not null default 'pt_BR',
   requested_category text not null default 'UTILITY',
   recommended_category text not null,
   utility_compatibility integer not null,
@@ -29,6 +30,9 @@ create table if not exists public.meta_whatsapp_template_ai_analyses (
   constraint meta_template_ai_recommended_category_chk
     check (recommended_category in ('UTILITY', 'MARKETING'))
 );
+
+alter table public.meta_whatsapp_template_ai_analyses
+  add column if not exists language text not null default 'pt_BR';
 
 create table if not exists public.meta_whatsapp_template_ai_submissions (
   id uuid primary key default gen_random_uuid(),

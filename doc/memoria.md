@@ -2,6 +2,7 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
 ## 2026-09-01 13:40 — Assistente IA de templates Utility
 - Fluxo: portfólio obrigatório → texto base → 3 opções Utility → revisão humana → Meta.
+- Confirmação única cadastra as 3 opções separadamente; lista pode filtrar Aprovados.
 - Mesmas envs OpenAI; Responses API com JSON Schema estrito + Ajv.
 - Marketing não é convertido artificialmente; decisão final sempre da Meta.
 - SQL: `doc/SQL-2026-09-01__create-meta-template-ai-analyses.sql`
