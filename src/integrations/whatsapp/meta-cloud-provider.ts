@@ -51,7 +51,11 @@ export class MetaCloudProvider implements WhatsAppProvider {
     if (text.length > 4096) throw new MetaWhatsappError("invalid_payload");
     const recipient = normalizeCloudApiRecipient(input.to);
     if (!recipient.ok) throw new MetaWhatsappError("invalid_recipient");
-    const connection = await this.requireConnected(input.tenantId, input.connectionId);
+    const connection = await this.requireConnected(
+      input.tenantId,
+      input.connectionId,
+      input.phoneNumberId,
+    );
     return this.dispatch(connection, {
       messaging_product: "whatsapp",
       recipient_type: "individual",
@@ -67,7 +71,11 @@ export class MetaCloudProvider implements WhatsAppProvider {
     if (!name || !language) throw new MetaWhatsappError("invalid_payload");
     const recipient = normalizeCloudApiRecipient(input.to);
     if (!recipient.ok) throw new MetaWhatsappError("invalid_recipient");
-    const connection = await this.requireConnected(input.tenantId, input.connectionId);
+    const connection = await this.requireConnected(
+      input.tenantId,
+      input.connectionId,
+      input.phoneNumberId,
+    );
     const template: Record<string, unknown> = {
       name,
       language: { code: language },
@@ -85,8 +93,20 @@ export class MetaCloudProvider implements WhatsAppProvider {
   async requireConnected(
     tenantId: string,
     connectionId?: string,
+    phoneNumberId?: string,
   ): Promise<MetaWhatsappConnectionRecord> {
     let row: MetaWhatsappConnectionRecord | null = null;
+    const phone = String(phoneNumberId || "").trim();
+    if (phone) {
+      row = await this.connections.findConnectedByPhoneNumberId(phone);
+      const usableByPhone =
+        Boolean(row) &&
+        row!.tenantId === tenantId &&
+        !row!.disconnectedAt &&
+        (row!.status === "connected" || row!.status === "pending_confirmation");
+      if (usableByPhone && row) return row;
+      row = null;
+    }
     if (connectionId) {
       row = await this.connections.findByIdForTenant(tenantId, connectionId);
       const usable =

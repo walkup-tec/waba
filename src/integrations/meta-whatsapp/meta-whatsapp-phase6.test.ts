@@ -78,6 +78,10 @@ class FakeConversations {
   rows: MetaConversationRecord[] = [];
   upserts: Array<{ contactWaId: string; inbound?: boolean }> = [];
 
+  async findByIdForTenant(tenantId: string, id: string) {
+    return this.rows.find((row) => row.tenantId === tenantId && row.id === id) || null;
+  }
+
   async findByTenantContact(tenantId: string, contactWaId: string) {
     return this.rows.find((row) => row.tenantId === tenantId && row.contactWaId === contactWaId) || null;
   }
@@ -123,6 +127,8 @@ class FakeConversations {
           input.contactWaId,
         );
     if (existing) {
+      existing.connectionId = input.connectionId;
+      if (input.phoneNumberId) existing.phoneNumberId = input.phoneNumberId;
       existing.lastMessageAt = input.atIso;
       if (input.inbound) {
         existing.lastInboundAt = input.atIso;
@@ -606,6 +612,67 @@ describe("fase 6 messaging service", () => {
       assert.equal(calls[0]?.token, "tok-walkup");
       assert.equal(conversations.rows[0]?.connectionId, "conn-walkup");
       assert.equal(conversations.rows[0]?.phoneNumberId, "phone-walkup");
+    } finally {
+      purgePhoneIdentities(tenantId);
+    }
+  });
+
+  it("resposta do Inbox corrige conexão antiga pelo número receptor", async () => {
+    const email = "phase6-inbox-stale-connection@example.com";
+    const tenantId = deriveStableMetaTenantId(email);
+    writePhoneIdentity(tenantId, "phone-walkup", { inboxEnabled: true, channelName: "Walkup" });
+    try {
+      const connections = new FakeConnections();
+      connections.rows.push(
+        connectedRow({
+          id: "conn-drax",
+          tenantId,
+          ownerEmail: email,
+          phoneNumberId: "phone-drax",
+          accessTokenEncrypted: "enc-drax",
+        }),
+        connectedRow({
+          id: "conn-walkup",
+          tenantId,
+          ownerEmail: email,
+          phoneNumberId: "phone-walkup",
+          accessTokenEncrypted: "enc-walkup",
+        }),
+      );
+      const conversations = new FakeConversations();
+      const stale = await conversations.upsertForContact({
+        tenantId,
+        connectionId: "conn-drax",
+        phoneNumberId: "phone-walkup",
+        contactWaId: "5551999887766",
+        inbound: true,
+        atIso: "2026-09-01T12:00:00.000Z",
+      });
+      const messages = new FakeMessages();
+      const calls: Array<{ token: string; phoneNumberId: string }> = [];
+      const provider = new MetaCloudProvider(
+        connections as any,
+        async (input: { token: string; phoneNumberId: string }) => {
+          calls.push(input);
+          return graphOk("wamid.WALKUP");
+        },
+        (encrypted: string) => (encrypted === "enc-walkup" ? "tok-walkup" : "tok-drax"),
+      );
+      const service = new MetaWhatsappMessagingService(provider, conversations as any, messages as any);
+      const result = await service.sendFromAuth(
+        { email, role: "subscriber" },
+        {
+          conversationId: stale.record.id,
+          to: "5551999887766",
+          type: "text",
+          text: "Resposta pelo número Walkup",
+        },
+      );
+
+      assert.equal(result.connectionId, "conn-walkup");
+      assert.equal(calls[0]?.token, "tok-walkup");
+      assert.equal(calls[0]?.phoneNumberId, "phone-walkup");
+      assert.equal(conversations.rows[0]?.connectionId, "conn-walkup");
     } finally {
       purgePhoneIdentities(tenantId);
     }

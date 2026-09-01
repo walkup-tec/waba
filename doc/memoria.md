@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 12:30 — Inbox envia pela conexão do número receptor
+- Fio Walkup herdava `connection_id` Drax na migration e o envio falhava.
+- Provider resolve conexão por `phone_number_id`; migration corrige históricos.
+- Marker: `DEPLOY-2026-09-01-123000-meta-inbox-conexao-por-numero`
+- LOG: `doc/LOG-2026-09-01__123000__meta-inbox-envio-conexao-por-numero.md`
+
 ## 2026-09-01 11:35 — Inbox separa fio por número oficial
 - Conversa = `tenant_id + phone_number_id + contact_wa_id`.
 - Drax e Walkup não compartilham mais o fio do mesmo contato.

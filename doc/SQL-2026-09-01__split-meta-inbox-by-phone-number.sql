@@ -107,6 +107,30 @@ begin
     end loop;
   end loop;
 
+  -- Corrige fios antigos cujo phone_number_id mudou, mas connection_id ficou
+  -- apontando para outro portfólio (ex.: Walkup usando token/conexão da Drax).
+  with latest_connection as (
+    select distinct on (c.id)
+      c.id as conversation_id,
+      m.connection_id
+    from public.meta_whatsapp_conversations c
+    join public.meta_whatsapp_messages m
+      on m.tenant_id = c.tenant_id
+     and m.conversation_id = c.id
+    where case
+      when m.direction = 'inbound' then nullif(trim(m.to_wa_id), '')
+      when m.direction = 'outbound' then nullif(trim(m.from_wa_id), '')
+      else null
+    end = c.phone_number_id
+    order by c.id, m.created_at desc
+  )
+  update public.meta_whatsapp_conversations c
+     set connection_id = latest_connection.connection_id,
+         updated_at = now()
+    from latest_connection
+   where latest_connection.conversation_id = c.id
+     and c.connection_id is distinct from latest_connection.connection_id;
+
   -- Recalcula os resumos de cada fio sem alterar status/responsável.
   with stats as (
     select

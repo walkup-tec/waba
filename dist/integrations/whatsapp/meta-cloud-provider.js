@@ -40,7 +40,7 @@ class MetaCloudProvider {
         const recipient = (0, meta_whatsapp_recipient_1.normalizeCloudApiRecipient)(input.to);
         if (!recipient.ok)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_recipient");
-        const connection = await this.requireConnected(input.tenantId, input.connectionId);
+        const connection = await this.requireConnected(input.tenantId, input.connectionId, input.phoneNumberId);
         return this.dispatch(connection, {
             messaging_product: "whatsapp",
             recipient_type: "individual",
@@ -57,7 +57,7 @@ class MetaCloudProvider {
         const recipient = (0, meta_whatsapp_recipient_1.normalizeCloudApiRecipient)(input.to);
         if (!recipient.ok)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_recipient");
-        const connection = await this.requireConnected(input.tenantId, input.connectionId);
+        const connection = await this.requireConnected(input.tenantId, input.connectionId, input.phoneNumberId);
         const template = {
             name,
             language: { code: language },
@@ -72,8 +72,19 @@ class MetaCloudProvider {
             template,
         }, input.phoneNumberId);
     }
-    async requireConnected(tenantId, connectionId) {
+    async requireConnected(tenantId, connectionId, phoneNumberId) {
         let row = null;
+        const phone = String(phoneNumberId || "").trim();
+        if (phone) {
+            row = await this.connections.findConnectedByPhoneNumberId(phone);
+            const usableByPhone = Boolean(row) &&
+                row.tenantId === tenantId &&
+                !row.disconnectedAt &&
+                (row.status === "connected" || row.status === "pending_confirmation");
+            if (usableByPhone && row)
+                return row;
+            row = null;
+        }
         if (connectionId) {
             row = await this.connections.findByIdForTenant(tenantId, connectionId);
             const usable = Boolean(row) &&

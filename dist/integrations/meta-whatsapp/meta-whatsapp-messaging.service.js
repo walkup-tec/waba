@@ -67,10 +67,12 @@ class MetaWhatsappMessagingService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("conversation_not_found");
         }
         const requestedConnection = String(body?.connectionId || body?.connection_id || "").trim();
+        const requestedPhone = String(body?.phoneNumberId || body?.phone_number_id || "").trim();
         const preferredConnectionId = String(existingConversation?.connectionId || requestedConnection || "").trim();
+        const preferredPhoneNumberId = String(existingConversation?.phoneNumberId || requestedPhone || "").trim();
         let connection;
         try {
-            connection = await this.provider.requireConnected(tenantId, preferredConnectionId || undefined);
+            connection = await this.provider.requireConnected(tenantId, preferredConnectionId || undefined, preferredPhoneNumberId || undefined);
         }
         catch (error) {
             const canFallbackToFirstConnected = Boolean(preferredConnectionId) &&
@@ -84,7 +86,6 @@ class MetaWhatsappMessagingService {
                 throw error;
             }
         }
-        const requestedPhone = String(body?.phoneNumberId || body?.phone_number_id || "").trim();
         const sendPhoneNumberId = !existingConversation && requestedPhone
             ? requestedPhone
             : (0, meta_whatsapp_phone_identity_store_1.resolveInboxSendPhoneNumberId)({

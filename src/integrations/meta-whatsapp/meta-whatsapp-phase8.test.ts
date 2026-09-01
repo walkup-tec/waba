@@ -114,6 +114,16 @@ class FakeConnections {
         .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))[0] || null
     );
   }
+  async findConnectedByPhoneNumberId(phoneNumberId: string) {
+    return (
+      this.rows.find(
+        (row) =>
+          row.phoneNumberId === phoneNumberId &&
+          !row.disconnectedAt &&
+          (row.status === "connected" || row.status === "pending_confirmation"),
+      ) || null
+    );
+  }
   async findOpenByTenant(tenantId: string) {
     return (
       this.rows
@@ -257,6 +267,7 @@ class FakeConversations {
       ? await this.findByTenantPhoneContact(input.tenantId, phoneNumberId, input.contactWaId)
       : await this.findByTenantConnectionContact(input.tenantId, input.connectionId, input.contactWaId);
     if (existing) {
+      existing.connectionId = input.connectionId;
       existing.lastMessageAt = input.atIso;
       if (input.phoneNumberId) existing.phoneNumberId = input.phoneNumberId;
       if (input.lastMessagePreview !== undefined) existing.lastMessagePreview = input.lastMessagePreview || null;

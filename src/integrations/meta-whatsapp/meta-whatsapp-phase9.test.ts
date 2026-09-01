@@ -170,6 +170,9 @@ class FakeConnections {
   async findConnectedByTenant(tenantId: string) {
     return this.rows.find((row) => row.tenantId === tenantId && row.status === "connected") || null;
   }
+  async findConnectedByPhoneNumberId(phoneNumberId: string) {
+    return this.rows.find((row) => row.phoneNumberId === phoneNumberId && row.status === "connected") || null;
+  }
   async findByIdForTenant(tenantId: string, id: string) {
     return this.rows.find((row) => row.tenantId === tenantId && row.id === id) || null;
   }
@@ -226,6 +229,8 @@ class FakeConversations {
       ? await this.findByTenantPhoneContact(input.tenantId, phoneNumberId, input.contactWaId)
       : await this.findByTenantConnectionContact(input.tenantId, input.connectionId, input.contactWaId);
     if (existing) {
+      existing.connectionId = input.connectionId;
+      if (input.phoneNumberId) existing.phoneNumberId = input.phoneNumberId;
       existing.lastMessageAt = input.atIso;
       if (input.lastMessagePreview !== undefined) existing.lastMessagePreview = input.lastMessagePreview || null;
       return { created: false, record: existing };

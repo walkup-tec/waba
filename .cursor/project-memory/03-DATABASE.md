@@ -19,7 +19,7 @@ _A preencher conforme mapeamento definitivo._
 
 | Data | Migração | Impacto |
 |------|----------|---------|
-| 2026-09-01 | `doc/SQL-2026-09-01__split-meta-inbox-by-phone-number.sql` | Separa fios e mensagens do mesmo contato por número oficial receptor |
+| 2026-09-01 | `doc/SQL-2026-09-01__split-meta-inbox-by-phone-number.sql` | Separa fios/mensagens por receptor e alinha `connection_id` ao número oficial |
 
 ## Índices relevantes
 

@@ -156,6 +156,7 @@ export class MetaWhatsappConversationRepository {
       const { data, error } = await this.client()
         .from(TABLE)
         .update({
+          connection_id: input.connectionId,
           phone_number_id: input.phoneNumberId || existing.phoneNumberId,
           contact_phone: input.contactPhone || existing.contactPhone,
           contact_name: input.contactName || existing.contactName,
