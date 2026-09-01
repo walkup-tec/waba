@@ -11,4 +11,5 @@ Ao responder, escolha a abordagem conforme o contexto do pedido (sem que o usuá
 - Se o pedido envolver criação/refatoração de endpoints e arquitetura backend (Express/rotas em TypeScript, controllers/services/repositories), aplique as diretrizes de Clean Architecture e segurança.
 - Se o pedido envolver UI/UX (HTML/CSS/JS, telas, layout, responsividade), aplique as diretrizes de UX/UI SaaS: clareza, acessibilidade e performance.
 - Se o pedido envolver software de terceiro (Traefik, Easypanel, Docker, Supabase, n8n, Evolution, gateways), aplique `study-upstream-docs.mdc` (e, se Traefik, `ucp-traefik-static-dynamic.mdc`): ler doc oficial + confrontar ambiente **antes** de patch. Lição crítica = Rule, não só MD.
+- Se o pedido envolver **push / deploy / EasyPanel / “sobe para o servidor” / publicar no GitHub**, aplique `waba-github-easypanel-push.mdc` + Secret `GITHUB_TOKEN` (nunca só push no remoto Cursor).
 

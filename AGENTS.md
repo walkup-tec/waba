@@ -78,12 +78,22 @@ Logs: `/var/log/waba-infra-audit.log`, `/var/log/waba-infra-cpu.log`, `/var/log/
 Neste VPS: só **`http`** / **`https`** — nunca `web` / `websecure`.  
 Normalização: Guardião de Sistemas (o entrypoint-guard legado não deve operar como writer concorrente).
 
+### Push GitHub / EasyPanel (qualquer agente)
+
+**Rule (sempre ativa):** `.cursor/rules/waba-github-easypanel-push.mdc`  
+**Skill:** `.cursor/skills/waba-github-push/SKILL.md`  
+**Script:** `scripts/git-push-github-master.sh`  
+**Secret:** `GITHUB_TOKEN` (Fine-grained PAT, Contents: Read and write em `walkup-tec/waba`)
+
+EasyPanel e Deploy FTP só veem o GitHub `master`. Em Cloud Agent, não basta `git push origin`.
+
 ### Outros agentes do projeto
 
 | Skill | Uso |
 |-------|-----|
 | `traefik-agent` (global `~/.cursor/skills`) | Desconexões Traefik — preferir este |
 | `traefik-incident-specialist` | Legado WABA (mesmo tema) |
+| `waba-github-push` | Push autenticado → GitHub master / EasyPanel |
 | `backend-saas-api-senior` | APIs, services, multi-tenant |
 | `frontend-ux-ui-saas-designer` | UI/UX |
 | `integrations-apis-specialist` | APIs externas, webhooks |

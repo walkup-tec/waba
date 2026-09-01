@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 00:38 — Rule push GitHub automático (GITHUB_TOKEN)
+- Rule alwaysApply: `.cursor/rules/waba-github-easypanel-push.mdc`
+- Skill: `.cursor/skills/waba-github-push/` — script `scripts/git-push-github-master.sh`
+- Secret Cursor: `GITHUB_TOKEN` (Contents Write). Push Cursor ≠ EasyPanel.
+- LOG: `doc/LOG-2026-09-01__003800__rule-github-token-push-easypanel.md`
+
 ## 2026-09-01 00:36 — Push master atendimento Meta (EasyPanel)
 - GitHub `master` = `9489cc7` (Inbox nome + Atendimento).
 - Marker alvo: `DEPLOY-2026-09-01-001200-meta-atendimento-chat`.

@@ -1,0 +1,96 @@
+---
+description: Push automático para GitHub (EasyPanel/Deploy FTP) via Secret GITHUB_TOKEN — vale em qualquer agente
+alwaysApply: true
+---
+
+# Push GitHub / EasyPanel (obrigatório em Cloud Agents)
+
+## Por que existe
+
+EasyPanel (`waba_disparador`) e o workflow **Deploy FTP (bundle)** só observam
+**`https://github.com/walkup-tec/waba.git`** branch **`master`**.
+
+Push só para `origin.cursor.com` (remoto Cursor) **não** dispara deploy. Em Cloud
+Agents o remoto `origin` costuma ser o Cursor; o GitHub fica em `github` ou precisa
+ser empurrado por URL autenticada.
+
+## Segredo canônico
+
+| Nome | Onde | Uso |
+|------|------|-----|
+| `GITHUB_TOKEN` | Cursor Cloud Agent **Secrets** / environment | Fine-grained PAT do GitHub |
+
+**Nunca** colar o token no chat, em `doc/`, commit, log ou `git remote -v` com URL
+contendo o valor. Usar só a variável de ambiente `$GITHUB_TOKEN`.
+
+### Permissões do PAT (Fine-grained)
+
+- Repository access: **`walkup-tec/waba`**
+- **Contents: Read and write** (Read-only → push 403 / blob 403)
+- **Metadata: Read-only** (obrigatório)
+
+### Se o secret faltar ou estiver Read-only
+
+1. Pedir ao usuário via setup (`add_secrets` → `GITHUB_TOKEN`) **sem** pedir cola no chat.
+2. Se API autenticar mas `x-accepted-github-permissions: contents=read`, pedir
+   atualização do PAT para **Contents: Read and write** e regravar o Secret.
+
+Probe rápido (sem imprimir o token):
+
+```bash
+curl -sS -D - -o /tmp/gh-blob.json -X POST \
+  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  -H "Accept: application/vnd.github+json" \
+  https://api.github.com/repos/walkup-tec/waba/git/blobs \
+  -d '{"content":"cHJvYmU=","encoding":"base64"}' | grep -i x-accepted
+# Esperado: contents=write e HTTP 201
+```
+
+## Quando o agente DEVE empurrar o GitHub
+
+Sem esperar o usuário repetir o pedido, se a intenção for publicar / EasyPanel /
+“sobe para o servidor” / “manda pro master” / deploy produção:
+
+1. Garantir commits prontos e validados (regra de commit/deploy do projeto).
+2. Empurrar para **`github.com/walkup-tec/waba` `master`** com `$GITHUB_TOKEN`.
+3. Confirmar tip remoto e, quando possível, `GET /health` → `deployMarker`.
+4. Avisar: EasyPanel pode precisar de **Redeploy** do `waba_disparador`; após
+   Redeploy lembrar heal de login (`waba-login-heal`).
+
+## Como autenticar o `git push` (método que funciona)
+
+Fine-grained PAT: **não** confiar em `https://x-access-token:...@github.com/...`
+(pode dar `invalid credentials`). Evitar `http.*.extraheader=Authorization` se o
+ambiente já injetar Authorization (`Duplicate header`).
+
+Usar `GIT_ASKPASS` com usuário **`walkup-tec`** e senha = `$GITHUB_TOKEN`:
+
+```bash
+unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+ASKPASS=$(mktemp)
+cat > "$ASKPASS" <<EOF
+#!/bin/sh
+case "\$1" in
+  *Username*) printf '%s\n' "walkup-tec" ;;
+  *Password*) printf '%s\n' "$GITHUB_TOKEN" ;;
+  *) printf '\n' ;;
+esac
+EOF
+chmod 700 "$ASKPASS"
+GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0 \
+  git -c credential.helper= push https://github.com/walkup-tec/waba.git HEAD:master
+rm -f "$ASKPASS"
+```
+
+Ou o script canônico: `scripts/git-push-github-master.sh` (aceita ref opcional).
+
+## Desktop / worktree Windows
+
+Se `origin` já for `github.com/walkup-tec/waba` (ex.: `Waba-master-welcome`),
+`git push origin master` basta — Credential Manager / PAT local. Não misturar com
+a pasta `Waba` na branch `v02`.
+
+## Playbook detalhado
+
+Skill: `.cursor/skills/waba-github-push/SKILL.md`  
+Rule irmã: `sobe-para-o-servidor.mdc` (gatilho de publicação; aqui está a chave Cloud).
