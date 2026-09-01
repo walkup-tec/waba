@@ -121,7 +121,7 @@ exports.WABA_MENU_REGISTRY = [
     },
     {
         id: "whatsapp-inbox",
-        label: "Inbox",
+        label: "Atendimento",
         tab: "whatsapp-inbox",
         section: "lab-api-oficial",
         sectionLabel: SECTION_LABELS["lab-api-oficial"],
