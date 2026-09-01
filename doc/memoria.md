@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 17:29 — CTA do rodapé: Enviar para META
+- `#meta-tpl-ai-submit-all` passou a **Enviar para META**. O Gerar da coluna Texto base permanece.
+- Marker: `DEPLOY-2026-09-01-173000-enviar-para-meta`
+- LOG: `doc/LOG-2026-09-01__172900__enviar-para-meta-cta.md`
+
 ## 2026-09-01 17:28 — Botão Gerar do rodapé maior e centralizado
 - CTA `#meta-tpl-ai-submit-all` maior e no centro; o Gerar da coluna Texto base permanece o mesmo.
 - Marker: `DEPLOY-2026-09-01-173000-gerar-centro-maior`
