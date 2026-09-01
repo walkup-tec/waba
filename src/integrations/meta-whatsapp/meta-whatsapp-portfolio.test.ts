@@ -810,6 +810,38 @@ describe("meta portfolio service", () => {
       displayPhoneNumber: "+55 51 8200-1279",
     });
     assert.equal(listPhoneInboxChannels(tenantId)[0]?.name, "Grupo Walkup");
+    applyLocalPhoneIdentities(tenantId, [
+      {
+        phoneNumberId: "phone-1",
+        displayPhoneNumber: "+55 51 8200-1279",
+        verifiedName: "Mms Marketing E Sistemas Digitais Ltda",
+        qualityRating: null,
+        metaStatus: "CONNECTED",
+        codeVerificationStatus: "VERIFIED",
+        uiStatus: "ativo",
+        dispatchStatus: "livre",
+        canActivate: false,
+        nameNeedsRegister: false,
+        nameStatus: null,
+        newDisplayName: null,
+        newNameStatus: null,
+        profilePictureUrl: null,
+        vertical: null,
+        description: null,
+        address: null,
+        email: null,
+        requestedName: null,
+        nameSyncStatus: null,
+        photoSyncStatus: null,
+        profileSyncStatus: null,
+        inboxEnabled: true,
+      },
+    ]);
+    assert.equal(listPhoneInboxChannels(tenantId)[0]?.name, "Mms Marketing E Sistemas Digitais Ltda");
+    assert.equal(
+      listPhoneInboxChannels(tenantId, new Map([["phone-1", "Nome Meta ao vivo"]]))[0]?.name,
+      "Nome Meta ao vivo",
+    );
   });
 
   it("lista vários portfólios e Graph vazio não apaga número gravado", async () => {

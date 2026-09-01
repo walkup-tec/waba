@@ -10,6 +10,7 @@ exports.localPhonePhotoUrl = localPhonePhotoUrl;
 exports.phoneIdentitySyncStatus = phoneIdentitySyncStatus;
 exports.isPhoneInboxEnabled = isPhoneInboxEnabled;
 exports.phoneInboxDisplayName = phoneInboxDisplayName;
+exports.syncInboxChannelNameFromMeta = syncInboxChannelNameFromMeta;
 exports.listPhoneInboxChannels = listPhoneInboxChannels;
 exports.listEnabledInboxPhoneIds = listEnabledInboxPhoneIds;
 exports.inboxQueryPhoneIds = inboxQueryPhoneIds;
@@ -181,14 +182,45 @@ function phoneIdentitySyncStatus(input) {
 function isPhoneInboxEnabled(identity) {
     return identity?.inboxEnabled === true;
 }
-function phoneInboxDisplayName(identity) {
+function phoneInboxDisplayName(identity, verifiedNameFromMeta) {
+    const meta = String(verifiedNameFromMeta || "").trim();
+    if (meta)
+        return meta;
     const channel = String(identity?.channelName || "").trim();
     if (channel)
         return channel;
     const saved = String(identity?.name || "").trim();
     return saved || null;
 }
-function listPhoneInboxChannels(tenantId) {
+/** Mantém o rótulo do Inbox alinhado ao verified_name da Meta (ignora nome local do Editar). */
+function syncInboxChannelNameFromMeta(tenantId, phoneNumberId, verifiedName, displayPhoneNumber) {
+    const id = String(phoneNumberId || "").trim();
+    const name = String(verifiedName || "").trim();
+    if (!id || !name)
+        return;
+    const current = readPhoneIdentity(tenantId, id);
+    if (!current || current.inboxEnabled !== true)
+        return;
+    const phone = displayPhoneNumber !== undefined ? String(displayPhoneNumber || "").trim() || null : undefined;
+    if (current.channelName === name && (phone === undefined || current.displayPhoneNumber === phone)) {
+        return;
+    }
+    writePhoneIdentity(tenantId, id, {
+        channelName: name,
+        ...(phone !== undefined ? { displayPhoneNumber: phone } : {}),
+    });
+}
+function lookupVerifiedName(verifiedNameByPhone, phoneNumberId) {
+    if (!verifiedNameByPhone)
+        return undefined;
+    if (verifiedNameByPhone instanceof Map) {
+        return verifiedNameByPhone.get(phoneNumberId);
+    }
+    const record = verifiedNameByPhone;
+    const name = String(record[phoneNumberId] || "").trim();
+    return name || undefined;
+}
+function listPhoneInboxChannels(tenantId, verifiedNameByPhone) {
     try {
         const dir = tenantDir(tenantId);
         if (!(0, node_fs_1.existsSync)(dir))
@@ -201,9 +233,10 @@ function listPhoneInboxChannels(tenantId) {
             const identity = readPhoneIdentity(tenantId, phoneNumberId);
             if (!identity)
                 continue;
+            const metaVerified = lookupVerifiedName(verifiedNameByPhone, phoneNumberId);
             out.push({
                 phoneNumberId,
-                name: phoneInboxDisplayName(identity),
+                name: phoneInboxDisplayName(identity, metaVerified),
                 displayPhoneNumber: identity.displayPhoneNumber,
                 profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
                 inboxEnabled: isPhoneInboxEnabled(identity),
@@ -284,6 +317,9 @@ function applyLocalPhoneIdentities(tenantId, numbers) {
         });
         const connected = (0, meta_whatsapp_portfolio_map_1.isMetaPhoneConnected)(row.metaStatus);
         const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
+        if (isPhoneInboxEnabled(identity) && row.verifiedName) {
+            syncInboxChannelNameFromMeta(tenantId, row.phoneNumberId, row.verifiedName, row.displayPhoneNumber);
+        }
         return {
             ...row,
             requestedName: nameSync.requestedName,

@@ -228,14 +228,58 @@ export function isPhoneInboxEnabled(identity: MetaPhoneIdentity | null): boolean
   return identity?.inboxEnabled === true;
 }
 
-export function phoneInboxDisplayName(identity: MetaPhoneIdentity | null): string | null {
+export function phoneInboxDisplayName(
+  identity: MetaPhoneIdentity | null,
+  verifiedNameFromMeta?: string | null,
+): string | null {
+  const meta = String(verifiedNameFromMeta || "").trim();
+  if (meta) return meta;
   const channel = String(identity?.channelName || "").trim();
   if (channel) return channel;
   const saved = String(identity?.name || "").trim();
   return saved || null;
 }
 
-export function listPhoneInboxChannels(tenantId: string): MetaPhoneInboxChannel[] {
+/** Mantém o rótulo do Inbox alinhado ao verified_name da Meta (ignora nome local do Editar). */
+export function syncInboxChannelNameFromMeta(
+  tenantId: string,
+  phoneNumberId: string,
+  verifiedName: string | null | undefined,
+  displayPhoneNumber?: string | null,
+): void {
+  const id = String(phoneNumberId || "").trim();
+  const name = String(verifiedName || "").trim();
+  if (!id || !name) return;
+  const current = readPhoneIdentity(tenantId, id);
+  if (!current || current.inboxEnabled !== true) return;
+  const phone =
+    displayPhoneNumber !== undefined ? String(displayPhoneNumber || "").trim() || null : undefined;
+  if (current.channelName === name && (phone === undefined || current.displayPhoneNumber === phone)) {
+    return;
+  }
+  writePhoneIdentity(tenantId, id, {
+    channelName: name,
+    ...(phone !== undefined ? { displayPhoneNumber: phone } : {}),
+  });
+}
+
+function lookupVerifiedName(
+  verifiedNameByPhone: ReadonlyMap<string, string> | Record<string, string | null | undefined> | undefined,
+  phoneNumberId: string,
+): string | undefined {
+  if (!verifiedNameByPhone) return undefined;
+  if (verifiedNameByPhone instanceof Map) {
+    return verifiedNameByPhone.get(phoneNumberId);
+  }
+  const record = verifiedNameByPhone as Record<string, string | null | undefined>;
+  const name = String(record[phoneNumberId] || "").trim();
+  return name || undefined;
+}
+
+export function listPhoneInboxChannels(
+  tenantId: string,
+  verifiedNameByPhone?: ReadonlyMap<string, string> | Record<string, string | null | undefined>,
+): MetaPhoneInboxChannel[] {
   try {
     const dir = tenantDir(tenantId);
     if (!existsSync(dir)) return [];
@@ -245,9 +289,10 @@ export function listPhoneInboxChannels(tenantId: string): MetaPhoneInboxChannel[
       const phoneNumberId = file.slice(0, -5);
       const identity = readPhoneIdentity(tenantId, phoneNumberId);
       if (!identity) continue;
+      const metaVerified = lookupVerifiedName(verifiedNameByPhone, phoneNumberId);
       out.push({
         phoneNumberId,
-        name: phoneInboxDisplayName(identity),
+        name: phoneInboxDisplayName(identity, metaVerified),
         displayPhoneNumber: identity.displayPhoneNumber,
         profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
         inboxEnabled: isPhoneInboxEnabled(identity),
@@ -339,6 +384,14 @@ export function applyLocalPhoneIdentities(
     });
     const connected = isMetaPhoneConnected(row.metaStatus);
     const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
+    if (isPhoneInboxEnabled(identity) && row.verifiedName) {
+      syncInboxChannelNameFromMeta(
+        tenantId,
+        row.phoneNumberId,
+        row.verifiedName,
+        row.displayPhoneNumber,
+      );
+    }
     return {
       ...row,
       requestedName: nameSync.requestedName,

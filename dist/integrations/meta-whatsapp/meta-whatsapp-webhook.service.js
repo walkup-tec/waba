@@ -7,6 +7,7 @@ const meta_whatsapp_webhook_events_repository_1 = require("./meta-whatsapp-webho
 const meta_whatsapp_webhook_log_1 = require("./meta-whatsapp-webhook-log");
 const meta_whatsapp_webhook_signature_1 = require("./meta-whatsapp-webhook-signature");
 const meta_config_1 = require("./meta-config");
+const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
 const NOOP_INBOX = {
     persistInbound: async () => undefined,
     applyStatus: async () => undefined,
@@ -115,6 +116,9 @@ class MetaWhatsappWebhookService {
                 qualityRating: event.qualityRating,
                 verifiedName: event.verifiedName,
             });
+            if (event.eventType === "phone_number_name_update" && event.phoneNumberId && event.verifiedName) {
+                (0, meta_whatsapp_phone_identity_store_1.syncInboxChannelNameFromMeta)(connection.tenantId, event.phoneNumberId, event.verifiedName);
+            }
         }
         if (event.eventType === "messages") {
             try {

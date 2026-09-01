@@ -11,6 +11,7 @@ import { isValidMetaHubSignature, timingSafeEqualString } from "./meta-whatsapp-
 import { readMetaAppSecret, readMetaWebhookVerifyToken } from "./meta-config";
 import type { MetaWhatsappWebhookInboxPort } from "./meta-whatsapp-webhook-inbox.service";
 import type { MetaWhatsappWebhookTemplatePort } from "./meta-whatsapp-webhook-template.service";
+import { syncInboxChannelNameFromMeta } from "./meta-whatsapp-phone-identity.store";
 
 const NOOP_INBOX: MetaWhatsappWebhookInboxPort = {
   persistInbound: async () => undefined,
@@ -149,6 +150,9 @@ export class MetaWhatsappWebhookService {
         qualityRating: event.qualityRating,
         verifiedName: event.verifiedName,
       });
+      if (event.eventType === "phone_number_name_update" && event.phoneNumberId && event.verifiedName) {
+        syncInboxChannelNameFromMeta(connection.tenantId, event.phoneNumberId, event.verifiedName);
+      }
     }
     if (event.eventType === "messages") {
       try {

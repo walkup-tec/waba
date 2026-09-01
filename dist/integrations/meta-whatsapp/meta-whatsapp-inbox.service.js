@@ -32,8 +32,21 @@ function clampPage(raw, fallback, max) {
         return fallback;
     return Math.min(max, Math.max(0, Math.floor(n)));
 }
-function channelLabel(channel, fallbackPhone) {
-    return String(channel?.name || channel?.displayPhoneNumber || fallbackPhone || "WhatsApp Oficial").trim();
+function channelLabel(channel, verifiedName) {
+    const meta = String(verifiedName || "").trim();
+    if (meta)
+        return meta;
+    return String(channel?.name || channel?.displayPhoneNumber || "WhatsApp Oficial").trim();
+}
+function verifiedNamesByPhone(connections) {
+    const map = new Map();
+    for (const row of connections) {
+        const id = String(row.phoneNumberId || "").trim();
+        const name = String(row.verifiedName || "").trim();
+        if (id && name)
+            map.set(id, name);
+    }
+    return map;
 }
 function canServeInbox(row, tenantId) {
     return Boolean(row &&
@@ -43,11 +56,13 @@ function canServeInbox(row, tenantId) {
         row.phoneNumberId &&
         (row.status === "connected" || row.status === "pending_confirmation"));
 }
-function withChannel(row, channelsById, connectionPhone, connectionName) {
+function withChannel(row, channelsById, connectionPhone, connectionName, verifiedByPhone) {
     const id = String(row.phoneNumberId || "").trim();
     const snapshot = id ? channelsById.get(id) : undefined;
+    const verified = (id && verifiedByPhone.get(id)) ||
+        (id && id === String(connectionPhone || "") ? connectionName : null);
     return (0, meta_whatsapp_inbox_types_1.toPublicInboxConversation)(row, (0, meta_whatsapp_customer_care_window_1.resolveCustomerCareWindow)({ lastInboundAt: row.lastInboundAt }), {
-        name: channelLabel(snapshot, snapshot?.displayPhoneNumber || connectionName),
+        name: channelLabel(snapshot, verified),
         phone: snapshot?.displayPhoneNumber || (id && id === String(connectionPhone || "") ? connectionPhone : null),
         photoUrl: snapshot?.profilePictureUrl || null,
     });
@@ -97,7 +112,8 @@ class MetaWhatsappInboxService {
         const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();
         const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
         const offset = clampPage(query?.offset, 0, 10000);
-        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId);
+        const verifiedByPhone = verifiedNamesByPhone(open);
+        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone);
         const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
         const enabledIds = snapshots.filter((row) => row.inboxEnabled).map((row) => row.phoneNumberId);
         const connPhones = open.map((row) => row.phoneNumberId).filter((id) => Boolean(id));
@@ -140,7 +156,7 @@ class MetaWhatsappInboxService {
             const isConnection = id === String(matching.phoneNumberId || "");
             return {
                 phoneNumberId: id,
-                name: channelLabel(snap, isConnection ? matching.verifiedName : id),
+                name: channelLabel(snap, verifiedByPhone.get(id) || (isConnection ? matching.verifiedName : null)),
                 displayPhoneNumber: snap?.displayPhoneNumber || (isConnection ? matching.displayPhoneNumber : null),
                 profilePictureUrl: snap?.profilePictureUrl || null,
                 unreadCount: unreadByPhone.get(id) || 0,
@@ -154,7 +170,7 @@ class MetaWhatsappInboxService {
             poll,
             conversations: page.map((row) => {
                 const origin = byConn.get(row.connectionId) || connection;
-                return withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName);
+                return withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName, verifiedByPhone);
             }),
             channels,
             selectedPhoneNumberId: selectedPhone || null,
@@ -170,10 +186,11 @@ class MetaWhatsappInboxService {
         const limit = Math.min(80, Math.max(1, clampPage(query?.limit, 80, 80) || 80));
         const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
         (0, meta_whatsapp_inbox_log_1.logMetaInbox)("THREAD", { tenantId: tenant.tenantId, count: messages.length });
-        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId);
+        const verifiedByPhone = verifiedNamesByPhone(open);
+        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone);
         const channelsById = new Map(snapshots.map((item) => [item.phoneNumberId, item]));
         return {
-            conversation: withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName),
+            conversation: withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName, verifiedByPhone),
             messages: messages.map(meta_whatsapp_inbox_types_1.toPublicInboxMessage),
         };
     }
