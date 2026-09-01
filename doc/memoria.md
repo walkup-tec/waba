@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 19:08 — Modal de sucesso sem lista PENDING
+- Sucesso do envio à Meta mostra só o texto (prazo de 24 h). A lista Opção 1/2/3 PENDING saiu do modal.
+- Marker: `DEPLOY-2026-09-01-190800-modal-sem-pending`
+- LOG: `doc/LOG-2026-09-01__190800__modal-sucesso-sem-pending.md`
+
 ## 2026-09-01 19:02 — Logo Meta PNG sem fundo no modal
 - PNG RGBA do infinito (Wikimedia `Meta Platforms logo.svg`, sem wordmark) em `/media/meta-logo.png`.
 - Marker: `DEPLOY-2026-09-01-190200-logo-meta-png`
