@@ -21049,35 +21049,6 @@
                 <p id="meta-tp-connect-log" hidden></p>
               </div>
             </section>
-            <section class="panel col-12">
-              <div class="panel-header">
-                <div class="panel-title">Teste de envio Cloud API</div>
-                <span class="muted">Somente Meta — não usa Evolution</span>
-              </div>
-              <p class="muted" style="margin: 0 0 12px;">
-                Envia texto pelo número de origem escolhido (todos os portfólios Meta desta sessão). Informe o destino com DDI.
-              </p>
-              <div class="row g-2 align-items-end">
-                <div class="col-12 col-md-3">
-                  <label class="muted" for="meta-cloud-lab-from">Número de origem</label>
-                  <select id="meta-cloud-lab-from" class="form-control" disabled>
-                    <option value="">Carregando números…</option>
-                  </select>
-                </div>
-                <div class="col-12 col-md-3">
-                  <label class="muted" for="meta-cloud-lab-to">Número destino</label>
-                  <input id="meta-cloud-lab-to" class="form-control" type="text" inputmode="numeric" autocomplete="off" placeholder="5551999887766" />
-                </div>
-                <div class="col-12 col-md-4">
-                  <label class="muted" for="meta-cloud-lab-text">Mensagem</label>
-                  <input id="meta-cloud-lab-text" class="form-control" type="text" maxlength="4096" placeholder="Olá" />
-                </div>
-                <div class="col-12 col-md-2">
-                  <button id="meta-cloud-lab-send" type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaSendMetaCloudLabTest(event);">Enviar</button>
-                </div>
-              </div>
-              <p id="meta-cloud-lab-result" class="muted" style="margin: 10px 0 0;" role="status" aria-live="polite"></p>
-            </section>
           </div>
         </div>
 
@@ -35515,11 +35486,7 @@
           ) {
             return true;
           }
-          if (
-            el.id === "meta-cloud-lab-send" ||
-            el.id === "meta-inbox-send" ||
-            el.id === "meta-inbox-tpl-send"
-          ) {
+          if (el.id === "meta-inbox-send" || el.id === "meta-inbox-tpl-send") {
             return true;
           }
           return (
@@ -35577,149 +35544,6 @@
           true,
         );
       })();
-
-      function metaTpCloudLabFromValue(connectionId, phoneNumberId) {
-        return String(connectionId || "").trim() + "|" + String(phoneNumberId || "").trim();
-      }
-
-      function metaTpParseCloudLabFromValue(raw) {
-        const value = String(raw || "").trim();
-        const sep = value.indexOf("|");
-        if (sep < 0) return { connectionId: "", phoneNumberId: value };
-        return {
-          connectionId: value.slice(0, sep),
-          phoneNumberId: value.slice(sep + 1),
-        };
-      }
-
-      function metaTpCloudLabFromOptions() {
-        const options = [];
-        const seen = {};
-        (metaTpSession.portfolios || []).forEach(function (portfolio) {
-          const connectionId = String((portfolio && portfolio.connectionId) || "").trim();
-          const portfolioName = metaTpPortfolioTitle(portfolio || {});
-          (Array.isArray(portfolio && portfolio.numbers) ? portfolio.numbers : []).forEach(function (row) {
-            const phoneNumberId = String((row && row.phoneNumberId) || "").trim();
-            if (!connectionId || !phoneNumberId) return;
-            const key = metaTpCloudLabFromValue(connectionId, phoneNumberId);
-            if (seen[key]) return;
-            seen[key] = true;
-            const phone = String((row && row.displayPhoneNumber) || "").trim() || phoneNumberId;
-            const verified = String((row && row.verifiedName) || "").trim();
-            const pending = String((row && row.uiStatus) || "") !== "ativo";
-            options.push({
-              value: key,
-              connectionId: connectionId,
-              phoneNumberId: phoneNumberId,
-              inbox: row && row.inboxEnabled === true,
-              label:
-                portfolioName +
-                " — " +
-                phone +
-                (verified ? " (" + verified + ")" : "") +
-                (pending ? " · pendente" : ""),
-            });
-          });
-        });
-        return options;
-      }
-
-      function metaTpFillCloudLabFromSelect() {
-        const el = document.getElementById("meta-cloud-lab-from");
-        if (!el) return;
-        const prev = String(el.value || "");
-        const options = metaTpCloudLabFromOptions();
-        el.innerHTML = "";
-        if (!options.length) {
-          const opt = document.createElement("option");
-          opt.value = "";
-          opt.textContent = "Nenhum número no portfólio";
-          el.appendChild(opt);
-          el.disabled = true;
-          return;
-        }
-        el.disabled = false;
-        options.forEach(function (item) {
-          const opt = document.createElement("option");
-          opt.value = item.value;
-          opt.textContent = item.label;
-          el.appendChild(opt);
-        });
-        const keep = options.some(function (item) {
-          return item.value === prev;
-        });
-        const inboxMatch = options.find(function (item) {
-          return item.inbox;
-        });
-        el.value = keep ? prev : inboxMatch ? inboxMatch.value : options[0].value;
-      }
-
-      window.wabaSendMetaCloudLabTest = async function wabaSendMetaCloudLabTest(event) {
-        if (event && typeof event.preventDefault === "function") event.preventDefault();
-        const fromEl = document.getElementById("meta-cloud-lab-from");
-        const toEl = document.getElementById("meta-cloud-lab-to");
-        const textEl = document.getElementById("meta-cloud-lab-text");
-        const outEl = document.getElementById("meta-cloud-lab-result");
-        const btn = document.getElementById("meta-cloud-lab-send");
-        const from = metaTpParseCloudLabFromValue(fromEl && fromEl.value);
-        const to = String(toEl && toEl.value ? toEl.value : "").trim();
-        const text = String(textEl && textEl.value ? textEl.value : "").trim();
-        if (!from.connectionId || !from.phoneNumberId) {
-          if (outEl) outEl.textContent = "Selecione o número de origem.";
-          return false;
-        }
-        if (!to) {
-          if (outEl) outEl.textContent = "Informe o número destino com DDI.";
-          return false;
-        }
-        if (!text) {
-          if (outEl) outEl.textContent = "Informe a mensagem.";
-          return false;
-        }
-        if (outEl) outEl.textContent = "Enviando…";
-        if (btn) btn.disabled = true;
-        try {
-          const response = await fetch(resolveWabaPublicPath("/integrations/meta/whatsapp/messages"), {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({
-              to,
-              type: "text",
-              text,
-              connectionId: from.connectionId,
-              phoneNumberId: from.phoneNumberId,
-            }),
-          });
-          const payload = await response.json().catch(() => ({}));
-          const serialized = JSON.stringify(payload);
-          if (/access_token|app_secret|verify_token|Bearer /i.test(serialized)) {
-            if (outEl) outEl.textContent = "Envio concluído.";
-            return false;
-          }
-          if (!response.ok || payload.ok === false) {
-            if (outEl) outEl.textContent = String(payload.error || "Não foi possível enviar.");
-            return false;
-          }
-          if (outEl) {
-            outEl.textContent =
-              "Aceito pela Meta. status=" +
-              String(payload.status || "") +
-              " id=" +
-              String(payload.messageId || "—");
-          }
-          if (payload.conversationId && typeof window.wabaOpenMetaInboxConversation === "function") {
-            window.wabaOpenMetaInboxConversation(payload.conversationId);
-          } else if (typeof window.wabaRefreshMetaInbox === "function") {
-            window.wabaRefreshMetaInbox();
-          }
-        } catch {
-          if (outEl) outEl.textContent = "Falha de rede ao enviar.";
-        } finally {
-          if (btn) btn.disabled = false;
-        }
-        return false;
-      };
 
       const META_TP_FINISH_EVENTS = {
         FINISH: true,
@@ -35780,7 +35604,6 @@
         metaTpSession.finishEvent = "";
         metaTpSession.advancing = false;
         metaTpSession.addNumber = false;
-        metaTpFillCloudLabFromSelect();
       }
 
       async function metaTpResetOfficialLab() {
@@ -36215,7 +36038,6 @@
               : { portfolios: metaTpSession.portfolios, portfolio: null, numbers: [] };
         const bundles = metaTpPortfolioBundles(source);
         metaTpSession.portfolios = bundles;
-        metaTpFillCloudLabFromSelect();
         if (!section) return;
         if (!bundles.length) {
           section.hidden = true;

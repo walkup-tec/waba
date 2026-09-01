@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 12:40 — Removido Teste de envio Cloud API
+- Painel e JavaScript de envio textual de diagnóstico removidos do Laboratório.
+- Templates e Atendimento permanecem funcionais.
+- Marker: `DEPLOY-2026-09-01-124000-meta-sem-teste-envio-cloud`
+- LOG: `doc/LOG-2026-09-01__124000__remove-teste-envio-cloud-api.md`
+
 ## 2026-09-01 12:30 — Inbox envia pela conexão do número receptor
 - Fio Walkup herdava `connection_id` Drax na migration e o envio falhava.
 - Provider resolve conexão por `phone_number_id`; migration corrige históricos.
