@@ -21355,10 +21355,6 @@
                       <span class="muted">A Meta exige um exemplo via upload resumable para cabeçalho de mídia.</span>
                     </div>
                     <div class="aquecedor-field">
-                      <label for="meta-tpl-ai-header">Cabeçalho</label>
-                      <input id="meta-tpl-ai-header" type="text" maxlength="60" autocomplete="off" placeholder="Texto do HEADER" />
-                    </div>
-                    <div class="aquecedor-field">
                       <label for="meta-tpl-ai-button-text">Texto do botão</label>
                       <select id="meta-tpl-ai-button-text">
                         <option value="Quero saber mais">Quero saber mais</option>
@@ -36849,7 +36845,6 @@
           modelName: String((document.getElementById("meta-tpl-ai-model-name") || {}).value || "").trim(),
           variableType: String((document.getElementById("meta-tpl-ai-variable-type") || {}).value || "nome").trim(),
           mediaFormat: String((document.getElementById("meta-tpl-ai-media-format") || {}).value || "NONE").trim(),
-          headerText: String((document.getElementById("meta-tpl-ai-header") || {}).value || "").trim(),
           buttonText: metaTplAiSelectedButtonText(),
           buttonUrl: String((document.getElementById("meta-tpl-ai-button-url") || {}).value || "").trim(),
         };
@@ -37116,7 +37111,6 @@
               modelName: shell.modelName,
               variableType: shell.variableType,
               mediaFormat: shell.mediaFormat,
-              headerText: shell.headerText,
               buttonText: shell.buttonText,
               buttonUrl: shell.buttonUrl,
               headerHandle,
@@ -37181,8 +37175,6 @@
         if (select) select.value = "demo-connection";
         const modelName = document.getElementById("meta-tpl-ai-model-name");
         if (modelName) modelName.value = "retorno_lead";
-        const header = document.getElementById("meta-tpl-ai-header");
-        if (header) header.value = "Atualização da solicitação";
         const buttonUrl = document.getElementById("meta-tpl-ai-button-url");
         if (buttonUrl) buttonUrl.value = "https://waba.draxsistemas.com.br/";
         const base = document.getElementById("meta-tpl-ai-base-text");

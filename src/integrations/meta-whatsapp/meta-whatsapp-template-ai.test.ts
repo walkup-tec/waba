@@ -16,6 +16,7 @@ import {
 } from "./meta-whatsapp-template-ai.schema";
 import { buildMetaTemplateAiInstructions } from "./meta-whatsapp-template-ai.prompt";
 import {
+  META_TEMPLATE_AI_FIXED_HEADER_TEXT,
   componentsFromAiOptionAndShell,
   parseMetaTemplateAiShell,
   templateNameForOption,
@@ -307,7 +308,7 @@ describe("Assistente IA de templates Utility", () => {
     const header = (calls[0]?.components as Array<Record<string, any>> | undefined)
       ?.find((item) => item.type === "HEADER");
     assert.equal(header?.format, "TEXT");
-    assert.equal(header?.text, "Atualização da solicitação");
+    assert.equal(header?.text, META_TEMPLATE_AI_FIXED_HEADER_TEXT);
   });
   it("instrui a IA a reescrever o tema central em três Utility, sem recusar o texto base", () => {
     const instructions = buildMetaTemplateAiInstructions();
@@ -365,6 +366,21 @@ describe("Assistente IA de templates Utility", () => {
     assert.equal(body?.example, undefined);
     assert.equal(String(body?.text || "").includes("{{"), false);
     assert.match(String(body?.text || ""), /^Olá\./);
+  });
+
+  it("envia sempre o HEADER de texto fixo e ignora o valor do cliente", () => {
+    const shell = parseMetaTemplateAiShell({
+      modelName: "dg01",
+      variableType: "nenhuma",
+      buttonText: "Quero saber mais",
+      buttonUrl: "https://wa.me/5511999999999",
+      headerText: "Texto do HEADER",
+    });
+    assert.equal(shell.headerText, META_TEMPLATE_AI_FIXED_HEADER_TEXT);
+    const components = componentsFromAiOptionAndShell(utilityOutput().options[0], shell);
+    const header = components.find((item) => item.type === "HEADER");
+    assert.equal(header?.format, "TEXT");
+    assert.equal(header?.text, "Informação de utilidade");
   });
 
   it("recusa URL não https ou botão fora do select do Mensageiro", () => {

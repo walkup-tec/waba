@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_TEMPLATE_AI_BUTTON_LABELS = void 0;
+exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT = exports.META_TEMPLATE_AI_BUTTON_LABELS = void 0;
 exports.sanitizeMetaTemplateName = sanitizeMetaTemplateName;
 exports.templateNameForOption = templateNameForOption;
 exports.parseMetaTemplateAiShell = parseMetaTemplateAiShell;
@@ -26,6 +26,8 @@ const MEDIA_FORMATS = new Set([
 ]);
 const BUTTON_LABELS = new Set(exports.META_TEMPLATE_AI_BUTTON_LABELS);
 const MEDIA_NEEDS_HANDLE = new Set(["IMAGE", "VIDEO", "DOCUMENT"]);
+/** HEADER de texto fixo. A Meta aceita um HEADER: este texto, ou mídia. */
+exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT = "Informação de utilidade";
 function sanitizeMetaTemplateName(raw) {
     return String(raw || "")
         .normalize("NFD")
@@ -71,7 +73,7 @@ function parseMetaTemplateAiShell(input) {
     const mediaFormat = String(body.mediaFormat || body.media_format || "NONE")
         .trim()
         .toUpperCase();
-    const headerText = String(body.headerText || body.header_text || "").trim();
+    const headerText = exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT;
     const buttonText = String(body.buttonText || body.button_text || "").trim();
     const buttonUrl = requireStaticHttpsUrl(String(body.buttonUrl || body.button_url || ""));
     const headerHandle = String(body.headerHandle || body.header_handle || "").trim();
@@ -79,9 +81,6 @@ function parseMetaTemplateAiShell(input) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
     }
     if (!BUTTON_LABELS.has(buttonText) || buttonText.length > 25) {
-        throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
-    }
-    if (headerText.length > 60 || (0, meta_whatsapp_template_validate_1.placeholderIndexes)(headerText).length) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
     }
     if (MEDIA_NEEDS_HANDLE.has(mediaFormat) && !headerHandle) {

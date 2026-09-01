@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 20:12 — Cabeçalho fixo, sem campo no front
+- Campo Cabeçalho saiu da UI. A Meta recebe sempre HEADER TEXT «Informação de utilidade». Com mídia, o HEADER continua sendo a mídia (a Meta aceita só um).
+- Marker: `DEPLOY-2026-09-01-201200-cabecalho-fixo-utilidade`
+- LOG: `doc/LOG-2026-09-01__201200__cabecalho-fixo-utilidade.md`
+
 ## 2026-09-01 19:08 — Modal de sucesso sem lista PENDING
 - Sucesso do envio à Meta mostra só o texto (prazo de 24 h). A lista Opção 1/2/3 PENDING saiu do modal.
 - Marker: `DEPLOY-2026-09-01-190800-modal-sem-pending`

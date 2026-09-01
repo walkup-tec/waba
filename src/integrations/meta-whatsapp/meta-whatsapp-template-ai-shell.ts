@@ -25,6 +25,9 @@ const MEDIA_FORMATS = new Set<MetaTemplateAiMediaFormat>([
 const BUTTON_LABELS = new Set<string>(META_TEMPLATE_AI_BUTTON_LABELS);
 const MEDIA_NEEDS_HANDLE = new Set<MetaTemplateAiMediaFormat>(["IMAGE", "VIDEO", "DOCUMENT"]);
 
+/** HEADER de texto fixo. A Meta aceita um HEADER: este texto, ou mídia. */
+export const META_TEMPLATE_AI_FIXED_HEADER_TEXT = "Informação de utilidade";
+
 export type MetaTemplateAiShell = {
   modelName: string;
   variableType: MetaTemplateAiVariableType;
@@ -81,7 +84,7 @@ export function parseMetaTemplateAiShell(input: Record<string, unknown> | undefi
   const mediaFormat = String(body.mediaFormat || body.media_format || "NONE")
     .trim()
     .toUpperCase() as MetaTemplateAiMediaFormat;
-  const headerText = String(body.headerText || body.header_text || "").trim();
+  const headerText = META_TEMPLATE_AI_FIXED_HEADER_TEXT;
   const buttonText = String(body.buttonText || body.button_text || "").trim();
   const buttonUrl = requireStaticHttpsUrl(String(body.buttonUrl || body.button_url || ""));
   const headerHandle = String(body.headerHandle || body.header_handle || "").trim();
@@ -89,9 +92,6 @@ export function parseMetaTemplateAiShell(input: Record<string, unknown> | undefi
     throw new MetaWhatsappError("template_invalid");
   }
   if (!BUTTON_LABELS.has(buttonText) || buttonText.length > 25) {
-    throw new MetaWhatsappError("template_invalid");
-  }
-  if (headerText.length > 60 || placeholderIndexes(headerText).length) {
     throw new MetaWhatsappError("template_invalid");
   }
   if (MEDIA_NEEDS_HANDLE.has(mediaFormat) && !headerHandle) {
