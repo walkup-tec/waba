@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-01 19:02 — Logo Meta PNG sem fundo no modal
+- PNG RGBA do infinito (Wikimedia `Meta Platforms logo.svg`, sem wordmark) em `/media/meta-logo.png`.
+- Marker: `DEPLOY-2026-09-01-190200-logo-meta-png`
+- LOG: `doc/LOG-2026-09-01__190200__logo-meta-png-transparente.md`
+
 ## 2026-09-01 18:55 — Logo Meta do modal = infinito do sistema
 - SVG do botão Conectar Portfólio no modal de envio; saiu o desenho + PNG que pareciam dois ícones.
 - Marker: `DEPLOY-2026-09-01-185500-logo-meta-infinito`
