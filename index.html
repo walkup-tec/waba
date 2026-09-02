@@ -21743,7 +21743,7 @@
                   <select id="meta-tpl-broadcast-intake" aria-label="Campanha atendida no Laboratório">
                     <option value="">Selecione a campanha</option>
                   </select>
-                  <span class="muted">Só aparecem campanhas atendidas por quem tem acesso ao Laboratório. Relatórios de outros operadores continuam manuais.</span>
+                  <span class="muted">Só campanhas Em andamento, no formato nome do assinante - campanha - envios.</span>
                 </div>
                 <div class="aquecedor-field">
                   <label for="meta-tpl-broadcast-file-btn">5. Lista (.xlsx, .xls ou .txt)</label>
@@ -38630,10 +38630,10 @@
             [
               {
                 value: "demo-intake-lab",
-                label: "Campanha Setembro · assinante@exemplo.com · 500 envios",
+                label: "Maria Silva - Campanha Setembro - 500",
               },
             ],
-            "Selecione a campanha atendida no Laboratório",
+            "Selecione a campanha Em andamento",
           );
           select.value = "demo-intake-lab";
           return;
@@ -38644,15 +38644,17 @@
           metaTplBroadcastFillSelect(
             select,
             items.map(function (item) {
-              const name = String(item.campaignName || "Campanha").trim();
-              const owner = String(item.ownerEmail || "").trim();
-              const envios = Number(item.plannedSendCount || 0);
+              const ready = String(item.label || "").trim();
+              if (ready) return { value: String(item.id || ""), label: ready };
+              const name = String(item.campaignName || "Campanha").trim() || "Campanha";
+              const owner = String(item.ownerName || item.ownerEmail || "Assinante").trim() || "Assinante";
+              const envios = Math.max(0, Math.round(Number(item.plannedSendCount || 0)));
               return {
                 value: String(item.id || ""),
-                label: name + (owner ? " · " + owner : "") + (envios ? " · " + envios + " envios" : ""),
+                label: owner + " - " + name + " - " + envios,
               };
             }),
-            items.length ? "Selecione a campanha atendida no Laboratório" : "Nenhuma campanha do Laboratório em aberto",
+            items.length ? "Selecione a campanha Em andamento" : "Nenhuma campanha Em andamento no Laboratório",
           );
         } catch (_error) {
           metaTplBroadcastFillSelect(select, [], "Não foi possível listar as campanhas");
@@ -38945,7 +38947,7 @@
           return;
         }
         if (!String((metaTplBroadcastEl("meta-tpl-broadcast-intake") || {}).value || "").trim()) {
-          metaTplBroadcastSetStatus("Selecione a campanha do assinante atendida no Laboratório.");
+          metaTplBroadcastSetStatus("Selecione a campanha Em andamento do assinante.");
           return;
         }
         metaTplBroadcastSetStatus("Iniciando disparo Cloud…");

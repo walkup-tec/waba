@@ -17,6 +17,10 @@ import {
   collectBusyCloudPhoneNumberIds,
   isCloudPhoneBusyForCampaign,
 } from "./meta-whatsapp-phone-occupancy";
+import {
+  formatCloudLinkableCampaignLabel,
+  isLinkableLabCampaignStatus,
+} from "./meta-whatsapp-broadcast-linkable";
 
 const prodEnv = {
   WABA_UI_PROFILE: "production",
@@ -216,5 +220,35 @@ describe("ocupação do número no Disparo Cloud", () => {
     );
     assert.equal(busy.has("phone-a"), true);
     assert.equal(busy.has("phone-b"), false);
+  });
+});
+
+describe("campanha do assinante no Disparo Cloud", () => {
+  it("só aceita status Em andamento", () => {
+    assert.equal(isLinkableLabCampaignStatus("in_progress"), true);
+    assert.equal(isLinkableLabCampaignStatus("generated"), false);
+    assert.equal(isLinkableLabCampaignStatus("completed"), false);
+    assert.equal(isLinkableLabCampaignStatus("error_reported"), false);
+    assert.equal(isLinkableLabCampaignStatus("cancelled"), false);
+  });
+
+  it("rótulo é nome do assinante - campanha - envios", () => {
+    assert.equal(
+      formatCloudLinkableCampaignLabel({
+        subscriberName: "Maria Silva",
+        ownerEmail: "assinante@exemplo.com",
+        campaignName: "Campanha Setembro",
+        plannedSendCount: 500,
+      }),
+      "Maria Silva - Campanha Setembro - 500",
+    );
+    assert.equal(
+      formatCloudLinkableCampaignLabel({
+        ownerEmail: "assinante@exemplo.com",
+        campaignName: "Campanha Setembro",
+        plannedSendCount: 0,
+      }),
+      "assinante@exemplo.com - Campanha Setembro - 0",
+    );
   });
 });

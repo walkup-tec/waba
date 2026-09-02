@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 16:57 — Campanha do assinante: só Em andamento
+- Select do Disparo Cloud: apenas intake `in_progress`.
+- Rótulo: `nome do assinante - nome da campanha - envios`.
+- LOG: `doc/LOG-2026-09-02__165700__campanha-assinante-em-andamento.md`
+
 ## 2026-09-02 16:52 — Números do disparo = Ativos do portfólio
 - O select usa a lista `NÚMEROS DESTE PORTFÓLIO` do card (Ativo + disponível).
 - Ao abrir Templates o wizard recarrega o portfólio; se a aba Portfólios já tiver um BM selecionado, o wizard começa nele.

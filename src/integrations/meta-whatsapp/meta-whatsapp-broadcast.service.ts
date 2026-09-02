@@ -47,6 +47,11 @@ import { createMetaTemplateButtonShortUrl } from "./meta-whatsapp-template-ai-sh
 import { WabaCampaignIntakeRepository } from "../../disparos/waba-campaign-intake.repository";
 import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
 import { campaignAttendedByLaboratorioStaff } from "../../disparos/waba-campaign-laboratorio-attended";
+import { WabaSubscriberRepository } from "../../subscribers/waba-subscriber.repository";
+import {
+  formatCloudLinkableCampaignLabel,
+  isLinkableLabCampaignStatus,
+} from "./meta-whatsapp-broadcast-linkable";
 
 const running = new Set<string>();
 
@@ -544,7 +549,7 @@ export class MetaWhatsappBroadcastService {
   }
 
   /**
-   * Campanhas do assinante ainda abertas e atendidas por quem tem Laboratório.
+   * Campanhas do assinante Em andamento e atendidas por quem tem Laboratório.
    * Só essas entram no Disparo Cloud e recebem indicadores/cliques automáticos.
    */
   listLinkableSubscriberCampaigns(auth: WabaRequestAuth) {
@@ -552,11 +557,11 @@ export class MetaWhatsappBroadcastService {
     const email = String(auth.email || "").trim().toLowerCase();
     const isMaster = auth.role === "master";
     const intakes = new WabaCampaignIntakeRepository();
+    const subscribers = new WabaSubscriberRepository();
     return intakes
       .listAll()
       .filter((intake) => {
-        const status = normalizeCampaignIntakeStatus(intake.status);
-        if (status !== "generated" && status !== "in_progress") return false;
+        if (!isLinkableLabCampaignStatus(intake.status)) return false;
         if (!campaignAttendedByLaboratorioStaff(intake)) return false;
         const existing = findBroadcastByIntakeCampaignId(intake.id);
         if (existing && existing.status !== "failed") return false;
@@ -568,14 +573,26 @@ export class MetaWhatsappBroadcastService {
       })
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
       .slice(0, 40)
-      .map((intake) => ({
-        id: intake.id,
-        campaignName: intake.campaignName,
-        ownerEmail: intake.ownerEmail,
-        status: normalizeCampaignIntakeStatus(intake.status),
-        plannedSendCount: Math.max(0, Math.round(Number(intake.plannedSendCount || 0))),
-        assignedOperacionalEmail: String(intake.assignedOperacionalEmail || "").trim().toLowerCase(),
-      }));
+      .map((intake) => {
+        const ownerEmail = String(intake.ownerEmail || "").trim().toLowerCase();
+        const subscriberName = String(subscribers.getByEmail(ownerEmail)?.fullName || "").trim();
+        const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount || 0)));
+        return {
+          id: intake.id,
+          campaignName: intake.campaignName,
+          ownerEmail,
+          ownerName: subscriberName || ownerEmail,
+          status: normalizeCampaignIntakeStatus(intake.status),
+          plannedSendCount,
+          assignedOperacionalEmail: String(intake.assignedOperacionalEmail || "").trim().toLowerCase(),
+          label: formatCloudLinkableCampaignLabel({
+            subscriberName,
+            ownerEmail,
+            campaignName: intake.campaignName,
+            plannedSendCount,
+          }),
+        };
+      });
   }
 
   private linkSubscriberCampaign(auth: WabaRequestAuth, intakeId: string): string | undefined {
@@ -596,18 +613,12 @@ export class MetaWhatsappBroadcastService {
     if (status === "completed" || status === "error_reported" || status === "cancelled") {
       fail("invalid_payload", "Esta campanha do assinante já foi encerrada.");
     }
+    if (!isLinkableLabCampaignStatus(status)) {
+      fail("invalid_payload", "Só é possível vincular campanhas Em andamento.");
+    }
     const existing = findBroadcastByIntakeCampaignId(intake.id);
     if (existing && existing.status !== "failed") {
       fail("invalid_payload", "Esta campanha já tem um Disparo Cloud em andamento.");
-    }
-    if (status === "generated") {
-      const now = new Date().toISOString();
-      intakes.updateById(intake.id, {
-        status: "in_progress",
-        startedAt: now,
-        startedByEmail: String(auth.email || "").trim().toLowerCase(),
-        updatedAt: now,
-      });
     }
     return intake.id;
   }
