@@ -15,6 +15,20 @@ function toUploadSessionPath(id: string): string {
   return raw.startsWith("upload:") ? raw : `upload:${raw}`;
 }
 
+function normalizeUploadMime(mime: string): string {
+  const raw = String(mime || "").trim().toLowerCase().split(";")[0].trim();
+  if (raw === "image/jpg" || raw === "image/pjpeg") return "image/jpeg";
+  if (raw === "image/x-png") return "image/png";
+  return raw;
+}
+
+function sanitizeUploadName(fileName: string, mime: string): string {
+  const type = normalizeUploadMime(mime);
+  const ext =
+    type === "image/png" ? "png" : type === "video/mp4" ? "mp4" : type === "application/pdf" ? "pdf" : "jpg";
+  return `header.${ext}`;
+}
+
 export async function uploadMetaResumableImage(
   input: MetaResumableUploadInput,
 ): Promise<{ handle: string }> {
@@ -26,9 +40,9 @@ export async function uploadMetaResumableImage(
     method: "POST",
     path: `${appId}/uploads`,
     query: {
-      file_name: input.fileName,
+      file_name: sanitizeUploadName(input.fileName, input.mime),
       file_length: String(input.bytes.length),
-      file_type: input.mime,
+      file_type: normalizeUploadMime(input.mime),
     },
   });
   const sessionId = toUploadSessionPath(String(started.json?.id || "").trim());
@@ -46,6 +60,7 @@ export async function uploadMetaResumableImage(
       headers: {
         Authorization: `OAuth ${token}`,
         file_offset: "0",
+        "Content-Type": "application/octet-stream",
       },
       body: new Uint8Array(input.bytes),
       signal: controller.signal,

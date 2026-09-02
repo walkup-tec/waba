@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 11:51 — PNG de cabeçalho recusado
+- Upload identifica PNG pelos bytes, nome `header.png` na Graph, teto 5 MB.
+- Marker: `DEPLOY-2026-09-02-115100-png-header-upload`
+- LOG: `doc/LOG-2026-09-02__115100__png-header-upload.md`
+
 ## 2026-09-02 11:43 — Card fantasma ao adicionar número
 - `pending_token` vazio não vira card «Portfólio empresarial».
 - Marker: `DEPLOY-2026-09-02-114300-portfolio-fantasma`

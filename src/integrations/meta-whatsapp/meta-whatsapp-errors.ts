@@ -15,6 +15,7 @@ export type MetaWhatsappErrorCode =
   | "template_url_restricted"
   | "template_shorten_failed"
   | "template_media_required"
+  | "template_media_too_large"
   | "template_upload_failed"
   | "template_not_found"
   | "template_delete_failed"
@@ -53,8 +54,10 @@ const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
     "Não foi possível cadastrar o botão. Tente novamente em instantes.",
   template_media_required:
     "Selecione o arquivo da mídia. A Meta exige um exemplo via upload para cabeçalho de imagem, vídeo ou documento.",
+  template_media_too_large:
+    "A imagem passou de 5 MB, o limite da Meta para cabeçalho. Envie um PNG ou JPEG menor.",
   template_upload_failed:
-    "Não foi possível enviar o arquivo da mídia para a Meta. Para imagem, use JPEG ou PNG e tente novamente.",
+    "A Meta recusou o upload da mídia. Use JPEG ou PNG de até 5 MB e tente novamente.",
   template_not_found: "Este template não pertence à conexão WhatsApp desta conta.",
   template_delete_failed: "Não foi possível excluir o template na Meta. Tente novamente.",
   template_not_ready: "Este template ainda não está aprovado para envio.",

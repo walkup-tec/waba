@@ -1,6 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetaWhatsappTemplateAiService = void 0;
+exports.normalizeHeaderMediaMime = normalizeHeaderMediaMime;
+exports.sniffMetaHeaderMediaMime = sniffMetaHeaderMediaMime;
+exports.sanitizeGraphUploadFileName = sanitizeGraphUploadFileName;
 exports.resolveMetaHeaderMediaMime = resolveMetaHeaderMediaMime;
 const waba_openai_responses_client_1 = require("../openai/waba-openai-responses.client");
 const meta_whatsapp_tenant_1 = require("./meta-whatsapp-tenant");
@@ -29,9 +32,50 @@ const MIME_ALIASES = {
     "image/pjpeg": "image/jpeg",
     "image/x-png": "image/png",
 };
-function resolveMetaHeaderMediaMime(mediaFormat, mime, fileName) {
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+function normalizeHeaderMediaMime(mime) {
+    return String(mime || "")
+        .trim()
+        .toLowerCase()
+        .split(";")[0]
+        .trim();
+}
+function sniffMetaHeaderMediaMime(bytes) {
+    if (!bytes || bytes.length < 8)
+        return null;
+    if (bytes[0] === 0x89 &&
+        bytes[1] === 0x50 &&
+        bytes[2] === 0x4e &&
+        bytes[3] === 0x47 &&
+        bytes[4] === 0x0d &&
+        bytes[5] === 0x0a &&
+        bytes[6] === 0x1a &&
+        bytes[7] === 0x0a) {
+        return "image/png";
+    }
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+        return "image/jpeg";
+    if (bytes.length >= 5 && bytes.subarray(0, 5).toString("ascii") === "%PDF-")
+        return "application/pdf";
+    if (bytes.length >= 8 && bytes.subarray(4, 8).toString("ascii") === "ftyp")
+        return "video/mp4";
+    return null;
+}
+function sanitizeGraphUploadFileName(fileName, mime) {
+    const type = normalizeHeaderMediaMime(mime);
+    const ext = type === "image/png" ? "png" : type === "video/mp4" ? "mp4" : type === "application/pdf" ? "pdf" : "jpg";
+    return `header.${ext}`;
+}
+function resolveMetaHeaderMediaMime(mediaFormat, mime, fileName, bytes) {
     const format = String(mediaFormat || "").trim().toUpperCase();
-    const raw = String(mime || "").trim().toLowerCase();
+    const sniffed = sniffMetaHeaderMediaMime(bytes);
+    if (sniffed && MEDIA_MIME[format]?.has(sniffed))
+        return sniffed;
+    if (format === "VIDEO" && sniffed === "video/mp4")
+        return sniffed;
+    if (format === "DOCUMENT" && sniffed === "application/pdf")
+        return sniffed;
+    const raw = normalizeHeaderMediaMime(mime);
     const ext = String(fileName || "").toLowerCase().split(".").pop() || "";
     const fromAlias = MIME_ALIASES[raw] || raw;
     if (MEDIA_MIME[format]?.has(fromAlias))
@@ -359,12 +403,16 @@ class MetaWhatsappTemplateAiService {
         const mediaFormat = String(input.mediaFormat || "").trim().toUpperCase();
         const allowed = MEDIA_MIME[mediaFormat];
         const bytes = input.bytes;
-        const fileName = String(input.fileName || "header").trim() || "header";
-        const mime = resolveMetaHeaderMediaMime(mediaFormat, input.mime || "", fileName);
+        const originalName = String(input.fileName || "header").trim() || "header";
+        const mime = resolveMetaHeaderMediaMime(mediaFormat, input.mime || "", originalName, bytes);
+        const fileName = sanitizeGraphUploadFileName(originalName, mime);
         if (!connectionId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         if (!allowed || !bytes?.length || !allowed.has(mime)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
+        }
+        if (mediaFormat === "IMAGE" && bytes.length > IMAGE_MAX_BYTES) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_media_too_large");
         }
         const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
         const appId = (0, meta_config_1.readMetaAppId)();
@@ -401,6 +449,14 @@ class MetaWhatsappTemplateAiService {
         catch (error) {
             if (error instanceof meta_whatsapp_errors_1.MetaWhatsappError)
                 throw error;
+            (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
+                tenantId: tenant.tenantId,
+                connectionId,
+                headerUploadFailed: mediaFormat,
+                mime,
+                bytes: bytes.length,
+                reason: String(error?.message || "upload").slice(0, 80),
+            });
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
         }
     }

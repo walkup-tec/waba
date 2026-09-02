@@ -3,6 +3,8 @@ import { after, before, describe, it } from "node:test";
 import {
   MetaWhatsappTemplateAiService,
   resolveMetaHeaderMediaMime,
+  sniffMetaHeaderMediaMime,
+  sanitizeGraphUploadFileName,
 } from "./meta-whatsapp-template-ai.service";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
@@ -795,6 +797,44 @@ describe("Assistente IA de templates Utility", () => {
       "image/png",
     );
     assert.equal(resolveMetaHeaderMediaMime("IMAGE", "image/x-png", "foto.png"), "image/png");
+    assert.equal(
+      resolveMetaHeaderMediaMime("IMAGE", "image/png; charset=utf-8", "sem-extensao"),
+      "image/png",
+    );
+    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3]);
+    assert.equal(sniffMetaHeaderMediaMime(pngBytes), "image/png");
+    assert.equal(
+      resolveMetaHeaderMediaMime("IMAGE", "application/octet-stream", "arquivo", pngBytes),
+      "image/png",
+    );
+    assert.equal(sanitizeGraphUploadFileName("ChatGPT Image 02-09-2026.png", "image/png"), "header.png");
+  });
+
+  it("recusa imagem de cabeçalho maior que 5 MB", async () => {
+    const png = Buffer.alloc(5 * 1024 * 1024 + 8, 0);
+    png[0] = 0x89;
+    png[1] = 0x50;
+    png[2] = 0x4e;
+    png[3] = 0x47;
+    png[4] = 0x0d;
+    png[5] = 0x0a;
+    png[6] = 0x1a;
+    png[7] = 0x0a;
+    const service = new MetaWhatsappTemplateAiService();
+    await assert.rejects(
+      () =>
+        service.uploadHeaderMediaFromAuth(
+          { email: "tpl-media@exemplo.com", role: "subscriber" },
+          {
+            connectionId: "conn-1",
+            mediaFormat: "IMAGE",
+            fileName: "ChatGPT Image.png",
+            mime: "image/png",
+            bytes: png,
+          },
+        ),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_media_too_large",
+    );
   });
 });
 describe("OpenAI Responses com Structured Outputs", () => {
