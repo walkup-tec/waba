@@ -38229,6 +38229,8 @@
       }
 
       function initMetaDisparoCloudUiPreview() {
+        document.body.classList.add("waba-laboratorio-visible", "waba-preview-disparo-cloud");
+        setActiveTab("whatsapp-templates", { skipPolicyCheck: true });
         metaTpSession.portfolios = [
           {
             id: "demo-business",
@@ -38254,8 +38256,6 @@
             status: "APPROVED",
           },
         ];
-        document.body.classList.add("waba-laboratorio-visible", "waba-preview-disparo-cloud");
-        setActiveTab("whatsapp-templates", { skipPolicyCheck: true });
         metaTplBroadcastFillPortfolio();
         const portfolio = metaTplBroadcastEl("meta-tpl-broadcast-portfolio");
         if (portfolio) portfolio.value = "demo-connection";
@@ -38756,6 +38756,9 @@
 
       window.wabaLoadMetaTemplatesLab = async function wabaLoadMetaTemplatesLab(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          return false;
+        }
         metaTplLabFillPortfolioSelect();
         metaTplLabFillPortfolioFilter();
         if (!metaTplLabPortfolioOptions().length && typeof metaTpLoadPortfolio === "function") {
@@ -55593,7 +55596,11 @@
             "aria-hidden",
             nextTab !== "whatsapp-templates" ? "true" : "false"
           );
-          if (nextTab === "whatsapp-templates" && typeof window.wabaLoadMetaTemplatesLab === "function") {
+          if (
+            nextTab === "whatsapp-templates" &&
+            typeof window.wabaLoadMetaTemplatesLab === "function" &&
+            !(typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview())
+          ) {
             window.wabaLoadMetaTemplatesLab();
           }
         }
