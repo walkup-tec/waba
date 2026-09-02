@@ -1,3 +1,4 @@
+- 2026-09-02: Disparo Cloud é menu próprio do Laboratório (`whatsapp-disparo-cloud`), acima de Automação. Motivo: o wizard não deve viver no meio de Templates; operacional antigo só vê o item depois que o master marcar no cadastro.
 - 2026-09-02: o Disparo Cloud só vincula campanha do assinante **Em andamento** (`in_progress`). Motivo: Gerada ainda não está na fila operacional; o rótulo é `nome - campanha - envios`.
 - 2026-09-02: número Cloud fica ocupado no início do Disparo Cloud e só libera após o relatório da campanha. Motivo: um número Ativo não pode servir dois disparos ao mesmo tempo; o envio terminar não basta, porque o Laboratório ainda coleta o relatório da Meta.
 - 2026-09-02: relatório automático da Meta e card de cliques só existem para campanhas **atendidas** por quem tem Laboratório (`assignedOperacionalEmail`). Motivo: a fila sem Laboratório continua operacional/manual. O plano oficial/alternativa não dispara automação.

@@ -3037,6 +3037,7 @@
         #tab-btn-whatsapp-oficial,
         #tab-btn-whatsapp-inbox,
         #tab-btn-whatsapp-templates,
+        #tab-btn-whatsapp-disparo-cloud,
         #tab-btn-whatsapp-automation {
           border-color: rgba(37, 211, 102, 0.72);
           background: rgba(6, 36, 24, 0.94);
@@ -4469,6 +4470,7 @@
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-oficial,
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-inbox,
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-templates,
+      body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-disparo-cloud,
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-automation {
         display: none !important;
       }
@@ -17685,7 +17687,10 @@
         display: none !important;
       }
 
-      body.waba-preview-disparo-cloud #tab-whatsapp-templates .panel:not(#meta-tpl-lab-list-panel):not(#meta-tpl-broadcast-panel) {
+      body.waba-preview-disparo-cloud #tab-whatsapp-oficial,
+      body.waba-preview-disparo-cloud #tab-whatsapp-inbox,
+      body.waba-preview-disparo-cloud #tab-whatsapp-templates,
+      body.waba-preview-disparo-cloud #tab-whatsapp-automation {
         display: none;
       }
 
@@ -18659,6 +18664,26 @@
                   <span class="tab-label">Atendimento</span>
                 </button>
                 <button
+                  id="tab-btn-whatsapp-disparo-cloud"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-whatsapp-disparo-cloud"
+                  data-tab="whatsapp-disparo-cloud"
+                  data-menu-key="whatsapp-disparo-cloud"
+                  data-menu-section="lab-api-oficial"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                      <path d="M12 12v6"></path>
+                      <path d="M9 15l3-3 3 3"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Disparo Cloud</span>
+                </button>
+                <button
                   id="tab-btn-whatsapp-automation"
                   class="tab-button waba-prod-only"
                   type="button"
@@ -19120,6 +19145,17 @@
               aria-checked="false"
             >
               Atendimento
+            </button>
+            <button
+              class="tab-button waba-prod-only"
+              type="button"
+              data-tab="whatsapp-disparo-cloud"
+              data-menu-key="whatsapp-disparo-cloud"
+              data-menu-section="lab-api-oficial"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Disparo Cloud
             </button>
             <button
               class="tab-button waba-prod-only"
@@ -21710,101 +21746,6 @@
               <p id="meta-tpl-lab-status" class="muted" style="margin: 10px 0 0;" role="status" aria-live="polite"></p>
             </section>
 
-            <section class="panel col-12" id="meta-tpl-broadcast-panel">
-              <div class="panel-header">
-                <div class="panel-title">Disparo Cloud</div>
-                <span class="muted">Template oficial · números no padrão Meta</span>
-              </div>
-              <p class="muted" style="margin: 0 0 12px;">
-                Ordem: portfólio, template aprovado, número Ativo e disponível, campanha do assinante atendida no Laboratório e planilha. Ao iniciar o disparo o número fica ocupado; só volta a disponível depois que a campanha for finalizada e o relatório for gerado. Os indicadores e os cliques entram no relatório dessa campanha. Telefones são normalizados para E.164 da Meta (DDI 55, 9º dígito, máscara e número do Excel).
-              </p>
-              <div class="disparos-grid disparos-grid-2 meta-tpl-broadcast-grid">
-                <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-portfolio">1. Portfólio</label>
-                  <select id="meta-tpl-broadcast-portfolio" aria-label="Portfólio do disparo Cloud">
-                    <option value="">Selecione um portfólio</option>
-                  </select>
-                </div>
-                <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-template">2. Template aprovado</label>
-                  <div class="meta-tpl-broadcast-template-row">
-                    <select id="meta-tpl-broadcast-category" aria-label="Filtrar templates por categoria">
-                      <option value="todas">todas</option>
-                    </select>
-                    <select id="meta-tpl-broadcast-template" aria-label="Template aprovado">
-                      <option value="">Selecione um template aprovado</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-number">3. Número Ativo e disponível</label>
-                  <select id="meta-tpl-broadcast-number" aria-label="Número Ativo e disponível">
-                    <option value="">Selecione um número Ativo e disponível</option>
-                  </select>
-                  <span class="muted">Os mesmos números Ativos deste portfólio na aba Portfólios. Só entram os disponíveis; ocupados somem até o relatório.</span>
-                </div>
-                <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-intake">4. Campanha do assinante (Laboratório)</label>
-                  <select id="meta-tpl-broadcast-intake" aria-label="Campanha atendida no Laboratório">
-                    <option value="">Selecione a campanha</option>
-                  </select>
-                  <span class="muted">Só campanhas Em andamento, no formato nome do assinante - campanha - envios.</span>
-                </div>
-                <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-file-btn">5. Lista (.xlsx, .xls ou .txt)</label>
-                  <div class="meta-tpl-ai-file-row">
-                    <input id="meta-tpl-broadcast-file" type="file" accept=".xlsx,.xls,.txt" hidden />
-                    <button id="meta-tpl-broadcast-file-btn" type="button" class="instance-action-btn btn-refresh enabled">Escolher planilha</button>
-                    <span id="meta-tpl-broadcast-file-name" class="muted meta-tpl-ai-file-name">Nenhum arquivo.</span>
-                  </div>
-                </div>
-                <div class="aquecedor-field" id="meta-tpl-broadcast-phone-wrap" hidden>
-                  <label for="meta-tpl-broadcast-phone-col">Coluna do telefone</label>
-                  <select id="meta-tpl-broadcast-phone-col" aria-label="Coluna do telefone">
-                    <option value="">Carregue a planilha</option>
-                  </select>
-                  <span class="muted">Aparece depois do template. Destino do disparo (máscara, DDI, Excel e 9º dígito).</span>
-                </div>
-                <div class="aquecedor-field" id="meta-tpl-broadcast-nome-wrap" hidden>
-                  <label for="meta-tpl-broadcast-nome-col">Coluna do nome</label>
-                  <select id="meta-tpl-broadcast-nome-col" aria-label="Coluna do nome">
-                    <option value="">Selecione a coluna</option>
-                  </select>
-                  <span class="muted">Só se o template tiver a variável de nome.</span>
-                </div>
-                <div class="aquecedor-field" id="meta-tpl-broadcast-numero-wrap" hidden>
-                  <label for="meta-tpl-broadcast-numero-col">Coluna da variável Número</label>
-                  <select id="meta-tpl-broadcast-numero-col" aria-label="Coluna da variável Número">
-                    <option value="">Selecione a coluna</option>
-                  </select>
-                  <span class="muted">Só se o template tiver a variável de número.</span>
-                </div>
-              </div>
-              <div class="disparos-inline-actions" style="margin-top:12px; flex-wrap:wrap; gap:8px;">
-                <button id="meta-tpl-broadcast-start" type="button" class="instance-action-btn btn-qrcode enabled">Iniciar disparo</button>
-              </div>
-              <p id="meta-tpl-broadcast-status" class="muted" role="status" aria-live="polite" style="margin:10px 0 0;"></p>
-              <div class="meta-tpl-broadcast-history" id="meta-tpl-broadcast-history">
-                <table class="meta-tpl-lab-table" aria-label="Campanhas iniciadas no Disparo Cloud">
-                  <thead>
-                    <tr>
-                      <th>Data de início</th>
-                      <th>Campanha</th>
-                      <th>Cliente</th>
-                      <th>Envios</th>
-                      <th>Andamento</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody id="meta-tpl-broadcast-history-tbody">
-                    <tr>
-                      <td class="muted" colspan="6">Nenhuma campanha iniciada neste Laboratório.</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
             <section class="panel col-12">
               <div class="panel-header">
                 <div class="panel-title">Criar template</div>
@@ -21901,6 +21842,105 @@
                   <p id="meta-tpl-ai-submit-status" class="muted" role="status" aria-live="polite" style="margin:0;" hidden></p>
                   <div id="meta-tpl-ai-batch-result"></div>
                 </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-whatsapp-disparo-cloud" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12" id="meta-tpl-broadcast-panel">
+              <div class="panel-header">
+                <div class="panel-title">Disparo Cloud</div>
+                <span class="muted">Template oficial · números no padrão Meta</span>
+              </div>
+              <p class="muted" style="margin: 0 0 12px;">
+                Ordem: portfólio, template aprovado, número Ativo e disponível, campanha do assinante atendida no Laboratório e planilha. Ao iniciar o disparo o número fica ocupado; só volta a disponível depois que a campanha for finalizada e o relatório for gerado. Os indicadores e os cliques entram no relatório dessa campanha. Telefones são normalizados para E.164 da Meta (DDI 55, 9º dígito, máscara e número do Excel).
+              </p>
+              <div class="disparos-grid disparos-grid-2 meta-tpl-broadcast-grid">
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-portfolio">1. Portfólio</label>
+                  <select id="meta-tpl-broadcast-portfolio" aria-label="Portfólio do disparo Cloud">
+                    <option value="">Selecione um portfólio</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-template">2. Template aprovado</label>
+                  <div class="meta-tpl-broadcast-template-row">
+                    <select id="meta-tpl-broadcast-category" aria-label="Filtrar templates por categoria">
+                      <option value="todas">todas</option>
+                    </select>
+                    <select id="meta-tpl-broadcast-template" aria-label="Template aprovado">
+                      <option value="">Selecione um template aprovado</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-number">3. Número Ativo e disponível</label>
+                  <select id="meta-tpl-broadcast-number" aria-label="Número Ativo e disponível">
+                    <option value="">Selecione um número Ativo e disponível</option>
+                  </select>
+                  <span class="muted">Os mesmos números Ativos deste portfólio na aba Portfólios. Só entram os disponíveis; ocupados somem até o relatório.</span>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-intake">4. Campanha do assinante (Laboratório)</label>
+                  <select id="meta-tpl-broadcast-intake" aria-label="Campanha atendida no Laboratório">
+                    <option value="">Selecione a campanha</option>
+                  </select>
+                  <span class="muted">Só campanhas Em andamento, no formato nome do assinante - campanha - envios.</span>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-file-btn">5. Lista (.xlsx, .xls ou .txt)</label>
+                  <div class="meta-tpl-ai-file-row">
+                    <input id="meta-tpl-broadcast-file" type="file" accept=".xlsx,.xls,.txt" hidden />
+                    <button id="meta-tpl-broadcast-file-btn" type="button" class="instance-action-btn btn-refresh enabled">Escolher planilha</button>
+                    <span id="meta-tpl-broadcast-file-name" class="muted meta-tpl-ai-file-name">Nenhum arquivo.</span>
+                  </div>
+                </div>
+                <div class="aquecedor-field" id="meta-tpl-broadcast-phone-wrap" hidden>
+                  <label for="meta-tpl-broadcast-phone-col">Coluna do telefone</label>
+                  <select id="meta-tpl-broadcast-phone-col" aria-label="Coluna do telefone">
+                    <option value="">Carregue a planilha</option>
+                  </select>
+                  <span class="muted">Aparece depois do template. Destino do disparo (máscara, DDI, Excel e 9º dígito).</span>
+                </div>
+                <div class="aquecedor-field" id="meta-tpl-broadcast-nome-wrap" hidden>
+                  <label for="meta-tpl-broadcast-nome-col">Coluna do nome</label>
+                  <select id="meta-tpl-broadcast-nome-col" aria-label="Coluna do nome">
+                    <option value="">Selecione a coluna</option>
+                  </select>
+                  <span class="muted">Só se o template tiver a variável de nome.</span>
+                </div>
+                <div class="aquecedor-field" id="meta-tpl-broadcast-numero-wrap" hidden>
+                  <label for="meta-tpl-broadcast-numero-col">Coluna da variável Número</label>
+                  <select id="meta-tpl-broadcast-numero-col" aria-label="Coluna da variável Número">
+                    <option value="">Selecione a coluna</option>
+                  </select>
+                  <span class="muted">Só se o template tiver a variável de número.</span>
+                </div>
+              </div>
+              <div class="disparos-inline-actions" style="margin-top:12px; flex-wrap:wrap; gap:8px;">
+                <button id="meta-tpl-broadcast-start" type="button" class="instance-action-btn btn-qrcode enabled">Iniciar disparo</button>
+              </div>
+              <p id="meta-tpl-broadcast-status" class="muted" role="status" aria-live="polite" style="margin:10px 0 0;"></p>
+              <div class="meta-tpl-broadcast-history" id="meta-tpl-broadcast-history">
+                <table class="meta-tpl-lab-table" aria-label="Campanhas iniciadas no Disparo Cloud">
+                  <thead>
+                    <tr>
+                      <th>Data de início</th>
+                      <th>Campanha</th>
+                      <th>Cliente</th>
+                      <th>Envios</th>
+                      <th>Andamento</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="meta-tpl-broadcast-history-tbody">
+                    <tr>
+                      <td class="muted" colspan="6">Nenhuma campanha iniciada neste Laboratório.</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </section>
           </div>
@@ -26038,6 +26078,7 @@
         "whatsapp-oficial",
         "whatsapp-inbox",
         "whatsapp-templates",
+        "whatsapp-disparo-cloud",
         "whatsapp-automation",
       ];
 
@@ -28953,7 +28994,7 @@
 
       function getMenuSectionForTab(tabName) {
         if (isMarketingTab(tabName)) return "marketing";
-        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-automation") return "lab-api-oficial";
+        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
         if (tabName === "disparos" || tabName === "disparo-evo" || isOfficialTab(tabName)) return "disparos";
@@ -38425,7 +38466,7 @@
 
       function initMetaDisparoCloudUiPreview() {
         document.body.classList.add("waba-laboratorio-visible", "waba-preview-disparo-cloud");
-        setActiveTab("whatsapp-templates", { skipPolicyCheck: true });
+        setActiveTab("whatsapp-disparo-cloud", { skipPolicyCheck: true });
         seedMetaDisparoCloudPreviewWorkspace();
         applyMetaDisparoCloudPreviewWizard();
         const panel = document.getElementById("meta-tpl-broadcast-panel");
@@ -55790,6 +55831,7 @@
         const whatsappOficialPanel = document.getElementById("tab-whatsapp-oficial");
         const whatsappInboxPanel = document.getElementById("tab-whatsapp-inbox");
         const whatsappTemplatesPanel = document.getElementById("tab-whatsapp-templates");
+        const whatsappDisparoCloudPanel = document.getElementById("tab-whatsapp-disparo-cloud");
         const whatsappAutomationPanel = document.getElementById("tab-whatsapp-automation");
         const metaTemplatesPanel = document.getElementById("tab-meta-templates");
         const metaDisparoPanel = document.getElementById("tab-meta-disparo");
@@ -55918,6 +55960,21 @@
           );
           if (
             nextTab === "whatsapp-templates" &&
+            typeof window.wabaLoadMetaTemplatesLab === "function" &&
+            !(typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview())
+          ) {
+            window.wabaLoadMetaTemplatesLab();
+          }
+        }
+
+        if (whatsappDisparoCloudPanel) {
+          whatsappDisparoCloudPanel.classList.toggle("tab-hidden", nextTab !== "whatsapp-disparo-cloud");
+          whatsappDisparoCloudPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "whatsapp-disparo-cloud" ? "true" : "false"
+          );
+          if (
+            nextTab === "whatsapp-disparo-cloud" &&
             typeof window.wabaLoadMetaTemplatesLab === "function" &&
             !(typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview())
           ) {
@@ -60354,7 +60411,7 @@
 
       function resolveMenuGroupForTab(tabName) {
         if (isMarketingTab(tabName)) return "marketing";
-        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-automation") return "lab-api-oficial";
+        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
         if (isOfficialTab(tabName)) return "oficial";

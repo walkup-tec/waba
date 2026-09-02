@@ -136,6 +136,14 @@ exports.WABA_MENU_REGISTRY = [
         profile: "production",
     },
     {
+        id: "whatsapp-disparo-cloud",
+        label: "Disparo Cloud",
+        tab: "whatsapp-disparo-cloud",
+        section: "lab-api-oficial",
+        sectionLabel: SECTION_LABELS["lab-api-oficial"],
+        profile: "production",
+    },
+    {
         id: "whatsapp-automation",
         label: "Automação",
         tab: "whatsapp-automation",
@@ -223,6 +231,7 @@ exports.WABA_TECH_PROVIDER_MENU_IDS = [
     "whatsapp-oficial",
     "whatsapp-inbox",
     "whatsapp-templates",
+    "whatsapp-disparo-cloud",
     "whatsapp-automation",
 ];
 const listWabaMenuDefinitions = () => exports.WABA_MENU_REGISTRY.map((item) => ({ ...item }));

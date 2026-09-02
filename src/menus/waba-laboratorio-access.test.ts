@@ -60,6 +60,7 @@ describe("waba-laboratorio-access", () => {
       assert.equal(perms["whatsapp-oficial"], false);
       assert.equal(perms["whatsapp-inbox"], false);
       assert.equal(perms["whatsapp-templates"], false);
+      assert.equal(perms["whatsapp-disparo-cloud"], false);
       assert.equal(perms["whatsapp-automation"], false);
       assert.equal(perms.dashboard, true);
     } finally {
@@ -89,6 +90,9 @@ describe("waba-laboratorio-access", () => {
       });
       assert.equal(perms["whatsapp-oficial"], true);
       assert.equal(perms["whatsapp-inbox"], true);
+      assert.equal(perms["whatsapp-templates"], true);
+      assert.equal(perms["whatsapp-disparo-cloud"], true);
+      assert.equal(perms["whatsapp-automation"], true);
     } finally {
       if (prev.ui == null) delete process.env.WABA_UI_PROFILE;
       else process.env.WABA_UI_PROFILE = prev.ui;
@@ -117,12 +121,14 @@ describe("waba-laboratorio-access", () => {
           "whatsapp-oficial": true,
           "whatsapp-inbox": false,
           "whatsapp-templates": true,
+          "whatsapp-disparo-cloud": true,
           "whatsapp-automation": true,
         },
       });
       assert.equal(perms["whatsapp-oficial"], true);
       assert.equal(perms["whatsapp-inbox"], false);
       assert.equal(perms["whatsapp-templates"], true);
+      assert.equal(perms["whatsapp-disparo-cloud"], true);
       assert.equal(perms["whatsapp-automation"], true);
       assert.equal(perms["admin-campanhas"], true);
     } finally {
