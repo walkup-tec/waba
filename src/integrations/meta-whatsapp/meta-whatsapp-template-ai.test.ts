@@ -573,7 +573,7 @@ describe("Assistente IA de templates Utility", () => {
         qualityScore: null,
         components: [
           { type: "BODY", text: "Olá.\nInformamos que a solicitação foi atualizada.\nPara consultar, use o link abaixo." },
-          { type: "BUTTONS", buttons: [{ type: "URL", text: "Ver Detalhes" }] },
+          { type: "BUTTONS", buttons: [{ type: "QUICK_REPLY", text: "Bloquear" }, { type: "URL", text: "Ver Detalhes" }] },
         ],
         rejectedReason: null,
         lastSyncedAt: "2026-09-02T01:00:00.000Z",

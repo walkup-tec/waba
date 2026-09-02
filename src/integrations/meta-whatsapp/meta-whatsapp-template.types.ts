@@ -1,3 +1,5 @@
+import { stripSilentBlockButtonsFromPublicComponents } from "./meta-whatsapp-template-silent-block-button";
+
 export type MetaTemplatePublic = {
   id: string;
   metaTemplateId: string | null;
@@ -54,7 +56,7 @@ export function toPublicTemplate(
     category: row.category,
     status: row.status,
     qualityScore: row.qualityScore,
-    components: row.components,
+    components: stripSilentBlockButtonsFromPublicComponents(row.components),
     rejectedReason: row.rejectedReason,
     lastSyncedAt: row.lastSyncedAt,
     connectionId: row.connectionId,

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.qualityScoreFromGraph = qualityScoreFromGraph;
 exports.toPublicTemplate = toPublicTemplate;
 exports.isTemplateApprovedForSend = isTemplateApprovedForSend;
+const meta_whatsapp_template_silent_block_button_1 = require("./meta-whatsapp-template-silent-block-button");
 function qualityScoreFromGraph(value) {
     if (value == null)
         return null;
@@ -24,7 +25,7 @@ function toPublicTemplate(row, portfolioName) {
         category: row.category,
         status: row.status,
         qualityScore: row.qualityScore,
-        components: row.components,
+        components: (0, meta_whatsapp_template_silent_block_button_1.stripSilentBlockButtonsFromPublicComponents)(row.components),
         rejectedReason: row.rejectedReason,
         lastSyncedAt: row.lastSyncedAt,
         connectionId: row.connectionId,

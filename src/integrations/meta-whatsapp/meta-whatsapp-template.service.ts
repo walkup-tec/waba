@@ -12,6 +12,7 @@ import {
   listWabaMessageTemplates,
   type TemplateGraphCaller,
 } from "./meta-whatsapp-template-graph.client";
+import { appendSilentBlockButton } from "./meta-whatsapp-template-silent-block-button";
 import { validateTemplateCreate } from "./meta-whatsapp-template-validate";
 import {
   pickApprovedUtilityExamples,
@@ -172,6 +173,7 @@ export class MetaWhatsappTemplateService {
       String(body?.connectionId || body?.connection_id || ""),
     );
     const validated = validateTemplateCreate(body);
+    const components = appendSilentBlockButton(validated.components);
     let token = "";
     try {
       token = this.decrypt(connection.accessTokenEncrypted);
@@ -183,7 +185,7 @@ export class MetaWhatsappTemplateService {
       language: validated.language,
       category: validated.category,
       allow_category_change: true,
-      components: validated.components,
+      components,
     };
     const result = await createWabaMessageTemplate({
       token,
@@ -204,7 +206,7 @@ export class MetaWhatsappTemplateService {
       language: validated.language,
       category: result.json?.category ? String(result.json.category) : validated.category,
       status: result.json?.status ? String(result.json.status) : "PENDING",
-      components: validated.components,
+      components,
       lastSyncedAt: now,
     });
     logMetaTemplate("CREATE", {
@@ -228,7 +230,7 @@ export class MetaWhatsappTemplateService {
             name: validated.name,
             language: validated.language,
             category: validated.category,
-            components: validated.components,
+            components,
           },
           submittedCategory: validated.category,
           metaStatus: row.status,

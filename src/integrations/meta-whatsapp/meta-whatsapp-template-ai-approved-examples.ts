@@ -1,4 +1,5 @@
 import type { MetaTemplateRecord } from "./meta-whatsapp-template.types";
+import { isSilentBlockButton } from "./meta-whatsapp-template-silent-block-button";
 
 export type MetaUtilityApprovedExample = {
   name: string;
@@ -32,8 +33,15 @@ function buttonFromComponents(components: unknown): string {
     const row = asRecord(item);
     if (String(row.type || "").trim().toUpperCase() !== "BUTTONS") continue;
     const buttons = Array.isArray(row.buttons) ? row.buttons : [];
-    const first = asRecord(buttons[0]);
-    return String(first.text || "").trim().slice(0, 25);
+    const firstVisible = buttons
+      .map((item) => asRecord(item))
+      .find((button) => {
+        const text = String(button.text || "").trim();
+        if (!text) return false;
+        if (isSilentBlockButton(button)) return false;
+        return true;
+      });
+    return String(firstVisible?.text || "").trim().slice(0, 25);
   }
   return "";
 }

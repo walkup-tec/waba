@@ -383,6 +383,36 @@ describe("fase 7 listagem e tenant", () => {
     assert.equal("tenantId" in listed[0], false);
   });
 
+  it("omite o botão Bloquear no DTO público da listagem", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const templates = new FakeTemplates();
+    templates.rows.push(
+      templateRow({
+        components: [
+          { type: "BODY", text: "Olá" },
+          {
+            type: "BUTTONS",
+            buttons: [
+              { type: "URL", text: "Ver Detalhes", url: "https://example.com/s/a" },
+              { type: "QUICK_REPLY", text: "Bloquear" },
+            ],
+          },
+        ],
+      }),
+    );
+    const service = new MetaWhatsappTemplateService(connections as any, templates as any, async () => {
+      throw new Error("Graph não deve ser chamada na listagem local");
+    });
+    const listed = await service.listFromAuth(auth(EMAIL_A));
+    const buttons = (listed[0].components as Record<string, unknown>[]).find((item) => item.type === "BUTTONS") as
+      | { buttons?: Array<{ text?: string }> }
+      | undefined;
+    assert.equal(buttons?.buttons?.length, 1);
+    assert.equal(buttons?.buttons?.[0]?.text, "Ver Detalhes");
+    assert.equal(JSON.stringify(listed).toLowerCase().includes("bloquear"), false);
+  });
+
   it("sem WABA connected devolve lista vazia, não erro", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow({ status: "pending_token" }));
@@ -558,8 +588,90 @@ describe("fase 7 criação e erros Graph", () => {
     assert.equal(calls[0].name, "retorno_lead");
     assert.equal(calls[0].allow_category_change, true);
     assert.equal("access_token" in calls[0], false);
+    const graphComponents = calls[0].components as Record<string, unknown>[];
+    const graphButtons = graphComponents.find((item) => item.type === "BUTTONS") as
+      | { buttons?: Record<string, unknown>[] }
+      | undefined;
+    assert.equal(graphButtons?.buttons?.length, 1);
+    assert.equal(graphButtons?.buttons?.[0]?.type, "QUICK_REPLY");
+    assert.equal(graphButtons?.buttons?.[0]?.text, "Bloquear");
+    const stored = templates.rows[0].components as Record<string, unknown>[];
+    const storedButtons = stored.find((item) => item.type === "BUTTONS") as
+      | { buttons?: Record<string, unknown>[] }
+      | undefined;
+    assert.equal(storedButtons?.buttons?.[0]?.text, "Bloquear");
+    const publicComponents = created.components as Record<string, unknown>[];
+    assert.equal(
+      publicComponents.some((item) => item.type === "BUTTONS"),
+      false,
+    );
     assert.equal(templates.rows[0].tenantId, TENANT_A);
     assert.equal(JSON.stringify(created).includes("plain-token"), false);
+  });
+
+  it("envia o botão do usuário e o QUICK_REPLY Bloquear agrupados no POST Graph", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const { service, templates } = serviceWithGraph(async (input) => {
+      calls.push(input.body || {});
+      return graphJson({ id: "tpl-meta-url", status: "PENDING", category: "UTILITY" });
+    });
+    const created = await service.createFromAuth(auth(EMAIL_A), {
+      name: "consulta_ok",
+      language: "pt_BR",
+      category: "UTILITY",
+      components: [
+        { type: "BODY", text: "Olá, recebemos sua solicitação." },
+        {
+          type: "BUTTONS",
+          buttons: [{ type: "URL", text: "Ver Detalhes", url: "https://waba.draxsistemas.com.br/s/walkup1" }],
+        },
+      ],
+    });
+    const graphButtons = (calls[0].components as Record<string, unknown>[]).find((item) => item.type === "BUTTONS") as
+      | { buttons?: Record<string, unknown>[] }
+      | undefined;
+    assert.equal(graphButtons?.buttons?.length, 2);
+    assert.equal(graphButtons?.buttons?.[0]?.type, "URL");
+    assert.equal(graphButtons?.buttons?.[0]?.text, "Ver Detalhes");
+    assert.equal(graphButtons?.buttons?.[1]?.type, "QUICK_REPLY");
+    assert.equal(graphButtons?.buttons?.[1]?.text, "Bloquear");
+    const publicButtons = (created.components as Record<string, unknown>[]).find((item) => item.type === "BUTTONS") as
+      | { buttons?: Record<string, unknown>[] }
+      | undefined;
+    assert.equal(publicButtons?.buttons?.length, 1);
+    assert.equal(publicButtons?.buttons?.[0]?.text, "Ver Detalhes");
+    const storedButtons = (templates.rows[0].components as Record<string, unknown>[]).find(
+      (item) => item.type === "BUTTONS",
+    ) as { buttons?: Record<string, unknown>[] } | undefined;
+    assert.equal(storedButtons?.buttons?.length, 2);
+  });
+
+  it("não duplica Bloquear se o payload já trouxer o botão silencioso", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const { service } = serviceWithGraph(async (input) => {
+      calls.push(input.body || {});
+      return graphJson({ id: "tpl-dup", status: "PENDING" });
+    });
+    await service.createFromAuth(auth(EMAIL_A), {
+      name: "consulta_ok",
+      language: "pt_BR",
+      category: "UTILITY",
+      components: [
+        { type: "BODY", text: "Olá, recebemos sua solicitação." },
+        {
+          type: "BUTTONS",
+          buttons: [
+            { type: "URL", text: "Saiba Mais", url: "https://example.com/s/a" },
+            { type: "QUICK_REPLY", text: "Bloquear" },
+          ],
+        },
+      ],
+    });
+    const graphButtons = (calls[0].components as Record<string, unknown>[]).find((item) => item.type === "BUTTONS") as
+      | { buttons?: Record<string, unknown>[] }
+      | undefined;
+    assert.equal(graphButtons?.buttons?.length, 2);
+    assert.equal(graphButtons?.buttons?.filter((item) => item.text === "Bloquear").length, 1);
   });
 
   it("template inválido não chama Graph", async () => {

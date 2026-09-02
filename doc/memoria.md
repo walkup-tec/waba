@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 10:00 — Botão silencioso Bloquear
+- Todo POST Graph de template ganha `QUICK_REPLY` Bloquear depois do botão do usuário. O painel não mostra.
+- Marker: `DEPLOY-2026-09-02-100000-botao-bloquear-silencioso`
+- LOG: `doc/LOG-2026-09-02__100000__botao-bloquear-silencioso.md`
+
 ## 2026-09-02 09:52 — IA: palavras de utilidade
 - Prompt 1.7: Confirmação, Status Confirmado, Confirmado, aprovado, concluído, atualizado, liberado.
 - Marker: `DEPLOY-2026-09-02-095200-ia-palavras-utilidade`

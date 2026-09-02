@@ -37697,7 +37697,9 @@
                 };
               })
               .filter(function (button) {
-                return button.text;
+                if (!button.text) return false;
+                if (button.type === "QUICK_REPLY" && button.text.toLowerCase() === "bloquear") return false;
+                return true;
               });
           }
         });

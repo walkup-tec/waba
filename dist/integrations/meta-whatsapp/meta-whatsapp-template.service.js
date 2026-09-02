@@ -9,6 +9,7 @@ const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
 const meta_whatsapp_template_log_1 = require("./meta-whatsapp-template-log");
 const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.repository");
 const meta_whatsapp_template_graph_client_1 = require("./meta-whatsapp-template-graph.client");
+const meta_whatsapp_template_silent_block_button_1 = require("./meta-whatsapp-template-silent-block-button");
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
 const meta_whatsapp_template_ai_approved_examples_1 = require("./meta-whatsapp-template-ai-approved-examples");
 const meta_whatsapp_template_types_1 = require("./meta-whatsapp-template.types");
@@ -128,6 +129,7 @@ class MetaWhatsappTemplateService {
         warnIgnored(body, tenant.tenantId);
         const connection = await this.requireConnectedWaba(tenant.tenantId, String(body?.connectionId || body?.connection_id || ""));
         const validated = (0, meta_whatsapp_template_validate_1.validateTemplateCreate)(body);
+        const components = (0, meta_whatsapp_template_silent_block_button_1.appendSilentBlockButton)(validated.components);
         let token = "";
         try {
             token = this.decrypt(connection.accessTokenEncrypted);
@@ -140,7 +142,7 @@ class MetaWhatsappTemplateService {
             language: validated.language,
             category: validated.category,
             allow_category_change: true,
-            components: validated.components,
+            components,
         };
         const result = await (0, meta_whatsapp_template_graph_client_1.createWabaMessageTemplate)({
             token,
@@ -161,7 +163,7 @@ class MetaWhatsappTemplateService {
             language: validated.language,
             category: result.json?.category ? String(result.json.category) : validated.category,
             status: result.json?.status ? String(result.json.status) : "PENDING",
-            components: validated.components,
+            components,
             lastSyncedAt: now,
         });
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("CREATE", {
@@ -185,7 +187,7 @@ class MetaWhatsappTemplateService {
                         name: validated.name,
                         language: validated.language,
                         category: validated.category,
-                        components: validated.components,
+                        components,
                     },
                     submittedCategory: validated.category,
                     metaStatus: row.status,

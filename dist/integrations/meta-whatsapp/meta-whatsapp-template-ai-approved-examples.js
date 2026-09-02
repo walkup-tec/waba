@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.pickApprovedUtilityExamples = pickApprovedUtilityExamples;
+const meta_whatsapp_template_silent_block_button_1 = require("./meta-whatsapp-template-silent-block-button");
 const MAX_EXAMPLES = 8;
 const MAX_BODY = 500;
 function asRecord(value) {
@@ -27,8 +28,17 @@ function buttonFromComponents(components) {
         if (String(row.type || "").trim().toUpperCase() !== "BUTTONS")
             continue;
         const buttons = Array.isArray(row.buttons) ? row.buttons : [];
-        const first = asRecord(buttons[0]);
-        return String(first.text || "").trim().slice(0, 25);
+        const firstVisible = buttons
+            .map((item) => asRecord(item))
+            .find((button) => {
+            const text = String(button.text || "").trim();
+            if (!text)
+                return false;
+            if ((0, meta_whatsapp_template_silent_block_button_1.isSilentBlockButton)(button))
+                return false;
+            return true;
+        });
+        return String(firstVisible?.text || "").trim().slice(0, 25);
     }
     return "";
 }

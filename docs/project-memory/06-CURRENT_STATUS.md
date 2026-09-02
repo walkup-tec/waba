@@ -8,9 +8,10 @@ Concluído no laboratório Meta:
 - o painel legado Visualizar / usar em teste saiu;
 - Atualizar da Meta também remove da tabela o que já não existe na biblioteca da Meta;
 - Enviar para META mostra no modal o nome Graph, status e WABA; não afirma sucesso se nada foi reenviado.
+- criação Graph inclui o botão silencioso **Bloquear** (`QUICK_REPLY`); o preview e a tabela não o exibem.
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-095200-ia-palavras-utilidade`.
+Marker: `DEPLOY-2026-09-02-100000-botao-bloquear-silencioso`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
