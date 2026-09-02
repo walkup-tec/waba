@@ -38465,8 +38465,13 @@
       }
 
       function initMetaDisparoCloudUiPreview() {
-        document.body.classList.add("waba-laboratorio-visible", "waba-preview-disparo-cloud");
+        document.body.classList.add(
+          "waba-ui-production",
+          "waba-laboratorio-visible",
+          "waba-preview-disparo-cloud",
+        );
         setActiveTab("whatsapp-disparo-cloud", { skipPolicyCheck: true });
+        if (typeof setSidebarCollapsed === "function") setSidebarCollapsed(false);
         seedMetaDisparoCloudPreviewWorkspace();
         applyMetaDisparoCloudPreviewWizard();
         const panel = document.getElementById("meta-tpl-broadcast-panel");
