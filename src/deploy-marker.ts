@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-02-103000-modal-excluir-template";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-02-110400-modal-envio-processando";

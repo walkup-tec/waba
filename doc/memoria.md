@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 11:04 — Processando do envio à Meta sumia
+- Clique duplo/triplo em Enviar fechava o overlay na fase processing (microtask entre listeners).
+- Marker: `DEPLOY-2026-09-02-110400-modal-envio-processando`
+- LOG: `doc/LOG-2026-09-02__110400__modal-envio-processando.md`
+
 ## 2026-09-02 10:33 — Push GitHub master (modal excluir)
 - `walkup-tec/waba` `master`: `81e149a` (fast-forward de `c38df14`).
 - Marker esperado após Redeploy: `DEPLOY-2026-09-02-103000-modal-excluir-template`

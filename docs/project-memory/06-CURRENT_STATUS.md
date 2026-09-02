@@ -7,11 +7,11 @@ Concluído no laboratório Meta:
 - na tabela: Visualizar abre preview WhatsApp com a imagem de cabeçalho quando houver mídia; Excluir abre modal de confirmação com spinner até a Graph concluir;
 - o painel legado Visualizar / usar em teste saiu;
 - Atualizar da Meta também remove da tabela o que já não existe na biblioteca da Meta;
-- Enviar para META abre o modal de processamento (logo, spinner e etapas das 3 opções); o resultado continua no mesmo overlay.
+- Enviar para META: confirmação → processando (spinner e etapas) → resultado no mesmo overlay. O clique em Enviar não pode fechar o modal no meio do processamento.
 - criação Graph inclui o botão silencioso **Bloquear** (`QUICK_REPLY`); o preview e a tabela não o exibem.
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-103000-modal-excluir-template`.
+Marker: `DEPLOY-2026-09-02-110400-modal-envio-processando`.
 
-GitHub `walkup-tec/waba` `master` está em `81e149a`. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
+GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

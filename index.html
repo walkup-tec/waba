@@ -37443,7 +37443,7 @@
       }
 
       function metaTplAiCloseOverlay(force) {
-        if (!force && metaTplAiModalPhase === "processing") return;
+        if (metaTplAiModalPhase === "processing") return;
         metaTplAiStopProgressTimer();
         metaTplAiProgressSteps = [];
         const { overlay } = metaTplAiModalEls();
@@ -37557,6 +37557,7 @@
       }
 
       function metaTplAiOnModalOk() {
+        if (metaTplAiModalPhase === "processing") return;
         if (metaTplAiModalPhase === "confirm") {
           const resolve = metaTplAiModalResolver;
           metaTplAiModalResolver = null;
@@ -37665,6 +37666,11 @@
             ? "Enviando o arquivo de mídia e, em seguida, cada uma das três opções."
             : "Cadastrando cada uma das três opções no portfólio selecionado.",
         );
+        await new Promise(function (resolve) {
+          window.requestAnimationFrame(function () {
+            window.requestAnimationFrame(resolve);
+          });
+        });
         async function markStepDone(id) {
           metaTplAiSetStepState(id, "done");
           const next = metaTplAiProgressSteps.find(function (step) {
@@ -61617,11 +61623,9 @@
       const metaTplAiOverlay = document.getElementById("meta-tpl-ai-overlay");
       if (metaTplAiOverlay) {
         metaTplAiOverlay.addEventListener("click", (e) => {
-          if (e.target === metaTplAiOverlay) metaTplAiCloseOverlay(true);
+          if (e.target === metaTplAiOverlay) metaTplAiCloseOverlay();
         });
       }
-      document.getElementById("meta-tpl-ai-modal-cancel")?.addEventListener("click", () => metaTplAiCloseOverlay(true));
-      document.getElementById("meta-tpl-ai-modal-ok")?.addEventListener("click", () => metaTplAiOnModalOk());
       const metaTplDeleteOverlay = document.getElementById("meta-tpl-delete-overlay");
       if (metaTplDeleteOverlay) {
         metaTplDeleteOverlay.addEventListener("click", (e) => {
