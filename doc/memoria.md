@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 13:34 — Workspace do Laboratório para o operacional
+- Operacional/suporte com menu marcado lê portfólio, números e templates do tenant do dono (Mozart), não de um tenant vazio.
+- Marker: `DEPLOY-2026-09-02-133400-laboratorio-workspace-operacional`
+- LOG: `doc/LOG-2026-09-02__133400__laboratorio-workspace-operacional.md`
+
 ## 2026-09-02 13:14 — Laboratório segue o cadastro do operacional
 - Em produção, operacional/suporte vê os menus do Laboratório marcados no usuário. Master walkup continua sem a seção; Mozart continua com ela.
 - Marker: `DEPLOY-2026-09-02-131400-laboratorio-menu-cadastro`

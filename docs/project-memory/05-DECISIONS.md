@@ -1,3 +1,4 @@
+- 2026-09-02: operacional/suporte com menu do Laboratório lê o tenant do dono (`mozart.pmo@gmail.com`). Motivo: portfólio, números e templates ficavam vazios no e-mail do operacional.
 - 2026-09-02: operacional/suporte vê Laboratório pelos checkboxes do cadastro. Motivo: a allowlist Mozart zerava a seção mesmo com menus marcados (ex.: `drax@draxsistemas.com.br`). Masters que não são Mozart continuam sem a seção.
 - 2026-09-02: o Arquivo da mídia do template não tem teto no Waba. Motivo: só a Meta recusa (imagem JPEG/PNG até 5 MB). O alerta mostra `error_user_msg` da Graph. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media/
 - 2026-09-02: o Laboratório volta a enviar foto de perfil do chip para a Meta (`profile_picture_handle`). Motivo: o card só lia a Graph; o pedido é ditar a foto no Waba. Nome de exibição segue revisão da Meta. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/

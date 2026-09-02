@@ -2,6 +2,7 @@
 
 - Isolamento por tenant da sessão. Cliente não escolhe `tenant_id`.
 - Laboratório no menu: operacional/suporte vê o que estiver marcado no cadastro. Master em produção só Mozart. Walkup e quantumivst não veem a seção.
+- Laboratório nos dados: operacional/suporte com menu marcado vê o mesmo workspace do dono (portfólios, números e templates já conectados). Não usa o tenant vazio do próprio e-mail.
 - Laboratório: conexão `pending_token` sem Business, WABA nem números **não** aparece como card de portfólio. Adicionar número a um BM existente não cria o card vazio «Portfólio empresarial».
 - Listagem do card de relatórios mostra **todos** os templates do tenant, sem exigir portfólio.
 - Filtro de portfólio (padrão: Todos os Portfólios) e busca por nome são só de UI.

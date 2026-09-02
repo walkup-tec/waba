@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { WabaSubscriberRepository } from "../../subscribers/waba-subscriber.repository";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
+import { WABA_LABORATORIO_OWNER_EMAIL } from "../../menus/waba-laboratorio-access";
+import { isMenuAllowedForUser } from "../../menus/waba-menu-permissions.service";
+import { WABA_TECH_PROVIDER_MENU_IDS } from "../../menus/waba-menu-registry";
+import { WabaSystemUserService } from "../../users/waba-system-user.service";
 import type { MetaWhatsappTenant } from "./meta-whatsapp-connection.types";
 
 const normalizeEmail = (value: string): string => String(value || "").trim().toLowerCase();
@@ -16,19 +20,48 @@ function uuidV5FromEmail(email: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
-export function resolveMetaWhatsappTenant(
-  auth: WabaRequestAuth,
-  subscriberRepository = new WabaSubscriberRepository(),
+export type MetaWhatsappTenantOptions = {
+  /** Testes: força se o staff compartilha o workspace do Laboratório. */
+  hasLaboratorioMenu?: boolean;
+};
+
+function staffHasLaboratorioMenu(auth: WabaRequestAuth): boolean {
+  if (auth.role !== "operacional" && auth.role !== "suporte") return false;
+  const user = new WabaSystemUserService().getByEmail(auth.email);
+  if (!user) return false;
+  return WABA_TECH_PROVIDER_MENU_IDS.some((id) => isMenuAllowedForUser(user, id));
+}
+
+function tenantForWorkspaceEmail(
+  workspaceEmail: string,
+  subscriberRepository: Pick<WabaSubscriberRepository, "getByEmail">,
 ): MetaWhatsappTenant {
-  const ownerEmail = normalizeEmail(auth.email);
-  if (!ownerEmail || !ownerEmail.includes("@") || auth.role === "guest") {
-    throw new Error("Sessão inválida para integração Meta.");
-  }
-  const subscriber = subscriberRepository.getByEmail(ownerEmail);
+  const subscriber = subscriberRepository.getByEmail(workspaceEmail);
   if (subscriber?.id) {
     return { tenantId: subscriber.id, ownerEmail: subscriber.email };
   }
-  return { tenantId: uuidV5FromEmail(ownerEmail), ownerEmail };
+  return { tenantId: uuidV5FromEmail(workspaceEmail), ownerEmail: workspaceEmail };
+}
+
+/**
+ * Assinante e master usam o tenant do próprio e-mail.
+ * Operacional/suporte com menu do Laboratório lê o mesmo workspace do dono (Mozart).
+ */
+export function resolveMetaWhatsappTenant(
+  auth: WabaRequestAuth,
+  subscriberRepository: Pick<WabaSubscriberRepository, "getByEmail"> = new WabaSubscriberRepository(),
+  options: MetaWhatsappTenantOptions = {},
+): MetaWhatsappTenant {
+  const sessionEmail = normalizeEmail(auth.email);
+  if (!sessionEmail || !sessionEmail.includes("@") || auth.role === "guest") {
+    throw new Error("Sessão inválida para integração Meta.");
+  }
+
+  const shareLab =
+    (auth.role === "operacional" || auth.role === "suporte") &&
+    (options.hasLaboratorioMenu ?? staffHasLaboratorioMenu(auth));
+  const workspaceEmail = shareLab ? WABA_LABORATORIO_OWNER_EMAIL : sessionEmail;
+  return tenantForWorkspaceEmail(workspaceEmail, subscriberRepository);
 }
 
 export { uuidV5FromEmail as deriveStableMetaTenantId };
