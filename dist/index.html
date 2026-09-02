@@ -21736,6 +21736,7 @@
                   <select id="meta-tpl-broadcast-number" aria-label="Número Ativo e disponível">
                     <option value="">Selecione um número Ativo e disponível</option>
                   </select>
+                  <span class="muted">Os mesmos números Ativos deste portfólio na aba Portfólios. Só entram os disponíveis; ocupados somem até o relatório.</span>
                 </div>
                 <div class="aquecedor-field">
                   <label for="meta-tpl-broadcast-intake">4. Campanha do assinante (Laboratório)</label>
@@ -36947,6 +36948,7 @@
           return all.concat(Array.isArray(item.numbers) ? item.numbers : []);
         }, []);
         metaTpRenderPortfolioCards(bundles, selectedBiz === "—" ? "" : selectedBiz);
+        if (typeof metaTplBroadcastFillNumbers === "function") metaTplBroadcastFillNumbers();
       }
 
       let metaTpPortfolioInflight = null;
@@ -36973,6 +36975,7 @@
                   phone: row.displayPhoneNumber || "",
                   photo: row.profilePictureUrl || "",
                   status: row.uiStatus || "",
+                  dispatch: row.dispatchStatus || "",
                   inbox: row.inboxEnabled === true,
                   pin: row.nameNeedsRegister === true,
                 };
@@ -38575,14 +38578,44 @@
         else if ((items || []).length === 1) select.value = items[0].value;
       }
 
+      function metaTplBroadcastPreferredConnectionId() {
+        const savedBiz = String((metaTpSession && metaTpSession.savedBusinessId) || "").trim();
+        const portfolios = (metaTpSession && metaTpSession.portfolios) || [];
+        const selected =
+          (savedBiz &&
+            portfolios.find(function (item) {
+              return typeof metaTpBusinessIdLabel === "function" && metaTpBusinessIdLabel(item) === savedBiz;
+            })) ||
+          null;
+        return String((selected && selected.connectionId) || "").trim();
+      }
+
+      function metaTplBroadcastSelectedPortfolio() {
+        const connectionId = String((metaTplBroadcastEl("meta-tpl-broadcast-portfolio") || {}).value || "").trim();
+        const portfolios = metaTpSession && Array.isArray(metaTpSession.portfolios) ? metaTpSession.portfolios : [];
+        if (!connectionId) return null;
+        return (
+          portfolios.find(function (item) {
+            return String((item && item.connectionId) || "") === connectionId;
+          }) ||
+          portfolios.find(function (item) {
+            return String((item && item.id) || "") === connectionId;
+          }) ||
+          null
+        );
+      }
+
       function metaTplBroadcastFillPortfolio() {
+        const preferred = metaTplBroadcastPreferredConnectionId();
+        const select = metaTplBroadcastEl("meta-tpl-broadcast-portfolio");
         metaTplBroadcastFillSelect(
-          metaTplBroadcastEl("meta-tpl-broadcast-portfolio"),
+          select,
           metaTplLabPortfolioOptions().map(function (item) {
             return { value: item.connectionId, label: item.label };
           }),
           "Selecione um portfólio",
         );
+        if (select && preferred && !String(select.value || "").trim()) select.value = preferred;
         metaTplBroadcastFillTemplates();
         metaTplBroadcastFillNumbers();
         void metaTplBroadcastLoadLinkableCampaigns();
@@ -38696,16 +38729,13 @@
       }
 
       function metaTplBroadcastActiveNumbers() {
-        const connectionId = String((metaTplBroadcastEl("meta-tpl-broadcast-portfolio") || {}).value || "").trim();
-        const portfolios = metaTpSession && Array.isArray(metaTpSession.portfolios) ? metaTpSession.portfolios : [];
-        const match = portfolios.find(function (item) {
-          return String((item && item.connectionId) || "") === connectionId;
-        });
+        const match = metaTplBroadcastSelectedPortfolio();
         return ((match && match.numbers) || []).filter(function (item) {
           return (
             String(item.uiStatus || "") === "ativo" &&
             String(item.dispatchStatus || "livre") !== "em_disparo" &&
-            String(item.phoneNumberId || "").trim()
+            String(item.phoneNumberId || "").trim() &&
+            String(item.displayPhoneNumber || "").trim()
           );
         });
       }
@@ -38942,7 +38972,7 @@
         }
         metaTplLabFillPortfolioSelect();
         metaTplLabFillPortfolioFilter();
-        if (!metaTplLabPortfolioOptions().length && typeof metaTpLoadPortfolio === "function") {
+        if (typeof metaTpLoadPortfolio === "function") {
           await metaTpLoadPortfolio({ silent: true }).catch(() => null);
           metaTplLabFillPortfolioSelect();
           metaTplLabFillPortfolioFilter();
