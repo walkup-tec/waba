@@ -12,4 +12,4 @@ Em andamento: aprovação dos templates na Meta (até 24 h).
 
 Marker: `DEPLOY-2026-09-02-023200-sync-prune-templates`.
 
-GitHub `walkup-tec/waba` `master` em `a0f3e97`. Redeploy EasyPanel só com autorização.
+GitHub `walkup-tec/waba` `master` recebe o tip com marker `DEPLOY-2026-09-02-023200-sync-prune-templates`. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

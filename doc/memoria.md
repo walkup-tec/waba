@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:34 — Push GitHub master (templates)
+- Um push: `0d02647` → tip com marker `DEPLOY-2026-09-02-023200-sync-prune-templates`.
+- LOG: `doc/LOG-2026-09-02__023400__push-github-master-templates.md`
+
 ## 2026-09-02 02:32 — Sync remove o que a Meta já apagou
 - Atualizar da Meta, após listagem Graph completa, apaga o registro local órfão do portfólio.
 - Marker: `DEPLOY-2026-09-02-023200-sync-prune-templates`
