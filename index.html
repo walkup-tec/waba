@@ -3818,6 +3818,11 @@
         .meta-tpl-card p { margin:0; font-size:12px; color:rgba(226,232,240,.7); }
         .meta-tpl-ai-box { margin:12px 0 16px; padding:14px; border:1px solid rgba(129,140,248,.28); background:linear-gradient(145deg,rgba(79,70,229,.12),rgba(15,23,42,.55)); border-radius:16px; }
         .meta-tpl-broadcast-grid { margin-top: 4px; }
+        .meta-tpl-broadcast-template-row {
+          display: grid;
+          grid-template-columns: minmax(7.5rem, 10.5rem) minmax(0, 1fr);
+          gap: 8px;
+        }
         .meta-tpl-broadcast-preview {
           margin-top: 12px;
           padding: 12px;
@@ -3834,6 +3839,7 @@
         .meta-tpl-broadcast-preview .bad { color: #fca5a5; }
         @media (max-width: 720px) {
           .meta-tpl-broadcast-grid.disparos-grid-2 { grid-template-columns: 1fr; }
+          .meta-tpl-broadcast-template-row { grid-template-columns: 1fr; }
         }
         .meta-tpl-ai-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
         .meta-tpl-ai-head strong { display:block; font-size:14px; color:#f8fafc; }
@@ -21716,9 +21722,14 @@
                 </div>
                 <div class="aquecedor-field">
                   <label for="meta-tpl-broadcast-template">2. Template aprovado</label>
-                  <select id="meta-tpl-broadcast-template" aria-label="Template aprovado">
-                    <option value="">Selecione um template aprovado</option>
-                  </select>
+                  <div class="meta-tpl-broadcast-template-row">
+                    <select id="meta-tpl-broadcast-category" aria-label="Filtrar templates por categoria">
+                      <option value="todas">todas</option>
+                    </select>
+                    <select id="meta-tpl-broadcast-template" aria-label="Template aprovado">
+                      <option value="">Selecione um template aprovado</option>
+                    </select>
+                  </div>
                 </div>
                 <div class="aquecedor-field">
                   <label for="meta-tpl-broadcast-number">3. Número Ativo e disponível</label>
@@ -38266,6 +38277,18 @@
             lastSyncedAt: "2026-09-02T14:10:00.000Z",
             mapping: { nome: false, numero: false },
           },
+          {
+            id: "demo-template-marketing",
+            connectionId: "demo-connection",
+            portfolioName: "Drax Sistemas",
+            name: "campanha_setembro_info",
+            language: "pt_BR",
+            category: "MARKETING",
+            status: "APPROVED",
+            qualityScore: "GREEN",
+            lastSyncedAt: "2026-09-02T16:40:00.000Z",
+            mapping: { nome: true, numero: false },
+          },
         ];
       }
 
@@ -38324,13 +38347,15 @@
         const statusFilter = document.getElementById("meta-tpl-lab-status-filter");
         if (statusFilter) statusFilter.value = "APPROVED";
         metaTplLabRenderTable(metaTplLabCache);
-        metaTplLabSetStatus("Portfólio Drax Sistemas · 3 templates aprovados (demonstração).");
+        metaTplLabSetStatus("Portfólio Drax Sistemas · 4 templates aprovados (demonstração).");
       }
 
       function applyMetaDisparoCloudPreviewWizard() {
         metaTplBroadcastFillPortfolio();
         const portfolio = metaTplBroadcastEl("meta-tpl-broadcast-portfolio");
         if (portfolio) portfolio.value = "demo-connection";
+        const category = metaTplBroadcastEl("meta-tpl-broadcast-category");
+        if (category) category.value = "todas";
         metaTplBroadcastFillTemplates();
         metaTplBroadcastFillNumbers();
         const template = metaTplBroadcastEl("meta-tpl-broadcast-template");
@@ -38601,11 +38626,61 @@
         }
       }
 
-      function metaTplBroadcastFillTemplates() {
+      function metaTplBroadcastApprovedTemplates() {
         const connectionId = String((metaTplBroadcastEl("meta-tpl-broadcast-portfolio") || {}).value || "").trim();
-        const approved = (metaTplLabCache || []).filter(function (item) {
+        return (metaTplLabCache || []).filter(function (item) {
           if (String(item.status || "").toUpperCase() !== "APPROVED") return false;
           if (connectionId && String(item.connectionId || "") !== connectionId) return false;
+          return true;
+        });
+      }
+
+      function metaTplBroadcastTemplateLabel(item) {
+        const name = String((item && item.name) || "template").trim() || "template";
+        return name + "-" + metaTplLabCategoryLabel(item && item.category);
+      }
+
+      function metaTplBroadcastFillCategories() {
+        const select = metaTplBroadcastEl("meta-tpl-broadcast-category");
+        if (!select) return;
+        const previous = String(select.value || "todas").trim().toLowerCase() || "todas";
+        const seen = {};
+        const cats = [];
+        metaTplBroadcastApprovedTemplates().forEach(function (item) {
+          const key = String(item.category || "").trim().toUpperCase();
+          if (!key || seen[key]) return;
+          seen[key] = true;
+          cats.push({ value: key, label: metaTplLabCategoryLabel(key) });
+        });
+        cats.sort(function (a, b) {
+          return a.label.localeCompare(b.label, "pt-BR");
+        });
+        select.innerHTML = "";
+        const all = document.createElement("option");
+        all.value = "todas";
+        all.textContent = "todas";
+        select.appendChild(all);
+        cats.forEach(function (item) {
+          const option = document.createElement("option");
+          option.value = item.value;
+          option.textContent = item.label;
+          select.appendChild(option);
+        });
+        const keep = previous === "todas" || cats.some(function (item) {
+          return item.value.toLowerCase() === previous;
+        });
+        select.value = keep ? (previous === "todas" ? "todas" : previous.toUpperCase()) : "todas";
+      }
+
+      function metaTplBroadcastFillTemplates() {
+        metaTplBroadcastFillCategories();
+        const category = String((metaTplBroadcastEl("meta-tpl-broadcast-category") || {}).value || "todas")
+          .trim()
+          .toUpperCase();
+        const approved = metaTplBroadcastApprovedTemplates().filter(function (item) {
+          if (category && category !== "TODAS") {
+            return String(item.category || "").trim().toUpperCase() === category;
+          }
           return true;
         });
         metaTplBroadcastFillSelect(
@@ -38613,10 +38688,10 @@
           approved.map(function (item) {
             return {
               value: String(item.id || ""),
-              label: String(item.name || "template") + " · " + metaTplLabLanguageLabel(item.language),
+              label: metaTplBroadcastTemplateLabel(item),
             };
           }),
-          approved.length ? "Selecione um template aprovado" : "Nenhum template aprovado neste portfólio",
+          approved.length ? "Selecione um template aprovado" : "Nenhum template aprovado nesta categoria",
         );
       }
 
@@ -39287,6 +39362,10 @@
       document.getElementById("meta-tpl-broadcast-portfolio")?.addEventListener("change", function () {
         metaTplBroadcastFillTemplates();
         metaTplBroadcastFillNumbers();
+        metaTplBroadcastLoadInspect();
+      });
+      document.getElementById("meta-tpl-broadcast-category")?.addEventListener("change", function () {
+        metaTplBroadcastFillTemplates();
         metaTplBroadcastLoadInspect();
       });
       document.getElementById("meta-tpl-broadcast-template")?.addEventListener("change", function () {

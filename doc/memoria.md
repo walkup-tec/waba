@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 16:48 — Filtro de categoria no template do Disparo Cloud
+- Campo Template aprovado: filtro de categoria com primeira opção `todas`.
+- Rótulo do select: `nome-categoria` (ex.: `consulta_margem_atualizacao_1-Utilidade`).
+- LOG: `doc/LOG-2026-09-02__164800__filtro-categoria-template-cloud.md`
+
 ## 2026-09-02 16:33 — Número Cloud ocupado até o relatório
 - Select do Disparo Cloud: só Ativo + disponível (`dispatchStatus !== em_disparo`).
 - Ao iniciar o disparo o número fica ocupado; libera em `completed` / `error_reported` / `cancelled`.
