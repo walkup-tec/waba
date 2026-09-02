@@ -344,6 +344,9 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(instructions, /Ver Detalhes/);
     assert.match(instructions, /Saiba Mais/);
     assert.match(instructions, /Ver Atualizações/);
+    assert.match(instructions, /BIBLIOTECA UTILITY DA META/i);
+    assert.match(instructions, /TEMA CENTRAL/i);
+    assert.match(instructions, /use o link abaixo/i);
     assert.doesNotMatch(instructions, /retorne options=\[\]/);
   });
 

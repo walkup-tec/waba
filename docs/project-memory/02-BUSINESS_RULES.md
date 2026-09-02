@@ -8,3 +8,4 @@
 - Botão URL enviado à Graph é a URL curta WABA (`/s/{slug}`), nunca `wa.me`.
 - Laboratório Cloud: BODY Utility com léxico **Olá** + **Informamos que** + **Para**. Botões só **Ver Detalhes**, **Saiba Mais**, **Ver Atualizações**. A categoria final é da Meta.
 - A cada geração, a IA consulta só templates do mesmo tenant aprovados como UTILITY. Não usa Marketing, pendentes nem de outro tenant.
+- A IA adapta o formato da biblioteca Utility da Meta (prints) sem trocar o tema do texto base.

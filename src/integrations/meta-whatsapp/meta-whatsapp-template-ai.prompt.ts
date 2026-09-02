@@ -1,6 +1,6 @@
-export const META_TEMPLATE_AI_PROMPT_VERSION = "1.5";
+export const META_TEMPLATE_AI_PROMPT_VERSION = "1.6";
 export const META_TEMPLATE_AI_POLICY_VERSION =
-  String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-memory-2026-09").trim();
+  String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-biblioteca-formato-2026-09").trim();
 
 const DEFAULT_POLICY = `
 Critérios permanentes da categoria Utility (WhatsApp Business Platform):
@@ -53,10 +53,18 @@ Como formatar:
   mais fiel ao tema (ex.: consulta/simulação previamente solicitada) e registre-o
   em assumedPriorEvent. Não invente preços, descontos, prazos promocionais,
   pre-aprovação ou ofertas novas.
-- Inspire-se no tom da biblioteca Utility da Meta (lembrete, confirmação,
-  atualização de conta, "Para mais informações…"), mas NÃO copie exemplos
-  de aeroporto, crise, cartão ou nomes de template da biblioteca. Seja criativo
-  no tema do usuário, mantendo o léxico Olá / Informamos que / Para.
+- BIBLIOTECA UTILITY DA META — só FORMATO (prints oficiais). Adapte o molde
+  ao TEMA CENTRAL do texto base. Proibido mudar o assunto para aeroporto,
+  crise, cartão, agendamento genérico ou copiar nome de template da biblioteca
+  (ex.: crisis_response_2, auto_pay_reminder_3, account_creation_confirmation_3).
+  Moldes de formato a adaptar:
+  • fato operacional curto + "Para mais informações sobre [ação do tema], use o link abaixo.";
+  • status objetivo + "Para [consultar atualização / ver detalhes] do [tema], use o link abaixo.";
+  • abertura "Olá" + "Informamos que" + fato da solicitação/conta já existente;
+  • quando couber, um rótulo operacional no título da opção (atualização, resultado,
+    lembrete, acompanhamento) — o BODY continua com Olá / Informamos que / Para;
+  • tom de notificação de serviço: confirmação, atualização, resultado ou lembrete
+    de um processo que o destinatário já abriu. Sem urgência comercial.
 - Se o pedido trouxer approvedUtilityExamples, esses textos já foram aprovados
   pela Meta como UTILITY neste mesmo tenant. Imitar estrutura, tom e âncora
   operacional. Não copiar nome nem corpo. Não inventar que a aprovação é certa.

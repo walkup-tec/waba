@@ -9,6 +9,6 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-021800-acoes-tabela-restauradas`.
+Marker: `DEPLOY-2026-09-02-022000-ia-formato-biblioteca`.
 
 GitHub `walkup-tec/waba` `master` em `a0f3e97`. Redeploy EasyPanel só com autorização.

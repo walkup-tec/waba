@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:20 — IA: formato da biblioteca Meta
+- Prompt 1.6 adapta o molde dos prints Utility sem trocar o tema do texto base.
+- Marker: `DEPLOY-2026-09-02-022000-ia-formato-biblioteca`
+- LOG: `doc/LOG-2026-09-02__022000__ia-formato-biblioteca-meta.md`
+
 ## 2026-09-02 02:18 — Ações da tabela restauradas
 - Visualizar inerte. Usar em teste e Excluir de volta.
 - Marker: `DEPLOY-2026-09-02-021800-acoes-tabela-restauradas`
