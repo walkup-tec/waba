@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-02-021000-ia-utility-lexicon";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-02-021200-tabela-so-visualizar";

@@ -37412,9 +37412,7 @@
               `<td style="padding:8px;">${quality}</td>` +
               `<td style="padding:8px;">${synced}</td>` +
               `<td style="padding:8px; white-space:nowrap;">` +
-              `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-view="${index}">Visualizar</button> ` +
-              `<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-tpl-test="${index}">Usar em teste</button> ` +
-              `<button type="button" class="instance-action-btn btn-delete enabled" data-meta-tpl-hide="${index}" title="Remove só desta lista. Não apaga na Meta.">Excluir</button>` +
+              `<button type="button" class="instance-action-btn btn-refresh enabled">Visualizar</button>` +
               "</td></tr>"
             );
           })
@@ -37569,7 +37567,7 @@
 
       document.addEventListener("click", function onMetaTplLabClick(event) {
         const target = event.target && event.target.closest
-          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-test], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all")
+          ? event.target.closest("#meta-tpl-ai-generate, #meta-tpl-ai-submit-all")
           : null;
         if (!target) return;
         if (target.id === "meta-tpl-ai-generate") {
@@ -37580,21 +37578,6 @@
           void metaTplSubmitAllAiOptions();
           return;
         }
-        const hideIndex = target.getAttribute("data-meta-tpl-hide");
-        if (hideIndex != null) {
-          const item = metaTplLabCache[Number(hideIndex)];
-          const id = String((item && item.id) || "").trim();
-          if (id) {
-            metaTplLabHideTemplate(id);
-            metaTplLabRenderTable();
-            metaTplLabSetStatus("Template removido só desta lista. A Meta não foi alterada.");
-          }
-          return;
-        }
-        const viewIndex = target.getAttribute("data-meta-tpl-view");
-        const testIndex = target.getAttribute("data-meta-tpl-test");
-        if (viewIndex != null) window.wabaViewMetaTemplateLab(Number(viewIndex));
-        if (testIndex != null) window.wabaTestMetaTemplateLab(Number(testIndex));
       });
 
       document.getElementById("meta-tpl-lab-portfolio")?.addEventListener("change", function () {

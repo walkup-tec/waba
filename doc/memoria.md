@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:12 — Tabela: só Visualizar
+- Ações da lista: permanece Visualizar, sem clique. Saíram Usar em teste e Excluir.
+- Marker: `DEPLOY-2026-09-02-021200-tabela-so-visualizar`
+- LOG: `doc/LOG-2026-09-02__021200__tabela-so-visualizar.md`
+
 ## 2026-09-02 02:10 — IA Utility: léxico e botões informativos
 - Corpo: Olá + Informamos que + Para. Botões: Ver Detalhes / Saiba Mais / Ver Atualizações. Shaper pós-IA.
 - Marker: `DEPLOY-2026-09-02-021000-ia-utility-lexicon`
