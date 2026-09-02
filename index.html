@@ -4028,6 +4028,47 @@
         .meta-tpl-ai-modal.is-ok .confirm-title { color: #86efac; }
         .meta-tpl-ai-modal.is-error .confirm-title { color: #fca5a5; }
         .meta-tpl-ai-modal.is-processing .confirm-actions { display: none; }
+        #meta-tpl-delete-overlay.confirm-overlay {
+          z-index: 5310;
+        }
+        .meta-tpl-delete-modal {
+          width: min(94vw, 440px);
+        }
+        .meta-tpl-delete-modal.is-processing .confirm-title {
+          animation: dis-campaign-pulse 1.4s ease-in-out infinite;
+        }
+        .meta-tpl-delete-modal.is-processing .confirm-actions { display: none; }
+        .meta-tpl-delete-modal.is-error .confirm-title { color: #fca5a5; }
+        .meta-tpl-delete-spinner {
+          justify-content: center;
+          margin: 2px 0 14px;
+        }
+        .meta-tpl-delete-spinner:not([hidden]) { display: flex; }
+        .meta-tpl-delete-name {
+          margin: 0 0 10px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: rgba(2, 6, 23, 0.55);
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          color: #e2e8f0;
+          font-size: 0.86rem;
+          font-weight: 700;
+          word-break: break-word;
+        }
+        .meta-tpl-delete-warn {
+          margin: 0 0 4px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: rgba(127, 29, 29, 0.22);
+          border: 1px solid rgba(251, 113, 133, 0.28);
+          color: #fecdd3;
+          font-size: 0.8rem;
+          line-height: 1.5;
+          text-align: left;
+        }
+        .meta-tpl-delete-progress {
+          margin: 8px 0 4px;
+        }
         .meta-tpl-ai-alert { padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.5; }
         .meta-tpl-ai-alert.is-ok { color:#bbf7d0; background:rgba(22,163,74,.12); border:1px solid rgba(34,197,94,.25); }
         .meta-tpl-ai-alert.is-warn { color:#fde68a; background:rgba(217,119,6,.12); border:1px solid rgba(245,158,11,.25); }
@@ -23821,6 +23862,27 @@
       </div>
     </div>
 
+    <div id="meta-tpl-delete-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal meta-tpl-delete-modal" role="dialog" aria-modal="true" aria-labelledby="meta-tpl-delete-title" aria-describedby="meta-tpl-delete-text">
+        <div class="meta-tpl-delete-spinner" id="meta-tpl-delete-spinner" hidden>
+          <div class="dis-campaign-spinner" aria-hidden="true"></div>
+        </div>
+        <div class="confirm-title" id="meta-tpl-delete-title">Excluir template</div>
+        <div class="meta-tpl-delete-name" id="meta-tpl-delete-name" hidden></div>
+        <div class="confirm-text" id="meta-tpl-delete-text"></div>
+        <div class="meta-tpl-delete-warn" id="meta-tpl-delete-warn">
+          Se o template estiver aprovado, a Meta bloqueia o mesmo nome por 30 dias.
+        </div>
+        <div class="meta-tpl-delete-progress" id="meta-tpl-delete-progress" hidden>
+          <div class="meta-tpl-ai-progress-track" aria-hidden="true"><i></i></div>
+        </div>
+        <div class="confirm-actions" id="meta-tpl-delete-actions">
+          <button id="meta-tpl-delete-cancel" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="meta-tpl-delete-confirm" class="instance-action-btn btn-delete enabled" type="button">Excluir</button>
+        </div>
+      </div>
+    </div>
+
     <div id="register-instance-overlay" class="confirm-overlay" aria-hidden="true">
       <div class="confirm-modal register-modal register-wizard-modal" role="dialog" aria-modal="true">
         <div class="reg-wizard-header">
@@ -38109,14 +38171,108 @@
         if (closeBtn) closeBtn.focus();
       }
 
-      async function metaTplLabDeleteTemplate(index) {
-        const item = metaTplLabCache[index];
+      let metaTplLabDeletePhase = "closed";
+      let metaTplLabDeletePending = null;
+
+      function metaTplLabDeleteEls() {
+        return {
+          overlay: document.getElementById("meta-tpl-delete-overlay"),
+          modal: document.querySelector("#meta-tpl-delete-overlay .meta-tpl-delete-modal"),
+          title: document.getElementById("meta-tpl-delete-title"),
+          text: document.getElementById("meta-tpl-delete-text"),
+          name: document.getElementById("meta-tpl-delete-name"),
+          warn: document.getElementById("meta-tpl-delete-warn"),
+          spinner: document.getElementById("meta-tpl-delete-spinner"),
+          progress: document.getElementById("meta-tpl-delete-progress"),
+          actions: document.getElementById("meta-tpl-delete-actions"),
+          cancel: document.getElementById("meta-tpl-delete-cancel"),
+          confirm: document.getElementById("meta-tpl-delete-confirm"),
+        };
+      }
+
+      function metaTplLabDeleteSetPhase(phase, options) {
+        const opts = options || {};
+        const els = metaTplLabDeleteEls();
+        metaTplLabDeletePhase = phase;
+        if (els.modal) {
+          els.modal.classList.toggle("is-processing", phase === "processing");
+          els.modal.classList.toggle("is-error", phase === "error");
+          els.modal.setAttribute("aria-busy", phase === "processing" ? "true" : "false");
+        }
+        if (els.title) els.title.textContent = String(opts.title || "");
+        if (els.text) els.text.textContent = String(opts.text || "");
+        if (els.name) {
+          const name = String(opts.name || "").trim();
+          els.name.hidden = !name;
+          els.name.textContent = name;
+        }
+        if (els.warn) els.warn.hidden = phase !== "confirm";
+        if (els.spinner) els.spinner.hidden = phase !== "processing";
+        if (els.progress) els.progress.hidden = phase !== "processing";
+        if (els.actions) els.actions.hidden = phase === "processing";
+        if (els.cancel) els.cancel.hidden = phase !== "confirm";
+        if (els.confirm) {
+          els.confirm.textContent = phase === "error" ? "Fechar" : "Excluir";
+          els.confirm.classList.toggle("btn-delete", phase === "confirm");
+          els.confirm.classList.add("enabled");
+        }
+      }
+
+      function metaTplLabCloseDeleteOverlay(force) {
+        if (!force && metaTplLabDeletePhase === "processing") return;
+        const { overlay } = metaTplLabDeleteEls();
+        if (overlay) {
+          try {
+            if (typeof blurFocusInsideOverlay === "function") blurFocusInsideOverlay(overlay);
+          } catch {
+            /* fechar mesmo se o blur falhar */
+          }
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+        metaTplLabDeletePhase = "closed";
+        metaTplLabDeletePending = null;
+      }
+
+      function metaTplLabOpenDeleteOverlay() {
+        const { overlay, cancel } = metaTplLabDeleteEls();
+        if (!overlay) return;
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        if (cancel && !cancel.hidden) cancel.focus();
+      }
+
+      function metaTplLabAskDelete(item) {
         const id = String((item && item.id) || "").trim();
-        if (!id) return false;
-        const ok = window.confirm(
-          "Excluir este template da biblioteca da Meta e desta lista?\n\nSe estiver aprovado, a Meta bloqueia o mesmo nome por 30 dias.",
-        );
-        if (!ok) return false;
+        if (!id) return;
+        if (metaTplLabDeletePhase === "processing") return;
+        metaTplLabDeletePending = item;
+        metaTplLabDeleteSetPhase("confirm", {
+          title: "Excluir template",
+          name: String((item && item.name) || "").trim(),
+          text: "Excluir este template da biblioteca da Meta e desta lista?",
+        });
+        metaTplLabOpenDeleteOverlay();
+      }
+
+      async function metaTplLabConfirmDelete() {
+        if (metaTplLabDeletePhase === "processing") return;
+        if (metaTplLabDeletePhase === "error") {
+          metaTplLabCloseDeleteOverlay(true);
+          return;
+        }
+        const item = metaTplLabDeletePending;
+        const id = String((item && item.id) || "").trim();
+        if (!id) {
+          metaTplLabCloseDeleteOverlay(true);
+          return;
+        }
+        const name = String((item && item.name) || "").trim();
+        metaTplLabDeleteSetPhase("processing", {
+          title: "Excluindo na Meta…",
+          name: name,
+          text: "Aguarde enquanto removemos o template na biblioteca da Meta. Isso pode levar alguns segundos.",
+        });
         metaTplLabSetStatus("Excluindo na Meta…");
         try {
           await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/" + encodeURIComponent(id), {
@@ -38128,9 +38284,24 @@
           });
           metaTplLabRenderTable();
           metaTplLabSetStatus("Template excluído da Meta e da lista.");
+          metaTplLabCloseDeleteOverlay(true);
         } catch (error) {
-          metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível excluir.");
+          const message = error && error.message ? error.message : "Não foi possível excluir.";
+          metaTplLabDeleteSetPhase("error", {
+            title: "Não foi possível excluir",
+            name: name,
+            text: message,
+          });
+          metaTplLabSetStatus(message);
+          const els = metaTplLabDeleteEls();
+          if (els.confirm) els.confirm.focus();
         }
+      }
+
+      function metaTplLabDeleteTemplate(index) {
+        const item = metaTplLabCache[index];
+        if (!item) return false;
+        metaTplLabAskDelete(item);
         return false;
       }
 
@@ -38144,10 +38315,14 @@
 
       document.addEventListener("click", function onMetaTplLabClick(event) {
         const target = event.target && event.target.closest
-          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all, #meta-tpl-preview-close, #meta-tpl-ai-modal-ok, #meta-tpl-ai-modal-cancel")
+          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all, #meta-tpl-preview-close, #meta-tpl-ai-modal-ok, #meta-tpl-ai-modal-cancel, #meta-tpl-delete-cancel, #meta-tpl-delete-confirm")
           : null;
         if (event.target && event.target.id === "meta-tpl-preview-overlay") {
           metaTplLabClosePreview();
+          return;
+        }
+        if (event.target && event.target.id === "meta-tpl-delete-overlay") {
+          metaTplLabCloseDeleteOverlay();
           return;
         }
         if (!target) return;
@@ -38171,6 +38346,14 @@
           metaTplAiCloseOverlay(true);
           return;
         }
+        if (target.id === "meta-tpl-delete-cancel") {
+          metaTplLabCloseDeleteOverlay();
+          return;
+        }
+        if (target.id === "meta-tpl-delete-confirm") {
+          void metaTplLabConfirmDelete();
+          return;
+        }
         const hideIndex = target.getAttribute("data-meta-tpl-hide");
         if (hideIndex != null) {
           void metaTplLabDeleteTemplate(Number(hideIndex));
@@ -38181,6 +38364,11 @@
       });
       document.addEventListener("keydown", function onMetaTplPreviewEsc(event) {
         if (event.key !== "Escape") return;
+        const deleteOverlay = document.getElementById("meta-tpl-delete-overlay");
+        if (deleteOverlay && deleteOverlay.classList.contains("open")) {
+          metaTplLabCloseDeleteOverlay();
+          return;
+        }
         const overlay = document.getElementById("meta-tpl-preview-overlay");
         if (overlay && overlay.classList.contains("open")) metaTplLabClosePreview();
       });
@@ -61434,10 +61622,23 @@
       }
       document.getElementById("meta-tpl-ai-modal-cancel")?.addEventListener("click", () => metaTplAiCloseOverlay(true));
       document.getElementById("meta-tpl-ai-modal-ok")?.addEventListener("click", () => metaTplAiOnModalOk());
+      const metaTplDeleteOverlay = document.getElementById("meta-tpl-delete-overlay");
+      if (metaTplDeleteOverlay) {
+        metaTplDeleteOverlay.addEventListener("click", (e) => {
+          if (e.target === metaTplDeleteOverlay) metaTplLabCloseDeleteOverlay();
+        });
+      }
+      document.getElementById("meta-tpl-delete-cancel")?.addEventListener("click", () => metaTplLabCloseDeleteOverlay());
+      document.getElementById("meta-tpl-delete-confirm")?.addEventListener("click", () => void metaTplLabConfirmDelete());
       document.addEventListener("keydown", (e) => {
         if (e.key !== "Escape") return;
         const overlay = document.getElementById("app-confirm-overlay");
         if (overlay?.classList.contains("open")) closeAppConfirm(false);
+        const deleteOverlay = document.getElementById("meta-tpl-delete-overlay");
+        if (deleteOverlay?.classList.contains("open")) {
+          metaTplLabCloseDeleteOverlay();
+          return;
+        }
         const metaOverlay = document.getElementById("meta-tpl-ai-overlay");
         if (metaOverlay?.classList.contains("open")) metaTplAiCloseOverlay();
       });

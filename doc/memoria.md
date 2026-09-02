@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 10:30 — Modal de exclusão de template
+- Excluir deixa o `confirm` do navegador e usa overlay com spinner até a Graph responder.
+- Marker: `DEPLOY-2026-09-02-103000-modal-excluir-template`
+- LOG: `doc/LOG-2026-09-02__103000__modal-excluir-template.md`
+
 ## 2026-09-02 10:20 — Preview mostra a imagem do cabeçalho
 - Visualizar usa a mídia enviada (cópia local ou URL HTTPS da Graph), não o placeholder.
 - Marker: `DEPLOY-2026-09-02-102000-preview-imagem-cabecalho`
