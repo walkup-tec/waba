@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 09:52 — IA: palavras de utilidade
+- Prompt 1.7: Confirmação, Status Confirmado, Confirmado, aprovado, concluído, atualizado, liberado.
+- Marker: `DEPLOY-2026-09-02-095200-ia-palavras-utilidade`
+- LOG: `doc/LOG-2026-09-02__095200__ia-palavras-utilidade.md`
+
 ## 2026-09-02 09:38 — Envio à Meta com resultado real
 - Não marca sucesso sem Graph se o local foi apagado. Modal mostra nome, status, portfólio e WABA.
 - Marker: `DEPLOY-2026-09-02-093800-submit-meta-verdade`

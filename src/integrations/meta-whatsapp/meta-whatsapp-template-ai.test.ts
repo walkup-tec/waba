@@ -470,6 +470,14 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(instructions, /variableType/i);
     assert.match(instructions, /nenhuma/i);
     assert.match(instructions, /Informamos que/i);
+    assert.match(instructions, /PALAVRAS DE UTILIDADE/i);
+    assert.match(instructions, /Confirmação/);
+    assert.match(instructions, /Status Confirmado/);
+    assert.match(instructions, /Confirmado/);
+    assert.match(instructions, /aprovado/);
+    assert.match(instructions, /concluído/);
+    assert.match(instructions, /atualizado/);
+    assert.match(instructions, /liberado/);
     assert.match(instructions, /Ver Detalhes/);
     assert.match(instructions, /Saiba Mais/);
     assert.match(instructions, /Ver Atualizações/);
@@ -588,6 +596,18 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(shaped, /Informamos que há uma atualização/i);
     assert.match(shaped, /Para consultar a atualização/i);
     assert.doesNotMatch(shaped, /aproveite/i);
+  });
+
+  it("insere âncora de utilidade quando o BODY não tem confirmação, status ou atualizado", () => {
+    const shaped = shapeMetaUtilityOptionBody(
+      "Informamos que o protocolo da solicitação está disponível.",
+      "nome",
+      1,
+    );
+    assert.match(shaped, /^Olá, \{\{1\}\}\./);
+    assert.match(shaped, /Informamos que o protocolo/i);
+    assert.match(shaped, /status está confirmado/i);
+    assert.match(shaped, /Para ver os detalhes do resultado/i);
   });
 
   it("rejeita JSON sem as três opções ou com finalidade Marketing", () => {

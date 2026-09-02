@@ -9,6 +9,12 @@ const PARA_LINES = [
     "Para ver os detalhes do resultado, use o link abaixo.",
     "Para acompanhar as informações atualizadas, use o link abaixo.",
 ];
+const UTILITY_STATUS_RE = /\b(confirma[cç][aã]o|status\s+confirmado|confirmad|aprovad|conclu[ií]d|atualizad|atualiza[cç]|liberad)\b/i;
+const UTILITY_STATUS_INJECT = [
+    "A solicitação foi atualizada.",
+    "O status está confirmado.",
+    "A solicitação foi concluída e liberada.",
+];
 function compactSpaces(text) {
     return String(text || "")
         .replace(/[ \t]{2,}/g, " ")
@@ -29,6 +35,18 @@ function ensureInformamosQue(text) {
 function hasPurposePara(text) {
     return /(?:^|\n|[.!?]\s+)para\b/i.test(text) || /\bpara (consultar|ver|acompanhar|mais)\b/i.test(text);
 }
+function ensureUtilityStatusAnchor(text, optionIndex) {
+    if (UTILITY_STATUS_RE.test(text))
+        return text;
+    const clause = UTILITY_STATUS_INJECT[optionIndex] || UTILITY_STATUS_INJECT[0];
+    const lines = text.split(/\n/);
+    const paraIdx = lines.findIndex((line) => /^\s*para\b/i.test(line));
+    if (paraIdx >= 0) {
+        lines.splice(paraIdx, 0, clause);
+        return lines.join("\n");
+    }
+    return `${text}\n${clause}`;
+}
 function shapeMetaUtilityOptionBody(body, variableType, optionIndex) {
     const greeting = variableType === "nenhuma" ? "Olá." : "Olá, {{1}}.";
     let text = compactSpaces(String(body || "").replace(MARKETING_LEAK, ""));
@@ -41,6 +59,7 @@ function shapeMetaUtilityOptionBody(body, variableType, optionIndex) {
         const para = PARA_LINES[optionIndex] || PARA_LINES[0];
         text = `${text.replace(/[.!?]?$/, ".")}\n${para}`;
     }
+    text = ensureUtilityStatusAnchor(text, optionIndex);
     return compactSpaces(`${greeting}\n${text}`);
 }
 function shapeMetaUtilityAiOutput(result, variableType) {

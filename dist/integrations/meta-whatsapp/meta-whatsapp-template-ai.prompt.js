@@ -1,9 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_TEMPLATE_AI_POLICY_VERSION = exports.META_TEMPLATE_AI_PROMPT_VERSION = void 0;
+exports.META_UTILITY_STATUS_WORDS = exports.META_TEMPLATE_AI_POLICY_VERSION = exports.META_TEMPLATE_AI_PROMPT_VERSION = void 0;
 exports.buildMetaTemplateAiInstructions = buildMetaTemplateAiInstructions;
-exports.META_TEMPLATE_AI_PROMPT_VERSION = "1.6";
-exports.META_TEMPLATE_AI_POLICY_VERSION = String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-biblioteca-formato-2026-09").trim();
+exports.META_TEMPLATE_AI_PROMPT_VERSION = "1.7";
+exports.META_TEMPLATE_AI_POLICY_VERSION = String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-status-lexicon-2026-09").trim();
+/** Âncoras que a Meta tende a ler como Utility. Uma por BODY, no fato operacional. */
+exports.META_UTILITY_STATUS_WORDS = [
+    "Confirmação",
+    "Status Confirmado",
+    "Confirmado",
+    "aprovado",
+    "concluído",
+    "atualizado",
+    "liberado",
+];
 const DEFAULT_POLICY = `
 Critérios permanentes da categoria Utility (WhatsApp Business Platform):
 1) o conteúdo deve ser não promocional, sem intenção persuasiva de venda;
@@ -43,6 +53,18 @@ LÉXICO OBRIGATÓRIO (cada BODY, nesta ordem):
 3) Feche com uma frase que comece com "Para" e explique o motivo do link
    (consultar detalhes, ver o resultado, acompanhar a atualização). Sem venda.
 
+PALAVRAS DE UTILIDADE (obrigatório no fato, uma âncora por opção):
+A Meta tende a classificar como Utility mensagens com estas âncoras:
+${exports.META_UTILITY_STATUS_WORDS.join(", ")}.
+Use-as no trecho depois de "Informamos que", conjugadas ao tema
+(ex.: "foi confirmado", "está atualizado", "foi liberado", "confirmação da
+solicitação", "status confirmado", "foi aprovado", "foi concluído").
+Não junte as sete no mesmo BODY. Distribua entre as três opções:
+  1) atualizado;
+  2) confirmação / confirmado / status confirmado;
+  3) aprovado / concluído / liberado.
+Proibido: pre-aprovação comercial, "aprovado para contratar" ou oferta nova.
+
 Como formatar:
 - Extraia o tema (ex.: margem consignável, proposta, agendamento, protocolo).
 - Remova urgência comercial, prospecção, "aproveite", "imperdível", "acesse agora",
@@ -63,9 +85,11 @@ Como formatar:
   • status objetivo + "Para [consultar atualização / ver detalhes] do [tema], use o link abaixo.";
   • abertura "Olá" + "Informamos que" + fato da solicitação/conta já existente;
   • quando couber, um rótulo operacional no título da opção (atualização, resultado,
-    lembrete, acompanhamento) — o BODY continua com Olá / Informamos que / Para;
-  • tom de notificação de serviço: confirmação, atualização, resultado ou lembrete
-    de um processo que o destinatário já abriu. Sem urgência comercial.
+    confirmação, acompanhamento) — o BODY continua com Olá / Informamos que / Para
+    e uma das palavras de utilidade;
+  • tom de notificação de serviço: confirmação, status confirmado, atualizado,
+    aprovado, concluído ou liberado — de um processo que o destinatário já abriu.
+    Sem urgência comercial.
 - Se o pedido trouxer approvedUtilityExamples, esses textos já foram aprovados
   pela Meta como UTILITY neste mesmo tenant. Imitar estrutura, tom e âncora
   operacional. Não copiar nome nem corpo. Não inventar que a aprovação é certa.
@@ -86,17 +110,17 @@ Texto original promocional sobre margem consignável disponível, urgência e CT
 assumedPriorEvent: "O destinatário solicitou previamente uma consulta/simulação de margem consignável."
 Opção 1 — atualização de solicitação
 Olá, {{1}}.
-Informamos que há uma atualização referente à consulta de margem consignável solicitada anteriormente.
+Informamos que a consulta de margem consignável solicitada anteriormente foi atualizada.
 Para consultar a atualização da sua solicitação, use o link abaixo.
 [Ver Atualizações]
 Opção 2 — resultado disponível
 Olá, {{1}}.
-Informamos que o resultado da consulta referente à sua solicitação de margem consignável está disponível.
-Para ver os detalhes do resultado, use o link abaixo.
+Informamos que o status da consulta referente à sua solicitação de margem consignável está confirmado.
+Para ver os detalhes da confirmação, use o link abaixo.
 [Ver Detalhes]
 Opção 3 — acompanhamento
 Olá, {{1}}.
-Informamos que a sua solicitação de consulta de margem consignável recebeu um acompanhamento.
+Informamos que a sua solicitação de consulta de margem consignável foi concluída e liberada.
 Para acompanhar as informações atualizadas, use o link abaixo.
 [Saiba Mais]
 
