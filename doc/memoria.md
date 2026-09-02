@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 10:17 — Modal sem aviso de filtro Ativo
+- Saiu o texto sobre análise vs Ativo e filtro no WhatsApp Manager.
+- Marker: `DEPLOY-2026-09-02-101700-modal-sem-aviso-filtro-ativo`
+- LOG: `doc/LOG-2026-09-02__101700__modal-sem-aviso-filtro-ativo.md`
+
 ## 2026-09-02 10:15 — Modal de processamento no envio
 - Enviar para META mostra spinner, barra e as três etapas no modal. Sem texto solto sob o botão.
 - Marker: `DEPLOY-2026-09-02-101500-modal-processando-envio-meta`
