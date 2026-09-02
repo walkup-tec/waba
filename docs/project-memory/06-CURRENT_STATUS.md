@@ -9,3 +9,5 @@ Concluído no laboratório Meta:
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
 Marker: `DEPLOY-2026-09-02-013000-tabela-todos-portfolios`.
+
+GitHub `walkup-tec/waba` `master` em `a0f3e97`. Redeploy EasyPanel só com autorização.

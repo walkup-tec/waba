@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 01:36 — Push GitHub master (tabela portfólios)
+- `master` em `walkup-tec/waba`: `a0f3e97`.
+- LOG: `doc/LOG-2026-09-02__013600__push-github-master-tabela-portfolios.md`
+
 ## 2026-09-02 01:30 — Tabela: todos os portfólios + filtros
 - Card de relatórios lista todos os templates do tenant. Filtro **Todos os Portfólios**, busca por nome, Excluir só no front (`sessionStorage`).
 - Marker: `DEPLOY-2026-09-02-013000-tabela-todos-portfolios`
