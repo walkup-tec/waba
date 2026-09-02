@@ -36251,15 +36251,20 @@
       }
 
       function metaTpOpenEditNumber(phoneNumberId, phone, name, connectionId) {
-        metaTpEditState.phoneNumberId = String(phoneNumberId || "").trim();
+        const id = String(phoneNumberId || "").trim();
+        const row =
+          (metaTpSession.numbers || []).find(function (item) {
+            return String(item.phoneNumberId) === id;
+          }) || {};
+        if (String(row.uiStatus || "") !== "ativo") {
+          metaTpSetStatus("Ative o número com o PIN de 6 dígitos antes de editar o perfil.");
+          return;
+        }
+        metaTpEditState.phoneNumberId = id;
         metaTpEditState.connectionId = String(connectionId || "").trim();
         metaTpEditState.originalName = String(name && name !== "Sem nome de exibição" ? name : "").trim();
         metaTpEditState.photoBase64 = "";
         metaTpEditState.photoMime = "";
-        const row =
-          (metaTpSession.numbers || []).find(function (item) {
-            return String(item.phoneNumberId) === metaTpEditState.phoneNumberId;
-          }) || {};
         const modal = document.getElementById("meta-tp-edit-modal");
         const file = document.getElementById("meta-tp-edit-photo");
         const preview = document.getElementById("meta-tp-edit-preview");
@@ -36289,6 +36294,13 @@
         const email = String((document.getElementById("meta-tp-edit-email") || {}).value || "").trim();
         const bizChanged = Boolean(vertical || description || address || email);
         if (!phoneNumberId) return false;
+        const current = (metaTpSession.numbers || []).find(function (item) {
+          return String(item.phoneNumberId) === phoneNumberId;
+        });
+        if (!current || String(current.uiStatus || "") !== "ativo") {
+          metaTpEditStatus("Ative o número com o PIN de 6 dígitos antes de editar o perfil.");
+          return false;
+        }
         if (!nameChanged && !metaTpEditState.photoBase64 && !bizChanged) {
           metaTpEditStatus("Altere a foto, o nome ou as informações da empresa.");
           return false;
@@ -36543,17 +36555,6 @@
                 "</span>"
               : "";
             const id = metaTpEsc(item.phoneNumberId);
-            const editName = metaTpEsc(item.verifiedName || item.requestedName || groupName || "");
-            const editAttrs =
-              ' data-meta-edit="' +
-              id +
-              '" data-meta-edit-name="' +
-              editName +
-              '" data-meta-edit-phone="' +
-              phone +
-              '" data-meta-edit-connection="' +
-              metaTpEsc(connectionId) +
-              '"';
             const photoUrl = String(item.profilePictureUrl || "").trim();
             const isLocalPhoto = /^\/integrations\/meta\/whatsapp\/phone-numbers\/photo(\?|$)/i.test(photoUrl);
             const safePhoto = isLocalPhoto
@@ -36573,6 +36574,18 @@
                   "</span>"
                 : phoneIcon;
             const ativo = item.uiStatus === "ativo";
+            const editName = metaTpEsc(item.verifiedName || item.requestedName || groupName || "");
+            const editAttrs = ativo
+              ? ' data-meta-edit="' +
+                id +
+                '" data-meta-edit-name="' +
+                editName +
+                '" data-meta-edit-phone="' +
+                phone +
+                '" data-meta-edit-connection="' +
+                metaTpEsc(connectionId) +
+                '"'
+              : "";
             const busy = item.dispatchStatus === "em_disparo";
             const statusChip = ativo
               ? '<span class="meta-number-chip is-ok">Ativo</span>'
@@ -36599,21 +36612,18 @@
                 (item.nameNeedsRegister && ativo ? "Aplicar nome na Meta" : "Ativar") +
                 "</button></div>"
               : "";
-            const editBtn =
-              '<button type="button" class="instance-action-btn btn-refresh enabled meta-number-edit"' +
-              editAttrs +
-              ">Editar perfil</button>";
+            const editBtn = ativo
+              ? '<button type="button" class="instance-action-btn btn-refresh enabled meta-number-edit"' +
+                editAttrs +
+                ">Editar perfil</button>"
+              : "";
             if (!ativo) {
               const region = metaTpPhoneRegion(item.displayPhoneNumber);
               return (
                 '<article class="meta-number-card is-pending">' +
-                '<button type="button" class="meta-number-logo"' +
-                editAttrs +
-                ' aria-label="Editar perfil de ' +
-                verified +
-                '">' +
+                '<div class="meta-number-logo">' +
                 avatar +
-                "</button>" +
+                "</div>" +
                 '<div class="meta-number-col meta-number-col-phone">' +
                 '<span class="meta-number-phone-primary">' +
                 phone +
@@ -36627,7 +36637,6 @@
                 activate +
                 '<div class="meta-number-badges">' +
                 statusChip +
-                editBtn +
                 "</div></article>"
               );
             }
@@ -37253,8 +37262,16 @@
         const editBtn = target.closest("[data-meta-edit]");
         if (editBtn && portfolioRoot && portfolioRoot.contains(editBtn)) {
           event.preventDefault();
+          const phoneNumberId = String(editBtn.getAttribute("data-meta-edit") || "").trim();
+          const row = (metaTpSession.numbers || []).find(function (item) {
+            return String(item.phoneNumberId) === phoneNumberId;
+          });
+          if (!row || String(row.uiStatus || "") !== "ativo") {
+            metaTpSetStatus("Ative o número com o PIN de 6 dígitos antes de editar o perfil.");
+            return;
+          }
           metaTpOpenEditNumber(
-            editBtn.getAttribute("data-meta-edit"),
+            phoneNumberId,
             editBtn.getAttribute("data-meta-edit-phone"),
             editBtn.getAttribute("data-meta-edit-name"),
             editBtn.getAttribute("data-meta-edit-connection"),

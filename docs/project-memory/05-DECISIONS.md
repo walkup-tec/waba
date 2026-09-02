@@ -1,4 +1,5 @@
 - 2026-09-02: o Laboratório volta a enviar foto de perfil do chip para a Meta (`profile_picture_handle`). Motivo: o card só lia a Graph; o pedido é ditar a foto no Waba. Nome de exibição segue revisão da Meta. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/
+- 2026-09-02: **Editar perfil** só habilita no número Ativo (CONNECTED). Motivo: a Meta recusa `whatsapp_business_profile` em Pendente; o botão não deve aparecer antes do PIN.
 - 2026-09-02: submit-all só trata como já enviado se o template ainda existe no banco do portfólio. Motivo: após exclusão na Meta o modal fingia sucesso sem POST Graph.
 - 2026-09-02: o painel Visualizar / usar em teste e o botão Usar em teste saíram. Motivo: Visualizar já é o modal Seu modelo; o card era laboratório órfão.
 - 2026-09-02: sync completo pruneia o local que a GET `message_templates` já não devolve. Motivo: exclusão no WhatsApp Manager deixava órfãos na tabela. Não prune se a paginação Graph for truncada.

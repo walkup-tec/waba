@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 12:10 — Editar perfil só no número Ativo
+- Card Pendente não mostra Editar perfil nem clique na foto. Backend já recusa `phone_not_registered`.
+- Marker: `DEPLOY-2026-09-02-121000-editar-perfil-so-ativo`
+- LOG: `doc/LOG-2026-09-02__121000__editar-perfil-so-ativo.md`
+
 ## 2026-09-02 12:00 — Foto de perfil do chip para a Meta
 - Card do número: Editar perfil envia JPEG/PNG à Graph (`profile_picture_handle`).
 - Marker: `DEPLOY-2026-09-02-120000-foto-perfil-whatsapp`

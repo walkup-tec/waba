@@ -10,10 +10,10 @@ Concluído no laboratório Meta:
 - Enviar para META: confirmação → processando (spinner e etapas) → resultado no mesmo overlay. O clique em Enviar não pode fechar o modal no meio do processamento. Cabeçalho de imagem: PNG/JPEG até 5 MB (assinatura do arquivo + nome simples na Graph).
 - criação Graph inclui o botão silencioso **Bloquear** (`QUICK_REPLY`); o preview e a tabela não o exibem.
 - adicionar número a um portfólio existente não cria card vazio «Portfólio empresarial».
-- **Editar perfil** no card do número envia a foto (JPEG/PNG até 5 MB) à Meta; o cliente passa a vê-la no WhatsApp. Número precisa estar Ativo.
+- **Editar perfil** no card do número envia a foto (JPEG/PNG até 5 MB) à Meta; o cliente passa a vê-la no WhatsApp. O botão e o clique na foto só existem no número **Ativo**.
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-120000-foto-perfil-whatsapp`.
+Marker: `DEPLOY-2026-09-02-121000-editar-perfil-so-ativo`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
