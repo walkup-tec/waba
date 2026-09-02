@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 00:30 — GitHub master no botão encurtado
+- `master` em `walkup-tec/waba`: `c063c73`.
+- LOG: `doc/LOG-2026-09-02__003000__push-github-master-botao-encurtado.md`
+
 ## 2026-09-02 00:22 — Botão Meta = URL curta WABA
 - Destino do usuário (site ou wa.me) não vai mais à Graph. O lote gera um `/s/{slug}` no mesmo encurtador da campanha Alternativa e envia só esse https à Meta.
 - Marker: `DEPLOY-2026-09-02-002200-meta-botao-url-encurtada`
