@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 19:37 — Push GitHub master Entregues/Lidos
+- Tip enviado a `walkup-tec/waba` `master` para o usuário Redeployar.
+- Marker: `DEPLOY-2026-09-02-193700-relatorio-entregues-lidos`.
+- LOG: `doc/LOG-2026-09-02__193700__push-github-master-relatorio-entregues.md`
+
 ## 2026-09-02 19:30 — Entregues/Lidos do relatório Meta
 - HTTP 200 da Graph conta Enviados, não Entregues. Webhook `delivered`/`read` era apagado na regravação do disparo.
 - Merge no save + casamento por destinatário + não fechar em 15 min sem entregue/lido + refresh do relatório já finalizado.

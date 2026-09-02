@@ -17,6 +17,6 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h); validar Entregues/Lidos no relatório Meta após o próximo Redeploy. Campanha Jandira já fechada só atualiza se ainda houver delivered/read no JSON do disparo ou webhook novo.
 
-Marker: `DEPLOY-2026-09-02-183000-menu-disparo-cloud`.
+Marker: `DEPLOY-2026-09-02-193700-relatorio-entregues-lidos`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
