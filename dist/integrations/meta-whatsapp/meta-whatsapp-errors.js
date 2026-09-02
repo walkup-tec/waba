@@ -22,6 +22,7 @@ const PUBLIC_MESSAGES = {
     template_media_required: "Selecione o arquivo da mídia. A Meta exige um exemplo via upload para cabeçalho de imagem, vídeo ou documento.",
     template_upload_failed: "Não foi possível enviar o arquivo da mídia para a Meta. Para imagem, use JPEG ou PNG e tente novamente.",
     template_not_found: "Este template não pertence à conexão WhatsApp desta conta.",
+    template_delete_failed: "Não foi possível excluir o template na Meta. Tente novamente.",
     template_not_ready: "Este template ainda não está aprovado para envio.",
     conversation_not_found: "Conversa não encontrada nesta conta.",
     automation_invalid: "Os dados da automação não são válidos.",
@@ -58,6 +59,7 @@ function defaultStatus(code) {
         return 503;
     if (code === "exchange_failed" ||
         code === "send_failed" ||
+        code === "template_delete_failed" ||
         code === "register_failed" ||
         code === "profile_update_failed" ||
         code === "portfolio_update_failed") {

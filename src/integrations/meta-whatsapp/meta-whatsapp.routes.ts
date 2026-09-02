@@ -354,6 +354,18 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  app.delete("/integrations/meta/whatsapp/templates/:templateId", async (req: Request, res: Response) => {
+    try {
+      const result = await templateService.deleteFromAuth(
+        resolveWabaRequestAuth(req),
+        String(req.params.templateId || ""),
+      );
+      return sendPublic(res, 200, { ok: true, ...result });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
   app.post("/integrations/meta/whatsapp/templates/sync", async (req: Request, res: Response) => {
     try {
       warnClientTenantClaim(req);

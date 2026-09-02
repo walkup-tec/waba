@@ -32,7 +32,7 @@ function withProof(endpoint: string, token: string): string {
 
 export async function callMetaGraphJson(input: {
   token: string;
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "DELETE";
   path: string;
   query?: Record<string, string>;
   body?: Record<string, unknown>;

@@ -1,5 +1,6 @@
 # Decisões
 
+- 2026-09-02: Excluir na tabela chama a Graph (hsm_id + name) e só então apaga o registro local. Motivo: a Meta tem DELETE oficial; apagar só no front deixava o template na biblioteca. Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-management
 - 2026-09-02: o prompt inclui moldes de formato da biblioteca Utility da Meta (prints). Só estrutura; o assunto é o texto base.
 - 2026-09-02: a IA Utility se realimenta com templates do tenant já APPROVED+UTILITY (few-shot). Não há treino do GPT. Motivo: cada aprovação real vira referência na próxima geração.
 - 2026-09-02: IA Utility do laboratório Cloud usa léxico Olá / Informamos que / Para e botões informativos. Motivo: a Meta recategorizou os templates para Marketing. Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-categorization

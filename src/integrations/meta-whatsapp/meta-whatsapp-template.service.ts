@@ -8,6 +8,7 @@ import { logMetaTemplate } from "./meta-whatsapp-template-log";
 import { MetaWhatsappTemplateRepository } from "./meta-whatsapp-template.repository";
 import {
   createWabaMessageTemplate,
+  deleteWabaMessageTemplate,
   listWabaMessageTemplates,
   type TemplateGraphCaller,
 } from "./meta-whatsapp-template-graph.client";
@@ -31,6 +32,13 @@ function requireTenant(auth: WabaRequestAuth) {
   } catch {
     throw new MetaWhatsappError("unauthenticated");
   }
+}
+
+function isGraphTemplateGone(result: { status: number; json?: unknown }): boolean {
+  if (result.status === 404) return true;
+  const err = (result.json as { error?: { message?: string; error_user_msg?: string } } | null)?.error;
+  const text = `${err?.message || ""} ${err?.error_user_msg || ""}`;
+  return /does not exist|not found|não exist/i.test(text);
 }
 
 function throwFromGraph(result: {
@@ -281,6 +289,44 @@ export class MetaWhatsappTemplateService {
     });
     const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
     return { templates: rows.map((row) => toPublicTemplate(row, publicPortfolioName(connection))), pages: listed.pages };
+  }
+
+  async deleteFromAuth(auth: WabaRequestAuth, templateId: string): Promise<{ deleted: true; metaDeleted: boolean }> {
+    const tenant = requireTenant(auth);
+    const id = String(templateId || "").trim();
+    if (!id) throw new MetaWhatsappError("invalid_payload");
+    const row = await this.templates.findByIdForTenant(tenant.tenantId, id);
+    if (!row || row.tenantId !== tenant.tenantId) {
+      throw new MetaWhatsappError("template_not_found");
+    }
+    const connection = await this.requireConnectedWaba(tenant.tenantId, row.connectionId);
+    let metaDeleted = false;
+    if (row.metaTemplateId || row.name) {
+      let token = "";
+      try {
+        token = this.decrypt(connection.accessTokenEncrypted);
+      } catch {
+        throw new MetaWhatsappError("invalid_token");
+      }
+      const result = await deleteWabaMessageTemplate({
+        token,
+        wabaId: String(connection.wabaId),
+        name: row.name,
+        metaTemplateId: row.metaTemplateId,
+        graph: this.graph,
+      });
+      const missing = isGraphTemplateGone(result);
+      if (!result.ok && !missing) throwFromGraph(result);
+      metaDeleted = result.ok || missing;
+    }
+    const removed = await this.templates.deleteForTenant(tenant.tenantId, row.id);
+    if (!removed) throw new MetaWhatsappError("template_not_found");
+    logMetaTemplate("DELETE", {
+      tenantId: tenant.tenantId,
+      connectionId: connection.id,
+      metaDeleted,
+    });
+    return { deleted: true, metaDeleted };
   }
 
   async assertSendable(input: {

@@ -118,6 +118,29 @@ export class MetaWhatsappTemplateRepository {
     return data ? mapRow(asRow(data)) : null;
   }
 
+  async findByIdForTenant(tenantId: string, id: string): Promise<MetaTemplateRecord | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+
+  async deleteForTenant(tenantId: string, id: string): Promise<boolean> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .delete()
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return Boolean(data);
+  }
+
   async findByMetaId(tenantId: string, metaTemplateId: string): Promise<MetaTemplateRecord | null> {
     const { data, error } = await this.client()
       .from(TABLE)

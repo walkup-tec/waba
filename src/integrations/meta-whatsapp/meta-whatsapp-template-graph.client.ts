@@ -7,7 +7,7 @@ const MAX_PAGES = 20;
 
 export type TemplateGraphCaller = (input: {
   token: string;
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "DELETE";
   path: string;
   query?: Record<string, string>;
   body?: Record<string, unknown>;
@@ -78,6 +78,25 @@ export async function listWabaMessageTemplates(input: {
   }
 
   return { ok: true, items, pages };
+}
+
+export async function deleteWabaMessageTemplate(input: {
+  token: string;
+  wabaId: string;
+  name: string;
+  metaTemplateId?: string | null;
+  graph?: TemplateGraphCaller;
+}): Promise<MetaGraphJsonResult> {
+  const graph = input.graph || callMetaGraphJson;
+  const query: Record<string, string> = { name: String(input.name || "").trim() };
+  const metaId = String(input.metaTemplateId || "").trim();
+  if (metaId) query.hsm_id = metaId;
+  return graph({
+    token: input.token,
+    method: "DELETE",
+    path: `${input.wabaId}/message_templates`,
+    query,
+  });
 }
 
 export async function createWabaMessageTemplate(input: {

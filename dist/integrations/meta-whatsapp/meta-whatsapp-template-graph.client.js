@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapGraphTemplate = mapGraphTemplate;
 exports.listWabaMessageTemplates = listWabaMessageTemplates;
+exports.deleteWabaMessageTemplate = deleteWabaMessageTemplate;
 exports.createWabaMessageTemplate = createWabaMessageTemplate;
 const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
 const meta_whatsapp_template_types_1 = require("./meta-whatsapp-template.types");
@@ -59,6 +60,19 @@ async function listWabaMessageTemplates(input) {
         after = nextAfter;
     }
     return { ok: true, items, pages };
+}
+async function deleteWabaMessageTemplate(input) {
+    const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
+    const query = { name: String(input.name || "").trim() };
+    const metaId = String(input.metaTemplateId || "").trim();
+    if (metaId)
+        query.hsm_id = metaId;
+    return graph({
+        token: input.token,
+        method: "DELETE",
+        path: `${input.wabaId}/message_templates`,
+        query,
+    });
 }
 async function createWabaMessageTemplate(input) {
     const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;

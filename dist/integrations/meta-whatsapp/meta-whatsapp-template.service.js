@@ -21,6 +21,13 @@ function requireTenant(auth) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("unauthenticated");
     }
 }
+function isGraphTemplateGone(result) {
+    if (result.status === 404)
+        return true;
+    const err = result.json?.error;
+    const text = `${err?.message || ""} ${err?.error_user_msg || ""}`;
+    return /does not exist|not found|não exist/i.test(text);
+}
 function throwFromGraph(result) {
     const detail = (0, meta_whatsapp_graph_errors_1.safePublicGraphTemplateDetail)(result.json);
     (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", {
@@ -244,6 +251,47 @@ class MetaWhatsappTemplateService {
         });
         const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
         return { templates: rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection))), pages: listed.pages };
+    }
+    async deleteFromAuth(auth, templateId) {
+        const tenant = requireTenant(auth);
+        const id = String(templateId || "").trim();
+        if (!id)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        const row = await this.templates.findByIdForTenant(tenant.tenantId, id);
+        if (!row || row.tenantId !== tenant.tenantId) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_not_found");
+        }
+        const connection = await this.requireConnectedWaba(tenant.tenantId, row.connectionId);
+        let metaDeleted = false;
+        if (row.metaTemplateId || row.name) {
+            let token = "";
+            try {
+                token = this.decrypt(connection.accessTokenEncrypted);
+            }
+            catch {
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
+            }
+            const result = await (0, meta_whatsapp_template_graph_client_1.deleteWabaMessageTemplate)({
+                token,
+                wabaId: String(connection.wabaId),
+                name: row.name,
+                metaTemplateId: row.metaTemplateId,
+                graph: this.graph,
+            });
+            const missing = isGraphTemplateGone(result);
+            if (!result.ok && !missing)
+                throwFromGraph(result);
+            metaDeleted = result.ok || missing;
+        }
+        const removed = await this.templates.deleteForTenant(tenant.tenantId, row.id);
+        if (!removed)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_not_found");
+        (0, meta_whatsapp_template_log_1.logMetaTemplate)("DELETE", {
+            tenantId: tenant.tenantId,
+            connectionId: connection.id,
+            metaDeleted,
+        });
+        return { deleted: true, metaDeleted };
     }
     async assertSendable(input) {
         const row = await this.templates.findForSend(input.tenantId, input.connectionId, input.name, input.language);

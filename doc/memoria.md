@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:28 — Excluir template na Meta
+- DELETE Graph `hsm_id`+`name`, depois apaga o registro local do tenant.
+- Marker: `DEPLOY-2026-09-02-022800-excluir-template-meta`
+- LOG: `doc/LOG-2026-09-02__022800__excluir-template-meta.md`
+
 ## 2026-09-02 02:22 — Modal Visualizar
 - Visualizar abre **Seu modelo** no formato WhatsApp (header, corpo, botão).
 - Marker: `DEPLOY-2026-09-02-022200-modal-visualizar-template`

@@ -10,7 +10,7 @@ function sanitize(meta: Record<string, unknown>): Record<string, unknown> {
 }
 
 export function logMetaTemplate(
-  step: "LIST" | "CREATE" | "SYNC" | "WEBHOOK" | "AI" | "ERROR",
+  step: "LIST" | "CREATE" | "SYNC" | "WEBHOOK" | "AI" | "DELETE" | "ERROR",
   meta: Record<string, unknown> = {},
 ): void {
   const line = `${PREFIX}[${step}]`;

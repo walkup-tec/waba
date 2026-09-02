@@ -37527,7 +37527,7 @@
               `<td style="padding:8px; white-space:nowrap;">` +
               `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-view="${index}">Visualizar</button> ` +
               `<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-tpl-test="${index}">Usar em teste</button> ` +
-              `<button type="button" class="instance-action-btn btn-delete enabled" data-meta-tpl-hide="${index}" title="Remove só desta lista. Não apaga na Meta.">Excluir</button>` +
+              `<button type="button" class="instance-action-btn btn-delete enabled" data-meta-tpl-hide="${index}" title="Exclui na biblioteca da Meta e nesta lista.">Excluir</button>` +
               "</td></tr>"
             );
           })
@@ -37701,6 +37701,31 @@
         if (closeBtn) closeBtn.focus();
       }
 
+      async function metaTplLabDeleteTemplate(index) {
+        const item = metaTplLabCache[index];
+        const id = String((item && item.id) || "").trim();
+        if (!id) return false;
+        const ok = window.confirm(
+          "Excluir este template da biblioteca da Meta e desta lista?\n\nSe estiver aprovado, a Meta bloqueia o mesmo nome por 30 dias.",
+        );
+        if (!ok) return false;
+        metaTplLabSetStatus("Excluindo na Meta…");
+        try {
+          await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/" + encodeURIComponent(id), {
+            method: "DELETE",
+          });
+          metaTplLabHideTemplate(id);
+          metaTplLabCache = metaTplLabCache.filter(function (row) {
+            return String((row && row.id) || "") !== id;
+          });
+          metaTplLabRenderTable();
+          metaTplLabSetStatus("Template excluído da Meta e da lista.");
+        } catch (error) {
+          metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível excluir.");
+        }
+        return false;
+      }
+
       window.wabaViewMetaTemplateLab = function wabaViewMetaTemplateLab(index) {
         const item = metaTplLabCache[index];
         if (!item) return false;
@@ -37776,13 +37801,7 @@
         }
         const hideIndex = target.getAttribute("data-meta-tpl-hide");
         if (hideIndex != null) {
-          const item = metaTplLabCache[Number(hideIndex)];
-          const id = String((item && item.id) || "").trim();
-          if (id) {
-            metaTplLabHideTemplate(id);
-            metaTplLabRenderTable();
-            metaTplLabSetStatus("Template removido só desta lista. A Meta não foi alterada.");
-          }
+          void metaTplLabDeleteTemplate(Number(hideIndex));
           return;
         }
         const viewIndex = target.getAttribute("data-meta-tpl-view");

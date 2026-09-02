@@ -114,6 +114,15 @@ class FakeTemplates {
   async listByTenant(tenantId: string) {
     return this.rows.filter((row) => row.tenantId === tenantId);
   }
+  async findByIdForTenant(tenantId: string, id: string) {
+    return this.rows.find((row) => row.tenantId === tenantId && row.id === id) || null;
+  }
+  async deleteForTenant(tenantId: string, id: string) {
+    const idx = this.rows.findIndex((row) => row.tenantId === tenantId && row.id === id);
+    if (idx < 0) return false;
+    this.rows.splice(idx, 1);
+    return true;
+  }
   async listByTenantConnection(tenantId: string, connectionId: string) {
     return this.rows.filter((row) => row.tenantId === tenantId && row.connectionId === connectionId);
   }
@@ -627,6 +636,85 @@ describe("fase 7 criação e erros Graph", () => {
       () => service.createFromAuth(auth(EMAIL_A), VALID_CREATE),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "send_failed" && error.status === 503,
     );
+  });
+});
+
+describe("fase 7 exclusão Graph", () => {
+  it("apaga na Meta por hsm_id+name e remove o registro local do tenant", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const templates = new FakeTemplates();
+    templates.rows.push(templateRow());
+    templates.rows.push(templateRow({ id: "other", tenantId: TENANT_B, connectionId: "conn-b", name: "outro" }));
+    const calls: Array<Record<string, unknown>> = [];
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input) => {
+        calls.push(input);
+        assert.equal(input.method, "DELETE");
+        assert.equal(input.path, "waba-a/message_templates");
+        assert.equal(input.query?.name, "retorno_lead");
+        assert.equal(input.query?.hsm_id, "tpl-1");
+        return graphJson({ success: true });
+      },
+      () => "tok",
+    );
+    const result = await service.deleteFromAuth(auth(EMAIL_A), "local-1");
+    assert.equal(result.deleted, true);
+    assert.equal(result.metaDeleted, true);
+    assert.equal(templates.rows.some((row) => row.id === "local-1"), false);
+    assert.equal(templates.rows.some((row) => row.id === "other"), true);
+    assert.equal(calls.length, 1);
+  });
+
+  it("não apaga local se a Meta recusar", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const templates = new FakeTemplates();
+    templates.rows.push(templateRow());
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async () => graphErr(400, { json: { error: { message: "Templates that are in a disabled status cannot be deleted." } } }),
+      () => "tok",
+    );
+    await assert.rejects(
+      () => service.deleteFromAuth(auth(EMAIL_A), "local-1"),
+      (error: unknown) => error instanceof MetaWhatsappError,
+    );
+    assert.equal(templates.rows.some((row) => row.id === "local-1"), true);
+  });
+
+  it("se o template já não existe na Meta, remove só o local", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const templates = new FakeTemplates();
+    templates.rows.push(templateRow());
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async () => graphErr(400, { json: { error: { message: "Template does not exist" } } }),
+      () => "tok",
+    );
+    const result = await service.deleteFromAuth(auth(EMAIL_A), "local-1");
+    assert.equal(result.metaDeleted, true);
+    assert.equal(templates.rows.length, 0);
+  });
+
+  it("não apaga template de outro tenant", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const templates = new FakeTemplates();
+    templates.rows.push(templateRow({ tenantId: TENANT_B }));
+    const service = new MetaWhatsappTemplateService(connections as any, templates as any, async () => {
+      throw new Error("Graph não deve ser chamada");
+    });
+    await assert.rejects(
+      () => service.deleteFromAuth(auth(EMAIL_A), "local-1"),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_not_found",
+    );
+    assert.equal(templates.rows.length, 1);
   });
 });
 

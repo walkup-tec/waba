@@ -93,6 +93,29 @@ class MetaWhatsappTemplateRepository {
             throw new Error(error.message);
         return data ? mapRow(asRow(data)) : null;
     }
+    async findByIdForTenant(tenantId, id) {
+        const { data, error } = await this.client()
+            .from(TABLE)
+            .select(COLUMNS)
+            .eq("id", id)
+            .eq("tenant_id", tenantId)
+            .maybeSingle();
+        if (error)
+            throw new Error(error.message);
+        return data ? mapRow(asRow(data)) : null;
+    }
+    async deleteForTenant(tenantId, id) {
+        const { data, error } = await this.client()
+            .from(TABLE)
+            .delete()
+            .eq("id", id)
+            .eq("tenant_id", tenantId)
+            .select("id")
+            .maybeSingle();
+        if (error)
+            throw new Error(error.message);
+        return Boolean(data);
+    }
     async findByMetaId(tenantId, metaTemplateId) {
         const { data, error } = await this.client()
             .from(TABLE)
