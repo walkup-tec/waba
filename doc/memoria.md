@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 01:12 — Card: três enviados, sem URL e sem contagem
+- Modal/card de sucesso: ✓ Template 01/02/03 Enviado para META + prazo de 24 h. Saiu a URL `/s/` e o «X de 3».
+- Marker: `DEPLOY-2026-09-02-011200-card-enviado-meta`
+- LOG: `doc/LOG-2026-09-02__011200__card-enviado-meta.md`
+
 ## 2026-09-02 01:07 — Sucesso sem mostrar URL curta
 - Modal de sucesso e `Botão na Meta: /s/…` saíram da UI. `submit-all` não devolve a URL curta.
 - Marker: `DEPLOY-2026-09-02-010700-sem-url-curta-no-modal`

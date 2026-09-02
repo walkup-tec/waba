@@ -3930,6 +3930,9 @@
         .meta-tpl-ai-alert { padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.5; }
         .meta-tpl-ai-alert.is-ok { color:#bbf7d0; background:rgba(22,163,74,.12); border:1px solid rgba(34,197,94,.25); }
         .meta-tpl-ai-alert.is-warn { color:#fde68a; background:rgba(217,119,6,.12); border:1px solid rgba(245,158,11,.25); }
+        .meta-tpl-ai-sent-list { margin:0; padding:0; list-style:none; }
+        .meta-tpl-ai-sent-list li { margin:0 0 4px; }
+        .meta-tpl-ai-sent-wait { margin:10px 0 0; }
         .meta-tpl-status-filter {
           width:132px;
           height:32px;
@@ -36971,15 +36974,15 @@
         metaTplAiOpenOverlay();
       }
 
-      function metaTplAiDismissOverlay() {
-        metaTplAiModalPhase = "closed";
-        metaTplAiModalResolver = null;
-        const { overlay } = metaTplAiModalEls();
-        if (overlay) {
-          if (typeof blurFocusInsideOverlay === "function") blurFocusInsideOverlay(overlay);
-          overlay.classList.remove("open");
-          overlay.setAttribute("aria-hidden", "true");
-        }
+      function metaTplAiSentConfirmHtml() {
+        return (
+          '<ul class="meta-tpl-ai-sent-list">' +
+          "<li>✓ Template 01 - Enviado para META</li>" +
+          "<li>✓ Template 02 - Enviado para META</li>" +
+          "<li>✓ Template 03 - Enviado para META</li>" +
+          "</ul>" +
+          "<p class=\"meta-tpl-ai-sent-wait\">Aguardando aprovação final da META (Pode demorar até 24h)</p>"
+        );
       }
 
       function metaTplAiValidateButtonUrl(raw) {
@@ -37104,8 +37107,12 @@
         metaTplAiShowProcessing();
         if (isMetaTemplateAiUiPreview()) {
           await new Promise((resolve) => window.setTimeout(resolve, 1100));
-          if (status) status.textContent = "Três templates enviados à Meta. A análise pode levar até 24 horas.";
-          metaTplAiDismissOverlay();
+          const previewCard = document.getElementById("meta-tpl-ai-batch-result");
+          if (previewCard) {
+            previewCard.innerHTML = `<div class="meta-tpl-ai-alert is-ok">${metaTplAiSentConfirmHtml()}</div>`;
+          }
+          if (status) status.textContent = "Templates enviados à Meta.";
+          metaTplAiShowResult("ok", "Templates enviados à Meta", "", metaTplAiSentConfirmHtml());
           if (button) button.disabled = false;
           return;
         }
@@ -37126,26 +37133,26 @@
           });
           const result = document.getElementById("meta-tpl-ai-batch-result");
           const rows = Array.isArray(payload.results) ? payload.results : [];
-          const detail = rows
-            .map((item) => `${item.ok ? "✓" : "✕"} Opção ${Number(item.index || 0) + 1}: ${escapeAdminHtml(String(item.status || item.error || "erro"))}`)
+          const errorDetail = rows
+            .filter((item) => !item.ok)
+            .map((item) => `✕ Template 0${Number(item.index || 0) + 1}: ${escapeAdminHtml(String(item.error || "erro"))}`)
             .join("<br>");
           if (result) {
-            result.innerHTML =
-              `<div class="meta-tpl-ai-alert ${payload.failed ? "is-warn" : "is-ok"}"><strong>${escapeAdminHtml(String(payload.submitted || 0))} de 3 cadastrados</strong>` +
-              (payload.failed ? `<br>${detail}` : "") +
-              `</div>`;
+            result.innerHTML = payload.failed
+              ? `<div class="meta-tpl-ai-alert is-warn">${errorDetail}</div>`
+              : `<div class="meta-tpl-ai-alert is-ok">${metaTplAiSentConfirmHtml()}</div>`;
           }
           if (payload.failed) {
             if (status) status.textContent = "Cadastro parcial. Consulte o resultado no modal.";
             metaTplAiShowResult(
               "error",
               "Envio parcial",
-              "Parte dos templates chegou à Meta, mas nem todas as opções foram aceitas. A Meta ainda pode levar até 24 horas para concluir a análise das que foram enviadas.",
-              detail,
+              "Nem todas as opções foram aceitas. A Meta ainda pode levar até 24 horas para concluir a análise das que foram enviadas.",
+              errorDetail,
             );
           } else {
-            if (status) status.textContent = "Três templates enviados à Meta. A análise pode levar até 24 horas. Use Atualizar da Meta para ver o status.";
-            metaTplAiDismissOverlay();
+            if (status) status.textContent = "Templates enviados à Meta.";
+            metaTplAiShowResult("ok", "Templates enviados à Meta", "", metaTplAiSentConfirmHtml());
           }
           await window.wabaLoadMetaTemplatesLab();
         } catch (error) {
