@@ -188,6 +188,19 @@ export class MetaWhatsappTemplateAiService {
     const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
     ensureRateLimit(`${tenant.tenantId}:${auth.email}`);
 
+    const catalog = this.templates as {
+      listApprovedUtilityExamples?: (id: string) => Promise<unknown>;
+    };
+    let approvedUtilityExamples: unknown[] = [];
+    if (typeof catalog.listApprovedUtilityExamples === "function") {
+      try {
+        const listed = await catalog.listApprovedUtilityExamples(tenant.tenantId);
+        approvedUtilityExamples = Array.isArray(listed) ? listed.slice(0, 8) : [];
+      } catch {
+        approvedUtilityExamples = [];
+      }
+    }
+
     let ai: OpenAiStructuredResult;
     try {
       ai = await this.openAi({
@@ -197,6 +210,7 @@ export class MetaWhatsappTemplateAiService {
           language,
           variableType,
           baseText,
+          approvedUtilityExamples,
         }),
         schemaName: META_TEMPLATE_AI_SCHEMA_NAME,
         schema: META_TEMPLATE_AI_OUTPUT_SCHEMA,
@@ -256,6 +270,7 @@ export class MetaWhatsappTemplateAiService {
       latencyMs: ai.latencyMs,
       eligibleForUtility: result.eligibleForUtility,
       riskLevel: result.riskLevel,
+      approvedExampleCount: approvedUtilityExamples.length,
     });
 
     return {

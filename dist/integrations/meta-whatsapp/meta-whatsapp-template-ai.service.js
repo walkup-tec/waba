@@ -141,6 +141,17 @@ class MetaWhatsappTemplateAiService {
         }
         const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
         ensureRateLimit(`${tenant.tenantId}:${auth.email}`);
+        const catalog = this.templates;
+        let approvedUtilityExamples = [];
+        if (typeof catalog.listApprovedUtilityExamples === "function") {
+            try {
+                const listed = await catalog.listApprovedUtilityExamples(tenant.tenantId);
+                approvedUtilityExamples = Array.isArray(listed) ? listed.slice(0, 8) : [];
+            }
+            catch {
+                approvedUtilityExamples = [];
+            }
+        }
         let ai;
         try {
             ai = await this.openAi({
@@ -150,6 +161,7 @@ class MetaWhatsappTemplateAiService {
                     language,
                     variableType,
                     baseText,
+                    approvedUtilityExamples,
                 }),
                 schemaName: meta_whatsapp_template_ai_schema_1.META_TEMPLATE_AI_SCHEMA_NAME,
                 schema: meta_whatsapp_template_ai_schema_1.META_TEMPLATE_AI_OUTPUT_SCHEMA,
@@ -211,6 +223,7 @@ class MetaWhatsappTemplateAiService {
             latencyMs: ai.latencyMs,
             eligibleForUtility: result.eligibleForUtility,
             riskLevel: result.riskLevel,
+            approvedExampleCount: approvedUtilityExamples.length,
         });
         return {
             ...result,

@@ -1,6 +1,6 @@
-export const META_TEMPLATE_AI_PROMPT_VERSION = "1.4";
+export const META_TEMPLATE_AI_PROMPT_VERSION = "1.5";
 export const META_TEMPLATE_AI_POLICY_VERSION =
-  String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-lexicon-2026-09").trim();
+  String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-memory-2026-09").trim();
 
 const DEFAULT_POLICY = `
 Critérios permanentes da categoria Utility (WhatsApp Business Platform):
@@ -57,6 +57,9 @@ Como formatar:
   atualização de conta, "Para mais informações…"), mas NÃO copie exemplos
   de aeroporto, crise, cartão ou nomes de template da biblioteca. Seja criativo
   no tema do usuário, mantendo o léxico Olá / Informamos que / Para.
+- Se o pedido trouxer approvedUtilityExamples, esses textos já foram aprovados
+  pela Meta como UTILITY neste mesmo tenant. Imitar estrutura, tom e âncora
+  operacional. Não copiar nome nem corpo. Não inventar que a aprovação é certa.
 - Gere sempre estas três abordagens, nesta ordem:
   1) atualização da solicitação — buttonText "Ver Atualizações";
   2) resultado disponível — buttonText "Ver Detalhes";

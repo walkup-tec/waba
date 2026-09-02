@@ -13,6 +13,10 @@ import {
 } from "./meta-whatsapp-template-graph.client";
 import { validateTemplateCreate } from "./meta-whatsapp-template-validate";
 import {
+  pickApprovedUtilityExamples,
+  type MetaUtilityApprovedExample,
+} from "./meta-whatsapp-template-ai-approved-examples";
+import {
   isTemplateApprovedForSend,
   toPublicTemplate,
   type MetaTemplatePublic,
@@ -110,6 +114,13 @@ export class MetaWhatsappTemplateService {
     }
     const one = await this.connections.findConnectedByTenant(tenantId);
     return one ? [one] : [];
+  }
+
+  async listApprovedUtilityExamples(tenantId: string): Promise<MetaUtilityApprovedExample[]> {
+    const id = String(tenantId || "").trim();
+    if (!id || typeof this.templates.listByTenant !== "function") return [];
+    const rows = await this.templates.listByTenant(id);
+    return pickApprovedUtilityExamples(rows);
   }
 
   async listFromAuth(auth: WabaRequestAuth, connectionId?: string): Promise<MetaTemplatePublic[]> {

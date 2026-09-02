@@ -10,6 +10,7 @@ const meta_whatsapp_template_log_1 = require("./meta-whatsapp-template-log");
 const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.repository");
 const meta_whatsapp_template_graph_client_1 = require("./meta-whatsapp-template-graph.client");
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
+const meta_whatsapp_template_ai_approved_examples_1 = require("./meta-whatsapp-template-ai-approved-examples");
 const meta_whatsapp_template_types_1 = require("./meta-whatsapp-template.types");
 const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
 function requireTenant(auth) {
@@ -83,6 +84,13 @@ class MetaWhatsappTemplateService {
         }
         const one = await this.connections.findConnectedByTenant(tenantId);
         return one ? [one] : [];
+    }
+    async listApprovedUtilityExamples(tenantId) {
+        const id = String(tenantId || "").trim();
+        if (!id || typeof this.templates.listByTenant !== "function")
+            return [];
+        const rows = await this.templates.listByTenant(id);
+        return (0, meta_whatsapp_template_ai_approved_examples_1.pickApprovedUtilityExamples)(rows);
     }
     async listFromAuth(auth, connectionId) {
         const tenant = requireTenant(auth);

@@ -22,6 +22,7 @@ import {
   templateNameForOption,
 } from "./meta-whatsapp-template-ai-shell";
 import { shapeMetaUtilityOptionBody } from "./meta-whatsapp-template-ai-utility-shape";
+import { pickApprovedUtilityExamples } from "./meta-whatsapp-template-ai-approved-examples";
 import {
   appendDisparosLinkNonce,
   assertMetaReadyButtonShortUrl,
@@ -118,6 +119,7 @@ function serviceFor(
   templateService?: { createFromAuth(auth: unknown, input: Record<string, unknown>): Promise<any> },
   connectionOverrides: Partial<MetaWhatsappConnectionRecord> = {},
   createButtonShortUrl?: (input: { destinationUrl: string; tenantId: string }) => Promise<string>,
+  onOpenAi?: (request: { input: string; instructions: string }) => void,
 ) {
   const row = connection(email, connectionOverrides);
   const stored: Array<Record<string, unknown>> = [];
@@ -151,12 +153,15 @@ function serviceFor(
           return new Set<string>();
         },
       } as any,
-      async () => ({
-        value: output,
-        model: "gpt-test",
-        responseId: "resp-1",
-        latencyMs: 12,
-      }),
+      async (request) => {
+        onOpenAi?.(request);
+        return {
+          value: output,
+          model: "gpt-test",
+          responseId: "resp-1",
+          latencyMs: 12,
+        };
+      },
       (templateService || {
         async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
           return {
@@ -340,6 +345,105 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(instructions, /Saiba Mais/);
     assert.match(instructions, /Ver Atualizações/);
     assert.doesNotMatch(instructions, /retorne options=\[\]/);
+  });
+
+  it("envia à IA só templates do tenant aprovados como Utility", async () => {
+    const email = "ai-memory@example.com";
+    let payload = "";
+    const { service } = serviceFor(
+      email,
+      utilityOutput(),
+      {
+        async createFromAuth() {
+          return { id: "local", status: "PENDING" };
+        },
+        async listApprovedUtilityExamples() {
+          return [
+            {
+              name: "consulta_aprovada",
+              language: "pt_BR",
+              body: "Olá, {{1}}.\nInformamos que a consulta solicitada foi atualizada.\nPara ver os detalhes, use o link abaixo.",
+              buttonText: "Ver Detalhes",
+            },
+          ];
+        },
+      } as any,
+      {},
+      undefined,
+      (request) => {
+        payload = request.input;
+      },
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da consulta solicitada." },
+    );
+    const parsed = JSON.parse(payload);
+    assert.equal(parsed.approvedUtilityExamples.length, 1);
+    assert.equal(parsed.approvedUtilityExamples[0].name, "consulta_aprovada");
+    assert.match(buildMetaTemplateAiInstructions(), /approvedUtilityExamples/);
+  });
+
+  it("escolhe exemplos Utility aprovados e ignora Marketing ou pendentes", () => {
+    const picked = pickApprovedUtilityExamples([
+      {
+        id: "mkt",
+        tenantId: "t",
+        connectionId: "c",
+        wabaId: "w",
+        metaTemplateId: "1",
+        name: "promo",
+        language: "pt_BR",
+        category: "MARKETING",
+        status: "APPROVED",
+        qualityScore: null,
+        components: [{ type: "BODY", text: "Aproveite a oferta." }],
+        rejectedReason: null,
+        lastSyncedAt: "2026-09-02T02:00:00.000Z",
+        createdAt: "2026-09-02T02:00:00.000Z",
+        updatedAt: "2026-09-02T02:00:00.000Z",
+      },
+      {
+        id: "pend",
+        tenantId: "t",
+        connectionId: "c",
+        wabaId: "w",
+        metaTemplateId: "2",
+        name: "ainda_nao",
+        language: "pt_BR",
+        category: "UTILITY",
+        status: "PENDING",
+        qualityScore: null,
+        components: [{ type: "BODY", text: "Olá. Informamos que está em análise." }],
+        rejectedReason: null,
+        lastSyncedAt: "2026-09-02T03:00:00.000Z",
+        createdAt: "2026-09-02T03:00:00.000Z",
+        updatedAt: "2026-09-02T03:00:00.000Z",
+      },
+      {
+        id: "ok",
+        tenantId: "t",
+        connectionId: "c",
+        wabaId: "w",
+        metaTemplateId: "3",
+        name: "consulta_ok",
+        language: "pt_BR",
+        category: "UTILITY",
+        status: "APPROVED",
+        qualityScore: null,
+        components: [
+          { type: "BODY", text: "Olá.\nInformamos que a solicitação foi atualizada.\nPara consultar, use o link abaixo." },
+          { type: "BUTTONS", buttons: [{ type: "URL", text: "Ver Detalhes" }] },
+        ],
+        rejectedReason: null,
+        lastSyncedAt: "2026-09-02T01:00:00.000Z",
+        createdAt: "2026-09-02T01:00:00.000Z",
+        updatedAt: "2026-09-02T01:00:00.000Z",
+      },
+    ]);
+    assert.equal(picked.length, 1);
+    assert.equal(picked[0]?.name, "consulta_ok");
+    assert.equal(picked[0]?.buttonText, "Ver Detalhes");
   });
 
   it("completa Olá, Informamos que e Para quando a IA omite o léxico Utility", () => {
