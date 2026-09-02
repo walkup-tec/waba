@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 18:02 — Push GitHub master do Disparo Cloud
+- Tip enviado a `walkup-tec/waba` `master` para o usuário Redeployar no EasyPanel.
+- LOG: `doc/LOG-2026-09-02__180200__push-github-master-disparo-cloud.md`
+
 ## 2026-09-02 17:10 — Histórico no lugar da prévia de números
 - Sem botão Pré-visualizar e sem tabela por número.
 - Tabela após iniciar: data, campanha, cliente, envios, barra, status.
