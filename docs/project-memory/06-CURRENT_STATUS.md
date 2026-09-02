@@ -11,6 +11,6 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-024800-modal-enviar-templates-centro`.
+Marker: `DEPLOY-2026-09-02-025100-fechar-modal-templates`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

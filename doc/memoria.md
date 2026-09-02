@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:51 — Fechar do modal de envio
+- Fechar no sucesso força o close; listener no overlay e no clique da tela.
+- Marker: `DEPLOY-2026-09-02-025100-fechar-modal-templates`
+- LOG: `doc/LOG-2026-09-02__025100__fechar-modal-templates.md`
+
 ## 2026-09-02 02:48 — Modal Enviar templates no centro
 - Restaurou `#meta-tpl-ai-overlay`. Sem o wrapper o card caía no rodapé.
 - Marker: `DEPLOY-2026-09-02-024800-modal-enviar-templates-centro`

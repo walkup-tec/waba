@@ -3909,10 +3909,10 @@
           object-fit: contain;
         }
         .meta-tpl-ai-modal-spinner {
-          display: flex;
           justify-content: center;
           margin: 2px 0 14px;
         }
+        .meta-tpl-ai-modal-spinner:not([hidden]) { display: flex; }
         .meta-tpl-ai-modal-detail {
           margin: 0 0 10px;
           padding: 10px 12px;
@@ -37073,6 +37073,23 @@
           logo.src = src;
         }
         if (!overlay) return;
+        if (overlay.dataset.bound !== "1") {
+          overlay.dataset.bound = "1";
+          overlay.addEventListener("click", function onMetaTplAiOverlayClick(event) {
+            const hit = event.target && event.target.closest
+              ? event.target.closest("#meta-tpl-ai-modal-ok, #meta-tpl-ai-modal-cancel")
+              : null;
+            if (hit && hit.id === "meta-tpl-ai-modal-ok") {
+              metaTplAiOnModalOk();
+              return;
+            }
+            if (hit && hit.id === "meta-tpl-ai-modal-cancel") {
+              metaTplAiCloseOverlay(true);
+              return;
+            }
+            if (event.target === overlay) metaTplAiCloseOverlay(true);
+          });
+        }
         overlay.classList.add("open");
         overlay.setAttribute("aria-hidden", "false");
       }
@@ -37103,11 +37120,15 @@
         }
       }
 
-      function metaTplAiCloseOverlay() {
-        if (metaTplAiModalPhase === "processing") return;
+      function metaTplAiCloseOverlay(force) {
+        if (!force && metaTplAiModalPhase === "processing") return;
         const { overlay } = metaTplAiModalEls();
         if (overlay) {
-          if (typeof blurFocusInsideOverlay === "function") blurFocusInsideOverlay(overlay);
+          try {
+            if (typeof blurFocusInsideOverlay === "function") blurFocusInsideOverlay(overlay);
+          } catch {
+            /* fechar mesmo se o blur falhar */
+          }
           overlay.classList.remove("open");
           overlay.setAttribute("aria-hidden", "true");
         }
@@ -37176,14 +37197,13 @@
       }
 
       function metaTplAiOnModalOk() {
-        if (metaTplAiModalPhase === "processing") return;
         if (metaTplAiModalPhase === "confirm") {
           const resolve = metaTplAiModalResolver;
           metaTplAiModalResolver = null;
           if (typeof resolve === "function") resolve(true);
           return;
         }
-        metaTplAiCloseOverlay();
+        metaTplAiCloseOverlay(true);
       }
 
       function metaTplAiRenderResult(payload) {
@@ -37725,7 +37745,7 @@
 
       document.addEventListener("click", function onMetaTplLabClick(event) {
         const target = event.target && event.target.closest
-          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all, #meta-tpl-preview-close")
+          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all, #meta-tpl-preview-close, #meta-tpl-ai-modal-ok, #meta-tpl-ai-modal-cancel")
           : null;
         if (event.target && event.target.id === "meta-tpl-preview-overlay") {
           metaTplLabClosePreview();
@@ -37742,6 +37762,14 @@
         }
         if (target.id === "meta-tpl-ai-submit-all") {
           void metaTplSubmitAllAiOptions();
+          return;
+        }
+        if (target.id === "meta-tpl-ai-modal-ok") {
+          metaTplAiOnModalOk();
+          return;
+        }
+        if (target.id === "meta-tpl-ai-modal-cancel") {
+          metaTplAiCloseOverlay(true);
           return;
         }
         const hideIndex = target.getAttribute("data-meta-tpl-hide");
@@ -61002,10 +61030,10 @@
       const metaTplAiOverlay = document.getElementById("meta-tpl-ai-overlay");
       if (metaTplAiOverlay) {
         metaTplAiOverlay.addEventListener("click", (e) => {
-          if (e.target === metaTplAiOverlay) metaTplAiCloseOverlay();
+          if (e.target === metaTplAiOverlay) metaTplAiCloseOverlay(true);
         });
       }
-      document.getElementById("meta-tpl-ai-modal-cancel")?.addEventListener("click", () => metaTplAiCloseOverlay());
+      document.getElementById("meta-tpl-ai-modal-cancel")?.addEventListener("click", () => metaTplAiCloseOverlay(true));
       document.getElementById("meta-tpl-ai-modal-ok")?.addEventListener("click", () => metaTplAiOnModalOk());
       document.addEventListener("keydown", (e) => {
         if (e.key !== "Escape") return;
