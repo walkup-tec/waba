@@ -30,6 +30,8 @@ export type WabaCampaignPerformanceReport = {
   delivered: number;
   read: number;
   failed: number;
+  clicks?: number;
+  source?: "manual" | "meta_lab";
   filledAt: string;
   filledByEmail: string;
 };

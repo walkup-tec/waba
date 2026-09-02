@@ -29,6 +29,7 @@ import {
 } from "./meta-whatsapp-broadcast-leads";
 import { uploadCloudApiMedia } from "./meta-whatsapp-broadcast-media";
 import {
+  findBroadcastByIntakeCampaignId,
   findBroadcastCampaign,
   listBroadcastCampaigns,
   publicBroadcastCampaign,
@@ -36,12 +37,16 @@ import {
   type MetaBroadcastCampaign,
   type MetaBroadcastLead,
 } from "./meta-whatsapp-broadcast.store";
+import { scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
 import { attachCampaignIdToShortLink } from "../../shortener/waba-shortener.service";
 import {
   extractSlugFromPublicShortUrl,
   findShortLinkBySlug,
 } from "../../shortener/waba-shortener.repository";
 import { createMetaTemplateButtonShortUrl } from "./meta-whatsapp-template-ai-short-url";
+import { WabaCampaignIntakeRepository } from "../../disparos/waba-campaign-intake.repository";
+import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
+import { campaignAttendedByLaboratorioStaff } from "../../disparos/waba-campaign-laboratorio-attended";
 
 const running = new Set<string>();
 
@@ -358,6 +363,7 @@ export class MetaWhatsappBroadcastService {
       buffer: Buffer;
       fileName: string;
       mapping: MetaBroadcastLeadMapping;
+      intakeCampaignId?: string;
       publicBaseHints?: WabaPublicBaseRequestHints;
     },
   ) {
@@ -384,6 +390,7 @@ export class MetaWhatsappBroadcastService {
       throw new MetaWhatsappError("invalid_token");
     }
     const campaignId = randomUUID();
+    const intakeCampaignId = this.linkSubscriberCampaign(auth, String(input.intakeCampaignId || "").trim());
     const header = await this.resolveHeaderMedia({
       tenantId: tenant.tenantId,
       token,
@@ -407,6 +414,7 @@ export class MetaWhatsappBroadcastService {
       templateName: loaded.template.name,
       language: loaded.template.language,
       phoneNumberId,
+      intakeCampaignId,
       shortSlug: short.shortSlug,
       shortUrl: short.shortUrl,
       trackedSlug: short.trackedSlug,
@@ -467,7 +475,7 @@ export class MetaWhatsappBroadcastService {
         const lead = row.leads[index];
         if (lead.status === "sent") continue;
         try {
-          await this.provider.sendTemplate({
+          const sent = await this.provider.sendTemplate({
             tenantId,
             to: lead.waId,
             templateName: ctx.templateName,
@@ -482,9 +490,12 @@ export class MetaWhatsappBroadcastService {
             }),
           });
           lead.status = "sent";
+          lead.metaStatus = "accepted";
+          lead.wamid = sent.messageId || lead.wamid;
           row.sent += 1;
         } catch (error) {
           lead.status = "failed";
+          lead.metaStatus = "failed";
           lead.error = error instanceof Error ? error.message.slice(0, 180) : "send_failed";
           row.failed += 1;
         }
@@ -495,6 +506,7 @@ export class MetaWhatsappBroadcastService {
         }
       }
       row.status = row.failed === row.total ? "failed" : "done";
+      row.sendFinishedAt = new Date().toISOString();
       saveBroadcastCampaign(row);
       logMetaWhatsappSafe("broadcast-done", {
         tenantId,
@@ -502,9 +514,12 @@ export class MetaWhatsappBroadcastService {
         failed: row.failed,
         total: row.total,
       });
+      if (row.intakeCampaignId) scheduleLabReportFinalize(row.intakeCampaignId);
     } catch {
       row.status = "failed";
+      row.sendFinishedAt = new Date().toISOString();
       saveBroadcastCampaign(row);
+      if (row.intakeCampaignId) scheduleLabReportFinalize(row.intakeCampaignId);
     } finally {
       running.delete(campaignId);
     }
@@ -520,5 +535,74 @@ export class MetaWhatsappBroadcastService {
     const row = findBroadcastCampaign(tenant.tenantId, String(id || "").trim());
     if (!row) fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
     return publicBroadcastCampaign(row);
+  }
+
+  /**
+   * Campanhas do assinante ainda abertas e atendidas por quem tem Laboratório.
+   * Só essas entram no Disparo Cloud e recebem indicadores/cliques automáticos.
+   */
+  listLinkableSubscriberCampaigns(auth: WabaRequestAuth) {
+    requireTenant(auth);
+    const email = String(auth.email || "").trim().toLowerCase();
+    const isMaster = auth.role === "master";
+    const intakes = new WabaCampaignIntakeRepository();
+    return intakes
+      .listAll()
+      .filter((intake) => {
+        const status = normalizeCampaignIntakeStatus(intake.status);
+        if (status !== "generated" && status !== "in_progress") return false;
+        if (!campaignAttendedByLaboratorioStaff(intake)) return false;
+        const existing = findBroadcastByIntakeCampaignId(intake.id);
+        if (existing && existing.status !== "failed") return false;
+        if (!isMaster) {
+          const assigned = String(intake.assignedOperacionalEmail || "").trim().toLowerCase();
+          if (assigned && assigned !== email) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, 40)
+      .map((intake) => ({
+        id: intake.id,
+        campaignName: intake.campaignName,
+        ownerEmail: intake.ownerEmail,
+        status: normalizeCampaignIntakeStatus(intake.status),
+        plannedSendCount: Math.max(0, Math.round(Number(intake.plannedSendCount || 0))),
+        assignedOperacionalEmail: String(intake.assignedOperacionalEmail || "").trim().toLowerCase(),
+      }));
+  }
+
+  private linkSubscriberCampaign(auth: WabaRequestAuth, intakeId: string): string | undefined {
+    const id = String(intakeId || "").trim();
+    if (!id) return undefined;
+    const intakes = new WabaCampaignIntakeRepository();
+    const intake = intakes.getById(id);
+    if (!intake) {
+      fail("invalid_payload", "Campanha do assinante não encontrada.");
+    }
+    if (!campaignAttendedByLaboratorioStaff(intake)) {
+      fail(
+        "invalid_payload",
+        "Só é possível vincular campanhas atendidas por quem tem acesso ao Laboratório.",
+      );
+    }
+    const status = normalizeCampaignIntakeStatus(intake.status);
+    if (status === "completed" || status === "error_reported" || status === "cancelled") {
+      fail("invalid_payload", "Esta campanha do assinante já foi encerrada.");
+    }
+    const existing = findBroadcastByIntakeCampaignId(intake.id);
+    if (existing && existing.status !== "failed") {
+      fail("invalid_payload", "Esta campanha já tem um Disparo Cloud em andamento.");
+    }
+    if (status === "generated") {
+      const now = new Date().toISOString();
+      intakes.updateById(intake.id, {
+        status: "in_progress",
+        startedAt: now,
+        startedByEmail: String(auth.email || "").trim().toLowerCase(),
+        updatedAt: now,
+      });
+    }
+    return intake.id;
   }
 }

@@ -40,6 +40,7 @@ const buildCampaignComparisonFromIntakes = (intakes, options) => {
         const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
         const rates = computeRatesFromReport(report);
+        const showClicks = report.source === "meta_lab";
         return {
             id: intake.id,
             campaignName: intake.campaignName,
@@ -49,6 +50,16 @@ const buildCampaignComparisonFromIntakes = (intakes, options) => {
             completedAt: intake.updatedAt,
             ...(options?.includeOwnerEmail ? { ownerEmail: intake.ownerEmail } : {}),
             ...rates,
+            ...(showClicks
+                ? {
+                    cliques: Math.max(0, Math.round(Number(report.clicks || 0))),
+                    clickRate: rates.entregues > 0
+                        ? Math.round(Math.max(0, Math.min(100, (Number(report.clicks || 0) / rates.entregues) * 100)) *
+                            100) / 100
+                        : 0,
+                    reportSource: "meta_lab",
+                }
+                : { reportSource: (report.source || "manual") }),
         };
     })
         .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());

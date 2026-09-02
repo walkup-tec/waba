@@ -8,6 +8,9 @@ const meta_whatsapp_webhook_log_1 = require("./meta-whatsapp-webhook-log");
 const meta_whatsapp_webhook_signature_1 = require("./meta-whatsapp-webhook-signature");
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
+const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_report_1 = require("./meta-whatsapp-broadcast-report");
+const meta_whatsapp_messaging_types_1 = require("./meta-whatsapp-messaging.types");
 const NOOP_INBOX = {
     persistInbound: async () => undefined,
     applyStatus: async () => undefined,
@@ -134,6 +137,13 @@ class MetaWhatsappWebhookService {
             }
             catch {
                 (0, meta_whatsapp_webhook_log_1.logMetaWebhook)("ERROR", { reason: "inbox_status_failed", eventType: event.eventType });
+            }
+            const mapped = (0, meta_whatsapp_messaging_types_1.mapWebhookStatus)(event.status);
+            if (event.messageId && mapped) {
+                const campaign = (0, meta_whatsapp_broadcast_store_1.applyMetaStatusToBroadcastByWamid)(event.messageId, mapped);
+                if (campaign?.intakeCampaignId) {
+                    (0, meta_whatsapp_broadcast_report_1.scheduleLabReportFinalize)(campaign.intakeCampaignId);
+                }
             }
         }
         if (event.eventType === "message_template_status_update") {

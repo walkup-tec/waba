@@ -16,6 +16,8 @@ const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.reposi
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.util");
 const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
+const waba_campaign_laboratorio_attended_1 = require("./waba-campaign-laboratorio-attended");
+const waba_campaign_performance_metrics_1 = require("./waba-campaign-performance-metrics");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
 const waba_disparos_dashboard_service_1 = require("./waba-disparos-dashboard.service");
@@ -52,7 +54,7 @@ const normalizeDdd = (value) => {
     return digits;
 };
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
-const toDisplayStatus = (status) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "subscriber");
+const toDisplayStatus = (status, laboratorioAttended = false) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "subscriber", { laboratorioAttended });
 const parseRequestedPlannedSendCount = (body) => {
     const raw = body.plannedSendCount;
     if (raw === undefined || raw === null || String(raw).trim() === "")
@@ -120,6 +122,7 @@ const toPublicIntake = (intake) => {
     const importedLineCount = Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
     const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
     const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
+    const laboratorioAttended = (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake);
     return {
         id: intake.id,
         name: intake.campaignName,
@@ -127,7 +130,7 @@ const toPublicIntake = (intake) => {
         createdAt: intake.createdAt,
         updatedAt: intake.updatedAt,
         status,
-        displayStatus: toDisplayStatus(status),
+        displayStatus: toDisplayStatus(status, laboratorioAttended),
         regionDdd: intake.regionDdd,
         importedLineCount,
         plannedSendCount,
@@ -136,6 +139,8 @@ const toPublicIntake = (intake) => {
         /** Envios confirmados no relatório do operacional (somente campanhas finalizadas). */
         sentCount: resolveReportedSentCount(intake),
         hasErrorReport: status === "error_reported",
+        laboratorioAttended,
+        reportSource: intake.performanceReport?.source || null,
         source: "intake",
     };
 };
@@ -505,6 +510,17 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             });
         }
         const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+        const showClicks = report?.source === "meta_lab";
+        const metrics = report
+            ? (0, waba_campaign_performance_metrics_1.computeCampaignPerformanceMetrics)({
+                totalLeads: report.totalLeads,
+                sent: report.sent,
+                delivered: report.delivered,
+                read: report.read,
+                failed: report.failed,
+                clicks: showClicks ? report.clicks : 0,
+            })
+            : null;
         const indicators = report
             ? {
                 totalLeads: report.totalLeads,
@@ -512,6 +528,12 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 entregues: report.delivered,
                 lidos: report.read,
                 falhados: report.failed,
+                ...(showClicks
+                    ? {
+                        cliques: metrics?.clicks ?? 0,
+                        taxaCliques: metrics?.clickRate ?? 0,
+                    }
+                    : {}),
             }
             : {
                 totalLeads: 0,
@@ -524,11 +546,15 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             campaignName: intake.campaignName,
             createdAt: intake.createdAt,
             completedAt: intake.updatedAt,
-            displayStatus: toDisplayStatus(status),
+            displayStatus: toDisplayStatus(status, (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake)),
             regionDdd: intake.regionDdd,
+            source: report?.source || "manual",
+            showClicks,
             indicators,
             message: report
-                ? "Indicadores de performance da campanha."
+                ? showClicks
+                    ? "Indicadores gerados automaticamente com dados da Meta."
+                    : "Indicadores de performance da campanha."
                 : "Indicadores de performance serão atualizados pela equipe assim que a consolidação estiver concluída.",
         });
     });

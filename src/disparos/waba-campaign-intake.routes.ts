@@ -29,6 +29,8 @@ import {
   trimLeadsBufferToRowCount,
 } from "./waba-campaign-spreadsheet.util";
 import { applyCampaignReportReadOverride } from "./waba-campaign-report-read-overrides";
+import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
+import { computeCampaignPerformanceMetrics } from "./waba-campaign-performance-metrics";
 import {
   scheduleOperacionalStaffNotifyOnCampaignAssigned,
   type OperacionalNotifyResult,
@@ -80,8 +82,10 @@ const normalizeDdd = (value: string): string => {
 const normalizeStoredStatus = (status: string): WabaCampaignIntake["status"] =>
   normalizeCampaignIntakeStatus(status);
 
-const toDisplayStatus = (status: WabaCampaignIntake["status"]): string =>
-  toCampaignIntakeDisplayStatus(status, "subscriber");
+const toDisplayStatus = (
+  status: WabaCampaignIntake["status"],
+  laboratorioAttended = false,
+): string => toCampaignIntakeDisplayStatus(status, "subscriber", { laboratorioAttended });
 
 const parseRequestedPlannedSendCount = (body: Record<string, unknown>): number | null => {
   const raw = body.plannedSendCount;
@@ -154,6 +158,7 @@ const toPublicIntake = (intake: WabaCampaignIntake) => {
   const importedLineCount = Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
   const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
   const apiKind = resolveIntakeApiKindFromIntake(intake);
+  const laboratorioAttended = campaignAttendedByLaboratorioStaff(intake);
   return {
     id: intake.id,
     name: intake.campaignName,
@@ -161,7 +166,7 @@ const toPublicIntake = (intake: WabaCampaignIntake) => {
     createdAt: intake.createdAt,
     updatedAt: intake.updatedAt,
     status,
-    displayStatus: toDisplayStatus(status),
+    displayStatus: toDisplayStatus(status, laboratorioAttended),
     regionDdd: intake.regionDdd,
     importedLineCount,
     plannedSendCount,
@@ -170,6 +175,8 @@ const toPublicIntake = (intake: WabaCampaignIntake) => {
     /** Envios confirmados no relatório do operacional (somente campanhas finalizadas). */
     sentCount: resolveReportedSentCount(intake),
     hasErrorReport: status === "error_reported",
+    laboratorioAttended,
+    reportSource: intake.performanceReport?.source || null,
     source: "intake" as const,
   };
 };
@@ -615,6 +622,17 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       intake.createdAt,
       intake.performanceReport,
     );
+    const showClicks = report?.source === "meta_lab";
+    const metrics = report
+      ? computeCampaignPerformanceMetrics({
+          totalLeads: report.totalLeads,
+          sent: report.sent,
+          delivered: report.delivered,
+          read: report.read,
+          failed: report.failed,
+          clicks: showClicks ? report.clicks : 0,
+        })
+      : null;
     const indicators = report
       ? {
           totalLeads: report.totalLeads,
@@ -622,6 +640,12 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           entregues: report.delivered,
           lidos: report.read,
           falhados: report.failed,
+          ...(showClicks
+            ? {
+                cliques: metrics?.clicks ?? 0,
+                taxaCliques: metrics?.clickRate ?? 0,
+              }
+            : {}),
         }
       : {
           totalLeads: 0,
@@ -635,11 +659,15 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       campaignName: intake.campaignName,
       createdAt: intake.createdAt,
       completedAt: intake.updatedAt,
-      displayStatus: toDisplayStatus(status),
+      displayStatus: toDisplayStatus(status, campaignAttendedByLaboratorioStaff(intake)),
       regionDdd: intake.regionDdd,
+      source: report?.source || "manual",
+      showClicks,
       indicators,
       message: report
-        ? "Indicadores de performance da campanha."
+        ? showClicks
+          ? "Indicadores gerados automaticamente com dados da Meta."
+          : "Indicadores de performance da campanha."
         : "Indicadores de performance serão atualizados pela equipe assim que a consolidação estiver concluída.",
     });
   });

@@ -18,7 +18,11 @@ export const isCampaignIntakeFinalized = (status: string): boolean => {
 export const toCampaignIntakeDisplayStatus = (
   status: WabaCampaignIntakeStatus,
   audience: "operacional" | "subscriber" = "subscriber",
+  options?: { laboratorioAttended?: boolean },
 ): string => {
+  if (status === "in_progress" && options?.laboratorioAttended) {
+    return "Coletando relatório da Meta";
+  }
   if (status === "in_progress") return "Em andamento";
   if (status === "error_reported") {
     return audience === "operacional" ? "Erro reportado" : "Erro Reportado";

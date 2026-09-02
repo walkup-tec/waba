@@ -89,6 +89,7 @@ import { resolveWabaContainerServiceId } from "./waba-container-service";
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
 import { registerMetaWhatsappIntegrationRoutes } from "./integrations/meta-whatsapp/meta-whatsapp.routes";
 import { startMetaWhatsappAutomation } from "./integrations/meta-whatsapp/meta-whatsapp-automation.bootstrap";
+import { ensureLabReportFinalizeSweep } from "./integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
 import {
   registerMetaWhatsappSubscriptionRoute,
   registerMetaWhatsappWebhookRoutes,
@@ -807,6 +808,7 @@ registerWabaEntitlementRoutes(app);
 app.use(wabaRequireAuthMiddleware);
 registerMetaWhatsappIntegrationRoutes(app);
 startMetaWhatsappAutomation();
+ensureLabReportFinalizeSweep();
 registerMetaWhatsappSubscriptionRoute(app);
 
 const wabaEntitlementService = new WabaEntitlementService();

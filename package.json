@@ -44,6 +44,7 @@
     "test:meta-portfolio": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-portfolio.test.ts",
     "test:meta-template-ai": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-template-ai.test.ts",
     "test:meta-broadcast": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-cloud-recipient.test.ts",
+    "test:meta-lab-report": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-lab-report.test.ts",
     "test:laboratorio-menu": "node --require ts-node/register --test src/menus/waba-laboratorio-access.test.ts"
   },
   "keywords": [

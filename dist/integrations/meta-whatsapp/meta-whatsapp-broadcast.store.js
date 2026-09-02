@@ -6,12 +6,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.saveBroadcastCampaign = saveBroadcastCampaign;
 exports.findBroadcastCampaign = findBroadcastCampaign;
 exports.listBroadcastCampaigns = listBroadcastCampaigns;
+exports.findBroadcastByIntakeCampaignId = findBroadcastByIntakeCampaignId;
+exports.applyMetaStatusToBroadcastByWamid = applyMetaStatusToBroadcastByWamid;
 exports.addClicksToBroadcastCampaign = addClicksToBroadcastCampaign;
 exports.addClicksByBroadcastSlug = addClicksByBroadcastSlug;
 exports.publicBroadcastCampaign = publicBroadcastCampaign;
 const node_fs_1 = require("node:fs");
 const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../../data-path");
+const meta_whatsapp_messaging_types_1 = require("./meta-whatsapp-messaging.types");
 const FILE_NAME = "meta-whatsapp-broadcasts.json";
 function emptyStore() {
     return { version: 1, campaigns: [] };
@@ -64,6 +67,37 @@ function listBroadcastCampaigns(tenantId, limit = 8) {
         .slice(0, Math.max(1, limit))
         .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
+function findBroadcastByIntakeCampaignId(intakeCampaignId) {
+    const id = String(intakeCampaignId || "").trim();
+    if (!id)
+        return null;
+    const row = readStore().campaigns.find((item) => String(item.intakeCampaignId || "") === id);
+    return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
+}
+function applyMetaStatusToBroadcastByWamid(wamid, status) {
+    const id = String(wamid || "").trim();
+    if (!id)
+        return null;
+    const store = readStore();
+    for (const row of store.campaigns) {
+        const lead = row.leads.find((item) => String(item.wamid || "") === id);
+        if (!lead)
+            continue;
+        const current = lead.metaStatus || (lead.status === "sent" ? "accepted" : lead.status === "failed" ? "failed" : "queued");
+        if (!(0, meta_whatsapp_messaging_types_1.canAdvanceMetaMessageStatus)(current, status) && current !== status)
+            return row;
+        lead.metaStatus = status;
+        if (status === "failed") {
+            lead.status = "failed";
+            lead.error = lead.error || "Falha informada pela Meta.";
+        }
+        row.lastMetaStatusAt = new Date().toISOString();
+        row.updatedAt = row.lastMetaStatusAt;
+        writeStore(store);
+        return { ...row, leads: row.leads.map((item) => ({ ...item })) };
+    }
+    return null;
+}
 function addClicksToBroadcastCampaign(campaignId, amount = 1) {
     const id = String(campaignId || "").trim();
     const delta = Math.max(0, Math.round(Number(amount) || 0));
@@ -99,6 +133,7 @@ function publicBroadcastCampaign(row) {
         phoneNumberId: row.phoneNumberId,
         shortUrl: row.shortUrl,
         clicks: Math.max(0, Number(row.clicks || 0)),
+        intakeCampaignId: row.intakeCampaignId || undefined,
         status: row.status,
         total: row.total,
         sent: row.sent,

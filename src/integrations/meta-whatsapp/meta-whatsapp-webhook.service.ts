@@ -12,6 +12,9 @@ import { readMetaAppSecret, readMetaWebhookVerifyToken } from "./meta-config";
 import type { MetaWhatsappWebhookInboxPort } from "./meta-whatsapp-webhook-inbox.service";
 import type { MetaWhatsappWebhookTemplatePort } from "./meta-whatsapp-webhook-template.service";
 import { syncInboxChannelNameFromMeta } from "./meta-whatsapp-phone-identity.store";
+import { applyMetaStatusToBroadcastByWamid } from "./meta-whatsapp-broadcast.store";
+import { scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
+import { mapWebhookStatus } from "./meta-whatsapp-messaging.types";
 
 const NOOP_INBOX: MetaWhatsappWebhookInboxPort = {
   persistInbound: async () => undefined,
@@ -166,6 +169,13 @@ export class MetaWhatsappWebhookService {
         await this.inbox.applyStatus({ connection, event });
       } catch {
         logMetaWebhook("ERROR", { reason: "inbox_status_failed", eventType: event.eventType });
+      }
+      const mapped = mapWebhookStatus(event.status);
+      if (event.messageId && mapped) {
+        const campaign = applyMetaStatusToBroadcastByWamid(event.messageId, mapped);
+        if (campaign?.intakeCampaignId) {
+          scheduleLabReportFinalize(campaign.intakeCampaignId);
+        }
       }
     }
     if (event.eventType === "message_template_status_update") {

@@ -13,10 +13,10 @@ Concluído no laboratório Meta:
 - **Editar perfil** no card do número envia a foto (JPEG/PNG até 5 MB) à Meta; o cliente passa a vê-la no WhatsApp. O botão e o clique na foto só existem no número **Ativo**.
 - operacional/suporte vê a seção Laboratório quando os menus estão marcados no cadastro (não só a conta Mozart).
 - Com esse privilégio, o operacional vê os portfólios, números e templates já conectados no Laboratório (mesmo workspace do dono).
-- Disparo Cloud na aba Templates: planilha com telefones em qualquer formato comum no Brasil; a prévia mostra o E.164 que a Meta recebe. Envio só de template aprovado, pelo número Ativo.
+- Disparo Cloud na aba Templates: planilha com telefones em qualquer formato comum no Brasil; a prévia mostra o E.164 que a Meta recebe. Envio só de template aprovado, pelo número Ativo. O disparo pede a campanha do assinante atendida no Laboratório; o relatório dessa campanha fecha com dados da Meta e cliques. Campanhas de operadores sem Laboratório permanecem com relatório manual.
 
 Em andamento: aprovação dos templates na Meta (até 24 h); validar o primeiro disparo Cloud em produção após Redeploy.
 
-Marker: `DEPLOY-2026-09-02-154800-disparo-cloud-e164`.
+Marker: `DEPLOY-2026-09-02-161500-relatorio-meta-atendente-lab`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

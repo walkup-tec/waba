@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 16:15 — Relatório Meta só se o atendente tem Laboratório
+- Campanhas da fila sem Laboratório: relatório manual, sem cliques.
+- Campanhas atendidas por quem tem Laboratório: indicadores da Meta + cliques no `/s/:slug`.
+- Critério: `assignedOperacionalEmail` (não o plano oficial/alternativa).
+- Marker: `DEPLOY-2026-09-02-161500-relatorio-meta-atendente-lab`
+- LOG: `doc/LOG-2026-09-02__161500__relatorio-meta-atendente-laboratorio.md`
+
 ## 2026-09-02 15:48 — Disparo Cloud e E.164 da Meta
 - Planilha do Laboratório: telefone vira E.164 sem `+` (DDI 55, 9º dígito, máscara, Excel).
 - Wizard: Portfólio → template aprovado → número Ativo → lista → Iniciar. Envio só `sendTemplate`.

@@ -15,9 +15,13 @@ const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-te
 const meta_whatsapp_broadcast_leads_1 = require("./meta-whatsapp-broadcast-leads");
 const meta_whatsapp_broadcast_media_1 = require("./meta-whatsapp-broadcast-media");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_report_1 = require("./meta-whatsapp-broadcast-report");
 const waba_shortener_service_1 = require("../../shortener/waba-shortener.service");
 const waba_shortener_repository_1 = require("../../shortener/waba-shortener.repository");
 const meta_whatsapp_template_ai_short_url_1 = require("./meta-whatsapp-template-ai-short-url");
+const waba_campaign_intake_repository_1 = require("../../disparos/waba-campaign-intake.repository");
+const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-intake-status");
+const waba_campaign_laboratorio_attended_1 = require("../../disparos/waba-campaign-laboratorio-attended");
 const running = new Set();
 function requireTenant(auth) {
     try {
@@ -286,6 +290,7 @@ class MetaWhatsappBroadcastService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
         }
         const campaignId = (0, node_crypto_1.randomUUID)();
+        const intakeCampaignId = this.linkSubscriberCampaign(auth, String(input.intakeCampaignId || "").trim());
         const header = await this.resolveHeaderMedia({
             tenantId: tenant.tenantId,
             token,
@@ -309,6 +314,7 @@ class MetaWhatsappBroadcastService {
             templateName: loaded.template.name,
             language: loaded.template.language,
             phoneNumberId,
+            intakeCampaignId,
             shortSlug: short.shortSlug,
             shortUrl: short.shortUrl,
             trackedSlug: short.trackedSlug,
@@ -358,7 +364,7 @@ class MetaWhatsappBroadcastService {
                 if (lead.status === "sent")
                     continue;
                 try {
-                    await this.provider.sendTemplate({
+                    const sent = await this.provider.sendTemplate({
                         tenantId,
                         to: lead.waId,
                         templateName: ctx.templateName,
@@ -373,10 +379,13 @@ class MetaWhatsappBroadcastService {
                         }),
                     });
                     lead.status = "sent";
+                    lead.metaStatus = "accepted";
+                    lead.wamid = sent.messageId || lead.wamid;
                     row.sent += 1;
                 }
                 catch (error) {
                     lead.status = "failed";
+                    lead.metaStatus = "failed";
                     lead.error = error instanceof Error ? error.message.slice(0, 180) : "send_failed";
                     row.failed += 1;
                 }
@@ -387,6 +396,7 @@ class MetaWhatsappBroadcastService {
                 }
             }
             row.status = row.failed === row.total ? "failed" : "done";
+            row.sendFinishedAt = new Date().toISOString();
             (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(row);
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-done", {
                 tenantId,
@@ -394,10 +404,15 @@ class MetaWhatsappBroadcastService {
                 failed: row.failed,
                 total: row.total,
             });
+            if (row.intakeCampaignId)
+                (0, meta_whatsapp_broadcast_report_1.scheduleLabReportFinalize)(row.intakeCampaignId);
         }
         catch {
             row.status = "failed";
+            row.sendFinishedAt = new Date().toISOString();
             (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(row);
+            if (row.intakeCampaignId)
+                (0, meta_whatsapp_broadcast_report_1.scheduleLabReportFinalize)(row.intakeCampaignId);
         }
         finally {
             running.delete(campaignId);
@@ -413,6 +428,75 @@ class MetaWhatsappBroadcastService {
         if (!row)
             fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
         return (0, meta_whatsapp_broadcast_store_1.publicBroadcastCampaign)(row);
+    }
+    /**
+     * Campanhas do assinante ainda abertas e atendidas por quem tem Laboratório.
+     * Só essas entram no Disparo Cloud e recebem indicadores/cliques automáticos.
+     */
+    listLinkableSubscriberCampaigns(auth) {
+        requireTenant(auth);
+        const email = String(auth.email || "").trim().toLowerCase();
+        const isMaster = auth.role === "master";
+        const intakes = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
+        return intakes
+            .listAll()
+            .filter((intake) => {
+            const status = (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status);
+            if (status !== "generated" && status !== "in_progress")
+                return false;
+            if (!(0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake))
+                return false;
+            const existing = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
+            if (existing && existing.status !== "failed")
+                return false;
+            if (!isMaster) {
+                const assigned = String(intake.assignedOperacionalEmail || "").trim().toLowerCase();
+                if (assigned && assigned !== email)
+                    return false;
+            }
+            return true;
+        })
+            .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+            .slice(0, 40)
+            .map((intake) => ({
+            id: intake.id,
+            campaignName: intake.campaignName,
+            ownerEmail: intake.ownerEmail,
+            status: (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status),
+            plannedSendCount: Math.max(0, Math.round(Number(intake.plannedSendCount || 0))),
+            assignedOperacionalEmail: String(intake.assignedOperacionalEmail || "").trim().toLowerCase(),
+        }));
+    }
+    linkSubscriberCampaign(auth, intakeId) {
+        const id = String(intakeId || "").trim();
+        if (!id)
+            return undefined;
+        const intakes = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
+        const intake = intakes.getById(id);
+        if (!intake) {
+            fail("invalid_payload", "Campanha do assinante não encontrada.");
+        }
+        if (!(0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake)) {
+            fail("invalid_payload", "Só é possível vincular campanhas atendidas por quem tem acesso ao Laboratório.");
+        }
+        const status = (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status);
+        if (status === "completed" || status === "error_reported" || status === "cancelled") {
+            fail("invalid_payload", "Esta campanha do assinante já foi encerrada.");
+        }
+        const existing = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
+        if (existing && existing.status !== "failed") {
+            fail("invalid_payload", "Esta campanha já tem um Disparo Cloud em andamento.");
+        }
+        if (status === "generated") {
+            const now = new Date().toISOString();
+            intakes.updateById(intake.id, {
+                status: "in_progress",
+                startedAt: now,
+                startedByEmail: String(auth.email || "").trim().toLowerCase(),
+                updatedAt: now,
+            });
+        }
+        return intake.id;
     }
 }
 exports.MetaWhatsappBroadcastService = MetaWhatsappBroadcastService;

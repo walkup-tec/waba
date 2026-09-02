@@ -1,3 +1,4 @@
+- 2026-09-02: relatório automático da Meta e card de cliques só existem para campanhas **atendidas** por quem tem Laboratório (`assignedOperacionalEmail`). Motivo: a fila sem Laboratório continua operacional/manual. O plano oficial/alternativa não dispara automação.
 - 2026-09-02: destinos da planilha do disparo Cloud são normalizados para E.164 da Meta (sem `+`) antes do `POST /{PHONE_NUMBER_ID}/messages`. Motivo: Excel, máscara, DDI e falta do 9º dígito. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages
 - 2026-09-02: operacional/suporte com menu do Laboratório lê o tenant do dono (`mozart.pmo@gmail.com`). Motivo: portfólio, números e templates ficavam vazios no e-mail do operacional.
 - 2026-09-02: operacional/suporte vê Laboratório pelos checkboxes do cadastro. Motivo: a allowlist Mozart zerava a seção mesmo com menus marcados (ex.: `drax@draxsistemas.com.br`). Masters que não são Mozart continuam sem a seção.

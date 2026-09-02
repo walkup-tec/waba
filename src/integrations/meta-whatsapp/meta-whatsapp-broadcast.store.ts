@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "path";
 import { resolveDataFile } from "../../data-path";
+import { canAdvanceMetaMessageStatus, type MetaMessageStatus } from "./meta-whatsapp-messaging.types";
 
 export type MetaBroadcastLead = {
   waId: string;
@@ -8,6 +9,8 @@ export type MetaBroadcastLead = {
   numero?: string;
   texto?: string;
   status: "queued" | "sent" | "failed" | "skipped";
+  metaStatus?: MetaMessageStatus;
+  wamid?: string;
   error?: string;
 };
 
@@ -19,12 +22,16 @@ export type MetaBroadcastCampaign = {
   templateName: string;
   language: string;
   phoneNumberId: string;
+  intakeCampaignId?: string;
   shortSlug: string;
   shortUrl: string;
   trackedSlug: string;
   clicksAtStart: number;
   clicks: number;
   status: "queued" | "running" | "done" | "failed";
+  sendFinishedAt?: string;
+  lastMetaStatusAt?: string;
+  reportFinalizedAt?: string;
   total: number;
   sent: number;
   failed: number;
@@ -88,6 +95,38 @@ export function listBroadcastCampaigns(tenantId: string, limit = 8): MetaBroadca
     .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
 
+export function findBroadcastByIntakeCampaignId(intakeCampaignId: string): MetaBroadcastCampaign | null {
+  const id = String(intakeCampaignId || "").trim();
+  if (!id) return null;
+  const row = readStore().campaigns.find((item) => String(item.intakeCampaignId || "") === id);
+  return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
+}
+
+export function applyMetaStatusToBroadcastByWamid(
+  wamid: string,
+  status: MetaMessageStatus,
+): MetaBroadcastCampaign | null {
+  const id = String(wamid || "").trim();
+  if (!id) return null;
+  const store = readStore();
+  for (const row of store.campaigns) {
+    const lead = row.leads.find((item) => String(item.wamid || "") === id);
+    if (!lead) continue;
+    const current = lead.metaStatus || (lead.status === "sent" ? "accepted" : lead.status === "failed" ? "failed" : "queued");
+    if (!canAdvanceMetaMessageStatus(current, status) && current !== status) return row;
+    lead.metaStatus = status;
+    if (status === "failed") {
+      lead.status = "failed";
+      lead.error = lead.error || "Falha informada pela Meta.";
+    }
+    row.lastMetaStatusAt = new Date().toISOString();
+    row.updatedAt = row.lastMetaStatusAt;
+    writeStore(store);
+    return { ...row, leads: row.leads.map((item) => ({ ...item })) };
+  }
+  return null;
+}
+
 export function addClicksToBroadcastCampaign(campaignId: string, amount = 1): void {
   const id = String(campaignId || "").trim();
   const delta = Math.max(0, Math.round(Number(amount) || 0));
@@ -123,6 +162,7 @@ export function publicBroadcastCampaign(row: MetaBroadcastCampaign) {
     phoneNumberId: row.phoneNumberId,
     shortUrl: row.shortUrl,
     clicks: Math.max(0, Number(row.clicks || 0)),
+    intakeCampaignId: row.intakeCampaignId || undefined,
     status: row.status,
     total: row.total,
     sent: row.sent,

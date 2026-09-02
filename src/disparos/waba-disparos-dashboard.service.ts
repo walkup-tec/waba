@@ -38,6 +38,9 @@ export type DisparosDashboardCampaignComparisonItem = {
   deliveryRate: number;
   readRate: number;
   failureRate: number;
+  cliques?: number;
+  clickRate?: number;
+  reportSource?: "manual" | "meta_lab";
 };
 
 export type DisparosDashboardCompareSubscriber = {
@@ -124,6 +127,7 @@ export const buildCampaignComparisonFromIntakes = (
       )!;
       const apiKind = resolveIntakeApiKindFromIntake(intake);
       const rates = computeRatesFromReport(report);
+      const showClicks = report.source === "meta_lab";
       return {
         id: intake.id,
         campaignName: intake.campaignName,
@@ -133,6 +137,19 @@ export const buildCampaignComparisonFromIntakes = (
         completedAt: intake.updatedAt,
         ...(options?.includeOwnerEmail ? { ownerEmail: intake.ownerEmail } : {}),
         ...rates,
+        ...(showClicks
+          ? {
+              cliques: Math.max(0, Math.round(Number(report.clicks || 0))),
+              clickRate:
+                rates.entregues > 0
+                  ? Math.round(
+                      Math.max(0, Math.min(100, (Number(report.clicks || 0) / rates.entregues) * 100)) *
+                        100,
+                    ) / 100
+                  : 0,
+              reportSource: "meta_lab" as const,
+            }
+          : { reportSource: (report.source || "manual") as "manual" | "meta_lab" }),
       };
     })
     .sort(

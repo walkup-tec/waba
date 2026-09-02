@@ -674,6 +674,23 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  app.get("/integrations/meta/whatsapp/broadcast/linkable-campaigns", async (req: Request, res: Response) => {
+    try {
+      if (!isMetaOfficialPortfolioLabEnabled()) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Recurso indisponível neste ambiente.",
+          code: "config_invalid",
+        });
+      }
+      warnClientTenantClaim(req);
+      const campaigns = broadcastService.listLinkableSubscriberCampaigns(resolveWabaRequestAuth(req));
+      return sendPublic(res, 200, { ok: true, campaigns });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
   app.get("/integrations/meta/whatsapp/broadcast/:id", async (req: Request, res: Response) => {
     try {
       if (!isMetaOfficialPortfolioLabEnabled()) {
@@ -776,6 +793,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
           buffer: file.buffer,
           fileName: String(file.originalname || "leads.xlsx"),
           mapping: broadcastMappingFromBody(body),
+          intakeCampaignId: String(body.intakeCampaignId || body.intake_campaign_id || ""),
           publicBaseHints: publicBaseHintsFromExpressRequest(req),
         });
         return sendPublic(res, 202, { ok: true, campaign });

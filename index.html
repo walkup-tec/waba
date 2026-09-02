@@ -8873,6 +8873,10 @@
         gap: clamp(8px, 1.4vw, 12px);
       }
 
+      .camp-report-metrics-row--clicks {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+      }
+
       @media (max-width: 1100px) {
         .camp-report-metrics-row {
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -8928,6 +8932,7 @@
       .camp-report-metric--delivered .camp-report-metric-value { color: #fb923c; }
       .camp-report-metric--read .camp-report-metric-value { color: #c084fc; }
       .camp-report-metric--failed .camp-report-metric-value { color: #f87171; }
+      .camp-report-metric--clicks .camp-report-metric-value { color: #34d399; }
 
       .camp-report-main-grid {
         display: grid;
@@ -9020,6 +9025,10 @@
         align-content: stretch;
       }
 
+      .camp-report-rates-grid--clicks {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
       @container camp-report-rates (max-width: 520px) {
         .camp-report-rates-grid {
           grid-template-columns: 1fr;
@@ -9033,6 +9042,9 @@
       @media (max-width: 900px) {
         .camp-report-rates-grid {
           grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .camp-report-rates-grid--clicks {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
 
@@ -21693,7 +21705,7 @@
                 <span class="muted">Template oficial · números no padrão Meta</span>
               </div>
               <p class="muted" style="margin: 0 0 12px;">
-                Ordem: portfólio, template aprovado, número Ativo e planilha. Os telefones são normalizados para E.164 da Meta (DDI 55, 9º dígito, máscara e número do Excel).
+                Ordem: portfólio, template aprovado, número Ativo, campanha do assinante atendida no Laboratório e planilha. Os indicadores e os cliques desse disparo entram no relatório dessa campanha. Telefones são normalizados para E.164 da Meta (DDI 55, 9º dígito, máscara e número do Excel).
               </p>
               <div class="disparos-grid disparos-grid-2 meta-tpl-broadcast-grid">
                 <div class="aquecedor-field">
@@ -21715,7 +21727,14 @@
                   </select>
                 </div>
                 <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-file-btn">4. Lista (.xlsx, .xls ou .txt)</label>
+                  <label for="meta-tpl-broadcast-intake">4. Campanha do assinante (Laboratório)</label>
+                  <select id="meta-tpl-broadcast-intake" aria-label="Campanha atendida no Laboratório">
+                    <option value="">Selecione a campanha</option>
+                  </select>
+                  <span class="muted">Só aparecem campanhas atendidas por quem tem acesso ao Laboratório. Relatórios de outros operadores continuam manuais.</span>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-file-btn">5. Lista (.xlsx, .xls ou .txt)</label>
                   <div class="meta-tpl-ai-file-row">
                     <input id="meta-tpl-broadcast-file" type="file" accept=".xlsx,.xls,.txt" hidden />
                     <button id="meta-tpl-broadcast-file-btn" type="button" class="instance-action-btn btn-refresh enabled">Escolher planilha</button>
@@ -38400,6 +38419,31 @@
         );
         metaTplBroadcastFillTemplates();
         metaTplBroadcastFillNumbers();
+        void metaTplBroadcastLoadLinkableCampaigns();
+      }
+
+      async function metaTplBroadcastLoadLinkableCampaigns() {
+        const select = metaTplBroadcastEl("meta-tpl-broadcast-intake");
+        if (!select) return;
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/linkable-campaigns");
+          const items = Array.isArray(payload.campaigns) ? payload.campaigns : [];
+          metaTplBroadcastFillSelect(
+            select,
+            items.map(function (item) {
+              const name = String(item.campaignName || "Campanha").trim();
+              const owner = String(item.ownerEmail || "").trim();
+              const envios = Number(item.plannedSendCount || 0);
+              return {
+                value: String(item.id || ""),
+                label: name + (owner ? " · " + owner : "") + (envios ? " · " + envios + " envios" : ""),
+              };
+            }),
+            items.length ? "Selecione a campanha atendida no Laboratório" : "Nenhuma campanha do Laboratório em aberto",
+          );
+        } catch (_error) {
+          metaTplBroadcastFillSelect(select, [], "Não foi possível listar as campanhas");
+        }
       }
 
       function metaTplBroadcastFillTemplates() {
@@ -38478,6 +38522,7 @@
         data.append("phoneColumn", String((metaTplBroadcastEl("meta-tpl-broadcast-phone-col") || {}).value || ""));
         data.append("nomeColumn", String((metaTplBroadcastEl("meta-tpl-broadcast-nome-col") || {}).value || ""));
         data.append("numeroColumn", String((metaTplBroadcastEl("meta-tpl-broadcast-numero-col") || {}).value || ""));
+        data.append("intakeCampaignId", String((metaTplBroadcastEl("meta-tpl-broadcast-intake") || {}).value || ""));
         if (metaTplBroadcastFile) data.append("file", metaTplBroadcastFile, metaTplBroadcastFile.name || "leads.xlsx");
         return data;
       }
@@ -38603,6 +38648,10 @@
         }
         if (!String((metaTplBroadcastEl("meta-tpl-broadcast-number") || {}).value || "").trim()) {
           metaTplBroadcastSetStatus("Selecione um número Ativo.");
+          return;
+        }
+        if (!String((metaTplBroadcastEl("meta-tpl-broadcast-intake") || {}).value || "").trim()) {
+          metaTplBroadcastSetStatus("Selecione a campanha do assinante atendida no Laboratório.");
           return;
         }
         metaTplBroadcastSetStatus("Iniciando disparo Cloud…");
@@ -42819,6 +42868,9 @@
       let adminCampanhasReportCampaignId = "";
       let adminCampanhasReportTotalLeads = 0;
       let adminCampanhasReportReadOnly = false;
+      let adminCampanhasReportShowClicks = false;
+      let adminCampanhasReportClicks = 0;
+      let adminCampanhasReportSource = "";
       let adminCampanhasActiveBucket = "open";
       let adminCampanhasPlanFilter = "all";
       const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 10;
@@ -43232,7 +43284,8 @@
             const isErrorReported = status === "error_reported";
             const showDetails = status === "generated" || status === "in_progress";
             const showReport = status === "in_progress" || status === "completed";
-            const reportReadOnly = status === "completed" || isErrorReported;
+            const labAttended = Boolean(item?.laboratorioAttended);
+            const reportReadOnly = status === "completed" || isErrorReported || labAttended;
             const actions = [];
             if (showDetails) {
               actions.push(`
@@ -43899,6 +43952,9 @@
         overlay.setAttribute("aria-hidden", "true");
         adminCampanhasReportCampaignId = "";
         adminCampanhasReportTotalLeads = 0;
+        adminCampanhasReportShowClicks = false;
+        adminCampanhasReportClicks = 0;
+        adminCampanhasReportSource = "";
         setAdminCampanhasReportReadOnly(false);
       }
 
@@ -43957,9 +44013,11 @@
         const delivered = normalizeCampaignReportMetric(raw?.delivered ?? raw?.entregues);
         const read = normalizeCampaignReportMetric(raw?.read ?? raw?.lidos);
         const failed = normalizeCampaignReportMetric(raw?.failed ?? raw?.falhados);
+        const clicks = normalizeCampaignReportMetric(raw?.clicks ?? raw?.cliques);
         const deliveryRate = sent > 0 ? (delivered / sent) * 100 : 0;
         const readRate = delivered > 0 ? (read / delivered) * 100 : 0;
         const failureRate = totalLeads > 0 ? (failed / totalLeads) * 100 : 0;
+        const clickRate = delivered > 0 ? (clicks / delivered) * 100 : 0;
         const bonusShipments = Math.max(0, totalLeads - sent);
         const pendingSent = Math.max(0, sent - delivered - failed);
         const isFinalized = options.isFinalized === true;
@@ -44010,6 +44068,8 @@
           deliveryRate,
           readRate,
           failureRate,
+          clickRate,
+          clicks,
           progress,
           isFinalized,
           pieGradient: buildCampaignPieGradient(pieLegend, totalLeads),
@@ -44021,6 +44081,8 @@
         const metrics = computeCampaignPerformanceMetrics(metricsInput, options);
         const showProgress = options.showProgress !== false;
         const hideMessageMetrics = options.hideMessageMetrics === true;
+        const showClicks = options.showClicks === true;
+        const reportSource = String(options.reportSource || "").trim();
         const campaignName = String(options.campaignName || "").trim();
         const subtitle = campaignName
           ? `<p class="confirm-text" style="margin:0 0 4px">${escapeReportHtml(campaignName)}</p>`
@@ -44052,20 +44114,42 @@
           </section>`
           : "";
 
+        const finalizedLegend =
+          reportSource === "meta_lab"
+            ? "Progresso = 100% (relatório gerado com dados da Meta)."
+            : "Progresso = 100% (campanha finalizada pelo operacional).";
+        const clickFormula = showClicks
+          ? " · Taxa de cliques = Cliques ÷ Entregues × 100"
+          : "";
         const formulaLegend = showProgress
           ? `${
               metrics.isFinalized
-                ? "Progresso = 100% (campanha finalizada pelo operacional)."
+                ? finalizedLegend
                 : "Progresso = Enviados ÷ Total de Leads × 100."
-            } Taxa de entrega = Entregues ÷ Enviados × 100 · Taxa de leitura = Lidos ÷ Entregues × 100 · Taxa de falha = Falhados ÷ Total de Leads × 100 · Créditos bonificados = Total de Leads − Enviados (creditados na próxima compra).`
-          : "Taxa de entrega = Entregues ÷ Enviados × 100 · Taxa de leitura = Lidos ÷ Entregues × 100 · Taxa de falha = Falhados ÷ Total de Leads × 100 · Créditos bonificados = Total de Leads − Enviados (creditados na próxima compra).";
+            } Taxa de entrega = Entregues ÷ Enviados × 100 · Taxa de leitura = Lidos ÷ Entregues × 100 · Taxa de falha = Falhados ÷ Total de Leads × 100${clickFormula} · Créditos bonificados = Total de Leads − Enviados (creditados na próxima compra).`
+          : `Taxa de entrega = Entregues ÷ Enviados × 100 · Taxa de leitura = Lidos ÷ Entregues × 100 · Taxa de falha = Falhados ÷ Total de Leads × 100${clickFormula} · Créditos bonificados = Total de Leads − Enviados (creditados na próxima compra).`;
+
+        const clicksCard = showClicks
+          ? `
+              <article class="camp-report-metric camp-report-metric--clicks">
+                <span class="camp-report-metric-label">Cliques</span>
+                <span class="camp-report-metric-value">${formatAdminCampanhasReportNumber(metrics.clicks)}</span>
+              </article>`
+          : "";
+        const clickRateCard = showClicks
+          ? `
+                <article class="camp-report-rate camp-report-rate--click">
+                  <span class="camp-report-rate-label">Taxa de Cliques</span>
+                  <span class="camp-report-rate-value">${formatCampaignReportPercent(metrics.clickRate)}</span>
+                </article>`
+          : "";
 
         const messageCountSection = hideMessageMetrics
           ? ""
           : `
           <section class="camp-report-block">
             <h4 class="camp-report-block-title">Contagem de Mensagens</h4>
-            <div class="camp-report-metrics-row">
+            <div class="camp-report-metrics-row${showClicks ? " camp-report-metrics-row--clicks" : ""}">
               <article class="camp-report-metric camp-report-metric--leads">
                 <span class="camp-report-metric-label">Total de Leads</span>
                 <span class="camp-report-metric-value">${formatAdminCampanhasReportNumber(metrics.totalLeads)}</span>
@@ -44086,6 +44170,7 @@
                 <span class="camp-report-metric-label">Falhados</span>
                 <span class="camp-report-metric-value">${formatAdminCampanhasReportNumber(metrics.failed)}</span>
               </article>
+              ${clicksCard}
             </div>
           </section>`;
 
@@ -44115,7 +44200,7 @@
             </section>
             <section class="camp-report-rates-card">
               <h4 class="camp-report-block-title">Taxas de Performance</h4>
-              <div class="camp-report-rates-grid">
+              <div class="camp-report-rates-grid${showClicks ? " camp-report-rates-grid--clicks" : ""}">
                 <article class="camp-report-rate camp-report-rate--delivery">
                   <span class="camp-report-rate-label">Taxa de Entrega</span>
                   <span class="camp-report-rate-value">${formatCampaignReportPercent(metrics.deliveryRate)}</span>
@@ -44128,6 +44213,7 @@
                   <span class="camp-report-rate-label">Taxa de Falha</span>
                   <span class="camp-report-rate-value">${formatCampaignReportPercent(metrics.failureRate)}</span>
                 </article>
+                ${clickRateCard}
               </div>
             </section>
           </div>
@@ -44143,6 +44229,7 @@
           delivered: readField("admin-campanhas-report-delivered"),
           read: readField("admin-campanhas-report-read"),
           failed: readField("admin-campanhas-report-failed"),
+          clicks: adminCampanhasReportClicks,
         };
       }
 
@@ -44155,6 +44242,8 @@
           campaignName: "",
           isFinalized: adminCampanhasReportReadOnly,
           hideMessageMetrics: !adminCampanhasReportReadOnly,
+          showClicks: adminCampanhasReportShowClicks,
+          reportSource: adminCampanhasReportSource,
         });
       }
 
@@ -44243,6 +44332,9 @@
         setValue("admin-campanhas-report-delivered", "delivered");
         setValue("admin-campanhas-report-read", "read");
         setValue("admin-campanhas-report-failed", "failed");
+        adminCampanhasReportShowClicks = Boolean(data.showClicks || data.laboratorioAttended);
+        adminCampanhasReportClicks = Math.max(0, Math.round(Number(report.clicks ?? 0)));
+        adminCampanhasReportSource = String(data.source || report.source || "").trim();
         setAdminCampanhasReportReadOnly(Boolean(data.isReadOnly));
         updateAdminCampanhasReportDashboard();
       }
@@ -54348,6 +54440,7 @@
         const body = document.getElementById("dis-campaign-report-body");
         if (!body) return;
         const indicators = data?.indicators && typeof data.indicators === "object" ? data.indicators : {};
+        const showClicks = Boolean(data?.showClicks) || Number.isFinite(Number(indicators.cliques));
         body.innerHTML = buildCampaignPerformanceDashboardHtml(
           {
             totalLeads: indicators.totalLeads,
@@ -54355,10 +54448,13 @@
             entregues: indicators.entregues,
             lidos: indicators.lidos,
             falhados: indicators.falhados,
+            cliques: indicators.cliques,
           },
           {
             campaignName: String(data.campaignName || "Campanha"),
             isFinalized: true,
+            showClicks,
+            reportSource: String(data.source || "").trim(),
           }
         );
       }

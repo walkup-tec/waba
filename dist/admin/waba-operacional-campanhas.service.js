@@ -8,7 +8,6 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_disparos_bonus_service_1 = require("../billing/waba-disparos-bonus.service");
-const waba_campaign_credit_funding_1 = require("../billing/waba-campaign-credit-funding");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("../disparos/waba-campaign-spreadsheet.util");
 const waba_auth_service_1 = require("../auth/waba-auth.service");
@@ -16,6 +15,8 @@ const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_operacional_segments_1 = require("../users/waba-operacional-segments");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
 const waba_campaign_report_read_overrides_1 = require("../disparos/waba-campaign-report-read-overrides");
+const waba_campaign_laboratorio_attended_1 = require("../disparos/waba-campaign-laboratorio-attended");
+const waba_campaign_report_finalize_service_1 = require("../disparos/waba-campaign-report-finalize.service");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_campaign_operacional_segment_rules_1 = require("../services/waba-campaign-operacional-segment-rules");
@@ -25,6 +26,8 @@ const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-split.service");
 const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
+const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_report_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-report");
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
 exports.CAMPAIGN_START_DEADLINE_MS = waba_campaign_supplier_assignment_service_1.CAMPAIGN_START_OVERDUE_MS;
 const normalizeEmail = (value) => value.trim().toLowerCase();
@@ -45,7 +48,7 @@ const formatDateLabel = (iso) => {
     });
 };
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
-const toDisplayStatus = (status) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "operacional");
+const toDisplayStatus = (status, laboratorioAttended = false) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "operacional", { laboratorioAttended });
 const isCampaignAwaitingConfiguration = (status) => status === "generated" || status === "in_progress";
 const parseNonNegativeInt = (value) => {
     const parsed = Math.round(Number(value));
@@ -69,7 +72,6 @@ const resolveIntakeApiKind = (intake, orderRepository) => {
     }
     return (0, waba_dispatches_api_kind_1.resolveSubscriberDispatchesApiKindFromOrdersAt)(intake.ownerEmail, intake.createdAt, orderRepository);
 };
-const resolveIntakeApiKindForBonus = (intake) => (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
 const resolvePlanTypeLabel = (intake, orderRepository) => {
     const apiKind = resolveIntakeApiKind(intake, orderRepository);
     return `Disparo ${waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[apiKind]}`;
@@ -175,6 +177,7 @@ class WabaOperacionalCampanhasService {
             ? this.systemUserService.getByEmail(assignedOperacionalEmail)
             : null;
         const assignedOperacionalName = String(assignedUser?.fullName || assignedOperacionalEmail || "").trim();
+        const laboratorioAttended = (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake);
         const isMaster = Boolean(staff) &&
             (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email));
         const canTransferOperacional = isMaster && (status === "generated" || status === "in_progress");
@@ -191,13 +194,14 @@ class WabaOperacionalCampanhasService {
             plannedSendCount,
             importedLineCount,
             status,
-            displayStatus: toDisplayStatus(status),
+            displayStatus: toDisplayStatus(status, laboratorioAttended),
             needsConfiguration: isCampaignAwaitingConfiguration(status),
             canStartCampaign: status === "generated",
-            canFillReport: status === "in_progress" || status === "completed",
+            canFillReport: !laboratorioAttended && (status === "in_progress" || status === "completed"),
             canReportError: status === "generated" || status === "in_progress",
             canBmInoperante: status === "generated" && !String(intake.bmInoperanteRegisteredAt || "").trim(),
             bmInoperanteRegistered: Boolean(String(intake.bmInoperanteRegisteredAt || "").trim()),
+            laboratorioAttended,
             isStartOverdue: isCampaignStartOverdue(intake, this.assignmentService),
             startDeadlineAt: resolveCampaignStartDeadlineAt(intake),
             assignedOperacionalEmail,
@@ -280,15 +284,41 @@ class WabaOperacionalCampanhasService {
             throw new Error("O relatório fica disponível após iniciar a campanha.");
         }
         const totalLeads = resolvePlannedSendCount(intake);
-        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+        const laboratorioAttended = (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake);
+        const stored = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+        let report = stored;
+        let liveFromMeta = false;
+        if (laboratorioAttended && status === "in_progress") {
+            const broadcast = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
+            if (broadcast) {
+                const live = (0, meta_whatsapp_broadcast_report_1.computeMetaLabCampaignMetrics)(broadcast, totalLeads);
+                report = {
+                    totalLeads: live.totalLeads,
+                    sent: live.sent,
+                    delivered: live.delivered,
+                    read: live.read,
+                    failed: live.failed,
+                    clicks: live.clicks,
+                    source: "meta_lab",
+                    filledAt: "",
+                    filledByEmail: "",
+                };
+                liveFromMeta = true;
+            }
+        }
+        const showClicks = laboratorioAttended || stored?.source === "meta_lab";
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,
             status,
-            displayStatus: toDisplayStatus(status),
+            displayStatus: toDisplayStatus(status, laboratorioAttended),
             plannedSendCount: totalLeads,
             totalLeads,
-            isReadOnly: status === "completed" || status === "error_reported",
+            isReadOnly: laboratorioAttended || status === "completed" || status === "error_reported",
+            laboratorioAttended,
+            showClicks,
+            source: report?.source || (laboratorioAttended ? "meta_lab" : null),
+            liveFromMeta,
             report: report
                 ? {
                     totalLeads,
@@ -296,12 +326,16 @@ class WabaOperacionalCampanhasService {
                     delivered: report.delivered,
                     read: report.read,
                     failed: report.failed,
+                    ...(showClicks ? { clicks: Math.max(0, Math.round(Number(report.clicks || 0))) } : {}),
                 }
                 : null,
         };
     }
     saveCampaignReport(campaignId, body, staff) {
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
+        if ((0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake)) {
+            throw new Error("Esta campanha é atendida pelo Laboratório. Os indicadores vêm da Meta automaticamente.");
+        }
         const status = normalizeStoredStatus(intake.status);
         if (status === "completed" || status === "error_reported") {
             throw new Error("Esta campanha já foi finalizada.");
@@ -316,45 +350,18 @@ class WabaOperacionalCampanhasService {
         if (!parsed) {
             throw new Error("Informe valores numéricos válidos (zero ou maior) em todos os campos.");
         }
-        const totalLeads = resolvePlannedSendCount(intake);
-        const now = new Date().toISOString();
-        const performanceReport = {
-            totalLeads,
-            ...parsed,
-            filledAt: now,
-            filledByEmail: normalizeEmail(staff.email),
-        };
-        const bonusShipments = Math.max(0, totalLeads - parsed.sent);
-        const creditFunding = (0, waba_campaign_credit_funding_1.normalizeCampaignCreditFunding)(intake.creditFunding) ??
-            (0, waba_campaign_credit_funding_1.buildLegacyBonusOnlyCreditFunding)(totalLeads);
-        const updated = this.intakeRepository.updateById(campaignId, {
-            performanceReport,
-            status: "completed",
-            creditFunding,
-            updatedAt: now,
-        });
-        if (!updated)
-            throw new Error("Não foi possível salvar o relatório.");
-        if (bonusShipments > 0) {
-            this.bonusService.grantCampaignBonus(intake.ownerEmail, campaignId, bonusShipments, resolveIntakeApiKindForBonus(intake));
-        }
-        (0, waba_mail_delivery_1.notifyCampaignCompletedEmail)({
-            ownerEmail: intake.ownerEmail,
+        const updated = (0, waba_campaign_report_finalize_service_1.finalizeIntakePerformanceReport)({
             campaignId,
-            campaignName: intake.campaignName,
+            metrics: parsed,
+            filledByEmail: staff.email,
+            source: "manual",
+            intakeRepository: this.intakeRepository,
+            bonusService: this.bonusService,
+            splitService: this.splitService,
         });
-        const completedIntake = this.intakeRepository.getById(campaignId) ?? updated;
-        void this.splitService.payoutSupplierForCompletedCampaign(completedIntake).then((settlement) => {
-            if (settlement?.id) {
-                this.intakeRepository.updateById(campaignId, {
-                    supplierPayoutSettlementId: settlement.id,
-                    updatedAt: new Date().toISOString(),
-                });
-            }
-        });
-        const detail = this.getCampaignDetail(campaignId, staff);
+        const detail = this.getCampaignDetail(updated.id, staff);
         if (!detail)
-            throw new Error("Campanha não encontrada.");
+            throw new Error("Não foi possível salvar o relatório.");
         return detail;
     }
     reportCampaignError(campaignId, justificationRaw, staff) {

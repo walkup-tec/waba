@@ -3,10 +3,6 @@ import path from "node:path";
 import { WabaBillingOrderRepository } from "../billing/waba-billing-order.repository";
 import { WabaDisparosBonusService } from "../billing/waba-disparos-bonus.service";
 import {
-  buildLegacyBonusOnlyCreditFunding,
-  normalizeCampaignCreditFunding,
-} from "../billing/waba-campaign-credit-funding";
-import {
   resolveIntakeApiKindFromIntake,
   resolveSubscriberDispatchesApiKindFromOrdersAt,
   WABA_DISPATCHES_API_LABELS,
@@ -31,6 +27,8 @@ import {
   type WabaCampaignErrorReport,
 } from "../disparos/waba-campaign-intake.repository";
 import { applyCampaignReportReadOverride } from "../disparos/waba-campaign-report-read-overrides";
+import { campaignAttendedByLaboratorioStaff } from "../disparos/waba-campaign-laboratorio-attended";
+import { finalizeIntakePerformanceReport } from "../disparos/waba-campaign-report-finalize.service";
 import {
   normalizeCampaignIntakeStatus,
   toCampaignIntakeDisplayStatus,
@@ -40,7 +38,7 @@ import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segme
 import { operacionalCanServeSubscriberCampaign } from "../services/waba-campaign-operacional-segment-rules";
 import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
-import { notifyCampaignCompletedEmail, notifyCampaignErrorReportedEmail } from "../mail/waba-mail-delivery";
+import { notifyCampaignErrorReportedEmail } from "../mail/waba-mail-delivery";
 import {
   notifyOperacionalStaffOnCampaignCreated,
   notifyOperacionalStaffOnCampaignAssigned,
@@ -52,6 +50,8 @@ import {
   CAMPAIGN_START_OVERDUE_MS,
   WabaCampaignSupplierAssignmentService,
 } from "../services/waba-campaign-supplier-assignment.service";
+import { findBroadcastByIntakeCampaignId } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
+import { computeMetaLabCampaignMetrics } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
 
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
 export const CAMPAIGN_START_DEADLINE_MS = CAMPAIGN_START_OVERDUE_MS;
@@ -76,6 +76,7 @@ export type OperacionalCampaignListItem = {
   canReportError: boolean;
   canBmInoperante: boolean;
   bmInoperanteRegistered: boolean;
+  laboratorioAttended: boolean;
   isStartOverdue: boolean;
   startDeadlineAt: string;
   assignedOperacionalEmail: string;
@@ -91,6 +92,7 @@ export type OperacionalCampaignReportInput = {
   delivered: number;
   read: number;
   failed: number;
+  clicks?: number;
 };
 
 export type OperacionalBmInoperanteResult = {
@@ -136,8 +138,10 @@ const formatDateLabel = (iso: string): string => {
 const normalizeStoredStatus = (status: string): WabaCampaignIntakeStatus =>
   normalizeCampaignIntakeStatus(status);
 
-const toDisplayStatus = (status: WabaCampaignIntakeStatus): string =>
-  toCampaignIntakeDisplayStatus(status, "operacional");
+const toDisplayStatus = (
+  status: WabaCampaignIntakeStatus,
+  laboratorioAttended = false,
+): string => toCampaignIntakeDisplayStatus(status, "operacional", { laboratorioAttended });
 
 const isCampaignAwaitingConfiguration = (status: WabaCampaignIntakeStatus): boolean =>
   status === "generated" || status === "in_progress";
@@ -174,9 +178,6 @@ const resolveIntakeApiKind = (
     orderRepository,
   );
 };
-
-const resolveIntakeApiKindForBonus = (intake: WabaCampaignIntake): WabaDispatchesApiKind =>
-  resolveIntakeApiKindFromIntake(intake);
 
 const resolvePlanTypeLabel = (
   intake: WabaCampaignIntake,
@@ -315,6 +316,7 @@ export class WabaOperacionalCampanhasService {
     const assignedOperacionalName = String(
       assignedUser?.fullName || assignedOperacionalEmail || "",
     ).trim();
+    const laboratorioAttended = campaignAttendedByLaboratorioStaff(intake);
     const isMaster =
       Boolean(staff) &&
       (staff!.role === "master" || isWabaMasterEmail(staff!.email));
@@ -334,13 +336,14 @@ export class WabaOperacionalCampanhasService {
       plannedSendCount,
       importedLineCount,
       status,
-      displayStatus: toDisplayStatus(status),
+      displayStatus: toDisplayStatus(status, laboratorioAttended),
       needsConfiguration: isCampaignAwaitingConfiguration(status),
       canStartCampaign: status === "generated",
-      canFillReport: status === "in_progress" || status === "completed",
+      canFillReport: !laboratorioAttended && (status === "in_progress" || status === "completed"),
       canReportError: status === "generated" || status === "in_progress",
       canBmInoperante: status === "generated" && !String(intake.bmInoperanteRegisteredAt || "").trim(),
       bmInoperanteRegistered: Boolean(String(intake.bmInoperanteRegisteredAt || "").trim()),
+      laboratorioAttended,
       isStartOverdue: isCampaignStartOverdue(intake, this.assignmentService),
       startDeadlineAt: resolveCampaignStartDeadlineAt(intake),
       assignedOperacionalEmail,
@@ -444,6 +447,10 @@ export class WabaOperacionalCampanhasService {
     plannedSendCount: number;
     totalLeads: number;
     isReadOnly: boolean;
+    laboratorioAttended: boolean;
+    showClicks: boolean;
+    source: "manual" | "meta_lab" | null;
+    liveFromMeta: boolean;
     report: OperacionalCampaignReportInput | null;
   } {
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
@@ -454,19 +461,45 @@ export class WabaOperacionalCampanhasService {
     }
 
     const totalLeads = resolvePlannedSendCount(intake);
-    const report = applyCampaignReportReadOverride(
+    const laboratorioAttended = campaignAttendedByLaboratorioStaff(intake);
+    const stored = applyCampaignReportReadOverride(
       intake.campaignName,
       intake.createdAt,
       intake.performanceReport,
     );
+    let report = stored;
+    let liveFromMeta = false;
+    if (laboratorioAttended && status === "in_progress") {
+      const broadcast = findBroadcastByIntakeCampaignId(intake.id);
+      if (broadcast) {
+        const live = computeMetaLabCampaignMetrics(broadcast, totalLeads);
+        report = {
+          totalLeads: live.totalLeads,
+          sent: live.sent,
+          delivered: live.delivered,
+          read: live.read,
+          failed: live.failed,
+          clicks: live.clicks,
+          source: "meta_lab",
+          filledAt: "",
+          filledByEmail: "",
+        };
+        liveFromMeta = true;
+      }
+    }
+    const showClicks = laboratorioAttended || stored?.source === "meta_lab";
     return {
       campaignId: intake.id,
       campaignName: intake.campaignName,
       status,
-      displayStatus: toDisplayStatus(status),
+      displayStatus: toDisplayStatus(status, laboratorioAttended),
       plannedSendCount: totalLeads,
       totalLeads,
-      isReadOnly: status === "completed" || status === "error_reported",
+      isReadOnly: laboratorioAttended || status === "completed" || status === "error_reported",
+      laboratorioAttended,
+      showClicks,
+      source: report?.source || (laboratorioAttended ? "meta_lab" : null),
+      liveFromMeta,
       report: report
         ? {
             totalLeads,
@@ -474,6 +507,7 @@ export class WabaOperacionalCampanhasService {
             delivered: report.delivered,
             read: report.read,
             failed: report.failed,
+            ...(showClicks ? { clicks: Math.max(0, Math.round(Number(report.clicks || 0))) } : {}),
           }
         : null,
     };
@@ -485,6 +519,11 @@ export class WabaOperacionalCampanhasService {
     staff: OperacionalCampanhasStaffContext,
   ): OperacionalCampaignDetail {
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
+    if (campaignAttendedByLaboratorioStaff(intake)) {
+      throw new Error(
+        "Esta campanha é atendida pelo Laboratório. Os indicadores vêm da Meta automaticamente.",
+      );
+    }
 
     const status = normalizeStoredStatus(intake.status);
     if (status === "completed" || status === "error_reported") {
@@ -502,54 +541,17 @@ export class WabaOperacionalCampanhasService {
       throw new Error("Informe valores numéricos válidos (zero ou maior) em todos os campos.");
     }
 
-    const totalLeads = resolvePlannedSendCount(intake);
-    const now = new Date().toISOString();
-    const performanceReport: WabaCampaignPerformanceReport = {
-      totalLeads,
-      ...parsed,
-      filledAt: now,
-      filledByEmail: normalizeEmail(staff.email),
-    };
-
-    const bonusShipments = Math.max(0, totalLeads - parsed.sent);
-    const creditFunding =
-      normalizeCampaignCreditFunding(intake.creditFunding) ??
-      buildLegacyBonusOnlyCreditFunding(totalLeads);
-    const updated = this.intakeRepository.updateById(campaignId, {
-      performanceReport,
-      status: "completed",
-      creditFunding,
-      updatedAt: now,
-    });
-    if (!updated) throw new Error("Não foi possível salvar o relatório.");
-
-    if (bonusShipments > 0) {
-      this.bonusService.grantCampaignBonus(
-        intake.ownerEmail,
-        campaignId,
-        bonusShipments,
-        resolveIntakeApiKindForBonus(intake),
-      );
-    }
-
-    notifyCampaignCompletedEmail({
-      ownerEmail: intake.ownerEmail,
+    const updated = finalizeIntakePerformanceReport({
       campaignId,
-      campaignName: intake.campaignName,
+      metrics: parsed,
+      filledByEmail: staff.email,
+      source: "manual",
+      intakeRepository: this.intakeRepository,
+      bonusService: this.bonusService,
+      splitService: this.splitService,
     });
-
-    const completedIntake = this.intakeRepository.getById(campaignId) ?? updated;
-    void this.splitService.payoutSupplierForCompletedCampaign(completedIntake).then((settlement) => {
-      if (settlement?.id) {
-        this.intakeRepository.updateById(campaignId, {
-          supplierPayoutSettlementId: settlement.id,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-    });
-
-    const detail = this.getCampaignDetail(campaignId, staff);
-    if (!detail) throw new Error("Campanha não encontrada.");
+    const detail = this.getCampaignDetail(updated.id, staff);
+    if (!detail) throw new Error("Não foi possível salvar o relatório.");
     return detail;
   }
 
