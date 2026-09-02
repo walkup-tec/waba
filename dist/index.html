@@ -36296,22 +36296,31 @@
       function metaTpPortfolioBundles(assets) {
         const incoming = assets || {};
         const list = Array.isArray(incoming.portfolios) ? incoming.portfolios : [];
-        if (list.length) {
-          return list.map(function (item) {
-            const numbers = Array.isArray(item.numbers)
-              ? item.numbers
-              : incoming.portfolio && String(item.id || "") === String(incoming.portfolio.id || "") && Array.isArray(incoming.numbers)
-                ? incoming.numbers
-                : [];
-            return Object.assign({}, item, { numbers: numbers });
+        const withNumbers = list.length
+          ? list.map(function (item) {
+              const numbers = Array.isArray(item.numbers)
+                ? item.numbers
+                : incoming.portfolio && String(item.id || "") === String(incoming.portfolio.id || "") && Array.isArray(incoming.numbers)
+                  ? incoming.numbers
+                  : [];
+              return Object.assign({}, item, { numbers: numbers });
+            })
+          : incoming.portfolio
+            ? [
+                Object.assign({}, incoming.portfolio, {
+                  numbers: Array.isArray(incoming.numbers) ? incoming.numbers : [],
+                }),
+              ]
+            : [];
+        return withNumbers.filter(function (item) {
+          if (String(item.id || "").trim()) return true;
+          if (String(item.wabaId || "").trim()) return true;
+          if (String(item.primaryPageId || "").trim()) return true;
+          if (String(item.primaryPageName || "").trim()) return true;
+          return (item.numbers || []).some(function (row) {
+            return Boolean(String(row.displayPhoneNumber || "").trim());
           });
-        }
-        if (!incoming.portfolio) return [];
-        return [
-          Object.assign({}, incoming.portfolio, {
-            numbers: Array.isArray(incoming.numbers) ? incoming.numbers : [],
-          }),
-        ];
+        });
       }
 
       function metaTpPhoneRegion(phone) {

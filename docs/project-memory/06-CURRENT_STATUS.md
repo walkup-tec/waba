@@ -9,9 +9,10 @@ Concluído no laboratório Meta:
 - Atualizar da Meta também remove da tabela o que já não existe na biblioteca da Meta;
 - Enviar para META: confirmação → processando (spinner e etapas) → resultado no mesmo overlay. O clique em Enviar não pode fechar o modal no meio do processamento.
 - criação Graph inclui o botão silencioso **Bloquear** (`QUICK_REPLY`); o preview e a tabela não o exibem.
+- adicionar número a um portfólio existente não cria card vazio «Portfólio empresarial».
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-111000-filtro-status-largura`.
+Marker: `DEPLOY-2026-09-02-114300-portfolio-fantasma`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

@@ -17,6 +17,7 @@ exports.asPageRef = asPageRef;
 exports.mapMetaBusinessToPortfolio = mapMetaBusinessToPortfolio;
 exports.mergePortfolioIdentity = mergePortfolioIdentity;
 exports.mergePortfolioNumbers = mergePortfolioNumbers;
+exports.isRenderablePortfolioCard = isRenderablePortfolioCard;
 exports.dedupePortfolioCards = dedupePortfolioCards;
 exports.firstOwnedPageId = firstOwnedPageId;
 exports.mapMetaPhoneToPortfolioNumber = mapMetaPhoneToPortfolioNumber;
@@ -255,6 +256,19 @@ function mergePortfolioNumbers(graphNumbers, stored) {
     if (fromGraph.length)
         return fromGraph;
     return stored.filter(isListedPortfolioNumber);
+}
+function isRenderablePortfolioCard(card) {
+    if (!card)
+        return false;
+    if (String(card.id || "").trim())
+        return true;
+    if (String(card.wabaId || "").trim())
+        return true;
+    if (String(card.primaryPageId || "").trim())
+        return true;
+    if (String(card.primaryPageName || "").trim())
+        return true;
+    return (card.numbers || []).some((item) => Boolean(String(item.displayPhoneNumber || "").trim()));
 }
 function dedupePortfolioCards(cards) {
     if (cards.length < 2)

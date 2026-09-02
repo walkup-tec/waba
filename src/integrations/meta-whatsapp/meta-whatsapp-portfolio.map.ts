@@ -311,6 +311,15 @@ export function mergePortfolioNumbers(
   return stored.filter(isListedPortfolioNumber);
 }
 
+export function isRenderablePortfolioCard(card: MetaPortfolioPublic | null | undefined): boolean {
+  if (!card) return false;
+  if (String(card.id || "").trim()) return true;
+  if (String(card.wabaId || "").trim()) return true;
+  if (String(card.primaryPageId || "").trim()) return true;
+  if (String(card.primaryPageName || "").trim()) return true;
+  return (card.numbers || []).some((item) => Boolean(String(item.displayPhoneNumber || "").trim()));
+}
+
 export function dedupePortfolioCards(cards: MetaPortfolioPublic[]): MetaPortfolioPublic[] {
   if (cards.length < 2) return cards;
   const list = cards.map((card) => ({ ...card, numbers: (card.numbers || []).slice() }));

@@ -1,6 +1,7 @@
 # Regras de negócio
 
 - Isolamento por tenant da sessão. Cliente não escolhe `tenant_id`.
+- Laboratório: conexão `pending_token` sem Business, WABA nem números **não** aparece como card de portfólio. Adicionar número a um BM existente não cria o card vazio «Portfólio empresarial».
 - Listagem do card de relatórios mostra **todos** os templates do tenant, sem exigir portfólio.
 - Filtro de portfólio (padrão: Todos os Portfólios) e busca por nome são só de UI.
 - Na tabela de templates: **Visualizar** abre o modal **Seu modelo**, com a imagem/vídeo de cabeçalho quando existir. **Excluir** abre um modal do sistema (não o `confirm` do navegador): confirmação, depois spinner até a Graph e o banco do tenant responderem. Nome aprovado fica bloqueado 30 dias na Meta. Não há painel nem botão de envio de teste.

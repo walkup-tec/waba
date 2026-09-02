@@ -30,6 +30,7 @@ import {
   mergePortfolioIdentity,
   mergePortfolioNumbers,
   dedupePortfolioCards,
+  isRenderablePortfolioCard,
   businessIdNotWaba,
   isMetaPhoneConnected,
   mapPhoneNameFields,
@@ -268,6 +269,9 @@ async function hydrateOpenConnection(
 
   const storedWaba = String(open.wabaId || "").trim();
   const storedBm = String(open.metaBusinessId || "").trim();
+  if (!storedWaba && !storedBm) {
+    return { card: fallback, directory: [] };
+  }
   const wabaLookup = storedWaba || storedBm;
   const waba = wabaLookup ? await fetchWabaOwner(graph, token, wabaLookup) : { hint: { wabaId: null, wabaName: null, businessId: null, businessName: null, primaryPageId: null, primaryPageName: null, profilePictureUrl: null }, json: null, ok: false };
   if (wabaLookup && !waba.ok) {
@@ -680,6 +684,10 @@ export class MetaWhatsappConnectionService {
         hasBusiness: Boolean(row.metaBusinessId),
         status: row.status,
       });
+      const repo = this.repository as MetaWhatsappConnectionRepository;
+      if (typeof repo.disconnectEmptyPendingTokens === "function") {
+        await repo.disconnectEmptyPendingTokens(tenant.tenantId, tenant.ownerEmail, row.id);
+      }
       return toMetaWhatsappPublicConnection(row);
     } catch {
       throw new MetaWhatsappError("persist_failed");
@@ -798,7 +806,7 @@ export class MetaWhatsappConnectionService {
     const hydrated = await Promise.all(
       rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row)),
     );
-    const cards = dedupePortfolioCards(hydrated.map((item) => item.card));
+    const cards = dedupePortfolioCards(hydrated.map((item) => item.card)).filter(isRenderablePortfolioCard);
     const selected =
       cards.find((item) => item.connectionId === requested) ||
       cards.find((item) => item.id && item.id === String(opts?.connectionId || "").trim()) ||

@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 11:43 — Card fantasma ao adicionar número
+- `pending_token` vazio não vira card «Portfólio empresarial».
+- Marker: `DEPLOY-2026-09-02-114300-portfolio-fantasma`
+- LOG: `doc/LOG-2026-09-02__114300__portfolio-fantasma-add-numero.md`
+
 ## 2026-09-02 11:10 — Filtro Todos os status cortado
 - Select da tabela: largura 132px → 176px.
 - Marker: `DEPLOY-2026-09-02-111000-filtro-status-largura`

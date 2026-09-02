@@ -11,6 +11,7 @@ import {
   mergePortfolioIdentity,
   mergePortfolioNumbers,
   dedupePortfolioCards,
+  isRenderablePortfolioCard,
   graphPhotoDownloadUrl,
   graphPhotoSourceKey,
   META_BUSINESS_IDENTITY_FIELDS,
@@ -245,6 +246,35 @@ describe("meta portfolio mapper", () => {
     assert.equal(cards[0]?.id, "1041827648719609");
     assert.equal(cards[0]?.name, "Drax Sistemas");
     assert.equal((cards[0]?.numbers || []).length, 1);
+  });
+
+  it("não trata pending_token vazio como card de portfólio", () => {
+    assert.equal(
+      isRenderablePortfolioCard({
+        id: null,
+        name: null,
+        primaryPageId: null,
+        primaryPageName: null,
+        profilePictureUrl: null,
+        wabaId: null,
+        connectionId: "conn-ghost",
+        numbers: [],
+      }),
+      false,
+    );
+    assert.equal(
+      isRenderablePortfolioCard({
+        id: "1041827648719609",
+        name: "Drax Sistemas",
+        primaryPageId: "page-drax",
+        primaryPageName: "Drax Tecnologia e Sistemas",
+        profilePictureUrl: null,
+        wabaId: "1247508354180311",
+        connectionId: "conn-drax",
+        numbers: [],
+      }),
+      true,
+    );
   });
 
   it("não lista ID de número sem telefone quando a Graph já devolveu o chip real", () => {
@@ -930,6 +960,45 @@ describe("meta portfolio service", () => {
     assert.ok((walkupCard?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("95213-7761")));
     const draxCard = (assets.portfolios || []).find((item) => item.id === "1041827648719609");
     assert.ok((draxCard?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
+  });
+
+  it("não lista pending_token vazio criado ao adicionar número em portfólio existente", async () => {
+    const drax = {
+      ...connectedRow(),
+      id: "conn-drax",
+      metaBusinessId: "1041827648719609",
+      wabaId: "1247508354180311",
+      displayPhoneNumber: "+55 51 8200-1279",
+      verifiedName: "Drax Tecnologia e Sistemas",
+    };
+    const ghost = {
+      ...connectedRow(),
+      id: "conn-ghost",
+      metaBusinessId: null,
+      wabaId: null,
+      phoneNumberId: null,
+      displayPhoneNumber: null,
+      verifiedName: null,
+      status: "pending_token" as const,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [drax, ghost];
+      },
+      async findOpenByTenant() {
+        return drax;
+      },
+    };
+    const graph = async () => ({ ok: true, status: 200, json: { data: [] } });
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    assert.equal((assets.portfolios || []).length, 1);
+    assert.equal(assets.portfolios?.[0]?.id, "1041827648719609");
+    assert.equal(assets.portfolios?.[0]?.connectionId, "conn-drax");
   });
 
   it("traz nome, ID, página e foto da Meta e não lista WABA como portfólio", async () => {

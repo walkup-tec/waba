@@ -156,6 +156,24 @@ class FakeMetaRepo {
     }
     return count;
   }
+
+  async disconnectEmptyPendingTokens(tenantId: string, actorEmail: string, exceptId?: string | null): Promise<number> {
+    const keep = String(exceptId || "").trim();
+    const now = new Date().toISOString();
+    let count = 0;
+    for (const row of this.rows) {
+      if (row.tenantId !== tenantId || row.disconnectedAt) continue;
+      if (keep && row.id === keep) continue;
+      if (row.status !== "pending_token") continue;
+      if (row.metaBusinessId || row.wabaId || row.phoneNumberId) continue;
+      row.status = "disconnected";
+      row.disconnectedAt = now;
+      row.updatedBy = actorEmail;
+      row.accessTokenEncrypted = "";
+      count += 1;
+    }
+    return count;
+  }
 }
 
 const authA: WabaRequestAuth = { email: "tenant-a@exemplo.com", role: "subscriber" };
@@ -285,6 +303,31 @@ describe("meta-whatsapp phase 3", () => {
     assert.equal(repo.rows[0].metaBusinessId, "1041827648719609");
     assert.equal(repo.rows[1].wabaId, "waba-walkup");
     assert.equal(repo.rows[1].metaBusinessId, "4141369862822598");
+  });
+
+  it("adicionar número no BM existente não deixa pending_token vazio aberto", async () => {
+    const repo = new FakeMetaRepo();
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk);
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    await service.attachSessionAssets(authA, {
+      wabaId: "1247508354180311",
+      phoneNumberId: "phone-drax",
+      businessId: "1041827648719609",
+    });
+    repo.rows[0].status = "connected";
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    assert.equal(repo.rows.filter((row) => !row.disconnectedAt).length, 2);
+    await service.attachSessionAssets(authA, {
+      wabaId: "1247508354180311",
+      phoneNumberId: "phone-drax-2",
+      businessId: "1041827648719609",
+    });
+    const open = repo.rows.filter((row) => !row.disconnectedAt);
+    assert.equal(open.length, 1);
+    assert.equal(open[0].id, "conn-1");
+    assert.equal(open[0].metaBusinessId, "1041827648719609");
+    assert.equal(open[0].phoneNumberId, "phone-drax-2");
+    assert.equal(repo.rows[1].status, "disconnected");
   });
 
   it("conexão é associada ao tenant da sessão, não ao body", async () => {

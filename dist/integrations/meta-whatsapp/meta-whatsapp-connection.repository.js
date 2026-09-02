@@ -371,5 +371,39 @@ class MetaWhatsappConnectionRepository {
             throw new Error(error.message);
         return (data || []).length;
     }
+    async disconnectEmptyPendingTokens(tenantId, actorEmail, exceptId) {
+        const id = String(tenantId || "").trim();
+        if (!id)
+            return 0;
+        const keep = String(exceptId || "").trim();
+        const rows = await this.listOpenByTenant(id);
+        const now = new Date().toISOString();
+        let count = 0;
+        for (const row of rows) {
+            if (keep && row.id === keep)
+                continue;
+            if (row.status !== "pending_token")
+                continue;
+            if (row.metaBusinessId || row.wabaId || row.phoneNumberId)
+                continue;
+            const { error } = await this.client()
+                .from(TABLE)
+                .update({
+                status: "disconnected",
+                disconnected_at: now,
+                updated_by: actorEmail,
+                access_token_encrypted: "",
+                last_error: null,
+            })
+                .eq("id", row.id)
+                .eq("tenant_id", id)
+                .eq("status", "pending_token")
+                .is("disconnected_at", null);
+            if (error)
+                throw new Error(error.message);
+            count += 1;
+        }
+        return count;
+    }
 }
 exports.MetaWhatsappConnectionRepository = MetaWhatsappConnectionRepository;
