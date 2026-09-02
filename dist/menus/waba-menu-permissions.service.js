@@ -33,6 +33,8 @@ exports.buildNoMenusEnabled = buildNoMenusEnabled;
 function applyLaboratorioMenuPolicy(user, permissions) {
     if ((0, waba_laboratorio_access_1.canAccessWabaLaboratorioMenus)(user.email))
         return permissions;
+    if (user.role !== "master")
+        return permissions;
     const result = { ...permissions };
     for (const id of waba_menu_registry_1.WABA_TECH_PROVIDER_MENU_IDS) {
         result[id] = false;

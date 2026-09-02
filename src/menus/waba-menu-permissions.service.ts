@@ -40,10 +40,11 @@ export const buildNoMenusEnabled = (): MenuPermissionsMap => {
 };
 
 function applyLaboratorioMenuPolicy(
-  user: Pick<WabaSystemUser, "email">,
+  user: Pick<WabaSystemUser, "email" | "role">,
   permissions: MenuPermissionsMap,
 ): MenuPermissionsMap {
   if (canAccessWabaLaboratorioMenus(user.email)) return permissions;
+  if (user.role !== "master") return permissions;
   const result = { ...permissions };
   for (const id of WABA_TECH_PROVIDER_MENU_IDS) {
     result[id] = false;

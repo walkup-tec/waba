@@ -72,7 +72,7 @@ describe("waba-laboratorio-access", () => {
     }
   });
 
-  it("master Mozart em produção mantém Laboratório", () => {
+    it("master Mozart em produção mantém Laboratório", () => {
     const prev = {
       ui: process.env.WABA_UI_PROFILE,
       env: process.env.WABA_ENV,
@@ -89,6 +89,42 @@ describe("waba-laboratorio-access", () => {
       });
       assert.equal(perms["whatsapp-oficial"], true);
       assert.equal(perms["whatsapp-inbox"], true);
+    } finally {
+      if (prev.ui == null) delete process.env.WABA_UI_PROFILE;
+      else process.env.WABA_UI_PROFILE = prev.ui;
+      if (prev.env == null) delete process.env.WABA_ENV;
+      else process.env.WABA_ENV = prev.env;
+      if (prev.runtime == null) delete process.env.RUNTIME_MODE;
+      else process.env.RUNTIME_MODE = prev.runtime;
+    }
+  });
+
+  it("operacional em produção vê o Laboratório marcado no cadastro", () => {
+    const prev = {
+      ui: process.env.WABA_UI_PROFILE,
+      env: process.env.WABA_ENV,
+      runtime: process.env.RUNTIME_MODE,
+    };
+    process.env.WABA_UI_PROFILE = "production";
+    process.env.WABA_ENV = "production";
+    process.env.RUNTIME_MODE = "production";
+    try {
+      const perms = resolveEffectiveMenuPermissions({
+        email: "drax@draxsistemas.com.br",
+        role: "operacional",
+        menuPermissions: {
+          "admin-campanhas": true,
+          "whatsapp-oficial": true,
+          "whatsapp-inbox": false,
+          "whatsapp-templates": true,
+          "whatsapp-automation": true,
+        },
+      });
+      assert.equal(perms["whatsapp-oficial"], true);
+      assert.equal(perms["whatsapp-inbox"], false);
+      assert.equal(perms["whatsapp-templates"], true);
+      assert.equal(perms["whatsapp-automation"], true);
+      assert.equal(perms["admin-campanhas"], true);
     } finally {
       if (prev.ui == null) delete process.env.WABA_UI_PROFILE;
       else process.env.WABA_UI_PROFILE = prev.ui;

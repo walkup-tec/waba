@@ -1,6 +1,7 @@
 /**
  * Laboratório (Meta Tech Provider) no painel de gestão.
- * Em produção só a conta Mozart vê a seção e os menus.
+ * Em produção, masters só veem a seção se forem Mozart.
+ * Operacional/suporte seguem os menus marcados no cadastro.
  * No localhost V02 as telas novas ficam visíveis para validação.
  */
 export const WABA_LABORATORIO_OWNER_EMAIL = "mozart.pmo@gmail.com";

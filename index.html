@@ -25898,6 +25898,12 @@
 
       const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
       const LABORATORIO_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
+      const LABORATORIO_MENU_KEYS = [
+        "whatsapp-oficial",
+        "whatsapp-inbox",
+        "whatsapp-templates",
+        "whatsapp-automation",
+      ];
 
       function canAccessDeviceCloudMenu() {
         const profile = String(window.WABA_UI_PROFILE || "").trim().toLowerCase();
@@ -25906,11 +25912,16 @@
         return DEVICE_CLOUD_ALLOWLIST.has(email);
       }
 
+      function hasGrantedLaboratorioMenu() {
+        return LABORATORIO_MENU_KEYS.some((id) => wabaStaffAllowedMenuIds.has(id));
+      }
+
       function canAccessLaboratorioMenu() {
         const email = String(wabaSessionEmail || "").trim().toLowerCase();
-        if (!email) return false;
         const base = String(window.WABA_BASE_PATH || "").replace(/\/$/, "");
         if (base === "/version-02") return true;
+        if (hasGrantedLaboratorioMenu()) return true;
+        if (!email) return false;
         if (!isProductionUi()) return false;
         return LABORATORIO_ALLOWLIST.has(email);
       }

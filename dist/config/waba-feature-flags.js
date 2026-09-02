@@ -21,7 +21,7 @@ function isAlternativaNumbersPurchaseEnabled() {
         return explicit;
     return false;
 }
-/** Telas de portfólio/números oficiais. Laboratório em produção continua só Mozart. */
+/** Telas de portfólio/números oficiais no Laboratório. */
 function isMetaOfficialPortfolioLabEnabled(env = process.env) {
     const explicit = parseTruthy(String(env.WABA_META_OFFICIAL_PORTFOLIO_LAB ?? ""));
     if (explicit !== null)

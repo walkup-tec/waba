@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 13:14 — Laboratório segue o cadastro do operacional
+- Em produção, operacional/suporte vê os menus do Laboratório marcados no usuário. Master walkup continua sem a seção; Mozart continua com ela.
+- Marker: `DEPLOY-2026-09-02-131400-laboratorio-menu-cadastro`
+- LOG: `doc/LOG-2026-09-02__131400__laboratorio-menu-cadastro.md`
+
 ## 2026-09-02 12:40 — Alerta da Meta no upload de cabeçalho
 - Sem teto de tamanho no Waba para Arquivo da mídia. Recusa da Graph (ex.: 5 MB) aparece no alerta.
 - Marker: `DEPLOY-2026-09-02-124000-template-alerta-meta`

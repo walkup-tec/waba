@@ -1,3 +1,4 @@
+- 2026-09-02: operacional/suporte vê Laboratório pelos checkboxes do cadastro. Motivo: a allowlist Mozart zerava a seção mesmo com menus marcados (ex.: `drax@draxsistemas.com.br`). Masters que não são Mozart continuam sem a seção.
 - 2026-09-02: o Arquivo da mídia do template não tem teto no Waba. Motivo: só a Meta recusa (imagem JPEG/PNG até 5 MB). O alerta mostra `error_user_msg` da Graph. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media/
 - 2026-09-02: o Laboratório volta a enviar foto de perfil do chip para a Meta (`profile_picture_handle`). Motivo: o card só lia a Graph; o pedido é ditar a foto no Waba. Nome de exibição segue revisão da Meta. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/
 - 2026-09-02: **Editar perfil** só habilita no número Ativo (CONNECTED). Motivo: a Meta recusa `whatsapp_business_profile` em Pendente; o botão não deve aparecer antes do PIN.
