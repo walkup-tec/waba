@@ -3981,6 +3981,110 @@
         .meta-tpl-status-tag.is-flagged { background:rgba(234,179,8,.22); color:#fde047; }
         .meta-tpl-status-tag.is-limit { background:rgba(168,85,247,.22); color:#d8b4fe; }
         .meta-tpl-status-tag.is-deleted { background:rgba(71,85,105,.35); color:#94a3b8; }
+        #meta-tpl-preview-overlay.confirm-overlay { z-index: 2470; }
+        .meta-tpl-preview-modal {
+          width: min(94vw, 400px);
+          background: #fff;
+          color: #111b21;
+          text-align: left;
+          padding: 14px 14px 16px;
+          border-radius: 16px;
+          border: 1px solid rgba(148, 163, 184, 0.28);
+        }
+        .meta-tpl-preview-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin: 0 0 12px;
+        }
+        .meta-tpl-preview-modal .confirm-title {
+          color: #111b21;
+          text-align: left;
+          font-weight: 700;
+          font-size: 1.05rem;
+        }
+        .meta-tpl-preview-close {
+          border: 0;
+          background: transparent;
+          color: #54656f;
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          padding: 4px 2px;
+        }
+        .meta-tpl-preview-close:focus { outline: 2px solid rgba(2, 122, 105, .35); outline-offset: 2px; }
+        .meta-tpl-preview-chat {
+          background-color: #e5ddd5;
+          background-image:
+            radial-gradient(circle at 12% 18%, rgba(17, 27, 33, 0.05) 0 1px, transparent 1.5px),
+            radial-gradient(circle at 72% 64%, rgba(17, 27, 33, 0.04) 0 1px, transparent 1.5px);
+          background-size: 28px 28px, 36px 36px;
+          border-radius: 12px;
+          padding: 16px 14px 18px;
+          min-height: 168px;
+        }
+        .meta-tpl-preview-bubble {
+          background: #fff;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+        }
+        .meta-tpl-preview-header-media {
+          min-height: 118px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #1f1633;
+          color: #e2e8f0;
+          font-size: 13px;
+          font-weight: 600;
+        }
+        .meta-tpl-preview-header-text {
+          padding: 10px 12px 0;
+          font-weight: 700;
+          font-size: 15px;
+          line-height: 1.3;
+        }
+        .meta-tpl-preview-body {
+          padding: 10px 12px 2px;
+          font-size: 14.5px;
+          line-height: 1.4;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .meta-tpl-preview-time {
+          text-align: right;
+          color: #8696a0;
+          font-size: 11px;
+          padding: 2px 12px 8px;
+        }
+        .meta-tpl-preview-cta {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          width: 100%;
+          border: 0;
+          border-top: 1px solid #e9edef;
+          background: #fff;
+          color: #027a69;
+          font-weight: 600;
+          font-size: 14px;
+          padding: 11px 12px;
+          cursor: default;
+        }
+        .meta-tpl-preview-cta-icon {
+          width: 14px;
+          height: 14px;
+          flex: 0 0 auto;
+        }
+        .meta-tpl-preview-empty {
+          color: #54656f;
+          font-size: 13px;
+          padding: 18px 8px;
+          text-align: center;
+        }
         @media (max-width:900px) {
           .meta-tpl-ai-workspace { grid-template-columns:1fr; }
           .meta-tpl-ai-options { grid-template-columns:1fr; }
@@ -23590,7 +23694,16 @@
       </div>
     </div>
 
-    <div id="meta-tpl-ai-overlay" class="confirm-overlay" aria-hidden="true">
+    <div id="meta-tpl-preview-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal meta-tpl-preview-modal" role="dialog" aria-modal="true" aria-labelledby="meta-tpl-preview-title">
+        <div class="meta-tpl-preview-head">
+          <div class="confirm-title" id="meta-tpl-preview-title">Seu modelo</div>
+          <button type="button" id="meta-tpl-preview-close" class="meta-tpl-preview-close">Fechar</button>
+        </div>
+        <div class="meta-tpl-preview-chat" id="meta-tpl-preview-chat"></div>
+      </div>
+    </div>
+
       <div class="confirm-modal meta-tpl-ai-modal" role="dialog" aria-modal="true" aria-labelledby="meta-tpl-ai-modal-title" aria-describedby="meta-tpl-ai-modal-text">
         <div class="meta-tpl-ai-modal-brand" aria-hidden="true">
           <img id="meta-tpl-ai-modal-logo" class="meta-tpl-ai-modal-logo" alt="Meta" width="88" height="58" />
@@ -37412,7 +37525,7 @@
               `<td style="padding:8px;">${quality}</td>` +
               `<td style="padding:8px;">${synced}</td>` +
               `<td style="padding:8px; white-space:nowrap;">` +
-              `<button type="button" class="instance-action-btn btn-refresh enabled">Visualizar</button> ` +
+              `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-view="${index}">Visualizar</button> ` +
               `<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-tpl-test="${index}">Usar em teste</button> ` +
               `<button type="button" class="instance-action-btn btn-delete enabled" data-meta-tpl-hide="${index}" title="Remove só desta lista. Não apaga na Meta.">Excluir</button>` +
               "</td></tr>"
@@ -37499,26 +37612,100 @@
         return false;
       };
 
+      function metaTplLabPreviewParts(item) {
+        const components = Array.isArray(item && item.components) ? item.components : [];
+        const parts = { headerKind: "none", headerText: "", body: "", buttons: [] };
+        components.forEach(function (comp) {
+          const row = comp && typeof comp === "object" ? comp : {};
+          const type = String(row.type || "").trim().toUpperCase();
+          if (type === "HEADER") {
+            const format = String(row.format || "TEXT").trim().toUpperCase();
+            if (format === "TEXT") {
+              parts.headerKind = "text";
+              parts.headerText = String(row.text || "").trim();
+            } else if (format === "IMAGE" || format === "VIDEO" || format === "DOCUMENT" || format === "LOCATION") {
+              parts.headerKind = format.toLowerCase();
+            }
+          }
+          if (type === "BODY") {
+            let text = String(row.text || "").trim();
+            const examples = row.example && Array.isArray(row.example.body_text) ? row.example.body_text[0] : null;
+            if (Array.isArray(examples)) {
+              examples.forEach(function (example, index) {
+                const token = new RegExp("\\{\\{" + String(index + 1) + "\\}\\}", "g");
+                text = text.replace(token, String(example || "").trim());
+              });
+            }
+            parts.body = text;
+          }
+          if (type === "BUTTONS" && Array.isArray(row.buttons)) {
+            parts.buttons = row.buttons
+              .map(function (button) {
+                return {
+                  type: String((button && button.type) || "").trim().toUpperCase(),
+                  text: String((button && button.text) || "").trim(),
+                };
+              })
+              .filter(function (button) {
+                return button.text;
+              });
+          }
+        });
+        return parts;
+      }
+
+      function metaTplLabPreviewTime() {
+        return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      }
+
+      function metaTplLabHeaderMediaLabel(kind) {
+        if (kind === "image") return "Cabeçalho de imagem";
+        if (kind === "video") return "Cabeçalho de vídeo";
+        if (kind === "document") return "Cabeçalho de documento";
+        if (kind === "location") return "Localização";
+        return "Cabeçalho";
+      }
+
+      function metaTplLabClosePreview() {
+        const overlay = document.getElementById("meta-tpl-preview-overlay");
+        if (!overlay) return;
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "true");
+      }
+
+      function metaTplLabOpenPreview(item) {
+        const overlay = document.getElementById("meta-tpl-preview-overlay");
+        const chat = document.getElementById("meta-tpl-preview-chat");
+        if (!overlay || !chat || !item) return;
+        const parts = metaTplLabPreviewParts(item);
+        const linkIcon =
+          '<svg class="meta-tpl-preview-cta-icon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M6.2 3.2h-2A2.2 2.2 0 0 0 2 5.4v6.4A2.2 2.2 0 0 0 4.2 14h6.4A2.2 2.2 0 0 0 12.8 11.8v-2a.8.8 0 0 0-1.6 0v2a.6.6 0 0 1-.6.6H4.2a.6.6 0 0 1-.6-.6V5.4a.6.6 0 0 1 .6-.6h2a.8.8 0 0 0 0-1.6Zm3.1 0H14v4.7a.8.8 0 0 1-1.6 0V5.13L8.17 9.36a.8.8 0 1 1-1.13-1.13l4.23-4.23H9.3a.8.8 0 0 1 0-1.6Z"/></svg>';
+        let inner = "";
+        if (parts.headerKind !== "none" && parts.headerKind !== "text") {
+          inner += `<div class="meta-tpl-preview-header-media">${escapeAdminHtml(metaTplLabHeaderMediaLabel(parts.headerKind))}</div>`;
+        }
+        if (parts.headerKind === "text" && parts.headerText) {
+          inner += `<div class="meta-tpl-preview-header-text">${escapeAdminHtml(parts.headerText)}</div>`;
+        }
+        inner += `<div class="meta-tpl-preview-body">${escapeAdminHtml(parts.body || "Este template não tem texto de corpo.")}</div>`;
+        inner += `<div class="meta-tpl-preview-time">${escapeAdminHtml(metaTplLabPreviewTime())}</div>`;
+        inner += parts.buttons
+          .map(function (button) {
+            return `<div class="meta-tpl-preview-cta">${button.type === "URL" ? linkIcon : ""}${escapeAdminHtml(button.text)}</div>`;
+          })
+          .join("");
+        chat.innerHTML = `<div class="meta-tpl-preview-bubble">${inner}</div>`;
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        const closeBtn = document.getElementById("meta-tpl-preview-close");
+        if (closeBtn) closeBtn.focus();
+      }
+
       window.wabaViewMetaTemplateLab = function wabaViewMetaTemplateLab(index) {
         const item = metaTplLabCache[index];
-        const view = document.getElementById("meta-tpl-lab-view");
-        if (!item || !view) return false;
+        if (!item) return false;
         metaTplLabSelected = item;
-        const safe = {
-          id: item.id,
-          metaTemplateId: item.metaTemplateId,
-          name: item.name,
-          language: item.language,
-          category: item.category,
-          status: item.status,
-          qualityScore: item.qualityScore,
-          rejectedReason: item.rejectedReason,
-          lastSyncedAt: item.lastSyncedAt,
-          connectionId: item.connectionId,
-          portfolioName: item.portfolioName,
-          components: item.components,
-        };
-        view.textContent = JSON.stringify(safe, null, 2);
+        metaTplLabOpenPreview(item);
         return false;
       };
 
@@ -37535,7 +37722,6 @@
           return false;
         }
         metaTplLabSelected = item;
-        window.wabaViewMetaTemplateLab(index);
         if (outEl) outEl.textContent = "Enviando template…";
         const components = params.length
           ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text })) }]
@@ -37569,9 +37755,17 @@
 
       document.addEventListener("click", function onMetaTplLabClick(event) {
         const target = event.target && event.target.closest
-          ? event.target.closest("[data-meta-tpl-test], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all")
+          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-test], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all, #meta-tpl-preview-close")
           : null;
+        if (event.target && event.target.id === "meta-tpl-preview-overlay") {
+          metaTplLabClosePreview();
+          return;
+        }
         if (!target) return;
+        if (target.id === "meta-tpl-preview-close") {
+          metaTplLabClosePreview();
+          return;
+        }
         if (target.id === "meta-tpl-ai-generate") {
           void metaTplGenerateUtilityOptions();
           return;
@@ -37591,8 +37785,15 @@
           }
           return;
         }
+        const viewIndex = target.getAttribute("data-meta-tpl-view");
         const testIndex = target.getAttribute("data-meta-tpl-test");
+        if (viewIndex != null) window.wabaViewMetaTemplateLab(Number(viewIndex));
         if (testIndex != null) window.wabaTestMetaTemplateLab(Number(testIndex));
+      });
+      document.addEventListener("keydown", function onMetaTplPreviewEsc(event) {
+        if (event.key !== "Escape") return;
+        const overlay = document.getElementById("meta-tpl-preview-overlay");
+        if (overlay && overlay.classList.contains("open")) metaTplLabClosePreview();
       });
 
       document.getElementById("meta-tpl-lab-portfolio")?.addEventListener("change", function () {

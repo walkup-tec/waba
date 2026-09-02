@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:22 — Modal Visualizar
+- Visualizar abre **Seu modelo** no formato WhatsApp (header, corpo, botão).
+- Marker: `DEPLOY-2026-09-02-022200-modal-visualizar-template`
+- LOG: `doc/LOG-2026-09-02__022200__modal-visualizar-template.md`
+
 ## 2026-09-02 02:20 — IA: formato da biblioteca Meta
 - Prompt 1.6 adapta o molde dos prints Utility sem trocar o tema do texto base.
 - Marker: `DEPLOY-2026-09-02-022000-ia-formato-biblioteca`
