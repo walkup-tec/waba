@@ -24,6 +24,7 @@ const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-inta
 const waba_campaign_laboratorio_attended_1 = require("../../disparos/waba-campaign-laboratorio-attended");
 const waba_subscriber_repository_1 = require("../../subscribers/waba-subscriber.repository");
 const meta_whatsapp_broadcast_linkable_1 = require("./meta-whatsapp-broadcast-linkable");
+const meta_whatsapp_broadcast_history_1 = require("./meta-whatsapp-broadcast-history");
 const running = new Set();
 function requireTenant(auth) {
     try {
@@ -415,7 +416,20 @@ class MetaWhatsappBroadcastService {
     }
     listFromAuth(auth) {
         const tenant = requireTenant(auth);
-        return (0, meta_whatsapp_broadcast_store_1.listBroadcastCampaigns)(tenant.tenantId, 8).map(meta_whatsapp_broadcast_store_1.publicBroadcastCampaign);
+        const intakes = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
+        const subscribers = new waba_subscriber_repository_1.WabaSubscriberRepository();
+        return (0, meta_whatsapp_broadcast_store_1.listBroadcastCampaigns)(tenant.tenantId, 40).map((row) => {
+            const intake = row.intakeCampaignId ? intakes.getById(row.intakeCampaignId) : null;
+            const ownerEmail = String(intake?.ownerEmail || "").trim().toLowerCase();
+            const clientName = String(subscribers.getByEmail(ownerEmail)?.fullName || ownerEmail).trim();
+            return (0, meta_whatsapp_broadcast_history_1.toCloudBroadcastHistoryItem)({
+                campaign: row,
+                campaignName: intake?.campaignName,
+                clientName,
+                plannedSendCount: intake?.plannedSendCount ?? row.total,
+                intakeStatus: intake?.status,
+            });
+        });
     }
     getFromAuth(auth, id) {
         const tenant = requireTenant(auth);

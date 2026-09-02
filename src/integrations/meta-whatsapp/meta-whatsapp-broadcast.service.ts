@@ -53,6 +53,7 @@ import {
   formatCloudLinkableCampaignLabel,
   isLinkableLabCampaignStatus,
 } from "./meta-whatsapp-broadcast-linkable";
+import { toCloudBroadcastHistoryItem } from "./meta-whatsapp-broadcast-history";
 
 const running = new Set<string>();
 
@@ -529,7 +530,20 @@ export class MetaWhatsappBroadcastService {
 
   listFromAuth(auth: WabaRequestAuth) {
     const tenant = requireTenant(auth);
-    return listBroadcastCampaigns(tenant.tenantId, 8).map(publicBroadcastCampaign);
+    const intakes = new WabaCampaignIntakeRepository();
+    const subscribers = new WabaSubscriberRepository();
+    return listBroadcastCampaigns(tenant.tenantId, 40).map((row) => {
+      const intake = row.intakeCampaignId ? intakes.getById(row.intakeCampaignId) : null;
+      const ownerEmail = String(intake?.ownerEmail || "").trim().toLowerCase();
+      const clientName = String(subscribers.getByEmail(ownerEmail)?.fullName || ownerEmail).trim();
+      return toCloudBroadcastHistoryItem({
+        campaign: row,
+        campaignName: intake?.campaignName,
+        clientName,
+        plannedSendCount: intake?.plannedSendCount ?? row.total,
+        intakeStatus: intake?.status,
+      });
+    });
   }
 
   getFromAuth(auth: WabaRequestAuth, id: string) {

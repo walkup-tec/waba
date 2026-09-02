@@ -21,6 +21,10 @@ import {
   formatCloudLinkableCampaignLabel,
   isLinkableLabCampaignStatus,
 } from "./meta-whatsapp-broadcast-linkable";
+import {
+  cloudBroadcastDisplayStatus,
+  cloudBroadcastProgress,
+} from "./meta-whatsapp-broadcast-history";
 
 const prodEnv = {
   WABA_UI_PROFILE: "production",
@@ -249,6 +253,28 @@ describe("campanha do assinante no Disparo Cloud", () => {
         plannedSendCount: 0,
       }),
       "assinante@exemplo.com - Campanha Setembro - 0",
+    );
+  });
+});
+
+describe("histórico do Disparo Cloud", () => {
+  it("barra de andamento usa enviados contra a quantidade solicitada", () => {
+    const mid = cloudBroadcastProgress({ sent: 180, failed: 0, plannedSendCount: 500, status: "running" });
+    assert.equal(mid.percent, 36);
+    assert.equal(mid.processed, 180);
+    const done = cloudBroadcastProgress({ sent: 480, failed: 20, plannedSendCount: 500, status: "done" });
+    assert.equal(done.percent, 100);
+  });
+
+  it("status da tabela segue o envio e o relatório da campanha", () => {
+    assert.equal(cloudBroadcastDisplayStatus({ broadcastStatus: "running" }).label, "Enviando");
+    assert.equal(
+      cloudBroadcastDisplayStatus({ broadcastStatus: "done", intakeStatus: "in_progress" }).label,
+      "Coletando relatório da Meta",
+    );
+    assert.equal(
+      cloudBroadcastDisplayStatus({ broadcastStatus: "done", intakeStatus: "completed" }).label,
+      "Finalizado",
     );
   });
 });

@@ -3823,20 +3823,25 @@
           grid-template-columns: minmax(7.5rem, 10.5rem) minmax(0, 1fr);
           gap: 8px;
         }
-        .meta-tpl-broadcast-preview {
-          margin-top: 12px;
-          padding: 12px;
-          border-radius: 13px;
-          background: rgba(7, 15, 30, 0.42);
-          border: 1px solid rgba(148, 163, 184, 0.12);
-          font-size: 13px;
-          color: #cbd5e1;
+        .meta-tpl-broadcast-history { margin-top: 16px; overflow-x: auto; }
+        .meta-tpl-broadcast-history table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .meta-tpl-broadcast-history th,
+        .meta-tpl-broadcast-history td { text-align: left; padding: 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); vertical-align: middle; }
+        .meta-tpl-broadcast-progress { display: flex; align-items: center; gap: 8px; min-width: 160px; }
+        .meta-tpl-broadcast-progress-track {
+          flex: 1;
+          height: 8px;
+          border-radius: 999px;
+          background: rgba(148, 163, 184, 0.2);
+          overflow: hidden;
         }
-        .meta-tpl-broadcast-preview table { width: 100%; border-collapse: collapse; }
-        .meta-tpl-broadcast-preview th,
-        .meta-tpl-broadcast-preview td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
-        .meta-tpl-broadcast-preview .ok { color: #86efac; }
-        .meta-tpl-broadcast-preview .bad { color: #fca5a5; }
+        .meta-tpl-broadcast-progress-fill {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: linear-gradient(90deg, #16a34a, #4ade80);
+        }
+        .meta-tpl-broadcast-progress-label { color: #94a3b8; font-size: 12px; white-space: nowrap; }
         @media (max-width: 720px) {
           .meta-tpl-broadcast-grid.disparos-grid-2 { grid-template-columns: 1fr; }
           .meta-tpl-broadcast-template-row { grid-template-columns: 1fr; }
@@ -21776,11 +21781,28 @@
                 </div>
               </div>
               <div class="disparos-inline-actions" style="margin-top:12px; flex-wrap:wrap; gap:8px;">
-                <button id="meta-tpl-broadcast-preview" type="button" class="instance-action-btn btn-refresh enabled">Pré-visualizar números</button>
                 <button id="meta-tpl-broadcast-start" type="button" class="instance-action-btn btn-qrcode enabled">Iniciar disparo</button>
               </div>
               <p id="meta-tpl-broadcast-status" class="muted" role="status" aria-live="polite" style="margin:10px 0 0;"></p>
-              <div id="meta-tpl-broadcast-preview-box" class="meta-tpl-broadcast-preview" hidden></div>
+              <div class="meta-tpl-broadcast-history" id="meta-tpl-broadcast-history">
+                <table class="meta-tpl-lab-table" aria-label="Campanhas iniciadas no Disparo Cloud">
+                  <thead>
+                    <tr>
+                      <th>Data de início</th>
+                      <th>Campanha</th>
+                      <th>Cliente</th>
+                      <th>Envios</th>
+                      <th>Andamento</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="meta-tpl-broadcast-history-tbody">
+                    <tr>
+                      <td class="muted" colspan="6">Nenhuma campanha iniciada neste Laboratório.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </section>
 
             <section class="panel col-12">
@@ -38297,6 +38319,24 @@
         ];
       }
 
+      function metaDisparoCloudPreviewHistory() {
+        return [
+          {
+            id: "demo-broadcast-1",
+            startedAt: "2026-09-02T16:10:00.000Z",
+            campaignName: "Campanha Setembro",
+            clientName: "Maria Silva",
+            plannedSendCount: 500,
+            sent: 180,
+            processedCount: 180,
+            progressPercent: 36,
+            status: "running",
+            statusKey: "running",
+            statusLabel: "Enviando",
+          },
+        ];
+      }
+
       function metaDisparoCloudPreviewSample() {
         return {
           valid: 3,
@@ -38377,9 +38417,9 @@
         if (phoneCol) phoneCol.value = "telefone";
         const fileName = metaTplBroadcastEl("meta-tpl-broadcast-file-name");
         if (fileName) fileName.textContent = "leads-setembro.xlsx";
-        metaTplBroadcastRenderPreview(sample);
+        metaTplBroadcastRenderHistory(metaDisparoCloudPreviewHistory());
         metaTplBroadcastSetStatus(
-          "Portfólio com template aprovado. Troque o modelo no select para ver o mapeamento. Os cliques entram no relatório desta campanha do Laboratório.",
+          "Portfólio com template aprovado. Depois de iniciar, o andamento entra na tabela abaixo.",
         );
       }
 
@@ -38816,39 +38856,104 @@
         return data;
       }
 
-      function metaTplBroadcastRenderPreview(payload) {
-        const box = metaTplBroadcastEl("meta-tpl-broadcast-preview-box");
-        if (!box) return;
-        const samples = (payload && payload.samples) || { valid: [], invalid: [] };
-        const validRows = (samples.valid || [])
+      function metaTplBroadcastHistoryStatusMeta(item) {
+        const key = String((item && item.statusKey) || item && item.status || "").trim();
+        if (key === "completed" || key === "done") return { label: item.statusLabel || "Finalizado", cls: "is-approved" };
+        if (key === "running" || key === "in_progress") return { label: item.statusLabel || "Enviando", cls: "is-pending" };
+        if (key === "collecting") return { label: item.statusLabel || "Coletando relatório da Meta", cls: "is-pending" };
+        if (key === "queued") return { label: item.statusLabel || "Na fila", cls: "is-pending" };
+        if (key === "failed" || key === "error") return { label: item.statusLabel || "Falha no envio", cls: "is-rejected" };
+        if (key === "cancelled") return { label: item.statusLabel || "Cancelada", cls: "is-disabled" };
+        return { label: String((item && item.statusLabel) || "Em andamento"), cls: "is-pending" };
+      }
+
+      function metaTplBroadcastRenderHistory(items) {
+        const tbody = metaTplBroadcastEl("meta-tpl-broadcast-history-tbody");
+        if (!tbody) return;
+        const rows = Array.isArray(items) ? items : [];
+        if (!rows.length) {
+          tbody.innerHTML =
+            '<tr><td class="muted" colspan="6">Nenhuma campanha iniciada neste Laboratório.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows
           .map(function (item) {
-            return "<tr><td>" + metaTpEsc(item.raw || "") + "</td><td class=\"ok\">" + metaTpEsc(item.waId || "") + "</td></tr>";
+            const started = metaTplLabFormatSync(item.startedAt || item.createdAt);
+            const campaign = metaTpEsc(item.campaignName || "Campanha");
+            const client = metaTpEsc(item.clientName || "Assinante");
+            const envios = Math.max(0, Math.round(Number(item.plannedSendCount || item.total || 0)));
+            const processed = Math.max(0, Math.round(Number(item.processedCount || item.sent || 0)));
+            const percent = Math.max(0, Math.min(100, Math.round(Number(item.progressPercent || 0))));
+            const status = metaTplBroadcastHistoryStatusMeta(item);
+            return (
+              "<tr>" +
+              "<td>" +
+              metaTpEsc(started) +
+              "</td>" +
+              "<td>" +
+              campaign +
+              "</td>" +
+              "<td>" +
+              client +
+              "</td>" +
+              "<td>" +
+              envios +
+              "</td>" +
+              '<td><div class="meta-tpl-broadcast-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' +
+              percent +
+              '" aria-label="Andamento ' +
+              percent +
+              '%">' +
+              '<span class="meta-tpl-broadcast-progress-track"><span class="meta-tpl-broadcast-progress-fill" style="width:' +
+              percent +
+              '%"></span></span>' +
+              '<span class="meta-tpl-broadcast-progress-label">' +
+              processed +
+              " / " +
+              envios +
+              "</span></div></td>" +
+              "<td>" +
+              '<span class="meta-tpl-status-tag ' +
+              status.cls +
+              '">' +
+              metaTpEsc(status.label) +
+              "</span></td>" +
+              "</tr>"
+            );
           })
           .join("");
-        const invalidRows = (samples.invalid || [])
-          .map(function (item) {
-            return "<tr><td>" + metaTpEsc(item.raw || "") + "</td><td class=\"bad\">" + metaTpEsc(item.error || "") + "</td></tr>";
-          })
-          .join("");
-        box.hidden = false;
-        box.innerHTML =
-          "<p><strong>" +
-          Number(payload.valid || 0) +
-          "</strong> números no padrão Meta · " +
-          Number(payload.invalid || 0) +
-          " inválidos · " +
-          Number(payload.duplicatesRemoved || 0) +
-          " duplicados ignorados.</p>" +
-          (validRows
-            ? "<table><thead><tr><th>Na planilha</th><th>Enviado à Meta (E.164)</th></tr></thead><tbody>" +
-              validRows +
-              "</tbody></table>"
-            : "<p class=\"muted\">Nenhum número válido para prévia.</p>") +
-          (invalidRows
-            ? "<table style=\"margin-top:10px\"><thead><tr><th>Ignorado</th><th>Motivo</th></tr></thead><tbody>" +
-              invalidRows +
-              "</tbody></table>"
-            : "");
+      }
+
+      function metaTplBroadcastHistoryNeedsPoll(items) {
+        return (items || []).some(function (item) {
+          const key = String((item && item.statusKey) || item && item.status || "");
+          return key === "queued" || key === "running" || key === "collecting" || key === "in_progress";
+        });
+      }
+
+      async function metaTplBroadcastLoadHistory() {
+        const tbody = metaTplBroadcastEl("meta-tpl-broadcast-history-tbody");
+        if (!tbody) return;
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          metaTplBroadcastRenderHistory(metaDisparoCloudPreviewHistory());
+          return;
+        }
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast");
+          const items = Array.isArray(payload.campaigns) ? payload.campaigns : [];
+          metaTplBroadcastRenderHistory(items);
+          if (metaTplBroadcastPoll) window.clearTimeout(metaTplBroadcastPoll);
+          if (metaTplBroadcastHistoryNeedsPoll(items)) {
+            metaTplBroadcastPoll = window.setTimeout(function () {
+              void metaTplBroadcastLoadHistory();
+            }, 2500);
+          }
+        } catch (_error) {
+          if (!tbody.innerHTML) {
+            tbody.innerHTML =
+              '<tr><td class="muted" colspan="6">Não foi possível carregar as campanhas iniciadas.</td></tr>';
+          }
+        }
       }
 
       async function metaTplBroadcastLoadInspect() {
@@ -38888,26 +38993,19 @@
         }
       }
 
-      async function metaTplBroadcastPreview() {
+      async function metaTplBroadcastLoadColumns() {
         if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
           if (!metaTplBroadcastHasTemplate()) {
             metaTplBroadcastSyncMappingFields({ nome: false, numero: false });
-            metaTplBroadcastSetStatus("Selecione um template aprovado para mapear as colunas.");
             return;
           }
           const sample = metaDisparoCloudPreviewSample();
           const mapping = (metaTplBroadcastInspect && metaTplBroadcastInspect.mapping) || sample.mapping;
           metaTplBroadcastFillColumns(sample.columns, sample);
           metaTplBroadcastSyncMappingFields(mapping);
-          metaTplBroadcastRenderPreview(sample);
-          metaTplBroadcastSetStatus("Prévia pronta. Os destinos abaixo já estão no formato E.164 da Meta.");
           return;
         }
-        if (!metaTplBroadcastFile) {
-          metaTplBroadcastSetStatus("Escolha a planilha com os números.");
-          return;
-        }
-        metaTplBroadcastSetStatus("Normalizando números no padrão Meta…");
+        if (!metaTplBroadcastFile || !metaTplBroadcastHasTemplate()) return;
         try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/preview", {
             method: "POST",
@@ -38919,50 +39017,29 @@
             numeroColumn: payload.numeroColumn,
           });
           metaTplBroadcastSyncMappingFields(payload.mapping || {});
-          metaTplBroadcastRenderPreview(payload);
-          metaTplBroadcastSetStatus(
-            payload.valid
-              ? "Prévia pronta. Os destinos abaixo já estão no formato E.164 da Meta."
-              : "Nenhum número válido. Ajuste a coluna de telefone.",
-          );
-        } catch (error) {
-          metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível ler a planilha.");
-        }
-      }
-
-      async function metaTplBroadcastPollStatus(id) {
-        if (metaTplBroadcastPoll) window.clearTimeout(metaTplBroadcastPoll);
-        try {
-          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/" + encodeURIComponent(id));
-          const row = payload.campaign || {};
-          metaTplBroadcastSetStatus(
-            "Disparo " +
-              String(row.status || "") +
-              ": " +
-              Number(row.sent || 0) +
-              " enviados · " +
-              Number(row.failed || 0) +
-              " falhas · " +
-              Number(row.clicks || 0) +
-              " cliques no botão.",
-          );
-          if (row.status === "queued" || row.status === "running") {
-            metaTplBroadcastPoll = window.setTimeout(function () {
-              metaTplBroadcastPollStatus(id);
-            }, 2500);
-          }
         } catch (_error) {
-          metaTplBroadcastPoll = window.setTimeout(function () {
-            metaTplBroadcastPollStatus(id);
-          }, 4000);
+          /* o start ainda tenta adivinhar as colunas */
         }
       }
 
       async function metaTplBroadcastStart() {
         if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
-          metaTplBroadcastSetStatus(
-            "Disparo done: 3 enviados · 0 falhas · 2 cliques no botão. Preview — nada foi enviado à Meta.",
-          );
+          metaTplBroadcastRenderHistory([
+            {
+              id: "demo-broadcast-1",
+              startedAt: new Date().toISOString(),
+              campaignName: "Campanha Setembro",
+              clientName: "Maria Silva",
+              plannedSendCount: 500,
+              sent: 120,
+              processedCount: 120,
+              progressPercent: 24,
+              status: "running",
+              statusKey: "running",
+              statusLabel: "Enviando",
+            },
+          ]);
+          metaTplBroadcastSetStatus("Disparo iniciado. Acompanhe o andamento na tabela. Preview — nada foi enviado à Meta.");
           return;
         }
         if (!metaTplBroadcastFile) {
@@ -38985,8 +39062,8 @@
           });
           const campaign = payload.campaign || {};
           metaTplBroadcastCampaignId = String(campaign.id || "");
-          metaTplBroadcastSetStatus("Disparo na fila. Os números já foram normalizados para a Meta.");
-          if (metaTplBroadcastCampaignId) metaTplBroadcastPollStatus(metaTplBroadcastCampaignId);
+          metaTplBroadcastSetStatus("Disparo iniciado. Acompanhe o andamento na tabela.");
+          void metaTplBroadcastLoadHistory();
         } catch (error) {
           metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível iniciar o disparo.");
         }
@@ -39012,10 +39089,12 @@
           metaTplLabRenderTable(payload.templates);
           metaTplLabSetStatus(payload.templates && payload.templates.length ? "" : "Lista local vazia.");
           metaTplBroadcastFillPortfolio();
+          void metaTplBroadcastLoadHistory();
         } catch (error) {
           metaTplLabRenderTable([]);
           metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível listar.");
           metaTplBroadcastFillPortfolio();
+          void metaTplBroadcastLoadHistory();
         }
         return false;
       };
@@ -39438,10 +39517,7 @@
         metaTplBroadcastFile = input && input.files && input.files[0] ? input.files[0] : null;
         const label = document.getElementById("meta-tpl-broadcast-file-name");
         if (label) label.textContent = metaTplBroadcastFile ? metaTplBroadcastFile.name : "Nenhum arquivo.";
-        if (metaTplBroadcastFile) metaTplBroadcastPreview();
-      });
-      document.getElementById("meta-tpl-broadcast-preview")?.addEventListener("click", function () {
-        metaTplBroadcastPreview();
+        if (metaTplBroadcastFile) void metaTplBroadcastLoadColumns();
       });
       document.getElementById("meta-tpl-broadcast-start")?.addEventListener("click", function () {
         metaTplBroadcastStart();

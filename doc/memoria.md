@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 17:10 — Histórico no lugar da prévia de números
+- Sem botão Pré-visualizar e sem tabela por número.
+- Tabela após iniciar: data, campanha, cliente, envios, barra, status.
+- LOG: `doc/LOG-2026-09-02__171000__historico-disparo-cloud.md`
+
 ## 2026-09-02 17:03 — Colunas da planilha só depois do template
 - Telefone e nome/número ficam ocultos até escolher o template aprovado.
 - Uma variável de BODY no máximo: nome ou número.
