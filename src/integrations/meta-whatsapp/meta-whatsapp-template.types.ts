@@ -1,4 +1,5 @@
 import { stripSilentBlockButtonsFromPublicComponents } from "./meta-whatsapp-template-silent-block-button";
+import { publicTemplateHeaderPreviewUrl } from "./meta-whatsapp-template-header-preview.store";
 
 export type MetaTemplatePublic = {
   id: string;
@@ -13,9 +14,10 @@ export type MetaTemplatePublic = {
   lastSyncedAt: string | null;
   connectionId: string;
   portfolioName: string | null;
+  headerPreviewUrl: string | null;
 };
 
-export type MetaTemplateRecord = Omit<MetaTemplatePublic, "portfolioName"> & {
+export type MetaTemplateRecord = Omit<MetaTemplatePublic, "portfolioName" | "headerPreviewUrl"> & {
   tenantId: string;
   wabaId: string;
   createdAt: string;
@@ -61,6 +63,11 @@ export function toPublicTemplate(
     lastSyncedAt: row.lastSyncedAt,
     connectionId: row.connectionId,
     portfolioName: name || null,
+    headerPreviewUrl: publicTemplateHeaderPreviewUrl({
+      id: row.id,
+      tenantId: row.tenantId,
+      components: row.components,
+    }),
   };
 }
 

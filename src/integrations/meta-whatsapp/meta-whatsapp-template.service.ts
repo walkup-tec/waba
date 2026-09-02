@@ -26,6 +26,10 @@ import {
 } from "./meta-whatsapp-template.types";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import { MetaWhatsappTemplateAiRepository } from "./meta-whatsapp-template-ai.repository";
+import {
+  headerHandleFromComponents,
+  readTemplateHeaderPreview,
+} from "./meta-whatsapp-template-header-preview.store";
 
 function requireTenant(auth: WabaRequestAuth) {
   try {
@@ -393,5 +397,21 @@ export class MetaWhatsappTemplateService {
       throw new MetaWhatsappError("template_not_ready");
     }
     return row;
+  }
+
+  async readHeaderPreviewFromAuth(
+    auth: WabaRequestAuth,
+    templateId: string,
+  ): Promise<{ mime: string; bytes: Buffer } | null> {
+    const tenant = requireTenant(auth);
+    const id = String(templateId || "").trim();
+    if (!id) throw new MetaWhatsappError("invalid_payload");
+    const row = await this.templates.findByIdForTenant(tenant.tenantId, id);
+    if (!row || row.tenantId !== tenant.tenantId) {
+      throw new MetaWhatsappError("template_not_found");
+    }
+    const handle = headerHandleFromComponents(row.components);
+    if (!handle) return null;
+    return readTemplateHeaderPreview(tenant.tenantId, handle);
   }
 }

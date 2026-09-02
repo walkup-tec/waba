@@ -13,6 +13,7 @@ import {
   META_TEMPLATE_AI_PROMPT_VERSION,
 } from "./meta-whatsapp-template-ai.prompt";
 import { MetaWhatsappTemplateAiRepository } from "./meta-whatsapp-template-ai.repository";
+import { saveTemplateHeaderPreview } from "./meta-whatsapp-template-header-preview.store";
 import {
   META_TEMPLATE_AI_OUTPUT_SCHEMA,
   META_TEMPLATE_AI_SCHEMA_NAME,
@@ -491,6 +492,13 @@ export class MetaWhatsappTemplateAiService {
       });
       const handle = String(uploaded.handle || "").trim();
       if (!handle) throw new MetaWhatsappError("template_upload_failed");
+      saveTemplateHeaderPreview({
+        tenantId: tenant.tenantId,
+        handle,
+        mime,
+        fileName,
+        bytes,
+      });
       logMetaTemplate("AI", { tenantId: tenant.tenantId, connectionId, headerUpload: mediaFormat });
       return { handle, mediaFormat };
     } catch (error) {

@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 10:20 — Preview mostra a imagem do cabeçalho
+- Visualizar usa a mídia enviada (cópia local ou URL HTTPS da Graph), não o placeholder.
+- Marker: `DEPLOY-2026-09-02-102000-preview-imagem-cabecalho`
+- LOG: `doc/LOG-2026-09-02__102000__preview-imagem-cabecalho.md`
+
 ## 2026-09-02 10:17 — Modal sem aviso de filtro Ativo
 - Saiu o texto sobre análise vs Ativo e filtro no WhatsApp Manager.
 - Marker: `DEPLOY-2026-09-02-101700-modal-sem-aviso-filtro-ativo`

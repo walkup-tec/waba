@@ -327,6 +327,25 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             return handleMetaError(res, error);
         }
     });
+    app.get("/integrations/meta/whatsapp/templates/:templateId/header", async (req, res) => {
+        try {
+            const photo = await templateService.readHeaderPreviewFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(req.params.templateId || ""));
+            if (!photo) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Mídia do cabeçalho não encontrada.",
+                    code: "invalid_payload",
+                });
+            }
+            res.setHeader("Content-Type", photo.mime);
+            res.setHeader("Cache-Control", "private, max-age=300");
+            res.setHeader("Content-Length", String(photo.bytes.length));
+            return res.status(200).end(photo.bytes);
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
     app.delete("/integrations/meta/whatsapp/templates/:templateId", async (req, res) => {
         try {
             const result = await templateService.deleteFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(req.params.templateId || ""));

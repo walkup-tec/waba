@@ -4,7 +4,7 @@ Concluído no laboratório Meta:
 
 - tabela unificada de templates de todos os portfólios;
 - filtro Todos os Portfólios, busca por nome, tags de status;
-- na tabela: Visualizar abre preview WhatsApp; Excluir remove na Meta e no front;
+- na tabela: Visualizar abre preview WhatsApp com a imagem de cabeçalho quando houver mídia; Excluir remove na Meta e no front;
 - o painel legado Visualizar / usar em teste saiu;
 - Atualizar da Meta também remove da tabela o que já não existe na biblioteca da Meta;
 - Enviar para META abre o modal de processamento (logo, spinner e etapas das 3 opções); o resultado continua no mesmo overlay.
@@ -12,6 +12,6 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-101700-modal-sem-aviso-filtro-ativo`.
+Marker: `DEPLOY-2026-09-02-102000-preview-imagem-cabecalho`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

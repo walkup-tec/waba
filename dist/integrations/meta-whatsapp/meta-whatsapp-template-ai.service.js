@@ -9,6 +9,7 @@ const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
 const meta_whatsapp_template_ai_prompt_1 = require("./meta-whatsapp-template-ai.prompt");
 const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
+const meta_whatsapp_template_header_preview_store_1 = require("./meta-whatsapp-template-header-preview.store");
 const meta_whatsapp_template_ai_schema_1 = require("./meta-whatsapp-template-ai.schema");
 const meta_whatsapp_template_ai_shell_1 = require("./meta-whatsapp-template-ai-shell");
 const meta_whatsapp_template_ai_utility_shape_1 = require("./meta-whatsapp-template-ai-utility-shape");
@@ -387,6 +388,13 @@ class MetaWhatsappTemplateAiService {
             const handle = String(uploaded.handle || "").trim();
             if (!handle)
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
+            (0, meta_whatsapp_template_header_preview_store_1.saveTemplateHeaderPreview)({
+                tenantId: tenant.tenantId,
+                handle,
+                mime,
+                fileName,
+                bytes,
+            });
             (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", { tenantId: tenant.tenantId, connectionId, headerUpload: mediaFormat });
             return { handle, mediaFormat };
         }

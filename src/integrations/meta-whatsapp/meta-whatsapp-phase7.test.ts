@@ -413,6 +413,29 @@ describe("fase 7 listagem e tenant", () => {
     assert.equal(JSON.stringify(listed).toLowerCase().includes("bloquear"), false);
   });
 
+  it("expõe a URL HTTPS do cabeçalho IMAGE no DTO público", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const templates = new FakeTemplates();
+    templates.rows.push(
+      templateRow({
+        components: [
+          {
+            type: "HEADER",
+            format: "IMAGE",
+            example: { header_handle: ["https://lookaside.fbsbx.com/whatsapp/sample.png"] },
+          },
+          { type: "BODY", text: "Olá" },
+        ],
+      }),
+    );
+    const service = new MetaWhatsappTemplateService(connections as any, templates as any, async () => {
+      throw new Error("Graph não deve ser chamada na listagem local");
+    });
+    const listed = await service.listFromAuth(auth(EMAIL_A));
+    assert.equal(listed[0].headerPreviewUrl, "https://lookaside.fbsbx.com/whatsapp/sample.png");
+  });
+
   it("sem WABA connected devolve lista vazia, não erro", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow({ status: "pending_token" }));

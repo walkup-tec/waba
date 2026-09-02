@@ -4141,6 +4141,17 @@
           font-size: 13px;
           font-weight: 600;
         }
+        .meta-tpl-preview-header-media.has-image {
+          min-height: 0;
+          background: #111b21;
+        }
+        .meta-tpl-preview-header-media img,
+        .meta-tpl-preview-header-media video {
+          display: block;
+          width: 100%;
+          max-height: 220px;
+          object-fit: cover;
+        }
         .meta-tpl-preview-header-text {
           padding: 10px 12px 0;
           font-weight: 700;
@@ -37943,9 +37954,58 @@
         return false;
       };
 
+      let metaTplLabPreviewObjectUrl = "";
+
+      function metaTplLabRevokePreviewObjectUrl() {
+        if (metaTplLabPreviewObjectUrl) {
+          try {
+            URL.revokeObjectURL(metaTplLabPreviewObjectUrl);
+          } catch {
+            /* ignore */
+          }
+          metaTplLabPreviewObjectUrl = "";
+        }
+      }
+
+      function metaTplLabSafeHeaderMediaUrl(raw) {
+        const url = String(raw || "").trim();
+        if (/^https:\/\//i.test(url)) return url;
+        if (/^blob:/i.test(url)) return url;
+        if (/^\/integrations\/meta\/whatsapp\/templates\/[^/?#]+\/header(\?|$)/i.test(url)) {
+          return typeof resolveWabaPublicPath === "function" ? resolveWabaPublicPath(url) : url;
+        }
+        return "";
+      }
+
+      function metaTplLabHeaderUrlFromComponents(components) {
+        if (!Array.isArray(components)) return "";
+        for (let i = 0; i < components.length; i += 1) {
+          const row = components[i] && typeof components[i] === "object" ? components[i] : {};
+          if (String(row.type || "").trim().toUpperCase() !== "HEADER") continue;
+          const example = row.example && typeof row.example === "object" ? row.example : {};
+          const handles = Array.isArray(example.header_handle) ? example.header_handle : [];
+          const handle = String(handles[0] || "").trim();
+          if (/^https:\/\//i.test(handle)) return handle;
+        }
+        return "";
+      }
+
+      function metaTplLabLocalHeaderFileUrl(kind) {
+        if (kind !== "image" && kind !== "video") return "";
+        const input = document.getElementById("meta-tpl-ai-media-file");
+        const file = input && input.files && input.files[0];
+        if (!file) return "";
+        const mime = String(file.type || "").toLowerCase();
+        if (kind === "image" && mime.indexOf("image/") !== 0) return "";
+        if (kind === "video" && mime.indexOf("video/") !== 0) return "";
+        metaTplLabRevokePreviewObjectUrl();
+        metaTplLabPreviewObjectUrl = URL.createObjectURL(file);
+        return metaTplLabPreviewObjectUrl;
+      }
+
       function metaTplLabPreviewParts(item) {
         const components = Array.isArray(item && item.components) ? item.components : [];
-        const parts = { headerKind: "none", headerText: "", body: "", buttons: [] };
+        const parts = { headerKind: "none", headerText: "", headerMediaUrl: "", body: "", buttons: [] };
         components.forEach(function (comp) {
           const row = comp && typeof comp === "object" ? comp : {};
           const type = String(row.type || "").trim().toUpperCase();
@@ -37984,6 +38044,14 @@
               });
           }
         });
+        parts.headerMediaUrl = metaTplLabSafeHeaderMediaUrl(
+          item && item.headerPreviewUrl
+            ? item.headerPreviewUrl
+            : metaTplLabHeaderUrlFromComponents(components),
+        );
+        if (!parts.headerMediaUrl) {
+          parts.headerMediaUrl = metaTplLabLocalHeaderFileUrl(parts.headerKind);
+        }
         return parts;
       }
 
@@ -38004,6 +38072,7 @@
         if (!overlay) return;
         overlay.classList.remove("open");
         overlay.setAttribute("aria-hidden", "true");
+        metaTplLabRevokePreviewObjectUrl();
       }
 
       function metaTplLabOpenPreview(item) {
@@ -38015,7 +38084,13 @@
           '<svg class="meta-tpl-preview-cta-icon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M6.2 3.2h-2A2.2 2.2 0 0 0 2 5.4v6.4A2.2 2.2 0 0 0 4.2 14h6.4A2.2 2.2 0 0 0 12.8 11.8v-2a.8.8 0 0 0-1.6 0v2a.6.6 0 0 1-.6.6H4.2a.6.6 0 0 1-.6-.6V5.4a.6.6 0 0 1 .6-.6h2a.8.8 0 0 0 0-1.6Zm3.1 0H14v4.7a.8.8 0 0 1-1.6 0V5.13L8.17 9.36a.8.8 0 1 1-1.13-1.13l4.23-4.23H9.3a.8.8 0 0 1 0-1.6Z"/></svg>';
         let inner = "";
         if (parts.headerKind !== "none" && parts.headerKind !== "text") {
-          inner += `<div class="meta-tpl-preview-header-media">${escapeAdminHtml(metaTplLabHeaderMediaLabel(parts.headerKind))}</div>`;
+          if (parts.headerKind === "image" && parts.headerMediaUrl) {
+            inner += `<div class="meta-tpl-preview-header-media has-image"><img src="${escapeAdminHtml(parts.headerMediaUrl)}" alt=""></div>`;
+          } else if (parts.headerKind === "video" && parts.headerMediaUrl) {
+            inner += `<div class="meta-tpl-preview-header-media has-image"><video src="${escapeAdminHtml(parts.headerMediaUrl)}" muted playsinline></video></div>`;
+          } else {
+            inner += `<div class="meta-tpl-preview-header-media">${escapeAdminHtml(metaTplLabHeaderMediaLabel(parts.headerKind))}</div>`;
+          }
         }
         if (parts.headerKind === "text" && parts.headerText) {
           inner += `<div class="meta-tpl-preview-header-text">${escapeAdminHtml(parts.headerText)}</div>`;

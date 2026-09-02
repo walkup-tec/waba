@@ -1,0 +1,124 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.headerHandleFromComponents = headerHandleFromComponents;
+exports.headerHttpsUrlFromComponents = headerHttpsUrlFromComponents;
+exports.saveTemplateHeaderPreview = saveTemplateHeaderPreview;
+exports.readTemplateHeaderPreview = readTemplateHeaderPreview;
+exports.hasTemplateHeaderPreview = hasTemplateHeaderPreview;
+exports.publicTemplateHeaderPreviewUrl = publicTemplateHeaderPreviewUrl;
+const node_crypto_1 = require("node:crypto");
+const node_fs_1 = require("node:fs");
+const node_path_1 = __importDefault(require("node:path"));
+const data_path_1 = require("../../data-path");
+const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
+function asRecord(value) {
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : {};
+}
+function safeTenantId(tenantId) {
+    const id = String(tenantId || "").trim();
+    if (!id)
+        return "";
+    if (TENANT_ID_RE.test(id))
+        return id;
+    return (0, node_crypto_1.createHash)("sha256").update(id).digest("hex").slice(0, 40);
+}
+function handleKey(handle) {
+    return (0, node_crypto_1.createHash)("sha256").update(String(handle || "").trim()).digest("hex").slice(0, 40);
+}
+function headersDir(tenantId) {
+    return node_path_1.default.join((0, data_path_1.resolveDataDir)(), "meta-whatsapp", "template-headers", safeTenantId(tenantId));
+}
+function headerHandleFromComponents(components) {
+    if (!Array.isArray(components))
+        return "";
+    for (const item of components) {
+        const row = asRecord(item);
+        if (String(row.type || "").trim().toUpperCase() !== "HEADER")
+            continue;
+        const example = asRecord(row.example);
+        const handles = Array.isArray(example.header_handle) ? example.header_handle : [];
+        const handle = String(handles[0] || "").trim();
+        if (handle)
+            return handle;
+    }
+    return "";
+}
+function headerHttpsUrlFromComponents(components) {
+    const handle = headerHandleFromComponents(components);
+    if (/^https:\/\//i.test(handle))
+        return handle;
+    return null;
+}
+function extFromMime(mime, fileName) {
+    const type = String(mime || "").trim().toLowerCase();
+    const name = String(fileName || "").trim().toLowerCase();
+    if (type === "image/png" || name.endsWith(".png"))
+        return "png";
+    if (type === "image/jpeg" || type === "image/jpg" || name.endsWith(".jpg") || name.endsWith(".jpeg"))
+        return "jpg";
+    if (type === "video/mp4" || name.endsWith(".mp4"))
+        return "mp4";
+    if (type === "application/pdf" || name.endsWith(".pdf"))
+        return "pdf";
+    return "bin";
+}
+function mimeFromExt(ext) {
+    if (ext === "png")
+        return "image/png";
+    if (ext === "jpg")
+        return "image/jpeg";
+    if (ext === "mp4")
+        return "video/mp4";
+    if (ext === "pdf")
+        return "application/pdf";
+    return "application/octet-stream";
+}
+function filePath(tenantId, handle, ext) {
+    return node_path_1.default.join(headersDir(tenantId), `${handleKey(handle)}.${ext}`);
+}
+function saveTemplateHeaderPreview(input) {
+    const tenantId = safeTenantId(input.tenantId);
+    const handle = String(input.handle || "").trim();
+    if (!tenantId || !handle || !input.bytes?.length)
+        return;
+    const ext = extFromMime(input.mime || "", input.fileName || "");
+    (0, node_fs_1.mkdirSync)(headersDir(input.tenantId), { recursive: true });
+    (0, node_fs_1.writeFileSync)(filePath(input.tenantId, handle, ext), input.bytes);
+}
+function readTemplateHeaderPreview(tenantId, handle) {
+    const id = safeTenantId(tenantId);
+    const key = String(handle || "").trim();
+    if (!id || !key)
+        return null;
+    const dir = headersDir(tenantId);
+    if (!(0, node_fs_1.existsSync)(dir))
+        return null;
+    for (const ext of ["png", "jpg", "mp4", "pdf", "bin"]) {
+        const file = filePath(tenantId, key, ext);
+        if (!(0, node_fs_1.existsSync)(file))
+            continue;
+        const bytes = (0, node_fs_1.readFileSync)(file);
+        if (!bytes.length)
+            continue;
+        return { mime: mimeFromExt(ext), bytes };
+    }
+    return null;
+}
+function hasTemplateHeaderPreview(tenantId, handle) {
+    return Boolean(readTemplateHeaderPreview(tenantId, handle));
+}
+function publicTemplateHeaderPreviewUrl(input) {
+    const httpsUrl = headerHttpsUrlFromComponents(input.components);
+    if (httpsUrl)
+        return httpsUrl;
+    const handle = headerHandleFromComponents(input.components);
+    const id = String(input.id || "").trim();
+    if (!handle || !id || !hasTemplateHeaderPreview(input.tenantId, handle))
+        return null;
+    return `/integrations/meta/whatsapp/templates/${encodeURIComponent(id)}/header`;
+}

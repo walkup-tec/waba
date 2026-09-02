@@ -4,6 +4,7 @@ exports.qualityScoreFromGraph = qualityScoreFromGraph;
 exports.toPublicTemplate = toPublicTemplate;
 exports.isTemplateApprovedForSend = isTemplateApprovedForSend;
 const meta_whatsapp_template_silent_block_button_1 = require("./meta-whatsapp-template-silent-block-button");
+const meta_whatsapp_template_header_preview_store_1 = require("./meta-whatsapp-template-header-preview.store");
 function qualityScoreFromGraph(value) {
     if (value == null)
         return null;
@@ -30,6 +31,11 @@ function toPublicTemplate(row, portfolioName) {
         lastSyncedAt: row.lastSyncedAt,
         connectionId: row.connectionId,
         portfolioName: name || null,
+        headerPreviewUrl: (0, meta_whatsapp_template_header_preview_store_1.publicTemplateHeaderPreviewUrl)({
+            id: row.id,
+            tenantId: row.tenantId,
+            components: row.components,
+        }),
     };
 }
 function isTemplateApprovedForSend(status) {

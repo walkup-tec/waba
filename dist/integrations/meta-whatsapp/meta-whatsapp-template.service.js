@@ -14,6 +14,7 @@ const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-vali
 const meta_whatsapp_template_ai_approved_examples_1 = require("./meta-whatsapp-template-ai-approved-examples");
 const meta_whatsapp_template_types_1 = require("./meta-whatsapp-template.types");
 const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
+const meta_whatsapp_template_header_preview_store_1 = require("./meta-whatsapp-template-header-preview.store");
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -341,6 +342,20 @@ class MetaWhatsappTemplateService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_not_ready");
         }
         return row;
+    }
+    async readHeaderPreviewFromAuth(auth, templateId) {
+        const tenant = requireTenant(auth);
+        const id = String(templateId || "").trim();
+        if (!id)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        const row = await this.templates.findByIdForTenant(tenant.tenantId, id);
+        if (!row || row.tenantId !== tenant.tenantId) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_not_found");
+        }
+        const handle = (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(row.components);
+        if (!handle)
+            return null;
+        return (0, meta_whatsapp_template_header_preview_store_1.readTemplateHeaderPreview)(tenant.tenantId, handle);
     }
 }
 exports.MetaWhatsappTemplateService = MetaWhatsappTemplateService;
