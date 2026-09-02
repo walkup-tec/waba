@@ -17674,7 +17674,7 @@
         display: none !important;
       }
 
-      body.waba-preview-disparo-cloud #tab-whatsapp-templates .panel:not(#meta-tpl-broadcast-panel) {
+      body.waba-preview-disparo-cloud #tab-whatsapp-templates .panel:not(#meta-tpl-lab-list-panel):not(#meta-tpl-broadcast-panel) {
         display: none;
       }
 
@@ -21632,7 +21632,7 @@
 
         <div id="tab-whatsapp-templates" class="tab-panel tab-hidden" aria-hidden="true">
           <div class="row g-3">
-            <section class="panel col-12">
+            <section class="panel col-12" id="meta-tpl-lab-list-panel">
               <div class="panel-header">
                 <div class="panel-title">Templates WhatsApp</div>
                 <span class="muted">Meta Cloud API — Laboratório</span>
@@ -38228,9 +38228,68 @@
         if (status) status.textContent = "Preview visual com dados fictícios.";
       }
 
-      function initMetaDisparoCloudUiPreview() {
-        document.body.classList.add("waba-laboratorio-visible", "waba-preview-disparo-cloud");
-        setActiveTab("whatsapp-templates", { skipPolicyCheck: true });
+      function metaDisparoCloudPreviewTemplates() {
+        return [
+          {
+            id: "demo-template-atualizacao",
+            connectionId: "demo-connection",
+            portfolioName: "Drax Sistemas",
+            name: "consulta_margem_atualizacao_1",
+            language: "pt_BR",
+            category: "UTILITY",
+            status: "APPROVED",
+            qualityScore: "GREEN",
+            lastSyncedAt: "2026-09-02T15:40:00.000Z",
+            mapping: { nome: true, numero: false },
+          },
+          {
+            id: "demo-template-resultado",
+            connectionId: "demo-connection",
+            portfolioName: "Drax Sistemas",
+            name: "consulta_margem_resultado_2",
+            language: "pt_BR",
+            category: "UTILITY",
+            status: "APPROVED",
+            qualityScore: "GREEN",
+            lastSyncedAt: "2026-09-02T15:40:00.000Z",
+            mapping: { nome: true, numero: false },
+          },
+          {
+            id: "demo-template-status",
+            connectionId: "demo-connection",
+            portfolioName: "Drax Sistemas",
+            name: "status_solicitacao_utilidade",
+            language: "pt_BR",
+            category: "UTILITY",
+            status: "APPROVED",
+            qualityScore: "YELLOW",
+            lastSyncedAt: "2026-09-02T14:10:00.000Z",
+            mapping: { nome: false, numero: false },
+          },
+        ];
+      }
+
+      function metaDisparoCloudPreviewSample() {
+        return {
+          valid: 3,
+          invalid: 1,
+          duplicatesRemoved: 1,
+          columns: ["telefone", "nome"],
+          phoneColumn: "telefone",
+          nomeColumn: "nome",
+          mapping: { nome: true, numero: false },
+          samples: {
+            valid: [
+              { raw: "(51) 99988-7766", waId: "5551999887766" },
+              { raw: "5182001261", waId: "5551982001261" },
+              { raw: "+55 11 98888-0000", waId: "5511988880000" },
+            ],
+            invalid: [{ raw: "123", error: "Número incompleto" }],
+          },
+        };
+      }
+
+      function seedMetaDisparoCloudPreviewWorkspace() {
         metaTpSession.portfolios = [
           {
             id: "demo-business",
@@ -38247,47 +38306,50 @@
             ],
           },
         ];
-        metaTplLabCache = [
-          {
-            id: "demo-template",
-            connectionId: "demo-connection",
-            name: "consulta_margem_atualizacao_1",
-            language: "pt_BR",
-            status: "APPROVED",
-          },
-        ];
+        metaTplLabCache = metaDisparoCloudPreviewTemplates();
+        metaTplLabFillPortfolioSelect();
+        metaTplLabFillPortfolioFilter();
+        const listPortfolio = document.getElementById("meta-tpl-lab-portfolio");
+        if (listPortfolio) listPortfolio.value = "demo-connection";
+        const filter = document.getElementById("meta-tpl-lab-portfolio-filter");
+        if (filter) filter.value = "demo-connection";
+        const statusFilter = document.getElementById("meta-tpl-lab-status-filter");
+        if (statusFilter) statusFilter.value = "APPROVED";
+        metaTplLabRenderTable(metaTplLabCache);
+        metaTplLabSetStatus("Portfólio Drax Sistemas · 3 templates aprovados (demonstração).");
+      }
+
+      function applyMetaDisparoCloudPreviewWizard() {
         metaTplBroadcastFillPortfolio();
         const portfolio = metaTplBroadcastEl("meta-tpl-broadcast-portfolio");
         if (portfolio) portfolio.value = "demo-connection";
         metaTplBroadcastFillTemplates();
         metaTplBroadcastFillNumbers();
         const template = metaTplBroadcastEl("meta-tpl-broadcast-template");
-        if (template) template.value = "demo-template";
+        if (template) template.value = "demo-template-atualizacao";
         const number = metaTplBroadcastEl("meta-tpl-broadcast-number");
         if (number) number.value = "demo-phone";
         const intake = metaTplBroadcastEl("meta-tpl-broadcast-intake");
         if (intake) intake.value = "demo-intake-lab";
-        metaTplBroadcastFillColumns(["telefone", "nome"], { phoneColumn: "telefone" });
+        const sample = metaDisparoCloudPreviewSample();
+        metaTplBroadcastInspect = { mapping: sample.mapping };
+        metaTplBroadcastFillColumns(sample.columns, sample);
+        metaTplBroadcastSyncMappingFields(sample.mapping);
         const phoneCol = metaTplBroadcastEl("meta-tpl-broadcast-phone-col");
         if (phoneCol) phoneCol.value = "telefone";
         const fileName = metaTplBroadcastEl("meta-tpl-broadcast-file-name");
         if (fileName) fileName.textContent = "leads-setembro.xlsx";
-        metaTplBroadcastRenderPreview({
-          valid: 3,
-          invalid: 1,
-          duplicatesRemoved: 1,
-          samples: {
-            valid: [
-              { raw: "(51) 99988-7766", waId: "5551999887766" },
-              { raw: "5182001261", waId: "5551982001261" },
-              { raw: "+55 11 98888-0000", waId: "5511988880000" },
-            ],
-            invalid: [{ raw: "123", error: "Número incompleto" }],
-          },
-        });
+        metaTplBroadcastRenderPreview(sample);
         metaTplBroadcastSetStatus(
-          "Preview: campanha do Laboratório selecionada. Os cliques do botão entram neste relatório. Campanhas de operadores sem Laboratório continuam manuais.",
+          "Portfólio com template aprovado. Troque o modelo no select para ver o mapeamento. Os cliques entram no relatório desta campanha do Laboratório.",
         );
+      }
+
+      function initMetaDisparoCloudUiPreview() {
+        document.body.classList.add("waba-laboratorio-visible", "waba-preview-disparo-cloud");
+        setActiveTab("whatsapp-templates", { skipPolicyCheck: true });
+        seedMetaDisparoCloudPreviewWorkspace();
+        applyMetaDisparoCloudPreviewWizard();
         const panel = document.getElementById("meta-tpl-broadcast-panel");
         if (panel && typeof panel.scrollIntoView === "function") {
           panel.scrollIntoView({ block: "start" });
@@ -38650,6 +38712,20 @@
       async function metaTplBroadcastLoadInspect() {
         const connectionId = String((metaTplBroadcastEl("meta-tpl-broadcast-portfolio") || {}).value || "").trim();
         const templateId = String((metaTplBroadcastEl("meta-tpl-broadcast-template") || {}).value || "").trim();
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          const row = (metaTplLabCache || []).find(function (item) {
+            return String(item.id || "") === templateId;
+          });
+          const mapping = (row && row.mapping) || { nome: false, numero: false };
+          metaTplBroadcastInspect = { mapping: mapping };
+          metaTplBroadcastSyncMappingFields(mapping);
+          metaTplBroadcastSetStatus(
+            row
+              ? "Template aprovado «" + String(row.name || "") + "» do portfólio Drax Sistemas."
+              : "Selecione um template aprovado do portfólio.",
+          );
+          return;
+        }
         if (!connectionId || !templateId) {
           metaTplBroadcastInspect = null;
           metaTplBroadcastSyncMappingFields({ nome: false, numero: false });
@@ -38671,6 +38747,14 @@
       }
 
       async function metaTplBroadcastPreview() {
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          const sample = metaDisparoCloudPreviewSample();
+          metaTplBroadcastFillColumns(sample.columns, sample);
+          metaTplBroadcastSyncMappingFields(sample.mapping);
+          metaTplBroadcastRenderPreview(sample);
+          metaTplBroadcastSetStatus("Prévia pronta. Os destinos abaixo já estão no formato E.164 da Meta.");
+          return;
+        }
         if (!metaTplBroadcastFile) {
           metaTplBroadcastSetStatus("Escolha a planilha com os números.");
           return;
@@ -38727,6 +38811,12 @@
       }
 
       async function metaTplBroadcastStart() {
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          metaTplBroadcastSetStatus(
+            "Disparo done: 3 enviados · 0 falhas · 2 cliques no botão. Preview — nada foi enviado à Meta.",
+          );
+          return;
+        }
         if (!metaTplBroadcastFile) {
           metaTplBroadcastSetStatus("Escolha a planilha com os números.");
           return;
@@ -38757,6 +38847,8 @@
       window.wabaLoadMetaTemplatesLab = async function wabaLoadMetaTemplatesLab(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          seedMetaDisparoCloudPreviewWorkspace();
+          applyMetaDisparoCloudPreviewWizard();
           return false;
         }
         metaTplLabFillPortfolioSelect();
