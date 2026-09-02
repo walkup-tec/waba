@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_LAB_REPORT_MAX_WAIT_MS = exports.META_LAB_REPORT_QUIET_MS = void 0;
 exports.computeMetaLabCampaignMetrics = computeMetaLabCampaignMetrics;
 exports.shouldFinalizeMetaLabReport = shouldFinalizeMetaLabReport;
+exports.refreshCompletedLabIntakeReport = refreshCompletedLabIntakeReport;
 exports.tryFinalizeLabIntakeReport = tryFinalizeLabIntakeReport;
 exports.scheduleLabReportFinalize = scheduleLabReportFinalize;
 exports.tryFinalizeDueLabReports = tryFinalizeDueLabReports;
@@ -45,6 +46,9 @@ function computeMetaLabCampaignMetrics(campaign, totalLeads) {
         clicks: Math.max(0, Math.round(Number(campaign.clicks) || 0)),
     };
 }
+function campaignHasDeliverySignal(campaign) {
+    return (campaign.leads || []).some((lead) => leadCountsAsDelivered(lead) || leadCountsAsRead(lead));
+}
 function shouldFinalizeMetaLabReport(campaign, nowMs = Date.now()) {
     if (campaign.reportFinalizedAt)
         return false;
@@ -56,12 +60,66 @@ function shouldFinalizeMetaLabReport(campaign, nowMs = Date.now()) {
     if (!doneAt)
         return false;
     const lastMeta = Date.parse(String(campaign.lastMetaStatusAt || "")) || 0;
-    const lastEvent = Math.max(doneAt, lastMeta, Date.parse(String(campaign.updatedAt || "")) || 0);
-    if (nowMs - lastEvent >= exports.META_LAB_REPORT_QUIET_MS)
-        return true;
     if (nowMs - doneAt >= exports.META_LAB_REPORT_MAX_WAIT_MS)
         return true;
+    if (campaignHasDeliverySignal(campaign) && lastMeta && nowMs - lastMeta >= exports.META_LAB_REPORT_QUIET_MS) {
+        return true;
+    }
     return false;
+}
+function performanceChanged(previous, metrics) {
+    if (!previous)
+        return true;
+    return (Number(previous.sent || 0) !== metrics.sent ||
+        Number(previous.delivered || 0) !== metrics.delivered ||
+        Number(previous.read || 0) !== metrics.read ||
+        Number(previous.failed || 0) !== metrics.failed ||
+        Number(previous.clicks || 0) !== metrics.clicks);
+}
+/** Atualiza relatório Meta já finalizado quando o webhook chega depois. Não mexe em bônus. */
+function refreshCompletedLabIntakeReport(intakeCampaignId) {
+    const intakeId = String(intakeCampaignId || "").trim();
+    if (!intakeId)
+        return false;
+    const campaign = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intakeId);
+    if (!campaign)
+        return false;
+    const intakes = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
+    const intake = intakes.getById(intakeId);
+    if (!intake)
+        return false;
+    if (!(0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake))
+        return false;
+    if ((0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status) !== "completed")
+        return false;
+    if (intake.performanceReport?.source !== "meta_lab")
+        return false;
+    const metrics = computeMetaLabCampaignMetrics(campaign, Number(intake.plannedSendCount || campaign.total || 0));
+    if (!performanceChanged(intake.performanceReport, metrics))
+        return false;
+    const now = new Date().toISOString();
+    intakes.updateById(intakeId, {
+        performanceReport: {
+            ...intake.performanceReport,
+            sent: metrics.sent,
+            delivered: metrics.delivered,
+            read: metrics.read,
+            failed: metrics.failed,
+            clicks: metrics.clicks,
+            source: "meta_lab",
+            filledAt: now,
+            filledByEmail: "meta-lab",
+        },
+        updatedAt: now,
+    });
+    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-report-refreshed", {
+        sent: metrics.sent,
+        delivered: metrics.delivered,
+        read: metrics.read,
+        failed: metrics.failed,
+        clicks: metrics.clicks,
+    });
+    return true;
 }
 function tryFinalizeLabIntakeReport(intakeCampaignId, nowMs = Date.now()) {
     const intakeId = String(intakeCampaignId || "").trim();
@@ -129,9 +187,13 @@ function tryFinalizeDueLabReports(nowMs = Date.now()) {
     for (const intake of intakes.listAll()) {
         if (!(0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake))
             continue;
-        if ((0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status) !== "in_progress")
+        const status = (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status);
+        if (status === "in_progress") {
+            if (tryFinalizeLabIntakeReport(intake.id, nowMs))
+                done += 1;
             continue;
-        if (tryFinalizeLabIntakeReport(intake.id, nowMs))
+        }
+        if (status === "completed" && refreshCompletedLabIntakeReport(intake.id))
             done += 1;
     }
     return done;

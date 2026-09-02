@@ -12,7 +12,11 @@ import {
   META_LAB_REPORT_QUIET_MS,
   META_LAB_REPORT_MAX_WAIT_MS,
 } from "./meta-whatsapp-broadcast-report";
-import type { MetaBroadcastCampaign } from "./meta-whatsapp-broadcast.store";
+import {
+  matchBroadcastLeadForMetaStatus,
+  mergeBroadcastCampaignPreservingMeta,
+  type MetaBroadcastCampaign,
+} from "./meta-whatsapp-broadcast.store";
 import {
   collectBusyCloudPhoneNumberIds,
   isCloudPhoneBusyForCampaign,
@@ -163,6 +167,22 @@ describe("fechamento automático do relatório Meta", () => {
     assert.equal(shouldFinalizeMetaLabReport(campaign, lastEvent + META_LAB_REPORT_QUIET_MS + 1_000), true);
   });
 
+  it("não fecha na janela quieta se só há accepted/sent, sem entregue nem lido", () => {
+    const campaign = base({
+      lastMetaStatusAt: "2026-09-02T10:06:00.000Z",
+      leads: [
+        { waId: "5551999887766", status: "sent", metaStatus: "accepted" },
+        { waId: "5551982001261", status: "sent", metaStatus: "sent" },
+      ],
+    });
+    const lastEvent = Date.parse(campaign.lastMetaStatusAt || "");
+    assert.equal(shouldFinalizeMetaLabReport(campaign, lastEvent + META_LAB_REPORT_QUIET_MS + 1_000), false);
+    assert.equal(
+      shouldFinalizeMetaLabReport(campaign, Date.parse(campaign.sendFinishedAt || "") + META_LAB_REPORT_MAX_WAIT_MS),
+      true,
+    );
+  });
+
   it("não fecha se ainda há lead na fila", () => {
     const campaign = base({
       leads: [{ waId: "5551999887766", status: "queued" }],
@@ -188,6 +208,71 @@ describe("fechamento automático do relatório Meta", () => {
     assert.equal(metrics.read, 1);
     assert.equal(metrics.failed, 1);
     assert.equal(metrics.clicks, 7);
+  });
+});
+
+describe("webhook do Disparo Cloud não perde entregue/lido", () => {
+  const campaign = (patch: Partial<MetaBroadcastCampaign> = {}): MetaBroadcastCampaign => ({
+    id: "bc-merge",
+    tenantId: "t1",
+    connectionId: "c1",
+    templateId: "tpl",
+    templateName: "aviso",
+    language: "pt_BR",
+    phoneNumberId: "phone-1",
+    shortSlug: "abc",
+    shortUrl: "https://wabadisparos.com.br/s/abc",
+    trackedSlug: "abc",
+    clicksAtStart: 0,
+    clicks: 0,
+    status: "running",
+    total: 1,
+    sent: 1,
+    failed: 0,
+    skipped: 0,
+    createdAt: "2026-09-02T10:00:00.000Z",
+    updatedAt: "2026-09-02T10:05:00.000Z",
+    leads: [{ waId: "5551999887766", status: "sent", metaStatus: "accepted", wamid: "wamid.1" }],
+    ...patch,
+  });
+
+  it("gravação do próximo envio não apaga delivered/read do webhook", () => {
+    const stored = campaign({
+      clicks: 3,
+      lastMetaStatusAt: "2026-09-02T10:07:00.000Z",
+      leads: [{ waId: "5551999887766", status: "sent", metaStatus: "delivered", wamid: "wamid.1" }],
+    });
+    const incoming = campaign({
+      sent: 2,
+      total: 2,
+      leads: [
+        { waId: "5551999887766", status: "sent", metaStatus: "accepted", wamid: "wamid.1" },
+        { waId: "5551982001261", status: "sent", metaStatus: "accepted", wamid: "wamid.2" },
+      ],
+    });
+    const merged = mergeBroadcastCampaignPreservingMeta(incoming, stored);
+    assert.equal(merged.leads[0].metaStatus, "delivered");
+    assert.equal(merged.clicks, 3);
+    assert.equal(merged.lastMetaStatusAt, "2026-09-02T10:07:00.000Z");
+  });
+
+  it("casa o status da Meta pelo wamid ou pelo destinatário", () => {
+    const rows = [
+      campaign({
+        leads: [{ waId: "5551999887766", status: "sent", metaStatus: "accepted" }],
+      }),
+    ];
+    const byRecipient = matchBroadcastLeadForMetaStatus(rows, {
+      wamid: "wamid.novo",
+      recipientId: "5551999887766",
+      phoneNumberId: "phone-1",
+    });
+    assert.equal(byRecipient?.lead.waId, "5551999887766");
+    const byWamid = matchBroadcastLeadForMetaStatus(
+      [campaign({ leads: [{ waId: "5551982001261", status: "sent", wamid: "wamid.X" }] })],
+      { wamid: "wamid.X" },
+    );
+    assert.equal(byWamid?.lead.wamid, "wamid.X");
   });
 });
 

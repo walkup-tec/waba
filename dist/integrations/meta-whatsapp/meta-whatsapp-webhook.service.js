@@ -18,6 +18,19 @@ const NOOP_INBOX = {
 const NOOP_TEMPLATES = {
     applyStatus: async () => undefined,
 };
+function applyBroadcastStatusFromWebhook(event) {
+    const mapped = (0, meta_whatsapp_messaging_types_1.mapWebhookStatus)(event.status);
+    if (!mapped)
+        return;
+    const campaign = (0, meta_whatsapp_broadcast_store_1.applyMetaStatusToBroadcastByWamid)(event.messageId || "", mapped, {
+        recipientId: event.recipientId,
+        phoneNumberId: event.phoneNumberId,
+    });
+    if (!campaign?.intakeCampaignId)
+        return;
+    (0, meta_whatsapp_broadcast_report_1.refreshCompletedLabIntakeReport)(campaign.intakeCampaignId);
+    (0, meta_whatsapp_broadcast_report_1.scheduleLabReportFinalize)(campaign.intakeCampaignId);
+}
 class MetaWhatsappWebhookService {
     constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), events = new meta_whatsapp_webhook_events_repository_1.MetaWhatsappWebhookEventsRepository(), inbox = NOOP_INBOX, templates = NOOP_TEMPLATES) {
         this.connections = connections;
@@ -106,9 +119,14 @@ class MetaWhatsappWebhookService {
         });
         if (insert.duplicate) {
             (0, meta_whatsapp_webhook_log_1.logMetaWebhook)("DUPLICATE", { eventType: event.eventType });
+            if (event.eventType === "statuses") {
+                applyBroadcastStatusFromWebhook(event);
+            }
             return;
         }
         if (!connection) {
+            if (event.eventType === "statuses")
+                applyBroadcastStatusFromWebhook(event);
             (0, meta_whatsapp_webhook_log_1.logMetaWebhook)("PROCESSED", { eventType: event.eventType, unmatched: true });
             return;
         }
@@ -138,13 +156,7 @@ class MetaWhatsappWebhookService {
             catch {
                 (0, meta_whatsapp_webhook_log_1.logMetaWebhook)("ERROR", { reason: "inbox_status_failed", eventType: event.eventType });
             }
-            const mapped = (0, meta_whatsapp_messaging_types_1.mapWebhookStatus)(event.status);
-            if (event.messageId && mapped) {
-                const campaign = (0, meta_whatsapp_broadcast_store_1.applyMetaStatusToBroadcastByWamid)(event.messageId, mapped);
-                if (campaign?.intakeCampaignId) {
-                    (0, meta_whatsapp_broadcast_report_1.scheduleLabReportFinalize)(campaign.intakeCampaignId);
-                }
-            }
+            applyBroadcastStatusFromWebhook(event);
         }
         if (event.eventType === "message_template_status_update") {
             try {

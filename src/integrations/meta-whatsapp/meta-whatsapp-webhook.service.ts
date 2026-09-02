@@ -13,7 +13,7 @@ import type { MetaWhatsappWebhookInboxPort } from "./meta-whatsapp-webhook-inbox
 import type { MetaWhatsappWebhookTemplatePort } from "./meta-whatsapp-webhook-template.service";
 import { syncInboxChannelNameFromMeta } from "./meta-whatsapp-phone-identity.store";
 import { applyMetaStatusToBroadcastByWamid } from "./meta-whatsapp-broadcast.store";
-import { scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
+import { refreshCompletedLabIntakeReport, scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
 import { mapWebhookStatus } from "./meta-whatsapp-messaging.types";
 
 const NOOP_INBOX: MetaWhatsappWebhookInboxPort = {
@@ -24,6 +24,18 @@ const NOOP_INBOX: MetaWhatsappWebhookInboxPort = {
 const NOOP_TEMPLATES: MetaWhatsappWebhookTemplatePort = {
   applyStatus: async () => undefined,
 };
+
+function applyBroadcastStatusFromWebhook(event: MetaWebhookNormalizedEvent): void {
+  const mapped = mapWebhookStatus(event.status);
+  if (!mapped) return;
+  const campaign = applyMetaStatusToBroadcastByWamid(event.messageId || "", mapped, {
+    recipientId: event.recipientId,
+    phoneNumberId: event.phoneNumberId,
+  });
+  if (!campaign?.intakeCampaignId) return;
+  refreshCompletedLabIntakeReport(campaign.intakeCampaignId);
+  scheduleLabReportFinalize(campaign.intakeCampaignId);
+}
 
 export type MetaWebhookVerifyQuery = {
   "hub.mode"?: string;
@@ -138,10 +150,14 @@ export class MetaWhatsappWebhookService {
 
     if (insert.duplicate) {
       logMetaWebhook("DUPLICATE", { eventType: event.eventType });
+      if (event.eventType === "statuses") {
+        applyBroadcastStatusFromWebhook(event);
+      }
       return;
     }
 
     if (!connection) {
+      if (event.eventType === "statuses") applyBroadcastStatusFromWebhook(event);
       logMetaWebhook("PROCESSED", { eventType: event.eventType, unmatched: true });
       return;
     }
@@ -170,13 +186,7 @@ export class MetaWhatsappWebhookService {
       } catch {
         logMetaWebhook("ERROR", { reason: "inbox_status_failed", eventType: event.eventType });
       }
-      const mapped = mapWebhookStatus(event.status);
-      if (event.messageId && mapped) {
-        const campaign = applyMetaStatusToBroadcastByWamid(event.messageId, mapped);
-        if (campaign?.intakeCampaignId) {
-          scheduleLabReportFinalize(campaign.intakeCampaignId);
-        }
-      }
+      applyBroadcastStatusFromWebhook(event);
     }
     if (event.eventType === "message_template_status_update") {
       try {

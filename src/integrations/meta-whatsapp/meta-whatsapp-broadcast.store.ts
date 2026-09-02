@@ -72,10 +72,60 @@ function writeStore(store: Store): void {
   writeFileSync(filePath, readFileSync(tmp));
 }
 
+function leadMetaRank(lead: MetaBroadcastLead): number {
+  const meta = lead.metaStatus;
+  if (meta === "read") return 4;
+  if (meta === "delivered") return 3;
+  if (meta === "sent") return 2;
+  if (meta === "accepted") return 1;
+  if (meta === "failed" || lead.status === "failed") return 50;
+  if (lead.status === "sent") return 1;
+  return 0;
+}
+
+function sameBroadcastLead(left: MetaBroadcastLead, right: MetaBroadcastLead): boolean {
+  const leftWamid = String(left.wamid || "").trim();
+  const rightWamid = String(right.wamid || "").trim();
+  if (leftWamid && rightWamid && leftWamid === rightWamid) return true;
+  const leftWa = String(left.waId || "").replace(/\D/g, "");
+  const rightWa = String(right.waId || "").replace(/\D/g, "");
+  return Boolean(leftWa && rightWa && leftWa === rightWa);
+}
+
+/** O envio regrava o JSON; não pode apagar delivered/read que o webhook já gravou. */
+export function mergeBroadcastCampaignPreservingMeta(
+  incoming: MetaBroadcastCampaign,
+  stored: MetaBroadcastCampaign | undefined,
+): MetaBroadcastCampaign {
+  if (!stored) return incoming;
+  const mergedLeads = incoming.leads.map((lead) => {
+    const previous = stored.leads.find((item) => sameBroadcastLead(item, lead));
+    if (!previous) return lead;
+    const keepStored = leadMetaRank(previous) > leadMetaRank(lead);
+    return {
+      ...lead,
+      wamid: String(lead.wamid || previous.wamid || "").trim() || lead.wamid || previous.wamid,
+      metaStatus: keepStored ? previous.metaStatus : lead.metaStatus || previous.metaStatus,
+      error: lead.error || previous.error,
+    };
+  });
+  const storedMetaMs = Date.parse(String(stored.lastMetaStatusAt || "")) || 0;
+  const incomingMetaMs = Date.parse(String(incoming.lastMetaStatusAt || "")) || 0;
+  return {
+    ...incoming,
+    leads: mergedLeads,
+    lastMetaStatusAt:
+      storedMetaMs > incomingMetaMs ? stored.lastMetaStatusAt : incoming.lastMetaStatusAt || stored.lastMetaStatusAt,
+    clicks: Math.max(Number(incoming.clicks || 0), Number(stored.clicks || 0)),
+    reportFinalizedAt: incoming.reportFinalizedAt || stored.reportFinalizedAt,
+  };
+}
+
 export function saveBroadcastCampaign(row: MetaBroadcastCampaign): MetaBroadcastCampaign {
   const store = readStore();
   const index = store.campaigns.findIndex((item) => item.id === row.id);
-  const next = { ...row, updatedAt: new Date().toISOString() };
+  const stored = index >= 0 ? store.campaigns[index] : undefined;
+  const next = mergeBroadcastCampaignPreservingMeta({ ...row, updatedAt: new Date().toISOString() }, stored);
   if (index >= 0) store.campaigns[index] = next;
   else store.campaigns.push(next);
   writeStore(store);
@@ -106,29 +156,66 @@ export function findBroadcastByIntakeCampaignId(intakeCampaignId: string): MetaB
   return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
 }
 
+function recipientDigits(value: string | null | undefined): string {
+  return String(value || "").replace(/\D/g, "");
+}
+
+export function matchBroadcastLeadForMetaStatus(
+  campaigns: MetaBroadcastCampaign[],
+  input: { wamid?: string | null; recipientId?: string | null; phoneNumberId?: string | null },
+): { campaign: MetaBroadcastCampaign; lead: MetaBroadcastLead } | null {
+  const wamid = String(input.wamid || "").trim();
+  const recipient = recipientDigits(input.recipientId);
+  const phoneNumberId = String(input.phoneNumberId || "").trim();
+  const ranked = [...campaigns].sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+  if (wamid) {
+    for (const campaign of ranked) {
+      if (phoneNumberId && String(campaign.phoneNumberId || "") !== phoneNumberId) continue;
+      const lead = campaign.leads.find((item) => String(item.wamid || "").trim() === wamid);
+      if (lead) return { campaign, lead };
+    }
+    for (const campaign of ranked) {
+      const lead = campaign.leads.find((item) => String(item.wamid || "").trim() === wamid);
+      if (lead) return { campaign, lead };
+    }
+  }
+  if (!recipient) return null;
+  for (const campaign of ranked) {
+    if (phoneNumberId && String(campaign.phoneNumberId || "") !== phoneNumberId) continue;
+    const lead = campaign.leads.find(
+      (item) => recipientDigits(item.waId) === recipient && item.status !== "skipped",
+    );
+    if (lead) return { campaign, lead };
+  }
+  return null;
+}
+
 export function applyMetaStatusToBroadcastByWamid(
   wamid: string,
   status: MetaMessageStatus,
+  extras?: { recipientId?: string | null; phoneNumberId?: string | null },
 ): MetaBroadcastCampaign | null {
-  const id = String(wamid || "").trim();
-  if (!id) return null;
   const store = readStore();
-  for (const row of store.campaigns) {
-    const lead = row.leads.find((item) => String(item.wamid || "") === id);
-    if (!lead) continue;
-    const current = lead.metaStatus || (lead.status === "sent" ? "accepted" : lead.status === "failed" ? "failed" : "queued");
-    if (!canAdvanceMetaMessageStatus(current, status) && current !== status) return row;
-    lead.metaStatus = status;
-    if (status === "failed") {
-      lead.status = "failed";
-      lead.error = lead.error || "Falha informada pela Meta.";
-    }
-    row.lastMetaStatusAt = new Date().toISOString();
-    row.updatedAt = row.lastMetaStatusAt;
-    writeStore(store);
-    return { ...row, leads: row.leads.map((item) => ({ ...item })) };
+  const matched = matchBroadcastLeadForMetaStatus(store.campaigns, {
+    wamid,
+    recipientId: extras?.recipientId,
+    phoneNumberId: extras?.phoneNumberId,
+  });
+  if (!matched) return null;
+  const { campaign: row, lead } = matched;
+  const current =
+    lead.metaStatus || (lead.status === "sent" ? "accepted" : lead.status === "failed" ? "failed" : "queued");
+  if (!canAdvanceMetaMessageStatus(current, status) && current !== status) return row;
+  lead.metaStatus = status;
+  if (wamid && !lead.wamid) lead.wamid = String(wamid).trim();
+  if (status === "failed") {
+    lead.status = "failed";
+    lead.error = lead.error || "Falha informada pela Meta.";
   }
-  return null;
+  row.lastMetaStatusAt = new Date().toISOString();
+  row.updatedAt = row.lastMetaStatusAt;
+  writeStore(store);
+  return { ...row, leads: row.leads.map((item) => ({ ...item })) };
 }
 
 export function addClicksToBroadcastCampaign(campaignId: string, amount = 1): void {

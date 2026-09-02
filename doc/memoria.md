@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 19:30 — Entregues/Lidos do relatório Meta
+- HTTP 200 da Graph conta Enviados, não Entregues. Webhook `delivered`/`read` era apagado na regravação do disparo.
+- Merge no save + casamento por destinatário + não fechar em 15 min sem entregue/lido + refresh do relatório já finalizado.
+- LOG: `doc/LOG-2026-09-02__193000__relatorio-meta-entregues-lidos.md`
+
 ## 2026-09-02 18:30 — Push GitHub master do menu Disparo Cloud
 - Tip enviado a `walkup-tec/waba` `master` para o usuário Redeployar no EasyPanel.
 - Marker: `DEPLOY-2026-09-02-183000-menu-disparo-cloud`.
