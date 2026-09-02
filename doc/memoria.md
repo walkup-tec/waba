@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:18 — Ações da tabela restauradas
+- Visualizar inerte. Usar em teste e Excluir de volta.
+- Marker: `DEPLOY-2026-09-02-021800-acoes-tabela-restauradas`
+- LOG: `doc/LOG-2026-09-02__021800__acoes-tabela-restauradas.md`
+
 ## 2026-09-02 02:15 — IA: memória dos Utility aprovados
 - Few-shot com templates do tenant APPROVED+UTILITY. Sem treino do GPT.
 - Marker: `DEPLOY-2026-09-02-021500-ia-memoria-utility`
