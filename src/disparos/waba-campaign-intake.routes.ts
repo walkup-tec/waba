@@ -28,7 +28,10 @@ import {
   isCampaignLeadsTxtFileName,
   trimLeadsBufferToRowCount,
 } from "./waba-campaign-spreadsheet.util";
-import { applyCampaignReportReadOverride } from "./waba-campaign-report-read-overrides";
+import {
+  applyCampaignReportReadOverride,
+  campaignReportHidesClicks,
+} from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
 import { computeCampaignPerformanceMetrics } from "./waba-campaign-performance-metrics";
 import {
@@ -622,7 +625,9 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       intake.createdAt,
       intake.performanceReport,
     );
-    const showClicks = report?.source === "meta_lab";
+    const showClicks =
+      report?.source === "meta_lab" &&
+      !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report);
     const metrics = report
       ? computeCampaignPerformanceMetrics({
           totalLeads: report.totalLeads,

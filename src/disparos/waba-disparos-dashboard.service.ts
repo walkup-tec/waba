@@ -8,7 +8,10 @@ import type {
   WabaCampaignIntakeStatus,
 } from "./waba-campaign-intake.repository";
 import { normalizeCampaignIntakeStatus } from "./waba-campaign-intake-status";
-import { applyCampaignReportReadOverride } from "./waba-campaign-report-read-overrides";
+import {
+  applyCampaignReportReadOverride,
+  campaignReportHidesClicks,
+} from "./waba-campaign-report-read-overrides";
 import {
   filterOutMetricsExcludedOwners,
   isWabaMetricsExcludedOwnerEmail,
@@ -127,7 +130,9 @@ export const buildCampaignComparisonFromIntakes = (
       )!;
       const apiKind = resolveIntakeApiKindFromIntake(intake);
       const rates = computeRatesFromReport(report);
-      const showClicks = report.source === "meta_lab";
+      const showClicks =
+        report.source === "meta_lab" &&
+        !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report);
       return {
         id: intake.id,
         campaignName: intake.campaignName,

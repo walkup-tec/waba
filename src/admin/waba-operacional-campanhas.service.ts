@@ -26,7 +26,10 @@ import {
   type WabaCampaignPerformanceReport,
   type WabaCampaignErrorReport,
 } from "../disparos/waba-campaign-intake.repository";
-import { applyCampaignReportReadOverride } from "../disparos/waba-campaign-report-read-overrides";
+import {
+  applyCampaignReportReadOverride,
+  campaignReportHidesClicks,
+} from "../disparos/waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "../disparos/waba-campaign-laboratorio-attended";
 import { finalizeIntakePerformanceReport } from "../disparos/waba-campaign-report-finalize.service";
 import {
@@ -487,7 +490,12 @@ export class WabaOperacionalCampanhasService {
         liveFromMeta = true;
       }
     }
-    const showClicks = laboratorioAttended || stored?.source === "meta_lab";
+    const hideClicks = campaignReportHidesClicks(
+      intake.campaignName,
+      intake.createdAt,
+      report || stored,
+    );
+    const showClicks = (laboratorioAttended || stored?.source === "meta_lab") && !hideClicks;
     return {
       campaignId: intake.id,
       campaignName: intake.campaignName,

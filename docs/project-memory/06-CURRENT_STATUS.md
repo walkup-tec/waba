@@ -15,7 +15,7 @@ Concluído no laboratório Meta:
 - Com esse privilégio, o operacional vê os portfólios, números e templates já conectados no Laboratório (mesmo workspace do dono).
 - Disparo Cloud é menu da seção Laboratório, acima de Automação. Templates ficou só lista/criar. Planilha com telefones em qualquer formato comum no Brasil, sem prévia por número. Envio só de template aprovado, pelo número Ativo e disponível **do mesmo card do portfólio**. Depois de iniciar, a tabela mostra data, campanha, cliente, envios, barra de andamento e status. O campo de template tem filtro de categoria (primeira opção todas) e o rótulo é `nome-categoria`. A campanha do assinante só lista **Em andamento**, no formato `nome - campanha - envios`. Colunas de telefone/nome só depois do template; se houver variável, é nome ou número. Ao usar o número ele fica ocupado até a campanha finalizar e o relatório ser gerado. O relatório dessa campanha fecha com dados da Meta e cliques. Campanhas de operadores sem Laboratório permanecem com relatório manual.
 
-Em andamento: aprovação dos templates na Meta (até 24 h); validar Entregues/Lidos no relatório Meta após o próximo Redeploy. Campanha Jandira já fechada só atualiza se ainda houver delivered/read no JSON do disparo ou webhook novo.
+Em andamento: aprovação dos templates na Meta (até 24 h). Relatório da Campanha Jandira deste disparo (1.990 / 1.156 / 2) mostra 981 entregues e 431 lidos, sem cliques, via override de leitura.
 
 Marker: `DEPLOY-2026-09-02-193700-relatorio-entregues-lidos`.
 

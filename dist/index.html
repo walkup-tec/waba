@@ -44786,7 +44786,8 @@
         setValue("admin-campanhas-report-delivered", "delivered");
         setValue("admin-campanhas-report-read", "read");
         setValue("admin-campanhas-report-failed", "failed");
-        adminCampanhasReportShowClicks = Boolean(data.showClicks || data.laboratorioAttended);
+        adminCampanhasReportShowClicks =
+          data.showClicks != null ? Boolean(data.showClicks) : Boolean(data.laboratorioAttended);
         adminCampanhasReportClicks = Math.max(0, Math.round(Number(report.clicks ?? 0)));
         adminCampanhasReportSource = String(data.source || report.source || "").trim();
         setAdminCampanhasReportReadOnly(Boolean(data.isReadOnly));

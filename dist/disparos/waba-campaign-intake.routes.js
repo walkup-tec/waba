@@ -510,7 +510,8 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             });
         }
         const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
-        const showClicks = report?.source === "meta_lab";
+        const showClicks = report?.source === "meta_lab" &&
+            !(0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report);
         const metrics = report
             ? (0, waba_campaign_performance_metrics_1.computeCampaignPerformanceMetrics)({
                 totalLeads: report.totalLeads,

@@ -1,14 +1,23 @@
 import type { WabaCampaignPerformanceReport } from "./waba-campaign-intake.repository";
 
-type CampaignReadOverride = {
-  name: string;
-  createdLocalDate: string;
-  createdLocalTime?: string;
-  timezone: string;
-  read: number;
+type CampaignReportFingerprint = {
+  totalLeads: number;
+  sent: number;
+  failed?: number;
 };
 
-const CAMPAIGN_REPORT_READ_OVERRIDES: CampaignReadOverride[] = [
+type CampaignReportOverride = {
+  name: string;
+  createdLocalDate?: string;
+  createdLocalTime?: string;
+  timezone?: string;
+  fingerprint?: CampaignReportFingerprint;
+  delivered?: number;
+  read?: number;
+  hideClicks?: boolean;
+};
+
+const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
   {
     name: "SQUARE RESIDENCIAL",
     createdLocalDate: "2026-08-14",
@@ -22,6 +31,13 @@ const CAMPAIGN_REPORT_READ_OVERRIDES: CampaignReadOverride[] = [
     createdLocalTime: "15:54",
     timezone: "America/Sao_Paulo",
     read: 518,
+  },
+  {
+    name: "Campanha Jandira",
+    fingerprint: { totalLeads: 1990, sent: 1156, failed: 2 },
+    delivered: 981,
+    read: 431,
+    hideClicks: true,
   },
 ];
 
@@ -62,22 +78,73 @@ const namesMatch = (campaignName: string, targetName: string): boolean => {
   return left === right || left.includes(right) || right.includes(left);
 };
 
-export const resolveCampaignReportReadOverride = (
+const roundMetric = (value: unknown): number => {
+  const parsed = Math.round(Number(value));
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return parsed;
+};
+
+const fingerprintMatches = (
+  report: WabaCampaignPerformanceReport,
+  fingerprint: CampaignReportFingerprint,
+): boolean => {
+  if (roundMetric(report.totalLeads) !== fingerprint.totalLeads) return false;
+  if (roundMetric(report.sent) !== fingerprint.sent) return false;
+  if (fingerprint.failed != null && roundMetric(report.failed) !== fingerprint.failed) return false;
+  return true;
+};
+
+const ruleMatches = (
+  rule: CampaignReportOverride,
   campaignName: string,
   createdAt: string,
-): number | null => {
-  const name = String(campaignName || "").trim();
-  const created = String(createdAt || "").trim();
-  if (!name || !created) return null;
+  report?: WabaCampaignPerformanceReport | null,
+): boolean => {
+  if (!namesMatch(campaignName, rule.name)) return false;
+  if (!rule.createdLocalDate && !rule.fingerprint) return false;
 
-  for (const rule of CAMPAIGN_REPORT_READ_OVERRIDES) {
-    if (!namesMatch(name, rule.name)) continue;
-    const stamp = formatLocalStamp(created, rule.timezone);
-    if (stamp.date !== rule.createdLocalDate) continue;
-    return rule.read;
+  if (rule.createdLocalDate) {
+    const created = String(createdAt || "").trim();
+    if (!created) return false;
+    const stamp = formatLocalStamp(created, rule.timezone || "America/Sao_Paulo");
+    if (stamp.date !== rule.createdLocalDate) return false;
+  }
+
+  if (rule.fingerprint) {
+    if (!report) return false;
+    if (!fingerprintMatches(report, rule.fingerprint)) return false;
+  }
+
+  return true;
+};
+
+export const resolveCampaignReportOverride = (
+  campaignName: string,
+  createdAt: string,
+  report?: WabaCampaignPerformanceReport | null,
+): CampaignReportOverride | null => {
+  const name = String(campaignName || "").trim();
+  if (!name) return null;
+  for (const rule of CAMPAIGN_REPORT_OVERRIDES) {
+    if (ruleMatches(rule, name, createdAt, report)) return rule;
   }
   return null;
 };
+
+export const resolveCampaignReportReadOverride = (
+  campaignName: string,
+  createdAt: string,
+  report?: WabaCampaignPerformanceReport | null,
+): number | null => {
+  const rule = resolveCampaignReportOverride(campaignName, createdAt, report);
+  return rule?.read ?? null;
+};
+
+export const campaignReportHidesClicks = (
+  campaignName: string,
+  createdAt: string,
+  report?: WabaCampaignPerformanceReport | null,
+): boolean => Boolean(resolveCampaignReportOverride(campaignName, createdAt, report)?.hideClicks);
 
 export const applyCampaignReportReadOverride = (
   campaignName: string,
@@ -85,7 +152,11 @@ export const applyCampaignReportReadOverride = (
   report: WabaCampaignPerformanceReport | null | undefined,
 ): WabaCampaignPerformanceReport | null | undefined => {
   if (!report) return report;
-  const nextRead = resolveCampaignReportReadOverride(campaignName, createdAt);
-  if (nextRead == null || nextRead === report.read) return report;
-  return { ...report, read: nextRead };
+  const rule = resolveCampaignReportOverride(campaignName, createdAt, report);
+  if (!rule) return report;
+
+  const nextDelivered = rule.delivered != null ? rule.delivered : report.delivered;
+  const nextRead = rule.read != null ? rule.read : report.read;
+  if (nextDelivered === report.delivered && nextRead === report.read) return report;
+  return { ...report, delivered: nextDelivered, read: nextRead };
 };

@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 20:15 — Override pontual Campanha Jandira
+- Só este disparo (nome + 1990/1156/2): Entregues **981**, Lidos **431**, sem cliques.
+- Taxas: entrega 84,86% · leitura 43,93% · falha 0,10%. Bônus 834 permanece.
+- Código geral de webhook/fechamento Meta não muda.
+- LOG: `doc/LOG-2026-09-02__201500__override-jandira-981-431.md`
+
 ## 2026-09-02 19:37 — Push GitHub master Entregues/Lidos
 - Tip enviado a `walkup-tec/waba` `master` para o usuário Redeployar.
 - Marker: `DEPLOY-2026-09-02-193700-relatorio-entregues-lidos`.
