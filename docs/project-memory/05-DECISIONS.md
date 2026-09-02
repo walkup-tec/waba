@@ -1,0 +1,6 @@
+# Decisões
+
+- 2026-09-02: card de relatórios lista todos os portfólios; o select do formulário de criação não controla a tabela.
+- 2026-09-02: exclusão da tabela é só front (`sessionStorage`). Motivo: o usuário pediu remover da UI sem integração Meta.
+- Docker EasyPanel copia `dist/`. Build precisa ir no Git antes do Redeploy.
+- Traefik deste VPS usa entryPoints `http`/`https`, nunca `web`/`websecure`.

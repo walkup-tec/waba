@@ -79,6 +79,16 @@ export class MetaWhatsappTemplateRepository {
     return this.clientFactory();
   }
 
+  async listByTenant(tenantId: string): Promise<MetaTemplateRecord[]> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("tenant_id", tenantId)
+      .order("name", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => mapRow(asRow(row)));
+  }
+
   async listByTenantConnection(tenantId: string, connectionId: string): Promise<MetaTemplateRecord[]> {
     const { data, error } = await this.client()
       .from(TABLE)

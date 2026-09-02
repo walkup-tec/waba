@@ -101,12 +101,34 @@ export class MetaWhatsappTemplateService {
     return row;
   }
 
+  private async listOpenConnections(tenantId: string): Promise<MetaWhatsappConnectionRecord[]> {
+    const repo = this.connections as {
+      listOpenByTenant?: (id: string) => Promise<MetaWhatsappConnectionRecord[]>;
+    };
+    if (typeof repo.listOpenByTenant === "function") {
+      return repo.listOpenByTenant(tenantId);
+    }
+    const one = await this.connections.findConnectedByTenant(tenantId);
+    return one ? [one] : [];
+  }
+
   async listFromAuth(auth: WabaRequestAuth, connectionId?: string): Promise<MetaTemplatePublic[]> {
     const tenant = requireTenant(auth);
-    const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
-    const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+    const requested = String(connectionId || "").trim();
+    if (requested) {
+      const connection = await this.requireConnectedWaba(tenant.tenantId, requested);
+      const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+      logMetaTemplate("LIST", { tenantId: tenant.tenantId, count: rows.length });
+      return rows.map((row) => toPublicTemplate(row, publicPortfolioName(connection)));
+    }
+    const rows = await this.templates.listByTenant(tenant.tenantId);
+    const openRows = await this.listOpenConnections(tenant.tenantId);
+    const byId = new Map(openRows.map((row) => [row.id, row]));
     logMetaTemplate("LIST", { tenantId: tenant.tenantId, count: rows.length });
-    return rows.map((row) => toPublicTemplate(row, publicPortfolioName(connection)));
+    return rows.map((row) => {
+      const connection = byId.get(row.connectionId);
+      return toPublicTemplate(row, connection ? publicPortfolioName(connection) : "Portfólio");
+    });
   }
 
   async createFromAuth(

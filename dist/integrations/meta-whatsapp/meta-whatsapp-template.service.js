@@ -76,12 +76,31 @@ class MetaWhatsappTemplateService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
         return row;
     }
+    async listOpenConnections(tenantId) {
+        const repo = this.connections;
+        if (typeof repo.listOpenByTenant === "function") {
+            return repo.listOpenByTenant(tenantId);
+        }
+        const one = await this.connections.findConnectedByTenant(tenantId);
+        return one ? [one] : [];
+    }
     async listFromAuth(auth, connectionId) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
-        const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+        const requested = String(connectionId || "").trim();
+        if (requested) {
+            const connection = await this.requireConnectedWaba(tenant.tenantId, requested);
+            const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+            (0, meta_whatsapp_template_log_1.logMetaTemplate)("LIST", { tenantId: tenant.tenantId, count: rows.length });
+            return rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection)));
+        }
+        const rows = await this.templates.listByTenant(tenant.tenantId);
+        const openRows = await this.listOpenConnections(tenant.tenantId);
+        const byId = new Map(openRows.map((row) => [row.id, row]));
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("LIST", { tenantId: tenant.tenantId, count: rows.length });
-        return rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection)));
+        return rows.map((row) => {
+            const connection = byId.get(row.connectionId);
+            return (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, connection ? publicPortfolioName(connection) : "Portfólio");
+        });
     }
     async createFromAuth(auth, body) {
         const tenant = requireTenant(auth);

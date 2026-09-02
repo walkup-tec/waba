@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 01:30 — Tabela: todos os portfólios + filtros
+- Card de relatórios lista todos os templates do tenant. Filtro **Todos os Portfólios**, busca por nome, Excluir só no front (`sessionStorage`).
+- Marker: `DEPLOY-2026-09-02-013000-tabela-todos-portfolios`
+- LOG: `doc/LOG-2026-09-02__013000__tabela-todos-portfolios.md`
+
 ## 2026-09-02 01:15 — Tabela: portfólio + tags de status
 - Primeira coluna = portfólio. Status da Meta em tag colorida (Aprovado / Em análise / Reprovado…). Categoria, qualidade e idioma traduzidos na lista.
 - Marker: `DEPLOY-2026-09-02-011500-tabela-portfolio-status`

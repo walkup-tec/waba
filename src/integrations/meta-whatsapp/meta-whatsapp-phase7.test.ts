@@ -91,6 +91,13 @@ class FakeConnections {
   async findConnectedByTenant(tenantId: string) {
     return this.rows.find((row) => row.tenantId === tenantId && row.status === "connected") || null;
   }
+  async listOpenByTenant(tenantId: string) {
+    return this.rows.filter(
+      (row) =>
+        row.tenantId === tenantId &&
+        (row.status === "connected" || row.status === "pending_confirmation"),
+    );
+  }
   async findConnectedByPhoneNumberId(phoneNumberId: string) {
     return this.rows.find((row) => row.phoneNumberId === phoneNumberId && row.status === "connected") || null;
   }
@@ -104,6 +111,9 @@ class FakeConnections {
 class FakeTemplates {
   rows: MetaTemplateRecord[] = [];
 
+  async listByTenant(tenantId: string) {
+    return this.rows.filter((row) => row.tenantId === tenantId);
+  }
   async listByTenantConnection(tenantId: string, connectionId: string) {
     return this.rows.filter((row) => row.tenantId === tenantId && row.connectionId === connectionId);
   }
@@ -364,14 +374,47 @@ describe("fase 7 listagem e tenant", () => {
     assert.equal("tenantId" in listed[0], false);
   });
 
-  it("conexão não connected recusa listagem", async () => {
+  it("sem WABA connected devolve lista vazia, não erro", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow({ status: "pending_token" }));
+    const service = new MetaWhatsappTemplateService(connections as any, new FakeTemplates() as any);
+    const listed = await service.listFromAuth(auth(EMAIL_A));
+    assert.equal(listed.length, 0);
+  });
+
+  it("connectionId de WABA não connected recusa listagem", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow({ status: "pending_token" }));
     const service = new MetaWhatsappTemplateService(connections as any, new FakeTemplates() as any);
     await assert.rejects(
-      () => service.listFromAuth(auth(EMAIL_A)),
+      () => service.listFromAuth(auth(EMAIL_A), "conn-a"),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "not_connected",
     );
+  });
+
+  it("lista templates de todos os portfólios do tenant", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow(),
+      connectedRow({
+        id: "conn-b",
+        wabaId: "waba-b",
+        phoneNumberId: "phone-b",
+        verifiedName: "Loja B",
+        updatedAt: "2026-09-02T00:00:00.000Z",
+      }),
+    );
+    const templates = new FakeTemplates();
+    templates.rows.push(
+      templateRow(),
+      templateRow({ id: "local-b", connectionId: "conn-b", wabaId: "waba-b", name: "template_b" }),
+      templateRow({ id: "other", tenantId: TENANT_B, connectionId: "conn-x", name: "outro" }),
+    );
+    const service = new MetaWhatsappTemplateService(connections as any, templates as any);
+    const listed = await service.listFromAuth(auth(EMAIL_A));
+    assert.equal(listed.length, 2);
+    assert.equal(listed.some((row) => row.name === "retorno_lead" && row.portfolioName === "Loja"), true);
+    assert.equal(listed.some((row) => row.name === "template_b" && row.portfolioName === "Loja B"), true);
   });
 
   it("WABA pending_confirmation pode gerenciar templates", async () => {

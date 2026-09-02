@@ -59,6 +59,16 @@ class MetaWhatsappTemplateRepository {
     client() {
         return this.clientFactory();
     }
+    async listByTenant(tenantId) {
+        const { data, error } = await this.client()
+            .from(TABLE)
+            .select(COLUMNS)
+            .eq("tenant_id", tenantId)
+            .order("name", { ascending: true });
+        if (error)
+            throw new Error(error.message);
+        return (data || []).map((row) => mapRow(asRow(row)));
+    }
     async listByTenantConnection(tenantId, connectionId) {
         const { data, error } = await this.client()
             .from(TABLE)
