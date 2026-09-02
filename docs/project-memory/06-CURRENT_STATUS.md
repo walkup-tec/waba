@@ -12,6 +12,6 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-110400-modal-envio-processando`.
+Marker: `DEPLOY-2026-09-02-111000-filtro-status-largura`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

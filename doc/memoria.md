@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 11:10 — Filtro Todos os status cortado
+- Select da tabela: largura 132px → 176px.
+- Marker: `DEPLOY-2026-09-02-111000-filtro-status-largura`
+- LOG: `doc/LOG-2026-09-02__111000__filtro-status-largura.md`
+
 ## 2026-09-02 11:04 — Processando do envio à Meta sumia
 - Clique duplo/triplo em Enviar fechava o overlay na fase processing (microtask entre listeners).
 - Marker: `DEPLOY-2026-09-02-110400-modal-envio-processando`
