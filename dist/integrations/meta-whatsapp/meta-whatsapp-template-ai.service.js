@@ -32,7 +32,6 @@ const MIME_ALIASES = {
     "image/pjpeg": "image/jpeg",
     "image/x-png": "image/png",
 };
-const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 function normalizeHeaderMediaMime(mime) {
     return String(mime || "")
         .trim()
@@ -410,9 +409,6 @@ class MetaWhatsappTemplateAiService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         if (!allowed || !bytes?.length || !allowed.has(mime)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
-        }
-        if (mediaFormat === "IMAGE" && bytes.length > IMAGE_MAX_BYTES) {
-            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_media_too_large");
         }
         const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
         const appId = (0, meta_config_1.readMetaAppId)();

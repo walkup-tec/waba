@@ -50,8 +50,6 @@ const MIME_ALIASES: Record<string, string> = {
   "image/x-png": "image/png",
 };
 
-const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-
 export function normalizeHeaderMediaMime(mime: string): string {
   return String(mime || "")
     .trim()
@@ -515,9 +513,6 @@ export class MetaWhatsappTemplateAiService {
     if (!connectionId) throw new MetaWhatsappError("invalid_payload");
     if (!allowed || !bytes?.length || !allowed.has(mime)) {
       throw new MetaWhatsappError("template_upload_failed");
-    }
-    if (mediaFormat === "IMAGE" && bytes.length > IMAGE_MAX_BYTES) {
-      throw new MetaWhatsappError("template_media_too_large");
     }
     const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
     const appId = readMetaAppId();

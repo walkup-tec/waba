@@ -55,9 +55,9 @@ const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   template_media_required:
     "Selecione o arquivo da mídia. A Meta exige um exemplo via upload para cabeçalho de imagem, vídeo ou documento.",
   template_media_too_large:
-    "A imagem passou de 5 MB, o limite da Meta para cabeçalho. Envie um PNG ou JPEG menor.",
+    "A Meta recusou a mídia do cabeçalho por tamanho. Envie um JPEG ou PNG menor.",
   template_upload_failed:
-    "A Meta recusou o upload da mídia. Use JPEG ou PNG de até 5 MB e tente novamente.",
+    "A Meta recusou o upload da mídia. Use JPEG ou PNG e tente novamente.",
   template_not_found: "Este template não pertence à conexão WhatsApp desta conta.",
   template_delete_failed: "Não foi possível excluir o template na Meta. Tente novamente.",
   template_not_ready: "Este template ainda não está aprovado para envio.",

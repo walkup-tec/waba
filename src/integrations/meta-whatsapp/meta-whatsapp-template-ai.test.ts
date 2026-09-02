@@ -810,7 +810,7 @@ describe("Assistente IA de templates Utility", () => {
     assert.equal(sanitizeGraphUploadFileName("ChatGPT Image 02-09-2026.png", "image/png"), "header.png");
   });
 
-  it("recusa imagem de cabeçalho maior que 5 MB", async () => {
+  it("não recusa cabeçalho de imagem só por passar de 5 MB", async () => {
     const png = Buffer.alloc(5 * 1024 * 1024 + 8, 0);
     png[0] = 0x89;
     png[1] = 0x50;
@@ -821,20 +821,25 @@ describe("Assistente IA de templates Utility", () => {
     png[6] = 0x1a;
     png[7] = 0x0a;
     const service = new MetaWhatsappTemplateAiService();
-    await assert.rejects(
-      () =>
-        service.uploadHeaderMediaFromAuth(
-          { email: "tpl-media@exemplo.com", role: "subscriber" },
-          {
-            connectionId: "conn-1",
-            mediaFormat: "IMAGE",
-            fileName: "ChatGPT Image.png",
-            mime: "image/png",
-            bytes: png,
-          },
-        ),
-      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_media_too_large",
-    );
+    try {
+      await service.uploadHeaderMediaFromAuth(
+        { email: "tpl-media@exemplo.com", role: "subscriber" },
+        {
+          connectionId: "conn-1",
+          mediaFormat: "IMAGE",
+          fileName: "ChatGPT Image.png",
+          mime: "image/png",
+          bytes: png,
+        },
+      );
+    } catch (error) {
+      assert.notEqual(
+        error instanceof MetaWhatsappError ? error.code : "",
+        "template_media_too_large",
+      );
+      return;
+    }
+    assert.ok(true);
   });
 });
 describe("OpenAI Responses com Structured Outputs", () => {

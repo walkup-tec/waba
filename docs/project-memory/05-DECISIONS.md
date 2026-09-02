@@ -1,3 +1,4 @@
+- 2026-09-02: o upload de cabeçalho de template não recusa mais JPEG/PNG por 5 MB. Motivo: o teto local barrava PNG válidos antes da Graph. O HTTP segue 16 MB. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media/
 - 2026-09-02: o Laboratório volta a enviar foto de perfil do chip para a Meta (`profile_picture_handle`). Motivo: o card só lia a Graph; o pedido é ditar a foto no Waba. Nome de exibição segue revisão da Meta. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/
 - 2026-09-02: **Editar perfil** só habilita no número Ativo (CONNECTED). Motivo: a Meta recusa `whatsapp_business_profile` em Pendente; o botão não deve aparecer antes do PIN.
 - 2026-09-02: submit-all só trata como já enviado se o template ainda existe no banco do portfólio. Motivo: após exclusão na Meta o modal fingia sucesso sem POST Graph.

@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 12:32 — Sem teto local de 5 MB no cabeçalho de template
+- O Enviar para META não recusa mais imagem > 5 MB. Upload HTTP até 16 MB; a Graph pode recusar.
+- Marker: `DEPLOY-2026-09-02-123200-template-sem-teto-5mb`
+- LOG: `doc/LOG-2026-09-02__123200__template-sem-teto-5mb.md`
+
 ## 2026-09-02 12:10 — Editar perfil só no número Ativo
 - Card Pendente não mostra Editar perfil nem clique na foto. Backend já recusa `phone_not_registered`.
 - Marker: `DEPLOY-2026-09-02-121000-editar-perfil-so-ativo`
