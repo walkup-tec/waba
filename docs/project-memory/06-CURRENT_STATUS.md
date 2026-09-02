@@ -14,4 +14,4 @@ Em andamento: aprovação dos templates na Meta (até 24 h).
 
 Marker: `DEPLOY-2026-09-02-103000-modal-excluir-template`.
 
-GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
+GitHub `walkup-tec/waba` `master` está em `81e149a`. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
