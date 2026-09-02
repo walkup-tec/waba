@@ -80,6 +80,7 @@ import {
 } from "./meta-whatsapp-phone-profile";
 import { publishMetaPageProfilePicture, uploadMetaResumableImage } from "./meta-whatsapp-resumable-upload";
 import { MetaWhatsappWebhookSubscriptionService } from "./meta-whatsapp-webhook-subscription.service";
+import { applyCloudPhoneOccupancy, listBusyCloudPhoneNumberIds } from "./meta-whatsapp-phone-occupancy";
 
 const SENSITIVE_KEY =
   /^(access_token|accessToken|app_secret|appSecret|client_secret|clientSecret|authorization_code|access_token_encrypted|accessTokenEncrypted|encrypted_token|encryptedToken|system_user_token|systemUserToken|refresh_token|refreshToken)$/i;
@@ -161,17 +162,20 @@ function withLocalIdentities(
 ): MetaPortfolioAssetsPublic {
   const localizeCard = (item: MetaPortfolioPublic) =>
     applyLocalPortfolioBusinessPhoto(tenantId, applyLocalPortfolioBusinessIdentity(tenantId, item));
+  const busyPhoneIds = listBusyCloudPhoneNumberIds(tenantId);
+  const localizeNumbers = (numbers: MetaPortfolioNumberPublic[]) =>
+    applyCloudPhoneOccupancy(tenantId, applyLocalPhoneIdentities(tenantId, numbers), busyPhoneIds);
   const portfolio = assets.portfolio ? localizeCard(assets.portfolio) : null;
   const portfolios = (assets.portfolios || []).map((item) => ({
     ...localizeCard(item),
-    numbers: applyLocalPhoneIdentities(tenantId, item.numbers || []),
+    numbers: localizeNumbers(item.numbers || []),
   }));
   return {
     ...assets,
     portfolios,
     selectedConnectionId: assets.selectedConnectionId ?? null,
     portfolio: portfolio,
-    numbers: applyLocalPhoneIdentities(tenantId, assets.numbers || []),
+    numbers: localizeNumbers(assets.numbers || []),
   };
 }
 

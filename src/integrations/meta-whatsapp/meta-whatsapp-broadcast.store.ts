@@ -88,10 +88,14 @@ export function findBroadcastCampaign(tenantId: string, id: string): MetaBroadca
 }
 
 export function listBroadcastCampaigns(tenantId: string, limit = 8): MetaBroadcastCampaign[] {
+  return listAllBroadcastCampaigns(tenantId)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .slice(0, Math.max(1, limit));
+}
+
+export function listAllBroadcastCampaigns(tenantId: string): MetaBroadcastCampaign[] {
   return readStore()
     .campaigns.filter((item) => item.tenantId === tenantId)
-    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-    .slice(0, Math.max(1, limit))
     .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
 

@@ -164,7 +164,7 @@ class MetaWhatsappBroadcastService {
     async requireActivePhone(auth, connectionId, phoneNumberId) {
         const requested = String(phoneNumberId || "").trim();
         if (!requested) {
-            fail("invalid_payload", "Selecione um número Ativo do portfólio.");
+            fail("invalid_payload", "Selecione um número Ativo e disponível do portfólio.");
         }
         const assets = await this.portfolios.listPortfolioAssets(auth, { connectionId });
         const numbers = [
@@ -176,6 +176,9 @@ class MetaWhatsappBroadcastService {
             fail("invalid_payload", "Este número não pertence ao portfólio selecionado.");
         if (String(match.uiStatus || "") !== "ativo") {
             fail("phone_not_registered", "O disparo Cloud só sai de um número Ativo.");
+        }
+        if (String(match.dispatchStatus || "") === "em_disparo") {
+            fail("invalid_payload", "Este número está ocupado em outro disparo. Ele volta a ficar disponível depois que a campanha for finalizada e o relatório for gerado.");
         }
         return requested;
     }

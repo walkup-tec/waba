@@ -19,6 +19,7 @@ const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-iden
 const meta_whatsapp_phone_profile_1 = require("./meta-whatsapp-phone-profile");
 const meta_whatsapp_resumable_upload_1 = require("./meta-whatsapp-resumable-upload");
 const meta_whatsapp_webhook_subscription_service_1 = require("./meta-whatsapp-webhook-subscription.service");
+const meta_whatsapp_phone_occupancy_1 = require("./meta-whatsapp-phone-occupancy");
 const SENSITIVE_KEY = /^(access_token|accessToken|app_secret|appSecret|client_secret|clientSecret|authorization_code|access_token_encrypted|accessTokenEncrypted|encrypted_token|encryptedToken|system_user_token|systemUserToken|refresh_token|refreshToken)$/i;
 function toMetaWhatsappUiStatus(status) {
     if (status === "connected")
@@ -86,17 +87,19 @@ function requireConfigured() {
 }
 function withLocalIdentities(tenantId, assets) {
     const localizeCard = (item) => (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessPhoto)(tenantId, (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessIdentity)(tenantId, item));
+    const busyPhoneIds = (0, meta_whatsapp_phone_occupancy_1.listBusyCloudPhoneNumberIds)(tenantId);
+    const localizeNumbers = (numbers) => (0, meta_whatsapp_phone_occupancy_1.applyCloudPhoneOccupancy)(tenantId, (0, meta_whatsapp_phone_identity_store_1.applyLocalPhoneIdentities)(tenantId, numbers), busyPhoneIds);
     const portfolio = assets.portfolio ? localizeCard(assets.portfolio) : null;
     const portfolios = (assets.portfolios || []).map((item) => ({
         ...localizeCard(item),
-        numbers: (0, meta_whatsapp_phone_identity_store_1.applyLocalPhoneIdentities)(tenantId, item.numbers || []),
+        numbers: localizeNumbers(item.numbers || []),
     }));
     return {
         ...assets,
         portfolios,
         selectedConnectionId: assets.selectedConnectionId ?? null,
         portfolio: portfolio,
-        numbers: (0, meta_whatsapp_phone_identity_store_1.applyLocalPhoneIdentities)(tenantId, assets.numbers || []),
+        numbers: localizeNumbers(assets.numbers || []),
     };
 }
 function storedNumbersFromConnection(open) {

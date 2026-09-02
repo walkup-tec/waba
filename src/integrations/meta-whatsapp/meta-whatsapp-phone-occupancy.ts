@@ -1,0 +1,77 @@
+import { WabaCampaignIntakeRepository } from "../../disparos/waba-campaign-intake.repository";
+import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
+import {
+  listAllBroadcastCampaigns,
+  type MetaBroadcastCampaign,
+} from "./meta-whatsapp-broadcast.store";
+import type { MetaPortfolioNumberPublic } from "./meta-whatsapp-portfolio.types";
+
+export function isCloudPhoneBusyForCampaign(input: {
+  broadcastStatus: MetaBroadcastCampaign["status"];
+  intakeStatus?: string | null;
+}): boolean {
+  if (input.intakeStatus) {
+    const intake = normalizeCampaignIntakeStatus(input.intakeStatus);
+    if (intake === "completed" || intake === "error_reported" || intake === "cancelled") {
+      return false;
+    }
+    if (intake === "generated" || intake === "in_progress") {
+      return true;
+    }
+  }
+  return input.broadcastStatus === "queued" || input.broadcastStatus === "running";
+}
+
+export function collectBusyCloudPhoneNumberIds(
+  campaigns: ReadonlyArray<{
+    phoneNumberId?: string;
+    status: MetaBroadcastCampaign["status"];
+    intakeCampaignId?: string;
+  }>,
+  intakeStatusById: ReadonlyMap<string, string>,
+): Set<string> {
+  const busy = new Set<string>();
+  for (const row of campaigns) {
+    const phoneId = String(row.phoneNumberId || "").trim();
+    if (!phoneId) continue;
+    const intakeId = String(row.intakeCampaignId || "").trim();
+    const intakeStatus = intakeId ? intakeStatusById.get(intakeId) : undefined;
+    if (
+      isCloudPhoneBusyForCampaign({
+        broadcastStatus: row.status,
+        intakeStatus,
+      })
+    ) {
+      busy.add(phoneId);
+    }
+  }
+  return busy;
+}
+
+export function listBusyCloudPhoneNumberIds(tenantId: string): Set<string> {
+  const campaigns = listAllBroadcastCampaigns(tenantId);
+  const intakeIds = [
+    ...new Set(campaigns.map((row) => String(row.intakeCampaignId || "").trim()).filter(Boolean)),
+  ];
+  const intakeStatusById = new Map<string, string>();
+  if (intakeIds.length) {
+    const intakes = new WabaCampaignIntakeRepository();
+    for (const id of intakeIds) {
+      const intake = intakes.getById(id);
+      if (intake) intakeStatusById.set(id, intake.status);
+    }
+  }
+  return collectBusyCloudPhoneNumberIds(campaigns, intakeStatusById);
+}
+
+export function applyCloudPhoneOccupancy(
+  tenantId: string,
+  numbers: MetaPortfolioNumberPublic[],
+  busyPhoneIds?: ReadonlySet<string>,
+): MetaPortfolioNumberPublic[] {
+  const busy = busyPhoneIds || listBusyCloudPhoneNumberIds(tenantId);
+  return numbers.map((row) => ({
+    ...row,
+    dispatchStatus: busy.has(String(row.phoneNumberId || "").trim()) ? "em_disparo" : "livre",
+  }));
+}

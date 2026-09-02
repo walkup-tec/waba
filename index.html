@@ -21705,7 +21705,7 @@
                 <span class="muted">Template oficial · números no padrão Meta</span>
               </div>
               <p class="muted" style="margin: 0 0 12px;">
-                Ordem: portfólio, template aprovado, número Ativo, campanha do assinante atendida no Laboratório e planilha. Os indicadores e os cliques desse disparo entram no relatório dessa campanha. Telefones são normalizados para E.164 da Meta (DDI 55, 9º dígito, máscara e número do Excel).
+                Ordem: portfólio, template aprovado, número Ativo e disponível, campanha do assinante atendida no Laboratório e planilha. Ao iniciar o disparo o número fica ocupado; só volta a disponível depois que a campanha for finalizada e o relatório for gerado. Os indicadores e os cliques entram no relatório dessa campanha. Telefones são normalizados para E.164 da Meta (DDI 55, 9º dígito, máscara e número do Excel).
               </p>
               <div class="disparos-grid disparos-grid-2 meta-tpl-broadcast-grid">
                 <div class="aquecedor-field">
@@ -21721,9 +21721,9 @@
                   </select>
                 </div>
                 <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-number">3. Número Ativo</label>
-                  <select id="meta-tpl-broadcast-number" aria-label="Número Ativo">
-                    <option value="">Selecione um número Ativo</option>
+                  <label for="meta-tpl-broadcast-number">3. Número Ativo e disponível</label>
+                  <select id="meta-tpl-broadcast-number" aria-label="Número Ativo e disponível">
+                    <option value="">Selecione um número Ativo e disponível</option>
                   </select>
                 </div>
                 <div class="aquecedor-field">
@@ -38302,6 +38302,14 @@
                 displayPhoneNumber: "+55 51 98107-7770",
                 verifiedName: "Drax Sistemas",
                 uiStatus: "ativo",
+                dispatchStatus: "livre",
+              },
+              {
+                phoneNumberId: "demo-phone-busy",
+                displayPhoneNumber: "+55 51 98200-1261",
+                verifiedName: "Drax Secundário",
+                uiStatus: "ativo",
+                dispatchStatus: "em_disparo",
               },
             ],
           },
@@ -38619,7 +38627,11 @@
           return String((item && item.connectionId) || "") === connectionId;
         });
         return ((match && match.numbers) || []).filter(function (item) {
-          return String(item.uiStatus || "") === "ativo" && String(item.phoneNumberId || "").trim();
+          return (
+            String(item.uiStatus || "") === "ativo" &&
+            String(item.dispatchStatus || "livre") !== "em_disparo" &&
+            String(item.phoneNumberId || "").trim()
+          );
         });
       }
 
@@ -38635,7 +38647,9 @@
               label: name ? name + " · " + phone : phone,
             };
           }),
-          numbers.length ? "Selecione um número Ativo" : "Nenhum número Ativo neste portfólio",
+          numbers.length
+            ? "Selecione um número Ativo e disponível"
+            : "Nenhum número Ativo e disponível. Números em disparo liberam após o relatório.",
         );
       }
 
@@ -38822,7 +38836,7 @@
           return;
         }
         if (!String((metaTplBroadcastEl("meta-tpl-broadcast-number") || {}).value || "").trim()) {
-          metaTplBroadcastSetStatus("Selecione um número Ativo.");
+          metaTplBroadcastSetStatus("Selecione um número Ativo e disponível.");
           return;
         }
         if (!String((metaTplBroadcastEl("meta-tpl-broadcast-intake") || {}).value || "").trim()) {

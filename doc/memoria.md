@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 16:33 — Número Cloud ocupado até o relatório
+- Select do Disparo Cloud: só Ativo + disponível (`dispatchStatus !== em_disparo`).
+- Ao iniciar o disparo o número fica ocupado; libera em `completed` / `error_reported` / `cancelled`.
+- Envio `done` com intake `in_progress` (coletando Meta) mantém ocupado.
+- LOG: `doc/LOG-2026-09-02__163317__numero-ocupado-disparo-cloud.md`
+
 ## 2026-09-02 16:15 — Relatório Meta só se o atendente tem Laboratório
 - Campanhas da fila sem Laboratório: relatório manual, sem cliques.
 - Campanhas atendidas por quem tem Laboratório: indicadores da Meta + cliques no `/s/:slug`.

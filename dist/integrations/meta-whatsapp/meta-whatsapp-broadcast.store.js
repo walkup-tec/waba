@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.saveBroadcastCampaign = saveBroadcastCampaign;
 exports.findBroadcastCampaign = findBroadcastCampaign;
 exports.listBroadcastCampaigns = listBroadcastCampaigns;
+exports.listAllBroadcastCampaigns = listAllBroadcastCampaigns;
 exports.findBroadcastByIntakeCampaignId = findBroadcastByIntakeCampaignId;
 exports.applyMetaStatusToBroadcastByWamid = applyMetaStatusToBroadcastByWamid;
 exports.addClicksToBroadcastCampaign = addClicksToBroadcastCampaign;
@@ -61,10 +62,13 @@ function findBroadcastCampaign(tenantId, id) {
     return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
 }
 function listBroadcastCampaigns(tenantId, limit = 8) {
+    return listAllBroadcastCampaigns(tenantId)
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .slice(0, Math.max(1, limit));
+}
+function listAllBroadcastCampaigns(tenantId) {
     return readStore()
         .campaigns.filter((item) => item.tenantId === tenantId)
-        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-        .slice(0, Math.max(1, limit))
         .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
 function findBroadcastByIntakeCampaignId(intakeCampaignId) {

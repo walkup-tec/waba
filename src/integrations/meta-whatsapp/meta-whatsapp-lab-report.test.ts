@@ -13,6 +13,10 @@ import {
   META_LAB_REPORT_MAX_WAIT_MS,
 } from "./meta-whatsapp-broadcast-report";
 import type { MetaBroadcastCampaign } from "./meta-whatsapp-broadcast.store";
+import {
+  collectBusyCloudPhoneNumberIds,
+  isCloudPhoneBusyForCampaign,
+} from "./meta-whatsapp-phone-occupancy";
 
 const prodEnv = {
   WABA_UI_PROFILE: "production",
@@ -176,5 +180,41 @@ describe("fechamento automático do relatório Meta", () => {
     assert.equal(metrics.read, 1);
     assert.equal(metrics.failed, 1);
     assert.equal(metrics.clicks, 7);
+  });
+});
+
+describe("ocupação do número no Disparo Cloud", () => {
+  it("ocupa no início do disparo e só libera depois do relatório", () => {
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "queued", intakeStatus: "generated" }), true);
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "running", intakeStatus: "in_progress" }), true);
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "done", intakeStatus: "in_progress" }), true);
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "failed", intakeStatus: "in_progress" }), true);
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "done", intakeStatus: "completed" }), false);
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "done", intakeStatus: "error_reported" }), false);
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "failed", intakeStatus: "cancelled" }), false);
+  });
+
+  it("sem campanha do assinante, ocupa só enquanto o envio está na fila ou rodando", () => {
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "queued" }), true);
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "running" }), true);
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "done" }), false);
+    assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "failed" }), false);
+  });
+
+  it("um disparo em andamento deixa o número ocupado mesmo se outro já tiver relatório", () => {
+    const busy = collectBusyCloudPhoneNumberIds(
+      [
+        { phoneNumberId: "phone-a", status: "done", intakeCampaignId: "old" },
+        { phoneNumberId: "phone-a", status: "queued", intakeCampaignId: "new" },
+        { phoneNumberId: "phone-b", status: "done", intakeCampaignId: "done-b" },
+      ],
+      new Map([
+        ["old", "completed"],
+        ["new", "in_progress"],
+        ["done-b", "completed"],
+      ]),
+    );
+    assert.equal(busy.has("phone-a"), true);
+    assert.equal(busy.has("phone-b"), false);
   });
 });
