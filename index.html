@@ -3890,10 +3890,10 @@
           }
         }
         #meta-tpl-ai-overlay.confirm-overlay {
-          z-index: 2460;
+          z-index: 5300;
         }
         .meta-tpl-ai-modal {
-          width: min(94vw, 440px);
+          width: min(94vw, 480px);
         }
         .meta-tpl-ai-modal-brand {
           display: flex;
@@ -3913,6 +3913,107 @@
           margin: 2px 0 14px;
         }
         .meta-tpl-ai-modal-spinner:not([hidden]) { display: flex; }
+        .meta-tpl-ai-modal.is-processing .confirm-title {
+          animation: dis-campaign-pulse 1.4s ease-in-out infinite;
+        }
+        .meta-tpl-ai-modal.is-processing .meta-tpl-ai-modal-logo {
+          animation: meta-tpl-ai-logo-pulse 1.6s ease-in-out infinite;
+        }
+        @keyframes meta-tpl-ai-logo-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.82; }
+          50% { transform: scale(1.04); opacity: 1; }
+        }
+        .meta-tpl-ai-modal-progress {
+          margin: 4px 0 12px;
+          text-align: left;
+        }
+        .meta-tpl-ai-progress-track {
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(148, 163, 184, 0.2);
+          overflow: hidden;
+          margin: 0 0 12px;
+        }
+        .meta-tpl-ai-progress-track i {
+          display: block;
+          height: 100%;
+          width: 38%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #22d3ee, #34d399);
+          animation: meta-tpl-ai-indet 1.15s ease-in-out infinite;
+        }
+        @keyframes meta-tpl-ai-indet {
+          0% { transform: translateX(-130%); }
+          100% { transform: translateX(360%); }
+        }
+        .meta-tpl-ai-progress-steps {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 8px;
+        }
+        .meta-tpl-ai-progress-steps li {
+          display: grid;
+          grid-template-columns: 22px minmax(0, 1fr);
+          gap: 10px;
+          align-items: start;
+          padding: 8px 10px;
+          border-radius: 10px;
+          background: rgba(2, 6, 23, 0.45);
+          border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+        .meta-tpl-ai-progress-steps li.is-current {
+          border-color: rgba(34, 211, 238, 0.42);
+          background: rgba(8, 47, 73, 0.42);
+        }
+        .meta-tpl-ai-progress-steps li.is-done {
+          border-color: rgba(52, 211, 153, 0.28);
+        }
+        .meta-tpl-ai-step-mark {
+          width: 18px;
+          height: 18px;
+          margin-top: 2px;
+          border-radius: 50%;
+          border: 2px solid rgba(148, 163, 184, 0.45);
+          box-sizing: border-box;
+        }
+        .meta-tpl-ai-progress-steps li.is-current .meta-tpl-ai-step-mark {
+          border-color: transparent;
+          border-top-color: #22d3ee;
+          border-right-color: rgba(34, 211, 238, 0.25);
+          border-bottom-color: rgba(34, 211, 238, 0.25);
+          border-left-color: rgba(34, 211, 238, 0.25);
+          animation: dis-campaign-spin 0.75s linear infinite;
+        }
+        .meta-tpl-ai-progress-steps li.is-done .meta-tpl-ai-step-mark {
+          border: 0;
+          background: #34d399;
+          position: relative;
+        }
+        .meta-tpl-ai-progress-steps li.is-done .meta-tpl-ai-step-mark::after {
+          content: "";
+          position: absolute;
+          left: 5px;
+          top: 2px;
+          width: 5px;
+          height: 9px;
+          border: solid #042f2e;
+          border-width: 0 2px 2px 0;
+          transform: rotate(45deg);
+        }
+        .meta-tpl-ai-step-copy strong {
+          display: block;
+          color: #e2e8f0;
+          font-size: 0.8rem;
+        }
+        .meta-tpl-ai-step-copy span {
+          display: block;
+          margin-top: 2px;
+          color: #94a3b8;
+          font-size: 0.72rem;
+          word-break: break-word;
+        }
         .meta-tpl-ai-modal-detail {
           margin: 0 0 10px;
           padding: 10px 12px;
@@ -21547,7 +21648,7 @@
                     <button id="meta-tpl-ai-submit-all" type="button" class="instance-action-btn btn-qrcode enabled">Enviar para META</button>
                   </div>
                   <p class="meta-tpl-ai-shell-hint">Envia as três opções geradas, com nome, mídia, cabeçalho e botão URL, para análise da Meta.</p>
-                  <p id="meta-tpl-ai-submit-status" class="muted" role="status" aria-live="polite" style="margin:0;"></p>
+                  <p id="meta-tpl-ai-submit-status" class="muted" role="status" aria-live="polite" style="margin:0;" hidden></p>
                   <div id="meta-tpl-ai-batch-result"></div>
                 </div>
               </div>
@@ -23697,6 +23798,10 @@
         </div>
         <div class="confirm-title" id="meta-tpl-ai-modal-title">Enviar templates à Meta</div>
         <div class="confirm-text" id="meta-tpl-ai-modal-text"></div>
+        <div class="meta-tpl-ai-modal-progress" id="meta-tpl-ai-modal-progress" hidden>
+          <div class="meta-tpl-ai-progress-track" aria-hidden="true"><i></i></div>
+          <ol class="meta-tpl-ai-progress-steps" id="meta-tpl-ai-modal-steps"></ol>
+        </div>
         <div class="meta-tpl-ai-modal-detail" id="meta-tpl-ai-modal-detail" hidden></div>
         <div class="confirm-actions" id="meta-tpl-ai-modal-actions">
           <button id="meta-tpl-ai-modal-cancel" class="instance-action-btn" type="button">Cancelar</button>
@@ -37048,6 +37153,8 @@
 
       let metaTplAiModalResolver = null;
       let metaTplAiModalPhase = "closed";
+      let metaTplAiProgressTimer = 0;
+      let metaTplAiProgressSteps = [];
 
       function metaTplAiModalEls() {
         return {
@@ -37056,12 +37163,152 @@
           title: document.getElementById("meta-tpl-ai-modal-title"),
           text: document.getElementById("meta-tpl-ai-modal-text"),
           detail: document.getElementById("meta-tpl-ai-modal-detail"),
+          progress: document.getElementById("meta-tpl-ai-modal-progress"),
+          steps: document.getElementById("meta-tpl-ai-modal-steps"),
           spinner: document.getElementById("meta-tpl-ai-modal-spinner"),
           actions: document.getElementById("meta-tpl-ai-modal-actions"),
           cancel: document.getElementById("meta-tpl-ai-modal-cancel"),
           ok: document.getElementById("meta-tpl-ai-modal-ok"),
           logo: document.getElementById("meta-tpl-ai-modal-logo"),
         };
+      }
+
+      function metaTplAiSubmitStatusEl() {
+        return document.getElementById("meta-tpl-ai-submit-status") || document.getElementById("meta-tpl-ai-status");
+      }
+
+      function metaTplAiSetSubmitStatus(text) {
+        const status = metaTplAiSubmitStatusEl();
+        if (!status) return;
+        const value = String(text || "").trim();
+        status.textContent = value;
+        if (status.id === "meta-tpl-ai-submit-status") status.hidden = !value;
+      }
+
+      function metaTplAiStopProgressTimer() {
+        if (metaTplAiProgressTimer) {
+          window.clearInterval(metaTplAiProgressTimer);
+          metaTplAiProgressTimer = 0;
+        }
+      }
+
+      function metaTplAiSanitizeTemplateName(raw) {
+        return String(raw || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "")
+          .slice(0, 500);
+      }
+
+      function metaTplAiSubmitSteps(shell, needsMedia) {
+        const items = [];
+        if (needsMedia) {
+          const input = document.getElementById("meta-tpl-ai-media-file");
+          const fileName = input && input.files && input.files[0] ? input.files[0].name : "arquivo da mídia";
+          items.push({
+            id: "media",
+            label: "Upload da mídia de exemplo",
+            detail: fileName,
+            state: "pending",
+          });
+        }
+        const options = Array.isArray(metaTplLabAiResult && metaTplLabAiResult.options) ? metaTplLabAiResult.options : [];
+        const base = metaTplAiSanitizeTemplateName(shell && shell.modelName) || "template";
+        for (let index = 0; index < 3; index += 1) {
+          const option = options[index] || {};
+          const name = String(option.name || "").trim() || base + "_" + String(index + 1);
+          const title = String(option.title || "").trim() || "Opção " + String(index + 1);
+          items.push({
+            id: "opt-" + index,
+            label: "Opção " + String(index + 1) + " — " + title,
+            detail: name,
+            state: "pending",
+          });
+        }
+        return items;
+      }
+
+      function metaTplAiPaintProgressSteps() {
+        const els = metaTplAiModalEls();
+        if (!els.steps) return;
+        els.steps.innerHTML = metaTplAiProgressSteps
+          .map(function (step) {
+            const stateClass = step.state === "done" ? " is-done" : step.state === "current" ? " is-current" : "";
+            const statusLabel = step.state === "done" ? "concluído" : step.state === "current" ? "processando agora" : "na fila";
+            return (
+              '<li class="' +
+              stateClass.trim() +
+              '" data-step-id="' +
+              escapeAdminHtml(step.id) +
+              '">' +
+              '<span class="meta-tpl-ai-step-mark" aria-hidden="true"></span>' +
+              '<span class="meta-tpl-ai-step-copy"><strong>' +
+              escapeAdminHtml(step.label) +
+              "</strong><span>" +
+              escapeAdminHtml(step.detail) +
+              " · " +
+              statusLabel +
+              "</span></span></li>"
+            );
+          })
+          .join("");
+      }
+
+      function metaTplAiSetStepState(id, state) {
+        metaTplAiProgressSteps = metaTplAiProgressSteps.map(function (step) {
+          if (step.id !== id) return step;
+          return { id: step.id, label: step.label, detail: step.detail, state: state };
+        });
+        metaTplAiPaintProgressSteps();
+      }
+
+      function metaTplAiStartBusyCycle() {
+        metaTplAiStopProgressTimer();
+        const pendingIds = metaTplAiProgressSteps
+          .filter(function (step) {
+            return step.state !== "done";
+          })
+          .map(function (step) {
+            return step.id;
+          });
+        if (!pendingIds.length) return;
+        let cursor = Math.max(
+          0,
+          pendingIds.indexOf(
+            (metaTplAiProgressSteps.find(function (step) {
+              return step.state === "current";
+            }) || {}).id,
+          ),
+        );
+        metaTplAiProgressTimer = window.setInterval(function () {
+          if (metaTplAiModalPhase !== "processing") {
+            metaTplAiStopProgressTimer();
+            return;
+          }
+          const ids = metaTplAiProgressSteps
+            .filter(function (step) {
+              return step.state !== "done";
+            })
+            .map(function (step) {
+              return step.id;
+            });
+          if (!ids.length) {
+            metaTplAiStopProgressTimer();
+            return;
+          }
+          cursor = (cursor + 1) % ids.length;
+          metaTplAiProgressSteps = metaTplAiProgressSteps.map(function (step) {
+            if (step.state === "done") return step;
+            return {
+              id: step.id,
+              label: step.label,
+              detail: step.detail,
+              state: step.id === ids[cursor] ? "current" : "pending",
+            };
+          });
+          metaTplAiPaintProgressSteps();
+        }, 1600);
       }
 
       function metaTplAiOpenOverlay() {
@@ -37087,7 +37334,7 @@
               metaTplAiCloseOverlay(true);
               return;
             }
-            if (event.target === overlay) metaTplAiCloseOverlay(true);
+            if (event.target === overlay && metaTplAiModalPhase !== "processing") metaTplAiCloseOverlay(true);
           });
         }
         overlay.classList.add("open");
@@ -37111,6 +37358,8 @@
           els.detail.innerHTML = detail;
         }
         if (els.spinner) els.spinner.hidden = phase !== "processing";
+        if (els.progress) els.progress.hidden = phase !== "processing" || !metaTplAiProgressSteps.length;
+        if (els.modal) els.modal.setAttribute("aria-busy", phase === "processing" ? "true" : "false");
         if (els.actions) els.actions.hidden = phase === "processing";
         if (els.cancel) els.cancel.hidden = phase !== "confirm";
         if (els.ok) {
@@ -37122,6 +37371,8 @@
 
       function metaTplAiCloseOverlay(force) {
         if (!force && metaTplAiModalPhase === "processing") return;
+        metaTplAiStopProgressTimer();
+        metaTplAiProgressSteps = [];
         const { overlay } = metaTplAiModalEls();
         if (overlay) {
           try {
@@ -37151,16 +37402,21 @@
         });
       }
 
-      function metaTplAiShowProcessing() {
+      function metaTplAiShowProcessing(text) {
         metaTplAiModalResolver = null;
         metaTplAiSetPhase("processing", {
           title: "Enviando para a Meta",
-          text: "Estamos enviando as três opções para análise. Aguarde — isso pode levar alguns segundos.",
+          text: String(text || "Acompanhe o que está sendo processado agora."),
         });
+        metaTplAiPaintProgressSteps();
+        const els = metaTplAiModalEls();
+        if (els.progress) els.progress.hidden = !metaTplAiProgressSteps.length;
         metaTplAiOpenOverlay();
+        metaTplAiSetSubmitStatus("");
       }
 
       function metaTplAiShowResult(kind, title, text, detail) {
+        metaTplAiStopProgressTimer();
         metaTplAiModalResolver = null;
         metaTplAiSetPhase(kind === "ok" ? "success" : "error", {
           title,
@@ -37295,7 +37551,6 @@
       async function metaTplSubmitAllAiOptions() {
         const connectionId = metaTplLabSelectedConnectionId();
         const analysisId = String(metaTplLabAiAnalysisId || "").trim();
-        const status = document.getElementById("meta-tpl-ai-submit-status") || document.getElementById("meta-tpl-ai-status");
         const button = document.getElementById("meta-tpl-ai-submit-all");
         const shell = metaTplAiReadShell();
         const needsMedia = shell.mediaFormat === "IMAGE" || shell.mediaFormat === "VIDEO" || shell.mediaFormat === "DOCUMENT";
@@ -37303,49 +37558,70 @@
         const hasMediaFile = Boolean(mediaInput && mediaInput.files && mediaInput.files[0]);
         if (!connectionId) {
           metaTplAiShowResult("error", "Não foi possível enviar", "Selecione primeiro o portfólio.");
-          if (status) status.textContent = "Selecione primeiro o portfólio.";
+          metaTplAiSetSubmitStatus("");
           return;
         }
         if (!analysisId || !Array.isArray(metaTplLabAiResult?.options) || metaTplLabAiResult.options.length !== 3) {
           metaTplAiShowResult("error", "Não foi possível enviar", "Gere primeiro as três opções Utility para este portfólio.");
-          if (status) status.textContent = "Gere primeiro as três opções Utility para este portfólio.";
+          metaTplAiSetSubmitStatus("");
           return;
         }
         if (!shell.modelName) {
           metaTplAiShowResult("error", "Não foi possível enviar", "Informe o nome do modelo.");
-          if (status) status.textContent = "Informe o nome do modelo.";
+          metaTplAiSetSubmitStatus("");
           return;
         }
         const urlError = metaTplAiValidateButtonUrl(shell.buttonUrl);
         if (urlError) {
           metaTplAiShowResult("error", "Não foi possível enviar", urlError);
-          if (status) status.textContent = urlError;
+          metaTplAiSetSubmitStatus("");
           return;
         }
         if (needsMedia && !hasMediaFile) {
           const mediaError = "Selecione o arquivo da mídia. A Meta exige um exemplo via upload para cabeçalho de imagem, vídeo ou documento.";
           metaTplAiShowResult("error", "Não foi possível enviar", mediaError);
-          if (status) status.textContent = mediaError;
+          metaTplAiSetSubmitStatus("");
           return;
         }
         const confirmed = await metaTplAiConfirmSubmit();
         if (!confirmed) return;
         if (button) button.disabled = true;
-        if (status) status.textContent = "Enviando os três templates para a Meta…";
-        metaTplAiShowProcessing();
+        metaTplAiProgressSteps = metaTplAiSubmitSteps(shell, needsMedia);
+        if (metaTplAiProgressSteps[0]) metaTplAiProgressSteps[0].state = "current";
+        metaTplAiShowProcessing(
+          needsMedia
+            ? "Enviando o arquivo de mídia e, em seguida, cada uma das três opções."
+            : "Cadastrando cada uma das três opções no portfólio selecionado.",
+        );
+        async function markStepDone(id) {
+          metaTplAiSetStepState(id, "done");
+          const next = metaTplAiProgressSteps.find(function (step) {
+            return step.state !== "done";
+          });
+          if (next) metaTplAiSetStepState(next.id, "current");
+        }
         if (isMetaTemplateAiUiPreview()) {
-          await new Promise((resolve) => window.setTimeout(resolve, 1100));
+          for (let i = 0; i < metaTplAiProgressSteps.length; i += 1) {
+            metaTplAiSetStepState(metaTplAiProgressSteps[i].id, "current");
+            await new Promise(function (resolve) {
+              window.setTimeout(resolve, 700);
+            });
+            await markStepDone(metaTplAiProgressSteps[i].id);
+          }
+          metaTplAiStopProgressTimer();
           const previewCard = document.getElementById("meta-tpl-ai-batch-result");
           if (previewCard) {
             previewCard.innerHTML = `<div class="meta-tpl-ai-alert is-ok">${metaTplAiSentConfirmHtml()}</div>`;
           }
-          if (status) status.textContent = "Templates enviados à Meta.";
           metaTplAiShowResult("ok", "Templates enviados à Meta", "", metaTplAiSentConfirmHtml());
           if (button) button.disabled = false;
           return;
         }
         try {
+          if (needsMedia) metaTplAiSetStepState("media", "current");
           const headerHandle = await metaTplAiUploadHeaderIfNeeded(connectionId, shell.mediaFormat);
+          if (needsMedia) await markStepDone("media");
+          metaTplAiStartBusyCycle();
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/submit-all", {
             method: "POST",
             body: JSON.stringify({
@@ -37359,6 +37635,11 @@
               headerHandle,
             }),
           });
+          metaTplAiStopProgressTimer();
+          metaTplAiProgressSteps = metaTplAiProgressSteps.map(function (step) {
+            return { id: step.id, label: step.label, detail: step.detail, state: "done" };
+          });
+          metaTplAiPaintProgressSteps();
           const result = document.getElementById("meta-tpl-ai-batch-result");
           const rows = Array.isArray(payload.results) ? payload.results : [];
           const errorDetail = rows
@@ -37372,7 +37653,7 @@
               : `<div class="meta-tpl-ai-alert is-ok">${resultHtml}</div>`;
           }
           if (payload.failed) {
-            if (status) status.textContent = "Cadastro parcial. Consulte o resultado no modal.";
+            metaTplAiSetSubmitStatus("");
             metaTplAiShowResult(
               "error",
               "Envio parcial",
@@ -37380,7 +37661,7 @@
               errorDetail + resultHtml,
             );
           } else if (!Number(payload.submitted || 0)) {
-            if (status) status.textContent = "Nada novo enviado. Estes nomes já estavam neste portfólio.";
+            metaTplAiSetSubmitStatus("");
             metaTplAiShowResult(
               "ok",
               "Nada novo enviado à Meta",
@@ -37388,13 +37669,14 @@
               resultHtml,
             );
           } else {
-            if (status) status.textContent = "Templates enviados à Meta. Conferir em análise, no mesmo WABA do portfólio.";
+            metaTplAiSetSubmitStatus("");
             metaTplAiShowResult("ok", "Templates enviados à Meta", "", resultHtml);
           }
           await window.wabaLoadMetaTemplatesLab();
         } catch (error) {
+          metaTplAiStopProgressTimer();
           const message = error && error.message ? error.message : "Não foi possível cadastrar as opções.";
-          if (status) status.textContent = message;
+          metaTplAiSetSubmitStatus("");
           metaTplAiShowResult("error", "Não foi possível enviar", message);
         } finally {
           if (button) button.disabled = false;

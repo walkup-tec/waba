@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 10:15 — Modal de processamento no envio
+- Enviar para META mostra spinner, barra e as três etapas no modal. Sem texto solto sob o botão.
+- Marker: `DEPLOY-2026-09-02-101500-modal-processando-envio-meta`
+- LOG: `doc/LOG-2026-09-02__101500__modal-processando-envio-meta.md`
+
 ## 2026-09-02 10:02 — Push GitHub master (Bloquear)
 - `walkup-tec/waba` `master` recebe o botão silencioso Bloquear.
 - Marker: `DEPLOY-2026-09-02-100000-botao-bloquear-silencioso`
