@@ -113,6 +113,17 @@ export class MetaWhatsappTemplateService {
     return row;
   }
 
+  async findByNameForConnection(
+    tenantId: string,
+    connectionId: string,
+    name: string,
+    language: string,
+  ): Promise<MetaTemplateRecord | null> {
+    const row = await this.templates.findForSend(tenantId, connectionId, name, language);
+    if (!row || row.tenantId !== tenantId) return null;
+    return row;
+  }
+
   private async listOpenConnections(tenantId: string): Promise<MetaWhatsappConnectionRecord[]> {
     const repo = this.connections as {
       listOpenByTenant?: (id: string) => Promise<MetaWhatsappConnectionRecord[]>;

@@ -243,7 +243,7 @@ class MetaWhatsappTemplateAiService {
         if (!connectionId || !analysisId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         const shell = (0, meta_whatsapp_template_ai_shell_1.parseMetaTemplateAiShell)(input);
-        await this.requirePortfolio(tenant.tenantId, connectionId);
+        const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
         const analysis = await this.analyses.findForSubmission(tenant.tenantId, connectionId, analysisId);
         if (!analysis ||
             !analysis.eligibleForUtility ||
@@ -254,9 +254,31 @@ class MetaWhatsappTemplateAiService {
         }
         const results = [];
         const alreadySubmitted = await this.analyses.listSubmittedNames(tenant.tenantId, connectionId, analysisId);
-        const pendingIndexes = analysis.result.options
-            .map((_, index) => index)
-            .filter((index) => !alreadySubmitted.has((0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index)));
+        const pendingIndexes = [];
+        for (let index = 0; index < analysis.result.options.length; index += 1) {
+            const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
+            if (!alreadySubmitted.has(name)) {
+                pendingIndexes.push(index);
+                continue;
+            }
+            const localFinder = this.templates;
+            const local = typeof localFinder.findByNameForConnection === "function"
+                ? await localFinder.findByNameForConnection(tenant.tenantId, connectionId, name, analysis.language)
+                : null;
+            if (local) {
+                results.push({
+                    index,
+                    name,
+                    ok: true,
+                    alreadySubmitted: true,
+                    status: local.status || "ALREADY_SUBMITTED",
+                    templateId: local.id,
+                    error: null,
+                });
+                continue;
+            }
+            pendingIndexes.push(index);
+        }
         let metaButtonUrl = null;
         if (pendingIndexes.length) {
             metaButtonUrl = await this.createButtonShortUrl({
@@ -273,20 +295,9 @@ class MetaWhatsappTemplateAiService {
             });
         }
         const graphShell = metaButtonUrl ? { ...shell, buttonUrl: metaButtonUrl } : shell;
-        for (let index = 0; index < analysis.result.options.length; index += 1) {
+        for (const index of pendingIndexes) {
             const option = analysis.result.options[index];
             const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
-            if (alreadySubmitted.has(name)) {
-                results.push({
-                    index,
-                    name,
-                    ok: true,
-                    status: "ALREADY_SUBMITTED",
-                    templateId: null,
-                    error: null,
-                });
-                continue;
-            }
             try {
                 const template = await this.templates.createFromAuth(auth, {
                     connectionId,
@@ -301,6 +312,7 @@ class MetaWhatsappTemplateAiService {
                     index,
                     name,
                     ok: true,
+                    alreadySubmitted: false,
                     status: template.status,
                     templateId: template.id,
                     error: null,
@@ -311,6 +323,7 @@ class MetaWhatsappTemplateAiService {
                     index,
                     name,
                     ok: false,
+                    alreadySubmitted: false,
                     status: null,
                     templateId: null,
                     error: error instanceof meta_whatsapp_errors_1.MetaWhatsappError
@@ -319,19 +332,24 @@ class MetaWhatsappTemplateAiService {
                 });
             }
         }
-        const submitted = results.filter((item) => item.ok).length;
+        results.sort((a, b) => a.index - b.index);
+        const submitted = results.filter((item) => item.ok && !item.alreadySubmitted).length;
+        const failed = results.filter((item) => !item.ok).length;
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
             tenantId: tenant.tenantId,
             connectionId,
             batchSubmit: true,
             submitted,
-            failed: results.length - submitted,
+            failed,
+            skippedLive: results.filter((item) => item.alreadySubmitted).length,
         });
         return {
             total: results.length,
             submitted,
-            failed: results.length - submitted,
+            failed,
             results,
+            portfolioName: String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio",
+            wabaId: String(connection.wabaId || ""),
         };
     }
     async uploadHeaderMediaFromAuth(auth, input) {

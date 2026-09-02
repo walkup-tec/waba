@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 09:38 — Envio à Meta com resultado real
+- Não marca sucesso sem Graph se o local foi apagado. Modal mostra nome, status, portfólio e WABA.
+- Marker: `DEPLOY-2026-09-02-093800-submit-meta-verdade`
+- LOG: `doc/LOG-2026-09-02__093800__submit-meta-sucesso-sem-biblioteca.md`
+
 ## 2026-09-02 02:51 — Fechar do modal de envio
 - Fechar no sucesso força o close; listener no overlay e no clique da tela.
 - Marker: `DEPLOY-2026-09-02-025100-fechar-modal-templates`

@@ -1,5 +1,6 @@
 # Decisões
 
+- 2026-09-02: submit-all só trata como já enviado se o template ainda existe no banco do portfólio. Motivo: após exclusão na Meta o modal fingia sucesso sem POST Graph.
 - 2026-09-02: o painel Visualizar / usar em teste e o botão Usar em teste saíram. Motivo: Visualizar já é o modal Seu modelo; o card era laboratório órfão.
 - 2026-09-02: sync completo pruneia o local que a GET `message_templates` já não devolve. Motivo: exclusão no WhatsApp Manager deixava órfãos na tabela. Não prune se a paginação Graph for truncada.
 - 2026-09-02: Excluir na tabela chama a Graph (hsm_id + name) e só então apaga o registro local. Motivo: a Meta tem DELETE oficial; apagar só no front deixava o template na biblioteca. Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-management

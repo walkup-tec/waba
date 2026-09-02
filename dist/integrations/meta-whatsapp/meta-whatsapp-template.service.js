@@ -84,6 +84,12 @@ class MetaWhatsappTemplateService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
         return row;
     }
+    async findByNameForConnection(tenantId, connectionId, name, language) {
+        const row = await this.templates.findForSend(tenantId, connectionId, name, language);
+        if (!row || row.tenantId !== tenantId)
+            return null;
+        return row;
+    }
     async listOpenConnections(tenantId) {
         const repo = this.connections;
         if (typeof repo.listOpenByTenant === "function") {

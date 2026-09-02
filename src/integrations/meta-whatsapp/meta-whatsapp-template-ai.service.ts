@@ -297,17 +297,20 @@ export class MetaWhatsappTemplateAiService {
       index: number;
       name: string;
       ok: boolean;
+      alreadySubmitted: boolean;
       status: string | null;
       templateId: string | null;
       error: string | null;
     }>;
+    portfolioName: string;
+    wabaId: string;
   }> {
     const tenant = requireTenant(auth);
     const connectionId = String(input?.connectionId || input?.connection_id || "").trim();
     const analysisId = String(input?.analysisId || input?.analysis_id || "").trim();
     if (!connectionId || !analysisId) throw new MetaWhatsappError("invalid_payload");
     const shell = parseMetaTemplateAiShell(input);
-    await this.requirePortfolio(tenant.tenantId, connectionId);
+    const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
     const analysis = await this.analyses.findForSubmission(
       tenant.tenantId,
       connectionId,
@@ -327,6 +330,7 @@ export class MetaWhatsappTemplateAiService {
       index: number;
       name: string;
       ok: boolean;
+      alreadySubmitted: boolean;
       status: string | null;
       templateId: string | null;
       error: string | null;
@@ -336,9 +340,44 @@ export class MetaWhatsappTemplateAiService {
       connectionId,
       analysisId,
     );
-    const pendingIndexes = analysis.result.options
-      .map((_, index) => index)
-      .filter((index) => !alreadySubmitted.has(templateNameForOption(shell.modelName, index)));
+    const pendingIndexes: number[] = [];
+    for (let index = 0; index < analysis.result.options.length; index += 1) {
+      const name = templateNameForOption(shell.modelName, index);
+      if (!alreadySubmitted.has(name)) {
+        pendingIndexes.push(index);
+        continue;
+      }
+      const localFinder = this.templates as {
+        findByNameForConnection?: (
+          tenantId: string,
+          connectionId: string,
+          name: string,
+          language: string,
+        ) => Promise<{ id: string; status: string | null } | null>;
+      };
+      const local =
+        typeof localFinder.findByNameForConnection === "function"
+          ? await localFinder.findByNameForConnection(
+              tenant.tenantId,
+              connectionId,
+              name,
+              analysis.language,
+            )
+          : null;
+      if (local) {
+        results.push({
+          index,
+          name,
+          ok: true,
+          alreadySubmitted: true,
+          status: local.status || "ALREADY_SUBMITTED",
+          templateId: local.id,
+          error: null,
+        });
+        continue;
+      }
+      pendingIndexes.push(index);
+    }
     let metaButtonUrl: string | null = null;
     if (pendingIndexes.length) {
       metaButtonUrl = await this.createButtonShortUrl({
@@ -355,20 +394,9 @@ export class MetaWhatsappTemplateAiService {
       });
     }
     const graphShell = metaButtonUrl ? { ...shell, buttonUrl: metaButtonUrl } : shell;
-    for (let index = 0; index < analysis.result.options.length; index += 1) {
+    for (const index of pendingIndexes) {
       const option = analysis.result.options[index];
       const name = templateNameForOption(shell.modelName, index);
-      if (alreadySubmitted.has(name)) {
-        results.push({
-          index,
-          name,
-          ok: true,
-          status: "ALREADY_SUBMITTED",
-          templateId: null,
-          error: null,
-        });
-        continue;
-      }
       try {
         const template = await this.templates.createFromAuth(auth, {
           connectionId,
@@ -383,6 +411,7 @@ export class MetaWhatsappTemplateAiService {
           index,
           name,
           ok: true,
+          alreadySubmitted: false,
           status: template.status,
           templateId: template.id,
           error: null,
@@ -392,6 +421,7 @@ export class MetaWhatsappTemplateAiService {
           index,
           name,
           ok: false,
+          alreadySubmitted: false,
           status: null,
           templateId: null,
           error: error instanceof MetaWhatsappError
@@ -400,19 +430,24 @@ export class MetaWhatsappTemplateAiService {
         });
       }
     }
-    const submitted = results.filter((item) => item.ok).length;
+    results.sort((a, b) => a.index - b.index);
+    const submitted = results.filter((item) => item.ok && !item.alreadySubmitted).length;
+    const failed = results.filter((item) => !item.ok).length;
     logMetaTemplate("AI", {
       tenantId: tenant.tenantId,
       connectionId,
       batchSubmit: true,
       submitted,
-      failed: results.length - submitted,
+      failed,
+      skippedLive: results.filter((item) => item.alreadySubmitted).length,
     });
     return {
       total: results.length,
       submitted,
-      failed: results.length - submitted,
+      failed,
       results,
+      portfolioName: String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio",
+      wabaId: String(connection.wabaId || ""),
     };
   }
 

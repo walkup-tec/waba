@@ -37182,6 +37182,38 @@
         );
       }
 
+      function metaTplAiSubmitResultHtml(payload) {
+        const rows = Array.isArray(payload && payload.results) ? payload.results : [];
+        const list = rows
+          .map(function (row) {
+            const name = escapeAdminHtml(String((row && row.name) || "template"));
+            const status = String((row && row.status) || "").toUpperCase();
+            if (row && row.ok && (row.alreadySubmitted || status === "ALREADY_SUBMITTED")) {
+              return "<li>✓ " + name + " — já estava neste portfólio (não reenviado agora)</li>";
+            }
+            if (row && row.ok) {
+              return "<li>✓ " + name + " — aceito pela Meta (" + escapeAdminHtml(status || "PENDING") + ")</li>";
+            }
+            return "<li>✕ " + name + ": " + escapeAdminHtml(String((row && row.error) || "erro")) + "</li>";
+          })
+          .join("");
+        const portfolio = escapeAdminHtml(String((payload && payload.portfolioName) || "").trim());
+        const wabaId = escapeAdminHtml(String((payload && payload.wabaId) || "").trim());
+        const where = portfolio
+          ? "<p class=\"meta-tpl-ai-sent-wait\">Portfólio: " +
+            portfolio +
+            (wabaId ? " · WABA " + wabaId : "") +
+            "</p>"
+          : "";
+        return (
+          '<ul class="meta-tpl-ai-sent-list">' +
+          list +
+          "</ul>" +
+          where +
+          "<p class=\"meta-tpl-ai-sent-wait\">Na Meta, o envio novo fica em análise — não em Ativo. Abra o mesmo WABA deste portfólio e tire o filtro só de modelos ativos.</p>"
+        );
+      }
+
       function metaTplAiValidateButtonUrl(raw) {
         const url = String(raw || "").trim();
         if (!url) return "Informe a URL do botão.";
@@ -37331,12 +37363,13 @@
           const rows = Array.isArray(payload.results) ? payload.results : [];
           const errorDetail = rows
             .filter((item) => !item.ok)
-            .map((item) => `✕ Template 0${Number(item.index || 0) + 1}: ${escapeAdminHtml(String(item.error || "erro"))}`)
+            .map((item) => `✕ ${escapeAdminHtml(String(item.name || "template"))}: ${escapeAdminHtml(String(item.error || "erro"))}`)
             .join("<br>");
+          const resultHtml = metaTplAiSubmitResultHtml(payload);
           if (result) {
             result.innerHTML = payload.failed
               ? `<div class="meta-tpl-ai-alert is-warn">${errorDetail}</div>`
-              : `<div class="meta-tpl-ai-alert is-ok">${metaTplAiSentConfirmHtml()}</div>`;
+              : `<div class="meta-tpl-ai-alert is-ok">${resultHtml}</div>`;
           }
           if (payload.failed) {
             if (status) status.textContent = "Cadastro parcial. Consulte o resultado no modal.";
@@ -37344,11 +37377,19 @@
               "error",
               "Envio parcial",
               "Nem todas as opções foram aceitas. A Meta ainda pode levar até 24 horas para concluir a análise das que foram enviadas.",
-              errorDetail,
+              errorDetail + resultHtml,
+            );
+          } else if (!Number(payload.submitted || 0)) {
+            if (status) status.textContent = "Nada novo enviado. Estes nomes já estavam neste portfólio.";
+            metaTplAiShowResult(
+              "ok",
+              "Nada novo enviado à Meta",
+              "Os três nomes já existiam neste portfólio. Nada foi reenviado agora.",
+              resultHtml,
             );
           } else {
-            if (status) status.textContent = "Templates enviados à Meta.";
-            metaTplAiShowResult("ok", "Templates enviados à Meta", "", metaTplAiSentConfirmHtml());
+            if (status) status.textContent = "Templates enviados à Meta. Conferir em análise, no mesmo WABA do portfólio.";
+            metaTplAiShowResult("ok", "Templates enviados à Meta", "", resultHtml);
           }
           await window.wabaLoadMetaTemplatesLab();
         } catch (error) {

@@ -163,6 +163,9 @@ function serviceFor(
         };
       },
       (templateService || {
+        async findByNameForConnection() {
+          return null;
+        },
         async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
           return {
             id: `template-${String(input.name)}`,
@@ -329,6 +332,132 @@ describe("Assistente IA de templates Utility", () => {
       ?.find((item) => item.type === "HEADER");
     assert.equal(header?.format, "TEXT");
     assert.equal(header?.text, META_TEMPLATE_AI_FIXED_HEADER_TEXT);
+  });
+
+  it("reenvia à Graph se a análise já tinha o nome mas o template local foi apagado", async () => {
+    const email = "ai-resubmit-gone@example.com";
+    const calls: string[] = [];
+    const row = connection(email);
+    let savedResult: MetaTemplateAiModelOutput | null = null;
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          return tenantId === row.tenantId && id === row.id ? row : null;
+        },
+      } as any,
+      {
+        async create(input: Record<string, unknown>) {
+          savedResult = input.result as MetaTemplateAiModelOutput;
+          return "analysis-1";
+        },
+        async findForSubmission(tenantId: string, connectionId: string, analysisId: string) {
+          if (tenantId !== row.tenantId || connectionId !== row.id || analysisId !== "analysis-1" || !savedResult) {
+            return null;
+          }
+          return {
+            id: analysisId,
+            language: "pt_BR",
+            eligibleForUtility: savedResult.eligibleForUtility,
+            result: savedResult,
+          };
+        },
+        async listSubmittedNames() {
+          return new Set(["retorno_lead_1", "retorno_lead_2", "retorno_lead_3"]);
+        },
+      } as any,
+      async () => ({
+        value: utilityOutput(),
+        model: "gpt-test",
+        responseId: "resp-1",
+        latencyMs: 12,
+      }),
+      {
+        async findByNameForConnection() {
+          return null;
+        },
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(String(input.name || ""));
+          return { id: `local-${String(input.name)}`, status: "PENDING" };
+        },
+      } as any,
+      undefined,
+      undefined,
+      async () => "https://waba.draxsistemas.com.br/s/tpltest1",
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    const result = await service.submitAllFromAuth({ email, role: "subscriber" }, submitShell());
+    assert.equal(calls.length, 3);
+    assert.equal(result.submitted, 3);
+    assert.equal(result.failed, 0);
+    assert.equal(result.results.every((item) => item.alreadySubmitted === false), true);
+    assert.equal(result.portfolioName, "Drax");
+    assert.equal(result.wabaId, "waba-1");
+  });
+
+  it("não chama Graph de novo se o template local ainda existe", async () => {
+    const email = "ai-skip-live@example.com";
+    const calls: string[] = [];
+    const row = connection(email);
+    let savedResult: MetaTemplateAiModelOutput | null = null;
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          return tenantId === row.tenantId && id === row.id ? row : null;
+        },
+      } as any,
+      {
+        async create(input: Record<string, unknown>) {
+          savedResult = input.result as MetaTemplateAiModelOutput;
+          return "analysis-1";
+        },
+        async findForSubmission(tenantId: string, connectionId: string, analysisId: string) {
+          if (tenantId !== row.tenantId || connectionId !== row.id || analysisId !== "analysis-1" || !savedResult) {
+            return null;
+          }
+          return {
+            id: analysisId,
+            language: "pt_BR",
+            eligibleForUtility: savedResult.eligibleForUtility,
+            result: savedResult,
+          };
+        },
+        async listSubmittedNames() {
+          return new Set(["retorno_lead_1", "retorno_lead_2", "retorno_lead_3"]);
+        },
+      } as any,
+      async () => ({
+        value: utilityOutput(),
+        model: "gpt-test",
+        responseId: "resp-1",
+        latencyMs: 12,
+      }),
+      {
+        async findByNameForConnection(_tenantId: string, _connectionId: string, name: string) {
+          return { id: `keep-${name}`, status: "PENDING" };
+        },
+        async createFromAuth() {
+          calls.push("graph");
+          throw new Error("Graph não deve ser chamada");
+        },
+      } as any,
+      undefined,
+      undefined,
+      async () => {
+        throw new Error("encurtador não deve rodar");
+      },
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    const result = await service.submitAllFromAuth({ email, role: "subscriber" }, submitShell());
+    assert.equal(calls.length, 0);
+    assert.equal(result.submitted, 0);
+    assert.equal(result.failed, 0);
+    assert.equal(result.results.every((item) => item.alreadySubmitted === true), true);
   });
   it("instrui a IA a reescrever o tema central em três Utility, sem recusar o texto base", () => {
     const instructions = buildMetaTemplateAiInstructions();

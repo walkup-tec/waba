@@ -7,10 +7,10 @@ Concluído no laboratório Meta:
 - na tabela: Visualizar abre preview WhatsApp; Excluir remove na Meta e no front;
 - o painel legado Visualizar / usar em teste saiu;
 - Atualizar da Meta também remove da tabela o que já não existe na biblioteca da Meta;
-- IA Utility com léxico Olá / Informamos que / Para e botões informativos.
+- Enviar para META mostra no modal o nome Graph, status e WABA; não afirma sucesso se nada foi reenviado.
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-025100-fechar-modal-templates`.
+Marker: `DEPLOY-2026-09-02-093800-submit-meta-verdade`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
