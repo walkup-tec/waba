@@ -315,7 +315,7 @@ describe("Assistente IA de templates Utility", () => {
     assert.equal(firstButtons?.buttons?.[0]?.type, "URL");
     assert.equal(firstButtons?.buttons?.[0]?.text, "Quero saber mais");
     assert.equal(firstButtons?.buttons?.[0]?.url, "https://waba.draxsistemas.com.br/s/tpltest1");
-    assert.equal(result.metaButtonUrl, "https://waba.draxsistemas.com.br/s/tpltest1");
+    assert.equal("metaButtonUrl" in result, false);
     const header = (calls[0]?.components as Array<Record<string, any>> | undefined)
       ?.find((item) => item.type === "HEADER");
     assert.equal(header?.format, "TEXT");
@@ -435,7 +435,8 @@ describe("Assistente IA de templates Utility", () => {
       submitShell({ buttonUrl: "https://wa.me/5511999999999" }),
     );
     assert.deepEqual(seen, ["https://wa.me/5511999999999"]);
-    assert.equal(result.metaButtonUrl, "https://waba.draxsistemas.com.br/s/walkup1");
+    assert.equal(result.submitted, 3);
+    assert.equal("metaButtonUrl" in result, false);
     const firstButtons = (calls[0]?.components as Array<Record<string, any>> | undefined)
       ?.find((item) => item.type === "BUTTONS");
     assert.equal(firstButtons?.buttons?.[0]?.url, "https://waba.draxsistemas.com.br/s/walkup1");

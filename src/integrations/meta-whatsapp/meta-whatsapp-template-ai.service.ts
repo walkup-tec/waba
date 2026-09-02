@@ -277,7 +277,6 @@ export class MetaWhatsappTemplateAiService {
     total: number;
     submitted: number;
     failed: number;
-    metaButtonUrl: string | null;
     results: Array<{
       index: number;
       name: string;
@@ -397,7 +396,6 @@ export class MetaWhatsappTemplateAiService {
       total: results.length,
       submitted,
       failed: results.length - submitted,
-      metaButtonUrl,
       results,
     };
   }

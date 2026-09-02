@@ -317,7 +317,6 @@ class MetaWhatsappTemplateAiService {
             total: results.length,
             submitted,
             failed: results.length - submitted,
-            metaButtonUrl,
             results,
         };
     }

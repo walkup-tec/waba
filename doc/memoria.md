@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 01:07 — Sucesso sem mostrar URL curta
+- Modal de sucesso e `Botão na Meta: /s/…` saíram da UI. `submit-all` não devolve a URL curta.
+- Marker: `DEPLOY-2026-09-02-010700-sem-url-curta-no-modal`
+- LOG: `doc/LOG-2026-09-02__010700__sem-url-curta-no-modal.md`
+
 ## 2026-09-02 01:00 — Teste 0/3 no dist antigo
 - Produção ainda em `DEPLOY-2026-09-01-201200-cabecalho-fixo-utilidade`. Docker usa `dist/` do Git; o encurtador estava só em `src/`.
 - Build + commit de `dist/`. Marker: `DEPLOY-2026-09-02-010000-dist-botao-encurtado`
