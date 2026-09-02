@@ -17,6 +17,6 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h); validar o primeiro disparo Cloud em produção após Redeploy.
 
-Marker: `DEPLOY-2026-09-02-180200-disparo-cloud-historico`.
+Marker: `DEPLOY-2026-09-02-183000-menu-disparo-cloud`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

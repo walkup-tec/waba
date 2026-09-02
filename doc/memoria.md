@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 18:30 — Push GitHub master do menu Disparo Cloud
+- Tip enviado a `walkup-tec/waba` `master` para o usuário Redeployar no EasyPanel.
+- Marker: `DEPLOY-2026-09-02-183000-menu-disparo-cloud`.
+- LOG: `doc/LOG-2026-09-02__183000__push-github-master-menu-disparo-cloud.md`
+
 ## 2026-09-02 18:12 — Menu Disparo Cloud no Laboratório
 - O wizard saiu de Templates. Menu **Disparo Cloud** (`whatsapp-disparo-cloud`) fica na seção Laboratório, acima de Automação.
 - Operacional antigo precisa do checkbox no cadastro.
