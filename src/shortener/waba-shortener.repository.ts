@@ -9,6 +9,7 @@ export type WabaShortLinkRecord = {
   tenantId: string;
   createdAt: string;
   clicks: number;
+  campaignId?: string;
 };
 
 type WabaShortenerStore = {
@@ -40,6 +41,7 @@ async function loadStore(): Promise<WabaShortenerStore> {
         tenantId: String(row?.tenantId || row?.tenant_id || "default"),
         createdAt: String(row?.createdAt || row?.created_at || new Date().toISOString()),
         clicks: Math.max(0, Number(row?.clicks || 0)),
+        campaignId: String(row?.campaignId || row?.campaign_id || "").trim() || undefined,
       })),
     };
   } catch {
@@ -60,7 +62,7 @@ async function persistStore(store: WabaShortenerStore): Promise<void> {
 
 export async function findShortLinkBySlug(slug: string): Promise<WabaShortLinkRecord | null> {
   await loadStore();
-  return slugIndex.get(slug) ?? null;
+  return slugIndex.get(normalizeSlug(slug)) ?? null;
 }
 
 export async function createShortLinkRecord(input: {
@@ -68,11 +70,19 @@ export async function createShortLinkRecord(input: {
   slug: string;
   longUrl: string;
   tenantId?: string;
+  campaignId?: string;
 }): Promise<WabaShortLinkRecord> {
   const store = await loadStore();
-  const existing = slugIndex.get(input.slug);
+  const existing = slugIndex.get(normalizeSlug(input.slug));
   if (existing) {
-    if (existing.longUrl === input.longUrl) return existing;
+    if (existing.longUrl === input.longUrl) {
+      const campaignId = String(input.campaignId || "").trim();
+      if (campaignId && existing.campaignId !== campaignId) {
+        existing.campaignId = campaignId;
+        await persistStore(store);
+      }
+      return existing;
+    }
     throw new Error("slug já existe para outra URL");
   }
   const record: WabaShortLinkRecord = {
@@ -82,6 +92,7 @@ export async function createShortLinkRecord(input: {
     tenantId: String(input.tenantId || "default"),
     createdAt: new Date().toISOString(),
     clicks: 0,
+    campaignId: String(input.campaignId || "").trim() || undefined,
   };
   store.links.push(record);
   await persistStore(store);
@@ -90,11 +101,23 @@ export async function createShortLinkRecord(input: {
 
 export async function incrementShortLinkClicks(slug: string): Promise<number> {
   const store = await loadStore();
-  const record = slugIndex.get(slug);
+  const record = slugIndex.get(normalizeSlug(slug));
   if (!record) return 0;
   record.clicks = Math.max(0, Number(record.clicks || 0)) + 1;
   await persistStore(store);
   return record.clicks;
+}
+
+export async function attachCampaignIdToShortLink(slug: string, campaignId: string): Promise<boolean> {
+  const id = String(campaignId || "").trim();
+  const key = normalizeSlug(slug);
+  if (!id || !key) return false;
+  const store = await loadStore();
+  const record = slugIndex.get(key);
+  if (!record) return false;
+  record.campaignId = id;
+  await persistStore(store);
+  return true;
 }
 
 export async function getShortLinkClicksByUrl(shortUrl: string): Promise<number | null> {

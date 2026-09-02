@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.findShortLinkBySlug = findShortLinkBySlug;
 exports.createShortLinkRecord = createShortLinkRecord;
 exports.incrementShortLinkClicks = incrementShortLinkClicks;
+exports.attachCampaignIdToShortLink = attachCampaignIdToShortLink;
 exports.getShortLinkClicksByUrl = getShortLinkClicksByUrl;
 exports.extractSlugFromPublicShortUrl = extractSlugFromPublicShortUrl;
 exports.normalizeSlug = normalizeSlug;
@@ -34,6 +35,7 @@ async function loadStore() {
                 tenantId: String(row?.tenantId || row?.tenant_id || "default"),
                 createdAt: String(row?.createdAt || row?.created_at || new Date().toISOString()),
                 clicks: Math.max(0, Number(row?.clicks || 0)),
+                campaignId: String(row?.campaignId || row?.campaign_id || "").trim() || undefined,
             })),
         };
     }
@@ -53,14 +55,20 @@ async function persistStore(store) {
 }
 async function findShortLinkBySlug(slug) {
     await loadStore();
-    return slugIndex.get(slug) ?? null;
+    return slugIndex.get(normalizeSlug(slug)) ?? null;
 }
 async function createShortLinkRecord(input) {
     const store = await loadStore();
-    const existing = slugIndex.get(input.slug);
+    const existing = slugIndex.get(normalizeSlug(input.slug));
     if (existing) {
-        if (existing.longUrl === input.longUrl)
+        if (existing.longUrl === input.longUrl) {
+            const campaignId = String(input.campaignId || "").trim();
+            if (campaignId && existing.campaignId !== campaignId) {
+                existing.campaignId = campaignId;
+                await persistStore(store);
+            }
             return existing;
+        }
         throw new Error("slug já existe para outra URL");
     }
     const record = {
@@ -70,6 +78,7 @@ async function createShortLinkRecord(input) {
         tenantId: String(input.tenantId || "default"),
         createdAt: new Date().toISOString(),
         clicks: 0,
+        campaignId: String(input.campaignId || "").trim() || undefined,
     };
     store.links.push(record);
     await persistStore(store);
@@ -77,12 +86,25 @@ async function createShortLinkRecord(input) {
 }
 async function incrementShortLinkClicks(slug) {
     const store = await loadStore();
-    const record = slugIndex.get(slug);
+    const record = slugIndex.get(normalizeSlug(slug));
     if (!record)
         return 0;
     record.clicks = Math.max(0, Number(record.clicks || 0)) + 1;
     await persistStore(store);
     return record.clicks;
+}
+async function attachCampaignIdToShortLink(slug, campaignId) {
+    const id = String(campaignId || "").trim();
+    const key = normalizeSlug(slug);
+    if (!id || !key)
+        return false;
+    const store = await loadStore();
+    const record = slugIndex.get(key);
+    if (!record)
+        return false;
+    record.campaignId = id;
+    await persistStore(store);
+    return true;
 }
 async function getShortLinkClicksByUrl(shortUrl) {
     const slug = extractSlugFromPublicShortUrl(shortUrl);

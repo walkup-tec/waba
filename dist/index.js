@@ -380,6 +380,10 @@ function shouldSkipBodyParserForMultipart(req) {
         return true;
     if (p === "/integrations/meta/whatsapp/templates/ai/header-media")
         return true;
+    if (p === "/integrations/meta/whatsapp/broadcast/preview")
+        return true;
+    if (p === "/integrations/meta/whatsapp/broadcast/start")
+        return true;
     if (/^\/device-cloud\/device\/[^/]+\/push-media$/.test(p))
         return true;
     const ct = String(req.headers["content-type"] || "");

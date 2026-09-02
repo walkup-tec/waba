@@ -16,13 +16,18 @@ const meta_whatsapp_inbox_service_1 = require("./meta-whatsapp-inbox.service");
 const meta_whatsapp_automation_service_1 = require("./meta-whatsapp-automation.service");
 const meta_whatsapp_template_ai_service_1 = require("./meta-whatsapp-template-ai.service");
 const waba_public_base_url_1 = require("../../lib/waba-public-base-url");
+const meta_whatsapp_broadcast_service_1 = require("./meta-whatsapp-broadcast.service");
 const service = new meta_whatsapp_connection_service_1.MetaWhatsappConnectionService();
 const messagingService = new meta_whatsapp_messaging_service_1.MetaWhatsappMessagingService();
 const templateService = new meta_whatsapp_template_service_1.MetaWhatsappTemplateService();
 const inboxService = new meta_whatsapp_inbox_service_1.MetaWhatsappInboxService();
 const automationService = new meta_whatsapp_automation_service_1.MetaWhatsappAutomationService();
 const templateAiService = new meta_whatsapp_template_ai_service_1.MetaWhatsappTemplateAiService();
+const broadcastService = new meta_whatsapp_broadcast_service_1.MetaWhatsappBroadcastService();
 const uploadTemplateHeader = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+});
+const uploadBroadcastLeads = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
 });
 function sendPublic(res, status, payload) {
@@ -551,6 +556,147 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
         catch (error) {
             return handleMetaError(res, error);
         }
+    });
+    app.get("/integrations/meta/whatsapp/broadcast/inspect", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            const result = await broadcastService.inspectFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
+                connectionId: String(req.query.connectionId || req.query.connection_id || ""),
+                templateId: String(req.query.templateId || req.query.template_id || ""),
+            });
+            return sendPublic(res, 200, { ok: true, ...result });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
+    app.get("/integrations/meta/whatsapp/broadcast", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            const campaigns = broadcastService.listFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req));
+            return sendPublic(res, 200, { ok: true, campaigns });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
+    app.get("/integrations/meta/whatsapp/broadcast/:id", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            const campaign = broadcastService.getFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(req.params.id || ""));
+            return sendPublic(res, 200, { ok: true, campaign });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
+    function broadcastMappingFromBody(body) {
+        return {
+            phoneColumn: String(body?.phoneColumn || body?.phone_column || "").trim(),
+            nomeColumn: String(body?.nomeColumn || body?.nome_column || "").trim(),
+            numeroColumn: String(body?.numeroColumn || body?.numero_column || "").trim(),
+            textoColumn: String(body?.textoColumn || body?.texto_column || "").trim(),
+        };
+    }
+    function handleBroadcastUpload(req, res, next) {
+        uploadBroadcastLeads.single("file")(req, res, (err) => {
+            if (err) {
+                return sendPublic(res, 400, {
+                    ok: false,
+                    error: "Não foi possível ler a planilha.",
+                    code: "invalid_payload",
+                });
+            }
+            return next();
+        });
+    }
+    app.post("/integrations/meta/whatsapp/broadcast/preview", (req, res) => {
+        handleBroadcastUpload(req, res, async () => {
+            try {
+                if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                    return sendPublic(res, 404, {
+                        ok: false,
+                        error: "Recurso indisponível neste ambiente.",
+                        code: "config_invalid",
+                    });
+                }
+                warnClientTenantClaim(req);
+                const file = req.file;
+                if (!file?.buffer?.length) {
+                    return sendPublic(res, 400, {
+                        ok: false,
+                        error: "Envie uma planilha .xlsx, .xls ou .txt.",
+                        code: "invalid_payload",
+                    });
+                }
+                const body = req.body && typeof req.body === "object" ? req.body : {};
+                const result = await broadcastService.previewFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
+                    connectionId: String(body.connectionId || body.connection_id || ""),
+                    templateId: String(body.templateId || body.template_id || ""),
+                    buffer: file.buffer,
+                    fileName: String(file.originalname || "leads.xlsx"),
+                    mapping: broadcastMappingFromBody(body),
+                });
+                return sendPublic(res, 200, { ok: true, ...result });
+            }
+            catch (error) {
+                return handleMetaError(res, error);
+            }
+        });
+    });
+    app.post("/integrations/meta/whatsapp/broadcast/start", (req, res) => {
+        handleBroadcastUpload(req, res, async () => {
+            try {
+                if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                    return sendPublic(res, 404, {
+                        ok: false,
+                        error: "Recurso indisponível neste ambiente.",
+                        code: "config_invalid",
+                    });
+                }
+                warnClientTenantClaim(req);
+                const file = req.file;
+                if (!file?.buffer?.length) {
+                    return sendPublic(res, 400, {
+                        ok: false,
+                        error: "Envie uma planilha .xlsx, .xls ou .txt.",
+                        code: "invalid_payload",
+                    });
+                }
+                const body = req.body && typeof req.body === "object" ? req.body : {};
+                const campaign = await broadcastService.startFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
+                    connectionId: String(body.connectionId || body.connection_id || ""),
+                    templateId: String(body.templateId || body.template_id || ""),
+                    phoneNumberId: String(body.phoneNumberId || body.phone_number_id || ""),
+                    buffer: file.buffer,
+                    fileName: String(file.originalname || "leads.xlsx"),
+                    mapping: broadcastMappingFromBody(body),
+                    publicBaseHints: (0, waba_public_base_url_1.publicBaseHintsFromExpressRequest)(req),
+                });
+                return sendPublic(res, 202, { ok: true, campaign });
+            }
+            catch (error) {
+                return handleMetaError(res, error);
+            }
+        });
     });
 };
 exports.registerMetaWhatsappIntegrationRoutes = registerMetaWhatsappIntegrationRoutes;

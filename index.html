@@ -3817,6 +3817,24 @@
         .meta-tpl-card h4 { margin:0 0 6px; font-size:14px; }
         .meta-tpl-card p { margin:0; font-size:12px; color:rgba(226,232,240,.7); }
         .meta-tpl-ai-box { margin:12px 0 16px; padding:14px; border:1px solid rgba(129,140,248,.28); background:linear-gradient(145deg,rgba(79,70,229,.12),rgba(15,23,42,.55)); border-radius:16px; }
+        .meta-tpl-broadcast-grid { margin-top: 4px; }
+        .meta-tpl-broadcast-preview {
+          margin-top: 12px;
+          padding: 12px;
+          border-radius: 13px;
+          background: rgba(7, 15, 30, 0.42);
+          border: 1px solid rgba(148, 163, 184, 0.12);
+          font-size: 13px;
+          color: #cbd5e1;
+        }
+        .meta-tpl-broadcast-preview table { width: 100%; border-collapse: collapse; }
+        .meta-tpl-broadcast-preview th,
+        .meta-tpl-broadcast-preview td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
+        .meta-tpl-broadcast-preview .ok { color: #86efac; }
+        .meta-tpl-broadcast-preview .bad { color: #fca5a5; }
+        @media (max-width: 720px) {
+          .meta-tpl-broadcast-grid.disparos-grid-2 { grid-template-columns: 1fr; }
+        }
         .meta-tpl-ai-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
         .meta-tpl-ai-head strong { display:block; font-size:14px; color:#f8fafc; }
         .meta-tpl-ai-head span { display:block; margin-top:3px; font-size:11px; color:#94a3b8; }
@@ -21669,6 +21687,69 @@
               <p id="meta-tpl-lab-status" class="muted" style="margin: 10px 0 0;" role="status" aria-live="polite"></p>
             </section>
 
+            <section class="panel col-12" id="meta-tpl-broadcast-panel">
+              <div class="panel-header">
+                <div class="panel-title">Disparo Cloud</div>
+                <span class="muted">Template oficial · números no padrão Meta</span>
+              </div>
+              <p class="muted" style="margin: 0 0 12px;">
+                Ordem: portfólio, template aprovado, número Ativo e planilha. Os telefones são normalizados para E.164 da Meta (DDI 55, 9º dígito, máscara e número do Excel).
+              </p>
+              <div class="disparos-grid disparos-grid-2 meta-tpl-broadcast-grid">
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-portfolio">1. Portfólio</label>
+                  <select id="meta-tpl-broadcast-portfolio" aria-label="Portfólio do disparo Cloud">
+                    <option value="">Selecione um portfólio</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-template">2. Template aprovado</label>
+                  <select id="meta-tpl-broadcast-template" aria-label="Template aprovado">
+                    <option value="">Selecione um template aprovado</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-number">3. Número Ativo</label>
+                  <select id="meta-tpl-broadcast-number" aria-label="Número Ativo">
+                    <option value="">Selecione um número Ativo</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-file-btn">4. Lista (.xlsx, .xls ou .txt)</label>
+                  <div class="meta-tpl-ai-file-row">
+                    <input id="meta-tpl-broadcast-file" type="file" accept=".xlsx,.xls,.txt" hidden />
+                    <button id="meta-tpl-broadcast-file-btn" type="button" class="instance-action-btn btn-refresh enabled">Escolher planilha</button>
+                    <span id="meta-tpl-broadcast-file-name" class="muted meta-tpl-ai-file-name">Nenhum arquivo.</span>
+                  </div>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-broadcast-phone-col">Coluna do telefone</label>
+                  <select id="meta-tpl-broadcast-phone-col" aria-label="Coluna do telefone">
+                    <option value="">Carregue a planilha</option>
+                  </select>
+                  <span class="muted">Obrigatória. Aceita máscara, DDI, 00, Excel e falta do 9º dígito.</span>
+                </div>
+                <div class="aquecedor-field" id="meta-tpl-broadcast-nome-wrap" hidden>
+                  <label for="meta-tpl-broadcast-nome-col">Coluna do nome</label>
+                  <select id="meta-tpl-broadcast-nome-col" aria-label="Coluna do nome">
+                    <option value="">Selecione a coluna</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field" id="meta-tpl-broadcast-numero-wrap" hidden>
+                  <label for="meta-tpl-broadcast-numero-col">Coluna da variável Número</label>
+                  <select id="meta-tpl-broadcast-numero-col" aria-label="Coluna da variável Número">
+                    <option value="">Selecione a coluna</option>
+                  </select>
+                </div>
+              </div>
+              <div class="disparos-inline-actions" style="margin-top:12px; flex-wrap:wrap; gap:8px;">
+                <button id="meta-tpl-broadcast-preview" type="button" class="instance-action-btn btn-refresh enabled">Pré-visualizar números</button>
+                <button id="meta-tpl-broadcast-start" type="button" class="instance-action-btn btn-qrcode enabled">Iniciar disparo</button>
+              </div>
+              <p id="meta-tpl-broadcast-status" class="muted" role="status" aria-live="polite" style="margin:10px 0 0;"></p>
+              <div id="meta-tpl-broadcast-preview-box" class="meta-tpl-broadcast-preview" hidden></div>
+            </section>
+
             <section class="panel col-12">
               <div class="panel-header">
                 <div class="panel-title">Criar template</div>
@@ -38277,6 +38358,268 @@
         return payload;
       }
 
+      let metaTplBroadcastFile = null;
+      let metaTplBroadcastInspect = null;
+      let metaTplBroadcastCampaignId = "";
+      let metaTplBroadcastPoll = 0;
+
+      function metaTplBroadcastEl(id) {
+        return document.getElementById(id);
+      }
+
+      function metaTplBroadcastSetStatus(text) {
+        const el = metaTplBroadcastEl("meta-tpl-broadcast-status");
+        if (el) el.textContent = text || "";
+      }
+
+      function metaTplBroadcastFillSelect(select, items, placeholder) {
+        if (!select) return;
+        const previous = String(select.value || "").trim();
+        select.innerHTML = "";
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = placeholder;
+        select.appendChild(empty);
+        (items || []).forEach(function (item) {
+          const option = document.createElement("option");
+          option.value = item.value;
+          option.textContent = item.label;
+          select.appendChild(option);
+        });
+        if ((items || []).some((item) => item.value === previous)) select.value = previous;
+        else if ((items || []).length === 1) select.value = items[0].value;
+      }
+
+      function metaTplBroadcastFillPortfolio() {
+        metaTplBroadcastFillSelect(
+          metaTplBroadcastEl("meta-tpl-broadcast-portfolio"),
+          metaTplLabPortfolioOptions().map(function (item) {
+            return { value: item.connectionId, label: item.label };
+          }),
+          "Selecione um portfólio",
+        );
+        metaTplBroadcastFillTemplates();
+        metaTplBroadcastFillNumbers();
+      }
+
+      function metaTplBroadcastFillTemplates() {
+        const connectionId = String((metaTplBroadcastEl("meta-tpl-broadcast-portfolio") || {}).value || "").trim();
+        const approved = (metaTplLabCache || []).filter(function (item) {
+          if (String(item.status || "").toUpperCase() !== "APPROVED") return false;
+          if (connectionId && String(item.connectionId || "") !== connectionId) return false;
+          return true;
+        });
+        metaTplBroadcastFillSelect(
+          metaTplBroadcastEl("meta-tpl-broadcast-template"),
+          approved.map(function (item) {
+            return {
+              value: String(item.id || ""),
+              label: String(item.name || "template") + " · " + metaTplLabLanguageLabel(item.language),
+            };
+          }),
+          approved.length ? "Selecione um template aprovado" : "Nenhum template aprovado neste portfólio",
+        );
+      }
+
+      function metaTplBroadcastActiveNumbers() {
+        const connectionId = String((metaTplBroadcastEl("meta-tpl-broadcast-portfolio") || {}).value || "").trim();
+        const portfolios = metaTpSession && Array.isArray(metaTpSession.portfolios) ? metaTpSession.portfolios : [];
+        const match = portfolios.find(function (item) {
+          return String((item && item.connectionId) || "") === connectionId;
+        });
+        return ((match && match.numbers) || []).filter(function (item) {
+          return String(item.uiStatus || "") === "ativo" && String(item.phoneNumberId || "").trim();
+        });
+      }
+
+      function metaTplBroadcastFillNumbers() {
+        const numbers = metaTplBroadcastActiveNumbers();
+        metaTplBroadcastFillSelect(
+          metaTplBroadcastEl("meta-tpl-broadcast-number"),
+          numbers.map(function (item) {
+            const phone = String(item.displayPhoneNumber || item.phoneNumberId || "").trim();
+            const name = String(item.verifiedName || "").trim();
+            return {
+              value: String(item.phoneNumberId || ""),
+              label: name ? name + " · " + phone : phone,
+            };
+          }),
+          numbers.length ? "Selecione um número Ativo" : "Nenhum número Ativo neste portfólio",
+        );
+      }
+
+      function metaTplBroadcastFillColumns(columns, guessed) {
+        const opts = (columns || []).map(function (name) {
+          return { value: name, label: name };
+        });
+        metaTplBroadcastFillSelect(metaTplBroadcastEl("meta-tpl-broadcast-phone-col"), opts, "Selecione a coluna de telefone");
+        metaTplBroadcastFillSelect(metaTplBroadcastEl("meta-tpl-broadcast-nome-col"), opts, "Selecione a coluna do nome");
+        metaTplBroadcastFillSelect(metaTplBroadcastEl("meta-tpl-broadcast-numero-col"), opts, "Selecione a coluna da variável");
+        const phone = metaTplBroadcastEl("meta-tpl-broadcast-phone-col");
+        const nome = metaTplBroadcastEl("meta-tpl-broadcast-nome-col");
+        const numero = metaTplBroadcastEl("meta-tpl-broadcast-numero-col");
+        if (phone && guessed && guessed.phoneColumn) phone.value = guessed.phoneColumn;
+        if (nome && guessed && guessed.nomeColumn) nome.value = guessed.nomeColumn;
+        if (numero && guessed && guessed.numeroColumn) numero.value = guessed.numeroColumn;
+      }
+
+      function metaTplBroadcastSyncMappingFields(mapping) {
+        const nomeWrap = metaTplBroadcastEl("meta-tpl-broadcast-nome-wrap");
+        const numeroWrap = metaTplBroadcastEl("meta-tpl-broadcast-numero-wrap");
+        if (nomeWrap) nomeWrap.hidden = !(mapping && mapping.nome);
+        if (numeroWrap) numeroWrap.hidden = !(mapping && mapping.numero);
+      }
+
+      function metaTplBroadcastFormData() {
+        const data = new FormData();
+        data.append("connectionId", String((metaTplBroadcastEl("meta-tpl-broadcast-portfolio") || {}).value || ""));
+        data.append("templateId", String((metaTplBroadcastEl("meta-tpl-broadcast-template") || {}).value || ""));
+        data.append("phoneNumberId", String((metaTplBroadcastEl("meta-tpl-broadcast-number") || {}).value || ""));
+        data.append("phoneColumn", String((metaTplBroadcastEl("meta-tpl-broadcast-phone-col") || {}).value || ""));
+        data.append("nomeColumn", String((metaTplBroadcastEl("meta-tpl-broadcast-nome-col") || {}).value || ""));
+        data.append("numeroColumn", String((metaTplBroadcastEl("meta-tpl-broadcast-numero-col") || {}).value || ""));
+        if (metaTplBroadcastFile) data.append("file", metaTplBroadcastFile, metaTplBroadcastFile.name || "leads.xlsx");
+        return data;
+      }
+
+      function metaTplBroadcastRenderPreview(payload) {
+        const box = metaTplBroadcastEl("meta-tpl-broadcast-preview-box");
+        if (!box) return;
+        const samples = (payload && payload.samples) || { valid: [], invalid: [] };
+        const validRows = (samples.valid || [])
+          .map(function (item) {
+            return "<tr><td>" + metaTpEsc(item.raw || "") + "</td><td class=\"ok\">" + metaTpEsc(item.waId || "") + "</td></tr>";
+          })
+          .join("");
+        const invalidRows = (samples.invalid || [])
+          .map(function (item) {
+            return "<tr><td>" + metaTpEsc(item.raw || "") + "</td><td class=\"bad\">" + metaTpEsc(item.error || "") + "</td></tr>";
+          })
+          .join("");
+        box.hidden = false;
+        box.innerHTML =
+          "<p><strong>" +
+          Number(payload.valid || 0) +
+          "</strong> números no padrão Meta · " +
+          Number(payload.invalid || 0) +
+          " inválidos · " +
+          Number(payload.duplicatesRemoved || 0) +
+          " duplicados ignorados.</p>" +
+          (validRows
+            ? "<table><thead><tr><th>Na planilha</th><th>Enviado à Meta (E.164)</th></tr></thead><tbody>" +
+              validRows +
+              "</tbody></table>"
+            : "<p class=\"muted\">Nenhum número válido para prévia.</p>") +
+          (invalidRows
+            ? "<table style=\"margin-top:10px\"><thead><tr><th>Ignorado</th><th>Motivo</th></tr></thead><tbody>" +
+              invalidRows +
+              "</tbody></table>"
+            : "");
+      }
+
+      async function metaTplBroadcastLoadInspect() {
+        const connectionId = String((metaTplBroadcastEl("meta-tpl-broadcast-portfolio") || {}).value || "").trim();
+        const templateId = String((metaTplBroadcastEl("meta-tpl-broadcast-template") || {}).value || "").trim();
+        if (!connectionId || !templateId) {
+          metaTplBroadcastInspect = null;
+          metaTplBroadcastSyncMappingFields({ nome: false, numero: false });
+          return;
+        }
+        try {
+          const payload = await metaTplLabFetchJson(
+            "/integrations/meta/whatsapp/broadcast/inspect?connectionId=" +
+              encodeURIComponent(connectionId) +
+              "&templateId=" +
+              encodeURIComponent(templateId),
+          );
+          metaTplBroadcastInspect = payload;
+          metaTplBroadcastSyncMappingFields(payload.mapping || {});
+        } catch (error) {
+          metaTplBroadcastInspect = null;
+          metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível ler o template.");
+        }
+      }
+
+      async function metaTplBroadcastPreview() {
+        if (!metaTplBroadcastFile) {
+          metaTplBroadcastSetStatus("Escolha a planilha com os números.");
+          return;
+        }
+        metaTplBroadcastSetStatus("Normalizando números no padrão Meta…");
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/preview", {
+            method: "POST",
+            body: metaTplBroadcastFormData(),
+          });
+          metaTplBroadcastFillColumns(payload.columns || [], {
+            phoneColumn: payload.phoneColumn,
+            nomeColumn: payload.nomeColumn,
+            numeroColumn: payload.numeroColumn,
+          });
+          metaTplBroadcastSyncMappingFields(payload.mapping || {});
+          metaTplBroadcastRenderPreview(payload);
+          metaTplBroadcastSetStatus(
+            payload.valid
+              ? "Prévia pronta. Os destinos abaixo já estão no formato E.164 da Meta."
+              : "Nenhum número válido. Ajuste a coluna de telefone.",
+          );
+        } catch (error) {
+          metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível ler a planilha.");
+        }
+      }
+
+      async function metaTplBroadcastPollStatus(id) {
+        if (metaTplBroadcastPoll) window.clearTimeout(metaTplBroadcastPoll);
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/" + encodeURIComponent(id));
+          const row = payload.campaign || {};
+          metaTplBroadcastSetStatus(
+            "Disparo " +
+              String(row.status || "") +
+              ": " +
+              Number(row.sent || 0) +
+              " enviados · " +
+              Number(row.failed || 0) +
+              " falhas · " +
+              Number(row.clicks || 0) +
+              " cliques no botão.",
+          );
+          if (row.status === "queued" || row.status === "running") {
+            metaTplBroadcastPoll = window.setTimeout(function () {
+              metaTplBroadcastPollStatus(id);
+            }, 2500);
+          }
+        } catch (_error) {
+          metaTplBroadcastPoll = window.setTimeout(function () {
+            metaTplBroadcastPollStatus(id);
+          }, 4000);
+        }
+      }
+
+      async function metaTplBroadcastStart() {
+        if (!metaTplBroadcastFile) {
+          metaTplBroadcastSetStatus("Escolha a planilha com os números.");
+          return;
+        }
+        if (!String((metaTplBroadcastEl("meta-tpl-broadcast-number") || {}).value || "").trim()) {
+          metaTplBroadcastSetStatus("Selecione um número Ativo.");
+          return;
+        }
+        metaTplBroadcastSetStatus("Iniciando disparo Cloud…");
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/start", {
+            method: "POST",
+            body: metaTplBroadcastFormData(),
+          });
+          const campaign = payload.campaign || {};
+          metaTplBroadcastCampaignId = String(campaign.id || "");
+          metaTplBroadcastSetStatus("Disparo na fila. Os números já foram normalizados para a Meta.");
+          if (metaTplBroadcastCampaignId) metaTplBroadcastPollStatus(metaTplBroadcastCampaignId);
+        } catch (error) {
+          metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível iniciar o disparo.");
+        }
+      }
+
       window.wabaLoadMetaTemplatesLab = async function wabaLoadMetaTemplatesLab(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         metaTplLabFillPortfolioSelect();
@@ -38291,9 +38634,11 @@
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
           metaTplLabRenderTable(payload.templates);
           metaTplLabSetStatus(payload.templates && payload.templates.length ? "" : "Lista local vazia.");
+          metaTplBroadcastFillPortfolio();
         } catch (error) {
           metaTplLabRenderTable([]);
           metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível listar.");
+          metaTplBroadcastFillPortfolio();
         }
         return false;
       };
@@ -38696,6 +39041,30 @@
         if (overlay && overlay.classList.contains("open")) metaTplLabClosePreview();
       });
 
+      document.getElementById("meta-tpl-broadcast-portfolio")?.addEventListener("change", function () {
+        metaTplBroadcastFillTemplates();
+        metaTplBroadcastFillNumbers();
+        metaTplBroadcastLoadInspect();
+      });
+      document.getElementById("meta-tpl-broadcast-template")?.addEventListener("change", function () {
+        metaTplBroadcastLoadInspect();
+      });
+      document.getElementById("meta-tpl-broadcast-file-btn")?.addEventListener("click", function () {
+        document.getElementById("meta-tpl-broadcast-file")?.click();
+      });
+      document.getElementById("meta-tpl-broadcast-file")?.addEventListener("change", function (event) {
+        const input = event && event.target;
+        metaTplBroadcastFile = input && input.files && input.files[0] ? input.files[0] : null;
+        const label = document.getElementById("meta-tpl-broadcast-file-name");
+        if (label) label.textContent = metaTplBroadcastFile ? metaTplBroadcastFile.name : "Nenhum arquivo.";
+        if (metaTplBroadcastFile) metaTplBroadcastPreview();
+      });
+      document.getElementById("meta-tpl-broadcast-preview")?.addEventListener("click", function () {
+        metaTplBroadcastPreview();
+      });
+      document.getElementById("meta-tpl-broadcast-start")?.addEventListener("click", function () {
+        metaTplBroadcastStart();
+      });
       document.getElementById("meta-tpl-lab-portfolio")?.addEventListener("change", function () {
         metaTplLabAiResult = null;
         metaTplLabAiAnalysisId = "";

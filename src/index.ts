@@ -583,6 +583,8 @@ function shouldSkipBodyParserForMultipart(req: express.Request) {
   if (p === "/disparos/campanhas/intake") return true;
   if (p === "/disparos/messenger-images") return true;
   if (p === "/integrations/meta/whatsapp/templates/ai/header-media") return true;
+  if (p === "/integrations/meta/whatsapp/broadcast/preview") return true;
+  if (p === "/integrations/meta/whatsapp/broadcast/start") return true;
   if (/^\/device-cloud\/device\/[^/]+\/push-media$/.test(p)) return true;
   const ct = String(req.headers["content-type"] || "");
   if (!ct.includes("multipart/form-data")) return false;

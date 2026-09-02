@@ -13,5 +13,6 @@
 - Todo template criado pelo backend inclui, além do botão do usuário, um `QUICK_REPLY` **Bloquear** só no payload Graph. O painel, o GET público e o preview não mostram esse botão.
 - Laboratório Cloud: BODY Utility com léxico **Olá** + **Informamos que** + **Para** e uma âncora de utilidade (**confirmação**, **status confirmado**, **confirmado**, **aprovado**, **concluído**, **atualizado**, **liberado**). Botões visíveis só **Ver Detalhes**, **Saiba Mais**, **Ver Atualizações**. A categoria final é da Meta.
 - A foto de perfil do chip no Laboratório pode ser ditada no Waba e enviada à Meta (`profile_picture_handle`). **Editar perfil** só aparece e só grava quando o número está **Ativo**. Pendente: só Ativar com PIN. O nome de exibição continua sujeito a aprovação da Meta.
+- Disparo Cloud (aba Templates): Portfólio → template **APPROVED** → número **Ativo** → planilha. A coluna de telefone é obrigatória; Nome/Número só se o BODY do template tiver essa variável. Destinos são normalizados para E.164 da Meta (sem `+`). Duplicata na mesma campanha (com/sem 9º dígito) é ignorada. Clique no botão URL conta no disparo via `/s/:slug`.
 - A cada geração, a IA consulta só templates do mesmo tenant aprovados como UTILITY. Não usa Marketing, pendentes nem de outro tenant.
 - A IA adapta o formato da biblioteca Utility da Meta (prints) sem trocar o tema do texto base.

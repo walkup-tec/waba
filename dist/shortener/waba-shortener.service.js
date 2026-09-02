@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.peekWabaShortPublicBaseUrl = void 0;
+exports.peekWabaShortPublicBaseUrl = exports.findShortLinkBySlug = exports.attachCampaignIdToShortLink = void 0;
 exports.createWabaShortUrl = createWabaShortUrl;
 exports.resolveWabaShortRedirect = resolveWabaShortRedirect;
 exports.fetchWabaShortUrlClicks = fetchWabaShortUrlClicks;
@@ -12,6 +12,9 @@ const crypto_1 = __importDefault(require("crypto"));
 const waba_public_base_url_1 = require("../lib/waba-public-base-url");
 Object.defineProperty(exports, "peekWabaShortPublicBaseUrl", { enumerable: true, get: function () { return waba_public_base_url_1.peekWabaShortPublicBaseUrl; } });
 const waba_shortener_repository_1 = require("./waba-shortener.repository");
+Object.defineProperty(exports, "attachCampaignIdToShortLink", { enumerable: true, get: function () { return waba_shortener_repository_1.attachCampaignIdToShortLink; } });
+Object.defineProperty(exports, "findShortLinkBySlug", { enumerable: true, get: function () { return waba_shortener_repository_1.findShortLinkBySlug; } });
+const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 function buildPublicShortUrl(slug, hints) {
     (0, waba_public_base_url_1.rememberPublicBaseFromRequest)(hints);
     const base = (0, waba_public_base_url_1.resolveWabaShortPublicBaseUrl)(hints);
@@ -44,6 +47,7 @@ async function createWabaShortUrl(longUrl, options = {}) {
                 slug: candidateSlug,
                 longUrl: safeLongUrl,
                 tenantId: options.tenantId,
+                campaignId: options.campaignId,
             });
             return buildPublicShortUrl(record.slug, options.publicBaseHints);
         }
@@ -61,6 +65,10 @@ async function resolveWabaShortRedirect(slug) {
     if (!record?.longUrl)
         return null;
     await (0, waba_shortener_repository_1.incrementShortLinkClicks)(normalized);
+    if (record.campaignId)
+        (0, meta_whatsapp_broadcast_store_1.addClicksToBroadcastCampaign)(record.campaignId, 1);
+    else
+        (0, meta_whatsapp_broadcast_store_1.addClicksByBroadcastSlug)(normalized, 1);
     return record.longUrl;
 }
 async function fetchWabaShortUrlClicks(shortUrl) {

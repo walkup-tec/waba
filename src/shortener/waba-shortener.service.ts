@@ -6,6 +6,7 @@ import {
   resolveWabaShortPublicBaseUrl,
 } from "../lib/waba-public-base-url";
 import {
+  attachCampaignIdToShortLink,
   createShortLinkRecord,
   extractSlugFromPublicShortUrl,
   findShortLinkBySlug,
@@ -14,6 +15,7 @@ import {
   normalizeSlug,
   randomSlug,
 } from "./waba-shortener.repository";
+import { addClicksByBroadcastSlug, addClicksToBroadcastCampaign } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 
 function buildPublicShortUrl(slug: string, hints?: WabaPublicBaseRequestHints): string {
   rememberPublicBaseFromRequest(hints);
@@ -33,7 +35,12 @@ function deriveSlugFromLongUrl(longUrl: string): string {
 
 export async function createWabaShortUrl(
   longUrl: string,
-  options: { tenantId?: string; slug?: string; publicBaseHints?: WabaPublicBaseRequestHints } = {},
+  options: {
+    tenantId?: string;
+    slug?: string;
+    publicBaseHints?: WabaPublicBaseRequestHints;
+    campaignId?: string;
+  } = {},
 ): Promise<string> {
   const safeLongUrl = String(longUrl || "").trim();
   if (!/^https?:\/\//i.test(safeLongUrl)) {
@@ -53,6 +60,7 @@ export async function createWabaShortUrl(
         slug: candidateSlug,
         longUrl: safeLongUrl,
         tenantId: options.tenantId,
+        campaignId: options.campaignId,
       });
       return buildPublicShortUrl(record.slug, options.publicBaseHints);
     } catch (error: any) {
@@ -69,8 +77,12 @@ export async function resolveWabaShortRedirect(slug: string): Promise<string | n
   const record = await findShortLinkBySlug(normalized);
   if (!record?.longUrl) return null;
   await incrementShortLinkClicks(normalized);
+  if (record.campaignId) addClicksToBroadcastCampaign(record.campaignId, 1);
+  else addClicksByBroadcastSlug(normalized, 1);
   return record.longUrl;
 }
+
+export { attachCampaignIdToShortLink, findShortLinkBySlug };
 
 export async function fetchWabaShortUrlClicks(shortUrl: string): Promise<number | null> {
   if (!extractSlugFromPublicShortUrl(shortUrl)) return null;

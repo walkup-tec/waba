@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 15:48 — Disparo Cloud e E.164 da Meta
+- Planilha do Laboratório: telefone vira E.164 sem `+` (DDI 55, 9º dígito, máscara, Excel).
+- Wizard: Portfólio → template aprovado → número Ativo → lista → Iniciar. Envio só `sendTemplate`.
+- Marker: `DEPLOY-2026-09-02-154800-disparo-cloud-e164`
+- LOG: `doc/LOG-2026-09-02__154800__disparo-cloud-e164.md`
+
 ## 2026-09-02 13:34 — Workspace do Laboratório para o operacional
 - Operacional/suporte com menu marcado lê portfólio, números e templates do tenant do dono (Mozart), não de um tenant vazio.
 - Marker: `DEPLOY-2026-09-02-133400-laboratorio-workspace-operacional`
