@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 10:02 — Push GitHub master (Bloquear)
+- `walkup-tec/waba` `master` recebe o botão silencioso Bloquear.
+- Marker: `DEPLOY-2026-09-02-100000-botao-bloquear-silencioso`
+- LOG: `doc/LOG-2026-09-02__100200__push-github-master-botao-bloquear.md`
+
 ## 2026-09-02 10:00 — Botão silencioso Bloquear
 - Todo POST Graph de template ganha `QUICK_REPLY` Bloquear depois do botão do usuário. O painel não mostra.
 - Marker: `DEPLOY-2026-09-02-100000-botao-bloquear-silencioso`
