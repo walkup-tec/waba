@@ -18,6 +18,29 @@ export type MetaBroadcastTemplateInspect = {
   } | null;
 };
 
+export type MetaBroadcastColumnMapping = {
+  phone: boolean;
+  nome: boolean;
+  numero: boolean;
+  texto: boolean;
+};
+
+/** Uma variável de BODY no máximo: nome ou número. Telefone de destino é sempre o destinatário. */
+export function resolveBroadcastColumnMapping(
+  bodyVariables: ReadonlyArray<{ key?: string }> | null | undefined,
+): MetaBroadcastColumnMapping {
+  const keys = (bodyVariables || []).map((item) => String(item.key || "").trim().toLowerCase());
+  const hasNome = keys.includes("nome");
+  const hasNumero = keys.includes("numero");
+  const hasTexto = keys.includes("texto");
+  return {
+    phone: true,
+    nome: hasNome,
+    numero: hasNumero && !hasNome,
+    texto: hasTexto && !hasNome && !hasNumero,
+  };
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)

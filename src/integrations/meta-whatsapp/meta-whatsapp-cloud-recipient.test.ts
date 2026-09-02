@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as XLSX from "xlsx";
-import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template";
+import { inspectMetaBroadcastTemplate, resolveBroadcastColumnMapping } from "./meta-whatsapp-broadcast-template";
 import {
   guessMetaBroadcastPhoneColumn,
   parseMetaBroadcastLeads,
@@ -76,6 +76,27 @@ describe("inspectMetaBroadcastTemplate", () => {
     ]);
     assert.equal(got.urlButton?.hasVariable, true);
     assert.equal(got.bodyVariables.length, 0);
+  });
+
+  it("se houver variável, o mapeamento fica só nome ou só número", () => {
+    assert.deepEqual(resolveBroadcastColumnMapping([{ key: "nome" }, { key: "numero" }]), {
+      phone: true,
+      nome: true,
+      numero: false,
+      texto: false,
+    });
+    assert.deepEqual(resolveBroadcastColumnMapping([{ key: "numero" }]), {
+      phone: true,
+      nome: false,
+      numero: true,
+      texto: false,
+    });
+    assert.deepEqual(resolveBroadcastColumnMapping([]), {
+      phone: true,
+      nome: false,
+      numero: false,
+      texto: false,
+    });
   });
 });
 

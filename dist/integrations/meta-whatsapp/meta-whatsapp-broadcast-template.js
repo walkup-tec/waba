@@ -1,8 +1,22 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.resolveBroadcastColumnMapping = resolveBroadcastColumnMapping;
 exports.inspectMetaBroadcastTemplate = inspectMetaBroadcastTemplate;
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
 const waba_shortener_repository_1 = require("../../shortener/waba-shortener.repository");
+/** Uma variável de BODY no máximo: nome ou número. Telefone de destino é sempre o destinatário. */
+function resolveBroadcastColumnMapping(bodyVariables) {
+    const keys = (bodyVariables || []).map((item) => String(item.key || "").trim().toLowerCase());
+    const hasNome = keys.includes("nome");
+    const hasNumero = keys.includes("numero");
+    const hasTexto = keys.includes("texto");
+    return {
+        phone: true,
+        nome: hasNome,
+        numero: hasNumero && !hasNome,
+        texto: hasTexto && !hasNome && !hasNumero,
+    };
+}
 function asRecord(value) {
     return value && typeof value === "object" && !Array.isArray(value)
         ? value

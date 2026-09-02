@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 17:03 — Colunas da planilha só depois do template
+- Telefone e nome/número ficam ocultos até escolher o template aprovado.
+- Uma variável de BODY no máximo: nome ou número.
+- LOG: `doc/LOG-2026-09-02__170300__colunas-depois-do-template.md`
+
 ## 2026-09-02 16:57 — Campanha do assinante: só Em andamento
 - Select do Disparo Cloud: apenas intake `in_progress`.
 - Rótulo: `nome do assinante - nome da campanha - envios`.

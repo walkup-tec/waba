@@ -17,6 +17,7 @@ import { MetaCloudProvider } from "../whatsapp/meta-cloud-provider";
 import type { WhatsAppTemplateComponent } from "../whatsapp/whatsapp-provider";
 import {
   inspectMetaBroadcastTemplate,
+  resolveBroadcastColumnMapping,
   type MetaBroadcastTemplateInspect,
 } from "./meta-whatsapp-broadcast-template";
 import {
@@ -139,12 +140,7 @@ export class MetaWhatsappBroadcastService {
       templateName: loaded.template.name,
       language: loaded.template.language,
       connectionId: loaded.connection.id,
-      mapping: {
-        phone: true,
-        nome: loaded.inspect.bodyVariables.some((item) => item.key === "nome"),
-        numero: loaded.inspect.bodyVariables.some((item) => item.key === "numero"),
-        texto: loaded.inspect.bodyVariables.some((item) => item.key === "texto"),
-      },
+      mapping: resolveBroadcastColumnMapping(loaded.inspect.bodyVariables),
     };
   }
 
@@ -207,12 +203,7 @@ export class MetaWhatsappBroadcastService {
     });
     return {
       inspect: loaded.inspect,
-      mapping: {
-        phone: true,
-        nome: loaded.inspect.bodyVariables.some((item) => item.key === "nome"),
-        numero: loaded.inspect.bodyVariables.some((item) => item.key === "numero"),
-        texto: loaded.inspect.bodyVariables.some((item) => item.key === "texto"),
-      },
+      mapping: resolveBroadcastColumnMapping(loaded.inspect.bodyVariables),
       columns: preview.columns,
       phoneColumn: preview.phoneColumn,
       nomeColumn: preview.nomeColumn,

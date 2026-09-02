@@ -21753,24 +21753,26 @@
                     <span id="meta-tpl-broadcast-file-name" class="muted meta-tpl-ai-file-name">Nenhum arquivo.</span>
                   </div>
                 </div>
-                <div class="aquecedor-field">
+                <div class="aquecedor-field" id="meta-tpl-broadcast-phone-wrap" hidden>
                   <label for="meta-tpl-broadcast-phone-col">Coluna do telefone</label>
                   <select id="meta-tpl-broadcast-phone-col" aria-label="Coluna do telefone">
                     <option value="">Carregue a planilha</option>
                   </select>
-                  <span class="muted">Obrigatória. Aceita máscara, DDI, 00, Excel e falta do 9º dígito.</span>
+                  <span class="muted">Aparece depois do template. Destino do disparo (máscara, DDI, Excel e 9º dígito).</span>
                 </div>
                 <div class="aquecedor-field" id="meta-tpl-broadcast-nome-wrap" hidden>
                   <label for="meta-tpl-broadcast-nome-col">Coluna do nome</label>
                   <select id="meta-tpl-broadcast-nome-col" aria-label="Coluna do nome">
                     <option value="">Selecione a coluna</option>
                   </select>
+                  <span class="muted">Só se o template tiver a variável de nome.</span>
                 </div>
                 <div class="aquecedor-field" id="meta-tpl-broadcast-numero-wrap" hidden>
                   <label for="meta-tpl-broadcast-numero-col">Coluna da variável Número</label>
                   <select id="meta-tpl-broadcast-numero-col" aria-label="Coluna da variável Número">
                     <option value="">Selecione a coluna</option>
                   </select>
+                  <span class="muted">Só se o template tiver a variável de número.</span>
                 </div>
               </div>
               <div class="disparos-inline-actions" style="margin-top:12px; flex-wrap:wrap; gap:8px;">
@@ -38619,6 +38621,7 @@
         metaTplBroadcastFillTemplates();
         metaTplBroadcastFillNumbers();
         void metaTplBroadcastLoadLinkableCampaigns();
+        void metaTplBroadcastLoadInspect();
       }
 
       async function metaTplBroadcastLoadLinkableCampaigns() {
@@ -38775,11 +38778,29 @@
         if (numero && guessed && guessed.numeroColumn) numero.value = guessed.numeroColumn;
       }
 
+      function metaTplBroadcastHasTemplate() {
+        return Boolean(String((metaTplBroadcastEl("meta-tpl-broadcast-template") || {}).value || "").trim());
+      }
+
+      function metaTplBroadcastResolveMapping(mapping) {
+        const hasTemplate = metaTplBroadcastHasTemplate();
+        const nome = Boolean(hasTemplate && mapping && mapping.nome);
+        const numero = Boolean(hasTemplate && mapping && mapping.numero && !nome);
+        return {
+          phone: hasTemplate,
+          nome: nome,
+          numero: numero,
+        };
+      }
+
       function metaTplBroadcastSyncMappingFields(mapping) {
+        const resolved = metaTplBroadcastResolveMapping(mapping);
+        const phoneWrap = metaTplBroadcastEl("meta-tpl-broadcast-phone-wrap");
         const nomeWrap = metaTplBroadcastEl("meta-tpl-broadcast-nome-wrap");
         const numeroWrap = metaTplBroadcastEl("meta-tpl-broadcast-numero-wrap");
-        if (nomeWrap) nomeWrap.hidden = !(mapping && mapping.nome);
-        if (numeroWrap) numeroWrap.hidden = !(mapping && mapping.numero);
+        if (phoneWrap) phoneWrap.hidden = !resolved.phone;
+        if (nomeWrap) nomeWrap.hidden = !resolved.nome;
+        if (numeroWrap) numeroWrap.hidden = !resolved.numero;
       }
 
       function metaTplBroadcastFormData() {
@@ -38869,9 +38890,15 @@
 
       async function metaTplBroadcastPreview() {
         if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          if (!metaTplBroadcastHasTemplate()) {
+            metaTplBroadcastSyncMappingFields({ nome: false, numero: false });
+            metaTplBroadcastSetStatus("Selecione um template aprovado para mapear as colunas.");
+            return;
+          }
           const sample = metaDisparoCloudPreviewSample();
+          const mapping = (metaTplBroadcastInspect && metaTplBroadcastInspect.mapping) || sample.mapping;
           metaTplBroadcastFillColumns(sample.columns, sample);
-          metaTplBroadcastSyncMappingFields(sample.mapping);
+          metaTplBroadcastSyncMappingFields(mapping);
           metaTplBroadcastRenderPreview(sample);
           metaTplBroadcastSetStatus("Prévia pronta. Os destinos abaixo já estão no formato E.164 da Meta.");
           return;
