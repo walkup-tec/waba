@@ -233,7 +233,7 @@ export class MetaWhatsappTemplateService {
   async syncFromAuth(
     auth: WabaRequestAuth,
     connectionId?: string,
-  ): Promise<{ templates: MetaTemplatePublic[]; pages: number }> {
+  ): Promise<{ templates: MetaTemplatePublic[]; pages: number; removed: number }> {
     const tenant = requireTenant(auth);
     const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
     let token = "";
@@ -282,13 +282,45 @@ export class MetaWhatsappTemplateService {
         logMetaTemplate("ERROR", { reason: "ai_outcome_sync_failed", tenantId: tenant.tenantId });
       }
     }
+    let removed = 0;
+    if (listed.complete) {
+      const keepMetaIds = new Set(
+        listed.items
+          .map((item) => String(item?.metaTemplateId || "").trim())
+          .filter(Boolean),
+      );
+      const keepNameLang = new Set(
+        listed.items
+          .filter((item): item is NonNullable<typeof item> => Boolean(item))
+          .map((item) => `${item.name}::${item.language}`),
+      );
+      const locals = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+      for (const row of locals) {
+        const keepById = Boolean(row.metaTemplateId && keepMetaIds.has(row.metaTemplateId));
+        const keepByName = keepNameLang.has(`${row.name}::${row.language}`);
+        if (keepById || keepByName) continue;
+        if (await this.templates.deleteForTenant(tenant.tenantId, row.id)) removed += 1;
+      }
+    } else {
+      logMetaTemplate("SYNC", {
+        reason: "skip_prune_incomplete_list",
+        tenantId: tenant.tenantId,
+        pages: listed.pages,
+      });
+    }
     logMetaTemplate("SYNC", {
       tenantId: tenant.tenantId,
       pages: listed.pages,
       upserted: upserted.length,
+      removed,
+      complete: listed.complete,
     });
     const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
-    return { templates: rows.map((row) => toPublicTemplate(row, publicPortfolioName(connection))), pages: listed.pages };
+    return {
+      templates: rows.map((row) => toPublicTemplate(row, publicPortfolioName(connection))),
+      pages: listed.pages,
+      removed,
+    };
   }
 
   async deleteFromAuth(auth: WabaRequestAuth, templateId: string): Promise<{ deleted: true; metaDeleted: boolean }> {

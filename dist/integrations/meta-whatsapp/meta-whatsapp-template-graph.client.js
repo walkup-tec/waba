@@ -30,7 +30,7 @@ async function listWabaMessageTemplates(input) {
     const seenCursors = new Set();
     let after = "";
     let pages = 0;
-    let last = null;
+    let complete = true;
     for (let page = 0; page < MAX_PAGES; page++) {
         const query = {
             fields: LIST_FIELDS,
@@ -44,7 +44,6 @@ async function listWabaMessageTemplates(input) {
             path: `${input.wabaId}/message_templates`,
             query,
         });
-        last = result;
         if (!result.ok)
             return { ok: false, result };
         pages += 1;
@@ -58,8 +57,10 @@ async function listWabaMessageTemplates(input) {
         }
         seenCursors.add(nextAfter);
         after = nextAfter;
+        if (page === MAX_PAGES - 1)
+            complete = false;
     }
-    return { ok: true, items, pages };
+    return { ok: true, items, pages, complete };
 }
 async function deleteWabaMessageTemplate(input) {
     const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;

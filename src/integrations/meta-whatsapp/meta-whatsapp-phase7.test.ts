@@ -493,6 +493,7 @@ describe("fase 7 paginação Graph", () => {
     assert.equal(listed.ok, true);
     if (!listed.ok) return;
     assert.equal(listed.pages, 2);
+    assert.equal(listed.complete, true);
     assert.equal(listed.items.length, 2);
     assert.equal(calls.length, 2);
   });
@@ -514,6 +515,7 @@ describe("fase 7 paginação Graph", () => {
     assert.equal(listed.ok, true);
     if (!listed.ok) return;
     assert.equal(listed.pages, 2);
+    assert.equal(listed.complete, true);
     assert.equal(listed.items.map((item) => item?.name).join(","), "p1,p2");
   });
 });
@@ -719,11 +721,12 @@ describe("fase 7 exclusão Graph", () => {
 });
 
 describe("fase 7 sync", () => {
-  it("faz upsert e não apaga local ausente na página", async () => {
+  it("após listagem completa, apaga local que a Meta já não lista", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow());
     const templates = new FakeTemplates();
     templates.rows.push(templateRow({ id: "keep", name: "antigo_local", metaTemplateId: "keep-1" }));
+    templates.rows.push(templateRow({ id: "other", tenantId: TENANT_B, connectionId: "conn-b", name: "outro" }));
     const service = new MetaWhatsappTemplateService(
       connections as any,
       templates as any,
@@ -746,9 +749,68 @@ describe("fase 7 sync", () => {
     );
     const result = await service.syncFromAuth(auth(EMAIL_A));
     assert.equal(result.pages, 1);
-    assert.equal(templates.rows.some((row) => row.name === "antigo_local"), true);
+    assert.equal(result.removed, 1);
+    assert.equal(templates.rows.some((row) => row.name === "antigo_local"), false);
     assert.equal(templates.rows.some((row) => row.name === "novo" && row.status === "APPROVED"), true);
+    assert.equal(templates.rows.some((row) => row.id === "other"), true);
     assert.equal(result.templates.every((row) => !("accessTokenEncrypted" in row)), true);
+  });
+
+  it("não apaga template de outro portfólio do mesmo tenant", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const templates = new FakeTemplates();
+    templates.rows.push(templateRow({ id: "gone", name: "apagado_meta", metaTemplateId: "gone-1" }));
+    templates.rows.push(
+      templateRow({
+        id: "other-conn",
+        connectionId: "conn-b",
+        wabaId: "waba-b",
+        name: "outro_portfolio",
+        metaTemplateId: "keep-b",
+      }),
+    );
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async () => graphJson({ data: [] }),
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A), "conn-a");
+    assert.equal(result.removed, 1);
+    assert.equal(templates.rows.some((row) => row.id === "gone"), false);
+    assert.equal(templates.rows.some((row) => row.id === "other-conn"), true);
+  });
+
+  it("listagem truncada não remove local", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const templates = new FakeTemplates();
+    templates.rows.push(templateRow({ id: "keep", name: "antigo_local", metaTemplateId: "keep-1" }));
+    let page = 0;
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async () => {
+        page += 1;
+        return graphJson({
+          data: [
+            {
+              id: `tpl-${page}`,
+              name: `pagina_${page}`,
+              language: "pt_BR",
+              status: "APPROVED",
+            },
+          ],
+          paging: { cursors: { after: `c${page}` } },
+        });
+      },
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A));
+    assert.equal(result.pages, 20);
+    assert.equal(result.removed, 0);
+    assert.equal(templates.rows.some((row) => row.name === "antigo_local"), true);
   });
 });
 

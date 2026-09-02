@@ -42,13 +42,16 @@ export async function listWabaMessageTemplates(input: {
   token: string;
   wabaId: string;
   graph?: TemplateGraphCaller;
-}): Promise<{ ok: true; items: ReturnType<typeof mapGraphTemplate>[]; pages: number } | { ok: false; result: MetaGraphJsonResult }> {
+}): Promise<
+  | { ok: true; items: ReturnType<typeof mapGraphTemplate>[]; pages: number; complete: boolean }
+  | { ok: false; result: MetaGraphJsonResult }
+> {
   const graph = input.graph || callMetaGraphJson;
   const items: ReturnType<typeof mapGraphTemplate>[] = [];
   const seenCursors = new Set<string>();
   let after = "";
   let pages = 0;
-  let last: MetaGraphJsonResult | null = null;
+  let complete = true;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const query: Record<string, string> = {
@@ -62,7 +65,6 @@ export async function listWabaMessageTemplates(input: {
       path: `${input.wabaId}/message_templates`,
       query,
     });
-    last = result;
     if (!result.ok) return { ok: false, result };
     pages += 1;
     const data = Array.isArray(result.json?.data) ? result.json.data : [];
@@ -75,9 +77,10 @@ export async function listWabaMessageTemplates(input: {
     }
     seenCursors.add(nextAfter);
     after = nextAfter;
+    if (page === MAX_PAGES - 1) complete = false;
   }
 
-  return { ok: true, items, pages };
+  return { ok: true, items, pages, complete };
 }
 
 export async function deleteWabaMessageTemplate(input: {

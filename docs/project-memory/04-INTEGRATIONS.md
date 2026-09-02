@@ -1,6 +1,6 @@
 # Integrações
 
-- Meta Graph: message templates (criar, listar/paginar, excluir, status).
+- Meta Graph: message templates (criar, listar/paginar, excluir, sync com prune do órfão local, status).
   Exclusão: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-management
 - Evolution API: instâncias alternativas (fora deste card).
 - Encurtador WABA (`/s/:slug`) para botões URL oficiais.

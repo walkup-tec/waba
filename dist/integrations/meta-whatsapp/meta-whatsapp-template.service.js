@@ -244,13 +244,44 @@ class MetaWhatsappTemplateService {
                 (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", { reason: "ai_outcome_sync_failed", tenantId: tenant.tenantId });
             }
         }
+        let removed = 0;
+        if (listed.complete) {
+            const keepMetaIds = new Set(listed.items
+                .map((item) => String(item?.metaTemplateId || "").trim())
+                .filter(Boolean));
+            const keepNameLang = new Set(listed.items
+                .filter((item) => Boolean(item))
+                .map((item) => `${item.name}::${item.language}`));
+            const locals = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+            for (const row of locals) {
+                const keepById = Boolean(row.metaTemplateId && keepMetaIds.has(row.metaTemplateId));
+                const keepByName = keepNameLang.has(`${row.name}::${row.language}`);
+                if (keepById || keepByName)
+                    continue;
+                if (await this.templates.deleteForTenant(tenant.tenantId, row.id))
+                    removed += 1;
+            }
+        }
+        else {
+            (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
+                reason: "skip_prune_incomplete_list",
+                tenantId: tenant.tenantId,
+                pages: listed.pages,
+            });
+        }
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
             tenantId: tenant.tenantId,
             pages: listed.pages,
             upserted: upserted.length,
+            removed,
+            complete: listed.complete,
         });
         const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
-        return { templates: rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection))), pages: listed.pages };
+        return {
+            templates: rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection))),
+            pages: listed.pages,
+            removed,
+        };
     }
     async deleteFromAuth(auth, templateId) {
         const tenant = requireTenant(auth);

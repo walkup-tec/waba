@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:32 — Sync remove o que a Meta já apagou
+- Atualizar da Meta, após listagem Graph completa, apaga o registro local órfão do portfólio.
+- Marker: `DEPLOY-2026-09-02-023200-sync-prune-templates`
+- LOG: `doc/LOG-2026-09-02__023200__sync-prune-templates-meta.md`
+
 ## 2026-09-02 02:28 — Excluir template na Meta
 - DELETE Graph `hsm_id`+`name`, depois apaga o registro local do tenant.
 - Marker: `DEPLOY-2026-09-02-022800-excluir-template-meta`

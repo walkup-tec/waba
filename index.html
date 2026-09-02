@@ -37594,16 +37594,22 @@
         metaTplLabSetStatus("Sincronizando com a Meta…");
         try {
           let pages = 0;
+          let removed = 0;
           for (let i = 0; i < ids.length; i += 1) {
             const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/sync", {
               method: "POST",
               body: JSON.stringify({ connectionId: ids[i] }),
             });
             pages += Number(payload.pages || 1);
+            removed += Number(payload.removed || 0);
           }
           const listed = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
           metaTplLabRenderTable(listed.templates);
-          metaTplLabSetStatus("Sincronizado. páginas=" + String(pages));
+          metaTplLabSetStatus(
+            "Sincronizado. páginas=" +
+              String(pages) +
+              (removed ? ". Removidos da Meta=" + String(removed) : ""),
+          );
         } catch (error) {
           metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível sincronizar.");
         } finally {
