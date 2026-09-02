@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isMetaRestrictedTemplateButtonHost = isMetaRestrictedTemplateButtonHost;
 exports.placeholderIndexes = placeholderIndexes;
 exports.validateTemplateCreate = validateTemplateCreate;
 const meta_whatsapp_recipient_1 = require("./meta-whatsapp-recipient");
@@ -13,6 +14,18 @@ function asRecord(value) {
     return value && typeof value === "object" && !Array.isArray(value)
         ? value
         : {};
+}
+function isMetaRestrictedTemplateButtonHost(hostname) {
+    const host = String(hostname || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\.$/, "");
+    return (host === "wa.me" ||
+        host.endsWith(".wa.me") ||
+        host === "whatsapp.com" ||
+        host.endsWith(".whatsapp.com") ||
+        host === "whatsapp.net" ||
+        host.endsWith(".whatsapp.net"));
 }
 function placeholderIndexes(text) {
     const found = new Set();
@@ -54,6 +67,18 @@ function sanitizeButton(raw) {
         const url = String(row.url || "").trim();
         if (!url)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+        let parsed;
+        try {
+            parsed = new URL(url);
+        }
+        catch {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_https");
+        }
+        if (parsed.protocol !== "https:")
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_https");
+        if (isMetaRestrictedTemplateButtonHost(parsed.hostname)) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_restricted");
+        }
         out.url = url;
         if (placeholderIndexes(url).length) {
             const examples = Array.isArray(row.example) ? row.example : [];

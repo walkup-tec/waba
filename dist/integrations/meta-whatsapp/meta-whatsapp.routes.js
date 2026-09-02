@@ -15,6 +15,7 @@ const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.servi
 const meta_whatsapp_inbox_service_1 = require("./meta-whatsapp-inbox.service");
 const meta_whatsapp_automation_service_1 = require("./meta-whatsapp-automation.service");
 const meta_whatsapp_template_ai_service_1 = require("./meta-whatsapp-template-ai.service");
+const waba_public_base_url_1 = require("../../lib/waba-public-base-url");
 const service = new meta_whatsapp_connection_service_1.MetaWhatsappConnectionService();
 const messagingService = new meta_whatsapp_messaging_service_1.MetaWhatsappMessagingService();
 const templateService = new meta_whatsapp_template_service_1.MetaWhatsappTemplateService();
@@ -349,7 +350,7 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
     app.post("/integrations/meta/whatsapp/templates/ai/submit-all", async (req, res) => {
         try {
             warnClientTenantClaim(req);
-            const result = await templateAiService.submitAllFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), req.body && typeof req.body === "object" ? req.body : {});
+            const result = await templateAiService.submitAllFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), req.body && typeof req.body === "object" ? req.body : {}, (0, waba_public_base_url_1.publicBaseHintsFromExpressRequest)(req));
             return sendPublic(res, 200, { ok: true, ...result });
         }
         catch (error) {

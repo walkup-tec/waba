@@ -16,6 +16,7 @@ const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.servi
 const meta_token_crypto_1 = require("./meta-token-crypto");
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_resumable_upload_1 = require("./meta-whatsapp-resumable-upload");
+const meta_whatsapp_template_ai_short_url_1 = require("./meta-whatsapp-template-ai-short-url");
 const MEDIA_MIME = {
     IMAGE: new Set(["image/jpeg", "image/png"]),
     VIDEO: new Set(["video/mp4"]),
@@ -61,6 +62,14 @@ function ensureRateLimit(key) {
     recent.push(now);
     windows.set(key, recent);
 }
+function safeHost(url) {
+    try {
+        return new URL(url).hostname || "";
+    }
+    catch {
+        return "";
+    }
+}
 function isEnabled() {
     const raw = String(process.env.META_TEMPLATE_AI_ENABLED || "").trim().toLowerCase();
     if (raw === "0" || raw === "false" || raw === "off")
@@ -92,13 +101,14 @@ function componentsFromAiOption(option) {
     ];
 }
 class MetaWhatsappTemplateAiService {
-    constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), analyses = new meta_whatsapp_template_ai_repository_1.MetaWhatsappTemplateAiRepository(), openAi = waba_openai_responses_client_1.callOpenAiStructured, templates = new meta_whatsapp_template_service_1.MetaWhatsappTemplateService(), decrypt = meta_token_crypto_1.decryptMetaToken, uploadHeader = meta_whatsapp_resumable_upload_1.uploadMetaResumableImage) {
+    constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), analyses = new meta_whatsapp_template_ai_repository_1.MetaWhatsappTemplateAiRepository(), openAi = waba_openai_responses_client_1.callOpenAiStructured, templates = new meta_whatsapp_template_service_1.MetaWhatsappTemplateService(), decrypt = meta_token_crypto_1.decryptMetaToken, uploadHeader = meta_whatsapp_resumable_upload_1.uploadMetaResumableImage, createButtonShortUrl = meta_whatsapp_template_ai_short_url_1.createMetaTemplateButtonShortUrl) {
         this.connections = connections;
         this.analyses = analyses;
         this.openAi = openAi;
         this.templates = templates;
         this.decrypt = decrypt;
         this.uploadHeader = uploadHeader;
+        this.createButtonShortUrl = createButtonShortUrl;
     }
     async requirePortfolio(tenantId, connectionId) {
         const id = String(connectionId || "").trim();
@@ -212,7 +222,7 @@ class MetaWhatsappTemplateAiService {
             analyzedAt,
         };
     }
-    async submitAllFromAuth(auth, input) {
+    async submitAllFromAuth(auth, input, publicBaseHints) {
         const tenant = requireTenant(auth);
         const connectionId = String(input?.connectionId || input?.connection_id || "").trim();
         const analysisId = String(input?.analysisId || input?.analysis_id || "").trim();
@@ -230,6 +240,25 @@ class MetaWhatsappTemplateAiService {
         }
         const results = [];
         const alreadySubmitted = await this.analyses.listSubmittedNames(tenant.tenantId, connectionId, analysisId);
+        const pendingIndexes = analysis.result.options
+            .map((_, index) => index)
+            .filter((index) => !alreadySubmitted.has((0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index)));
+        let metaButtonUrl = null;
+        if (pendingIndexes.length) {
+            metaButtonUrl = await this.createButtonShortUrl({
+                destinationUrl: shell.buttonUrl,
+                tenantId: tenant.tenantId,
+                publicBaseHints,
+            });
+            (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
+                tenantId: tenant.tenantId,
+                connectionId,
+                buttonShortened: true,
+                destinationHost: safeHost(shell.buttonUrl),
+                shortHost: safeHost(metaButtonUrl),
+            });
+        }
+        const graphShell = metaButtonUrl ? { ...shell, buttonUrl: metaButtonUrl } : shell;
         for (let index = 0; index < analysis.result.options.length; index += 1) {
             const option = analysis.result.options[index];
             const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
@@ -252,7 +281,7 @@ class MetaWhatsappTemplateAiService {
                     name,
                     language: analysis.language,
                     category: "UTILITY",
-                    components: (0, meta_whatsapp_template_ai_shell_1.componentsFromAiOptionAndShell)(option, shell),
+                    components: (0, meta_whatsapp_template_ai_shell_1.componentsFromAiOptionAndShell)(option, graphShell),
                 });
                 results.push({
                     index,
@@ -288,6 +317,7 @@ class MetaWhatsappTemplateAiService {
             total: results.length,
             submitted,
             failed: results.length - submitted,
+            metaButtonUrl,
             results,
         };
     }

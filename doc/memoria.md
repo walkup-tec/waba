@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 01:00 — Teste 0/3 no dist antigo
+- Produção ainda em `DEPLOY-2026-09-01-201200-cabecalho-fixo-utilidade`. Docker usa `dist/` do Git; o encurtador estava só em `src/`.
+- Build + commit de `dist/`. Marker: `DEPLOY-2026-09-02-010000-dist-botao-encurtado`
+- LOG: `doc/LOG-2026-09-02__010000__dist-botao-encurtado-producao.md`
+
 ## 2026-09-02 00:30 — GitHub master no botão encurtado
 - `master` em `walkup-tec/waba`: `c063c73`.
 - LOG: `doc/LOG-2026-09-02__003000__push-github-master-botao-encurtado.md`

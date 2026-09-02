@@ -7,6 +7,7 @@ exports.parseMetaTemplateAiShell = parseMetaTemplateAiShell;
 exports.stripTemplatePlaceholders = stripTemplatePlaceholders;
 exports.componentsFromAiOptionAndShell = componentsFromAiOptionAndShell;
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
+const meta_whatsapp_template_ai_short_url_1 = require("./meta-whatsapp-template-ai-short-url");
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
 /** Mesmas opções do select de botão do Mensageiro (API Alternativa). */
 exports.META_TEMPLATE_AI_BUTTON_LABELS = [
@@ -48,8 +49,8 @@ function asRecord(value) {
         ? value
         : {};
 }
-function requireStaticHttpsUrl(raw) {
-    const url = String(raw || "").trim();
+function requireDestinationUrl(raw) {
+    const url = (0, meta_whatsapp_template_ai_short_url_1.normalizeMetaTemplateDestinationUrl)(raw);
     if (!url || url.length > 2000 || (0, meta_whatsapp_template_validate_1.placeholderIndexes)(url).length) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_https");
     }
@@ -60,8 +61,9 @@ function requireStaticHttpsUrl(raw) {
     catch {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_https");
     }
-    if (parsed.protocol !== "https:")
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_https");
+    }
     return url;
 }
 function parseMetaTemplateAiShell(input) {
@@ -75,7 +77,7 @@ function parseMetaTemplateAiShell(input) {
         .toUpperCase();
     const headerText = exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT;
     const buttonText = String(body.buttonText || body.button_text || "").trim();
-    const buttonUrl = requireStaticHttpsUrl(String(body.buttonUrl || body.button_url || ""));
+    const buttonUrl = requireDestinationUrl(String(body.buttonUrl || body.button_url || ""));
     const headerHandle = String(body.headerHandle || body.header_handle || "").trim();
     if (!modelName || !VARIABLE_TYPES.has(variableType) || !MEDIA_FORMATS.has(mediaFormat)) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");

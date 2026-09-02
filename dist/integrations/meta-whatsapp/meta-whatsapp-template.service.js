@@ -21,17 +21,24 @@ function requireTenant(auth) {
     }
 }
 function throwFromGraph(result) {
-    (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", { status: result.status, kind: result.kind, timeout: result.timeout === true });
+    const detail = (0, meta_whatsapp_graph_errors_1.safePublicGraphTemplateDetail)(result.json);
+    (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", {
+        status: result.status,
+        kind: result.kind,
+        timeout: result.timeout === true,
+        graphCode: result.graphCode || null,
+        graphDetail: detail || null,
+    });
     if (result.status === 401)
         throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
     if (result.status === 400) {
         const error = new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
-        error.message = (0, meta_whatsapp_graph_errors_1.publicMetaGraphTemplateMessage)(result.kind, result.status);
+        error.message = (0, meta_whatsapp_graph_errors_1.publicMetaGraphTemplateMessage)(result.kind, result.status, result.json);
         throw error;
     }
     const status = result.timeout || result.status === 429 || result.status >= 500 || result.status === 0 ? 503 : 424;
     const error = new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", status);
-    error.message = (0, meta_whatsapp_graph_errors_1.publicMetaGraphTemplateMessage)(result.kind, result.status);
+    error.message = (0, meta_whatsapp_graph_errors_1.publicMetaGraphTemplateMessage)(result.kind, result.status, result.json);
     throw error;
 }
 function warnIgnored(body, tenantId) {
