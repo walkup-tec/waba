@@ -4,6 +4,7 @@ exports.uploadMetaResumableImage = uploadMetaResumableImage;
 exports.publishMetaPageProfilePicture = publishMetaPageProfilePicture;
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
+const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
 function toUploadSessionPath(id) {
     const raw = String(id || "").trim();
     if (!raw)
@@ -40,7 +41,7 @@ async function uploadMetaResumableImage(input) {
     });
     const sessionId = toUploadSessionPath(String(started.json?.id || "").trim());
     if (!started.ok || !sessionId) {
-        throw new Error(`upload-session ${started.status}${started.graphCode ? ` ${started.graphCode}` : ""}`.trim());
+        throw new Error((0, meta_whatsapp_graph_errors_1.publicMetaGraphMediaUploadMessage)(started.json));
     }
     const url = `${(0, meta_config_1.readMetaGraphBase)()}/${(0, meta_config_1.readMetaGraphVersion)()}/${sessionId}`;
     const controller = new AbortController();
@@ -66,8 +67,7 @@ async function uploadMetaResumableImage(input) {
         }
         const handle = String(json?.h || "").trim();
         if (!response.ok || !handle) {
-            const graphCode = String(json?.error?.code || "").trim();
-            throw new Error(graphCode ? `upload-binary ${response.status} ${graphCode}` : "A Meta não concluiu o upload da foto.");
+            throw new Error((0, meta_whatsapp_graph_errors_1.publicMetaGraphMediaUploadMessage)(json));
         }
         return { handle };
     }

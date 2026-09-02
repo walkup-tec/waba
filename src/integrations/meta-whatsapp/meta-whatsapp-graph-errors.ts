@@ -84,3 +84,12 @@ export function publicMetaGraphTemplateMessage(
   }
   return detail || "Não foi possível gerenciar o template na Meta.";
 }
+
+export function publicMetaGraphMediaUploadMessage(json?: unknown): string {
+  const detail = safePublicGraphTemplateDetail(json);
+  if (!detail) return "A Meta recusou o arquivo. Reduza a imagem se ela estiver grande e tente novamente.";
+  if (/size|too large|file length|maximum|tamanho|\b\d+\s*MB\b/i.test(detail)) {
+    return `A Meta recusou o arquivo por tamanho. ${detail} Reduza a imagem e envie de novo.`;
+  }
+  return `A Meta recusou o arquivo. ${detail}`;
+}

@@ -544,15 +544,18 @@ export class MetaWhatsappTemplateAiService {
       return { handle, mediaFormat };
     } catch (error) {
       if (error instanceof MetaWhatsappError) throw error;
+      const msg = String((error as { message?: string })?.message || "").replace(/\s+/g, " ").trim();
       logMetaTemplate("AI", {
         tenantId: tenant.tenantId,
         connectionId,
         headerUploadFailed: mediaFormat,
         mime,
         bytes: bytes.length,
-        reason: String((error as { message?: string })?.message || "upload").slice(0, 80),
+        reason: msg.slice(0, 80),
       });
-      throw new MetaWhatsappError("template_upload_failed");
+      const wrapped = new MetaWhatsappError("template_upload_failed");
+      if (msg.startsWith("A Meta recusou")) wrapped.message = msg;
+      throw wrapped;
     }
   }
 }

@@ -1,5 +1,6 @@
 import { readMetaGraphBase, readMetaGraphVersion } from "./meta-config";
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
+import { publicMetaGraphMediaUploadMessage } from "./meta-whatsapp-graph-errors";
 
 export type MetaResumableUploadInput = {
   token: string;
@@ -47,9 +48,7 @@ export async function uploadMetaResumableImage(
   });
   const sessionId = toUploadSessionPath(String(started.json?.id || "").trim());
   if (!started.ok || !sessionId) {
-    throw new Error(
-      `upload-session ${started.status}${started.graphCode ? ` ${started.graphCode}` : ""}`.trim(),
-    );
+    throw new Error(publicMetaGraphMediaUploadMessage(started.json));
   }
   const url = `${readMetaGraphBase()}/${readMetaGraphVersion()}/${sessionId}`;
   const controller = new AbortController();
@@ -74,8 +73,7 @@ export async function uploadMetaResumableImage(
     }
     const handle = String(json?.h || "").trim();
     if (!response.ok || !handle) {
-      const graphCode = String((json as { error?: { code?: unknown } } | null)?.error?.code || "").trim();
-      throw new Error(graphCode ? `upload-binary ${response.status} ${graphCode}` : "A Meta não concluiu o upload da foto.");
+      throw new Error(publicMetaGraphMediaUploadMessage(json));
     }
     return { handle };
   } finally {

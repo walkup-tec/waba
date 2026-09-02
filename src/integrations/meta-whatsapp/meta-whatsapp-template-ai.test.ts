@@ -8,6 +8,7 @@ import {
 } from "./meta-whatsapp-template-ai.service";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
+import { publicMetaGraphMediaUploadMessage } from "./meta-whatsapp-graph-errors";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { MetaTemplateAiModelOutput } from "./meta-whatsapp-template-ai.types";
 import { callOpenAiStructured } from "../openai/waba-openai-responses.client";
@@ -841,7 +842,16 @@ describe("Assistente IA de templates Utility", () => {
     }
     assert.ok(true);
   });
+
+  it("mostra o alerta da Meta quando o upload do cabeçalho é recusado por tamanho", () => {
+    const text = publicMetaGraphMediaUploadMessage({
+      error: { message: "File size too large", error_user_msg: "The image exceeds the maximum file size of 5MB." },
+    });
+    assert.match(text, /A Meta recusou o arquivo por tamanho/);
+    assert.match(text, /5MB/);
+  });
 });
+
 describe("OpenAI Responses com Structured Outputs", () => {
   it("envia JSON Schema estrito usando as mesmas variáveis OpenAI", async () => {
     const originalFetch = globalThis.fetch;

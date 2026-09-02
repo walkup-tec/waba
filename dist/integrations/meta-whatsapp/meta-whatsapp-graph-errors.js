@@ -5,6 +5,7 @@ exports.classifyMetaGraphError = classifyMetaGraphError;
 exports.publicMetaGraphSendMessage = publicMetaGraphSendMessage;
 exports.safePublicGraphTemplateDetail = safePublicGraphTemplateDetail;
 exports.publicMetaGraphTemplateMessage = publicMetaGraphTemplateMessage;
+exports.publicMetaGraphMediaUploadMessage = publicMetaGraphMediaUploadMessage;
 const PERMANENT_META_CODES = new Set([
     "100",
     "190",
@@ -84,4 +85,13 @@ function publicMetaGraphTemplateMessage(kind, status, json) {
             : "A Meta recusou o template. Confira nome, idioma, categoria, corpo e exemplos.";
     }
     return detail || "Não foi possível gerenciar o template na Meta.";
+}
+function publicMetaGraphMediaUploadMessage(json) {
+    const detail = safePublicGraphTemplateDetail(json);
+    if (!detail)
+        return "A Meta recusou o arquivo. Reduza a imagem se ela estiver grande e tente novamente.";
+    if (/size|too large|file length|maximum|tamanho|\b\d+\s*MB\b/i.test(detail)) {
+        return `A Meta recusou o arquivo por tamanho. ${detail} Reduza a imagem e envie de novo.`;
+    }
+    return `A Meta recusou o arquivo. ${detail}`;
 }

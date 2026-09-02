@@ -29,7 +29,6 @@ const automationService = new MetaWhatsappAutomationService();
 const templateAiService = new MetaWhatsappTemplateAiService();
 const uploadTemplateHeader = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 16 * 1024 * 1024 },
 });
 
 function sendPublic(res: Response, status: number, payload: unknown) {
@@ -458,10 +457,9 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
   app.post("/integrations/meta/whatsapp/templates/ai/header-media", (req: Request, res: Response) => {
     uploadTemplateHeader.single("file")(req, res, async (err) => {
       if (err) {
-        const tooBig = err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE";
         return sendPublic(res, 400, {
           ok: false,
-          error: tooBig ? "Arquivo maior que 16 MB." : "Não foi possível enviar a mídia.",
+          error: "Não foi possível enviar a mídia.",
           code: "invalid_payload",
         });
       }

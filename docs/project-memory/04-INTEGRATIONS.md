@@ -8,6 +8,6 @@
 - Evolution API: instâncias alternativas (fora deste card).
 - Encurtador WABA (`/s/:slug`) para botões URL oficiais.
 - OpenAI (`OPENAI_API_KEY`) no assistente Utility: few-shot com templates locais aprovados. Sem fine-tune.
-- Cabeçalho IMAGE: upload resumable Graph (`POST /{app-id}/uploads` + binário `upload:{session}`). MIME pelo magic dos bytes; `file_name` só ASCII (`header.png`/`header.jpg`). Sem teto local de 5 MB; o HTTP do upload aceita até 16 MB. A Graph ainda pode recusar arquivo grande. Doc: https://developers.facebook.com/docs/graph-api/guides/upload
+- Cabeçalho IMAGE: upload resumable Graph (`POST /{app-id}/uploads` + binário `upload:{session}`). MIME pelo magic dos bytes; `file_name` só ASCII (`header.png`/`header.jpg`). Sem teto de tamanho no Waba; recusa da Graph aparece no alerta. Doc: https://developers.facebook.com/docs/graph-api/guides/upload
 
 Docs oficiais de templates: https://developers.facebook.com/docs/whatsapp/business-management-api/message-templates/components

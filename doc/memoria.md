@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 12:40 — Alerta da Meta no upload de cabeçalho
+- Sem teto de tamanho no Waba para Arquivo da mídia. Recusa da Graph (ex.: 5 MB) aparece no alerta.
+- Marker: `DEPLOY-2026-09-02-124000-template-alerta-meta`
+- LOG: `doc/LOG-2026-09-02__124000__template-alerta-recusa-meta.md`
+
 ## 2026-09-02 12:32 — Sem teto local de 5 MB no cabeçalho de template
 - O Enviar para META não recusa mais imagem > 5 MB. Upload HTTP até 16 MB; a Graph pode recusar.
 - Marker: `DEPLOY-2026-09-02-123200-template-sem-teto-5mb`
