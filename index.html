@@ -21406,12 +21406,11 @@
                     <div class="aquecedor-field">
                       <label for="meta-tpl-ai-button-text">Texto do botão</label>
                       <select id="meta-tpl-ai-button-text">
-                        <option value="Quero saber mais">Quero saber mais</option>
-                        <option value="Mais informações">Mais informações</option>
-                        <option value="Solicitar agora">Solicitar agora</option>
-                        <option value="Me inscrever">Me inscrever</option>
-                        <option value="Comprar agora">Comprar agora</option>
+                        <option value="Ver Detalhes">Ver Detalhes</option>
+                        <option value="Saiba Mais">Saiba Mais</option>
+                        <option value="Ver Atualizações">Ver Atualizações</option>
                       </select>
+                      <span class="muted">Rótulo informativo (biblioteca Utility). Evite CTA de venda.</span>
                     </div>
                     <div class="aquecedor-field">
                       <label for="meta-tpl-ai-button-url">URL do botão</label>
@@ -37279,9 +37278,9 @@
           recommendedCategory: "UTILITY",
           reason: "O texto original tinha urgência comercial. As opções foram reescritas como atualização, resultado e acompanhamento da consulta já solicitada.",
           options: [
-            { name: "consulta_margem_atualizacao_1", title: "atualização de solicitação", body: "Olá, {{1}}.\nHá uma atualização referente à consulta de margem consignável solicitada anteriormente.\nConsulte as informações da sua solicitação abaixo.", buttonText: "Consultar solicitação", variableExamples: ["Maria"], rationale: "Atualização da solicitação existente." },
-            { name: "consulta_margem_resultado_2", title: "resultado disponível", body: "Olá, {{1}}.\nO resultado da consulta referente à sua solicitação de margem consignável está disponível.\nAcesse para consultar os detalhes.", buttonText: "Ver resultado", variableExamples: ["Maria"], rationale: "Resultado da consulta já pedida." },
-            { name: "consulta_margem_acompanhamento_3", title: "acompanhamento", body: "Olá, {{1}}.\nSua solicitação de consulta de margem consignável recebeu uma atualização.\nVocê pode acompanhar as informações pelo botão abaixo.", buttonText: "Acompanhar solicitação", variableExamples: ["Maria"], rationale: "Acompanhamento operacional." },
+            { name: "consulta_margem_atualizacao_1", title: "atualização de solicitação", body: "Olá, {{1}}.\nInformamos que há uma atualização referente à consulta de margem consignável solicitada anteriormente.\nPara consultar a atualização da sua solicitação, use o link abaixo.", buttonText: "Ver Atualizações", variableExamples: ["Maria"], rationale: "Atualização da solicitação existente." },
+            { name: "consulta_margem_resultado_2", title: "resultado disponível", body: "Olá, {{1}}.\nInformamos que o resultado da consulta referente à sua solicitação de margem consignável está disponível.\nPara ver os detalhes do resultado, use o link abaixo.", buttonText: "Ver Detalhes", variableExamples: ["Maria"], rationale: "Resultado da consulta já pedida." },
+            { name: "consulta_margem_acompanhamento_3", title: "acompanhamento", body: "Olá, {{1}}.\nInformamos que a sua solicitação de consulta de margem consignável recebeu um acompanhamento.\nPara acompanhar as informações atualizadas, use o link abaixo.", buttonText: "Saiba Mais", variableExamples: ["Maria"], rationale: "Acompanhamento operacional." },
           ],
           disclaimer: "Avaliação interna por IA. A análise e a classificação finais são realizadas pela Meta.",
         });

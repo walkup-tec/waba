@@ -3,13 +3,17 @@ import { normalizeMetaTemplateDestinationUrl } from "./meta-whatsapp-template-ai
 import { placeholderIndexes } from "./meta-whatsapp-template-validate";
 import type { MetaTemplateAiOption } from "./meta-whatsapp-template-ai.types";
 
-/** Mesmas opções do select de botão do Mensageiro (API Alternativa). */
+/** Rótulos informativos do laboratório Cloud (biblioteca Utility da Meta). */
 export const META_TEMPLATE_AI_BUTTON_LABELS = [
-  "Quero saber mais",
-  "Mais informações",
-  "Solicitar agora",
-  "Me inscrever",
-  "Comprar agora",
+  "Ver Detalhes",
+  "Saiba Mais",
+  "Ver Atualizações",
+] as const;
+
+export const META_TEMPLATE_AI_OPTION_BUTTONS = [
+  "Ver Atualizações",
+  "Ver Detalhes",
+  "Saiba Mais",
 ] as const;
 
 export type MetaTemplateAiVariableType = "nenhuma" | "nome" | "numero";

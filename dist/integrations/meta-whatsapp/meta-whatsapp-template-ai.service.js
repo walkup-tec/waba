@@ -11,6 +11,7 @@ const meta_whatsapp_template_ai_prompt_1 = require("./meta-whatsapp-template-ai.
 const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
 const meta_whatsapp_template_ai_schema_1 = require("./meta-whatsapp-template-ai.schema");
 const meta_whatsapp_template_ai_shell_1 = require("./meta-whatsapp-template-ai-shell");
+const meta_whatsapp_template_ai_utility_shape_1 = require("./meta-whatsapp-template-ai-utility-shape");
 const meta_whatsapp_template_log_1 = require("./meta-whatsapp-template-log");
 const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.service");
 const meta_token_crypto_1 = require("./meta-token-crypto");
@@ -162,7 +163,7 @@ class MetaWhatsappTemplateAiService {
         }
         let result;
         try {
-            result = (0, meta_whatsapp_template_ai_schema_1.validateMetaTemplateAiOutput)(ai.value);
+            result = (0, meta_whatsapp_template_ai_utility_shape_1.shapeMetaUtilityAiOutput)((0, meta_whatsapp_template_ai_schema_1.validateMetaTemplateAiOutput)(ai.value), variableType);
             const serialized = JSON.stringify(result);
             if (FORBIDDEN_APPROVAL_PROMISE.test(serialized)) {
                 throw new Error("A IA prometeu aprovação.");

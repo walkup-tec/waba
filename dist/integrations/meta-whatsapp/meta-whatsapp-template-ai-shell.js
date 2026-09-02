@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT = exports.META_TEMPLATE_AI_BUTTON_LABELS = void 0;
+exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT = exports.META_TEMPLATE_AI_OPTION_BUTTONS = exports.META_TEMPLATE_AI_BUTTON_LABELS = void 0;
 exports.sanitizeMetaTemplateName = sanitizeMetaTemplateName;
 exports.templateNameForOption = templateNameForOption;
 exports.parseMetaTemplateAiShell = parseMetaTemplateAiShell;
@@ -9,13 +9,16 @@ exports.componentsFromAiOptionAndShell = componentsFromAiOptionAndShell;
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_template_ai_short_url_1 = require("./meta-whatsapp-template-ai-short-url");
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
-/** Mesmas opções do select de botão do Mensageiro (API Alternativa). */
+/** Rótulos informativos do laboratório Cloud (biblioteca Utility da Meta). */
 exports.META_TEMPLATE_AI_BUTTON_LABELS = [
-    "Quero saber mais",
-    "Mais informações",
-    "Solicitar agora",
-    "Me inscrever",
-    "Comprar agora",
+    "Ver Detalhes",
+    "Saiba Mais",
+    "Ver Atualizações",
+];
+exports.META_TEMPLATE_AI_OPTION_BUTTONS = [
+    "Ver Atualizações",
+    "Ver Detalhes",
+    "Saiba Mais",
 ];
 const VARIABLE_TYPES = new Set(["nenhuma", "nome", "numero"]);
 const MEDIA_FORMATS = new Set([

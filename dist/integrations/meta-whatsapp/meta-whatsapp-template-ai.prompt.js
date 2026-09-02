@@ -2,8 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_TEMPLATE_AI_POLICY_VERSION = exports.META_TEMPLATE_AI_PROMPT_VERSION = void 0;
 exports.buildMetaTemplateAiInstructions = buildMetaTemplateAiInstructions;
-exports.META_TEMPLATE_AI_PROMPT_VERSION = "1.3";
-exports.META_TEMPLATE_AI_POLICY_VERSION = String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-reframe-2026-09").trim();
+exports.META_TEMPLATE_AI_PROMPT_VERSION = "1.4";
+exports.META_TEMPLATE_AI_POLICY_VERSION = String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-lexicon-2026-09").trim();
 const DEFAULT_POLICY = `
 Critérios permanentes da categoria Utility (WhatsApp Business Platform):
 1) o conteúdo deve ser não promocional, sem intenção persuasiva de venda;
@@ -14,6 +14,11 @@ solicitação existente — ou essencial/crítico para o usuário.
 Confirmações, atualizações de status, resultado de consulta, acompanhamento de
 processo, cobrança de obrigação existente, agendamento e informação operacional
 podem ser Utility. Não há garantia automática de aprovação.
+
+A Meta recategoriza para MARKETING quando o texto mistura utilidade com
+persuasão, CTA de venda, oferta, urgência comercial ou convite a nova conversão.
+Botões como "Comprar agora", "Solicitar agora" e "Quero saber mais" aumentam
+esse risco. Prefira rótulos informativos: Ver Detalhes, Saiba Mais, Ver Atualizações.
 
 Nova oferta, promoção, desconto, venda adicional, incentivo a contratar,
 recuperação comercial, urgência artificial ("antes que alguém aproveite") ou
@@ -31,6 +36,13 @@ Receba o texto base do usuário, preserve o TEMA CENTRAL (assunto, produto,
 serviço ou processo citado) e REESCREVA-o em exatamente três templates da
 categoria UTILITY. Não recuse a geração. Não devolva options vazio.
 
+LÉXICO OBRIGATÓRIO (cada BODY, nesta ordem):
+1) Comece com "Olá" — "Olá, {{1}}." se variableType for nome/numero; "Olá." se nenhuma.
+2) Em seguida use "Informamos que" + o fato operacional (atualização, resultado
+   ou acompanhamento de um processo JÁ aberto pelo destinatário).
+3) Feche com uma frase que comece com "Para" e explique o motivo do link
+   (consultar detalhes, ver o resultado, acompanhar a atualização). Sem venda.
+
 Como formatar:
 - Extraia o tema (ex.: margem consignável, proposta, agendamento, protocolo).
 - Remova urgência comercial, prospecção, "aproveite", "imperdível", "acesse agora",
@@ -42,12 +54,16 @@ Como formatar:
   mais fiel ao tema (ex.: consulta/simulação previamente solicitada) e registre-o
   em assumedPriorEvent. Não invente preços, descontos, prazos promocionais,
   pre-aprovação ou ofertas novas.
+- Inspire-se no tom da biblioteca Utility da Meta (lembrete, confirmação,
+  atualização de conta, "Para mais informações…"), mas NÃO copie exemplos
+  de aeroporto, crise, cartão ou nomes de template da biblioteca. Seja criativo
+  no tema do usuário, mantendo o léxico Olá / Informamos que / Para.
 - Gere sempre estas três abordagens, nesta ordem:
-  1) atualização da solicitação;
-  2) resultado disponível;
-  3) acompanhamento.
-- Cada opção: BODY objetivo. O botão na Meta será sempre URL (Acessar site),
-  estático; não invente QUICK_REPLY nem um destino diferente.
+  1) atualização da solicitação — buttonText "Ver Atualizações";
+  2) resultado disponível — buttonText "Ver Detalhes";
+  3) acompanhamento — buttonText "Saiba Mais".
+- Cada opção: BODY objetivo, 3 linhas curtas. O botão na Meta será sempre URL
+  (Acessar site), estático; não invente QUICK_REPLY nem um destino diferente.
 - Use {{1}} conforme variableType do pedido: "nome" = primeiro nome;
   "numero" = número (telefone ou protocolo); "nenhuma" = corpo 100% estático,
   sem {{1}}, {{2}} nem qualquer placeholder. variableExamples deve ter um
@@ -59,19 +75,19 @@ Texto original promocional sobre margem consignável disponível, urgência e CT
 assumedPriorEvent: "O destinatário solicitou previamente uma consulta/simulação de margem consignável."
 Opção 1 — atualização de solicitação
 Olá, {{1}}.
-Há uma atualização referente à consulta de margem consignável solicitada anteriormente.
-Consulte as informações da sua solicitação abaixo.
-[Consultar solicitação]
+Informamos que há uma atualização referente à consulta de margem consignável solicitada anteriormente.
+Para consultar a atualização da sua solicitação, use o link abaixo.
+[Ver Atualizações]
 Opção 2 — resultado disponível
 Olá, {{1}}.
-O resultado da consulta referente à sua solicitação de margem consignável está disponível.
-Acesse para consultar os detalhes.
-[Ver resultado]
+Informamos que o resultado da consulta referente à sua solicitação de margem consignável está disponível.
+Para ver os detalhes do resultado, use o link abaixo.
+[Ver Detalhes]
 Opção 3 — acompanhamento
 Olá, {{1}}.
-Sua solicitação de consulta de margem consignável recebeu uma atualização.
-Você pode acompanhar as informações pelo botão abaixo.
-[Acompanhar solicitação]
+Informamos que a sua solicitação de consulta de margem consignável recebeu um acompanhamento.
+Para acompanhar as informações atualizadas, use o link abaixo.
+[Saiba Mais]
 
 REGRA INEGOCIÁVEL:
 - Nunca ajude a burlar políticas da Meta nem afirme que a aprovação é garantida.
@@ -89,7 +105,7 @@ ${policyNotes ? `Notas adicionais vigentes:\n${policyNotes}` : ""}
 SAÍDA:
 - Sempre 3 opções Utility, semanticamente fiéis ao tema do texto base.
 - title curto para cada opção (atualização de solicitação, resultado disponível, acompanhamento).
-- buttonText com no máximo 25 caracteres, sem emoji.
+- buttonText exatamente um de: Ver Atualizações, Ver Detalhes, Saiba Mais.
 - O disclaimer deve informar que a avaliação é interna e que a decisão final é da Meta.
 - Retorne apenas JSON aderente ao schema solicitado.
 `.trim();

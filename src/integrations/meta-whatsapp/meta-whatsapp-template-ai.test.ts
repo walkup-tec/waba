@@ -21,6 +21,7 @@ import {
   parseMetaTemplateAiShell,
   templateNameForOption,
 } from "./meta-whatsapp-template-ai-shell";
+import { shapeMetaUtilityOptionBody } from "./meta-whatsapp-template-ai-utility-shape";
 import {
   appendDisparosLinkNonce,
   assertMetaReadyButtonShortUrl,
@@ -85,24 +86,24 @@ function utilityOutput(): MetaTemplateAiModelOutput {
       {
         name: "consulta_margem_atualizacao_1",
         title: "atualização de solicitação",
-        body: "Olá, {{1}}.\nHá uma atualização referente à consulta de margem consignável solicitada anteriormente.\nConsulte as informações da sua solicitação abaixo.",
-        buttonText: "Consultar solicitação",
+        body: "Olá, {{1}}.\nInformamos que há uma atualização referente à consulta de margem consignável solicitada anteriormente.\nPara consultar a atualização da sua solicitação, use o link abaixo.",
+        buttonText: "Ver Atualizações",
         variableExamples: ["Maria"],
         rationale: "Atualização objetiva da solicitação já aberta.",
       },
       {
         name: "consulta_margem_resultado_2",
         title: "resultado disponível",
-        body: "Olá, {{1}}.\nO resultado da consulta referente à sua solicitação de margem consignável está disponível.\nAcesse para consultar os detalhes.",
-        buttonText: "Ver resultado",
+        body: "Olá, {{1}}.\nInformamos que o resultado da consulta referente à sua solicitação de margem consignável está disponível.\nPara ver os detalhes do resultado, use o link abaixo.",
+        buttonText: "Ver Detalhes",
         variableExamples: ["Maria"],
         rationale: "Informa que o resultado da consulta já solicitada está disponível.",
       },
       {
         name: "consulta_margem_acompanhamento_3",
         title: "acompanhamento",
-        body: "Olá, {{1}}.\nSua solicitação de consulta de margem consignável recebeu uma atualização.\nVocê pode acompanhar as informações pelo botão abaixo.",
-        buttonText: "Acompanhar solicitação",
+        body: "Olá, {{1}}.\nInformamos que a sua solicitação de consulta de margem consignável recebeu um acompanhamento.\nPara acompanhar as informações atualizadas, use o link abaixo.",
+        buttonText: "Saiba Mais",
         variableExamples: ["Maria"],
         rationale: "Acompanhamento operacional do processo existente.",
       },
@@ -180,7 +181,7 @@ function submitShell(overrides: Record<string, unknown> = {}) {
     variableType: "nome",
     mediaFormat: "NONE",
     headerText: "Atualização da solicitação",
-    buttonText: "Quero saber mais",
+    buttonText: "Ver Detalhes",
     buttonUrl: "https://waba.draxsistemas.com.br/retorno",
     ...overrides,
   };
@@ -216,9 +217,12 @@ describe("Assistente IA de templates Utility", () => {
     assert.equal(result.options.length, 3);
     assert.match(result.assumedPriorEvent, /solicitou previamente/i);
     assert.match(result.options[0]?.body || "", /solicitada anteriormente/i);
-    assert.equal(result.options[0]?.buttonText, "Consultar solicitação");
-    assert.equal(result.options[1]?.buttonText, "Ver resultado");
-    assert.equal(result.options[2]?.buttonText, "Acompanhar solicitação");
+    assert.match(result.options[0]?.body || "", /^Olá, \{\{1\}\}\./);
+    assert.match(result.options[0]?.body || "", /Informamos que/i);
+    assert.match(result.options[0]?.body || "", /\bPara\b/);
+    assert.equal(result.options[0]?.buttonText, "Ver Atualizações");
+    assert.equal(result.options[1]?.buttonText, "Ver Detalhes");
+    assert.equal(result.options[2]?.buttonText, "Saiba Mais");
   });
 
   it("rejeita resposta sem as três opções Utility", async () => {
@@ -313,7 +317,7 @@ describe("Assistente IA de templates Utility", () => {
     const firstButtons = (calls[0]?.components as Array<Record<string, any>> | undefined)
       ?.find((item) => item.type === "BUTTONS");
     assert.equal(firstButtons?.buttons?.[0]?.type, "URL");
-    assert.equal(firstButtons?.buttons?.[0]?.text, "Quero saber mais");
+    assert.equal(firstButtons?.buttons?.[0]?.text, "Ver Detalhes");
     assert.equal(firstButtons?.buttons?.[0]?.url, "https://waba.draxsistemas.com.br/s/tpltest1");
     assert.equal("metaButtonUrl" in result, false);
     const header = (calls[0]?.components as Array<Record<string, any>> | undefined)
@@ -331,7 +335,23 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(instructions, /Acessar site/i);
     assert.match(instructions, /variableType/i);
     assert.match(instructions, /nenhuma/i);
+    assert.match(instructions, /Informamos que/i);
+    assert.match(instructions, /Ver Detalhes/);
+    assert.match(instructions, /Saiba Mais/);
+    assert.match(instructions, /Ver Atualizações/);
     assert.doesNotMatch(instructions, /retorne options=\[\]/);
+  });
+
+  it("completa Olá, Informamos que e Para quando a IA omite o léxico Utility", () => {
+    const shaped = shapeMetaUtilityOptionBody(
+      "Há uma atualização referente à consulta de margem consignável solicitada anteriormente.",
+      "nome",
+      0,
+    );
+    assert.match(shaped, /^Olá, \{\{1\}\}\./);
+    assert.match(shaped, /Informamos que há uma atualização/i);
+    assert.match(shaped, /Para consultar a atualização/i);
+    assert.doesNotMatch(shaped, /aproveite/i);
   });
 
   it("rejeita JSON sem as três opções ou com finalidade Marketing", () => {
@@ -353,7 +373,7 @@ describe("Assistente IA de templates Utility", () => {
       modelName: "Retorno Lead",
       variableType: "numero",
       mediaFormat: "IMAGE",
-      buttonText: "Mais informações",
+      buttonText: "Saiba Mais",
       buttonUrl: "https://waba.draxsistemas.com.br/retorno",
       headerHandle: "4::abc",
     });
@@ -369,7 +389,7 @@ describe("Assistente IA de templates Utility", () => {
     const shell = parseMetaTemplateAiShell({
       modelName: "retorno_lead",
       variableType: "nenhuma",
-      buttonText: "Quero saber mais",
+      buttonText: "Ver Detalhes",
       buttonUrl: "https://waba.draxsistemas.com.br/retorno",
     });
     const components = componentsFromAiOptionAndShell(utilityOutput().options[0], shell);
@@ -383,7 +403,7 @@ describe("Assistente IA de templates Utility", () => {
     const shell = parseMetaTemplateAiShell({
       modelName: "dg01",
       variableType: "nenhuma",
-      buttonText: "Quero saber mais",
+      buttonText: "Ver Detalhes",
       buttonUrl: "https://waba.draxsistemas.com.br/retorno",
       headerText: "Texto do HEADER",
     });
@@ -397,13 +417,13 @@ describe("Assistente IA de templates Utility", () => {
   it("aceita wa.me e http como destino; a Meta só recebe o link curto WABA", async () => {
     const destination = parseMetaTemplateAiShell({
       modelName: "retorno_lead",
-      buttonText: "Quero saber mais",
+      buttonText: "Ver Detalhes",
       buttonUrl: "https://wa.me/5511999999999",
     });
     assert.equal(destination.buttonUrl, "https://wa.me/5511999999999");
     const httpDest = parseMetaTemplateAiShell({
       modelName: "retorno_lead",
-      buttonText: "Quero saber mais",
+      buttonText: "Ver Detalhes",
       buttonUrl: "http://example.com/retorno",
     });
     assert.equal(httpDest.buttonUrl, "http://example.com/retorno");
@@ -487,7 +507,7 @@ describe("Assistente IA de templates Utility", () => {
       () =>
         parseMetaTemplateAiShell({
           modelName: "retorno_lead",
-          buttonText: "Quero saber mais",
+          buttonText: "Ver Detalhes",
           buttonUrl: "whatsapp://send?phone=5511999999999",
         }),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_https",
@@ -508,7 +528,7 @@ describe("Assistente IA de templates Utility", () => {
       () =>
         parseMetaTemplateAiShell({
           modelName: "dg01",
-          buttonText: "Quero saber mais",
+          buttonText: "Ver Detalhes",
           buttonUrl: "https://waba.draxsistemas.com.br/retorno",
           mediaFormat: "IMAGE",
         }),

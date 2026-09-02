@@ -23,6 +23,7 @@ import {
   parseMetaTemplateAiShell,
   templateNameForOption,
 } from "./meta-whatsapp-template-ai-shell";
+import { shapeMetaUtilityAiOutput } from "./meta-whatsapp-template-ai-utility-shape";
 import type { MetaTemplateAiOption, MetaTemplateAiPublicResult } from "./meta-whatsapp-template-ai.types";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
@@ -209,7 +210,7 @@ export class MetaWhatsappTemplateAiService {
 
     let result;
     try {
-      result = validateMetaTemplateAiOutput(ai.value);
+      result = shapeMetaUtilityAiOutput(validateMetaTemplateAiOutput(ai.value), variableType);
       const serialized = JSON.stringify(result);
       if (FORBIDDEN_APPROVAL_PROMISE.test(serialized)) {
         throw new Error("A IA prometeu aprovação.");

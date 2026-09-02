@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:10 — IA Utility: léxico e botões informativos
+- Corpo: Olá + Informamos que + Para. Botões: Ver Detalhes / Saiba Mais / Ver Atualizações. Shaper pós-IA.
+- Marker: `DEPLOY-2026-09-02-021000-ia-utility-lexicon`
+- LOG: `doc/LOG-2026-09-02__021000__ia-utility-lexicon.md`
+
 ## 2026-09-02 01:36 — Push GitHub master (tabela portfólios)
 - `master` em `walkup-tec/waba`: `a0f3e97`.
 - LOG: `doc/LOG-2026-09-02__013600__push-github-master-tabela-portfolios.md`
