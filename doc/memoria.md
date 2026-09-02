@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 10:33 — Push GitHub master (modal excluir)
+- `walkup-tec/waba` `master`: `81e149a` (fast-forward de `c38df14`).
+- Marker esperado após Redeploy: `DEPLOY-2026-09-02-103000-modal-excluir-template`
+- LOG: `doc/LOG-2026-09-02__103300__push-github-master-modal-excluir.md`
+
 ## 2026-09-02 10:30 — Modal de exclusão de template
 - Excluir deixa o `confirm` do navegador e usa overlay com spinner até a Graph responder.
 - Marker: `DEPLOY-2026-09-02-103000-modal-excluir-template`
