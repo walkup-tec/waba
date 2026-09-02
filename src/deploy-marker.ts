@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-02-023200-sync-prune-templates";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-02-024500-remover-painel-teste-template";

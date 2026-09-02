@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:45 — Removeu painel Visualizar / usar em teste
+- Card legado e botão Usar em teste saíram. Visualizar = modal; Excluir = Meta + lista.
+- Marker: `DEPLOY-2026-09-02-024500-remover-painel-teste-template`
+- LOG: `doc/LOG-2026-09-02__024500__remover-painel-teste-template.md`
+
 ## 2026-09-02 02:34 — Push GitHub master (templates)
 - Um push: `0d02647` → tip com marker `DEPLOY-2026-09-02-023200-sync-prune-templates`.
 - LOG: `doc/LOG-2026-09-02__023400__push-github-master-templates.md`

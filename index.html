@@ -21552,23 +21552,6 @@
                 </div>
               </div>
             </section>
-
-            <section class="panel col-12">
-              <div class="panel-header">
-                <div class="panel-title">Visualizar / usar em teste</div>
-                <span class="muted">Somente desta WABA</span>
-              </div>
-              <pre id="meta-tpl-lab-view" class="aquecedor-command-log" style="white-space:pre-wrap; min-height:120px; margin:0;">Selecione Visualizar em um template.</pre>
-              <div class="aquecedor-field" style="margin-top: 10px;">
-                <label for="meta-tpl-lab-test-to">Número destino</label>
-                <input id="meta-tpl-lab-test-to" type="text" inputmode="numeric" autocomplete="off" placeholder="5551999887766" />
-              </div>
-              <div class="aquecedor-field" style="margin-top: 8px;">
-                <label for="meta-tpl-lab-test-params">Parâmetros do corpo (um por linha)</label>
-                <textarea id="meta-tpl-lab-test-params" rows="2" placeholder="Ana"></textarea>
-              </div>
-              <p id="meta-tpl-lab-test-result" class="muted" style="margin: 10px 0 0;" role="status" aria-live="polite"></p>
-            </section>
           </div>
         </div>
 
@@ -37526,7 +37509,6 @@
               `<td style="padding:8px;">${synced}</td>` +
               `<td style="padding:8px; white-space:nowrap;">` +
               `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-view="${index}">Visualizar</button> ` +
-              `<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-tpl-test="${index}">Usar em teste</button> ` +
               `<button type="button" class="instance-action-btn btn-delete enabled" data-meta-tpl-hide="${index}" title="Exclui na biblioteca da Meta e nesta lista.">Excluir</button>` +
               "</td></tr>"
             );
@@ -37740,53 +37722,9 @@
         return false;
       };
 
-      window.wabaTestMetaTemplateLab = async function wabaTestMetaTemplateLab(index) {
-        const item = metaTplLabCache[index] || metaTplLabSelected;
-        const outEl = document.getElementById("meta-tpl-lab-test-result");
-        const to = String((document.getElementById("meta-tpl-lab-test-to") || {}).value || "").trim();
-        const params = String((document.getElementById("meta-tpl-lab-test-params") || {}).value || "")
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean);
-        if (!item) {
-          if (outEl) outEl.textContent = "Selecione um template.";
-          return false;
-        }
-        metaTplLabSelected = item;
-        if (outEl) outEl.textContent = "Enviando template…";
-        const components = params.length
-          ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text })) }]
-          : [];
-        try {
-          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/messages", {
-            method: "POST",
-            body: JSON.stringify({
-              to,
-              type: "template",
-              template: { name: item.name, language: item.language, components },
-            }),
-          });
-          if (outEl) {
-            outEl.textContent =
-              "Aceito pela Meta. status=" +
-              String(payload.status || "") +
-              " id=" +
-              String(payload.messageId || "—");
-          }
-          if (payload.conversationId && typeof window.wabaOpenMetaInboxConversation === "function") {
-            window.wabaOpenMetaInboxConversation(payload.conversationId);
-          } else if (typeof window.wabaRefreshMetaInbox === "function") {
-            window.wabaRefreshMetaInbox();
-          }
-        } catch (error) {
-          if (outEl) outEl.textContent = error && error.message ? error.message : "Não foi possível enviar.";
-        }
-        return false;
-      };
-
       document.addEventListener("click", function onMetaTplLabClick(event) {
         const target = event.target && event.target.closest
-          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-test], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all, #meta-tpl-preview-close")
+          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all, #meta-tpl-preview-close")
           : null;
         if (event.target && event.target.id === "meta-tpl-preview-overlay") {
           metaTplLabClosePreview();
@@ -37811,9 +37749,7 @@
           return;
         }
         const viewIndex = target.getAttribute("data-meta-tpl-view");
-        const testIndex = target.getAttribute("data-meta-tpl-test");
         if (viewIndex != null) window.wabaViewMetaTemplateLab(Number(viewIndex));
-        if (testIndex != null) window.wabaTestMetaTemplateLab(Number(testIndex));
       });
       document.addEventListener("keydown", function onMetaTplPreviewEsc(event) {
         if (event.key !== "Escape") return;
