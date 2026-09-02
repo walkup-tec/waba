@@ -17674,8 +17674,8 @@
         display: none !important;
       }
 
-      body.waba-auth-checking .waba-login-screen {
-        visibility: hidden;
+      body.waba-preview-disparo-cloud #tab-whatsapp-templates .panel:not(#meta-tpl-broadcast-panel) {
+        display: none;
       }
 
       .waba-login-screen {
@@ -29291,7 +29291,7 @@
       }
 
       async function initWabaAuthGate() {
-        if (isMetaInboxUiPreview() || isMetaTemplateAiUiPreview()) {
+        if (isMetaInboxUiPreview() || isMetaTemplateAiUiPreview() || isMetaDisparoCloudUiPreview()) {
           unlockWabaApp({ authConfigured: false, authenticated: true });
           return true;
         }
@@ -38183,6 +38183,11 @@
         return localHost && new URLSearchParams(location.search).get("ui-preview") === "template-ai";
       }
 
+      function isMetaDisparoCloudUiPreview() {
+        const localHost = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+        return localHost && new URLSearchParams(location.search).get("ui-preview") === "disparo-cloud";
+      }
+
       function initMetaTemplateAiUiPreview() {
         metaTpSession.portfolios = [
           {
@@ -38221,6 +38226,72 @@
         });
         const status = document.getElementById("meta-tpl-ai-status");
         if (status) status.textContent = "Preview visual com dados fictícios.";
+      }
+
+      function initMetaDisparoCloudUiPreview() {
+        metaTpSession.portfolios = [
+          {
+            id: "demo-business",
+            name: "Drax Sistemas",
+            wabaId: "demo-waba",
+            connectionId: "demo-connection",
+            numbers: [
+              {
+                phoneNumberId: "demo-phone",
+                displayPhoneNumber: "+55 51 98107-7770",
+                verifiedName: "Drax Sistemas",
+                uiStatus: "ativo",
+              },
+            ],
+          },
+        ];
+        metaTplLabCache = [
+          {
+            id: "demo-template",
+            connectionId: "demo-connection",
+            name: "consulta_margem_atualizacao_1",
+            language: "pt_BR",
+            status: "APPROVED",
+          },
+        ];
+        document.body.classList.add("waba-laboratorio-visible", "waba-preview-disparo-cloud");
+        setActiveTab("whatsapp-templates", { skipPolicyCheck: true });
+        metaTplBroadcastFillPortfolio();
+        const portfolio = metaTplBroadcastEl("meta-tpl-broadcast-portfolio");
+        if (portfolio) portfolio.value = "demo-connection";
+        metaTplBroadcastFillTemplates();
+        metaTplBroadcastFillNumbers();
+        const template = metaTplBroadcastEl("meta-tpl-broadcast-template");
+        if (template) template.value = "demo-template";
+        const number = metaTplBroadcastEl("meta-tpl-broadcast-number");
+        if (number) number.value = "demo-phone";
+        const intake = metaTplBroadcastEl("meta-tpl-broadcast-intake");
+        if (intake) intake.value = "demo-intake-lab";
+        metaTplBroadcastFillColumns(["telefone", "nome"], { phoneColumn: "telefone" });
+        const phoneCol = metaTplBroadcastEl("meta-tpl-broadcast-phone-col");
+        if (phoneCol) phoneCol.value = "telefone";
+        const fileName = metaTplBroadcastEl("meta-tpl-broadcast-file-name");
+        if (fileName) fileName.textContent = "leads-setembro.xlsx";
+        metaTplBroadcastRenderPreview({
+          valid: 3,
+          invalid: 1,
+          duplicatesRemoved: 1,
+          samples: {
+            valid: [
+              { raw: "(51) 99988-7766", waId: "5551999887766" },
+              { raw: "5182001261", waId: "5551982001261" },
+              { raw: "+55 11 98888-0000", waId: "5511988880000" },
+            ],
+            invalid: [{ raw: "123", error: "Número incompleto" }],
+          },
+        });
+        metaTplBroadcastSetStatus(
+          "Preview: campanha do Laboratório selecionada. Os cliques do botão entram neste relatório. Campanhas de operadores sem Laboratório continuam manuais.",
+        );
+        const panel = document.getElementById("meta-tpl-broadcast-panel");
+        if (panel && typeof panel.scrollIntoView === "function") {
+          panel.scrollIntoView({ block: "start" });
+        }
       }
 
       function metaTplLabHasSecret(payload) {
@@ -38425,6 +38496,20 @@
       async function metaTplBroadcastLoadLinkableCampaigns() {
         const select = metaTplBroadcastEl("meta-tpl-broadcast-intake");
         if (!select) return;
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          metaTplBroadcastFillSelect(
+            select,
+            [
+              {
+                value: "demo-intake-lab",
+                label: "Campanha Setembro · assinante@exemplo.com · 500 envios",
+              },
+            ],
+            "Selecione a campanha atendida no Laboratório",
+          );
+          select.value = "demo-intake-lab";
+          return;
+        }
         try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/linkable-campaigns");
           const items = Array.isArray(payload.campaigns) ? payload.campaigns : [];
@@ -62836,6 +62921,10 @@
         if (!unlocked) return;
         if (isMetaTemplateAiUiPreview()) {
           initMetaTemplateAiUiPreview();
+          return;
+        }
+        if (isMetaDisparoCloudUiPreview()) {
+          initMetaDisparoCloudUiPreview();
           return;
         }
         if (isMetaInboxUiPreview()) {
