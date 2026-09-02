@@ -51,6 +51,9 @@ function warnIgnored(body, tenantId) {
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", { reason: "ignored_client_claims", tenantId });
     }
 }
+function publicPortfolioName(connection) {
+    return String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio";
+}
 class MetaWhatsappTemplateService {
     constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), templates = new meta_whatsapp_template_repository_1.MetaWhatsappTemplateRepository(), graph = undefined, decrypt = meta_token_crypto_1.decryptMetaToken, analyses = new meta_whatsapp_template_ai_repository_1.MetaWhatsappTemplateAiRepository()) {
         this.connections = connections;
@@ -78,7 +81,7 @@ class MetaWhatsappTemplateService {
         const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
         const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("LIST", { tenantId: tenant.tenantId, count: rows.length });
-        return rows.map(meta_whatsapp_template_types_1.toPublicTemplate);
+        return rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection)));
     }
     async createFromAuth(auth, body) {
         const tenant = requireTenant(auth);
@@ -153,7 +156,7 @@ class MetaWhatsappTemplateService {
                 (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", { reason: "ai_analysis_link_failed", tenantId: tenant.tenantId });
             }
         }
-        return (0, meta_whatsapp_template_types_1.toPublicTemplate)(row);
+        return (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection));
     }
     async syncFromAuth(auth, connectionId) {
         const tenant = requireTenant(auth);
@@ -213,7 +216,7 @@ class MetaWhatsappTemplateService {
             upserted: upserted.length,
         });
         const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
-        return { templates: rows.map(meta_whatsapp_template_types_1.toPublicTemplate), pages: listed.pages };
+        return { templates: rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection))), pages: listed.pages };
     }
     async assertSendable(input) {
         const row = await this.templates.findForSend(input.tenantId, input.connectionId, input.name, input.language);

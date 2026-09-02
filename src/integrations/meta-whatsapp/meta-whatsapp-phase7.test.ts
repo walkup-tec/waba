@@ -357,6 +357,8 @@ describe("fase 7 listagem e tenant", () => {
     const listed = await service.listFromAuth(auth(EMAIL_A));
     assert.equal(listed.length, 1);
     assert.equal(listed[0].name, "retorno_lead");
+    assert.equal(listed[0].connectionId, "conn-a");
+    assert.equal(listed[0].portfolioName, "Loja");
     const serialized = JSON.stringify(stripMetaSecrets(listed));
     assert.equal(/access_token|accessTokenEncrypted|Bearer|v1:enc/i.test(serialized), false);
     assert.equal("tenantId" in listed[0], false);

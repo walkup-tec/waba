@@ -9,11 +9,12 @@ export type MetaTemplatePublic = {
   components: unknown;
   rejectedReason: string | null;
   lastSyncedAt: string | null;
+  connectionId: string;
+  portfolioName: string | null;
 };
 
-export type MetaTemplateRecord = MetaTemplatePublic & {
+export type MetaTemplateRecord = Omit<MetaTemplatePublic, "portfolioName"> & {
   tenantId: string;
-  connectionId: string;
   wabaId: string;
   createdAt: string;
   updatedAt: string;
@@ -40,7 +41,11 @@ export function qualityScoreFromGraph(value: unknown): string | null {
   return String(value).trim() || null;
 }
 
-export function toPublicTemplate(row: MetaTemplateRecord): MetaTemplatePublic {
+export function toPublicTemplate(
+  row: MetaTemplateRecord,
+  portfolioName?: string | null,
+): MetaTemplatePublic {
+  const name = String(portfolioName || "").trim();
   return {
     id: row.id,
     metaTemplateId: row.metaTemplateId,
@@ -52,6 +57,8 @@ export function toPublicTemplate(row: MetaTemplateRecord): MetaTemplatePublic {
     components: row.components,
     rejectedReason: row.rejectedReason,
     lastSyncedAt: row.lastSyncedAt,
+    connectionId: row.connectionId,
+    portfolioName: name || null,
   };
 }
 

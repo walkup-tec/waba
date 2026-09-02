@@ -3947,6 +3947,26 @@
         }
         .meta-tpl-status-filter:focus { outline:2px solid rgba(34,211,238,.35); outline-offset:1px; }
         .meta-tpl-status-filter option { background:#0f2631; color:#e2e8f0; }
+        .meta-tpl-status-tag {
+          display:inline-flex;
+          align-items:center;
+          border-radius:999px;
+          padding:3px 9px;
+          font-size:11px;
+          font-weight:700;
+          letter-spacing:.02em;
+          line-height:1.2;
+          white-space:nowrap;
+        }
+        .meta-tpl-status-tag.is-approved { background:rgba(34,197,94,.2); color:#86efac; }
+        .meta-tpl-status-tag.is-pending { background:rgba(245,158,11,.22); color:#fcd34d; }
+        .meta-tpl-status-tag.is-rejected { background:rgba(239,68,68,.2); color:#fca5a5; }
+        .meta-tpl-status-tag.is-paused { background:rgba(249,115,22,.2); color:#fdba74; }
+        .meta-tpl-status-tag.is-disabled { background:rgba(148,163,184,.2); color:#cbd5e1; }
+        .meta-tpl-status-tag.is-appeal { background:rgba(59,130,246,.22); color:#93c5fd; }
+        .meta-tpl-status-tag.is-flagged { background:rgba(234,179,8,.22); color:#fde047; }
+        .meta-tpl-status-tag.is-limit { background:rgba(168,85,247,.22); color:#d8b4fe; }
+        .meta-tpl-status-tag.is-deleted { background:rgba(71,85,105,.35); color:#94a3b8; }
         @media (max-width:900px) {
           .meta-tpl-ai-workspace { grid-template-columns:1fr; }
           .meta-tpl-ai-options { grid-template-columns:1fr; }
@@ -21285,6 +21305,7 @@
                 <table class="meta-tpl-lab-table" style="width:100%; border-collapse:collapse; font-size:13px;">
                   <thead>
                     <tr>
+                      <th style="text-align:left; padding:8px;">Portfólio</th>
                       <th style="text-align:left; padding:8px;">Nome</th>
                       <th style="text-align:left; padding:8px;">Idioma</th>
                       <th style="text-align:left; padding:8px;">Categoria</th>
@@ -21296,7 +21317,7 @@
                   </thead>
                   <tbody id="meta-tpl-lab-tbody">
                     <tr>
-                      <td class="muted" colspan="7" style="padding:10px;">Conecte o WhatsApp Oficial e atualize da Meta.</td>
+                      <td class="muted" colspan="8" style="padding:10px;">Conecte o WhatsApp Oficial e atualize da Meta.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -37228,6 +37249,65 @@
         return date.toLocaleString("pt-BR");
       }
 
+      function metaTplLabPortfolioLabel(item) {
+        const connectionId = String((item && item.connectionId) || "").trim();
+        const fromSelect = metaTplLabPortfolioOptions().find((option) => option.connectionId === connectionId);
+        return String((fromSelect && fromSelect.label) || item?.portfolioName || "—").trim() || "—";
+      }
+
+      function metaTplLabLanguageLabel(code) {
+        const key = String(code || "").trim();
+        const labels = {
+          pt_BR: "Português (Brasil)",
+          pt_PT: "Português (Portugal)",
+          en_US: "Inglês (EUA)",
+          en_GB: "Inglês (Reino Unido)",
+          es_ES: "Espanhol",
+          es_MX: "Espanhol (México)",
+          es_AR: "Espanhol (Argentina)",
+        };
+        return labels[key] || key || "—";
+      }
+
+      function metaTplLabCategoryLabel(value) {
+        const key = String(value || "").trim().toUpperCase();
+        if (key === "UTILITY") return "Utilidade";
+        if (key === "MARKETING") return "Marketing";
+        if (key === "AUTHENTICATION") return "Autenticação";
+        return key || "—";
+      }
+
+      function metaTplLabQualityLabel(value) {
+        const key = String(value || "").trim().toUpperCase();
+        if (key === "GREEN") return "Verde";
+        if (key === "YELLOW") return "Amarela";
+        if (key === "RED") return "Vermelha";
+        if (key === "UNKNOWN") return "—";
+        return key || "—";
+      }
+
+      function metaTplLabStatusMeta(value) {
+        const key = String(value || "").trim().toUpperCase();
+        const map = {
+          APPROVED: { label: "Aprovado", cls: "is-approved" },
+          PENDING: { label: "Em análise", cls: "is-pending" },
+          REJECTED: { label: "Reprovado", cls: "is-rejected" },
+          PAUSED: { label: "Pausado", cls: "is-paused" },
+          DISABLED: { label: "Desativado", cls: "is-disabled" },
+          IN_APPEAL: { label: "Em recurso", cls: "is-appeal" },
+          PENDING_DELETION: { label: "Exclusão pendente", cls: "is-pending" },
+          DELETED: { label: "Excluído", cls: "is-deleted" },
+          LIMIT_EXCEEDED: { label: "Limite excedido", cls: "is-limit" },
+          FLAGGED: { label: "Sinalizado", cls: "is-flagged" },
+        };
+        return map[key] || { label: key || "—", cls: "is-disabled" };
+      }
+
+      function metaTplLabStatusTagHtml(value) {
+        const meta = metaTplLabStatusMeta(value);
+        return `<span class="meta-tpl-status-tag ${meta.cls}">${escapeAdminHtml(meta.label)}</span>`;
+      }
+
       function metaTplLabRenderTable(templates) {
         const tbody = document.getElementById("meta-tpl-lab-tbody");
         if (!tbody) return;
@@ -37239,7 +37319,7 @@
           .filter((entry) => filter === "ALL" || String(entry.item?.status || "").toUpperCase() === filter);
         if (!rows.length) {
           tbody.innerHTML =
-            '<tr><td class="muted" colspan="7" style="padding:10px;">Nenhum template para este filtro. Use Atualizar da Meta para consultar o resultado.</td></tr>';
+            '<tr><td class="muted" colspan="8" style="padding:10px;">Nenhum template para este filtro. Use Atualizar da Meta para consultar o resultado.</td></tr>';
           return;
         }
         tbody.innerHTML = rows
@@ -37247,17 +37327,18 @@
             const item = entry.item;
             const index = entry.originalIndex;
             const name = escapeAdminHtml(String(item?.name || ""));
-            const language = escapeAdminHtml(String(item?.language || "—"));
-            const category = escapeAdminHtml(String(item?.category || "—"));
-            const status = escapeAdminHtml(String(item?.status || "—"));
-            const quality = escapeAdminHtml(String(item?.qualityScore || "—"));
+            const language = escapeAdminHtml(metaTplLabLanguageLabel(item?.language));
+            const category = escapeAdminHtml(metaTplLabCategoryLabel(item?.category));
+            const quality = escapeAdminHtml(metaTplLabQualityLabel(item?.qualityScore));
             const synced = escapeAdminHtml(metaTplLabFormatSync(item?.lastSyncedAt));
+            const portfolio = escapeAdminHtml(metaTplLabPortfolioLabel(item));
             return (
               "<tr>" +
+              `<td style="padding:8px;">${portfolio}</td>` +
               `<td style="padding:8px;">${name}</td>` +
               `<td style="padding:8px;">${language}</td>` +
               `<td style="padding:8px;">${category}</td>` +
-              `<td style="padding:8px;">${status}</td>` +
+              `<td style="padding:8px;">${metaTplLabStatusTagHtml(item?.status)}</td>` +
               `<td style="padding:8px;">${quality}</td>` +
               `<td style="padding:8px;">${synced}</td>` +
               `<td style="padding:8px; white-space:nowrap;">` +
@@ -37357,6 +37438,8 @@
           qualityScore: item.qualityScore,
           rejectedReason: item.rejectedReason,
           lastSyncedAt: item.lastSyncedAt,
+          connectionId: item.connectionId,
+          portfolioName: item.portfolioName,
           components: item.components,
         };
         view.textContent = JSON.stringify(safe, null, 2);

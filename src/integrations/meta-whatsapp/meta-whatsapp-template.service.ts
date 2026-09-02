@@ -69,6 +69,10 @@ function warnIgnored(body: Record<string, unknown> | undefined, tenantId: string
   }
 }
 
+function publicPortfolioName(connection: MetaWhatsappConnectionRecord): string {
+  return String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio";
+}
+
 export class MetaWhatsappTemplateService {
   constructor(
     private readonly connections = new MetaWhatsappConnectionRepository(),
@@ -102,7 +106,7 @@ export class MetaWhatsappTemplateService {
     const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
     const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
     logMetaTemplate("LIST", { tenantId: tenant.tenantId, count: rows.length });
-    return rows.map(toPublicTemplate);
+    return rows.map((row) => toPublicTemplate(row, publicPortfolioName(connection)));
   }
 
   async createFromAuth(
@@ -182,7 +186,7 @@ export class MetaWhatsappTemplateService {
         logMetaTemplate("ERROR", { reason: "ai_analysis_link_failed", tenantId: tenant.tenantId });
       }
     }
-    return toPublicTemplate(row);
+    return toPublicTemplate(row, publicPortfolioName(connection));
   }
 
   async syncFromAuth(
@@ -243,7 +247,7 @@ export class MetaWhatsappTemplateService {
       upserted: upserted.length,
     });
     const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
-    return { templates: rows.map(toPublicTemplate), pages: listed.pages };
+    return { templates: rows.map((row) => toPublicTemplate(row, publicPortfolioName(connection))), pages: listed.pages };
   }
 
   async assertSendable(input: {

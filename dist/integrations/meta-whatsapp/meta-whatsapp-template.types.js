@@ -14,7 +14,8 @@ function qualityScoreFromGraph(value) {
     }
     return String(value).trim() || null;
 }
-function toPublicTemplate(row) {
+function toPublicTemplate(row, portfolioName) {
+    const name = String(portfolioName || "").trim();
     return {
         id: row.id,
         metaTemplateId: row.metaTemplateId,
@@ -26,6 +27,8 @@ function toPublicTemplate(row) {
         components: row.components,
         rejectedReason: row.rejectedReason,
         lastSyncedAt: row.lastSyncedAt,
+        connectionId: row.connectionId,
+        portfolioName: name || null,
     };
 }
 function isTemplateApprovedForSend(status) {

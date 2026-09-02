@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 01:15 — Tabela: portfólio + tags de status
+- Primeira coluna = portfólio. Status da Meta em tag colorida (Aprovado / Em análise / Reprovado…). Categoria, qualidade e idioma traduzidos na lista.
+- Marker: `DEPLOY-2026-09-02-011500-tabela-portfolio-status`
+- LOG: `doc/LOG-2026-09-02__011500__tabela-portfolio-status.md`
+
 ## 2026-09-02 01:12 — Card: três enviados, sem URL e sem contagem
 - Modal/card de sucesso: ✓ Template 01/02/03 Enviado para META + prazo de 24 h. Saiu a URL `/s/` e o «X de 3».
 - Marker: `DEPLOY-2026-09-02-011200-card-enviado-meta`
