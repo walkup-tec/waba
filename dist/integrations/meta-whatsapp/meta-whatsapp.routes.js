@@ -234,6 +234,33 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             return handleMetaError(res, error);
         }
     });
+    app.post("/integrations/meta/whatsapp/phone-numbers/profile", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            warnClientTenantClaim(req);
+            const assets = await service.updatePhoneProfileFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
+                phoneNumberId: String(req.body?.phoneNumberId || req.body?.phone_number_id || "").trim(),
+                connectionId: String(req.body?.connectionId || req.body?.connection_id || "").trim(),
+                displayName: String(req.body?.displayName || req.body?.display_name || "").trim(),
+                photoBase64: String(req.body?.photoBase64 || req.body?.photo_base64 || "").trim(),
+                photoMime: String(req.body?.photoMime || req.body?.photo_mime || "").trim(),
+                vertical: String(req.body?.vertical || "").trim(),
+                description: String(req.body?.description || "").trim(),
+                address: String(req.body?.address || "").trim(),
+                email: String(req.body?.email || "").trim(),
+            });
+            return sendPublic(res, 200, { ok: true, ...assets });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
     app.post("/integrations/meta/whatsapp/phone-numbers/inbox", async (req, res) => {
         try {
             if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {

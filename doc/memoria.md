@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 12:00 — Foto de perfil do chip para a Meta
+- Card do número: Editar perfil envia JPEG/PNG à Graph (`profile_picture_handle`).
+- Marker: `DEPLOY-2026-09-02-120000-foto-perfil-whatsapp`
+- LOG: `doc/LOG-2026-09-02__120000__foto-perfil-whatsapp-meta.md`
+
 ## 2026-09-02 11:51 — PNG de cabeçalho recusado
 - Upload identifica PNG pelos bytes, nome `header.png` na Graph, teto 5 MB.
 - Marker: `DEPLOY-2026-09-02-115100-png-header-upload`

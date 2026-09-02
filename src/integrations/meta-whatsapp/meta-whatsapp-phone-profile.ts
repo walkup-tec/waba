@@ -39,6 +39,37 @@ export function parseDisplayName(value: unknown): string | null {
   return name;
 }
 
+function sniffProfilePhotoMime(bytes: Buffer): "image/png" | "image/jpeg" | null {
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  return null;
+}
+
+function normalizePhotoMime(mime: string): string {
+  const raw = String(mime || "")
+    .trim()
+    .toLowerCase()
+    .split(";")[0]
+    .trim();
+  if (raw === "image/jpg" || raw === "image/pjpeg") return "image/jpeg";
+  if (raw === "image/x-png") return "image/png";
+  return raw;
+}
+
 export function parseProfilePhoto(input: {
   photoBase64?: unknown;
   photoMime?: unknown;
@@ -48,8 +79,6 @@ export function parseProfilePhoto(input: {
   const dataUrl = raw.match(/^data:([^;]+);base64,(.+)$/i);
   const mimeFromUrl = dataUrl ? String(dataUrl[1] || "").trim().toLowerCase() : "";
   const b64 = dataUrl ? String(dataUrl[2] || "") : raw.replace(/\s+/g, "");
-  const mime = String(input.photoMime || mimeFromUrl || "").trim().toLowerCase();
-  if (!ALLOWED_MIME.has(mime)) return null;
   let bytes: Buffer;
   try {
     bytes = Buffer.from(b64, "base64");
@@ -57,8 +86,12 @@ export function parseProfilePhoto(input: {
     return null;
   }
   if (!bytes.length || bytes.length > MAX_PHOTO_BYTES) return null;
-  const fileName = mime.includes("png") ? "profile.png" : "profile.jpg";
+  const sniffed = sniffProfilePhotoMime(bytes);
+  const declared = normalizePhotoMime(String(input.photoMime || mimeFromUrl || ""));
+  const mime = sniffed || (ALLOWED_MIME.has(declared) ? declared : "");
+  if (!mime || !ALLOWED_MIME.has(mime)) return null;
   const normalizedMime = mime === "image/jpg" ? "image/jpeg" : mime;
+  const fileName = normalizedMime.includes("png") ? "profile.png" : "profile.jpg";
   return { mime: normalizedMime, bytes, fileName };
 }
 
