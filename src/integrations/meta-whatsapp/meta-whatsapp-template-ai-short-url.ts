@@ -14,6 +14,7 @@ export function normalizeMetaTemplateDestinationUrl(raw: string): string {
   const trimmed = String(raw || "").trim();
   if (!trimmed) return "";
   if (/^https?:\/\//i.test(trimmed)) return trimmed.slice(0, 2000);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return "";
   return `https://${trimmed.replace(/^\/+/, "")}`.slice(0, 2000);
 }
 
