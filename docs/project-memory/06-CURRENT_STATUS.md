@@ -17,6 +17,6 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h). Relatório da Campanha Jandira deste disparo (1.990 / 1.156 / 2) mostra 981 entregues e 431 lidos, sem cliques, via override de leitura.
 
-Marker: `DEPLOY-2026-09-02-193700-relatorio-entregues-lidos`.
+Marker: `DEPLOY-2026-09-02-201800-jandira-981-431`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
