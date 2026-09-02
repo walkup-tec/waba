@@ -11,6 +11,6 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h).
 
-Marker: `DEPLOY-2026-09-02-024500-remover-painel-teste-template`.
+Marker: `DEPLOY-2026-09-02-024800-modal-enviar-templates-centro`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 02:48 — Modal Enviar templates no centro
+- Restaurou `#meta-tpl-ai-overlay`. Sem o wrapper o card caía no rodapé.
+- Marker: `DEPLOY-2026-09-02-024800-modal-enviar-templates-centro`
+- LOG: `doc/LOG-2026-09-02__024800__modal-enviar-templates-centro.md`
+
 ## 2026-09-02 02:45 — Removeu painel Visualizar / usar em teste
 - Card legado e botão Usar em teste saíram. Visualizar = modal; Excluir = Meta + lista.
 - Marker: `DEPLOY-2026-09-02-024500-remover-painel-teste-template`
