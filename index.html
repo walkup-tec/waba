@@ -21365,9 +21365,9 @@
                       </select>
                     </div>
                     <div class="aquecedor-field">
-                      <label for="meta-tpl-ai-button-url">URL do botão</label>
+                      <label for="meta-tpl-ai-button-url">URL de destino do botão</label>
                       <input id="meta-tpl-ai-button-url" type="url" autocomplete="off" maxlength="2000" placeholder="https://seusite.com.br/retorno" />
-                      <span class="muted">Use um site https. A Meta recusa wa.me, whatsapp.com e encurtadores no botão.</span>
+                      <span class="muted">Informe o destino (site ou WhatsApp). A Meta recebe sempre o link curto do nosso domínio, como na campanha da API Alternativa.</span>
                     </div>
                   </div>
                 </div>
@@ -36944,7 +36944,7 @@
           metaTplAiModalResolver = resolve;
           metaTplAiSetPhase("confirm", {
             title: "Enviar templates à Meta",
-            text: "As três opções serão cadastradas no portfólio selecionado, cada uma em um envio separado. A Meta analisa cada template e pode levar até 24 horas para responder.",
+            text: "As três opções serão cadastradas no portfólio selecionado. O botão usará o link curto do nosso domínio, que abre o destino informado. A Meta analisa cada template e pode levar até 24 horas para responder.",
             okLabel: "Enviar",
           });
           metaTplAiOpenOverlay();
@@ -36973,25 +36973,14 @@
 
       function metaTplAiValidateButtonUrl(raw) {
         const url = String(raw || "").trim();
-        if (!url) return "Informe a URL do botão com https://.";
+        if (!url) return "Informe a URL de destino do botão.";
         try {
-          const parsed = new URL(url);
-          if (parsed.protocol !== "https:") {
-            return "A URL do botão precisa começar com https://. Links whatsapp:// ou sem https não são aceitos pela Meta.";
-          }
-          const host = String(parsed.hostname || "").toLowerCase();
-          if (
-            host === "wa.me" ||
-            host.endsWith(".wa.me") ||
-            host === "whatsapp.com" ||
-            host.endsWith(".whatsapp.com") ||
-            host === "whatsapp.net" ||
-            host.endsWith(".whatsapp.net")
-          ) {
-            return "A Meta não aceita wa.me, whatsapp.com nem whatsapp.net no botão URL. Use o site https do seu atendimento ou retorno.";
+          const parsed = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+          if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            return "Use http:// ou https://. O sistema gera o link curto do nosso domínio para a Meta.";
           }
         } catch {
-          return "A URL do botão não é válida. Use um endereço completo, por exemplo https://waba.draxsistemas.com.br/retorno.";
+          return "A URL de destino não é válida. Ex.: https://seusite.com.br/retorno ou https://wa.me/5511999999999";
         }
         return "";
       }
@@ -37133,10 +37122,13 @@
           const detail = rows
             .map((item) => `${item.ok ? "✓" : "✕"} Opção ${Number(item.index || 0) + 1}: ${escapeAdminHtml(String(item.status || item.error || "erro"))}`)
             .join("<br>");
+          const shortUrl = String(payload.metaButtonUrl || "").trim();
+          const shortLine = shortUrl ? `Botão na Meta: ${escapeAdminHtml(shortUrl)}` : "";
           if (result) {
             result.innerHTML =
               `<div class="meta-tpl-ai-alert ${payload.failed ? "is-warn" : "is-ok"}"><strong>${escapeAdminHtml(String(payload.submitted || 0))} de 3 cadastrados</strong><br>` +
               detail +
+              (shortLine ? `<br>${shortLine}` : "") +
               `</div>`;
           }
           if (payload.failed) {
@@ -37145,7 +37137,7 @@
               "error",
               "Envio parcial",
               "Parte dos templates chegou à Meta, mas nem todas as opções foram aceitas. A Meta ainda pode levar até 24 horas para concluir a análise das que foram enviadas.",
-              detail,
+              [detail, shortLine].filter(Boolean).join("<br>"),
             );
           } else {
             if (status) status.textContent = "Três templates enviados à Meta. A análise pode levar até 24 horas.";
@@ -37153,6 +37145,7 @@
               "ok",
               "Templates enviados à Meta",
               "Os três templates foram encaminhados para análise. A Meta costuma responder em até 24 horas. Enquanto isso, o status fica pendente — use Atualizar da Meta para ver se foram aprovados, rejeitados ou se pedem algum ajuste.",
+              shortLine,
             );
           }
           await window.wabaLoadMetaTemplatesLab();

@@ -19,6 +19,7 @@ import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 import { MetaWhatsappInboxService } from "./meta-whatsapp-inbox.service";
 import { MetaWhatsappAutomationService } from "./meta-whatsapp-automation.service";
 import { MetaWhatsappTemplateAiService } from "./meta-whatsapp-template-ai.service";
+import { publicBaseHintsFromExpressRequest } from "../../lib/waba-public-base-url";
 
 const service = new MetaWhatsappConnectionService();
 const messagingService = new MetaWhatsappMessagingService();
@@ -385,6 +386,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
       const result = await templateAiService.submitAllFromAuth(
         resolveWabaRequestAuth(req),
         req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {},
+        publicBaseHintsFromExpressRequest(req),
       );
       return sendPublic(res, 200, { ok: true, ...result });
     } catch (error) {

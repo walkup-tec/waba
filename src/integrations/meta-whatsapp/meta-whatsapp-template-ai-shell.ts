@@ -1,5 +1,6 @@
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
-import { isMetaRestrictedTemplateButtonHost, placeholderIndexes } from "./meta-whatsapp-template-validate";
+import { normalizeMetaTemplateDestinationUrl } from "./meta-whatsapp-template-ai-short-url";
+import { placeholderIndexes } from "./meta-whatsapp-template-validate";
 import type { MetaTemplateAiOption } from "./meta-whatsapp-template-ai.types";
 
 /** Mesmas opções do select de botão do Mensageiro (API Alternativa). */
@@ -60,8 +61,8 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function requireStaticHttpsUrl(raw: string): string {
-  const url = String(raw || "").trim();
+function requireDestinationUrl(raw: string): string {
+  const url = normalizeMetaTemplateDestinationUrl(raw);
   if (!url || url.length > 2_000 || placeholderIndexes(url).length) {
     throw new MetaWhatsappError("template_url_https");
   }
@@ -71,9 +72,8 @@ function requireStaticHttpsUrl(raw: string): string {
   } catch {
     throw new MetaWhatsappError("template_url_https");
   }
-  if (parsed.protocol !== "https:") throw new MetaWhatsappError("template_url_https");
-  if (isMetaRestrictedTemplateButtonHost(parsed.hostname)) {
-    throw new MetaWhatsappError("template_url_restricted");
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new MetaWhatsappError("template_url_https");
   }
   return url;
 }
@@ -89,7 +89,7 @@ export function parseMetaTemplateAiShell(input: Record<string, unknown> | undefi
     .toUpperCase() as MetaTemplateAiMediaFormat;
   const headerText = META_TEMPLATE_AI_FIXED_HEADER_TEXT;
   const buttonText = String(body.buttonText || body.button_text || "").trim();
-  const buttonUrl = requireStaticHttpsUrl(String(body.buttonUrl || body.button_url || ""));
+  const buttonUrl = requireDestinationUrl(String(body.buttonUrl || body.button_url || ""));
   const headerHandle = String(body.headerHandle || body.header_handle || "").trim();
   if (!modelName || !VARIABLE_TYPES.has(variableType) || !MEDIA_FORMATS.has(mediaFormat)) {
     throw new MetaWhatsappError("template_invalid");

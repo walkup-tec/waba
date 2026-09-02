@@ -21,6 +21,11 @@ import {
   parseMetaTemplateAiShell,
   templateNameForOption,
 } from "./meta-whatsapp-template-ai-shell";
+import {
+  appendDisparosLinkNonce,
+  assertMetaReadyButtonShortUrl,
+  normalizeMetaTemplateDestinationUrl,
+} from "./meta-whatsapp-template-ai-short-url";
 
 const previousKey = process.env.OPENAI_API_KEY;
 const previousLimit = process.env.META_TEMPLATE_AI_RATE_LIMIT_PER_MINUTE;
@@ -111,6 +116,7 @@ function serviceFor(
   output: unknown,
   templateService?: { createFromAuth(auth: unknown, input: Record<string, unknown>): Promise<any> },
   connectionOverrides: Partial<MetaWhatsappConnectionRecord> = {},
+  createButtonShortUrl?: (input: { destinationUrl: string; tenantId: string }) => Promise<string>,
 ) {
   const row = connection(email, connectionOverrides);
   const stored: Array<Record<string, unknown>> = [];
@@ -158,6 +164,10 @@ function serviceFor(
           };
         },
       }) as any,
+      undefined,
+      undefined,
+      createButtonShortUrl ||
+        (async () => "https://waba.draxsistemas.com.br/s/tpltest1"),
     ),
   };
 }
@@ -304,7 +314,8 @@ describe("Assistente IA de templates Utility", () => {
       ?.find((item) => item.type === "BUTTONS");
     assert.equal(firstButtons?.buttons?.[0]?.type, "URL");
     assert.equal(firstButtons?.buttons?.[0]?.text, "Quero saber mais");
-    assert.equal(firstButtons?.buttons?.[0]?.url, "https://waba.draxsistemas.com.br/retorno");
+    assert.equal(firstButtons?.buttons?.[0]?.url, "https://waba.draxsistemas.com.br/s/tpltest1");
+    assert.equal(result.metaButtonUrl, "https://waba.draxsistemas.com.br/s/tpltest1");
     const header = (calls[0]?.components as Array<Record<string, any>> | undefined)
       ?.find((item) => item.type === "HEADER");
     assert.equal(header?.format, "TEXT");
@@ -383,34 +394,100 @@ describe("Assistente IA de templates Utility", () => {
     assert.equal(header?.text, "Informação de utilidade");
   });
 
-  it("recusa wa.me e whatsapp.com no botão URL", () => {
-    assert.throws(
-      () =>
-        parseMetaTemplateAiShell({
-          modelName: "retorno_lead",
-          buttonText: "Quero saber mais",
-          buttonUrl: "https://wa.me/5511999999999",
-        }),
-      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_restricted",
+  it("aceita wa.me e http como destino; a Meta só recebe o link curto WABA", async () => {
+    const destination = parseMetaTemplateAiShell({
+      modelName: "retorno_lead",
+      buttonText: "Quero saber mais",
+      buttonUrl: "https://wa.me/5511999999999",
+    });
+    assert.equal(destination.buttonUrl, "https://wa.me/5511999999999");
+    const httpDest = parseMetaTemplateAiShell({
+      modelName: "retorno_lead",
+      buttonText: "Quero saber mais",
+      buttonUrl: "http://example.com/retorno",
+    });
+    assert.equal(httpDest.buttonUrl, "http://example.com/retorno");
+
+    const email = "ai-short-wa@example.com";
+    const seen: string[] = [];
+    const calls: Array<Record<string, unknown>> = [];
+    const { service } = serviceFor(
+      email,
+      utilityOutput(),
+      {
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(input);
+          return { id: `local-${String(input.name)}`, status: "PENDING" };
+        },
+      },
+      {},
+      async (input) => {
+        seen.push(input.destinationUrl);
+        return "https://waba.draxsistemas.com.br/s/walkup1";
+      },
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      submitShell({ buttonUrl: "https://wa.me/5511999999999" }),
+    );
+    assert.deepEqual(seen, ["https://wa.me/5511999999999"]);
+    assert.equal(result.metaButtonUrl, "https://waba.draxsistemas.com.br/s/walkup1");
+    const firstButtons = (calls[0]?.components as Array<Record<string, any>> | undefined)
+      ?.find((item) => item.type === "BUTTONS");
+    assert.equal(firstButtons?.buttons?.[0]?.url, "https://waba.draxsistemas.com.br/s/walkup1");
+    assert.equal(calls.length, 3);
+    assert.equal(
+      (calls[2]?.components as Array<Record<string, any>> | undefined)
+        ?.find((item) => item.type === "BUTTONS")?.buttons?.[0]?.url,
+      "https://waba.draxsistemas.com.br/s/walkup1",
+    );
+  });
+
+  it("falha o lote se o encurtador WABA não gerar o link curto", async () => {
+    const email = "ai-short-fail@example.com";
+    const { service } = serviceFor(
+      email,
+      utilityOutput(),
+      undefined,
+      {},
+      async () => {
+        throw new MetaWhatsappError("template_shorten_failed");
+      },
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    await assert.rejects(
+      () => service.submitAllFromAuth({ email, role: "subscriber" }, submitShell()),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_shorten_failed",
+    );
+  });
+
+  it("normaliza destino como a campanha e só aceita /s/ https na Meta", () => {
+    assert.equal(normalizeMetaTemplateDestinationUrl("seusite.com.br/retorno"), "https://seusite.com.br/retorno");
+    assert.match(appendDisparosLinkNonce("https://wa.me/5511999999999", "abc"), /_n8n_link_nonce=abc/);
+    assert.equal(
+      assertMetaReadyButtonShortUrl("https://waba.draxsistemas.com.br/s/abc1234"),
+      "https://waba.draxsistemas.com.br/s/abc1234",
     );
     assert.throws(
-      () =>
-        parseMetaTemplateAiShell({
-          modelName: "retorno_lead",
-          buttonText: "Quero saber mais",
-          buttonUrl: "https://api.whatsapp.com/send?phone=5511999999999",
-        }),
+      () => assertMetaReadyButtonShortUrl("https://wa.me/5511999999999"),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_restricted",
     );
   });
 
-  it("recusa URL não https ou botão fora do select do Mensageiro", () => {
+  it("recusa URL inválida ou botão fora do select do Mensageiro", () => {
     assert.throws(
       () =>
         parseMetaTemplateAiShell({
           modelName: "retorno_lead",
           buttonText: "Quero saber mais",
-          buttonUrl: "http://example.com",
+          buttonUrl: "whatsapp://send?phone=5511999999999",
         }),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_https",
     );

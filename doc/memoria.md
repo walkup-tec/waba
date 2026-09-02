@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-02 00:22 — Botão Meta = URL curta WABA
+- Destino do usuário (site ou wa.me) não vai mais à Graph. O lote gera um `/s/{slug}` no mesmo encurtador da campanha Alternativa e envia só esse https à Meta.
+- Marker: `DEPLOY-2026-09-02-002200-meta-botao-url-encurtada`
+- LOG: `doc/LOG-2026-09-02__002200__meta-botao-url-encurtada.md`
+
 ## 2026-09-01 20:45 — 0 de 3: Meta recusou botão wa.me
 - Graph 400 nas 3 opções + modal genérico. Causa típica: URL do botão em `wa.me` / `whatsapp.com` (host restrito). O detalhe da Graph era descartado.
 - Agora o sistema bloqueia esses hosts antes do POST e mostra `error_user_msg` seguro no modal.

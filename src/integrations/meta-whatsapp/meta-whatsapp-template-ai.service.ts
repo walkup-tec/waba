@@ -30,6 +30,11 @@ import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 import { decryptMetaToken } from "./meta-token-crypto";
 import { readMetaAppId } from "./meta-config";
 import { uploadMetaResumableImage } from "./meta-whatsapp-resumable-upload";
+import {
+  createMetaTemplateButtonShortUrl,
+  type MetaTemplateButtonShortUrlInput,
+} from "./meta-whatsapp-template-ai-short-url";
+import type { WabaPublicBaseRequestHints } from "../../lib/waba-public-base-url";
 
 const MEDIA_MIME: Record<string, Set<string>> = {
   IMAGE: new Set(["image/jpeg", "image/png"]),
@@ -91,6 +96,14 @@ function ensureRateLimit(key: string): void {
   windows.set(key, recent);
 }
 
+function safeHost(url: string): string {
+  try {
+    return new URL(url).hostname || "";
+  } catch {
+    return "";
+  }
+}
+
 function isEnabled(): boolean {
   const raw = String(process.env.META_TEMPLATE_AI_ENABLED || "").trim().toLowerCase();
   if (raw === "0" || raw === "false" || raw === "off") return false;
@@ -131,6 +144,9 @@ export class MetaWhatsappTemplateAiService {
     private readonly templates = new MetaWhatsappTemplateService(),
     private readonly decrypt = decryptMetaToken,
     private readonly uploadHeader = uploadMetaResumableImage as HeaderUploader,
+    private readonly createButtonShortUrl: (
+      input: MetaTemplateButtonShortUrlInput,
+    ) => Promise<string> = createMetaTemplateButtonShortUrl,
   ) {}
 
   private async requirePortfolio(
@@ -256,10 +272,12 @@ export class MetaWhatsappTemplateAiService {
   async submitAllFromAuth(
     auth: WabaRequestAuth,
     input: Record<string, unknown> | undefined,
+    publicBaseHints?: WabaPublicBaseRequestHints,
   ): Promise<{
     total: number;
     submitted: number;
     failed: number;
+    metaButtonUrl: string | null;
     results: Array<{
       index: number;
       name: string;
@@ -303,6 +321,25 @@ export class MetaWhatsappTemplateAiService {
       connectionId,
       analysisId,
     );
+    const pendingIndexes = analysis.result.options
+      .map((_, index) => index)
+      .filter((index) => !alreadySubmitted.has(templateNameForOption(shell.modelName, index)));
+    let metaButtonUrl: string | null = null;
+    if (pendingIndexes.length) {
+      metaButtonUrl = await this.createButtonShortUrl({
+        destinationUrl: shell.buttonUrl,
+        tenantId: tenant.tenantId,
+        publicBaseHints,
+      });
+      logMetaTemplate("AI", {
+        tenantId: tenant.tenantId,
+        connectionId,
+        buttonShortened: true,
+        destinationHost: safeHost(shell.buttonUrl),
+        shortHost: safeHost(metaButtonUrl),
+      });
+    }
+    const graphShell = metaButtonUrl ? { ...shell, buttonUrl: metaButtonUrl } : shell;
     for (let index = 0; index < analysis.result.options.length; index += 1) {
       const option = analysis.result.options[index];
       const name = templateNameForOption(shell.modelName, index);
@@ -325,7 +362,7 @@ export class MetaWhatsappTemplateAiService {
           name,
           language: analysis.language,
           category: "UTILITY",
-          components: componentsFromAiOptionAndShell(option, shell),
+          components: componentsFromAiOptionAndShell(option, graphShell),
         });
         results.push({
           index,
@@ -360,6 +397,7 @@ export class MetaWhatsappTemplateAiService {
       total: results.length,
       submitted,
       failed: results.length - submitted,
+      metaButtonUrl,
       results,
     };
   }
