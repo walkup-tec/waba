@@ -18,6 +18,14 @@ function qualityScoreFromGraph(value) {
 }
 function toPublicTemplate(row, portfolioName) {
     const name = String(portfolioName || "").trim();
+    const headerPreviewUrl = (0, meta_whatsapp_template_header_preview_store_1.publicTemplateHeaderPreviewUrl)({
+        id: row.id,
+        tenantId: row.tenantId,
+        components: row.components,
+        metaTemplateId: row.metaTemplateId,
+        name: row.name,
+        language: row.language,
+    });
     return {
         id: row.id,
         metaTemplateId: row.metaTemplateId,
@@ -31,11 +39,8 @@ function toPublicTemplate(row, portfolioName) {
         lastSyncedAt: row.lastSyncedAt,
         connectionId: row.connectionId,
         portfolioName: name || null,
-        headerPreviewUrl: (0, meta_whatsapp_template_header_preview_store_1.publicTemplateHeaderPreviewUrl)({
-            id: row.id,
-            tenantId: row.tenantId,
-            components: row.components,
-        }),
+        headerPreviewUrl,
+        headerReady: Boolean(headerPreviewUrl),
     };
 }
 function isTemplateApprovedForSend(status) {

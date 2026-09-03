@@ -7,6 +7,10 @@ exports.headerHandleFromComponents = headerHandleFromComponents;
 exports.headerHttpsUrlFromComponents = headerHttpsUrlFromComponents;
 exports.saveTemplateHeaderPreview = saveTemplateHeaderPreview;
 exports.copyTemplateHeaderPreview = copyTemplateHeaderPreview;
+exports.templateHeaderPreviewKeys = templateHeaderPreviewKeys;
+exports.aliasTemplateHeaderPreview = aliasTemplateHeaderPreview;
+exports.bindTemplateHeaderPreview = bindTemplateHeaderPreview;
+exports.saveTemplateHeaderPreviewAliases = saveTemplateHeaderPreviewAliases;
 exports.readTemplateHeaderPreviewForSend = readTemplateHeaderPreviewForSend;
 exports.readTemplateHeaderPreview = readTemplateHeaderPreview;
 exports.hasTemplateHeaderPreview = hasTemplateHeaderPreview;
@@ -93,12 +97,37 @@ function saveTemplateHeaderPreview(input) {
     (0, node_fs_1.writeFileSync)(filePath(input.tenantId, handle, ext), input.bytes);
 }
 function copyTemplateHeaderPreview(input) {
-    const preview = readTemplateHeaderPreview(input.tenantId, input.fromHandle);
+    aliasTemplateHeaderPreview({
+        tenantId: input.tenantId,
+        fromKeys: [input.fromHandle],
+        toKeys: input.toHandles,
+    });
+}
+/** Chaves estáveis: o handle da Graph vira URL lookaside e alguns templates passam a compartilhar a mesma. */
+function templateHeaderPreviewKeys(input) {
+    const name = String(input.name || "").trim().toLowerCase();
+    const language = String(input.language || "").trim();
+    const keys = [
+        String(input.handle || "").trim(),
+        String(input.templateId || "").trim(),
+        String(input.metaTemplateId || "").trim(),
+        name && language ? `${name}::${language}` : "",
+        name ? `name:${name}` : "",
+    ].filter(Boolean);
+    return [...new Set(keys)];
+}
+function aliasTemplateHeaderPreview(input) {
+    let preview = null;
+    for (const raw of input.fromKeys) {
+        preview = readTemplateHeaderPreview(input.tenantId, raw);
+        if (preview)
+            break;
+    }
     if (!preview)
-        return;
-    for (const raw of input.toHandles) {
+        return false;
+    for (const raw of input.toKeys) {
         const toHandle = String(raw || "").trim();
-        if (!toHandle || toHandle === input.fromHandle)
+        if (!toHandle)
             continue;
         saveTemplateHeaderPreview({
             tenantId: input.tenantId,
@@ -107,12 +136,46 @@ function copyTemplateHeaderPreview(input) {
             bytes: preview.bytes,
         });
     }
+    return true;
+}
+function bindTemplateHeaderPreview(input) {
+    const toKeys = templateHeaderPreviewKeys(input);
+    const fromKeys = templateHeaderPreviewKeys({
+        handle: input.previousHandle || input.handle,
+        templateId: input.templateId,
+        metaTemplateId: input.metaTemplateId,
+        name: input.name,
+        language: input.language,
+    });
+    if (input.handle)
+        fromKeys.unshift(String(input.handle).trim());
+    if (input.previousHandle)
+        fromKeys.unshift(String(input.previousHandle).trim());
+    return aliasTemplateHeaderPreview({
+        tenantId: input.tenantId,
+        fromKeys: [...new Set(fromKeys.filter(Boolean))],
+        toKeys,
+    });
+}
+function saveTemplateHeaderPreviewAliases(input) {
+    for (const alias of [...new Set(input.aliases.map((item) => String(item || "").trim()).filter(Boolean))]) {
+        saveTemplateHeaderPreview({
+            tenantId: input.tenantId,
+            handle: alias,
+            mime: input.mime,
+            fileName: input.fileName,
+            bytes: input.bytes,
+        });
+    }
 }
 function readTemplateHeaderPreviewForSend(input) {
-    const handle = String(input.handle || "").trim();
-    const templateId = String(input.templateId || "").trim();
-    return ((handle ? readTemplateHeaderPreview(input.tenantId, handle) : null) ||
-        (templateId ? readTemplateHeaderPreview(input.tenantId, templateId) : null));
+    bindTemplateHeaderPreview(input);
+    for (const key of templateHeaderPreviewKeys(input)) {
+        const found = readTemplateHeaderPreview(input.tenantId, key);
+        if (found)
+            return found;
+    }
+    return null;
 }
 function readTemplateHeaderPreview(tenantId, handle) {
     const id = safeTenantId(tenantId);
@@ -139,10 +202,16 @@ function hasTemplateHeaderPreview(tenantId, handle) {
 function publicTemplateHeaderPreviewUrl(input) {
     const handle = headerHandleFromComponents(input.components);
     const id = String(input.id || "").trim();
-    const hasLocal = Boolean(handle && hasTemplateHeaderPreview(input.tenantId, handle)) ||
-        Boolean(id && hasTemplateHeaderPreview(input.tenantId, id));
+    const hasLocal = Boolean(readTemplateHeaderPreviewForSend({
+        tenantId: input.tenantId,
+        handle,
+        templateId: id,
+        metaTemplateId: input.metaTemplateId || undefined,
+        name: input.name || undefined,
+        language: input.language || undefined,
+    }));
     if (hasLocal && id) {
         return `/integrations/meta/whatsapp/templates/${encodeURIComponent(id)}/header`;
     }
-    return headerHttpsUrlFromComponents(input.components);
+    return null;
 }

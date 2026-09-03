@@ -6,12 +6,13 @@
  * https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BROADCAST_HEADER_WEBLINK_ERROR = void 0;
+exports.BROADCAST_HEADER_MISSING_FILE_ERROR = exports.BROADCAST_HEADER_WEBLINK_ERROR = void 0;
 exports.isMetaHeaderExampleUrl = isMetaHeaderExampleUrl;
 exports.mimeFromHeaderFormat = mimeFromHeaderFormat;
 exports.headerUploadFileName = headerUploadFileName;
 exports.classifyBroadcastHeaderMedia = classifyBroadcastHeaderMedia;
-exports.BROADCAST_HEADER_WEBLINK_ERROR = "Este template exige mídia de cabeçalho no envio. Não use a URL de exemplo da Graph (ela responde 403). Sincronize o template ou reenvie a mídia.";
+exports.BROADCAST_HEADER_WEBLINK_ERROR = "Este template exige o arquivo da foto/vídeo do topo. A URL de exemplo da Graph (lookaside) responde 403. Envie de novo a mesma mídia neste template aprovado.";
+exports.BROADCAST_HEADER_MISSING_FILE_ERROR = "Este template aprovado precisa do arquivo da mídia do topo neste servidor. Envie de novo a mesma foto/vídeo usada na criação — a Meta não reaproveita o link de exemplo, mesmo se a imagem for igual em outro template.";
 function isMetaHeaderExampleUrl(value) {
     const raw = String(value || "").trim();
     if (!/^https:\/\//i.test(raw))
@@ -48,14 +49,7 @@ function headerUploadFileName(mime) {
         return "header.pdf";
     return "header.jpg";
 }
-/** Graph example URLs (lookaside/fbcdn) expire; sending them as `link` yields 131053. */
+/** Só bytes locais → upload Cloud API → `{ id }`. Qualquer weblink (lookaside ou CDN) gera 131053. */
 function classifyBroadcastHeaderMedia(input) {
-    if (input.hasLocalPreview)
-        return "upload";
-    const url = String(input.httpsUrl || "").trim();
-    if (url && isMetaHeaderExampleUrl(url))
-        return "refuse-weblink";
-    if (/^https:\/\//i.test(url))
-        return "weblink";
-    return "missing";
+    return input.hasLocalPreview ? "upload" : "missing";
 }

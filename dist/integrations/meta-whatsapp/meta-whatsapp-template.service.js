@@ -16,6 +16,7 @@ const meta_whatsapp_template_ai_approved_examples_1 = require("./meta-whatsapp-t
 const meta_whatsapp_template_types_1 = require("./meta-whatsapp-template.types");
 const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
 const meta_whatsapp_template_header_preview_store_1 = require("./meta-whatsapp-template-header-preview.store");
+const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-template");
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -23,6 +24,31 @@ function requireTenant(auth) {
     catch {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("unauthenticated");
     }
+}
+function mimeForApprovedHeaderAttach(format, mime, fileName, bytes) {
+    const type = String(mime || "").trim().toLowerCase().split(";")[0];
+    const name = String(fileName || "").trim().toLowerCase();
+    if (format === "IMAGE") {
+        if (bytes[0] === 0x89 && bytes[1] === 0x50)
+            return "image/png";
+        if (bytes[0] === 0xff && bytes[1] === 0xd8)
+            return "image/jpeg";
+        if (type === "image/png" || name.endsWith(".png"))
+            return "image/png";
+        if (type === "image/jpeg" || type === "image/jpg" || name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        return "";
+    }
+    if (format === "VIDEO") {
+        if (type === "video/mp4" || name.endsWith(".mp4"))
+            return "video/mp4";
+        return "";
+    }
+    if (type === "application/pdf" || name.endsWith(".pdf") || bytes.subarray(0, 5).toString("ascii") === "%PDF-") {
+        return "application/pdf";
+    }
+    return "";
 }
 function isGraphTemplateGone(result) {
     if (result.status === 404)
@@ -179,14 +205,14 @@ class MetaWhatsappTemplateService {
             components,
             lastSyncedAt: now,
         });
-        const createHandle = (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(components);
-        if (createHandle) {
-            (0, meta_whatsapp_template_header_preview_store_1.copyTemplateHeaderPreview)({
-                tenantId: tenant.tenantId,
-                fromHandle: createHandle,
-                toHandles: [row.id],
-            });
-        }
+        (0, meta_whatsapp_template_header_preview_store_1.bindTemplateHeaderPreview)({
+            tenantId: tenant.tenantId,
+            handle: (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(components),
+            templateId: row.id,
+            metaTemplateId: row.metaTemplateId,
+            name: row.name,
+            language: row.language,
+        });
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("CREATE", {
             tenantId: tenant.tenantId,
             name: validated.name,
@@ -265,13 +291,15 @@ class MetaWhatsappTemplateService {
                 lastSyncedAt: now,
             });
             const newHandle = (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(saved.components);
-            if (oldHandle) {
-                (0, meta_whatsapp_template_header_preview_store_1.copyTemplateHeaderPreview)({
-                    tenantId: tenant.tenantId,
-                    fromHandle: oldHandle,
-                    toHandles: [saved.id, newHandle],
-                });
-            }
+            (0, meta_whatsapp_template_header_preview_store_1.bindTemplateHeaderPreview)({
+                tenantId: tenant.tenantId,
+                handle: newHandle,
+                previousHandle: oldHandle,
+                templateId: saved.id,
+                metaTemplateId: saved.metaTemplateId,
+                name: saved.name,
+                language: saved.language,
+            });
             upserted.push(saved);
             rememberApprovedTemplate(saved);
             try {
@@ -392,7 +420,45 @@ class MetaWhatsappTemplateService {
             tenantId: tenant.tenantId,
             handle,
             templateId: id,
+            metaTemplateId: row.metaTemplateId,
+            name: row.name,
+            language: row.language,
         });
+    }
+    async attachHeaderMediaFromAuth(auth, templateId, input) {
+        const tenant = requireTenant(auth);
+        const id = String(templateId || "").trim();
+        const bytes = input.bytes;
+        if (!id || !bytes?.length)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        const row = await this.templates.findByIdForTenant(tenant.tenantId, id);
+        if (!row || row.tenantId !== tenant.tenantId) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_not_found");
+        }
+        const format = (0, meta_whatsapp_broadcast_template_1.inspectMetaBroadcastTemplate)(row.components).headerFormat;
+        if (format !== "IMAGE" && format !== "VIDEO" && format !== "DOCUMENT") {
+            const error = new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+            error.message = "Este template não tem mídia de cabeçalho.";
+            throw error;
+        }
+        const mime = mimeForApprovedHeaderAttach(format, input.mime || "", input.fileName || "", bytes);
+        if (!mime)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
+        (0, meta_whatsapp_template_header_preview_store_1.saveTemplateHeaderPreviewAliases)({
+            tenantId: tenant.tenantId,
+            mime,
+            fileName: input.fileName,
+            bytes,
+            aliases: (0, meta_whatsapp_template_header_preview_store_1.templateHeaderPreviewKeys)({
+                handle: (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(row.components),
+                templateId: row.id,
+                metaTemplateId: row.metaTemplateId,
+                name: row.name,
+                language: row.language,
+            }),
+        });
+        const headerPreviewUrl = `/integrations/meta/whatsapp/templates/${encodeURIComponent(row.id)}/header`;
+        return { headerReady: true, headerPreviewUrl };
     }
 }
 exports.MetaWhatsappTemplateService = MetaWhatsappTemplateService;

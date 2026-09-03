@@ -382,6 +382,8 @@ function shouldSkipBodyParserForMultipart(req) {
         return true;
     if (p === "/integrations/meta/whatsapp/templates/ai/header-media")
         return true;
+    if (/^\/integrations\/meta\/whatsapp\/templates\/[^/]+\/header-media$/.test(p))
+        return true;
     if (p === "/integrations/meta/whatsapp/broadcast/preview")
         return true;
     if (p === "/integrations/meta/whatsapp/broadcast/start")
