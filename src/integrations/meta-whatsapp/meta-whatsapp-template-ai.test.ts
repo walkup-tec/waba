@@ -31,6 +31,10 @@ import {
   assertMetaReadyButtonShortUrl,
   normalizeMetaTemplateDestinationUrl,
 } from "./meta-whatsapp-template-ai-short-url";
+import {
+  assertEditedMetaTemplateAiOptionBody,
+  parseMetaTemplateAiOptionBodyOverrides,
+} from "./meta-whatsapp-template-ai-option-edit";
 
 const previousKey = process.env.OPENAI_API_KEY;
 const previousLimit = process.env.META_TEMPLATE_AI_RATE_LIMIT_PER_MINUTE;
@@ -151,6 +155,10 @@ function serviceFor(
             eligibleForUtility: savedResult.eligibleForUtility,
             result: savedResult,
           };
+        },
+        async updateResult(_tenantId: string, _connectionId: string, _analysisId: string, result: MetaTemplateAiModelOutput) {
+          savedResult = result;
+          if (stored[0]) stored[0].result = result;
         },
         async listSubmittedNames() {
           return new Set<string>();
@@ -725,6 +733,88 @@ describe("Assistente IA de templates Utility", () => {
         ?.find((item) => item.type === "BUTTONS")?.buttons?.[0]?.url,
       "https://waba.draxsistemas.com.br/s/walkup1",
     );
+  });
+
+  it("grava o corpo editado da opção e envia esse texto à Graph", async () => {
+    const email = "ai-edit-option@example.com";
+    const calls: Array<Record<string, unknown>> = [];
+    const { service, stored } = serviceFor(email, utilityOutput(), {
+      async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+        calls.push(input);
+        return { id: `local-${String(input.name)}`, status: "PENDING" };
+      },
+    });
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    const edited =
+      "Olá, {{1}}.\nInformamos que o texto foi revisado pelo operador.\nPara consultar a atualização da sua solicitação, use o link abaixo.";
+    const saved = await service.saveEditedOptionFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", analysisId: "analysis-1", index: 0, body: edited },
+    );
+    assert.equal(saved.option.body, edited);
+    assert.equal((stored[0]?.result as MetaTemplateAiModelOutput).options[0]?.body, edited);
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      submitShell({
+        optionBodies: [null, "Olá, {{1}}.\nInformamos que a segunda opção foi ajustada.\nPara ver os detalhes do resultado, use o link abaixo."],
+      }),
+    );
+    assert.equal(result.submitted, 3);
+    const firstBody = (calls[0]?.components as Array<Record<string, any>> | undefined)?.find(
+      (item) => item.type === "BODY",
+    );
+    const secondBody = (calls[1]?.components as Array<Record<string, any>> | undefined)?.find(
+      (item) => item.type === "BODY",
+    );
+    assert.equal(firstBody?.text, edited);
+    assert.match(String(secondBody?.text || ""), /segunda opção foi ajustada/);
+  });
+
+  it("recusa corpo editado vazio ou com variável fora de ordem", async () => {
+    const email = "ai-edit-invalid@example.com";
+    const { service } = serviceFor(email, utilityOutput());
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    await assert.rejects(
+      () =>
+        service.saveEditedOptionFromAuth(
+          { email, role: "subscriber" },
+          { connectionId: "conn-utility", analysisId: "analysis-1", index: 1, body: "   " },
+        ),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_invalid",
+    );
+    await assert.rejects(
+      () =>
+        service.saveEditedOptionFromAuth(
+          { email, role: "subscriber" },
+          { connectionId: "conn-utility", analysisId: "analysis-1", index: 1, body: "Olá {{2}}." },
+        ),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_invalid",
+    );
+    await assert.rejects(
+      () =>
+        service.saveEditedOptionFromAuth(
+          { email: "outro@example.com", role: "subscriber" },
+          { connectionId: "conn-utility", analysisId: "analysis-1", index: 1, body: "Olá." },
+        ),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "not_connected",
+    );
+  });
+
+  it("normaliza overrides de corpo das três opções", () => {
+    assert.equal(assertEditedMetaTemplateAiOptionBody("  Olá, {{1}}.  \n"), "Olá, {{1}}.");
+    const parsed = parseMetaTemplateAiOptionBodyOverrides({
+      optionBodies: ["um", { index: 2, body: "três" }],
+    });
+    assert.deepEqual(parsed, [
+      { index: 0, body: "um" },
+      { index: 2, body: "três" },
+    ]);
   });
 
   it("falha o lote se o encurtador WABA não gerar o link curto", async () => {

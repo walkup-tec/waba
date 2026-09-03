@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 17:11 — Editar as 3 opções da IA
+- Cards Utility: Editar / Salvar. O texto salvo vai para a Meta no Enviar para META.
+- LOG: `doc/LOG-2026-09-03__171132__template-ai-editar-opcoes.md`
+
 ## 2026-09-03 17:03 — Dedupe de leads no wizard Oficial
 - Upload da planilha Oficial: 1 WhatsApp por campanha (com/sem 9º dígito). Créditos e arquivo de envio usam a lista única.
 - Alternativa continua contando cada linha.

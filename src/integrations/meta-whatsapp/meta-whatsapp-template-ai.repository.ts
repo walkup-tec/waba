@@ -60,6 +60,24 @@ export class MetaWhatsappTemplateAiRepository {
     return String((data as { id?: unknown } | null)?.id || "");
   }
 
+  async updateResult(
+    tenantId: string,
+    connectionId: string,
+    analysisId: string,
+    result: MetaTemplateAiModelOutput,
+  ): Promise<void> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .update({ result_json: result })
+      .eq("id", analysisId)
+      .eq("tenant_id", tenantId)
+      .eq("connection_id", connectionId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("Análise não encontrada para este portfólio.");
+  }
+
   async findForSubmission(
     tenantId: string,
     connectionId: string,

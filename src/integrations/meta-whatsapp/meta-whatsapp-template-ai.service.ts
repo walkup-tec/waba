@@ -25,7 +25,11 @@ import {
   templateNameForOption,
 } from "./meta-whatsapp-template-ai-shell";
 import { shapeMetaUtilityAiOutput } from "./meta-whatsapp-template-ai-utility-shape";
-import type { MetaTemplateAiOption, MetaTemplateAiPublicResult } from "./meta-whatsapp-template-ai.types";
+import {
+  assertEditedMetaTemplateAiOptionBody,
+  parseMetaTemplateAiOptionBodyOverrides,
+} from "./meta-whatsapp-template-ai-option-edit";
+import type { MetaTemplateAiModelOutput, MetaTemplateAiOption, MetaTemplateAiPublicResult } from "./meta-whatsapp-template-ai.types";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
 import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
@@ -326,6 +330,57 @@ export class MetaWhatsappTemplateAiService {
     };
   }
 
+  private applyOptionBodyEdits(
+    result: MetaTemplateAiModelOutput,
+    edits: Array<{ index: number; body: string }>,
+  ): MetaTemplateAiModelOutput {
+    if (!edits.length) return result;
+    const options = result.options.map((option) => ({ ...option }));
+    for (const edit of edits) {
+      if (!Number.isInteger(edit.index) || edit.index < 0 || edit.index > 2 || !options[edit.index]) {
+        throw new MetaWhatsappError("invalid_payload");
+      }
+      options[edit.index] = {
+        ...options[edit.index],
+        body: assertEditedMetaTemplateAiOptionBody(edit.body),
+      };
+    }
+    return { ...result, options };
+  }
+
+  async saveEditedOptionFromAuth(
+    auth: WabaRequestAuth,
+    input: Record<string, unknown> | undefined,
+  ): Promise<{ analysisId: string; index: number; option: MetaTemplateAiOption }> {
+    const tenant = requireTenant(auth);
+    const connectionId = String(input?.connectionId || input?.connection_id || "").trim();
+    const analysisId = String(input?.analysisId || input?.analysis_id || "").trim();
+    const index = Math.round(Number(input?.index ?? input?.optionIndex ?? input?.option_index));
+    if (!connectionId || !analysisId || !Number.isInteger(index) || index < 0 || index > 2) {
+      throw new MetaWhatsappError("invalid_payload");
+    }
+    await this.requirePortfolio(tenant.tenantId, connectionId);
+    const analysis = await this.analyses.findForSubmission(tenant.tenantId, connectionId, analysisId);
+    if (!analysis || !Array.isArray(analysis.result.options) || analysis.result.options.length !== 3) {
+      throw new MetaWhatsappError("template_ai_invalid_output");
+    }
+    const result = this.applyOptionBodyEdits(analysis.result, [
+      { index, body: String(input?.body ?? input?.text ?? "") },
+    ]);
+    try {
+      await this.analyses.updateResult(tenant.tenantId, connectionId, analysisId, result);
+    } catch {
+      throw new MetaWhatsappError("persist_failed");
+    }
+    logMetaTemplate("AI", {
+      tenantId: tenant.tenantId,
+      connectionId,
+      optionEdited: true,
+      optionIndex: index,
+    });
+    return { analysisId, index, option: result.options[index] };
+  }
+
   async submitAllFromAuth(
     auth: WabaRequestAuth,
     input: Record<string, unknown> | undefined,
@@ -367,6 +422,17 @@ export class MetaWhatsappTemplateAiService {
       throw new MetaWhatsappError("template_ai_invalid_output");
     }
 
+    const optionEdits = parseMetaTemplateAiOptionBodyOverrides(input);
+    let analysisResult = analysis.result;
+    if (optionEdits.length) {
+      analysisResult = this.applyOptionBodyEdits(analysis.result, optionEdits);
+      try {
+        await this.analyses.updateResult(tenant.tenantId, connectionId, analysisId, analysisResult);
+      } catch {
+        throw new MetaWhatsappError("persist_failed");
+      }
+    }
+
     const results: Array<{
       index: number;
       name: string;
@@ -382,7 +448,7 @@ export class MetaWhatsappTemplateAiService {
       analysisId,
     );
     const pendingIndexes: number[] = [];
-    for (let index = 0; index < analysis.result.options.length; index += 1) {
+    for (let index = 0; index < analysisResult.options.length; index += 1) {
       const name = templateNameForOption(shell.modelName, index);
       if (!alreadySubmitted.has(name)) {
         pendingIndexes.push(index);
@@ -436,7 +502,7 @@ export class MetaWhatsappTemplateAiService {
     }
     const graphShell = metaButtonUrl ? { ...shell, buttonUrl: metaButtonUrl } : shell;
     for (const index of pendingIndexes) {
-      const option = analysis.result.options[index];
+      const option = analysisResult.options[index];
       const name = templateNameForOption(shell.modelName, index);
       try {
         const template = await this.templates.createFromAuth(auth, {

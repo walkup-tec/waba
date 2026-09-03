@@ -3869,6 +3869,25 @@
         .meta-tpl-ai-option small { color:#94a3b8; line-height:1.4; }
         .meta-tpl-ai-option-btn { display:inline-flex; align-self:flex-start; margin-top:2px; padding:6px 10px; border-radius:999px; border:1px solid rgba(52,211,153,.38); color:#a7f3d0; font-size:11px; font-weight:700; letter-spacing:.01em; }
         .meta-tpl-ai-option button { margin-top:auto; }
+        .meta-tpl-ai-option-editor {
+          width: 100%;
+          min-height: 132px;
+          resize: vertical;
+          box-sizing: border-box;
+          padding: 8px 10px;
+          border-radius: 10px;
+          border: 1px solid #334155;
+          background: #0b1729;
+          color: #e2e8f0;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+        .meta-tpl-ai-option-editor[hidden] { display: none !important; }
+        .meta-tpl-ai-option.is-editing .meta-tpl-ai-option-body { display: none; }
+        .meta-tpl-ai-option-edit-error { margin: 0; color: #fca5a5; font-size: 11px; line-height: 1.4; }
+        .meta-tpl-ai-option-edit-error[hidden] { display: none !important; }
+        .meta-tpl-ai-option-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+        .meta-tpl-ai-option-actions .instance-action-btn { margin-top: 0; }
         .meta-tpl-ai-shell { display:grid; gap:10px; margin:0 0 14px; padding:12px; border-radius:13px; background:rgba(7,15,30,.42); border:1px solid rgba(148,163,184,.12); }
         .meta-tpl-ai-shell-title { margin:0; color:#e2e8f0; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
         .meta-tpl-ai-shell-hint { margin:0; color:#94a3b8; font-size:11px; line-height:1.45; }
@@ -22192,7 +22211,7 @@
                   <div class="disparos-inline-actions">
                     <button id="meta-tpl-ai-submit-all" type="button" class="instance-action-btn btn-qrcode enabled">Enviar para META</button>
                   </div>
-                  <p class="meta-tpl-ai-shell-hint">Envia as três opções geradas, com nome, mídia, cabeçalho e botão URL, para análise da Meta.</p>
+                  <p class="meta-tpl-ai-shell-hint">Envia as três opções (como foram salvas), com nome, mídia, cabeçalho e botão URL, para análise da Meta.</p>
                   <p id="meta-tpl-ai-submit-status" class="muted" role="status" aria-live="polite" style="margin:0;" hidden></p>
                   <div id="meta-tpl-ai-batch-result"></div>
                 </div>
@@ -38429,12 +38448,141 @@
           ? `<div class="meta-tpl-ai-options">${options
                 .map(
                   (option, index) =>
-                    `<article class="meta-tpl-ai-option"><h4>Opção ${index + 1}${option.title ? ` — ${escapeAdminHtml(String(option.title))}` : ""}</h4><p>${escapeAdminHtml(String(option.body || ""))}</p>${buttonText ? `<span class="meta-tpl-ai-option-btn">${escapeAdminHtml(buttonText)}</span>` : ""}</article>`,
+                    `<article class="meta-tpl-ai-option" data-ai-option-index="${index}">` +
+                    `<h4>Opção ${index + 1}${option.title ? ` — ${escapeAdminHtml(String(option.title))}` : ""}</h4>` +
+                    `<p class="meta-tpl-ai-option-body" data-ai-option-body>${escapeAdminHtml(String(option.body || ""))}</p>` +
+                    `<textarea class="meta-tpl-ai-option-editor" data-ai-option-editor hidden rows="6" maxlength="1024" aria-label="Texto da opção ${index + 1}"></textarea>` +
+                    `<p class="meta-tpl-ai-option-edit-error" data-ai-option-error hidden></p>` +
+                    `${buttonText ? `<span class="meta-tpl-ai-option-btn">${escapeAdminHtml(buttonText)}</span>` : ""}` +
+                    `<div class="meta-tpl-ai-option-actions">` +
+                    `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-ai-option-edit="${index}">Editar</button>` +
+                    `</div></article>`,
                 )
                 .join("")}</div>` +
-              `<p class="muted" style="margin:0;">A análise final é realizada pela Meta.</p>`
+              `<p class="muted" style="margin:0;">Edite se quiser. O texto salvo é o que vai para a Meta. A análise final é realizada pela Meta.</p>`
           : `<div class="meta-tpl-ai-alert is-warn"><strong>Não foi possível gerar as três opções Utility</strong><br>${escapeAdminHtml(String(payload.reason || "Tente gerar novamente com o mesmo texto base."))}</div>`;
+        if (options.length === 3) {
+          root.querySelectorAll("[data-ai-option-editor]").forEach((el) => {
+            const index = Number(el.closest("[data-ai-option-index]")?.getAttribute("data-ai-option-index"));
+            el.value = String(options[index]?.body || "");
+          });
+        }
         root.hidden = false;
+      }
+
+      function metaTplAiOptionCard(index) {
+        return document.querySelector(`.meta-tpl-ai-option[data-ai-option-index="${index}"]`);
+      }
+
+      function metaTplAiValidateEditedOptionBody(raw) {
+        const text = String(raw || "").replace(/\r\n/g, "\n").trim();
+        if (!text) return { ok: false, error: "Escreva o texto desta opção." };
+        if (text.length > 1024) return { ok: false, error: "O texto pode ter no máximo 1024 caracteres." };
+        const placeholders = [...new Set([...text.matchAll(/\{\{(\d+)\}\}/g)].map((item) => Number(item[1])))].sort(
+          (a, b) => a - b
+        );
+        if (placeholders.some((value, i) => value !== i + 1)) {
+          return { ok: false, error: "Use variáveis em sequência, começando em {{1}}." };
+        }
+        return { ok: true, text };
+      }
+
+      function metaTplAiSetOptionEditError(card, message) {
+        const errorEl = card && card.querySelector("[data-ai-option-error]");
+        if (!errorEl) return;
+        const text = String(message || "").trim();
+        errorEl.textContent = text;
+        errorEl.hidden = !text;
+      }
+
+      function metaTplAiStartEditOption(index) {
+        const card = metaTplAiOptionCard(index);
+        if (!card) return;
+        const editor = card.querySelector("[data-ai-option-editor]");
+        const button = card.querySelector("[data-meta-tpl-ai-option-edit]");
+        const body = String(metaTplLabAiResult?.options?.[index]?.body || "");
+        if (editor) {
+          editor.hidden = false;
+          editor.value = body;
+          editor.focus();
+        }
+        card.classList.add("is-editing");
+        if (button) button.textContent = "Salvar";
+        metaTplAiSetOptionEditError(card, "");
+      }
+
+      function metaTplAiCollectOptionBodies() {
+        const options = Array.isArray(metaTplLabAiResult?.options) ? metaTplLabAiResult.options : [];
+        return [0, 1, 2].map((index) => {
+          const card = metaTplAiOptionCard(index);
+          const editor = card && card.classList.contains("is-editing")
+            ? card.querySelector("[data-ai-option-editor]")
+            : null;
+          if (editor) return String(editor.value || "");
+          return String(options[index]?.body || "");
+        });
+      }
+
+      async function metaTplAiPersistOptionBody(index, body) {
+        if (isMetaTemplateAiUiPreview()) return { ok: true, option: { body } };
+        const connectionId = metaTplLabSelectedConnectionId();
+        const analysisId = String(metaTplLabAiAnalysisId || "").trim();
+        if (!connectionId || !analysisId) {
+          throw new Error("Gere novamente as três opções antes de salvar.");
+        }
+        return metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/option", {
+          method: "POST",
+          body: JSON.stringify({ connectionId, analysisId, index, body }),
+        });
+      }
+
+      async function metaTplAiSaveOption(index) {
+        const card = metaTplAiOptionCard(index);
+        if (!card) return false;
+        const editor = card.querySelector("[data-ai-option-editor]");
+        const button = card.querySelector("[data-meta-tpl-ai-option-edit]");
+        const checked = metaTplAiValidateEditedOptionBody(editor && editor.value);
+        if (!checked.ok) {
+          metaTplAiSetOptionEditError(card, checked.error);
+          return false;
+        }
+        if (button) button.disabled = true;
+        try {
+          await metaTplAiPersistOptionBody(index, checked.text);
+          if (metaTplLabAiResult && Array.isArray(metaTplLabAiResult.options) && metaTplLabAiResult.options[index]) {
+            metaTplLabAiResult.options[index].body = checked.text;
+          }
+          const preview = card.querySelector("[data-ai-option-body]");
+          if (preview) preview.textContent = checked.text;
+          if (editor) {
+            editor.value = checked.text;
+            editor.hidden = true;
+          }
+          card.classList.remove("is-editing");
+          if (button) button.textContent = "Editar";
+          metaTplAiSetOptionEditError(card, "");
+          const status = document.getElementById("meta-tpl-ai-status");
+          if (status) status.textContent = `Opção ${index + 1} salva. Esse texto vai para a Meta.`;
+          return true;
+        } catch (error) {
+          metaTplAiSetOptionEditError(
+            card,
+            error && error.message ? error.message : "Não foi possível salvar esta opção."
+          );
+          return false;
+        } finally {
+          if (button) button.disabled = false;
+        }
+      }
+
+      async function metaTplAiOnOptionEditClick(index) {
+        const card = metaTplAiOptionCard(index);
+        if (!card) return;
+        if (card.classList.contains("is-editing")) {
+          await metaTplAiSaveOption(index);
+          return;
+        }
+        metaTplAiStartEditOption(index);
       }
 
       async function metaTplGenerateUtilityOptions() {
@@ -38462,7 +38610,7 @@
           metaTplAiRenderResult(payload);
           if (status) {
             status.textContent = Array.isArray(payload.options) && payload.options.length === 3
-              ? "Três opções geradas. Confira todas antes de enviar para a Meta."
+              ? "Três opções geradas. Edite se quiser; o texto salvo é o que vai para a Meta."
               : "Não foi possível montar as três opções. Tente gerar novamente.";
           }
         } catch (error) {
@@ -38489,6 +38637,20 @@
           metaTplAiShowResult("error", "Não foi possível enviar", "Gere primeiro as três opções Utility para este portfólio.");
           metaTplAiSetSubmitStatus("");
           return;
+        }
+        const optionBodies = metaTplAiCollectOptionBodies();
+        for (let index = 0; index < 3; index += 1) {
+          const checked = metaTplAiValidateEditedOptionBody(optionBodies[index]);
+          if (!checked.ok) {
+            metaTplAiShowResult("error", "Não foi possível enviar", `Opção ${index + 1}: ${checked.error}`);
+            metaTplAiSetSubmitStatus("");
+            const card = metaTplAiOptionCard(index);
+            if (card && !card.classList.contains("is-editing")) metaTplAiStartEditOption(index);
+            metaTplAiSetOptionEditError(metaTplAiOptionCard(index), checked.error);
+            return;
+          }
+          optionBodies[index] = checked.text;
+          if (metaTplLabAiResult.options[index]) metaTplLabAiResult.options[index].body = checked.text;
         }
         if (!shell.modelName) {
           metaTplAiShowResult("error", "Não foi possível enviar", "Informe o nome do modelo.");
@@ -38562,6 +38724,7 @@
               buttonText: shell.buttonText,
               buttonUrl: shell.buttonUrl,
               headerHandle,
+              optionBodies,
             }),
           });
           metaTplAiStopProgressTimer();
@@ -39840,7 +40003,7 @@
 
       document.addEventListener("click", function onMetaTplLabClick(event) {
         const target = event.target && event.target.closest
-          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-hide], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all, #meta-tpl-preview-close, #meta-tpl-ai-modal-ok, #meta-tpl-ai-modal-cancel, #meta-tpl-delete-cancel, #meta-tpl-delete-confirm")
+          ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-hide], [data-meta-tpl-ai-option-edit], #meta-tpl-ai-generate, #meta-tpl-ai-submit-all, #meta-tpl-preview-close, #meta-tpl-ai-modal-ok, #meta-tpl-ai-modal-cancel, #meta-tpl-delete-cancel, #meta-tpl-delete-confirm")
           : null;
         if (event.target && event.target.id === "meta-tpl-preview-overlay") {
           metaTplLabClosePreview();
@@ -39853,6 +40016,10 @@
         if (!target) return;
         if (target.id === "meta-tpl-preview-close") {
           metaTplLabClosePreview();
+          return;
+        }
+        if (target.hasAttribute("data-meta-tpl-ai-option-edit")) {
+          void metaTplAiOnOptionEditClick(Number(target.getAttribute("data-meta-tpl-ai-option-edit")));
           return;
         }
         if (target.id === "meta-tpl-ai-generate") {
@@ -39947,7 +40114,11 @@
       });
       document.getElementById("meta-tpl-ai-media-file")?.addEventListener("change", metaTplAiSyncMediaFileName);
       document.getElementById("meta-tpl-ai-button-text")?.addEventListener("change", function () {
-        if (metaTplLabAiResult) metaTplAiRenderResult(metaTplLabAiResult);
+        const text = metaTplAiSelectedButtonText();
+        document.querySelectorAll(".meta-tpl-ai-option-btn").forEach((el) => {
+          el.textContent = text;
+          el.hidden = !text;
+        });
       });
       metaTplAiSyncMediaFields();
 
