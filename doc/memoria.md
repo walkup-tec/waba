@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 09:40 — Evidência 11 94949-0317 na Jandira
+- Planilha linha 552: `Cleison Felicio | 11949490317`. Enviado como `5511949490317`.
+- Meta aceitou (`wamid` presente). No JSON ficou `metaStatus=accepted`, sem delivered/read e sem error.
+- LOG: `doc/LOG-2026-09-03__094000__evidencia-lead-jandira-949490317.md`
+
 ## 2026-09-03 09:36 — Lead 11 94949-0317 da Jandira
 - Pedido de evidência do disparo. Sem SSH daqui e sem `VPS_SSH_PRIVATE_KEY` no GitHub Actions; o JSON do lead não foi lido.
 - Destino Meta esperado se a célula veio `11 94949-0317`: `5511949490317`.
