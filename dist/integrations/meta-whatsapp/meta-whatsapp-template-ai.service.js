@@ -465,7 +465,18 @@ class MetaWhatsappTemplateAiService {
         if (!connectionId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         if (!allowed || !bytes?.length || !allowed.has(mime)) {
-            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
+            const failed = new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
+            if (mediaFormat === "VIDEO") {
+                failed.message =
+                    "A Meta só aceita vídeo MP4 (H.264, AAC ou sem áudio) no cabeçalho. Confira o arquivo e tente de novo.";
+            }
+            throw failed;
+        }
+        if (mediaFormat === "VIDEO" && bytes.length > 16 * 1024 * 1024) {
+            const failed = new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
+            failed.message =
+                "A Meta recusou o arquivo por tamanho. Vídeo de cabeçalho até 16 MB. Comprima o MP4 e envie de novo.";
+            throw failed;
         }
         const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
         const appId = (0, meta_config_1.readMetaAppId)();
@@ -485,6 +496,7 @@ class MetaWhatsappTemplateAiService {
                 fileName,
                 mime,
                 bytes,
+                timeoutMs: mediaFormat === "VIDEO" ? 300000 : undefined,
             });
             const handle = String(uploaded.handle || "").trim();
             if (!handle)
@@ -496,7 +508,13 @@ class MetaWhatsappTemplateAiService {
                 fileName,
                 bytes,
             });
-            (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", { tenantId: tenant.tenantId, connectionId, headerUpload: mediaFormat });
+            (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
+                tenantId: tenant.tenantId,
+                connectionId,
+                headerUpload: mediaFormat,
+                bytes: bytes.length,
+                mime,
+            });
             return { handle, mediaFormat };
         }
         catch (error) {
@@ -509,11 +527,16 @@ class MetaWhatsappTemplateAiService {
                 headerUploadFailed: mediaFormat,
                 mime,
                 bytes: bytes.length,
-                reason: msg.slice(0, 80),
+                reason: msg.slice(0, 160),
             });
             const wrapped = new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
-            if (msg.startsWith("A Meta recusou"))
-                wrapped.message = msg;
+            if (msg.startsWith("A Meta recusou") ||
+                msg.startsWith("O upload") ||
+                /aborted|timeout/i.test(msg)) {
+                wrapped.message = msg.startsWith("A Meta")
+                    ? msg
+                    : "A Meta recusou o arquivo. O upload do vídeo passou do tempo limite. Use MP4 até 16 MB e tente de novo.";
+            }
             throw wrapped;
         }
     }

@@ -1,10 +1,21 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.resumableUploadTimeoutMs = resumableUploadTimeoutMs;
 exports.uploadMetaResumableImage = uploadMetaResumableImage;
 exports.publishMetaPageProfilePicture = publishMetaPageProfilePicture;
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
 const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
+function resumableUploadTimeoutMs(mime, override) {
+    if (Number.isFinite(override) && Number(override) > 0)
+        return Math.floor(Number(override));
+    const type = String(mime || "").toLowerCase();
+    if (type.includes("video"))
+        return 300000;
+    if (type.includes("pdf") || type.includes("document"))
+        return 180000;
+    return 60000;
+}
 function toUploadSessionPath(id) {
     const raw = String(id || "").trim();
     if (!raw)
@@ -29,6 +40,8 @@ async function uploadMetaResumableImage(input) {
     const appId = String(input.appId || "").trim();
     if (!token || !appId)
         throw new Error("Upload da Meta sem app ou token.");
+    if (!input.bytes?.length)
+        throw new Error("A Meta recusou o arquivo. Arquivo vazio.");
     const started = await (0, meta_whatsapp_graph_client_1.callMetaGraphJson)({
         token,
         method: "POST",
@@ -41,12 +54,18 @@ async function uploadMetaResumableImage(input) {
     });
     const sessionId = toUploadSessionPath(String(started.json?.id || "").trim());
     if (!started.ok || !sessionId) {
+        if (started.timeout) {
+            throw new Error("A Meta recusou o arquivo. Tempo esgotado ao abrir a sessão de upload.");
+        }
         throw new Error((0, meta_whatsapp_graph_errors_1.publicMetaGraphMediaUploadMessage)(started.json));
     }
     const url = `${(0, meta_config_1.readMetaGraphBase)()}/${(0, meta_config_1.readMetaGraphVersion)()}/${sessionId}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutMs = resumableUploadTimeoutMs(input.mime, input.timeoutMs);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
+        // View sobre o mesmo Buffer — sem copiar os bytes (vídeo grande).
+        const body = new Uint8Array(input.bytes.buffer, input.bytes.byteOffset, input.bytes.byteLength);
         const response = await fetch(url, {
             method: "POST",
             headers: {
@@ -54,7 +73,7 @@ async function uploadMetaResumableImage(input) {
                 file_offset: "0",
                 "Content-Type": "application/octet-stream",
             },
-            body: new Uint8Array(input.bytes),
+            body,
             signal: controller.signal,
         });
         const text = await response.text();
@@ -70,6 +89,12 @@ async function uploadMetaResumableImage(input) {
             throw new Error((0, meta_whatsapp_graph_errors_1.publicMetaGraphMediaUploadMessage)(json));
         }
         return { handle };
+    }
+    catch (error) {
+        if (String(error?.name || "") === "AbortError") {
+            throw new Error("A Meta recusou o arquivo. O upload do vídeo passou do tempo limite. Use MP4 até 16 MB (H.264) e tente de novo.");
+        }
+        throw error;
     }
     finally {
         clearTimeout(timeoutId);

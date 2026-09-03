@@ -521,6 +521,13 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
         });
         return sendPublic(res, 200, { ok: true, ...result });
       } catch (error) {
+        logMetaWhatsappSafe("header-media-error", {
+          name: String((error as { name?: string })?.name || ""),
+          code: String((error as { code?: string })?.code || ""),
+          message: String((error as { message?: string })?.message || "").slice(0, 160),
+          mediaFormat: String(req.body?.mediaFormat || req.body?.media_format || ""),
+          bytes: Number(req.file?.size || req.file?.buffer?.length || 0),
+        });
         return handleMetaError(res, error);
       }
     });

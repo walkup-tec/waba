@@ -78,7 +78,17 @@ function toPublicMetaError(error) {
     if (error instanceof MetaWhatsappError) {
         return { ok: false, error: error.message, code: error.code, status: error.status };
     }
-    const message = String(error?.message || "");
+    const row = error && typeof error === "object" ? error : null;
+    const duckCode = String(row?.code || "").trim();
+    if (duckCode && duckCode in PUBLIC_MESSAGES) {
+        return {
+            ok: false,
+            error: String(row?.message || PUBLIC_MESSAGES[duckCode]),
+            code: duckCode,
+            status: Number(row?.status) || defaultStatus(duckCode),
+        };
+    }
+    const message = String(row?.message || error?.message || "").trim();
     if (/sessão inválida|guest/i.test(message)) {
         return {
             ok: false,
@@ -95,11 +105,27 @@ function toPublicMetaError(error) {
             status: 503,
         };
     }
+    if (/^A Meta recusou|^Selecione o arquivo|^Informe |^Não foi possível /i.test(message)) {
+        return {
+            ok: false,
+            error: message.slice(0, 400),
+            code: "template_upload_failed",
+            status: 400,
+        };
+    }
+    if (/aborted|timeout|ETIMEDOUT|Fetch failed/i.test(message)) {
+        return {
+            ok: false,
+            error: "O upload da mídia demorou demais. Use um MP4 menor (até 16 MB) e tente de novo.",
+            code: "template_upload_failed",
+            status: 400,
+        };
+    }
     return {
         ok: false,
         error: "Não foi possível concluir a conexão. Tente novamente.",
         code: "unknown",
-        status: Number(error?.status) || 400,
+        status: Number(row?.status) || 400,
     };
 }
 function logMetaWhatsappSafe(event, meta = {}) {

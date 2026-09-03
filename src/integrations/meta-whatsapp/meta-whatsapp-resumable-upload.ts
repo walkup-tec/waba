@@ -8,7 +8,17 @@ export type MetaResumableUploadInput = {
   fileName: string;
   mime: string;
   bytes: Buffer;
+  /** Timeout do POST binário. Vídeo precisa de mais tempo que imagem. */
+  timeoutMs?: number;
 };
+
+export function resumableUploadTimeoutMs(mime: string, override?: number): number {
+  if (Number.isFinite(override) && Number(override) > 0) return Math.floor(Number(override));
+  const type = String(mime || "").toLowerCase();
+  if (type.includes("video")) return 300_000;
+  if (type.includes("pdf") || type.includes("document")) return 180_000;
+  return 60_000;
+}
 
 function toUploadSessionPath(id: string): string {
   const raw = String(id || "").trim();
@@ -36,6 +46,7 @@ export async function uploadMetaResumableImage(
   const token = String(input.token || "").trim();
   const appId = String(input.appId || "").trim();
   if (!token || !appId) throw new Error("Upload da Meta sem app ou token.");
+  if (!input.bytes?.length) throw new Error("A Meta recusou o arquivo. Arquivo vazio.");
   const started = await callMetaGraphJson({
     token,
     method: "POST",
@@ -48,12 +59,22 @@ export async function uploadMetaResumableImage(
   });
   const sessionId = toUploadSessionPath(String(started.json?.id || "").trim());
   if (!started.ok || !sessionId) {
+    if (started.timeout) {
+      throw new Error("A Meta recusou o arquivo. Tempo esgotado ao abrir a sessão de upload.");
+    }
     throw new Error(publicMetaGraphMediaUploadMessage(started.json));
   }
   const url = `${readMetaGraphBase()}/${readMetaGraphVersion()}/${sessionId}`;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  const timeoutMs = resumableUploadTimeoutMs(input.mime, input.timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    // View sobre o mesmo Buffer — sem copiar os bytes (vídeo grande).
+    const body = new Uint8Array(
+      input.bytes.buffer,
+      input.bytes.byteOffset,
+      input.bytes.byteLength,
+    ) as unknown as BodyInit;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -61,7 +82,7 @@ export async function uploadMetaResumableImage(
         file_offset: "0",
         "Content-Type": "application/octet-stream",
       },
-      body: new Uint8Array(input.bytes),
+      body,
       signal: controller.signal,
     });
     const text = await response.text();
@@ -76,6 +97,13 @@ export async function uploadMetaResumableImage(
       throw new Error(publicMetaGraphMediaUploadMessage(json));
     }
     return { handle };
+  } catch (error) {
+    if (String((error as { name?: string })?.name || "") === "AbortError") {
+      throw new Error(
+        "A Meta recusou o arquivo. O upload do vídeo passou do tempo limite. Use MP4 até 16 MB (H.264) e tente de novo.",
+      );
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
