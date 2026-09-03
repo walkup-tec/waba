@@ -814,18 +814,21 @@ export class MetaWhatsappBroadcastService {
 /** Boot: retoma lotes órfãos após Redeploy + guardião periódico (fire-and-forget). */
 export function ensureResumeOrphanedCloudBroadcasts(): void {
   const service = new MetaWhatsappBroadcastService();
-  void service.resumeOrphanedCloudBroadcastsOnBoot().catch((error) => {
-    logMetaWhatsappSafe("broadcast-boot-resume-error", {
-      reason: error instanceof Error ? error.message.slice(0, 120) : "boot_resume_failed",
-    });
-  });
-  if (resumeWatchdogTimer) return;
-  resumeWatchdogTimer = setInterval(() => {
+  const runResume = (reason: string) => {
     void service.resumeOrphanedCloudBroadcastsOnBoot().catch((error) => {
-      logMetaWhatsappSafe("broadcast-watchdog-resume-error", {
-        reason: error instanceof Error ? error.message.slice(0, 120) : "watchdog_resume_failed",
+      logMetaWhatsappSafe("broadcast-boot-resume-error", {
+        reason: error instanceof Error ? error.message.slice(0, 120) : "boot_resume_failed",
+        phase: reason,
       });
     });
+  };
+  runResume("boot");
+  // Nova tentativa após o Graph/token aquecerem (Redeploy costuma matar o loop no meio).
+  setTimeout(() => runResume("boot+3s"), 3_000).unref?.();
+  setTimeout(() => runResume("boot+10s"), 10_000).unref?.();
+  if (resumeWatchdogTimer) return;
+  resumeWatchdogTimer = setInterval(() => {
+    runResume("watchdog");
   }, CLOUD_BROADCAST_RESUME_WATCHDOG_MS);
   resumeWatchdogTimer.unref?.();
   logMetaWhatsappSafe("broadcast-protect-watchdog-started", {

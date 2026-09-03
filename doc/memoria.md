@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 20:01 — Push resume agora (Cloud travou de novo)
+- Marker `DEPLOY-2026-09-03-200100-cloud-resume-agora`: boot+3s+10s + watchdog.
+- LOG: `doc/LOG-2026-09-03__200100__cloud-resume-agora.md`
+
 ## 2026-09-03 19:50 — Vídeo header-media unknown v2
 - Mesmo `unknown` com marker 193200. Cause/undici + body Uint8Array + multer 20 MB.
 - Marker `DEPLOY-2026-09-03-195000-video-header-unknown-v2`.

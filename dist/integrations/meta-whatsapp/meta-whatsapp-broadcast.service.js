@@ -690,19 +690,22 @@ exports.MetaWhatsappBroadcastService = MetaWhatsappBroadcastService;
 /** Boot: retoma lotes órfãos após Redeploy + guardião periódico (fire-and-forget). */
 function ensureResumeOrphanedCloudBroadcasts() {
     const service = new MetaWhatsappBroadcastService();
-    void service.resumeOrphanedCloudBroadcastsOnBoot().catch((error) => {
-        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-boot-resume-error", {
-            reason: error instanceof Error ? error.message.slice(0, 120) : "boot_resume_failed",
+    const runResume = (reason) => {
+        void service.resumeOrphanedCloudBroadcastsOnBoot().catch((error) => {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-boot-resume-error", {
+                reason: error instanceof Error ? error.message.slice(0, 120) : "boot_resume_failed",
+                phase: reason,
+            });
         });
-    });
+    };
+    runResume("boot");
+    // Nova tentativa após o Graph/token aquecerem (Redeploy costuma matar o loop no meio).
+    setTimeout(() => runResume("boot+3s"), 3000).unref?.();
+    setTimeout(() => runResume("boot+10s"), 10000).unref?.();
     if (resumeWatchdogTimer)
         return;
     resumeWatchdogTimer = setInterval(() => {
-        void service.resumeOrphanedCloudBroadcastsOnBoot().catch((error) => {
-            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-watchdog-resume-error", {
-                reason: error instanceof Error ? error.message.slice(0, 120) : "watchdog_resume_failed",
-            });
-        });
+        runResume("watchdog");
     }, meta_whatsapp_broadcast_protect_1.CLOUD_BROADCAST_RESUME_WATCHDOG_MS);
     resumeWatchdogTimer.unref?.();
     (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-protect-watchdog-started", {
