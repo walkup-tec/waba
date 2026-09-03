@@ -4,10 +4,15 @@
 
 Usuário tenta cadastrar template Utility com mídia **Vídeo** (`Apresentacao_Nesio.mp4`), modelo «Nésio Fernandes», botão «Saiba Mais» e URL `https://wa.me/5527996632879?...`. Na tela: «Opção 3 salva».
 
-## Bloqueio de evidência
+## Evidência do VPS (usuário)
 
-- `VPS_SSH_PRIVATE_KEY` ausente neste ambiente → sem `docker logs` do `waba_disparador`.
-- Produção `/health` ainda no marker `DEPLOY-2026-09-03-171800-oficial-dedupe-ai-edit` (Redeploy do tip `7fe3c7d` ainda não refletiu no Node).
+Container: `waba_waba_disparador.1.ba4xrubgifa1yb817yiuvigi0`
+
+`docker logs --since 60m` filtrado **não** mostrou `headerUpload`, `template_upload`, `[META][TEMPLATE]` nem `Nesio`. Só `LEADS_SCRAPE` e `[campanhas] upload planilha`.
+
+Conclusão: o pedido de upload/envio do vídeo **não chegou** ao Node (ou falhou só no browser), ou o clique foi só «Salvar» da opção 3.
+
+Produção `/health` ainda no marker `DEPLOY-2026-09-03-171800-oficial-dedupe-ai-edit`.
 
 ## Hipóteses (sem log)
 
