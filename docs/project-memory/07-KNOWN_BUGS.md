@@ -5,3 +5,5 @@ O Disparo Cloud da Jandira 2 (`26d33b09-…` e retrabalho `c8e99348-…`) foi ca
 O Disparo Cloud antigo da Jandira 2 (`26d33b09-…`) e o retrabalho `c8e99348-…` são cancelados no boot (void) se ainda estiverem ativos. O assinante continua em **Em andamento** até existir um disparo novo com entrega.
 
 Redeploy EasyPanel do disparador pode deixar login em 502 até o heal republicar `:30180`. Isso não é senha inválida.
+
+Redeploy (ou `docker restart`) no meio de um Disparo Cloud deixa o broadcast em `status: running` sem loop de envio — a UI fica «Enviando» no último contador e o número Cloud permanece ocupado até void manual no JSON.
