@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 13:15 — Linha do tempo visual no relatório
+- Relatório do assinante: trilha de pontos (horizontal no desktop, vertical no celular). Sem "—".
+- LOG: `doc/LOG-2026-09-03__131500__relatorio-timeline-visual.md`
+
 ## 2026-09-03 12:30 — Push GitHub master mídia vídeo
 - Tip enviado a `walkup-tec/waba` `master` para o usuário Redeployar.
 - Marker: `DEPLOY-2026-09-03-123000-assinante-midia-video`.
