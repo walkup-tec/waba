@@ -2,6 +2,7 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
 ## 2026-09-03 17:42 — Jandira 2 retrabalho 131053 de novo
 - `c8e99348-…`: 180 failed 131053, 0 delivered, 27 skipped, 982 ainda na fila. Os 27 não foram entregas.
+- Operador voidou o id no JSON e deu `docker restart` no disparador. Health voltou 200 no marker `171800`.
 - LOG: `doc/LOG-2026-09-03__174200__jandira2-27-envios-131053-de-novo.md`
 
 ## 2026-09-03 17:35 — Jandira 2: 27 envios sem JSON de produção
