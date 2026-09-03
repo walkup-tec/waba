@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { shouldVoidCloudBroadcast } from "./meta-whatsapp-broadcast-void";
+import { shouldAbortBroadcastOnHeaderMediaFailure, shouldVoidCloudBroadcast } from "./meta-whatsapp-broadcast-void";
 import path from "path";
 import { resolveDataFile } from "../../data-path";
 import { canAdvanceMetaMessageStatus, type MetaMessageStatus } from "./meta-whatsapp-messaging.types";
@@ -329,6 +329,9 @@ export function applyMetaStatusToBroadcastByWamid(
   row.lastMetaStatusAt = new Date().toISOString();
   row.updatedAt = row.lastMetaStatusAt;
   writeStore(store);
+  if (errorCode === "131053" && shouldAbortBroadcastOnHeaderMediaFailure(row) && !row.voidedAt) {
+    return voidBroadcastCampaignForRetry(row.id) || row;
+  }
   return { ...row, leads: row.leads.map((item) => ({ ...item })) };
 }
 

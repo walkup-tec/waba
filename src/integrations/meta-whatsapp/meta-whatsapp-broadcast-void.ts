@@ -2,6 +2,7 @@ import type { MetaBroadcastCampaign, MetaBroadcastLead } from "./meta-whatsapp-b
 
 /** Disparo Cloud da Jandira 2 que a Meta recusou (131053 / weblink 403). */
 export const JANDIRA2_VOID_BROADCAST_ID = "26d33b09-8868-41dd-af78-afd59e7982f2";
+export const JANDIRA2_RERUN_VOID_BROADCAST_ID = "c8e99348-4579-476c-b52d-af4f05d509df";
 export const JANDIRA2_VOID_INTAKE_ID = "368d053b-d59b-4eed-a235-fe9e9f32c68c";
 
 function leadCountsAsDelivered(lead: MetaBroadcastLead): boolean {
@@ -19,6 +20,16 @@ export function isBroadcastVoided(
   return Boolean(String(row?.voidedAt || "").trim());
 }
 
+/** Cabeçalho recusado (131053): não continuar o lote — Graph aceita e ninguém recebe. */
+export function shouldAbortBroadcastOnHeaderMediaFailure(
+  row: Pick<MetaBroadcastCampaign, "leads"> | null | undefined,
+): boolean {
+  const leads = Array.isArray(row?.leads) ? row!.leads : [];
+  if (!leads.some((lead) => String(lead.errorCode || "") === "131053")) return false;
+  if (leads.some(leadCountsAsDelivered)) return false;
+  return true;
+}
+
 /** Envio já terminou, ninguém recebeu e todos os leads falharam no webhook. */
 export function isBroadcastAbandonedForRetry(
   row: Pick<MetaBroadcastCampaign, "status" | "leads"> | null | undefined,
@@ -34,6 +45,8 @@ export function isBroadcastAbandonedForRetry(
 export function shouldVoidCloudBroadcast(row: MetaBroadcastCampaign): boolean {
   if (isBroadcastVoided(row)) return false;
   if (String(row.id || "") === JANDIRA2_VOID_BROADCAST_ID) return true;
+  if (String(row.id || "") === JANDIRA2_RERUN_VOID_BROADCAST_ID) return true;
+  if (shouldAbortBroadcastOnHeaderMediaFailure(row)) return true;
   if (String(row.intakeCampaignId || "") === JANDIRA2_VOID_INTAKE_ID && isBroadcastAbandonedForRetry(row)) {
     return true;
   }
@@ -42,5 +55,9 @@ export function shouldVoidCloudBroadcast(row: MetaBroadcastCampaign): boolean {
 
 export function isCloudBroadcastInactiveForRetry(row: MetaBroadcastCampaign | null | undefined): boolean {
   if (!row) return true;
-  return isBroadcastVoided(row) || isBroadcastAbandonedForRetry(row);
+  return (
+    isBroadcastVoided(row) ||
+    isBroadcastAbandonedForRetry(row) ||
+    shouldAbortBroadcastOnHeaderMediaFailure(row)
+  );
 }

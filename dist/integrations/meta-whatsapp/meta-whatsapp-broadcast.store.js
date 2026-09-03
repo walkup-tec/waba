@@ -282,6 +282,9 @@ function applyMetaStatusToBroadcastByWamid(wamid, status, extras) {
     row.lastMetaStatusAt = new Date().toISOString();
     row.updatedAt = row.lastMetaStatusAt;
     writeStore(store);
+    if (errorCode === "131053" && (0, meta_whatsapp_broadcast_void_1.shouldAbortBroadcastOnHeaderMediaFailure)(row) && !row.voidedAt) {
+        return voidBroadcastCampaignForRetry(row.id) || row;
+    }
     return { ...row, leads: row.leads.map((item) => ({ ...item })) };
 }
 function stampTemplateApprovedAtOnBroadcasts(input) {

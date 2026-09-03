@@ -389,8 +389,22 @@ class MetaWhatsappBroadcastService {
         (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(row);
         try {
             for (let index = 0; index < row.leads.length; index += 1) {
+                const live = (0, meta_whatsapp_broadcast_store_1.findBroadcastCampaign)(tenantId, campaignId);
+                if (!live || (0, meta_whatsapp_broadcast_void_1.isBroadcastVoided)(live) || live.status === "failed") {
+                    row.status = "failed";
+                    row.voidedAt = row.voidedAt || live?.voidedAt || new Date().toISOString();
+                    row.sendFinishedAt = new Date().toISOString();
+                    (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(row);
+                    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-aborted", {
+                        tenantId,
+                        campaignId,
+                        sent: row.sent,
+                        reason: "header_media_or_void",
+                    });
+                    return;
+                }
                 const lead = row.leads[index];
-                if (lead.status === "sent")
+                if (lead.status === "sent" || lead.status === "failed" || lead.status === "skipped")
                     continue;
                 try {
                     const sent = await this.provider.sendTemplate({

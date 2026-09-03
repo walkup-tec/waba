@@ -19,7 +19,7 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h). Relatório da Campanha Jandira deste disparo (1.990 / 1.156 / 2) mostra 981 entregues e 431 lidos, sem cliques, via override de leitura. Relatório operacional Lab passa a listar falhas da Meta e envios sem comprovante de entrega. Relatório do assinante passa a listar a linha do tempo (criação, atendimento, aprovação do template, início e fim do disparo) numa trilha de pontos (horizontal no desktop, vertical no celular) e o aviso de até 3 horas da Meta.
 
-Campanha Jandira 2: o POST Cloud que falhou (131053) é cancelado no sistema. O assinante permanece Em andamento. O Laboratório pode refazer o Disparo Cloud no mesmo intake. Cabeçalho deixa de ir como weblink lookaside.
+Campanha Jandira 2: o POST Cloud que falhou (131053) é cancelado no sistema. O retrabalho `c8e99348-…` repetiu 131053 (0 entregues; 27 skipped). Esse lote também deve ser cancelado. O assinante permanece Em andamento até um disparo com entrega. Cabeçalho deixa de ir como weblink lookaside.
 
 Marker: `DEPLOY-2026-09-03-171800-oficial-dedupe-ai-edit`.
 

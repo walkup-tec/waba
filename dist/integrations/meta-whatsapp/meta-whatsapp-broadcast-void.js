@@ -1,12 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.JANDIRA2_VOID_INTAKE_ID = exports.JANDIRA2_VOID_BROADCAST_ID = void 0;
+exports.JANDIRA2_VOID_INTAKE_ID = exports.JANDIRA2_RERUN_VOID_BROADCAST_ID = exports.JANDIRA2_VOID_BROADCAST_ID = void 0;
 exports.isBroadcastVoided = isBroadcastVoided;
+exports.shouldAbortBroadcastOnHeaderMediaFailure = shouldAbortBroadcastOnHeaderMediaFailure;
 exports.isBroadcastAbandonedForRetry = isBroadcastAbandonedForRetry;
 exports.shouldVoidCloudBroadcast = shouldVoidCloudBroadcast;
 exports.isCloudBroadcastInactiveForRetry = isCloudBroadcastInactiveForRetry;
 /** Disparo Cloud da Jandira 2 que a Meta recusou (131053 / weblink 403). */
 exports.JANDIRA2_VOID_BROADCAST_ID = "26d33b09-8868-41dd-af78-afd59e7982f2";
+exports.JANDIRA2_RERUN_VOID_BROADCAST_ID = "c8e99348-4579-476c-b52d-af4f05d509df";
 exports.JANDIRA2_VOID_INTAKE_ID = "368d053b-d59b-4eed-a235-fe9e9f32c68c";
 function leadCountsAsDelivered(lead) {
     const meta = String(lead.metaStatus || "");
@@ -17,6 +19,15 @@ function leadCountsAsFailed(lead) {
 }
 function isBroadcastVoided(row) {
     return Boolean(String(row?.voidedAt || "").trim());
+}
+/** Cabeçalho recusado (131053): não continuar o lote — Graph aceita e ninguém recebe. */
+function shouldAbortBroadcastOnHeaderMediaFailure(row) {
+    const leads = Array.isArray(row?.leads) ? row.leads : [];
+    if (!leads.some((lead) => String(lead.errorCode || "") === "131053"))
+        return false;
+    if (leads.some(leadCountsAsDelivered))
+        return false;
+    return true;
 }
 /** Envio já terminou, ninguém recebeu e todos os leads falharam no webhook. */
 function isBroadcastAbandonedForRetry(row) {
@@ -36,6 +47,10 @@ function shouldVoidCloudBroadcast(row) {
         return false;
     if (String(row.id || "") === exports.JANDIRA2_VOID_BROADCAST_ID)
         return true;
+    if (String(row.id || "") === exports.JANDIRA2_RERUN_VOID_BROADCAST_ID)
+        return true;
+    if (shouldAbortBroadcastOnHeaderMediaFailure(row))
+        return true;
     if (String(row.intakeCampaignId || "") === exports.JANDIRA2_VOID_INTAKE_ID && isBroadcastAbandonedForRetry(row)) {
         return true;
     }
@@ -44,5 +59,7 @@ function shouldVoidCloudBroadcast(row) {
 function isCloudBroadcastInactiveForRetry(row) {
     if (!row)
         return true;
-    return isBroadcastVoided(row) || isBroadcastAbandonedForRetry(row);
+    return (isBroadcastVoided(row) ||
+        isBroadcastAbandonedForRetry(row) ||
+        shouldAbortBroadcastOnHeaderMediaFailure(row));
 }

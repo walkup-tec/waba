@@ -45,7 +45,7 @@ import {
   type MetaBroadcastCampaign,
   type MetaBroadcastLead,
 } from "./meta-whatsapp-broadcast.store";
-import { isCloudBroadcastInactiveForRetry } from "./meta-whatsapp-broadcast-void";
+import { isBroadcastVoided, isCloudBroadcastInactiveForRetry } from "./meta-whatsapp-broadcast-void";
 import { scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
 import { attachCampaignIdToShortLink } from "../../shortener/waba-shortener.service";
 import {
@@ -515,8 +515,22 @@ export class MetaWhatsappBroadcastService {
     saveBroadcastCampaign(row);
     try {
       for (let index = 0; index < row.leads.length; index += 1) {
+        const live = findBroadcastCampaign(tenantId, campaignId);
+        if (!live || isBroadcastVoided(live) || live.status === "failed") {
+          row.status = "failed";
+          row.voidedAt = row.voidedAt || live?.voidedAt || new Date().toISOString();
+          row.sendFinishedAt = new Date().toISOString();
+          saveBroadcastCampaign(row);
+          logMetaWhatsappSafe("broadcast-aborted", {
+            tenantId,
+            campaignId,
+            sent: row.sent,
+            reason: "header_media_or_void",
+          });
+          return;
+        }
         const lead = row.leads[index];
-        if (lead.status === "sent") continue;
+        if (lead.status === "sent" || lead.status === "failed" || lead.status === "skipped") continue;
         try {
           const sent = await this.provider.sendTemplate({
             tenantId,

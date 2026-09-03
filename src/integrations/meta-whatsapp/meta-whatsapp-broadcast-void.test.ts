@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { MetaBroadcastCampaign } from "./meta-whatsapp-broadcast.store";
 import {
+  JANDIRA2_RERUN_VOID_BROADCAST_ID,
   JANDIRA2_VOID_BROADCAST_ID,
   JANDIRA2_VOID_INTAKE_ID,
   isBroadcastAbandonedForRetry,
   isCloudBroadcastInactiveForRetry,
+  shouldAbortBroadcastOnHeaderMediaFailure,
   shouldVoidCloudBroadcast,
 } from "./meta-whatsapp-broadcast-void";
 
@@ -59,6 +61,22 @@ describe("cancelar Disparo Cloud sem entrega", () => {
     });
     assert.equal(isBroadcastAbandonedForRetry(ok), false);
     assert.equal(shouldVoidCloudBroadcast(ok), false);
+  });
+
+  it("aborta lote em andamento quando a Meta devolve 131053 e ninguém recebeu", () => {
+    const running = base({
+      id: JANDIRA2_RERUN_VOID_BROADCAST_ID,
+      status: "running",
+      sent: 179,
+      skipped: 27,
+      leads: [
+        { waId: "5551999666841", status: "sent", metaStatus: "failed", errorCode: "131053" },
+        { waId: "5551998335401", status: "queued" },
+      ],
+    });
+    assert.equal(shouldAbortBroadcastOnHeaderMediaFailure(running), true);
+    assert.equal(shouldVoidCloudBroadcast(running), true);
+    assert.equal(isBroadcastAbandonedForRetry(running), false);
   });
 
   it("não cancela envio ainda na fila", () => {
