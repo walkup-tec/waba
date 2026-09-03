@@ -302,6 +302,10 @@ function isListedPortfolioNumber(item: MetaPortfolioNumberPublic): boolean {
   return isMetaPhoneConnected(item.metaStatus);
 }
 
+/**
+ * Graph vs cache local: se a Graph trouxe chips listáveis, eles mandam.
+ * Senão, cai no que já estava gravado.
+ */
 export function mergePortfolioNumbers(
   graphNumbers: MetaPortfolioNumberPublic[],
   stored: MetaPortfolioNumberPublic[],
@@ -309,6 +313,39 @@ export function mergePortfolioNumbers(
   const fromGraph = graphNumbers.filter(isListedPortfolioNumber);
   if (fromGraph.length) return fromGraph;
   return stored.filter(isListedPortfolioNumber);
+}
+
+/**
+ * Une listas de números por phoneNumberId (ex.: várias conexões Embedded Signup
+ * do mesmo Business Manager). Não descarta a segunda lista só porque a primeira
+ * já tem itens — isso escondia chips da Quantum/outros portfólios.
+ */
+export function unionPortfolioNumbers(
+  ...lists: MetaPortfolioNumberPublic[][]
+): MetaPortfolioNumberPublic[] {
+  const byId = new Map<string, MetaPortfolioNumberPublic>();
+  for (const list of lists) {
+    for (const item of (list || []).filter(isListedPortfolioNumber)) {
+      const id = String(item.phoneNumberId || "").trim();
+      if (!id) continue;
+      const prev = byId.get(id);
+      if (!prev) {
+        byId.set(id, { ...item, phoneNumberId: id });
+        continue;
+      }
+      const preferIncoming =
+        (!String(prev.displayPhoneNumber || "").trim() && String(item.displayPhoneNumber || "").trim()) ||
+        (!String(prev.verifiedName || "").trim() && String(item.verifiedName || "").trim());
+      byId.set(id, {
+        ...prev,
+        ...(preferIncoming ? item : {}),
+        phoneNumberId: id,
+        displayPhoneNumber: text(item.displayPhoneNumber) || text(prev.displayPhoneNumber),
+        verifiedName: text(item.verifiedName) || text(prev.verifiedName),
+      });
+    }
+  }
+  return [...byId.values()];
 }
 
 export function isRenderablePortfolioCard(card: MetaPortfolioPublic | null | undefined): boolean {
@@ -330,7 +367,7 @@ export function dedupePortfolioCards(cards: MetaPortfolioPublic[]): MetaPortfoli
     host.primaryPageId = host.primaryPageId || extra.primaryPageId;
     host.profilePictureUrl = host.profilePictureUrl || extra.profilePictureUrl;
     host.wabaId = host.wabaId || extra.wabaId;
-    host.numbers = mergePortfolioNumbers(host.numbers || [], extra.numbers || []);
+    host.numbers = unionPortfolioNumbers(host.numbers || [], extra.numbers || []);
   };
 
   const dropped = new Set<string>();

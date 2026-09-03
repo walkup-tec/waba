@@ -360,12 +360,7 @@ async function hydrateOpenConnection(
   const wabaId = resolvedWaba || storedWaba;
   if (!wabaId) return { card, directory };
 
-  const phones = await graph({
-    token,
-    method: "GET",
-    path: `${wabaId}/phone_numbers`,
-    query: { fields: META_PHONE_NUMBER_LIST_FIELDS },
-  });
+  const phones = await listWabaPhoneNumbersPaged(graph, token, wabaId);
   if (!phones.ok) {
     logMetaWhatsappSafe("portfolio-list-partial", {
       tenantId,
@@ -380,6 +375,41 @@ async function hydrateOpenConnection(
   const merged = mergePortfolioNumbers(mapped, stored);
   const numbers = await attachPhoneBusinessProfiles(graph, token, merged, tenantId);
   return { card: { ...card, numbers }, directory };
+}
+
+/** Lista todos os chips do WABA (paginação Graph). Sem isso, só a 1ª página aparecia. */
+async function listWabaPhoneNumbersPaged(
+  graph: MetaConnectionGraphCaller,
+  token: string,
+  wabaId: string,
+): Promise<{ ok: true; json: { data: unknown[] } } | { ok: false; status: number }> {
+  const data: unknown[] = [];
+  const seen = new Set<string>();
+  let after = "";
+  for (let page = 0; page < 20; page += 1) {
+    const query: Record<string, string> = {
+      fields: META_PHONE_NUMBER_LIST_FIELDS,
+      limit: "100",
+    };
+    if (after) query.after = after;
+    const phones = await graph({
+      token,
+      method: "GET",
+      path: `${wabaId}/phone_numbers`,
+      query,
+    });
+    if (!phones.ok) {
+      if (!data.length) return { ok: false, status: phones.status };
+      break;
+    }
+    const batch = Array.isArray(phones.json?.data) ? phones.json.data : [];
+    for (const row of batch) data.push(row);
+    const nextAfter = String(phones.json?.paging?.cursors?.after || "").trim();
+    if (!nextAfter || nextAfter === after || seen.has(nextAfter) || !batch.length) break;
+    seen.add(nextAfter);
+    after = nextAfter;
+  }
+  return { ok: true, json: { data } };
 }
 
 async function cacheGraphPhonePhoto(

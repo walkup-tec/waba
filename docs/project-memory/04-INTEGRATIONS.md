@@ -4,6 +4,7 @@
   Criação: o backend acrescenta `QUICK_REPLY` Bloquear e agrupa URL/PHONE antes dos QR.
   Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/components/
   Exclusão: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-management
+- Portfólio / chips: `GET /{WABA_ID}/phone_numbers` com paginação (`limit` + `after`). Várias conexões Embedded Signup do mesmo BM unem chips por `phoneNumberId` (`unionPortfolioNumbers`), sem descartar a 2ª lista. Docs: https://developers.facebook.com/docs/graph-api/reference/whats-app-business-account/phone_numbers/ e https://developers.facebook.com/docs/whatsapp/cloud-api/reference/phone-numbers/
 - Foto de perfil do chip: o Laboratório envia JPEG/PNG (até 5 MB) à Meta. Upload resumable + `POST /{PHONE_NUMBER_ID}/whatsapp_business_profile` com `profile_picture_handle`. Número precisa estar Ativo. Doc: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/business-profiles/
 - Evolution API: instâncias alternativas (fora deste card).
 - Encurtador WABA (`/s/:slug`) para botões URL oficiais. No disparo Cloud, cada campanha ganha um alias; o clique no `/s/` incrementa o disparo (`campaignId` no link). Esse clique só aparece no relatório da campanha do assinante quando o atendente tem Laboratório.

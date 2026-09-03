@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 21:51 — Quantum: números incompletos no portfólio
+- Causa: absorb do dedupe usava `mergePortfolioNumbers` (2ª conexão do mesmo BM perdia chips) + `phone_numbers` sem paginação Graph.
+- Fix: `unionPortfolioNumbers` no absorb + `listWabaPhoneNumbersPaged`.
+- Marker `DEPLOY-2026-09-03-215100-quantum-portfolio-numbers`.
+- LOG: `doc/LOG-2026-09-03__215100__quantum-portfolio-numbers-incompletos.md`
+
 ## 2026-09-03 20:45 — Template vídeo uuid "ai"
 - Rota `:templateId/header-media` capturava `ai`. Reordenado + UUID guard.
 - Marker `DEPLOY-2026-09-03-204500-template-ai-header-route`.

@@ -10,6 +10,7 @@ import {
   mapMetaWabaIdentity,
   mergePortfolioIdentity,
   mergePortfolioNumbers,
+  unionPortfolioNumbers,
   dedupePortfolioCards,
   isRenderablePortfolioCard,
   graphPhotoDownloadUrl,
@@ -239,7 +240,7 @@ describe("meta portfolio mapper", () => {
         profilePictureUrl: null,
         wabaId: "1247508354180311",
         connectionId: "conn-waba",
-        numbers: [{ phoneNumberId: "phone-dup", displayPhoneNumber: "+55 51 8200-1279" } as any],
+        numbers: [{ phoneNumberId: "phone-drax", displayPhoneNumber: "+55 51 8200-1279" } as any],
       },
     ]);
     assert.equal(cards.length, 1);
@@ -311,6 +312,79 @@ describe("meta portfolio mapper", () => {
       [],
     );
     assert.equal(rows.length, 0);
+  });
+
+  it("une números de conexões do mesmo BM sem descartar a segunda lista", () => {
+    const rows = unionPortfolioNumbers(
+      [
+        {
+          phoneNumberId: "phone-jandira",
+          displayPhoneNumber: "+55 11 95213-1900",
+          verifiedName: "Relacionamento Deputada Jandira",
+          metaStatus: "CONNECTED",
+        } as any,
+      ],
+      [
+        {
+          phoneNumberId: "phone-quantum-2",
+          displayPhoneNumber: "+55 11 90000-2222",
+          verifiedName: "Quantum Smart Labs 2",
+          metaStatus: "CONNECTED",
+        } as any,
+      ],
+      [
+        {
+          phoneNumberId: "phone-jandira",
+          displayPhoneNumber: "+55 11 95213-1900",
+          verifiedName: "Relacionamento Deputada Jandira",
+          metaStatus: "CONNECTED",
+        } as any,
+      ],
+    );
+    assert.equal(rows.length, 2);
+    assert.ok(rows.some((item) => item.phoneNumberId === "phone-jandira"));
+    assert.ok(rows.some((item) => item.phoneNumberId === "phone-quantum-2"));
+  });
+
+  it("ao deduplicar o mesmo BM, preserva todos os chips das conexões", () => {
+    const cards = dedupePortfolioCards([
+      {
+        id: "3887084984861602",
+        name: "Quantum Smart Labs",
+        primaryPageId: null,
+        primaryPageName: null,
+        profilePictureUrl: null,
+        wabaId: "1053856057421351",
+        connectionId: "conn-quantum-a",
+        numbers: [
+          {
+            phoneNumberId: "phone-jandira",
+            displayPhoneNumber: "+55 11 95213-1900",
+            verifiedName: "Relacionamento Deputada Jandira",
+          } as any,
+        ],
+      },
+      {
+        id: "3887084984861602",
+        name: "Quantum Smart Labs",
+        primaryPageId: null,
+        primaryPageName: null,
+        profilePictureUrl: null,
+        wabaId: "1053856057421351",
+        connectionId: "conn-quantum-b",
+        numbers: [
+          {
+            phoneNumberId: "phone-quantum-2",
+            displayPhoneNumber: "+55 11 90000-2222",
+            verifiedName: "Quantum Smart Labs 2",
+          } as any,
+        ],
+      },
+    ]);
+    assert.equal(cards.length, 1);
+    assert.equal((cards[0]?.numbers || []).length, 2);
+    assert.ok((cards[0]?.numbers || []).some((item) => item.phoneNumberId === "phone-jandira"));
+    assert.ok((cards[0]?.numbers || []).some((item) => item.phoneNumberId === "phone-quantum-2"));
   });
 
   it("CONNECTED fica ativo e livre até haver disparo", () => {
@@ -1106,6 +1180,197 @@ describe("meta portfolio service", () => {
     assert.ok((walkupCard?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("95213-7761")));
     const draxCard = (assets.portfolios || []).find((item) => item.id === "1041827648719609");
     assert.ok((draxCard?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
+  });
+
+  it("lista todos os números quando duas conexões do mesmo BM Quantum são fundidas", async () => {
+    const quantumA = {
+      ...connectedRow(),
+      id: "conn-quantum-a",
+      metaBusinessId: "3887084984861602",
+      wabaId: "1053856057421351",
+      phoneNumberId: "phone-jandira",
+      displayPhoneNumber: "+55 11 95213-1900",
+      verifiedName: "Relacionamento Deputada Jandira",
+      status: "connected" as const,
+    };
+    const quantumB = {
+      ...connectedRow(),
+      id: "conn-quantum-b",
+      metaBusinessId: "3887084984861602",
+      wabaId: "1053856057421999",
+      phoneNumberId: "phone-quantum-2",
+      displayPhoneNumber: "+55 11 90000-2222",
+      verifiedName: "Quantum Smart Labs 2",
+      status: "connected" as const,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [quantumA, quantumB];
+      },
+      async findOpenByTenant() {
+        return quantumA;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1053856057421351") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1053856057421351",
+            name: "Quantum WABA A",
+            owner_business_info: { id: "3887084984861602", name: "Quantum Smart Labs" },
+          },
+        };
+      }
+      if (input.path === "1053856057421999") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1053856057421999",
+            name: "Quantum WABA B",
+            owner_business_info: { id: "3887084984861602", name: "Quantum Smart Labs" },
+          },
+        };
+      }
+      if (input.path === "3887084984861602") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "3887084984861602", name: "Quantum Smart Labs" },
+        };
+      }
+      if (input.path === "1053856057421351/phone_numbers") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-jandira",
+                display_phone_number: "+55 11 95213-1900",
+                verified_name: "Relacionamento Deputada Jandira",
+                status: "CONNECTED",
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "1053856057421999/phone_numbers") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-quantum-2",
+                display_phone_number: "+55 11 90000-2222",
+                verified_name: "Quantum Smart Labs 2",
+                status: "CONNECTED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth, { connectionId: "conn-quantum-a" });
+    const card = (assets.portfolios || []).find((item) => item.id === "3887084984861602");
+    assert.ok(card);
+    assert.equal((assets.portfolios || []).length, 1);
+    assert.equal((card?.numbers || []).length, 2);
+    assert.ok((card?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("95213-1900")));
+    assert.ok((card?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("90000-2222")));
+  });
+
+  it("pagina phone_numbers da Graph e une todas as páginas", async () => {
+    const quantum = {
+      ...connectedRow(),
+      id: "conn-quantum",
+      metaBusinessId: "3887084984861602",
+      wabaId: "1053856057421351",
+      phoneNumberId: "phone-jandira",
+      displayPhoneNumber: "+55 11 95213-1900",
+      verifiedName: "Relacionamento Deputada Jandira",
+      status: "connected" as const,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [quantum];
+      },
+      async findOpenByTenant() {
+        return quantum;
+      },
+    };
+    const phoneCalls: Array<Record<string, string> | undefined> = [];
+    const graph = async (input: { path: string; query?: Record<string, string> }) => {
+      if (input.path === "1053856057421351") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1053856057421351",
+            name: "Quantum WABA",
+            owner_business_info: { id: "3887084984861602", name: "Quantum Smart Labs" },
+          },
+        };
+      }
+      if (input.path === "3887084984861602") {
+        return { ok: true, status: 200, json: { id: "3887084984861602", name: "Quantum Smart Labs" } };
+      }
+      if (input.path === "1053856057421351/phone_numbers") {
+        phoneCalls.push(input.query);
+        if (!input.query?.after) {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              data: [
+                {
+                  id: "phone-jandira",
+                  display_phone_number: "+55 11 95213-1900",
+                  verified_name: "Relacionamento Deputada Jandira",
+                  status: "CONNECTED",
+                },
+              ],
+              paging: { cursors: { after: "cursor-page-2" } },
+            },
+          };
+        }
+        assert.equal(input.query?.after, "cursor-page-2");
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-quantum-2",
+                display_phone_number: "+55 11 90000-2222",
+                verified_name: "Quantum Smart Labs 2",
+                status: "CONNECTED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    assert.equal(phoneCalls.length, 2);
+    assert.equal((assets.numbers || []).length, 2);
+    assert.ok((assets.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("95213-1900")));
+    assert.ok((assets.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("90000-2222")));
   });
 
   it("não lista pending_token vazio criado ao adicionar número em portfólio existente", async () => {
