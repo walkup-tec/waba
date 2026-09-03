@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 09:55 — Erros de envio no relatório operacional
+- Lead guarda código/texto da Meta e trilha de status. Operacional vê falhas e aceitos sem comprovante de entrega.
+- Entregues continuam só com webhook `delivered`/`read`.
+- LOG: `doc/LOG-2026-09-03__095500__erros-envio-meta-operacional.md`
+
 ## 2026-09-03 09:40 — Evidência 11 94949-0317 na Jandira
 - Planilha linha 552: `Cleison Felicio | 11949490317`. Enviado como `5511949490317`.
 - Meta aceitou (`wamid` presente). No JSON ficou `metaStatus=accepted`, sem delivered/read e sem error.

@@ -30,6 +30,7 @@ import {
 } from "./meta-whatsapp-broadcast-leads";
 import { uploadCloudApiMedia } from "./meta-whatsapp-broadcast-media";
 import {
+  appendBroadcastLeadStatusLog,
   findBroadcastByIntakeCampaignId,
   findBroadcastCampaign,
   listBroadcastCampaigns,
@@ -495,11 +496,24 @@ export class MetaWhatsappBroadcastService {
           lead.status = "sent";
           lead.metaStatus = "accepted";
           lead.wamid = sent.messageId || lead.wamid;
+          appendBroadcastLeadStatusLog(lead, {
+            status: "accepted",
+            at: new Date().toISOString(),
+          });
           row.sent += 1;
         } catch (error) {
+          const graphCode = String(
+            (error as { graphCode?: string | null })?.graphCode || "",
+          ).trim();
           lead.status = "failed";
           lead.metaStatus = "failed";
+          if (graphCode) lead.errorCode = graphCode;
           lead.error = error instanceof Error ? error.message.slice(0, 180) : "send_failed";
+          appendBroadcastLeadStatusLog(lead, {
+            status: "failed",
+            at: new Date().toISOString(),
+            ...(graphCode ? { errorCode: graphCode } : {}),
+          });
           row.failed += 1;
         }
         saveBroadcastCampaign(row);

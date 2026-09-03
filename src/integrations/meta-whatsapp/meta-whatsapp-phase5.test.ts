@@ -284,6 +284,44 @@ describe("meta whatsapp webhook fase 5", () => {
     assert.equal(events[0].conversationId, "conv-1");
     assert.equal(events[0].pricingCategory, "utility");
     assert.equal(events[0].errorCode, "131026");
+    assert.equal(events[0].errorMessage, null);
+  });
+
+  it("parseia mensagem de erro do webhook failed", () => {
+    const payload = {
+      entry: [
+        {
+          id: "waba-1",
+          changes: [
+            {
+              field: "messages",
+              value: {
+                metadata: { phone_number_id: "phone-1" },
+                statuses: [
+                  {
+                    id: "wamid.FAIL",
+                    status: "failed",
+                    timestamp: "1710000001",
+                    recipient_id: "15550003333",
+                    errors: [
+                      {
+                        code: "131026",
+                        title: "Message undeliverable",
+                        error_user_msg: "Número não está no WhatsApp.",
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const events = parseMetaWebhookPayload(payload, hashRawPayload(Buffer.from("x")));
+    assert.equal(events[0].status, "failed");
+    assert.equal(events[0].errorCode, "131026");
+    assert.equal(events[0].errorMessage, "Número não está no WhatsApp.");
   });
 
   it("parseia account_update", () => {

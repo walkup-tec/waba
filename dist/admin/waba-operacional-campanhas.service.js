@@ -27,6 +27,7 @@ const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operaci
 const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-split.service");
 const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_send_issues_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-send-issues");
 const meta_whatsapp_broadcast_report_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-report");
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
 exports.CAMPAIGN_START_DEADLINE_MS = waba_campaign_supplier_assignment_service_1.CAMPAIGN_START_OVERDUE_MS;
@@ -288,26 +289,27 @@ class WabaOperacionalCampanhasService {
         const stored = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         let report = stored;
         let liveFromMeta = false;
-        if (laboratorioAttended && status === "in_progress") {
-            const broadcast = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
-            if (broadcast) {
-                const live = (0, meta_whatsapp_broadcast_report_1.computeMetaLabCampaignMetrics)(broadcast, totalLeads);
-                report = {
-                    totalLeads: live.totalLeads,
-                    sent: live.sent,
-                    delivered: live.delivered,
-                    read: live.read,
-                    failed: live.failed,
-                    clicks: live.clicks,
-                    source: "meta_lab",
-                    filledAt: "",
-                    filledByEmail: "",
-                };
-                liveFromMeta = true;
-            }
+        const broadcast = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
+        if (laboratorioAttended && status === "in_progress" && broadcast) {
+            const live = (0, meta_whatsapp_broadcast_report_1.computeMetaLabCampaignMetrics)(broadcast, totalLeads);
+            report = {
+                totalLeads: live.totalLeads,
+                sent: live.sent,
+                delivered: live.delivered,
+                read: live.read,
+                failed: live.failed,
+                clicks: live.clicks,
+                source: "meta_lab",
+                filledAt: "",
+                filledByEmail: "",
+            };
+            liveFromMeta = true;
         }
         const hideClicks = (0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report || stored);
         const showClicks = (laboratorioAttended || stored?.source === "meta_lab") && !hideClicks;
+        const sendIssues = laboratorioAttended || stored?.source === "meta_lab"
+            ? (0, meta_whatsapp_broadcast_send_issues_1.summarizeBroadcastSendIssues)(broadcast)
+            : null;
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,
@@ -330,6 +332,7 @@ class WabaOperacionalCampanhasService {
                     ...(showClicks ? { clicks: Math.max(0, Math.round(Number(report.clicks || 0))) } : {}),
                 }
                 : null,
+            sendIssues,
         };
     }
     saveCampaignReport(campaignId, body, staff) {

@@ -3,6 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.mergeBroadcastLeadStatusLogs = mergeBroadcastLeadStatusLogs;
+exports.appendBroadcastLeadStatusLog = appendBroadcastLeadStatusLog;
 exports.mergeBroadcastCampaignPreservingMeta = mergeBroadcastCampaignPreservingMeta;
 exports.saveBroadcastCampaign = saveBroadcastCampaign;
 exports.findBroadcastCampaign = findBroadcastCampaign;
@@ -73,6 +75,36 @@ function sameBroadcastLead(left, right) {
     const rightWa = String(right.waId || "").replace(/\D/g, "");
     return Boolean(leftWa && rightWa && leftWa === rightWa);
 }
+const STATUS_LOG_LIMIT = 8;
+function statusLogKey(entry) {
+    return `${entry.status}|${entry.at}|${entry.errorCode || ""}`;
+}
+function mergeBroadcastLeadStatusLogs(left, right) {
+    const rows = [...(left || []), ...(right || [])].filter((item) => item && item.status && item.at);
+    if (!rows.length)
+        return undefined;
+    const seen = new Set();
+    const merged = [];
+    for (const item of rows.sort((a, b) => String(a.at).localeCompare(String(b.at)))) {
+        const key = statusLogKey(item);
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        merged.push({
+            status: item.status,
+            at: item.at,
+            ...(item.errorCode ? { errorCode: String(item.errorCode).slice(0, 32) } : {}),
+        });
+    }
+    return merged.slice(-STATUS_LOG_LIMIT);
+}
+function appendBroadcastLeadStatusLog(lead, entry) {
+    const last = (lead.statusLog || [])[(lead.statusLog || []).length - 1];
+    if (last && last.status === entry.status && (last.errorCode || "") === (entry.errorCode || "")) {
+        return;
+    }
+    lead.statusLog = mergeBroadcastLeadStatusLogs(lead.statusLog, [entry]);
+}
 /** O envio regrava o JSON; não pode apagar delivered/read que o webhook já gravou. */
 function mergeBroadcastCampaignPreservingMeta(incoming, stored) {
     if (!stored)
@@ -87,6 +119,8 @@ function mergeBroadcastCampaignPreservingMeta(incoming, stored) {
             wamid: String(lead.wamid || previous.wamid || "").trim() || lead.wamid || previous.wamid,
             metaStatus: keepStored ? previous.metaStatus : lead.metaStatus || previous.metaStatus,
             error: lead.error || previous.error,
+            errorCode: previous.errorCode || lead.errorCode,
+            statusLog: mergeBroadcastLeadStatusLogs(previous.statusLog, lead.statusLog),
         };
     });
     const storedMetaMs = Date.parse(String(stored.lastMetaStatusAt || "")) || 0;
@@ -181,10 +215,20 @@ function applyMetaStatusToBroadcastByWamid(wamid, status, extras) {
     lead.metaStatus = status;
     if (wamid && !lead.wamid)
         lead.wamid = String(wamid).trim();
+    const errorCode = String(extras?.errorCode || "").trim().slice(0, 32);
+    const errorMessage = String(extras?.errorMessage || "").replace(/\s+/g, " ").trim().slice(0, 180);
     if (status === "failed") {
         lead.status = "failed";
-        lead.error = lead.error || "Falha informada pela Meta.";
+        if (errorCode)
+            lead.errorCode = errorCode;
+        lead.error = errorMessage || lead.error || "Falha informada pela Meta.";
     }
+    const occurredAt = String(extras?.occurredAt || "").trim() || new Date().toISOString();
+    appendBroadcastLeadStatusLog(lead, {
+        status,
+        at: occurredAt,
+        ...(errorCode ? { errorCode } : {}),
+    });
     row.lastMetaStatusAt = new Date().toISOString();
     row.updatedAt = row.lastMetaStatusAt;
     writeStore(store);

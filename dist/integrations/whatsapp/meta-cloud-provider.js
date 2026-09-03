@@ -125,11 +125,11 @@ class MetaCloudProvider {
             if (result.status === 401)
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
             const error = new meta_whatsapp_errors_1.MetaWhatsappError("send_failed");
-            error.graphStatus =
-                result.status;
-            error.graphKind =
-                result.kind;
-            error.message = (0, meta_whatsapp_graph_errors_1.publicMetaGraphSendMessage)(result.kind, result.status);
+            error.graphStatus = result.status;
+            error.graphKind = result.kind;
+            error.graphCode = result.graphCode;
+            const detail = (0, meta_whatsapp_graph_errors_1.safePublicGraphTemplateDetail)(result.json);
+            error.message = detail || (0, meta_whatsapp_graph_errors_1.publicMetaGraphSendMessage)(result.kind, result.status);
             throw error;
         }
         return {

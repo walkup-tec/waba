@@ -18,6 +18,16 @@ const NOOP_INBOX = {
 const NOOP_TEMPLATES = {
     applyStatus: async () => undefined,
 };
+function webhookOccurredAt(raw) {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 1000000000) {
+        const ms = n > 10000000000 ? n : n * 1000;
+        const date = new Date(ms);
+        if (!Number.isNaN(date.getTime()))
+            return date.toISOString();
+    }
+    return new Date().toISOString();
+}
 function applyBroadcastStatusFromWebhook(event) {
     const mapped = (0, meta_whatsapp_messaging_types_1.mapWebhookStatus)(event.status);
     if (!mapped)
@@ -25,6 +35,9 @@ function applyBroadcastStatusFromWebhook(event) {
     const campaign = (0, meta_whatsapp_broadcast_store_1.applyMetaStatusToBroadcastByWamid)(event.messageId || "", mapped, {
         recipientId: event.recipientId,
         phoneNumberId: event.phoneNumberId,
+        errorCode: event.errorCode,
+        errorMessage: event.errorMessage,
+        occurredAt: webhookOccurredAt(event.timestamp),
     });
     if (!campaign?.intakeCampaignId)
         return;

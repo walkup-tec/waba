@@ -6,7 +6,10 @@ import {
   type MetaGraphMessagesCaller,
 } from "../meta-whatsapp/meta-whatsapp-graph-messages.client";
 import { MetaWhatsappError } from "../meta-whatsapp/meta-whatsapp-errors";
-import { publicMetaGraphSendMessage } from "../meta-whatsapp/meta-whatsapp-graph-errors";
+import {
+  publicMetaGraphSendMessage,
+  safePublicGraphTemplateDetail,
+} from "../meta-whatsapp/meta-whatsapp-graph-errors";
 import type {
   WhatsAppProvider,
   WhatsAppProviderName,
@@ -148,12 +151,16 @@ export class MetaCloudProvider implements WhatsAppProvider {
     });
     if (!result.ok) {
       if (result.status === 401) throw new MetaWhatsappError("invalid_token");
-      const error = new MetaWhatsappError("send_failed");
-      (error as MetaWhatsappError & { graphStatus?: number; graphKind?: string }).graphStatus =
-        result.status;
-      (error as MetaWhatsappError & { graphStatus?: number; graphKind?: string }).graphKind =
-        result.kind;
-      error.message = publicMetaGraphSendMessage(result.kind, result.status);
+      const error = new MetaWhatsappError("send_failed") as MetaWhatsappError & {
+        graphStatus?: number;
+        graphKind?: string;
+        graphCode?: string | null;
+      };
+      error.graphStatus = result.status;
+      error.graphKind = result.kind;
+      error.graphCode = result.graphCode;
+      const detail = safePublicGraphTemplateDetail(result.json);
+      error.message = detail || publicMetaGraphSendMessage(result.kind, result.status);
       throw error;
     }
     return {

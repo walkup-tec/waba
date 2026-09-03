@@ -25,12 +25,25 @@ const NOOP_TEMPLATES: MetaWhatsappWebhookTemplatePort = {
   applyStatus: async () => undefined,
 };
 
+function webhookOccurredAt(raw: string | null | undefined): string {
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 1_000_000_000) {
+    const ms = n > 10_000_000_000 ? n : n * 1000;
+    const date = new Date(ms);
+    if (!Number.isNaN(date.getTime())) return date.toISOString();
+  }
+  return new Date().toISOString();
+}
+
 function applyBroadcastStatusFromWebhook(event: MetaWebhookNormalizedEvent): void {
   const mapped = mapWebhookStatus(event.status);
   if (!mapped) return;
   const campaign = applyMetaStatusToBroadcastByWamid(event.messageId || "", mapped, {
     recipientId: event.recipientId,
     phoneNumberId: event.phoneNumberId,
+    errorCode: event.errorCode,
+    errorMessage: event.errorMessage,
+    occurredAt: webhookOccurredAt(event.timestamp),
   });
   if (!campaign?.intakeCampaignId) return;
   refreshCompletedLabIntakeReport(campaign.intakeCampaignId);

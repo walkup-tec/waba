@@ -54,6 +54,7 @@ import {
   WabaCampaignSupplierAssignmentService,
 } from "../services/waba-campaign-supplier-assignment.service";
 import { findBroadcastByIntakeCampaignId } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
+import { summarizeBroadcastSendIssues } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-send-issues";
 import { computeMetaLabCampaignMetrics } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
 
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
@@ -455,6 +456,7 @@ export class WabaOperacionalCampanhasService {
     source: "manual" | "meta_lab" | null;
     liveFromMeta: boolean;
     report: OperacionalCampaignReportInput | null;
+    sendIssues: ReturnType<typeof summarizeBroadcastSendIssues> | null;
   } {
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
 
@@ -472,23 +474,21 @@ export class WabaOperacionalCampanhasService {
     );
     let report = stored;
     let liveFromMeta = false;
-    if (laboratorioAttended && status === "in_progress") {
-      const broadcast = findBroadcastByIntakeCampaignId(intake.id);
-      if (broadcast) {
-        const live = computeMetaLabCampaignMetrics(broadcast, totalLeads);
-        report = {
-          totalLeads: live.totalLeads,
-          sent: live.sent,
-          delivered: live.delivered,
-          read: live.read,
-          failed: live.failed,
-          clicks: live.clicks,
-          source: "meta_lab",
-          filledAt: "",
-          filledByEmail: "",
-        };
-        liveFromMeta = true;
-      }
+    const broadcast = findBroadcastByIntakeCampaignId(intake.id);
+    if (laboratorioAttended && status === "in_progress" && broadcast) {
+      const live = computeMetaLabCampaignMetrics(broadcast, totalLeads);
+      report = {
+        totalLeads: live.totalLeads,
+        sent: live.sent,
+        delivered: live.delivered,
+        read: live.read,
+        failed: live.failed,
+        clicks: live.clicks,
+        source: "meta_lab",
+        filledAt: "",
+        filledByEmail: "",
+      };
+      liveFromMeta = true;
     }
     const hideClicks = campaignReportHidesClicks(
       intake.campaignName,
@@ -496,6 +496,10 @@ export class WabaOperacionalCampanhasService {
       report || stored,
     );
     const showClicks = (laboratorioAttended || stored?.source === "meta_lab") && !hideClicks;
+    const sendIssues =
+      laboratorioAttended || stored?.source === "meta_lab"
+        ? summarizeBroadcastSendIssues(broadcast)
+        : null;
     return {
       campaignId: intake.id,
       campaignName: intake.campaignName,
@@ -518,6 +522,7 @@ export class WabaOperacionalCampanhasService {
             ...(showClicks ? { clicks: Math.max(0, Math.round(Number(report.clicks || 0))) } : {}),
           }
         : null,
+      sendIssues,
     };
   }
 

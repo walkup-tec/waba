@@ -8852,6 +8852,68 @@
         color: #94a3b8;
       }
 
+      .camp-report-send-issues {
+        margin-top: 16px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(248, 113, 113, 0.28);
+        background: rgba(127, 29, 29, 0.18);
+      }
+
+      .camp-report-send-issues[hidden] {
+        display: none;
+      }
+
+      .camp-report-send-issues-title {
+        margin: 0 0 6px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #fca5a5;
+      }
+
+      .camp-report-send-issues-hint {
+        margin: 0 0 10px;
+        font-size: 0.82rem;
+        line-height: 1.45;
+        color: #fecaca;
+      }
+
+      .camp-report-send-issues-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 8px;
+      }
+
+      .camp-report-send-issues-item {
+        display: grid;
+        gap: 2px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.35);
+      }
+
+      .camp-report-send-issues-item strong {
+        font-size: 0.86rem;
+        color: #fff7ed;
+      }
+
+      .camp-report-send-issues--pending {
+        border-color: rgba(148, 163, 184, 0.28);
+        background: rgba(15, 23, 42, 0.35);
+      }
+
+      .camp-report-send-issues--pending .camp-report-send-issues-title {
+        color: #cbd5e1;
+      }
+
+      .camp-report-send-issues--pending .camp-report-send-issues-hint {
+        color: #cbd5e1;
+      }
+
       .camp-report-progress-head {
         display: flex;
         align-items: center;
@@ -24612,6 +24674,7 @@
           </form>
         </div>
         <div id="admin-campanhas-report-dashboard" class="camp-report-dashboard" aria-live="polite"></div>
+        <div id="admin-campanhas-report-send-issues" class="camp-report-send-issues" hidden></div>
         <div class="confirm-actions">
           <button id="admin-campanhas-report-cancel-btn" class="instance-action-btn" type="button">
             Fechar
@@ -44687,6 +44750,48 @@
         };
       }
 
+      function renderAdminCampanhasReportSendIssues(payload) {
+        const box = document.getElementById("admin-campanhas-report-send-issues");
+        if (!box) return;
+        const issues = payload && payload.sendIssues && typeof payload.sendIssues === "object" ? payload.sendIssues : null;
+        const failures = Array.isArray(issues?.failures) ? issues.failures : [];
+        const pending = Math.max(0, Math.round(Number(issues?.pendingConfirmation || 0)));
+        const failureCount = Math.max(failures.length, Math.round(Number(issues?.failureCount || 0)));
+        if (!issues || (failureCount < 1 && pending < 1)) {
+          box.hidden = true;
+          box.classList.remove("camp-report-send-issues--pending");
+          box.innerHTML = "";
+          return;
+        }
+        const pendingHtml = pending
+          ? `<p class="camp-report-send-issues-hint">${pending.toLocaleString("pt-BR")} ${
+              pending === 1 ? "mensagem aceita" : "mensagens aceitas"
+            } pela Meta ainda sem comprovante de entrega. Isso não entra em Entregues.</p>`
+          : "";
+        const listHtml = failures.length
+          ? `<ul class="camp-report-send-issues-list">${failures
+              .map((item) => {
+                const recipient = escapeReportHtml(String(item.recipient || "••••"));
+                const code = escapeReportHtml(String(item.errorCode || ""));
+                const error = escapeReportHtml(String(item.error || "Falha informada pela Meta."));
+                const origin = item.source === "graph" ? "recusa no envio" : "webhook da Meta";
+                return `<li class="camp-report-send-issues-item"><strong>${recipient}${
+                  code ? ` · ${code}` : ""
+                }</strong><span>${error} (${origin})</span></li>`;
+              })
+              .join("")}</ul>`
+          : "";
+        box.hidden = false;
+        box.classList.toggle("camp-report-send-issues--pending", failures.length === 0);
+        box.innerHTML = `
+          <h4 class="camp-report-send-issues-title">${
+            failures.length ? "Erros que impactaram o envio" : "Comprovante de entrega da Meta"
+          }</h4>
+          ${pendingHtml}
+          ${listHtml}
+        `;
+      }
+
       function updateAdminCampanhasReportDashboard() {
         const dashboard = document.getElementById("admin-campanhas-report-dashboard");
         if (!dashboard) return;
@@ -44792,6 +44897,7 @@
         adminCampanhasReportSource = String(data.source || report.source || "").trim();
         setAdminCampanhasReportReadOnly(Boolean(data.isReadOnly));
         updateAdminCampanhasReportDashboard();
+        renderAdminCampanhasReportSendIssues(data);
       }
 
       async function openAdminCampanhasReport(campaignId, campaignName, options = {}) {

@@ -12,6 +12,7 @@ export type MetaWebhookNormalizedEvent = {
   conversationId: string | null;
   pricingCategory: string | null;
   errorCode: string | null;
+  errorMessage: string | null;
   qualityRating: string | null;
   verifiedName: string | null;
   messageType: string | null;
@@ -70,9 +71,33 @@ function contactNameFor(value: Record<string, unknown>, waId: string | null): st
   return null;
 }
 
+function webhookErrorMessage(firstError: Record<string, unknown>): string | null {
+  const nested = asRecord(firstError.error_data);
+  const candidates = [
+    firstError.error_user_msg,
+    firstError.error_user_title,
+    nested.details,
+    firstError.title,
+    firstError.message,
+  ];
+  for (const candidate of candidates) {
+    const value = text(candidate);
+    if (!value || value.length > 280) continue;
+    if (/EAA[A-Za-z0-9]+|access_token|app_secret|Bearer /i.test(value)) continue;
+    return value;
+  }
+  return null;
+}
+
 function extra(): Pick<
   MetaWebhookNormalizedEvent,
-  "fromWaId" | "textContent" | "contactName" | "templateName" | "templateLanguage" | "rejectedReason"
+  | "fromWaId"
+  | "textContent"
+  | "contactName"
+  | "templateName"
+  | "templateLanguage"
+  | "rejectedReason"
+  | "errorMessage"
 > {
   return {
     fromWaId: null,
@@ -81,6 +106,7 @@ function extra(): Pick<
     templateName: null,
     templateLanguage: null,
     rejectedReason: null,
+    errorMessage: null,
   };
 }
 
@@ -154,6 +180,7 @@ export function parseMetaWebhookPayload(
             templateName: null,
             templateLanguage: null,
             rejectedReason: null,
+            errorMessage: null,
           });
         }
         for (const statusRow of asArray(value.statuses)) {
@@ -180,6 +207,7 @@ export function parseMetaWebhookPayload(
             verifiedName: null,
             messageType: null,
             ...extra(),
+            errorMessage: webhookErrorMessage(firstError),
           });
         }
         if (!asArray(value.messages).length && !asArray(value.statuses).length) {
