@@ -16,13 +16,11 @@ Tip `796f537` (+ marker):
 
 Não entrou: pasta `C:\Users\Usuario\npm-cache/`.
 
-## Como validar
+## Dist no GitHub
 
-```bash
-curl -sS https://waba.draxsistemas.com.br/health | python3 -c 'import json,sys; print(json.load(sys.stdin).get("deployMarker"))'
-```
+O tip anterior tinha `src/` novo e `dist/deploy-marker.js` ainda em `171800`. EasyPanel copia `dist/` da imagem → Redeploy sozinho não bastava.
 
-Esperado após Redeploy EasyPanel: `DEPLOY-2026-09-03-182400-header-id-template-aprovado`.
+Corrigido: `npm run build` + push do `dist/` com marker `182400` e rotas `header-media` / never-weblink.
 
 ## Palavras-chave
 
