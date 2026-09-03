@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 16:15 — Jandira 2 sem entrega nos 4 destinos
+- Números passam na normalização Cloud. JSON de produção não lido (sem SSH).
+- LOG: `doc/LOG-2026-09-03__161500__jandira2-quatro-destinos-sem-entrega.md`
+
 ## 2026-09-03 13:56 — Push GitHub master linha do tempo visual
 - Tip enviado a `walkup-tec/waba` `master` para o usuário Redeployar.
 - Marker: `DEPLOY-2026-09-03-135600-relatorio-timeline-visual`.
