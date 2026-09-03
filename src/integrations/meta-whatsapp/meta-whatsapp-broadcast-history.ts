@@ -25,7 +25,9 @@ export function cloudBroadcastProgress(input: {
 export function cloudBroadcastDisplayStatus(input: {
   broadcastStatus?: string | null;
   intakeStatus?: string | null;
+  voided?: boolean;
 }): { key: string; label: string } {
+  if (input.voided) return { key: "cancelled", label: "Cancelado" };
   const intake = input.intakeStatus ? normalizeCampaignIntakeStatus(input.intakeStatus) : "";
   if (intake === "completed") return { key: "completed", label: "Finalizado" };
   if (intake === "error_reported") return { key: "error", label: "Erro reportado" };
@@ -60,6 +62,7 @@ export function toCloudBroadcastHistoryItem(input: {
   const display = cloudBroadcastDisplayStatus({
     broadcastStatus: input.campaign.status,
     intakeStatus: input.intakeStatus,
+    voided: Boolean(String(input.campaign.voidedAt || "").trim()),
   });
   return {
     ...publicBroadcastCampaign(input.campaign),

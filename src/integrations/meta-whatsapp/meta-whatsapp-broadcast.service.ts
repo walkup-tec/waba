@@ -41,9 +41,11 @@ import {
   listBroadcastCampaigns,
   publicBroadcastCampaign,
   saveBroadcastCampaign,
+  voidBroadcastCampaignForRetry,
   type MetaBroadcastCampaign,
   type MetaBroadcastLead,
 } from "./meta-whatsapp-broadcast.store";
+import { isCloudBroadcastInactiveForRetry } from "./meta-whatsapp-broadcast-void";
 import { scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
 import { attachCampaignIdToShortLink } from "../../shortener/waba-shortener.service";
 import {
@@ -620,7 +622,9 @@ export class MetaWhatsappBroadcastService {
         if (!isLinkableLabCampaignStatus(intake.status)) return false;
         if (!campaignAttendedByLaboratorioStaff(intake)) return false;
         const existing = findBroadcastByIntakeCampaignId(intake.id);
-        if (existing && existing.status !== "failed") return false;
+        if (existing && existing.status !== "failed" && !isCloudBroadcastInactiveForRetry(existing)) {
+          return false;
+        }
         if (!isMaster) {
           const assigned = String(intake.assignedOperacionalEmail || "").trim().toLowerCase();
           if (assigned && assigned !== email) return false;
@@ -673,8 +677,11 @@ export class MetaWhatsappBroadcastService {
       fail("invalid_payload", "Só é possível vincular campanhas Em andamento.");
     }
     const existing = findBroadcastByIntakeCampaignId(intake.id);
-    if (existing && existing.status !== "failed") {
+    if (existing && existing.status !== "failed" && !isCloudBroadcastInactiveForRetry(existing)) {
       fail("invalid_payload", "Esta campanha já tem um Disparo Cloud em andamento.");
+    }
+    if (existing && isCloudBroadcastInactiveForRetry(existing)) {
+      voidBroadcastCampaignForRetry(existing.id);
     }
     return intake.id;
   }

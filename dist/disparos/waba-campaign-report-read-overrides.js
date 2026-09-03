@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.applyCampaignReportReadOverride = exports.campaignReportHidesClicks = exports.resolveCampaignReportReadOverride = exports.campaignHoldsSubscriberInProgress = exports.resolveCampaignReportOverride = void 0;
+const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_void_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-void");
 const CAMPAIGN_REPORT_OVERRIDES = [
     {
         name: "SQUARE RESIDENCIAL",
@@ -121,7 +123,17 @@ const resolveCampaignReportOverride = (campaignName, createdAt, report, intakeId
     return null;
 };
 exports.resolveCampaignReportOverride = resolveCampaignReportOverride;
-const campaignHoldsSubscriberInProgress = (campaignName, createdAt, intakeId) => Boolean((0, exports.resolveCampaignReportOverride)(campaignName, createdAt, null, intakeId)?.holdSubscriberInProgress);
+const campaignHoldsSubscriberInProgress = (campaignName, createdAt, intakeId) => {
+    if (!(0, exports.resolveCampaignReportOverride)(campaignName, createdAt, null, intakeId)?.holdSubscriberInProgress) {
+        return false;
+    }
+    const active = String(intakeId || "").trim()
+        ? (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intakeId)
+        : null;
+    if (active && !(0, meta_whatsapp_broadcast_void_1.isCloudBroadcastInactiveForRetry)(active))
+        return false;
+    return true;
+};
 exports.campaignHoldsSubscriberInProgress = campaignHoldsSubscriberInProgress;
 const resolveCampaignReportReadOverride = (campaignName, createdAt, report) => {
     const rule = (0, exports.resolveCampaignReportOverride)(campaignName, createdAt, report);

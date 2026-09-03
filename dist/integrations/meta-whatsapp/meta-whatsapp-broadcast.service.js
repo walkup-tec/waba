@@ -16,6 +16,7 @@ const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-te
 const meta_whatsapp_broadcast_leads_1 = require("./meta-whatsapp-broadcast-leads");
 const meta_whatsapp_broadcast_media_1 = require("./meta-whatsapp-broadcast-media");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
 const meta_whatsapp_broadcast_report_1 = require("./meta-whatsapp-broadcast-report");
 const waba_shortener_service_1 = require("../../shortener/waba-shortener.service");
 const waba_shortener_repository_1 = require("../../shortener/waba-shortener.repository");
@@ -500,8 +501,9 @@ class MetaWhatsappBroadcastService {
             if (!(0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake))
                 return false;
             const existing = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
-            if (existing && existing.status !== "failed")
+            if (existing && existing.status !== "failed" && !(0, meta_whatsapp_broadcast_void_1.isCloudBroadcastInactiveForRetry)(existing)) {
                 return false;
+            }
             if (!isMaster) {
                 const assigned = String(intake.assignedOperacionalEmail || "").trim().toLowerCase();
                 if (assigned && assigned !== email)
@@ -552,8 +554,11 @@ class MetaWhatsappBroadcastService {
             fail("invalid_payload", "Só é possível vincular campanhas Em andamento.");
         }
         const existing = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
-        if (existing && existing.status !== "failed") {
+        if (existing && existing.status !== "failed" && !(0, meta_whatsapp_broadcast_void_1.isCloudBroadcastInactiveForRetry)(existing)) {
             fail("invalid_payload", "Esta campanha já tem um Disparo Cloud em andamento.");
+        }
+        if (existing && (0, meta_whatsapp_broadcast_void_1.isCloudBroadcastInactiveForRetry)(existing)) {
+            (0, meta_whatsapp_broadcast_store_1.voidBroadcastCampaignForRetry)(existing.id);
         }
         return intake.id;
     }

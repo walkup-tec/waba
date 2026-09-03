@@ -7,7 +7,11 @@ exports.applyCloudPhoneOccupancy = applyCloudPhoneOccupancy;
 const waba_campaign_intake_repository_1 = require("../../disparos/waba-campaign-intake.repository");
 const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-intake-status");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
 function isCloudPhoneBusyForCampaign(input) {
+    if (input.inactive) {
+        return input.broadcastStatus === "queued" || input.broadcastStatus === "running";
+    }
     if (input.intakeStatus) {
         const intake = (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(input.intakeStatus);
         if (intake === "completed" || intake === "error_reported" || intake === "cancelled") {
@@ -30,6 +34,7 @@ function collectBusyCloudPhoneNumberIds(campaigns, intakeStatusById) {
         if (isCloudPhoneBusyForCampaign({
             broadcastStatus: row.status,
             intakeStatus,
+            inactive: (0, meta_whatsapp_broadcast_void_1.isCloudBroadcastInactiveForRetry)(row),
         })) {
             busy.add(phoneId);
         }

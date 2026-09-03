@@ -4,12 +4,17 @@ import {
   listAllBroadcastCampaigns,
   type MetaBroadcastCampaign,
 } from "./meta-whatsapp-broadcast.store";
+import { isCloudBroadcastInactiveForRetry } from "./meta-whatsapp-broadcast-void";
 import type { MetaPortfolioNumberPublic } from "./meta-whatsapp-portfolio.types";
 
 export function isCloudPhoneBusyForCampaign(input: {
   broadcastStatus: MetaBroadcastCampaign["status"];
   intakeStatus?: string | null;
+  inactive?: boolean;
 }): boolean {
+  if (input.inactive) {
+    return input.broadcastStatus === "queued" || input.broadcastStatus === "running";
+  }
   if (input.intakeStatus) {
     const intake = normalizeCampaignIntakeStatus(input.intakeStatus);
     if (intake === "completed" || intake === "error_reported" || intake === "cancelled") {
@@ -27,6 +32,8 @@ export function collectBusyCloudPhoneNumberIds(
     phoneNumberId?: string;
     status: MetaBroadcastCampaign["status"];
     intakeCampaignId?: string;
+    voidedAt?: string;
+    leads?: MetaBroadcastCampaign["leads"];
   }>,
   intakeStatusById: ReadonlyMap<string, string>,
 ): Set<string> {
@@ -40,6 +47,7 @@ export function collectBusyCloudPhoneNumberIds(
       isCloudPhoneBusyForCampaign({
         broadcastStatus: row.status,
         intakeStatus,
+        inactive: isCloudBroadcastInactiveForRetry(row as MetaBroadcastCampaign),
       })
     ) {
       busy.add(phoneId);

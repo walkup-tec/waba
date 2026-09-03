@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { shouldVoidCloudBroadcast } from "./meta-whatsapp-broadcast-void";
 import path from "path";
 import { resolveDataFile } from "../../data-path";
 import { canAdvanceMetaMessageStatus, type MetaMessageStatus } from "./meta-whatsapp-messaging.types";
@@ -42,6 +43,8 @@ export type MetaBroadcastCampaign = {
   templateApprovedAt?: string;
   lastMetaStatusAt?: string;
   reportFinalizedAt?: string;
+  /** Cancelado para refazer o Disparo Cloud; não ocupa número nem bloqueia o vínculo. */
+  voidedAt?: string;
   total: number;
   sent: number;
   failed: number;
@@ -173,6 +176,7 @@ export function mergeBroadcastCampaignPreservingMeta(
     sendStartedAt: stored.sendStartedAt || incoming.sendStartedAt,
     sendFinishedAt: incoming.sendFinishedAt || stored.sendFinishedAt,
     templateApprovedAt: stored.templateApprovedAt || incoming.templateApprovedAt,
+    voidedAt: incoming.voidedAt || stored.voidedAt,
   };
 }
 
@@ -207,8 +211,48 @@ export function listAllBroadcastCampaigns(tenantId: string): MetaBroadcastCampai
 export function findBroadcastByIntakeCampaignId(intakeCampaignId: string): MetaBroadcastCampaign | null {
   const id = String(intakeCampaignId || "").trim();
   if (!id) return null;
-  const row = readStore().campaigns.find((item) => String(item.intakeCampaignId || "") === id);
+  const rows = readStore()
+    .campaigns.filter((item) => String(item.intakeCampaignId || "") === id && !String(item.voidedAt || "").trim())
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const row = rows[0];
   return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
+}
+
+export function voidBroadcastCampaignForRetry(campaignId: string): MetaBroadcastCampaign | null {
+  const id = String(campaignId || "").trim();
+  if (!id) return null;
+  const store = readStore();
+  const row = store.campaigns.find((item) => item.id === id);
+  if (!row) return null;
+  if (row.voidedAt) return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+  const now = new Date().toISOString();
+  row.status = "failed";
+  row.voidedAt = now;
+  row.updatedAt = now;
+  writeStore(store);
+  return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+}
+
+export function ensureVoidedFailedCloudBroadcasts(): number {
+  return voidAbandonedCloudBroadcastsForRetry(shouldVoidCloudBroadcast);
+}
+
+export function voidAbandonedCloudBroadcastsForRetry(
+  shouldVoid: (row: MetaBroadcastCampaign) => boolean,
+): number {
+  const store = readStore();
+  const now = new Date().toISOString();
+  let changed = 0;
+  for (const row of store.campaigns) {
+    if (row.voidedAt) continue;
+    if (!shouldVoid(row)) continue;
+    row.status = "failed";
+    row.voidedAt = now;
+    row.updatedAt = now;
+    changed += 1;
+  }
+  if (changed) writeStore(store);
+  return changed;
 }
 
 function recipientDigits(value: string | null | undefined): string {

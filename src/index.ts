@@ -90,6 +90,7 @@ import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-a
 import { registerMetaWhatsappIntegrationRoutes } from "./integrations/meta-whatsapp/meta-whatsapp.routes";
 import { startMetaWhatsappAutomation } from "./integrations/meta-whatsapp/meta-whatsapp-automation.bootstrap";
 import { ensureLabReportFinalizeSweep } from "./integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
+import { ensureVoidedFailedCloudBroadcasts } from "./integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 import {
   registerMetaWhatsappSubscriptionRoute,
   registerMetaWhatsappWebhookRoutes,
@@ -809,6 +810,7 @@ app.use(wabaRequireAuthMiddleware);
 registerMetaWhatsappIntegrationRoutes(app);
 startMetaWhatsappAutomation();
 ensureLabReportFinalizeSweep();
+ensureVoidedFailedCloudBroadcasts();
 registerMetaWhatsappSubscriptionRoute(app);
 
 const wabaEntitlementService = new WabaEntitlementService();

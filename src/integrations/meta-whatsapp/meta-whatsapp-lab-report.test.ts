@@ -418,6 +418,14 @@ describe("ocupação do número no Disparo Cloud", () => {
     assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "queued", intakeStatus: "generated" }), true);
     assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "running", intakeStatus: "in_progress" }), true);
     assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "done", intakeStatus: "in_progress" }), true);
+    assert.equal(
+      isCloudPhoneBusyForCampaign({
+        broadcastStatus: "done",
+        intakeStatus: "in_progress",
+        inactive: true,
+      }),
+      false,
+    );
     assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "failed", intakeStatus: "in_progress" }), true);
     assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "done", intakeStatus: "completed" }), false);
     assert.equal(isCloudPhoneBusyForCampaign({ broadcastStatus: "done", intakeStatus: "error_reported" }), false);
@@ -497,6 +505,14 @@ describe("histórico do Disparo Cloud", () => {
     assert.equal(
       cloudBroadcastDisplayStatus({ broadcastStatus: "done", intakeStatus: "completed" }).label,
       "Finalizado",
+    );
+    assert.equal(
+      cloudBroadcastDisplayStatus({
+        broadcastStatus: "done",
+        intakeStatus: "in_progress",
+        voided: true,
+      }).label,
+      "Cancelado",
     );
   });
 });

@@ -21,6 +21,8 @@ function cloudBroadcastProgress(input) {
     };
 }
 function cloudBroadcastDisplayStatus(input) {
+    if (input.voided)
+        return { key: "cancelled", label: "Cancelado" };
     const intake = input.intakeStatus ? (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(input.intakeStatus) : "";
     if (intake === "completed")
         return { key: "completed", label: "Finalizado" };
@@ -56,6 +58,7 @@ function toCloudBroadcastHistoryItem(input) {
     const display = cloudBroadcastDisplayStatus({
         broadcastStatus: input.campaign.status,
         intakeStatus: input.intakeStatus,
+        voided: Boolean(String(input.campaign.voidedAt || "").trim()),
     });
     return {
         ...(0, meta_whatsapp_broadcast_store_1.publicBroadcastCampaign)(input.campaign),

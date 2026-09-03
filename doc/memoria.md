@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 16:48 — Cancelar Cloud da Jandira 2 para refazer
+- POST `26d33b09-…` é void no boot. Número livre. Intake do assinante segue Em andamento.
+- Marker: `DEPLOY-2026-09-03-164800-jandira2-cancelar-cloud`.
+- LOG: `doc/LOG-2026-09-03__164800__jandira2-cancelar-cloud.md`
+
 ## 2026-09-03 16:35 — Jandira 2 só Em andamento para o assinante
 - Assinante não vê relatório nem indicadores do disparo 131053. Status permanece Em andamento. Finalize Meta não fecha esta campanha.
 - Marker: `DEPLOY-2026-09-03-163500-jandira2-andamento`.

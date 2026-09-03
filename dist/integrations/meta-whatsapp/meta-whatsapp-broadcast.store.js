@@ -11,6 +11,9 @@ exports.findBroadcastCampaign = findBroadcastCampaign;
 exports.listBroadcastCampaigns = listBroadcastCampaigns;
 exports.listAllBroadcastCampaigns = listAllBroadcastCampaigns;
 exports.findBroadcastByIntakeCampaignId = findBroadcastByIntakeCampaignId;
+exports.voidBroadcastCampaignForRetry = voidBroadcastCampaignForRetry;
+exports.ensureVoidedFailedCloudBroadcasts = ensureVoidedFailedCloudBroadcasts;
+exports.voidAbandonedCloudBroadcastsForRetry = voidAbandonedCloudBroadcastsForRetry;
 exports.matchBroadcastLeadForMetaStatus = matchBroadcastLeadForMetaStatus;
 exports.applyMetaStatusToBroadcastByWamid = applyMetaStatusToBroadcastByWamid;
 exports.stampTemplateApprovedAtOnBroadcasts = stampTemplateApprovedAtOnBroadcasts;
@@ -18,6 +21,7 @@ exports.addClicksToBroadcastCampaign = addClicksToBroadcastCampaign;
 exports.addClicksByBroadcastSlug = addClicksByBroadcastSlug;
 exports.publicBroadcastCampaign = publicBroadcastCampaign;
 const node_fs_1 = require("node:fs");
+const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
 const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../../data-path");
 const meta_whatsapp_messaging_types_1 = require("./meta-whatsapp-messaging.types");
@@ -135,6 +139,7 @@ function mergeBroadcastCampaignPreservingMeta(incoming, stored) {
         sendStartedAt: stored.sendStartedAt || incoming.sendStartedAt,
         sendFinishedAt: incoming.sendFinishedAt || stored.sendFinishedAt,
         templateApprovedAt: stored.templateApprovedAt || incoming.templateApprovedAt,
+        voidedAt: incoming.voidedAt || stored.voidedAt,
     };
 }
 function saveBroadcastCampaign(row) {
@@ -167,8 +172,49 @@ function findBroadcastByIntakeCampaignId(intakeCampaignId) {
     const id = String(intakeCampaignId || "").trim();
     if (!id)
         return null;
-    const row = readStore().campaigns.find((item) => String(item.intakeCampaignId || "") === id);
+    const rows = readStore()
+        .campaigns.filter((item) => String(item.intakeCampaignId || "") === id && !String(item.voidedAt || "").trim())
+        .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const row = rows[0];
     return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
+}
+function voidBroadcastCampaignForRetry(campaignId) {
+    const id = String(campaignId || "").trim();
+    if (!id)
+        return null;
+    const store = readStore();
+    const row = store.campaigns.find((item) => item.id === id);
+    if (!row)
+        return null;
+    if (row.voidedAt)
+        return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+    const now = new Date().toISOString();
+    row.status = "failed";
+    row.voidedAt = now;
+    row.updatedAt = now;
+    writeStore(store);
+    return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+}
+function ensureVoidedFailedCloudBroadcasts() {
+    return voidAbandonedCloudBroadcastsForRetry(meta_whatsapp_broadcast_void_1.shouldVoidCloudBroadcast);
+}
+function voidAbandonedCloudBroadcastsForRetry(shouldVoid) {
+    const store = readStore();
+    const now = new Date().toISOString();
+    let changed = 0;
+    for (const row of store.campaigns) {
+        if (row.voidedAt)
+            continue;
+        if (!shouldVoid(row))
+            continue;
+        row.status = "failed";
+        row.voidedAt = now;
+        row.updatedAt = now;
+        changed += 1;
+    }
+    if (changed)
+        writeStore(store);
+    return changed;
 }
 function recipientDigits(value) {
     return String(value || "").replace(/\D/g, "");

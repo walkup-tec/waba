@@ -1,4 +1,6 @@
 import type { WabaCampaignPerformanceReport } from "./waba-campaign-intake.repository";
+import { findBroadcastByIntakeCampaignId } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
+import { isCloudBroadcastInactiveForRetry } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-void";
 
 type CampaignReportFingerprint = {
   totalLeads: number;
@@ -154,8 +156,16 @@ export const campaignHoldsSubscriberInProgress = (
   campaignName: string,
   createdAt: string,
   intakeId?: string,
-): boolean =>
-  Boolean(resolveCampaignReportOverride(campaignName, createdAt, null, intakeId)?.holdSubscriberInProgress);
+): boolean => {
+  if (!resolveCampaignReportOverride(campaignName, createdAt, null, intakeId)?.holdSubscriberInProgress) {
+    return false;
+  }
+  const active = String(intakeId || "").trim()
+    ? findBroadcastByIntakeCampaignId(intakeId as string)
+    : null;
+  if (active && !isCloudBroadcastInactiveForRetry(active)) return false;
+  return true;
+};
 
 export const resolveCampaignReportReadOverride = (
   campaignName: string,
