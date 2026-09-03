@@ -21,8 +21,8 @@ Em andamento: aprovação dos templates na Meta (até 24 h). Relatório da Campa
 
 Campanha Jandira 2: lotes 131053 cancelados. O Disparo Cloud de template com mídia no topo só sobe bytes locais e manda `{ id }`. Se o arquivo não estiver no servidor (template aprovado da biblioteca, ou a mesma foto em outro modelo), o operacional envia a foto de novo na tela do disparo. A Meta não reusa o link de exemplo.
 
-Disparo Jandira 2 das 15:51 (1990 leads) ficou **Enviando em 357/1990** após Redeploy do marker `191200` (boot ~19:23 UTC). Tratar como lote órfão: dump VPS → void + restart antes de novo envio.
+Disparo Jandira 2 `5552c6f7-…` (15:51): 357 enviados Graph, **289 delivered/read**, 805 na fila, sem 131053. Travou no Redeploy. Marker `DEPLOY-2026-09-03-193200-broadcast-resume-orphan` retoma no boot — **Redeploy** do `waba_disparador` (não voidar este id).
 
-Marker: `DEPLOY-2026-09-03-191200-video-header-upload`.
+Marker: `DEPLOY-2026-09-03-193200-broadcast-resume-orphan`.
 
 GitHub `walkup-tec/waba` `master` recebe o tip do upload de vídeo no cabeçalho (mensagem real + timeout). Redeploy EasyPanel do `waba_disparador` fica com o usuário.

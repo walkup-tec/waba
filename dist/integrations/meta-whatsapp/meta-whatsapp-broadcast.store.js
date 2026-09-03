@@ -11,6 +11,10 @@ exports.findBroadcastCampaign = findBroadcastCampaign;
 exports.listBroadcastCampaigns = listBroadcastCampaigns;
 exports.listAllBroadcastCampaigns = listAllBroadcastCampaigns;
 exports.findBroadcastByIntakeCampaignId = findBroadcastByIntakeCampaignId;
+exports.broadcastLeadIsPendingSend = broadcastLeadIsPendingSend;
+exports.listResumableOrphanedBroadcasts = listResumableOrphanedBroadcasts;
+exports.listStaleRunningBroadcastsWithoutPending = listStaleRunningBroadcastsWithoutPending;
+exports.finalizeStaleRunningBroadcast = finalizeStaleRunningBroadcast;
 exports.voidBroadcastCampaignForRetry = voidBroadcastCampaignForRetry;
 exports.ensureVoidedFailedCloudBroadcasts = ensureVoidedFailedCloudBroadcasts;
 exports.voidAbandonedCloudBroadcastsForRetry = voidAbandonedCloudBroadcastsForRetry;
@@ -177,6 +181,57 @@ function findBroadcastByIntakeCampaignId(intakeCampaignId) {
         .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
     const row = rows[0];
     return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
+}
+/** Lead ainda não processado pelo loop de envio (Graph). */
+function broadcastLeadIsPendingSend(lead) {
+    const status = String(lead?.status || "").trim();
+    return !status || status === "queued";
+}
+/**
+ * Disparos Cloud com status running/queued, sem void, e com leads pendentes.
+ * Após Redeploy o loop em memória some — estes precisam de resume no boot.
+ */
+function listResumableOrphanedBroadcasts() {
+    return readStore()
+        .campaigns.filter((row) => {
+        if (String(row.voidedAt || "").trim())
+            return false;
+        if (row.status !== "running" && row.status !== "queued")
+            return false;
+        return (row.leads || []).some(broadcastLeadIsPendingSend);
+    })
+        .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
+}
+/** running sem leads pendentes (tudo sent/failed/skipped) — fechar no boot. */
+function listStaleRunningBroadcastsWithoutPending() {
+    return readStore()
+        .campaigns.filter((row) => {
+        if (String(row.voidedAt || "").trim())
+            return false;
+        if (row.status !== "running")
+            return false;
+        return !(row.leads || []).some(broadcastLeadIsPendingSend);
+    })
+        .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
+}
+function finalizeStaleRunningBroadcast(campaignId) {
+    const id = String(campaignId || "").trim();
+    if (!id)
+        return null;
+    const store = readStore();
+    const row = store.campaigns.find((item) => item.id === id);
+    if (!row || String(row.voidedAt || "").trim())
+        return null;
+    if (row.status !== "running")
+        return null;
+    if ((row.leads || []).some(broadcastLeadIsPendingSend))
+        return null;
+    const now = new Date().toISOString();
+    row.status = row.failed === row.total ? "failed" : "done";
+    row.sendFinishedAt = row.sendFinishedAt || now;
+    row.updatedAt = now;
+    writeStore(store);
+    return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
 }
 function voidBroadcastCampaignForRetry(campaignId) {
     const id = String(campaignId || "").trim();

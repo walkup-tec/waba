@@ -64,6 +64,7 @@ const meta_whatsapp_routes_1 = require("./integrations/meta-whatsapp/meta-whatsa
 const meta_whatsapp_automation_bootstrap_1 = require("./integrations/meta-whatsapp/meta-whatsapp-automation.bootstrap");
 const meta_whatsapp_broadcast_report_1 = require("./integrations/meta-whatsapp/meta-whatsapp-broadcast-report");
 const meta_whatsapp_broadcast_store_1 = require("./integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_service_1 = require("./integrations/meta-whatsapp/meta-whatsapp-broadcast.service");
 const meta_whatsapp_webhook_routes_1 = require("./integrations/meta-whatsapp/meta-whatsapp-webhook.routes");
 const meta_whatsapp_webhook_path_1 = require("./integrations/meta-whatsapp/meta-whatsapp-webhook-path");
 const waba_request_auth_1 = require("./auth/waba-request-auth");
@@ -584,6 +585,7 @@ app.use(waba_auth_routes_1.wabaRequireAuthMiddleware);
 (0, meta_whatsapp_automation_bootstrap_1.startMetaWhatsappAutomation)();
 (0, meta_whatsapp_broadcast_report_1.ensureLabReportFinalizeSweep)();
 (0, meta_whatsapp_broadcast_store_1.ensureVoidedFailedCloudBroadcasts)();
+(0, meta_whatsapp_broadcast_service_1.ensureResumeOrphanedCloudBroadcasts)();
 (0, meta_whatsapp_webhook_routes_1.registerMetaWhatsappSubscriptionRoute)(app);
 const wabaEntitlementService = new waba_entitlement_service_1.WabaEntitlementService();
 async function rejectForeignInstance(req, res, instanceName) {

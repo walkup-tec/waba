@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 19:32 — Resume Disparo Cloud órfão (Jandira 2 357/1162)
+- Dump `5552c6f7-…`: 289 delivered/read, 805 queued, sem 131053. Travou no Redeploy.
+- Boot retoma `running` com fila. Marker `DEPLOY-2026-09-03-193200-broadcast-resume-orphan`.
+- LOG: `doc/LOG-2026-09-03__193200__broadcast-resume-orphan-jandira2.md`
+
 ## 2026-09-03 19:27 — Jandira 2 travou 357/1990 após Redeploy
 - UI «Enviando» 357/1990 (15:51). Boot Node 19:23 UTC; `runCampaign` não retoma.
 - Void do broadcast órfão no VPS + restart. LOG: `doc/LOG-2026-09-03__192700__jandira2-travou-357-apos-redeploy.md`

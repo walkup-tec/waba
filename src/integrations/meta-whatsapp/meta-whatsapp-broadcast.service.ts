@@ -37,7 +37,10 @@ import {
   appendBroadcastLeadStatusLog,
   findBroadcastByIntakeCampaignId,
   findBroadcastCampaign,
+  finalizeStaleRunningBroadcast,
   listBroadcastCampaigns,
+  listResumableOrphanedBroadcasts,
+  listStaleRunningBroadcastsWithoutPending,
   publicBroadcastCampaign,
   saveBroadcastCampaign,
   voidBroadcastCampaignForRetry,
@@ -679,6 +682,84 @@ export class MetaWhatsappBroadcastService {
       });
   }
 
+  /**
+   * Após Redeploy/restart: retoma disparos `running`/`queued` com leads pendentes.
+   * Não usa checagem de ocupação do número — o próprio lote é quem ocupa o telefone.
+   */
+  async resumeOrphanedCampaign(row: MetaBroadcastCampaign): Promise<boolean> {
+    const campaignId = String(row.id || "").trim();
+    const tenantId = String(row.tenantId || "").trim();
+    if (!campaignId || !tenantId) return false;
+    if (running.has(campaignId)) return false;
+    if (isBroadcastVoided(row)) return false;
+    try {
+      const loaded = await this.loadApprovedTemplate(tenantId, row.connectionId, row.templateId);
+      let token = "";
+      try {
+        token = this.decrypt(loaded.connection.accessTokenEncrypted);
+      } catch {
+        logMetaWhatsappSafe("broadcast-resume-skipped", {
+          campaignId,
+          reason: "invalid_token",
+        });
+        return false;
+      }
+      const header = await this.resolveHeaderMedia({
+        tenantId,
+        token,
+        phoneNumberId: row.phoneNumberId,
+        templateId: loaded.template.id,
+        metaTemplateId: loaded.template.metaTemplateId,
+        templateName: loaded.template.name,
+        language: loaded.template.language,
+        components: loaded.template.components,
+        inspect: loaded.inspect,
+      });
+      logMetaWhatsappSafe("broadcast-resume", {
+        campaignId,
+        tenantId,
+        pending: (row.leads || []).filter((lead) => !lead.status || lead.status === "queued").length,
+        sent: row.sent,
+        total: row.total,
+      });
+      void this.runCampaign(campaignId, tenantId, {
+        connectionId: loaded.connection.id,
+        templateName: loaded.template.name,
+        language: loaded.template.language,
+        phoneNumberId: row.phoneNumberId,
+        inspect: loaded.inspect,
+        header,
+        buttonSlug: loaded.inspect.urlButton?.hasVariable ? row.shortSlug : undefined,
+      });
+      return true;
+    } catch (error) {
+      logMetaWhatsappSafe("broadcast-resume-failed", {
+        campaignId,
+        reason: error instanceof Error ? error.message.slice(0, 120) : "resume_failed",
+      });
+      return false;
+    }
+  }
+
+  async resumeOrphanedCloudBroadcastsOnBoot(): Promise<number> {
+    let closed = 0;
+    for (const stale of listStaleRunningBroadcastsWithoutPending()) {
+      const done = finalizeStaleRunningBroadcast(stale.id);
+      if (done) {
+        closed += 1;
+        if (done.intakeCampaignId) scheduleLabReportFinalize(done.intakeCampaignId);
+      }
+    }
+    let resumed = 0;
+    for (const row of listResumableOrphanedBroadcasts()) {
+      if (await this.resumeOrphanedCampaign(row)) resumed += 1;
+    }
+    if (closed || resumed) {
+      logMetaWhatsappSafe("broadcast-boot-resume", { closed, resumed });
+    }
+    return resumed;
+  }
+
   private linkSubscriberCampaign(auth: WabaRequestAuth, intakeId: string): string | undefined {
     const id = String(intakeId || "").trim();
     if (!id) return undefined;
@@ -709,4 +790,15 @@ export class MetaWhatsappBroadcastService {
     }
     return intake.id;
   }
+}
+
+/** Boot: retoma lotes órfãos após Redeploy (fire-and-forget). */
+export function ensureResumeOrphanedCloudBroadcasts(): void {
+  void new MetaWhatsappBroadcastService()
+    .resumeOrphanedCloudBroadcastsOnBoot()
+    .catch((error) => {
+      logMetaWhatsappSafe("broadcast-boot-resume-error", {
+        reason: error instanceof Error ? error.message.slice(0, 120) : "boot_resume_failed",
+      });
+    });
 }
