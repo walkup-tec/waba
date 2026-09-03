@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 18:34 — Monitor Jandira 2 (15:32)
+- Novo disparo iniciado; produção ainda no marker `171800` (correção `182400` sem Redeploy).
+- LOG: `doc/LOG-2026-09-03__183400__monitor-jandira2-disparo-1532.md`
+
 ## 2026-09-03 18:24 — Push GitHub master (header id template aprovado)
 - Tip para `walkup-tec/waba` `master` com marker `DEPLOY-2026-09-03-182400-header-id-template-aprovado`.
 - LOG: `doc/LOG-2026-09-03__182400__push-github-master-header-id.md`
