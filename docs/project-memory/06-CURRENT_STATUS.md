@@ -21,6 +21,6 @@ Em andamento: aprovação dos templates na Meta (até 24 h). Relatório da Campa
 
 Campanha Jandira 2: o POST Cloud que falhou (131053) é cancelado no sistema. O assinante permanece Em andamento. O Laboratório pode refazer o Disparo Cloud no mesmo intake. Cabeçalho deixa de ir como weblink lookaside.
 
-Marker: `DEPLOY-2026-09-03-164800-jandira2-cancelar-cloud`.
+Marker: `DEPLOY-2026-09-03-171800-oficial-dedupe-ai-edit`.
 
-GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
+GitHub `walkup-tec/waba` `master` recebe este tip (dedupe Oficial + Editar/Salvar das 3 opções). Redeploy EasyPanel do `waba_disparador` fica com o usuário.

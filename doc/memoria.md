@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 17:18 — Push GitHub master (dedupe + editar IA)
+- Tip único para `walkup-tec/waba` `master`: leads Oficiais sem duplicata + Editar/Salvar das 3 opções.
+- Marker: `DEPLOY-2026-09-03-171800-oficial-dedupe-ai-edit`.
+- LOG: `doc/LOG-2026-09-03__171800__push-github-master-oficial-dedupe-ai-edit.md`
+
 ## 2026-09-03 17:11 — Editar as 3 opções da IA
 - Cards Utility: Editar / Salvar. O texto salvo vai para a Meta no Enviar para META.
 - LOG: `doc/LOG-2026-09-03__171132__template-ai-editar-opcoes.md`
