@@ -38,6 +38,40 @@ console.log(JSON.stringify({id:c.id,status:c.status,voidedAt:c.voidedAt||null,cr
 '
 ```
 
+## Dump VPS (18:35 UTC) — lote 15:32
+
+Broadcast `4c2a8045-56a6-4fa2-a7fd-33dfde651da4`:
+
+- status `running`, voidedAt null
+- total 1162, sent 71, failed 0, skipped 27
+- delivered **0**
+- codes: **131053 × 70**, accepted 1, queued 1091
+
+Marker produção ainda `171800`. Correção `182400` não está no Node.
+
+**Veredito:** a correção **não** funcionou neste lote. Mesmo padrão weblink/mídia. Parar com void+restart; Redeploy + arquivo local antes de outro envio.
+
+```bash
+CONTAINER="$(docker ps --format '{{.Names}}' | grep -E 'waba.*disparador' | grep -vE 'v01|v02' | head -1)"
+docker exec "$CONTAINER" node -e '
+const fs=require("fs");
+const p="/app/data/meta-whatsapp-broadcasts.json";
+const s=JSON.parse(fs.readFileSync(p,"utf8"));
+const id="4c2a8045-56a6-4fa2-a7fd-33dfde651da4";
+const now=new Date().toISOString();
+for (const c of s.campaigns||[]) {
+  if (c.id!==id) continue;
+  c.status="failed";
+  c.voidedAt=c.voidedAt||now;
+  c.sendFinishedAt=now;
+  c.updatedAt=now;
+}
+fs.writeFileSync(p, JSON.stringify(s));
+console.log("voided", id);
+'
+docker restart "$CONTAINER"
+```
+
 ## Palavras-chave
 
-jandira 2, monitor, 15:32, deployMarker 171800, 131053
+jandira 2, 4c2a8045, 131053, monitor falhou, void
