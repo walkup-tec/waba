@@ -119,10 +119,15 @@ export class MetaWhatsappTemplateRepository {
   }
 
   async findByIdForTenant(tenantId: string, id: string): Promise<MetaTemplateRecord | null> {
+    const templateId = String(id || "").trim();
+    // Evita 22P02 no Postgres quando a rota :templateId captura "ai".
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(templateId)) {
+      return null;
+    }
     const { data, error } = await this.client()
       .from(TABLE)
       .select(COLUMNS)
-      .eq("id", id)
+      .eq("id", templateId)
       .eq("tenant_id", tenantId)
       .maybeSingle();
     if (error) throw new Error(error.message);

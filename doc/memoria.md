@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 20:45 — Template vídeo uuid "ai"
+- Rota `:templateId/header-media` capturava `ai`. Reordenado + UUID guard.
+- Marker `DEPLOY-2026-09-03-204500-template-ai-header-route`.
+- LOG: `doc/LOG-2026-09-03__204500__template-ai-header-route-uuid.md`
+
 ## 2026-09-03 20:01 — Push resume agora (Cloud travou de novo)
 - Marker `DEPLOY-2026-09-03-200100-cloud-resume-agora`: boot+3s+10s + watchdog.
 - LOG: `doc/LOG-2026-09-03__200100__cloud-resume-agora.md`

@@ -21,6 +21,7 @@ import { MetaWhatsappAutomationService } from "./meta-whatsapp-automation.servic
 import { MetaWhatsappTemplateAiService } from "./meta-whatsapp-template-ai.service";
 import { publicBaseHintsFromExpressRequest } from "../../lib/waba-public-base-url";
 import { MetaWhatsappBroadcastService } from "./meta-whatsapp-broadcast.service";
+import { isMetaTemplateRouteId } from "./meta-whatsapp-template-route-id";
 
 const service = new MetaWhatsappConnectionService();
 const messagingService = new MetaWhatsappMessagingService();
@@ -406,65 +407,6 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
-  app.post("/integrations/meta/whatsapp/templates/:templateId/header-media", (req: Request, res: Response) => {
-    uploadTemplateHeader.single("file")(req, res, async (err) => {
-      const multerError = multerHeaderUploadError(err);
-      if (multerError) {
-        return sendPublic(res, 400, multerError);
-      }
-      try {
-        warnClientTenantClaim(req);
-        const file = req.file;
-        const result = await templateService.attachHeaderMediaFromAuth(
-          resolveWabaRequestAuth(req),
-          String(req.params.templateId || ""),
-          {
-            fileName: file?.originalname,
-            mime: file?.mimetype,
-            bytes: file?.buffer,
-          },
-        );
-        return sendPublic(res, 200, { ok: true, ...result });
-      } catch (error) {
-        return handleMetaError(res, error);
-      }
-    });
-  });
-
-  app.get("/integrations/meta/whatsapp/templates/:templateId/header", async (req: Request, res: Response) => {
-    try {
-      const photo = await templateService.readHeaderPreviewFromAuth(
-        resolveWabaRequestAuth(req),
-        String(req.params.templateId || ""),
-      );
-      if (!photo) {
-        return sendPublic(res, 404, {
-          ok: false,
-          error: "Mídia do cabeçalho não encontrada.",
-          code: "invalid_payload",
-        });
-      }
-      res.setHeader("Content-Type", photo.mime);
-      res.setHeader("Cache-Control", "private, max-age=300");
-      res.setHeader("Content-Length", String(photo.bytes.length));
-      return res.status(200).end(photo.bytes);
-    } catch (error) {
-      return handleMetaError(res, error);
-    }
-  });
-
-  app.delete("/integrations/meta/whatsapp/templates/:templateId", async (req: Request, res: Response) => {
-    try {
-      const result = await templateService.deleteFromAuth(
-        resolveWabaRequestAuth(req),
-        String(req.params.templateId || ""),
-      );
-      return sendPublic(res, 200, { ok: true, ...result });
-    } catch (error) {
-      return handleMetaError(res, error);
-    }
-  });
-
   app.post("/integrations/meta/whatsapp/templates/sync", async (req: Request, res: Response) => {
     try {
       warnClientTenantClaim(req);
@@ -478,6 +420,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  // Rotas /templates/ai/* ANTES de /templates/:templateId — senão "ai" vira UUID no Postgres.
   app.post("/integrations/meta/whatsapp/templates/ai/generate", async (req: Request, res: Response) => {
     try {
       warnClientTenantClaim(req);
@@ -549,6 +492,89 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
         return handleMetaError(res, error);
       }
     });
+  });
+
+  app.post("/integrations/meta/whatsapp/templates/:templateId/header-media", (req: Request, res: Response) => {
+    uploadTemplateHeader.single("file")(req, res, async (err) => {
+      const multerError = multerHeaderUploadError(err);
+      if (multerError) {
+        return sendPublic(res, 400, multerError);
+      }
+      try {
+        warnClientTenantClaim(req);
+        const templateId = String(req.params.templateId || "").trim();
+        if (!isMetaTemplateRouteId(templateId)) {
+          return sendPublic(res, 404, {
+            ok: false,
+            error: "Template não encontrado.",
+            code: "template_not_found",
+          });
+        }
+        const file = req.file;
+        const result = await templateService.attachHeaderMediaFromAuth(
+          resolveWabaRequestAuth(req),
+          templateId,
+          {
+            fileName: file?.originalname,
+            mime: file?.mimetype,
+            bytes: file?.buffer,
+          },
+        );
+        return sendPublic(res, 200, { ok: true, ...result });
+      } catch (error) {
+        return handleMetaError(res, error);
+      }
+    });
+  });
+
+  app.get("/integrations/meta/whatsapp/templates/:templateId/header", async (req: Request, res: Response) => {
+    try {
+      const templateId = String(req.params.templateId || "").trim();
+      if (!isMetaTemplateRouteId(templateId)) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Mídia do cabeçalho não encontrada.",
+          code: "invalid_payload",
+        });
+      }
+      const photo = await templateService.readHeaderPreviewFromAuth(
+        resolveWabaRequestAuth(req),
+        templateId,
+      );
+      if (!photo) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Mídia do cabeçalho não encontrada.",
+          code: "invalid_payload",
+        });
+      }
+      res.setHeader("Content-Type", photo.mime);
+      res.setHeader("Cache-Control", "private, max-age=300");
+      res.setHeader("Content-Length", String(photo.bytes.length));
+      return res.status(200).end(photo.bytes);
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
+  app.delete("/integrations/meta/whatsapp/templates/:templateId", async (req: Request, res: Response) => {
+    try {
+      const templateId = String(req.params.templateId || "").trim();
+      if (!isMetaTemplateRouteId(templateId)) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Template não encontrado.",
+          code: "template_not_found",
+        });
+      }
+      const result = await templateService.deleteFromAuth(
+        resolveWabaRequestAuth(req),
+        templateId,
+      );
+      return sendPublic(res, 200, { ok: true, ...result });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
   });
 
   app.get("/integrations/meta/whatsapp/inbox/conversations", async (req: Request, res: Response) => {

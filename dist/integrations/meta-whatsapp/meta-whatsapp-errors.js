@@ -114,6 +114,14 @@ function toPublicMetaError(error) {
             status: 400,
         };
     }
+    if (/invalid input syntax for type uuid/i.test(message)) {
+        return {
+            ok: false,
+            error: "Template não encontrado.",
+            code: "template_not_found",
+            status: 404,
+        };
+    }
     if (name === "AbortError" ||
         name === "TimeoutError" ||
         /aborted|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up|Fetch failed|UND_ERR|network/i.test(message)) {
