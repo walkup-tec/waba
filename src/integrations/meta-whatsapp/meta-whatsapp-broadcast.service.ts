@@ -9,13 +9,12 @@ import { MetaWhatsappConnectionService } from "./meta-whatsapp-connection.servic
 import { MetaWhatsappTemplateRepository } from "./meta-whatsapp-template.repository";
 import { isTemplateApprovedForSend } from "./meta-whatsapp-template.types";
 import {
-  BROADCAST_HEADER_WEBLINK_ERROR,
+  BROADCAST_HEADER_MISSING_FILE_ERROR,
   classifyBroadcastHeaderMedia,
   headerUploadFileName,
 } from "./meta-whatsapp-broadcast-header";
 import {
   headerHandleFromComponents,
-  headerHttpsUrlFromComponents,
   readTemplateHeaderPreviewForSend,
 } from "./meta-whatsapp-template-header-preview.store";
 import { MetaCloudProvider } from "../whatsapp/meta-cloud-provider";
@@ -144,6 +143,17 @@ export class MetaWhatsappBroadcastService {
       String(input.connectionId || "").trim(),
       String(input.templateId || "").trim(),
     );
+    const headerKind = headerMediaType(loaded.inspect.headerFormat);
+    const preview = headerKind
+      ? readTemplateHeaderPreviewForSend({
+          tenantId: tenant.tenantId,
+          handle: headerHandleFromComponents(loaded.template.components),
+          templateId: loaded.template.id,
+          metaTemplateId: loaded.template.metaTemplateId,
+          name: loaded.template.name,
+          language: loaded.template.language,
+        })
+      : null;
     return {
       inspect: loaded.inspect,
       templateId: loaded.template.id,
@@ -151,6 +161,8 @@ export class MetaWhatsappBroadcastService {
       language: loaded.template.language,
       connectionId: loaded.connection.id,
       mapping: resolveBroadcastColumnMapping(loaded.inspect.bodyVariables),
+      headerReady: !headerKind || Boolean(preview),
+      headerNeedsFile: Boolean(headerKind) && !preview,
     };
   }
 
@@ -259,21 +271,25 @@ export class MetaWhatsappBroadcastService {
     token: string;
     phoneNumberId: string;
     templateId: string;
+    metaTemplateId?: string | null;
+    templateName?: string;
+    language?: string;
     components: unknown;
     inspect: MetaBroadcastTemplateInspect;
   }): Promise<{ mediaId?: string; link?: string } | null> {
     const kind = headerMediaType(input.inspect.headerFormat);
     if (!kind) return null;
     const handle = headerHandleFromComponents(input.components);
-    const httpsUrl = headerHttpsUrlFromComponents(input.components);
     const preview = readTemplateHeaderPreviewForSend({
       tenantId: input.tenantId,
       handle,
       templateId: input.templateId,
+      metaTemplateId: input.metaTemplateId,
+      name: input.templateName,
+      language: input.language,
     });
     const plan = classifyBroadcastHeaderMedia({
       hasLocalPreview: Boolean(preview),
-      httpsUrl,
     });
     if (plan === "upload" && preview) {
       const mime = mimeFromHeader(input.inspect.headerFormat, preview.mime);
@@ -289,19 +305,10 @@ export class MetaWhatsappBroadcastService {
       }
       return { mediaId };
     }
-    if (plan === "weblink" && httpsUrl) {
-      return { link: httpsUrl };
-    }
-    if (plan === "refuse-weblink") {
-      logMetaWhatsappSafe("broadcast_header_refuse_weblink", {
-        templateId: input.templateId,
-      });
-      fail("template_media_required", BROADCAST_HEADER_WEBLINK_ERROR);
-    }
-    fail(
-      "template_media_required",
-      "Este template exige mídia de cabeçalho no envio. Sincronize o template ou reenvie a mídia.",
-    );
+    logMetaWhatsappSafe("broadcast_header_missing_file", {
+      templateId: input.templateId,
+    });
+    fail("template_media_required", BROADCAST_HEADER_MISSING_FILE_ERROR);
   }
 
   private async createCampaignShortLink(input: {
@@ -425,6 +432,9 @@ export class MetaWhatsappBroadcastService {
       token,
       phoneNumberId,
       templateId: loaded.template.id,
+      metaTemplateId: loaded.template.metaTemplateId,
+      templateName: loaded.template.name,
+      language: loaded.template.language,
       components: loaded.template.components,
       inspect: loaded.inspect,
     });

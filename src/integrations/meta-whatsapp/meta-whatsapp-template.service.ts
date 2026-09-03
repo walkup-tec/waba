@@ -28,10 +28,13 @@ import {
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import { MetaWhatsappTemplateAiRepository } from "./meta-whatsapp-template-ai.repository";
 import {
-  copyTemplateHeaderPreview,
+  bindTemplateHeaderPreview,
   headerHandleFromComponents,
   readTemplateHeaderPreviewForSend,
+  saveTemplateHeaderPreviewAliases,
+  templateHeaderPreviewKeys,
 } from "./meta-whatsapp-template-header-preview.store";
+import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template";
 
 function requireTenant(auth: WabaRequestAuth) {
   try {
@@ -39,6 +42,33 @@ function requireTenant(auth: WabaRequestAuth) {
   } catch {
     throw new MetaWhatsappError("unauthenticated");
   }
+}
+
+function mimeForApprovedHeaderAttach(
+  format: "IMAGE" | "VIDEO" | "DOCUMENT",
+  mime: string,
+  fileName: string,
+  bytes: Buffer,
+): string {
+  const type = String(mime || "").trim().toLowerCase().split(";")[0];
+  const name = String(fileName || "").trim().toLowerCase();
+  if (format === "IMAGE") {
+    if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
+    if (type === "image/png" || name.endsWith(".png")) return "image/png";
+    if (type === "image/jpeg" || type === "image/jpg" || name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+      return "image/jpeg";
+    }
+    return "";
+  }
+  if (format === "VIDEO") {
+    if (type === "video/mp4" || name.endsWith(".mp4")) return "video/mp4";
+    return "";
+  }
+  if (type === "application/pdf" || name.endsWith(".pdf") || bytes.subarray(0, 5).toString("ascii") === "%PDF-") {
+    return "application/pdf";
+  }
+  return "";
 }
 
 function isGraphTemplateGone(result: { status: number; json?: unknown }): boolean {
@@ -230,14 +260,14 @@ export class MetaWhatsappTemplateService {
       components,
       lastSyncedAt: now,
     });
-    const createHandle = headerHandleFromComponents(components);
-    if (createHandle) {
-      copyTemplateHeaderPreview({
-        tenantId: tenant.tenantId,
-        fromHandle: createHandle,
-        toHandles: [row.id],
-      });
-    }
+    bindTemplateHeaderPreview({
+      tenantId: tenant.tenantId,
+      handle: headerHandleFromComponents(components),
+      templateId: row.id,
+      metaTemplateId: row.metaTemplateId,
+      name: row.name,
+      language: row.language,
+    });
     logMetaTemplate("CREATE", {
       tenantId: tenant.tenantId,
       name: validated.name,
@@ -323,13 +353,15 @@ export class MetaWhatsappTemplateService {
         lastSyncedAt: now,
       });
       const newHandle = headerHandleFromComponents(saved.components);
-      if (oldHandle) {
-        copyTemplateHeaderPreview({
-          tenantId: tenant.tenantId,
-          fromHandle: oldHandle,
-          toHandles: [saved.id, newHandle],
-        });
-      }
+      bindTemplateHeaderPreview({
+        tenantId: tenant.tenantId,
+        handle: newHandle,
+        previousHandle: oldHandle,
+        templateId: saved.id,
+        metaTemplateId: saved.metaTemplateId,
+        name: saved.name,
+        language: saved.language,
+      });
       upserted.push(saved);
       rememberApprovedTemplate(saved);
       try {
@@ -461,6 +493,47 @@ export class MetaWhatsappTemplateService {
       tenantId: tenant.tenantId,
       handle,
       templateId: id,
+      metaTemplateId: row.metaTemplateId,
+      name: row.name,
+      language: row.language,
     });
+  }
+
+  async attachHeaderMediaFromAuth(
+    auth: WabaRequestAuth,
+    templateId: string,
+    input: { fileName?: string; mime?: string; bytes?: Buffer },
+  ): Promise<{ headerReady: boolean; headerPreviewUrl: string | null }> {
+    const tenant = requireTenant(auth);
+    const id = String(templateId || "").trim();
+    const bytes = input.bytes;
+    if (!id || !bytes?.length) throw new MetaWhatsappError("invalid_payload");
+    const row = await this.templates.findByIdForTenant(tenant.tenantId, id);
+    if (!row || row.tenantId !== tenant.tenantId) {
+      throw new MetaWhatsappError("template_not_found");
+    }
+    const format = inspectMetaBroadcastTemplate(row.components).headerFormat;
+    if (format !== "IMAGE" && format !== "VIDEO" && format !== "DOCUMENT") {
+      const error = new MetaWhatsappError("invalid_payload");
+      error.message = "Este template não tem mídia de cabeçalho.";
+      throw error;
+    }
+    const mime = mimeForApprovedHeaderAttach(format, input.mime || "", input.fileName || "", bytes);
+    if (!mime) throw new MetaWhatsappError("template_upload_failed");
+    saveTemplateHeaderPreviewAliases({
+      tenantId: tenant.tenantId,
+      mime,
+      fileName: input.fileName,
+      bytes,
+      aliases: templateHeaderPreviewKeys({
+        handle: headerHandleFromComponents(row.components),
+        templateId: row.id,
+        metaTemplateId: row.metaTemplateId,
+        name: row.name,
+        language: row.language,
+      }),
+    });
+    const headerPreviewUrl = `/integrations/meta/whatsapp/templates/${encodeURIComponent(row.id)}/header`;
+    return { headerReady: true, headerPreviewUrl };
   }
 }

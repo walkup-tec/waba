@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 18:09 — Template aprovado: arquivo local, nunca weblink
+- Mesma foto em 3 templates não é recusa da Meta. O lookaside compartilhado é que gerava 131053.
+- Disparo só `{ id }`. Sem arquivo local, anexar a foto no template aprovado.
+- LOG: `doc/LOG-2026-09-03__180900__fix-header-id-template-aprovado.md`
+
 ## 2026-09-03 17:42 — Jandira 2 retrabalho 131053 de novo
 - `c8e99348-…`: 180 failed 131053, 0 delivered, 27 skipped, 982 ainda na fila. Os 27 não foram entregas.
 - Operador voidou o id no JSON e deu `docker restart` no disparador. Health voltou 200 no marker `171800`.

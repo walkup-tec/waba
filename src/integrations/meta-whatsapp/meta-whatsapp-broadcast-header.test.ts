@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  BROADCAST_HEADER_MISSING_FILE_ERROR,
   BROADCAST_HEADER_WEBLINK_ERROR,
   classifyBroadcastHeaderMedia,
   headerUploadFileName,
@@ -20,16 +21,17 @@ describe("cabeçalho do Disparo Cloud", () => {
 
   it("mantém o aviso de 403 no texto de falha do cabeçalho", () => {
     assert.match(BROADCAST_HEADER_WEBLINK_ERROR, /403/);
+    assert.match(BROADCAST_HEADER_MISSING_FILE_ERROR, /mesmo se a imagem for igual/);
     assert.equal(headerUploadFileName("video/mp4"), "header.mp4");
   });
 
-  it("nunca classifica URL de exemplo da Graph como weblink de envio", () => {
+  it("só envia cabeçalho com arquivo local; nunca weblink", () => {
     assert.equal(
       classifyBroadcastHeaderMedia({
         hasLocalPreview: false,
         httpsUrl: "https://lookaside.fbsbx.com/whatsapp/sample.png",
       }),
-      "refuse-weblink",
+      "missing",
     );
     assert.equal(
       classifyBroadcastHeaderMedia({
@@ -43,7 +45,7 @@ describe("cabeçalho do Disparo Cloud", () => {
         hasLocalPreview: false,
         httpsUrl: "https://cdn.cliente.example/capa.jpg",
       }),
-      "weblink",
+      "missing",
     );
     assert.equal(
       classifyBroadcastHeaderMedia({ hasLocalPreview: false, httpsUrl: null }),

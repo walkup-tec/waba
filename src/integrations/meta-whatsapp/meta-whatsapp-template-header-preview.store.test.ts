@@ -94,4 +94,51 @@ describe("preview do cabeçalho de mídia do template", () => {
     process.chdir(originalCwd);
     rmSync(root, { recursive: true, force: true });
   });
+
+  it("reusa o arquivo local quando outro template compartilha o mesmo lookaside", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "waba-tpl-header-shared-"));
+    process.chdir(root);
+    const {
+      bindTemplateHeaderPreview,
+      publicTemplateHeaderPreviewUrl,
+      readTemplateHeaderPreviewForSend,
+      saveTemplateHeaderPreview,
+    } = await import("./meta-whatsapp-template-header-preview.store");
+    const lookaside = "https://lookaside.fbsbx.com/whatsapp/sample.png";
+    saveTemplateHeaderPreview({
+      tenantId: "tenant-a",
+      handle: "tpl-primeiro",
+      mime: "image/png",
+      fileName: "capa.png",
+      bytes: Buffer.from("89504e470d0a1a0a", "hex"),
+    });
+    bindTemplateHeaderPreview({
+      tenantId: "tenant-a",
+      handle: lookaside,
+      previousHandle: "tpl-primeiro",
+      templateId: "tpl-primeiro",
+      name: "jandira_quantun_2",
+      language: "pt_BR",
+    });
+    const second = readTemplateHeaderPreviewForSend({
+      tenantId: "tenant-a",
+      handle: lookaside,
+      templateId: "tpl-segundo",
+      name: "jandira_quantun_3",
+      language: "pt_BR",
+    });
+    assert.equal(second?.mime, "image/png");
+    assert.equal(
+      publicTemplateHeaderPreviewUrl({
+        id: "tpl-segundo",
+        tenantId: "tenant-a",
+        components: [{ type: "HEADER", format: "IMAGE", example: { header_handle: [lookaside] } }],
+        name: "jandira_quantun_3",
+        language: "pt_BR",
+      }),
+      "/integrations/meta/whatsapp/templates/tpl-segundo/header",
+    );
+    process.chdir(originalCwd);
+    rmSync(root, { recursive: true, force: true });
+  });
 });

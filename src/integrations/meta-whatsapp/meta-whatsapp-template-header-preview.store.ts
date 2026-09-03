@@ -87,11 +87,47 @@ export function copyTemplateHeaderPreview(input: {
   fromHandle: string;
   toHandles: string[];
 }): void {
-  const preview = readTemplateHeaderPreview(input.tenantId, input.fromHandle);
-  if (!preview) return;
-  for (const raw of input.toHandles) {
+  aliasTemplateHeaderPreview({
+    tenantId: input.tenantId,
+    fromKeys: [input.fromHandle],
+    toKeys: input.toHandles,
+  });
+}
+
+/** Chaves estáveis: o handle da Graph vira URL lookaside e alguns templates passam a compartilhar a mesma. */
+export function templateHeaderPreviewKeys(input: {
+  handle?: string | null;
+  templateId?: string | null;
+  metaTemplateId?: string | null;
+  name?: string | null;
+  language?: string | null;
+}): string[] {
+  const name = String(input.name || "").trim().toLowerCase();
+  const language = String(input.language || "").trim();
+  const keys = [
+    String(input.handle || "").trim(),
+    String(input.templateId || "").trim(),
+    String(input.metaTemplateId || "").trim(),
+    name && language ? `${name}::${language}` : "",
+    name ? `name:${name}` : "",
+  ].filter(Boolean);
+  return [...new Set(keys)];
+}
+
+export function aliasTemplateHeaderPreview(input: {
+  tenantId: string;
+  fromKeys: string[];
+  toKeys: string[];
+}): boolean {
+  let preview: { mime: string; bytes: Buffer } | null = null;
+  for (const raw of input.fromKeys) {
+    preview = readTemplateHeaderPreview(input.tenantId, raw);
+    if (preview) break;
+  }
+  if (!preview) return false;
+  for (const raw of input.toKeys) {
     const toHandle = String(raw || "").trim();
-    if (!toHandle || toHandle === input.fromHandle) continue;
+    if (!toHandle) continue;
     saveTemplateHeaderPreview({
       tenantId: input.tenantId,
       handle: toHandle,
@@ -99,19 +135,67 @@ export function copyTemplateHeaderPreview(input: {
       bytes: preview.bytes,
     });
   }
+  return true;
+}
+
+export function bindTemplateHeaderPreview(input: {
+  tenantId: string;
+  handle?: string | null;
+  templateId?: string | null;
+  metaTemplateId?: string | null;
+  name?: string | null;
+  language?: string | null;
+  previousHandle?: string | null;
+}): boolean {
+  const toKeys = templateHeaderPreviewKeys(input);
+  const fromKeys = templateHeaderPreviewKeys({
+    handle: input.previousHandle || input.handle,
+    templateId: input.templateId,
+    metaTemplateId: input.metaTemplateId,
+    name: input.name,
+    language: input.language,
+  });
+  if (input.handle) fromKeys.unshift(String(input.handle).trim());
+  if (input.previousHandle) fromKeys.unshift(String(input.previousHandle).trim());
+  return aliasTemplateHeaderPreview({
+    tenantId: input.tenantId,
+    fromKeys: [...new Set(fromKeys.filter(Boolean))],
+    toKeys,
+  });
+}
+
+export function saveTemplateHeaderPreviewAliases(input: {
+  tenantId: string;
+  mime?: string;
+  fileName?: string;
+  bytes: Buffer;
+  aliases: string[];
+}): void {
+  for (const alias of [...new Set(input.aliases.map((item) => String(item || "").trim()).filter(Boolean))]) {
+    saveTemplateHeaderPreview({
+      tenantId: input.tenantId,
+      handle: alias,
+      mime: input.mime,
+      fileName: input.fileName,
+      bytes: input.bytes,
+    });
+  }
 }
 
 export function readTemplateHeaderPreviewForSend(input: {
   tenantId: string;
-  handle?: string;
-  templateId?: string;
+  handle?: string | null;
+  templateId?: string | null;
+  metaTemplateId?: string | null;
+  name?: string | null;
+  language?: string | null;
 }): { mime: string; bytes: Buffer } | null {
-  const handle = String(input.handle || "").trim();
-  const templateId = String(input.templateId || "").trim();
-  return (
-    (handle ? readTemplateHeaderPreview(input.tenantId, handle) : null) ||
-    (templateId ? readTemplateHeaderPreview(input.tenantId, templateId) : null)
-  );
+  bindTemplateHeaderPreview(input);
+  for (const key of templateHeaderPreviewKeys(input)) {
+    const found = readTemplateHeaderPreview(input.tenantId, key);
+    if (found) return found;
+  }
+  return null;
 }
 
 export function readTemplateHeaderPreview(
@@ -141,14 +225,24 @@ export function publicTemplateHeaderPreviewUrl(input: {
   id: string;
   tenantId: string;
   components: unknown;
+  metaTemplateId?: string | null;
+  name?: string | null;
+  language?: string | null;
 }): string | null {
   const handle = headerHandleFromComponents(input.components);
   const id = String(input.id || "").trim();
-  const hasLocal =
-    Boolean(handle && hasTemplateHeaderPreview(input.tenantId, handle)) ||
-    Boolean(id && hasTemplateHeaderPreview(input.tenantId, id));
+  const hasLocal = Boolean(
+    readTemplateHeaderPreviewForSend({
+      tenantId: input.tenantId,
+      handle,
+      templateId: id,
+      metaTemplateId: input.metaTemplateId || undefined,
+      name: input.name || undefined,
+      language: input.language || undefined,
+    }),
+  );
   if (hasLocal && id) {
     return `/integrations/meta/whatsapp/templates/${encodeURIComponent(id)}/header`;
   }
-  return headerHttpsUrlFromComponents(input.components);
+  return null;
 }

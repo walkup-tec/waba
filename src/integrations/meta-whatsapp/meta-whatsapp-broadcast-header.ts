@@ -6,7 +6,10 @@
  */
 
 export const BROADCAST_HEADER_WEBLINK_ERROR =
-  "Este template exige mídia de cabeçalho no envio. Não use a URL de exemplo da Graph (ela responde 403). Sincronize o template ou reenvie a mídia.";
+  "Este template exige o arquivo da foto/vídeo do topo. A URL de exemplo da Graph (lookaside) responde 403. Envie de novo a mesma mídia neste template aprovado.";
+
+export const BROADCAST_HEADER_MISSING_FILE_ERROR =
+  "Este template aprovado precisa do arquivo da mídia do topo neste servidor. Envie de novo a mesma foto/vídeo usada na criação — a Meta não reaproveita o link de exemplo, mesmo se a imagem for igual em outro template.";
 
 export function isMetaHeaderExampleUrl(value: string): boolean {
   const raw = String(value || "").trim();
@@ -41,16 +44,12 @@ export function headerUploadFileName(mime: string): string {
   return "header.jpg";
 }
 
-export type BroadcastHeaderMediaPlan = "upload" | "weblink" | "refuse-weblink" | "missing";
+export type BroadcastHeaderMediaPlan = "upload" | "missing";
 
-/** Graph example URLs (lookaside/fbcdn) expire; sending them as `link` yields 131053. */
+/** Só bytes locais → upload Cloud API → `{ id }`. Qualquer weblink (lookaside ou CDN) gera 131053. */
 export function classifyBroadcastHeaderMedia(input: {
   hasLocalPreview: boolean;
-  httpsUrl: string | null;
+  httpsUrl?: string | null;
 }): BroadcastHeaderMediaPlan {
-  if (input.hasLocalPreview) return "upload";
-  const url = String(input.httpsUrl || "").trim();
-  if (url && isMetaHeaderExampleUrl(url)) return "refuse-weblink";
-  if (/^https:\/\//i.test(url)) return "weblink";
-  return "missing";
+  return input.hasLocalPreview ? "upload" : "missing";
 }

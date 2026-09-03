@@ -385,6 +385,34 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  app.post("/integrations/meta/whatsapp/templates/:templateId/header-media", (req: Request, res: Response) => {
+    uploadTemplateHeader.single("file")(req, res, async (err) => {
+      if (err) {
+        return sendPublic(res, 400, {
+          ok: false,
+          error: "Não foi possível enviar a mídia.",
+          code: "invalid_payload",
+        });
+      }
+      try {
+        warnClientTenantClaim(req);
+        const file = req.file;
+        const result = await templateService.attachHeaderMediaFromAuth(
+          resolveWabaRequestAuth(req),
+          String(req.params.templateId || ""),
+          {
+            fileName: file?.originalname,
+            mime: file?.mimetype,
+            bytes: file?.buffer,
+          },
+        );
+        return sendPublic(res, 200, { ok: true, ...result });
+      } catch (error) {
+        return handleMetaError(res, error);
+      }
+    });
+  });
+
   app.get("/integrations/meta/whatsapp/templates/:templateId/header", async (req: Request, res: Response) => {
     try {
       const photo = await templateService.readHeaderPreviewFromAuth(

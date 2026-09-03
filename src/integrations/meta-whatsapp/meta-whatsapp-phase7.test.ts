@@ -413,7 +413,7 @@ describe("fase 7 listagem e tenant", () => {
     assert.equal(JSON.stringify(listed).toLowerCase().includes("bloquear"), false);
   });
 
-  it("expõe a URL HTTPS do cabeçalho IMAGE no DTO público", async () => {
+  it("não expõe URL lookaside como preview utilizável no DTO público", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow());
     const templates = new FakeTemplates();
@@ -433,7 +433,8 @@ describe("fase 7 listagem e tenant", () => {
       throw new Error("Graph não deve ser chamada na listagem local");
     });
     const listed = await service.listFromAuth(auth(EMAIL_A));
-    assert.equal(listed[0].headerPreviewUrl, "https://lookaside.fbsbx.com/whatsapp/sample.png");
+    assert.equal(listed[0].headerPreviewUrl, null);
+    assert.equal(listed[0].headerReady, false);
   });
 
   it("sem WABA connected devolve lista vazia, não erro", async () => {

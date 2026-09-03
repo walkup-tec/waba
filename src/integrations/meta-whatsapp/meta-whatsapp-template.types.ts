@@ -15,9 +15,10 @@ export type MetaTemplatePublic = {
   connectionId: string;
   portfolioName: string | null;
   headerPreviewUrl: string | null;
+  headerReady: boolean;
 };
 
-export type MetaTemplateRecord = Omit<MetaTemplatePublic, "portfolioName" | "headerPreviewUrl"> & {
+export type MetaTemplateRecord = Omit<MetaTemplatePublic, "portfolioName" | "headerPreviewUrl" | "headerReady"> & {
   tenantId: string;
   wabaId: string;
   createdAt: string;
@@ -50,6 +51,14 @@ export function toPublicTemplate(
   portfolioName?: string | null,
 ): MetaTemplatePublic {
   const name = String(portfolioName || "").trim();
+  const headerPreviewUrl = publicTemplateHeaderPreviewUrl({
+    id: row.id,
+    tenantId: row.tenantId,
+    components: row.components,
+    metaTemplateId: row.metaTemplateId,
+    name: row.name,
+    language: row.language,
+  });
   return {
     id: row.id,
     metaTemplateId: row.metaTemplateId,
@@ -63,11 +72,8 @@ export function toPublicTemplate(
     lastSyncedAt: row.lastSyncedAt,
     connectionId: row.connectionId,
     portfolioName: name || null,
-    headerPreviewUrl: publicTemplateHeaderPreviewUrl({
-      id: row.id,
-      tenantId: row.tenantId,
-      components: row.components,
-    }),
+    headerPreviewUrl,
+    headerReady: Boolean(headerPreviewUrl),
   };
 }
 

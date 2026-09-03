@@ -22262,6 +22262,15 @@
                   </select>
                   <span class="muted">Só campanhas Em andamento, no formato nome do assinante - campanha - envios.</span>
                 </div>
+                <div class="aquecedor-field" id="meta-tpl-broadcast-header-wrap" hidden>
+                  <label for="meta-tpl-broadcast-header-btn">Foto do topo deste template</label>
+                  <div class="meta-tpl-ai-file-row">
+                    <input id="meta-tpl-broadcast-header-file" type="file" accept="image/jpeg,image/png,image/jpg,video/mp4,application/pdf" hidden />
+                    <button id="meta-tpl-broadcast-header-btn" type="button" class="instance-action-btn btn-refresh enabled">Enviar a mesma foto</button>
+                    <span id="meta-tpl-broadcast-header-name" class="muted meta-tpl-ai-file-name">Arquivo local ausente.</span>
+                  </div>
+                  <span class="muted">A Meta não reusa o link de exemplo. Se a foto for a mesma de outro template, envie o arquivo de novo neste.</span>
+                </div>
                 <div class="aquecedor-field">
                   <label for="meta-tpl-broadcast-file-btn">5. Lista (.xlsx, .xls ou .txt)</label>
                   <div class="meta-tpl-ai-file-row">
@@ -39166,6 +39175,47 @@
         if (el) el.textContent = text || "";
       }
 
+      function metaTplBroadcastSyncHeaderFile(payload) {
+        const wrap = metaTplBroadcastEl("meta-tpl-broadcast-header-wrap");
+        const name = metaTplBroadcastEl("meta-tpl-broadcast-header-name");
+        const needs = Boolean(payload && payload.headerNeedsFile);
+        if (wrap) wrap.hidden = !needs;
+        if (name) {
+          name.textContent = needs
+            ? "Arquivo local ausente. Envie a mesma foto usada na criação."
+            : "Arquivo do topo pronto neste servidor.";
+        }
+      }
+
+      async function metaTplBroadcastUploadHeaderFile(file) {
+        const templateId = String((metaTplBroadcastEl("meta-tpl-broadcast-template") || {}).value || "").trim();
+        if (!templateId || !file) {
+          metaTplBroadcastSetStatus("Selecione o template e o arquivo da foto do topo.");
+          return;
+        }
+        const data = new FormData();
+        data.append("file", file, file.name || "header.jpg");
+        metaTplBroadcastSetStatus("Enviando a foto do topo deste template…");
+        try {
+          const payload = await metaTplLabFetchJson(
+            "/integrations/meta/whatsapp/templates/" + encodeURIComponent(templateId) + "/header-media",
+            { method: "POST", body: data },
+          );
+          if (payload && payload.headerReady) {
+            if (metaTplBroadcastInspect) {
+              metaTplBroadcastInspect.headerReady = true;
+              metaTplBroadcastInspect.headerNeedsFile = false;
+            }
+            metaTplBroadcastSyncHeaderFile({ headerNeedsFile: false });
+            metaTplBroadcastSetStatus("Foto do topo gravada. Pode iniciar o disparo.");
+            return;
+          }
+          metaTplBroadcastSetStatus("Não foi possível gravar a foto do topo.");
+        } catch (error) {
+          metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível gravar a foto do topo.");
+        }
+      }
+
       function metaTplBroadcastFillSelect(select, items, placeholder) {
         if (!select) return;
         const previous = String(select.value || "").trim();
@@ -39528,8 +39578,9 @@
             return String(item.id || "") === templateId;
           });
           const mapping = (row && row.mapping) || { nome: false, numero: false };
-          metaTplBroadcastInspect = { mapping: mapping };
+          metaTplBroadcastInspect = { mapping: mapping, headerNeedsFile: false, headerReady: true };
           metaTplBroadcastSyncMappingFields(mapping);
+          metaTplBroadcastSyncHeaderFile(metaTplBroadcastInspect);
           metaTplBroadcastSetStatus(
             row
               ? "Template aprovado «" + String(row.name || "") + "» do portfólio Drax Sistemas."
@@ -39540,6 +39591,7 @@
         if (!connectionId || !templateId) {
           metaTplBroadcastInspect = null;
           metaTplBroadcastSyncMappingFields({ nome: false, numero: false });
+          metaTplBroadcastSyncHeaderFile({ headerNeedsFile: false });
           return;
         }
         try {
@@ -39551,8 +39603,15 @@
           );
           metaTplBroadcastInspect = payload;
           metaTplBroadcastSyncMappingFields(payload.mapping || {});
+          metaTplBroadcastSyncHeaderFile(payload);
+          if (payload.headerNeedsFile) {
+            metaTplBroadcastSetStatus(
+              "Este template aprovado ainda não tem o arquivo da foto do topo neste servidor. Envie a mesma imagem da criação.",
+            );
+          }
         } catch (error) {
           metaTplBroadcastInspect = null;
+          metaTplBroadcastSyncHeaderFile({ headerNeedsFile: false });
           metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível ler o template.");
         }
       }
@@ -39604,6 +39663,10 @@
             },
           ]);
           metaTplBroadcastSetStatus("Disparo iniciado. Acompanhe o andamento na tabela. Preview — nada foi enviado à Meta.");
+          return;
+        }
+        if (metaTplBroadcastInspect && metaTplBroadcastInspect.headerNeedsFile) {
+          metaTplBroadcastSetStatus("Envie a foto do topo deste template antes de iniciar. A Meta não reusa o link de exemplo.");
           return;
         }
         if (!metaTplBroadcastFile) {
@@ -40076,6 +40139,14 @@
       });
       document.getElementById("meta-tpl-broadcast-template")?.addEventListener("change", function () {
         metaTplBroadcastLoadInspect();
+      });
+      document.getElementById("meta-tpl-broadcast-header-btn")?.addEventListener("click", function () {
+        document.getElementById("meta-tpl-broadcast-header-file")?.click();
+      });
+      document.getElementById("meta-tpl-broadcast-header-file")?.addEventListener("change", function (event) {
+        const input = event && event.target;
+        const file = input && input.files && input.files[0] ? input.files[0] : null;
+        if (file) void metaTplBroadcastUploadHeaderFile(file);
       });
       document.getElementById("meta-tpl-broadcast-file-btn")?.addEventListener("click", function () {
         document.getElementById("meta-tpl-broadcast-file")?.click();
