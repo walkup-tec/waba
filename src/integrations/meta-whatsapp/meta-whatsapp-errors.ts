@@ -130,7 +130,8 @@ export function toPublicMetaError(error: unknown): {
       status: Number(row?.status) || defaultStatus(duckCode),
     };
   }
-  const message = String(row?.message || (error as { message?: string })?.message || "").trim();
+  const name = String(row?.name || "").trim();
+  const message = collectErrorText(error);
   if (/sessão inválida|guest/i.test(message)) {
     return {
       ok: false,
@@ -147,7 +148,7 @@ export function toPublicMetaError(error: unknown): {
       status: 503,
     };
   }
-  if (/^A Meta recusou|^Selecione o arquivo|^Informe |^Não foi possível /i.test(message)) {
+  if (/^A Meta recusou|^Selecione o arquivo|^Informe |^Não foi possível |^O upload /i.test(message)) {
     return {
       ok: false,
       error: message.slice(0, 400),
@@ -155,20 +156,56 @@ export function toPublicMetaError(error: unknown): {
       status: 400,
     };
   }
-  if (/aborted|timeout|ETIMEDOUT|Fetch failed/i.test(message)) {
+  if (
+    name === "AbortError" ||
+    name === "TimeoutError" ||
+    /aborted|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up|Fetch failed|UND_ERR|network/i.test(
+      message,
+    )
+  ) {
     return {
       ok: false,
-      error: "O upload da mídia demorou demais. Use um MP4 menor (até 16 MB) e tente de novo.",
+      error: "O upload da mídia demorou demais ou a conexão caiu. Use um MP4 menor (até 16 MB, H.264) e tente de novo.",
       code: "template_upload_failed",
       status: 400,
     };
   }
+  if (message) {
+    return {
+      ok: false,
+      error: `Não foi possível enviar a mídia. ${message}`.slice(0, 400),
+      code: "template_upload_failed",
+      status: Number(row?.status) || 400,
+    };
+  }
   return {
     ok: false,
-    error: "Não foi possível concluir a conexão. Tente novamente.",
-    code: "unknown",
+    error:
+      "Não foi possível enviar a mídia do cabeçalho. Use MP4 H.264 até 16 MB e tente de novo. Se repetir, fale com o suporte.",
+    code: "template_upload_failed",
     status: Number(row?.status) || 400,
   };
+}
+
+/** Junta message/name/code + cause (undici guarda o detalhe em error.cause). */
+function collectErrorText(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    if (typeof current === "string") {
+      const text = current.trim();
+      if (text) parts.push(text);
+      break;
+    }
+    if (typeof current !== "object") break;
+    const row = current as Record<string, unknown>;
+    for (const key of ["name", "code", "message"] as const) {
+      const value = String(row[key] || "").trim();
+      if (value) parts.push(value);
+    }
+    current = row.cause;
+  }
+  return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
 export function logMetaWhatsappSafe(event: string, meta: Record<string, unknown> = {}): void {

@@ -22,6 +22,21 @@ describe("erros públicos Meta no upload de cabeçalho", () => {
     assert.match(publicError.error, /16 MB/);
   });
 
+  it("lê cause do undici (fetch failed) em vez de unknown", () => {
+    const err = Object.assign(new Error("fetch failed"), {
+      cause: Object.assign(new Error("connect ECONNRESET"), { code: "ECONNRESET" }),
+    });
+    const publicError = toPublicMetaError(err);
+    assert.equal(publicError.code, "template_upload_failed");
+    assert.match(publicError.error, /16 MB|conexão|mídia/i);
+  });
+
+  it("não devolve code unknown sem mensagem", () => {
+    const publicError = toPublicMetaError({});
+    assert.equal(publicError.code, "template_upload_failed");
+    assert.match(publicError.error, /MP4|mídia/i);
+  });
+
   it("dá mais tempo de upload para vídeo do que para imagem", () => {
     assert.equal(resumableUploadTimeoutMs("image/jpeg"), 60_000);
     assert.equal(resumableUploadTimeoutMs("video/mp4"), 300_000);

@@ -23,6 +23,6 @@ Campanha Jandira 2: lotes 131053 cancelados. O Disparo Cloud de template com mí
 
 Disparo Jandira 2 `5552c6f7-…` (15:51): 357 enviados Graph, **289 delivered/read**, 805 na fila, sem 131053. Travou no Redeploy. Marker `DEPLOY-2026-09-03-193200-broadcast-resume-orphan` retoma no boot — **Redeploy** do `waba_disparador` (não voidar este id).
 
-Marker: `DEPLOY-2026-09-03-194500-cloud-broadcast-protect` (resume + watchdog + `cloudBroadcastProtect` no `/health`). Com `blockRedeploy=true`, não Redeployar o disparador.
+Marker: `DEPLOY-2026-09-03-195000-video-header-unknown-v2` (upload vídeo sem `unknown` + protect/resume). Com Cloud `Enviando`, preferir esperar o lote antes do Redeploy; resume recupera a fila se reiniciar.
 
 GitHub `walkup-tec/waba` `master` recebe o tip do upload de vídeo no cabeçalho (mensagem real + timeout). Redeploy EasyPanel do `waba_disparador` fica com o usuário.

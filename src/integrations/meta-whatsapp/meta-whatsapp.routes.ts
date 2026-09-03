@@ -31,6 +31,8 @@ const templateAiService = new MetaWhatsappTemplateAiService();
 const broadcastService = new MetaWhatsappBroadcastService();
 const uploadTemplateHeader = multer({
   storage: multer.memoryStorage(),
+  /** Meta: vídeo de cabeçalho ≤ 16 MB; folga para overhead multipart. */
+  limits: { fileSize: 20 * 1024 * 1024, files: 1 },
 });
 const uploadBroadcastLeads = multer({
   storage: multer.memoryStorage(),
@@ -38,6 +40,25 @@ const uploadBroadcastLeads = multer({
 
 function sendPublic(res: Response, status: number, payload: unknown) {
   return res.status(status).json(stripMetaSecrets(payload));
+}
+
+function multerHeaderUploadError(err: unknown): { ok: false; error: string; code: string } | null {
+  const code = String((err as { code?: string })?.code || "");
+  if (code === "LIMIT_FILE_SIZE") {
+    return {
+      ok: false,
+      error: "Arquivo acima do limite. Vídeo de cabeçalho: MP4 até 16 MB (H.264).",
+      code: "template_media_too_large",
+    };
+  }
+  if (err) {
+    return {
+      ok: false,
+      error: "Não foi possível enviar a mídia.",
+      code: "invalid_payload",
+    };
+  }
+  return null;
 }
 
 function handleMetaError(res: Response, error: unknown) {
@@ -387,12 +408,9 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
 
   app.post("/integrations/meta/whatsapp/templates/:templateId/header-media", (req: Request, res: Response) => {
     uploadTemplateHeader.single("file")(req, res, async (err) => {
-      if (err) {
-        return sendPublic(res, 400, {
-          ok: false,
-          error: "Não foi possível enviar a mídia.",
-          code: "invalid_payload",
-        });
+      const multerError = multerHeaderUploadError(err);
+      if (multerError) {
+        return sendPublic(res, 400, multerError);
       }
       try {
         warnClientTenantClaim(req);
@@ -502,12 +520,9 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
 
   app.post("/integrations/meta/whatsapp/templates/ai/header-media", (req: Request, res: Response) => {
     uploadTemplateHeader.single("file")(req, res, async (err) => {
-      if (err) {
-        return sendPublic(res, 400, {
-          ok: false,
-          error: "Não foi possível enviar a mídia.",
-          code: "invalid_payload",
-        });
+      const multerError = multerHeaderUploadError(err);
+      if (multerError) {
+        return sendPublic(res, 400, multerError);
       }
       try {
         warnClientTenantClaim(req);
@@ -521,10 +536,13 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
         });
         return sendPublic(res, 200, { ok: true, ...result });
       } catch (error) {
+        const cause = (error as { cause?: { message?: string; code?: string } })?.cause;
         logMetaWhatsappSafe("header-media-error", {
           name: String((error as { name?: string })?.name || ""),
           code: String((error as { code?: string })?.code || ""),
           message: String((error as { message?: string })?.message || "").slice(0, 160),
+          causeMessage: String(cause?.message || "").slice(0, 120),
+          causeCode: String(cause?.code || "").slice(0, 64),
           mediaFormat: String(req.body?.mediaFormat || req.body?.media_format || ""),
           bytes: Number(req.file?.size || req.file?.buffer?.length || 0),
         });

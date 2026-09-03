@@ -69,12 +69,8 @@ export async function uploadMetaResumableImage(
   const timeoutMs = resumableUploadTimeoutMs(input.mime, input.timeoutMs);
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    // View sobre o mesmo Buffer — sem copiar os bytes (vídeo grande).
-    const body = new Uint8Array(
-      input.bytes.buffer,
-      input.bytes.byteOffset,
-      input.bytes.byteLength,
-    ) as unknown as BodyInit;
+    // Cópia em ArrayBuffer próprio — evita Buffer pooled / tipagem BodyInit opaca no fetch.
+    const body = new Uint8Array(input.bytes);
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -102,6 +98,17 @@ export async function uploadMetaResumableImage(
       throw new Error(
         "A Meta recusou o arquivo. O upload do vídeo passou do tempo limite. Use MP4 até 16 MB (H.264) e tente de novo.",
       );
+    }
+    const nested = String(
+      (error as { cause?: { message?: string; code?: string } })?.cause?.message ||
+        (error as { cause?: { code?: string } })?.cause?.code ||
+        (error as { message?: string })?.message ||
+        "",
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    if (nested && !/^A Meta recusou/i.test(nested)) {
+      throw new Error(`A Meta recusou o arquivo. ${nested}`.slice(0, 280));
     }
     throw error;
   } finally {

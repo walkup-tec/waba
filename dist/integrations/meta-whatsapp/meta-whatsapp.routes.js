@@ -26,12 +26,32 @@ const templateAiService = new meta_whatsapp_template_ai_service_1.MetaWhatsappTe
 const broadcastService = new meta_whatsapp_broadcast_service_1.MetaWhatsappBroadcastService();
 const uploadTemplateHeader = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
+    /** Meta: vídeo de cabeçalho ≤ 16 MB; folga para overhead multipart. */
+    limits: { fileSize: 20 * 1024 * 1024, files: 1 },
 });
 const uploadBroadcastLeads = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
 });
 function sendPublic(res, status, payload) {
     return res.status(status).json((0, meta_whatsapp_connection_service_1.stripMetaSecrets)(payload));
+}
+function multerHeaderUploadError(err) {
+    const code = String(err?.code || "");
+    if (code === "LIMIT_FILE_SIZE") {
+        return {
+            ok: false,
+            error: "Arquivo acima do limite. Vídeo de cabeçalho: MP4 até 16 MB (H.264).",
+            code: "template_media_too_large",
+        };
+    }
+    if (err) {
+        return {
+            ok: false,
+            error: "Não foi possível enviar a mídia.",
+            code: "invalid_payload",
+        };
+    }
+    return null;
 }
 function handleMetaError(res, error) {
     const publicError = (0, meta_whatsapp_errors_1.toPublicMetaError)(error);
@@ -360,12 +380,9 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
     });
     app.post("/integrations/meta/whatsapp/templates/:templateId/header-media", (req, res) => {
         uploadTemplateHeader.single("file")(req, res, async (err) => {
-            if (err) {
-                return sendPublic(res, 400, {
-                    ok: false,
-                    error: "Não foi possível enviar a mídia.",
-                    code: "invalid_payload",
-                });
+            const multerError = multerHeaderUploadError(err);
+            if (multerError) {
+                return sendPublic(res, 400, multerError);
             }
             try {
                 warnClientTenantClaim(req);
@@ -452,12 +469,9 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
     });
     app.post("/integrations/meta/whatsapp/templates/ai/header-media", (req, res) => {
         uploadTemplateHeader.single("file")(req, res, async (err) => {
-            if (err) {
-                return sendPublic(res, 400, {
-                    ok: false,
-                    error: "Não foi possível enviar a mídia.",
-                    code: "invalid_payload",
-                });
+            const multerError = multerHeaderUploadError(err);
+            if (multerError) {
+                return sendPublic(res, 400, multerError);
             }
             try {
                 warnClientTenantClaim(req);
@@ -472,10 +486,13 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
                 return sendPublic(res, 200, { ok: true, ...result });
             }
             catch (error) {
+                const cause = error?.cause;
                 (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("header-media-error", {
                     name: String(error?.name || ""),
                     code: String(error?.code || ""),
                     message: String(error?.message || "").slice(0, 160),
+                    causeMessage: String(cause?.message || "").slice(0, 120),
+                    causeCode: String(cause?.code || "").slice(0, 64),
                     mediaFormat: String(req.body?.mediaFormat || req.body?.media_format || ""),
                     bytes: Number(req.file?.size || req.file?.buffer?.length || 0),
                 });

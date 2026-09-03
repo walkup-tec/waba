@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 19:50 — Vídeo header-media unknown v2
+- Mesmo `unknown` com marker 193200. Cause/undici + body Uint8Array + multer 20 MB.
+- Marker `DEPLOY-2026-09-03-195000-video-header-unknown-v2`.
+- LOG: `doc/LOG-2026-09-03__195000__video-header-unknown-v2.md`
+
 ## 2026-09-03 19:48 — 1990 UI vs 1162 broadcast (Jandira 2)
 - UI usa `plannedSendCount` do intake; Cloud usa únicos válidos após dedupe/inválidos.
 - LOG: `doc/LOG-2026-09-03__194800__jandira2-1990-vs-1162.md`
