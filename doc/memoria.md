@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 19:48 — 1990 UI vs 1162 broadcast (Jandira 2)
+- UI usa `plannedSendCount` do intake; Cloud usa únicos válidos após dedupe/inválidos.
+- LOG: `doc/LOG-2026-09-03__194800__jandira2-1990-vs-1162.md`
+
 ## 2026-09-03 19:45 — Proteção Disparo Cloud (anti-Redeploy)
 - Watchdog 20s + `/health.cloudBroadcastProtect.blockRedeploy` + rule `waba-disparo-cloud-protect`.
 - Marker `DEPLOY-2026-09-03-194500-cloud-broadcast-protect`.
