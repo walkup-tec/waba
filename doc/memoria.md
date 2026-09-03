@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 17:03 — Dedupe de leads no wizard Oficial
+- Upload da planilha Oficial: 1 WhatsApp por campanha (com/sem 9º dígito). Créditos e arquivo de envio usam a lista única.
+- Alternativa continua contando cada linha.
+- LOG: `doc/LOG-2026-09-03__170326__oficial-intake-leads-dedupe.md`
+
 ## 2026-09-03 16:48 — Cancelar Cloud da Jandira 2 para refazer
 - POST `26d33b09-…` é void no boot. Número livre. Intake do assinante segue Em andamento.
 - Marker: `DEPLOY-2026-09-03-164800-jandira2-cancelar-cloud`.

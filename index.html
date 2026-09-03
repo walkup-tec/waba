@@ -21171,7 +21171,7 @@
                             <strong>Arraste o arquivo até aqui</strong>
                             <span>ou clique para escolher</span>
                             <span class="aquecedor-hint" style="display:block;margin-top:6px;">
-                              Formatos aceitos: Excel (.xlsx, .xls) ou TXT (.txt). Outros formatos serão bloqueados.
+                              Formatos aceitos: Excel (.xlsx, .xls) ou TXT (.txt). Números repetidos (com ou sem o 9º dígito) entram uma só vez.
                             </span>
                             <div class="dis-campaign-file-meta" id="dis-wizard-leads-file-label">Nenhum arquivo carregado.</div>
                           </div>
@@ -49505,6 +49505,7 @@
       let disCampaignWizardWhatsappLogoFile = null;
       let disCampaignWizardLeadsFile = null;
       let disCampaignWizardImportedLineCount = 0;
+      let disCampaignWizardDuplicatesRemoved = 0;
       let disCampaignWizardSubmitInFlight = false;
       let disCampaignWizardSubmitRequestId = "";
 
@@ -49642,7 +49643,7 @@
             return "O arquivo não contém linhas de leads.";
           }
           if (imported < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
-            return `O arquivo precisa ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} contatos para gerar a campanha.`;
+            return `O arquivo precisa ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} contatos únicos para gerar a campanha.`;
           }
           const planned = getDisCampaignWizardPlannedSendCountValue();
           if (!planned || planned < 1) {
@@ -49717,7 +49718,7 @@
         return true;
       }
 
-      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 5;
+      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 6;
       let wabaCampaignIntakeBackendCache = null;
 
       function isCampaignIntakeGatewayStatus(status) {
@@ -50261,7 +50262,9 @@
           if (wrap) wrap.hidden = true;
           if (input) input.value = "";
           clearDisCampaignWizardLeadsCountError();
-          renderCampaignImportStatsElement(statsEl, 0, 0);
+          renderCampaignImportStatsElement(statsEl, 0, 0, {
+            duplicatesRemoved: disCampaignWizardDuplicatesRemoved,
+          });
           return;
         }
         if (wrap) wrap.hidden = false;
@@ -50273,7 +50276,7 @@
         }
         if (hintEl) {
           const parts = [
-            `Até ${formatDisparosQty(imported)} contato(s) no arquivo`,
+            `Até ${formatDisparosQty(imported)} contato(s) único(s) no arquivo`,
             `mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} envios`,
           ];
           if (!hasMasterAccess()) {
@@ -50284,7 +50287,9 @@
           hintEl.innerHTML = parts.join(" · ");
         }
         const planned = getDisCampaignWizardPlannedSendCountValue();
-        renderCampaignImportStatsElement(statsEl, imported, planned);
+        renderCampaignImportStatsElement(statsEl, imported, planned, {
+          duplicatesRemoved: disCampaignWizardDuplicatesRemoved,
+        });
       }
 
       function isDisCampaignWizardLeadsFileName(fileName) {
@@ -50292,19 +50297,83 @@
         return lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".txt");
       }
 
+      function canonicalizeOfficialWizardPhone(raw) {
+        let digits = String(raw == null ? "" : raw).replace(/\D/g, "");
+        if (!digits) return "";
+        if (digits.startsWith("0") && digits.length >= 11) digits = digits.replace(/^0+/, "");
+        if (digits.length >= 10 && digits.length <= 11 && !digits.startsWith("55")) {
+          digits = `55${digits}`;
+        }
+        if (digits.startsWith("55") && digits.length === 13 && digits.charAt(4) === "9") {
+          return `${digits.slice(0, 4)}${digits.slice(5)}`;
+        }
+        return digits;
+      }
+
+      function guessOfficialWizardPhoneColumn(columns) {
+        const list = (Array.isArray(columns) ? columns : []).map((item) => String(item || "").trim()).filter(Boolean);
+        const exact = list.find((item) =>
+          /^(telefone|phone|celular|whatsapp|whats|mobile|tel|n[uú]mero|numero|destino)$/i.test(item)
+        );
+        if (exact) return exact;
+        const fuzzy = list.find((item) => /tel|phone|whats|cel/i.test(item));
+        return fuzzy || list[0] || "";
+      }
+
+      function countOfficialWizardUniquePhones(rows, phoneColumn) {
+        const seen = new Set();
+        let unique = 0;
+        let duplicatesRemoved = 0;
+        for (const row of rows) {
+          const key = canonicalizeOfficialWizardPhone(phoneColumn ? row?.[phoneColumn] : row);
+          if (!key) {
+            continue;
+          }
+          if (seen.has(key)) {
+            duplicatesRemoved += 1;
+            continue;
+          }
+          seen.add(key);
+          unique += 1;
+        }
+        return { unique, duplicatesRemoved };
+      }
+
       async function countDisCampaignWizardLeadsRows(file) {
         const lower = String(file?.name || "").toLowerCase();
         if (lower.endsWith(".txt")) {
           const text = await file.text();
-          if (!String(text || "").trim()) return 0;
-          return text
+          const lines = String(text || "")
             .split(/\r\n|\n|\r/)
             .map((line) => String(line || "").trim())
-            .filter(Boolean).length;
+            .filter(Boolean);
+          if (!lines.length) return { unique: 0, duplicatesRemoved: 0 };
+          const first = lines[0];
+          const delimiter = first.includes(";") ? ";" : first.includes("\t") ? "\t" : first.includes(",") ? "," : "";
+          if (delimiter) {
+            const headers = first.split(delimiter).map((item) => item.trim());
+            const phoneColumn = guessOfficialWizardPhoneColumn(headers);
+            if (phoneColumn && /tel|phone|whats|cel|n[uú]mero|numero|destino/i.test(phoneColumn)) {
+              const rows = lines.slice(1).map((line) => {
+                const parts = line.split(delimiter);
+                const row = {};
+                headers.forEach((header, index) => {
+                  row[header] = String(parts[index] ?? "").trim();
+                });
+                return row;
+              });
+              return countOfficialWizardUniquePhones(rows, phoneColumn);
+            }
+          }
+          return countOfficialWizardUniquePhones(
+            lines.map((line) => ({ telefone: line })),
+            "telefone"
+          );
         }
         await ensureXlsxParserReady();
         const rows = await parseSpreadsheetFile(file);
-        return rows.length;
+        const phoneColumn = guessOfficialWizardPhoneColumn(rows[0] ? Object.keys(rows[0]) : []);
+        return countOfficialWizardUniquePhones(rows, phoneColumn);
       }
 
       async function setDisCampaignWizardLeadsFile(file) {
@@ -50314,6 +50383,7 @@
         if (!file) {
           disCampaignWizardLeadsFile = null;
           disCampaignWizardImportedLineCount = 0;
+          disCampaignWizardDuplicatesRemoved = 0;
           if (label) label.textContent = "Nenhum arquivo carregado.";
           if (countInput) countInput.value = "";
           clearDisCampaignWizardLeadsCountError();
@@ -50323,6 +50393,7 @@
         if (!isDisCampaignWizardLeadsFileName(file.name)) {
           disCampaignWizardLeadsFile = null;
           disCampaignWizardImportedLineCount = 0;
+          disCampaignWizardDuplicatesRemoved = 0;
           if (leadsInput) leadsInput.value = "";
           if (label) label.textContent = "Nenhum arquivo carregado.";
           if (countInput) countInput.value = "";
@@ -50337,19 +50408,25 @@
         }
         disCampaignWizardLeadsFile = file;
         try {
-          const importedLineCount = await countDisCampaignWizardLeadsRows(file);
+          const counted = await countDisCampaignWizardLeadsRows(file);
+          const importedLineCount = Math.max(0, Math.floor(Number(counted?.unique) || 0));
+          const duplicatesRemoved = Math.max(0, Math.floor(Number(counted?.duplicatesRemoved) || 0));
           disCampaignWizardImportedLineCount = importedLineCount;
+          disCampaignWizardDuplicatesRemoved = duplicatesRemoved;
           if (label) {
-            label.textContent = `${file.name} · ${formatDisparosQty(importedLineCount)} linha(s)`;
+            label.textContent =
+              duplicatesRemoved > 0
+                ? `${file.name} · ${formatDisparosQty(importedLineCount)} contato(s) único(s)`
+                : `${file.name} · ${formatDisparosQty(importedLineCount)} linha(s)`;
           }
           if (importedLineCount < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
             if (countInput) countInput.value = "";
             updateDisCampaignWizardLeadsCountUi();
             showDisCampaignWizardLeadsCountError(
-              `O arquivo precisa ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} contatos.`
+              `O arquivo precisa ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} contatos únicos.`
             );
             showToast(
-              `Arquivo com ${formatDisparosQty(importedLineCount)} contato(s). Mínimo: ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)}.`,
+              `Arquivo com ${formatDisparosQty(importedLineCount)} contato(s) único(s). Mínimo: ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)}.`,
               "warning",
               5200
             );
@@ -50365,13 +50442,18 @@
           }
           clearDisCampaignWizardLeadsCountError();
           updateDisCampaignWizardLeadsCountUi();
+          const extra =
+            duplicatesRemoved > 0
+              ? ` ${formatDisparosQty(duplicatesRemoved)} duplicado(s) excluído(s).`
+              : "";
           showToast(
-            `Arquivo importado: ${formatDisparosQty(importedLineCount)} linha(s). Informe quantos envios deseja realizar (mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)}).`,
+            `Arquivo importado: ${formatDisparosQty(importedLineCount)} contato(s) único(s).${extra} Informe quantos envios deseja realizar (mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)}).`,
             "success",
             4500
           );
         } catch {
           disCampaignWizardImportedLineCount = 0;
+          disCampaignWizardDuplicatesRemoved = 0;
           if (label) label.textContent = file.name;
           if (countInput) countInput.value = "";
           clearDisCampaignWizardLeadsCountError();
@@ -50412,6 +50494,7 @@
         const plannedSendInput = document.getElementById("dis-wizard-planned-send-count");
         if (plannedSendInput) plannedSendInput.value = "";
         disCampaignWizardImportedLineCount = 0;
+        disCampaignWizardDuplicatesRemoved = 0;
         clearDisCampaignWizardLeadsCountError();
         [1, 2, 3].forEach((n) => {
           const el = document.getElementById(`dis-wizard-text-${n}`);
@@ -54278,10 +54361,17 @@
         const imported = Math.max(0, Math.floor(Number(importedLineCount) || 0));
         const planned = Math.max(0, Math.floor(Number(plannedSendCount) || 0));
         if (!imported) return "";
-        let html = `Quantidade de linhas importadas: ${formatDisparosQty(imported)}`;
+        const duplicatesRemoved = Math.max(0, Math.floor(Number(options?.duplicatesRemoved || 0)));
+        let html =
+          duplicatesRemoved > 0
+            ? `Quantidade de contatos únicos: ${formatDisparosQty(imported)}`
+            : `Quantidade de linhas importadas: ${formatDisparosQty(imported)}`;
         if (planned > 0) {
           const envioLabel = planned === 1 ? "envio" : "envios";
           html += `<br/>Quantidade de envios solicitados: ${formatDisparosQty(planned)} ${envioLabel}.`;
+        }
+        if (duplicatesRemoved > 0) {
+          html += `<br/>Telefones duplicados excluídos: ${formatDisparosQty(duplicatesRemoved)} (1 envio por número).`;
         }
         const status = normalizeCampaignIntakeStatus(options?.status);
         const sent = Math.max(0, Math.floor(Number(options?.sentCount ?? 0)));
@@ -54303,9 +54393,9 @@
         return Math.min(imported, remaining);
       }
 
-      function renderCampaignImportStatsElement(el, importedLineCount, plannedSendCount) {
+      function renderCampaignImportStatsElement(el, importedLineCount, plannedSendCount, options) {
         if (!el) return;
-        const html = formatCampaignImportStatsHtml(importedLineCount, plannedSendCount);
+        const html = formatCampaignImportStatsHtml(importedLineCount, plannedSendCount, options);
         if (!html) {
           el.innerHTML = "";
           el.hidden = true;

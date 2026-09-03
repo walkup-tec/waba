@@ -23,6 +23,10 @@ import {
   type WabaDispatchesApiKind,
 } from "./waba-dispatches-api-kind";
 import {
+  parseOfficialCampaignLeadsUnique,
+  writeOfficialCampaignLeadsFile,
+} from "./waba-campaign-intake-oficial-dedupe";
+import {
   countLeadsImportedRows,
   isCampaignLeadsFileName,
   isCampaignLeadsTxtFileName,
@@ -229,19 +233,26 @@ const buildIntakeSuccessPayload = (
   options: {
     deduplicated?: boolean;
     operacionalNotify?: OperacionalNotifyResult;
+    duplicatesRemoved?: number;
   } = {},
 ) => {
   const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
   const importedLineCount = Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
-  const importSummary =
+  const duplicatesRemoved = Math.max(0, Math.round(Number(options.duplicatesRemoved || 0)));
+  const importedLabel = duplicatesRemoved > 0 ? "contatos únicos" : "linhas importadas";
+  let importSummary =
     plannedSendCount < importedLineCount
-      ? `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios (limite do seu pacote contratado).`
-      : `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios.`;
+      ? `Quantidade de ${importedLabel}: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios (limite do seu pacote contratado).`
+      : `Quantidade de ${importedLabel}: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios.`;
+  if (duplicatesRemoved > 0) {
+    importSummary += ` ${duplicatesRemoved} telefone(s) duplicado(s) foram excluídos (1 envio por número).`;
+  }
 
   return {
     ok: true,
     deduplicated: Boolean(options.deduplicated),
     ...toPublicIntake(intake),
+    duplicatesRemoved,
     operacionalNotify: options.operacionalNotify,
     message:
       options.deduplicated
@@ -443,9 +454,25 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         });
       }
 
+      const { apiKind, error: apiKindError } = parseRequestedApiKind(body, auth.email);
+      if (apiKindError) {
+        return res.status(400).json({ error: apiKindError });
+      }
+
       let importedLineCount = 0;
+      let leadsBufferForTrim = spreadsheetFile.buffer;
+      let phoneDuplicatesRemoved = 0;
+      let officialUniqueSheet: ReturnType<typeof parseOfficialCampaignLeadsUnique>["sheet"] | null =
+        null;
       try {
-        importedLineCount = countLeadsImportedRows(spreadsheetFile.buffer, sheetName);
+        if (apiKind === "oficial") {
+          const deduped = parseOfficialCampaignLeadsUnique(spreadsheetFile.buffer, sheetName);
+          importedLineCount = deduped.uniqueCount;
+          officialUniqueSheet = deduped.sheet;
+          phoneDuplicatesRemoved = deduped.duplicatesRemoved;
+        } else {
+          importedLineCount = countLeadsImportedRows(spreadsheetFile.buffer, sheetName);
+        }
       } catch {
         return res.status(400).json({ error: "Não foi possível ler o arquivo de leads." });
       }
@@ -454,13 +481,11 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       }
       if (importedLineCount < WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
         return res.status(400).json({
-          error: `O arquivo precisa ter no mínimo ${WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} contatos para gerar a campanha.`,
+          error:
+            apiKind === "oficial"
+              ? `O arquivo precisa ter no mínimo ${WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} contatos únicos para gerar a campanha.`
+              : `O arquivo precisa ter no mínimo ${WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} contatos para gerar a campanha.`,
         });
-      }
-
-      const { apiKind, error: apiKindError } = parseRequestedApiKind(body, auth.email);
-      if (apiKindError) {
-        return res.status(400).json({ error: apiKindError });
       }
 
       const requestedSendCount = parseRequestedPlannedSendCount(body);
@@ -491,11 +516,9 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
 
       let trimmedSpreadsheetBuffer: Buffer;
       try {
-        trimmedSpreadsheetBuffer = trimLeadsBufferToRowCount(
-          spreadsheetFile.buffer,
-          plannedSendCount,
-          sheetName,
-        );
+        trimmedSpreadsheetBuffer = officialUniqueSheet
+          ? writeOfficialCampaignLeadsFile(officialUniqueSheet, sheetName, plannedSendCount)
+          : trimLeadsBufferToRowCount(leadsBufferForTrim, plannedSendCount, sheetName);
       } catch {
         return res.status(400).json({ error: "Não foi possível preparar o arquivo de leads para envio." });
       }
@@ -592,10 +615,17 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         );
         return res
           .status(200)
-          .json(buildIntakeSuccessPayload(intakeResult.intake, { deduplicated: true }));
+          .json(
+            buildIntakeSuccessPayload(intakeResult.intake, {
+              deduplicated: true,
+              duplicatesRemoved: phoneDuplicatesRemoved,
+            }),
+          );
       }
 
-      return res.status(201).json(buildIntakeSuccessPayload(intakeResult.intake));
+      return res.status(201).json(
+        buildIntakeSuccessPayload(intakeResult.intake, { duplicatesRemoved: phoneDuplicatesRemoved }),
+      );
     } catch (error) {
       const statusCode = Number((error as { statusCode?: number })?.statusCode || 0);
       if (statusCode >= 400 && statusCode < 600) {
