@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 17:35 — Jandira 2: 27 envios sem JSON de produção
+- Health de produção no marker novo. SSH/export sem chave. 27 no Cloud = aceite Graph até provar `delivered` no webhook.
+- LOG: `doc/LOG-2026-09-03__173500__jandira2-27-envios-verificacao.md`
+
 ## 2026-09-03 17:18 — Push GitHub master (dedupe + editar IA)
 - Tip único para `walkup-tec/waba` `master`: leads Oficiais sem duplicata + Editar/Salvar das 3 opções.
 - Marker: `DEPLOY-2026-09-03-171800-oficial-dedupe-ai-edit`.
