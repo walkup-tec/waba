@@ -34,6 +34,7 @@ import {
 } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
 import { computeCampaignPerformanceMetrics } from "./waba-campaign-performance-metrics";
+import { collectIntakeReportTimeline } from "./waba-campaign-report-timeline";
 import {
   scheduleOperacionalStaffNotifyOnCampaignAssigned,
   type OperacionalNotifyResult,
@@ -668,6 +669,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       regionDdd: intake.regionDdd,
       source: report?.source || "manual",
       showClicks,
+      timeline: collectIntakeReportTimeline(intake),
       indicators,
       message: report
         ? showClicks

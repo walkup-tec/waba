@@ -1,6 +1,7 @@
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { MetaWebhookNormalizedEvent } from "./meta-whatsapp-webhook-parser";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
+import { rememberTemplateApprovedAt } from "./meta-whatsapp-template-approved-at.store";
 import { MetaWhatsappTemplateRepository } from "./meta-whatsapp-template.repository";
 import { MetaWhatsappTemplateAiRepository } from "./meta-whatsapp-template-ai.repository";
 
@@ -35,6 +36,18 @@ export class MetaWhatsappWebhookTemplateService implements MetaWhatsappWebhookTe
       atIso: new Date().toISOString(),
     });
     if (updated) {
+      rememberTemplateApprovedAt(
+        {
+          tenantId: updated.tenantId,
+          templateId: updated.id,
+          metaTemplateId: updated.metaTemplateId,
+          wabaId,
+          name: updated.name,
+          language: updated.language,
+          status,
+        },
+        updated.lastSyncedAt || updated.updatedAt,
+      );
       try {
         await this.analyses.patchMetaOutcome({
           tenantId: input.connection.tenantId,

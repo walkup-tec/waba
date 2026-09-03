@@ -55,6 +55,7 @@ import {
   isLinkableLabCampaignStatus,
 } from "./meta-whatsapp-broadcast-linkable";
 import { toCloudBroadcastHistoryItem } from "./meta-whatsapp-broadcast-history";
+import { lookupTemplateApprovedAt } from "./meta-whatsapp-template-approved-at.store";
 
 const running = new Set<string>();
 
@@ -410,6 +411,18 @@ export class MetaWhatsappBroadcastService {
       publicBaseHints: input.publicBaseHints,
     });
     const now = new Date().toISOString();
+    const templateApprovedAt =
+      lookupTemplateApprovedAt({
+        tenantId: tenant.tenantId,
+        templateId: loaded.template.id,
+        metaTemplateId: loaded.template.metaTemplateId,
+        wabaId: loaded.connection.wabaId,
+        name: loaded.template.name,
+        language: loaded.template.language,
+      }) ||
+      loaded.template.lastSyncedAt ||
+      loaded.template.updatedAt ||
+      undefined;
     const campaign: MetaBroadcastCampaign = {
       id: campaignId,
       tenantId: tenant.tenantId,
@@ -431,6 +444,7 @@ export class MetaWhatsappBroadcastService {
       skipped: preview.parsed.invalid.length,
       createdAt: now,
       updatedAt: now,
+      ...(templateApprovedAt ? { templateApprovedAt } : {}),
       leads: preview.parsed.leads,
     };
     saveBroadcastCampaign(campaign);
@@ -473,6 +487,7 @@ export class MetaWhatsappBroadcastService {
       return;
     }
     row.status = "running";
+    if (!row.sendStartedAt) row.sendStartedAt = new Date().toISOString();
     saveBroadcastCampaign(row);
     try {
       for (let index = 0; index < row.leads.length; index += 1) {

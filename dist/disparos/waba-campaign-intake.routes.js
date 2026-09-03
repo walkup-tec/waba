@@ -18,6 +18,7 @@ const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.ut
 const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 const waba_campaign_laboratorio_attended_1 = require("./waba-campaign-laboratorio-attended");
 const waba_campaign_performance_metrics_1 = require("./waba-campaign-performance-metrics");
+const waba_campaign_report_timeline_1 = require("./waba-campaign-report-timeline");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
 const waba_disparos_dashboard_service_1 = require("./waba-disparos-dashboard.service");
@@ -551,6 +552,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             regionDdd: intake.regionDdd,
             source: report?.source || "manual",
             showClicks,
+            timeline: (0, waba_campaign_report_timeline_1.collectIntakeReportTimeline)(intake),
             indicators,
             message: report
                 ? showClicks

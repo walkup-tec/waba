@@ -7,6 +7,7 @@ const meta_whatsapp_connection_repository_1 = require("./meta-whatsapp-connectio
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
 const meta_whatsapp_template_log_1 = require("./meta-whatsapp-template-log");
+const meta_whatsapp_template_approved_at_store_1 = require("./meta-whatsapp-template-approved-at.store");
 const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.repository");
 const meta_whatsapp_template_graph_client_1 = require("./meta-whatsapp-template-graph.client");
 const meta_whatsapp_template_silent_block_button_1 = require("./meta-whatsapp-template-silent-block-button");
@@ -63,6 +64,17 @@ function warnIgnored(body, tenantId) {
 }
 function publicPortfolioName(connection) {
     return String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio";
+}
+function rememberApprovedTemplate(row) {
+    (0, meta_whatsapp_template_approved_at_store_1.rememberTemplateApprovedAt)({
+        tenantId: row.tenantId,
+        templateId: row.id,
+        metaTemplateId: row.metaTemplateId,
+        wabaId: row.wabaId,
+        name: row.name,
+        language: row.language,
+        status: row.status,
+    }, row.lastSyncedAt || row.updatedAt);
 }
 class MetaWhatsappTemplateService {
     constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), templates = new meta_whatsapp_template_repository_1.MetaWhatsappTemplateRepository(), graph = undefined, decrypt = meta_token_crypto_1.decryptMetaToken, analyses = new meta_whatsapp_template_ai_repository_1.MetaWhatsappTemplateAiRepository()) {
@@ -173,6 +185,7 @@ class MetaWhatsappTemplateService {
             language: validated.language,
             status: row.status,
         });
+        rememberApprovedTemplate(row);
         const analysisId = String(body?.aiAnalysisId || body?.ai_analysis_id || "").trim();
         if (analysisId) {
             try {
@@ -239,6 +252,7 @@ class MetaWhatsappTemplateService {
                 lastSyncedAt: now,
             });
             upserted.push(saved);
+            rememberApprovedTemplate(saved);
             try {
                 await this.analyses.patchMetaOutcome({
                     tenantId: tenant.tenantId,

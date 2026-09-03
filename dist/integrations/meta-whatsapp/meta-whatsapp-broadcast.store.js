@@ -13,6 +13,7 @@ exports.listAllBroadcastCampaigns = listAllBroadcastCampaigns;
 exports.findBroadcastByIntakeCampaignId = findBroadcastByIntakeCampaignId;
 exports.matchBroadcastLeadForMetaStatus = matchBroadcastLeadForMetaStatus;
 exports.applyMetaStatusToBroadcastByWamid = applyMetaStatusToBroadcastByWamid;
+exports.stampTemplateApprovedAtOnBroadcasts = stampTemplateApprovedAtOnBroadcasts;
 exports.addClicksToBroadcastCampaign = addClicksToBroadcastCampaign;
 exports.addClicksByBroadcastSlug = addClicksByBroadcastSlug;
 exports.publicBroadcastCampaign = publicBroadcastCampaign;
@@ -131,6 +132,9 @@ function mergeBroadcastCampaignPreservingMeta(incoming, stored) {
         lastMetaStatusAt: storedMetaMs > incomingMetaMs ? stored.lastMetaStatusAt : incoming.lastMetaStatusAt || stored.lastMetaStatusAt,
         clicks: Math.max(Number(incoming.clicks || 0), Number(stored.clicks || 0)),
         reportFinalizedAt: incoming.reportFinalizedAt || stored.reportFinalizedAt,
+        sendStartedAt: stored.sendStartedAt || incoming.sendStartedAt,
+        sendFinishedAt: incoming.sendFinishedAt || stored.sendFinishedAt,
+        templateApprovedAt: stored.templateApprovedAt || incoming.templateApprovedAt,
     };
 }
 function saveBroadcastCampaign(row) {
@@ -233,6 +237,36 @@ function applyMetaStatusToBroadcastByWamid(wamid, status, extras) {
     row.updatedAt = row.lastMetaStatusAt;
     writeStore(store);
     return { ...row, leads: row.leads.map((item) => ({ ...item })) };
+}
+function stampTemplateApprovedAtOnBroadcasts(input) {
+    const tenantId = String(input.tenantId || "").trim();
+    const approvedAt = String(input.approvedAt || "").trim();
+    if (!tenantId || !approvedAt)
+        return;
+    const templateId = String(input.templateId || "").trim();
+    const templateName = String(input.templateName || "").trim().toLowerCase();
+    const language = String(input.language || "").trim().toLowerCase();
+    if (!templateId && !templateName)
+        return;
+    const store = readStore();
+    let changed = false;
+    for (const row of store.campaigns) {
+        if (String(row.tenantId || "") !== tenantId)
+            continue;
+        if (row.templateApprovedAt)
+            continue;
+        const sameId = templateId && String(row.templateId || "").trim() === templateId;
+        const sameName = templateName &&
+            String(row.templateName || "").trim().toLowerCase() === templateName &&
+            (!language || String(row.language || "").trim().toLowerCase() === language);
+        if (!sameId && !sameName)
+            continue;
+        row.templateApprovedAt = approvedAt;
+        row.updatedAt = new Date().toISOString();
+        changed = true;
+    }
+    if (changed)
+        writeStore(store);
 }
 function addClicksToBroadcastCampaign(campaignId, amount = 1) {
     const id = String(campaignId || "").trim();

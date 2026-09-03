@@ -295,6 +295,23 @@ describe("webhook do Disparo Cloud não perde entregue/lido", () => {
     assert.equal(merged.leads[0].statusLog?.length, 2);
   });
 
+  it("preserva início do disparo e aprovação do template no merge", () => {
+    const stored = campaign({
+      sendStartedAt: "2026-09-02T10:01:00.000Z",
+      sendFinishedAt: "2026-09-02T10:20:00.000Z",
+      templateApprovedAt: "2026-09-01T12:00:00.000Z",
+    });
+    const incoming = campaign({
+      status: "running",
+      sendFinishedAt: undefined,
+      templateApprovedAt: undefined,
+    });
+    const merged = mergeBroadcastCampaignPreservingMeta(incoming, stored);
+    assert.equal(merged.sendStartedAt, "2026-09-02T10:01:00.000Z");
+    assert.equal(merged.sendFinishedAt, "2026-09-02T10:20:00.000Z");
+    assert.equal(merged.templateApprovedAt, "2026-09-01T12:00:00.000Z");
+  });
+
   it("casa o status da Meta pelo wamid ou pelo destinatário", () => {
     const rows = [
       campaign({

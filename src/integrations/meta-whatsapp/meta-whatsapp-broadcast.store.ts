@@ -37,7 +37,9 @@ export type MetaBroadcastCampaign = {
   clicksAtStart: number;
   clicks: number;
   status: "queued" | "running" | "done" | "failed";
+  sendStartedAt?: string;
   sendFinishedAt?: string;
+  templateApprovedAt?: string;
   lastMetaStatusAt?: string;
   reportFinalizedAt?: string;
   total: number;
@@ -168,6 +170,9 @@ export function mergeBroadcastCampaignPreservingMeta(
       storedMetaMs > incomingMetaMs ? stored.lastMetaStatusAt : incoming.lastMetaStatusAt || stored.lastMetaStatusAt,
     clicks: Math.max(Number(incoming.clicks || 0), Number(stored.clicks || 0)),
     reportFinalizedAt: incoming.reportFinalizedAt || stored.reportFinalizedAt,
+    sendStartedAt: stored.sendStartedAt || incoming.sendStartedAt,
+    sendFinishedAt: incoming.sendFinishedAt || stored.sendFinishedAt,
+    templateApprovedAt: stored.templateApprovedAt || incoming.templateApprovedAt,
   };
 }
 
@@ -281,6 +286,38 @@ export function applyMetaStatusToBroadcastByWamid(
   row.updatedAt = row.lastMetaStatusAt;
   writeStore(store);
   return { ...row, leads: row.leads.map((item) => ({ ...item })) };
+}
+
+export function stampTemplateApprovedAtOnBroadcasts(input: {
+  tenantId: string;
+  templateId?: string | null;
+  templateName?: string | null;
+  language?: string | null;
+  approvedAt: string;
+}): void {
+  const tenantId = String(input.tenantId || "").trim();
+  const approvedAt = String(input.approvedAt || "").trim();
+  if (!tenantId || !approvedAt) return;
+  const templateId = String(input.templateId || "").trim();
+  const templateName = String(input.templateName || "").trim().toLowerCase();
+  const language = String(input.language || "").trim().toLowerCase();
+  if (!templateId && !templateName) return;
+  const store = readStore();
+  let changed = false;
+  for (const row of store.campaigns) {
+    if (String(row.tenantId || "") !== tenantId) continue;
+    if (row.templateApprovedAt) continue;
+    const sameId = templateId && String(row.templateId || "").trim() === templateId;
+    const sameName =
+      templateName &&
+      String(row.templateName || "").trim().toLowerCase() === templateName &&
+      (!language || String(row.language || "").trim().toLowerCase() === language);
+    if (!sameId && !sameName) continue;
+    row.templateApprovedAt = approvedAt;
+    row.updatedAt = new Date().toISOString();
+    changed = true;
+  }
+  if (changed) writeStore(store);
 }
 
 export function addClicksToBroadcastCampaign(campaignId: string, amount = 1): void {

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetaWhatsappWebhookTemplateService = void 0;
 const meta_whatsapp_template_log_1 = require("./meta-whatsapp-template-log");
+const meta_whatsapp_template_approved_at_store_1 = require("./meta-whatsapp-template-approved-at.store");
 const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.repository");
 const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
 class MetaWhatsappWebhookTemplateService {
@@ -25,6 +26,15 @@ class MetaWhatsappWebhookTemplateService {
             atIso: new Date().toISOString(),
         });
         if (updated) {
+            (0, meta_whatsapp_template_approved_at_store_1.rememberTemplateApprovedAt)({
+                tenantId: updated.tenantId,
+                templateId: updated.id,
+                metaTemplateId: updated.metaTemplateId,
+                wabaId,
+                name: updated.name,
+                language: updated.language,
+                status,
+            }, updated.lastSyncedAt || updated.updatedAt);
             try {
                 await this.analyses.patchMetaOutcome({
                     tenantId: input.connection.tenantId,

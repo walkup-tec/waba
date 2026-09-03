@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 10:18 — Linha do tempo no relatório do assinante
+- Relatório do assinante mostra criação, início do atendimento, aprovação do template, início e fim do disparo (dia completo + hh:mm:ss).
+- Aviso: a Meta pode demorar até 3 horas após o fim do disparo para coletar e exibir os dados.
+- LOG: `doc/LOG-2026-09-03__101800__relatorio-assinante-timeline.md`
+
 ## 2026-09-03 09:55 — Erros de envio no relatório operacional
 - Lead guarda código/texto da Meta e trilha de status. Operacional vê falhas e aceitos sem comprovante de entrega.
 - Entregues continuam só com webhook `delivered`/`read`.

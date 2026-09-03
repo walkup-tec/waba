@@ -9172,6 +9172,66 @@
         color: rgba(148, 163, 184, 0.72);
       }
 
+      .camp-report-timeline {
+        display: grid;
+        gap: 10px;
+        margin: 0 0 16px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(15, 23, 42, 0.4);
+      }
+
+      .camp-report-timeline-title {
+        margin: 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #94a3b8;
+      }
+
+      .camp-report-timeline-list {
+        margin: 0;
+        display: grid;
+        gap: 8px;
+      }
+
+      .camp-report-timeline-row {
+        display: grid;
+        gap: 2px;
+      }
+
+      .camp-report-timeline-row dt {
+        margin: 0;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #cbd5e1;
+      }
+
+      .camp-report-timeline-row dd {
+        margin: 0;
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: #f8fafc;
+        line-height: 1.35;
+      }
+
+      .camp-report-meta-delay-note {
+        margin: 2px 0 0;
+        font-size: 0.82rem;
+        line-height: 1.5;
+        color: #fde68a;
+      }
+
+      @media (min-width: 720px) {
+        .camp-report-timeline-row {
+          grid-template-columns: minmax(148px, 210px) 1fr;
+          align-items: baseline;
+          gap: 12px;
+        }
+      }
+
       .camp-report-reimbursement {
         display: grid;
         gap: 4px;
@@ -55002,7 +55062,10 @@
         if (!body) return;
         const indicators = data?.indicators && typeof data.indicators === "object" ? data.indicators : {};
         const showClicks = Boolean(data?.showClicks) || Number.isFinite(Number(indicators.cliques));
-        body.innerHTML = buildCampaignPerformanceDashboardHtml(
+        const timelineHtml = buildSubscriberCampaignTimelineHtml(data?.timeline);
+        body.innerHTML =
+          timelineHtml +
+          buildCampaignPerformanceDashboardHtml(
           {
             totalLeads: indicators.totalLeads,
             enviados: indicators.enviados,
@@ -55018,6 +55081,29 @@
             reportSource: String(data.source || "").trim(),
           }
         );
+      }
+
+      function buildSubscriberCampaignTimelineHtml(timeline) {
+        const items = Array.isArray(timeline?.items) ? timeline.items : [];
+        if (!items.length) return "";
+        const rows = items
+          .map((item) => {
+            const label = escapeReportHtml(String(item.label || ""));
+            const display = escapeReportHtml(String(item.display || "—"));
+            return `<div class="camp-report-timeline-row"><dt>${label}</dt><dd>${display}</dd></div>`;
+          })
+          .join("");
+        const note = escapeReportHtml(
+          String(timeline.metaCollectionNote || "").trim() ||
+            "A Meta pode demorar até 3 horas após o fim do disparo para finalizar a coleta e a exibição dos dados deste relatório."
+        );
+        return `
+          <section class="camp-report-timeline" aria-label="Linha do tempo da campanha">
+            <h4 class="camp-report-timeline-title">Linha do tempo</h4>
+            <dl class="camp-report-timeline-list">${rows}</dl>
+            <p class="camp-report-meta-delay-note">${note}</p>
+          </section>
+        `;
       }
 
       function renderDisCampaignReportBody(data) {

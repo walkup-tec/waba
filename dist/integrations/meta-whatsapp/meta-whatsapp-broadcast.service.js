@@ -25,6 +25,7 @@ const waba_campaign_laboratorio_attended_1 = require("../../disparos/waba-campai
 const waba_subscriber_repository_1 = require("../../subscribers/waba-subscriber.repository");
 const meta_whatsapp_broadcast_linkable_1 = require("./meta-whatsapp-broadcast-linkable");
 const meta_whatsapp_broadcast_history_1 = require("./meta-whatsapp-broadcast-history");
+const meta_whatsapp_template_approved_at_store_1 = require("./meta-whatsapp-template-approved-at.store");
 const running = new Set();
 function requireTenant(auth) {
     try {
@@ -302,6 +303,17 @@ class MetaWhatsappBroadcastService {
             publicBaseHints: input.publicBaseHints,
         });
         const now = new Date().toISOString();
+        const templateApprovedAt = (0, meta_whatsapp_template_approved_at_store_1.lookupTemplateApprovedAt)({
+            tenantId: tenant.tenantId,
+            templateId: loaded.template.id,
+            metaTemplateId: loaded.template.metaTemplateId,
+            wabaId: loaded.connection.wabaId,
+            name: loaded.template.name,
+            language: loaded.template.language,
+        }) ||
+            loaded.template.lastSyncedAt ||
+            loaded.template.updatedAt ||
+            undefined;
         const campaign = {
             id: campaignId,
             tenantId: tenant.tenantId,
@@ -323,6 +335,7 @@ class MetaWhatsappBroadcastService {
             skipped: preview.parsed.invalid.length,
             createdAt: now,
             updatedAt: now,
+            ...(templateApprovedAt ? { templateApprovedAt } : {}),
             leads: preview.parsed.leads,
         };
         (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(campaign);
@@ -353,6 +366,8 @@ class MetaWhatsappBroadcastService {
             return;
         }
         row.status = "running";
+        if (!row.sendStartedAt)
+            row.sendStartedAt = new Date().toISOString();
         (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(row);
         try {
             for (let index = 0; index < row.leads.length; index += 1) {

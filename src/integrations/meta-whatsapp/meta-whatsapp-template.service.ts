@@ -5,6 +5,7 @@ import { MetaWhatsappConnectionRepository } from "./meta-whatsapp-connection.rep
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
 import { publicMetaGraphTemplateMessage, safePublicGraphTemplateDetail } from "./meta-whatsapp-graph-errors";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
+import { rememberTemplateApprovedAt } from "./meta-whatsapp-template-approved-at.store";
 import { MetaWhatsappTemplateRepository } from "./meta-whatsapp-template.repository";
 import {
   createWabaMessageTemplate,
@@ -88,6 +89,21 @@ function warnIgnored(body: Record<string, unknown> | undefined, tenantId: string
 
 function publicPortfolioName(connection: MetaWhatsappConnectionRecord): string {
   return String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio";
+}
+
+function rememberApprovedTemplate(row: MetaTemplateRecord): void {
+  rememberTemplateApprovedAt(
+    {
+      tenantId: row.tenantId,
+      templateId: row.id,
+      metaTemplateId: row.metaTemplateId,
+      wabaId: row.wabaId,
+      name: row.name,
+      language: row.language,
+      status: row.status,
+    },
+    row.lastSyncedAt || row.updatedAt,
+  );
 }
 
 export class MetaWhatsappTemplateService {
@@ -219,6 +235,7 @@ export class MetaWhatsappTemplateService {
       language: validated.language,
       status: row.status,
     });
+    rememberApprovedTemplate(row);
     const analysisId = String(body?.aiAnalysisId || body?.ai_analysis_id || "").trim();
     if (analysisId) {
       try {
@@ -286,6 +303,7 @@ export class MetaWhatsappTemplateService {
         lastSyncedAt: now,
       });
       upserted.push(saved);
+      rememberApprovedTemplate(saved);
       try {
         await this.analyses.patchMetaOutcome({
           tenantId: tenant.tenantId,

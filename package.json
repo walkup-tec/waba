@@ -46,7 +46,8 @@
     "test:meta-broadcast": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-cloud-recipient.test.ts",
     "test:meta-lab-report": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-lab-report.test.ts",
     "test:laboratorio-menu": "node --require ts-node/register --test src/menus/waba-laboratorio-access.test.ts",
-    "test:campaign-report-overrides": "node --require ts-node/register --test src/disparos/waba-campaign-report-read-overrides.test.ts"
+    "test:campaign-report-overrides": "node --require ts-node/register --test src/disparos/waba-campaign-report-read-overrides.test.ts",
+    "test:campaign-report-timeline": "node --require ts-node/register --test src/disparos/waba-campaign-report-timeline.test.ts"
   },
   "keywords": [
     "n8n",
