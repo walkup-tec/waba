@@ -179,6 +179,14 @@ class MetaWhatsappTemplateService {
             components,
             lastSyncedAt: now,
         });
+        const createHandle = (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(components);
+        if (createHandle) {
+            (0, meta_whatsapp_template_header_preview_store_1.copyTemplateHeaderPreview)({
+                tenantId: tenant.tenantId,
+                fromHandle: createHandle,
+                toHandles: [row.id],
+            });
+        }
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("CREATE", {
             tenantId: tenant.tenantId,
             name: validated.name,
@@ -237,6 +245,11 @@ class MetaWhatsappTemplateService {
         for (const item of listed.items) {
             if (!item)
                 continue;
+            const previous = (item.metaTemplateId
+                ? await this.templates.findByMetaId(tenant.tenantId, item.metaTemplateId)
+                : null) ||
+                (await this.templates.findByWabaNameLanguage(tenant.tenantId, String(connection.wabaId), item.name, item.language));
+            const oldHandle = previous ? (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(previous.components) : "";
             const saved = await this.templates.upsertFromGraph({
                 tenantId: tenant.tenantId,
                 connectionId: connection.id,
@@ -251,6 +264,14 @@ class MetaWhatsappTemplateService {
                 rejectedReason: item.rejectedReason,
                 lastSyncedAt: now,
             });
+            const newHandle = (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(saved.components);
+            if (oldHandle) {
+                (0, meta_whatsapp_template_header_preview_store_1.copyTemplateHeaderPreview)({
+                    tenantId: tenant.tenantId,
+                    fromHandle: oldHandle,
+                    toHandles: [saved.id, newHandle],
+                });
+            }
             upserted.push(saved);
             rememberApprovedTemplate(saved);
             try {
@@ -367,9 +388,11 @@ class MetaWhatsappTemplateService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_not_found");
         }
         const handle = (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(row.components);
-        if (!handle)
-            return null;
-        return (0, meta_whatsapp_template_header_preview_store_1.readTemplateHeaderPreview)(tenant.tenantId, handle);
+        return (0, meta_whatsapp_template_header_preview_store_1.readTemplateHeaderPreviewForSend)({
+            tenantId: tenant.tenantId,
+            handle,
+            templateId: id,
+        });
     }
 }
 exports.MetaWhatsappTemplateService = MetaWhatsappTemplateService;

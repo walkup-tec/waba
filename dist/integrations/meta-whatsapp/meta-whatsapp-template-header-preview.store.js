@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.headerHandleFromComponents = headerHandleFromComponents;
 exports.headerHttpsUrlFromComponents = headerHttpsUrlFromComponents;
 exports.saveTemplateHeaderPreview = saveTemplateHeaderPreview;
+exports.copyTemplateHeaderPreview = copyTemplateHeaderPreview;
+exports.readTemplateHeaderPreviewForSend = readTemplateHeaderPreviewForSend;
 exports.readTemplateHeaderPreview = readTemplateHeaderPreview;
 exports.hasTemplateHeaderPreview = hasTemplateHeaderPreview;
 exports.publicTemplateHeaderPreviewUrl = publicTemplateHeaderPreviewUrl;
@@ -90,6 +92,28 @@ function saveTemplateHeaderPreview(input) {
     (0, node_fs_1.mkdirSync)(headersDir(input.tenantId), { recursive: true });
     (0, node_fs_1.writeFileSync)(filePath(input.tenantId, handle, ext), input.bytes);
 }
+function copyTemplateHeaderPreview(input) {
+    const preview = readTemplateHeaderPreview(input.tenantId, input.fromHandle);
+    if (!preview)
+        return;
+    for (const raw of input.toHandles) {
+        const toHandle = String(raw || "").trim();
+        if (!toHandle || toHandle === input.fromHandle)
+            continue;
+        saveTemplateHeaderPreview({
+            tenantId: input.tenantId,
+            handle: toHandle,
+            mime: preview.mime,
+            bytes: preview.bytes,
+        });
+    }
+}
+function readTemplateHeaderPreviewForSend(input) {
+    const handle = String(input.handle || "").trim();
+    const templateId = String(input.templateId || "").trim();
+    return ((handle ? readTemplateHeaderPreview(input.tenantId, handle) : null) ||
+        (templateId ? readTemplateHeaderPreview(input.tenantId, templateId) : null));
+}
 function readTemplateHeaderPreview(tenantId, handle) {
     const id = safeTenantId(tenantId);
     const key = String(handle || "").trim();
@@ -113,12 +137,12 @@ function hasTemplateHeaderPreview(tenantId, handle) {
     return Boolean(readTemplateHeaderPreview(tenantId, handle));
 }
 function publicTemplateHeaderPreviewUrl(input) {
-    const httpsUrl = headerHttpsUrlFromComponents(input.components);
-    if (httpsUrl)
-        return httpsUrl;
     const handle = headerHandleFromComponents(input.components);
     const id = String(input.id || "").trim();
-    if (!handle || !id || !hasTemplateHeaderPreview(input.tenantId, handle))
-        return null;
-    return `/integrations/meta/whatsapp/templates/${encodeURIComponent(id)}/header`;
+    const hasLocal = Boolean(handle && hasTemplateHeaderPreview(input.tenantId, handle)) ||
+        Boolean(id && hasTemplateHeaderPreview(input.tenantId, id));
+    if (hasLocal && id) {
+        return `/integrations/meta/whatsapp/templates/${encodeURIComponent(id)}/header`;
+    }
+    return headerHttpsUrlFromComponents(input.components);
 }

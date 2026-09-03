@@ -14,6 +14,7 @@ const waba_campaign_intake_repository_1 = require("../../disparos/waba-campaign-
 const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-intake-status");
 const waba_campaign_laboratorio_attended_1 = require("../../disparos/waba-campaign-laboratorio-attended");
 const waba_campaign_report_finalize_service_1 = require("../../disparos/waba-campaign-report-finalize.service");
+const waba_campaign_report_read_overrides_1 = require("../../disparos/waba-campaign-report-read-overrides");
 /** Sem webhook novo após o envio, fecha o relatório. */
 exports.META_LAB_REPORT_QUIET_MS = 15 * 60 * 1000;
 /** Teto: não espera leitura eterna. */
@@ -136,6 +137,9 @@ function tryFinalizeLabIntakeReport(intakeCampaignId, nowMs = Date.now()) {
         return false;
     if (!(0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake))
         return false;
+    if ((0, waba_campaign_report_read_overrides_1.campaignHoldsSubscriberInProgress)(intake.campaignName, intake.createdAt, intake.id)) {
+        return false;
+    }
     const status = (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status);
     if (status === "completed" || status === "error_reported" || status === "cancelled")
         return false;

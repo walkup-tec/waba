@@ -18,8 +18,8 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h). Relatório da Campanha Jandira deste disparo (1.990 / 1.156 / 2) mostra 981 entregues e 431 lidos, sem cliques, via override de leitura. Relatório operacional Lab passa a listar falhas da Meta e envios sem comprovante de entrega. Relatório do assinante passa a listar a linha do tempo (criação, atendimento, aprovação do template, início e fim do disparo) numa trilha de pontos (horizontal no desktop, vertical no celular) e o aviso de até 3 horas da Meta.
 
-Campanha Jandira 2 (`jandira_quantun_2`, 1159 envios): a Meta recusou a mídia do cabeçalho (131053 / weblink 403) em todos os leads. Correção no código: não reenviar weblink de exemplo; próximo disparo só depois do deploy. Não reenviar este lote automaticamente.
+Campanha Jandira 2 (`jandira_quantun_2`, 1159 envios): a Meta recusou a mídia do cabeçalho (131053 / weblink 403). O assinante vê a campanha só como **Em andamento**, sem relatório. Correção do weblink no Disparo Cloud: próximo envio só depois do deploy, sem reenviar este lote.
 
-Marker: `DEPLOY-2026-09-03-135600-relatorio-timeline-visual`.
+Marker: `DEPLOY-2026-09-03-163500-jandira2-andamento`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.

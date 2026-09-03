@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.applyCampaignReportReadOverride = exports.campaignReportHidesClicks = exports.resolveCampaignReportReadOverride = exports.resolveCampaignReportOverride = void 0;
+exports.applyCampaignReportReadOverride = exports.campaignReportHidesClicks = exports.resolveCampaignReportReadOverride = exports.campaignHoldsSubscriberInProgress = exports.resolveCampaignReportOverride = void 0;
 const CAMPAIGN_REPORT_OVERRIDES = [
     {
         name: "SQUARE RESIDENCIAL",
@@ -22,6 +22,13 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         delivered: 981,
         read: 431,
         hideClicks: true,
+    },
+    {
+        name: "Campanha Jandira 2",
+        createdLocalDate: "2026-09-03",
+        timezone: "America/Sao_Paulo",
+        holdSubscriberInProgress: true,
+        intakeId: "368d053b-d59b-4eed-a235-fe9e9f32c68c",
     },
 ];
 const normalizeCampaignName = (value) => String(value || "")
@@ -73,9 +80,17 @@ const fingerprintMatches = (report, fingerprint) => {
         return false;
     return true;
 };
-const ruleMatches = (rule, campaignName, createdAt, report) => {
+const ruleMatches = (rule, campaignName, createdAt, report, intakeId) => {
+    if (rule.intakeId && String(intakeId || "").trim() === rule.intakeId)
+        return true;
     if (!namesMatch(campaignName, rule.name))
         return false;
+    if (rule.holdSubscriberInProgress) {
+        const left = normalizeCampaignName(campaignName);
+        const right = normalizeCampaignName(rule.name);
+        if (!left.includes(right))
+            return false;
+    }
     if (!rule.createdLocalDate && !rule.fingerprint)
         return false;
     if (rule.createdLocalDate) {
@@ -94,17 +109,20 @@ const ruleMatches = (rule, campaignName, createdAt, report) => {
     }
     return true;
 };
-const resolveCampaignReportOverride = (campaignName, createdAt, report) => {
+const resolveCampaignReportOverride = (campaignName, createdAt, report, intakeId) => {
     const name = String(campaignName || "").trim();
-    if (!name)
+    const id = String(intakeId || "").trim();
+    if (!name && !id)
         return null;
     for (const rule of CAMPAIGN_REPORT_OVERRIDES) {
-        if (ruleMatches(rule, name, createdAt, report))
+        if (ruleMatches(rule, name, createdAt, report, id))
             return rule;
     }
     return null;
 };
 exports.resolveCampaignReportOverride = resolveCampaignReportOverride;
+const campaignHoldsSubscriberInProgress = (campaignName, createdAt, intakeId) => Boolean((0, exports.resolveCampaignReportOverride)(campaignName, createdAt, null, intakeId)?.holdSubscriberInProgress);
+exports.campaignHoldsSubscriberInProgress = campaignHoldsSubscriberInProgress;
 const resolveCampaignReportReadOverride = (campaignName, createdAt, report) => {
     const rule = (0, exports.resolveCampaignReportOverride)(campaignName, createdAt, report);
     return rule?.read ?? null;

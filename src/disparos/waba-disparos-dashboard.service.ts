@@ -10,6 +10,7 @@ import type {
 import { normalizeCampaignIntakeStatus } from "./waba-campaign-intake-status";
 import {
   applyCampaignReportReadOverride,
+  campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
 } from "./waba-campaign-report-read-overrides";
 import {
@@ -119,6 +120,9 @@ export const buildCampaignComparisonFromIntakes = (
 ): DisparosDashboardCampaignComparisonItem[] => {
   return intakes
     .filter((intake) => {
+      if (campaignHoldsSubscriberInProgress(intake.campaignName, intake.createdAt, intake.id)) {
+        return false;
+      }
       const status = normalizeStoredStatus(intake.status);
       return status === "completed" && Boolean(intake.performanceReport);
     })
@@ -229,12 +233,17 @@ const aggregateDisparosDashboardFromIntakes = (
   };
 
   for (const intake of intakes) {
-    const status = normalizeStoredStatus(intake.status);
+    const holdInProgress = campaignHoldsSubscriberInProgress(
+      intake.campaignName,
+      intake.createdAt,
+      intake.id,
+    );
+    const status = holdInProgress ? "in_progress" : normalizeStoredStatus(intake.status);
     if (status === "completed" || status === "error_reported") completed += 1;
     else if (status === "in_progress") inProgress += 1;
     else if (status === "generated") awaiting += 1;
 
-    if (status !== "completed" || !intake.performanceReport) continue;
+    if (holdInProgress || status !== "completed" || !intake.performanceReport) continue;
 
     withReport += 1;
     const apiKind = resolveIntakeApiKindFromIntake(intake);

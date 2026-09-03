@@ -9,6 +9,7 @@ import { WabaCampaignIntakeRepository } from "../../disparos/waba-campaign-intak
 import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
 import { campaignAttendedByLaboratorioStaff } from "../../disparos/waba-campaign-laboratorio-attended";
 import { finalizeIntakePerformanceReport } from "../../disparos/waba-campaign-report-finalize.service";
+import { campaignHoldsSubscriberInProgress } from "../../disparos/waba-campaign-report-read-overrides";
 
 /** Sem webhook novo após o envio, fecha o relatório. */
 export const META_LAB_REPORT_QUIET_MS = 15 * 60 * 1000;
@@ -132,6 +133,9 @@ export function tryFinalizeLabIntakeReport(intakeCampaignId: string, nowMs = Dat
   const intake = intakes.getById(intakeId);
   if (!intake) return false;
   if (!campaignAttendedByLaboratorioStaff(intake)) return false;
+  if (campaignHoldsSubscriberInProgress(intake.campaignName, intake.createdAt, intake.id)) {
+    return false;
+  }
   const status = normalizeCampaignIntakeStatus(intake.status);
   if (status === "completed" || status === "error_reported" || status === "cancelled") return false;
   if (status !== "in_progress") return false;

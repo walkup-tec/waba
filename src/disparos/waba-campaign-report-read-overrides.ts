@@ -15,6 +15,9 @@ type CampaignReportOverride = {
   delivered?: number;
   read?: number;
   hideClicks?: boolean;
+  /** Assinante vê Em andamento; o fechamento automático do relatório Meta não roda. */
+  holdSubscriberInProgress?: boolean;
+  intakeId?: string;
 };
 
 const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
@@ -38,6 +41,13 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
     delivered: 981,
     read: 431,
     hideClicks: true,
+  },
+  {
+    name: "Campanha Jandira 2",
+    createdLocalDate: "2026-09-03",
+    timezone: "America/Sao_Paulo",
+    holdSubscriberInProgress: true,
+    intakeId: "368d053b-d59b-4eed-a235-fe9e9f32c68c",
   },
 ];
 
@@ -99,8 +109,15 @@ const ruleMatches = (
   campaignName: string,
   createdAt: string,
   report?: WabaCampaignPerformanceReport | null,
+  intakeId?: string,
 ): boolean => {
+  if (rule.intakeId && String(intakeId || "").trim() === rule.intakeId) return true;
   if (!namesMatch(campaignName, rule.name)) return false;
+  if (rule.holdSubscriberInProgress) {
+    const left = normalizeCampaignName(campaignName);
+    const right = normalizeCampaignName(rule.name);
+    if (!left.includes(right)) return false;
+  }
   if (!rule.createdLocalDate && !rule.fingerprint) return false;
 
   if (rule.createdLocalDate) {
@@ -122,14 +139,23 @@ export const resolveCampaignReportOverride = (
   campaignName: string,
   createdAt: string,
   report?: WabaCampaignPerformanceReport | null,
+  intakeId?: string,
 ): CampaignReportOverride | null => {
   const name = String(campaignName || "").trim();
-  if (!name) return null;
+  const id = String(intakeId || "").trim();
+  if (!name && !id) return null;
   for (const rule of CAMPAIGN_REPORT_OVERRIDES) {
-    if (ruleMatches(rule, name, createdAt, report)) return rule;
+    if (ruleMatches(rule, name, createdAt, report, id)) return rule;
   }
   return null;
 };
+
+export const campaignHoldsSubscriberInProgress = (
+  campaignName: string,
+  createdAt: string,
+  intakeId?: string,
+): boolean =>
+  Boolean(resolveCampaignReportOverride(campaignName, createdAt, null, intakeId)?.holdSubscriberInProgress);
 
 export const resolveCampaignReportReadOverride = (
   campaignName: string,

@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 16:35 — Jandira 2 só Em andamento para o assinante
+- Assinante não vê relatório nem indicadores do disparo 131053. Status permanece Em andamento. Finalize Meta não fecha esta campanha.
+- Marker: `DEPLOY-2026-09-03-163500-jandira2-andamento`.
+- LOG: `doc/LOG-2026-09-03__163500__jandira2-assinante-andamento.md`
+
 ## 2026-09-03 16:30 — Weblink de cabeçalho 131053 / 403
 - Jandira 2: 1159/1159 `metaStatus=failed` com 131053 (lookaside 403). `wamid` não é entrega.
 - Disparo Cloud deixa de mandar URL de exemplo da Graph como `link`; sobe o arquivo local e envia `{ id }`. Sem arquivo, aborta antes do lote.

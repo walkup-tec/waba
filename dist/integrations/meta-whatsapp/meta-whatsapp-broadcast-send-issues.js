@@ -7,7 +7,7 @@ const META_SEND_ERROR_HINT = {
     "131026": "Número inválido ou sem WhatsApp.",
     "131047": "Fora da janela de 24 h. É preciso template.",
     "131051": "A Meta recusou o tipo desta mensagem.",
-    "131053": "A Meta recusou a mídia desta mensagem.",
+    "131053": "A Meta não baixou a mídia do cabeçalho (erro 131053 / weblink 403). Use o arquivo local, não a URL de exemplo da Graph.",
     "130429": "Limite de envio da Meta atingido.",
     "132001": "Template pausado ou recusado.",
     "133010": "Número ainda não está pronto na Meta.",
@@ -36,6 +36,8 @@ function failureMessage(lead) {
     const code = String(lead.errorCode || "").trim();
     const hint = code ? META_SEND_ERROR_HINT[code] : "";
     const raw = String(lead.error || "").replace(/\s+/g, " ").trim();
+    if (code === "131053" && hint)
+        return hint;
     if (hint && (!raw || /não foi possível enviar|falha informada pela meta/i.test(raw)))
         return hint;
     return raw || hint || "Falha informada pela Meta.";

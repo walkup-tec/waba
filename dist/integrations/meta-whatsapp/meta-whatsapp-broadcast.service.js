@@ -9,6 +9,7 @@ const meta_whatsapp_connection_repository_1 = require("./meta-whatsapp-connectio
 const meta_whatsapp_connection_service_1 = require("./meta-whatsapp-connection.service");
 const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.repository");
 const meta_whatsapp_template_types_1 = require("./meta-whatsapp-template.types");
+const meta_whatsapp_broadcast_header_1 = require("./meta-whatsapp-broadcast-header");
 const meta_whatsapp_template_header_preview_store_1 = require("./meta-whatsapp-template-header-preview.store");
 const meta_cloud_provider_1 = require("../whatsapp/meta-cloud-provider");
 const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-template");
@@ -180,25 +181,41 @@ class MetaWhatsappBroadcastService {
         const kind = headerMediaType(input.inspect.headerFormat);
         if (!kind)
             return null;
-        const httpsUrl = (0, meta_whatsapp_template_header_preview_store_1.headerHttpsUrlFromComponents)(input.components);
-        if (httpsUrl)
-            return { link: httpsUrl };
         const handle = (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(input.components);
-        const preview = handle ? (0, meta_whatsapp_template_header_preview_store_1.readTemplateHeaderPreview)(input.tenantId, handle) : null;
-        if (!preview) {
-            fail("template_media_required", "Este template exige mídia de cabeçalho no envio. Sincronize o template ou reenvie a mídia.");
-        }
-        const mediaId = await (0, meta_whatsapp_broadcast_media_1.uploadCloudApiMedia)({
-            token: input.token,
-            phoneNumberId: input.phoneNumberId,
-            bytes: preview.bytes,
-            mime: mimeFromHeader(input.inspect.headerFormat, preview.mime),
-            fileName: `header.${preview.mime.includes("png") ? "png" : preview.mime.includes("mp4") ? "mp4" : preview.mime.includes("pdf") ? "pdf" : "jpg"}`,
+        const httpsUrl = (0, meta_whatsapp_template_header_preview_store_1.headerHttpsUrlFromComponents)(input.components);
+        const preview = (0, meta_whatsapp_template_header_preview_store_1.readTemplateHeaderPreviewForSend)({
+            tenantId: input.tenantId,
+            handle,
+            templateId: input.templateId,
         });
-        if (!mediaId) {
-            fail("template_upload_failed", "A Meta recusou a mídia do cabeçalho para o disparo.");
+        const plan = (0, meta_whatsapp_broadcast_header_1.classifyBroadcastHeaderMedia)({
+            hasLocalPreview: Boolean(preview),
+            httpsUrl,
+        });
+        if (plan === "upload" && preview) {
+            const mime = mimeFromHeader(input.inspect.headerFormat, preview.mime);
+            const mediaId = await (0, meta_whatsapp_broadcast_media_1.uploadCloudApiMedia)({
+                token: input.token,
+                phoneNumberId: input.phoneNumberId,
+                bytes: preview.bytes,
+                mime,
+                fileName: (0, meta_whatsapp_broadcast_header_1.headerUploadFileName)(mime),
+            });
+            if (!mediaId) {
+                fail("template_upload_failed", "A Meta recusou a mídia do cabeçalho para o disparo.");
+            }
+            return { mediaId };
         }
-        return { mediaId };
+        if (plan === "weblink" && httpsUrl) {
+            return { link: httpsUrl };
+        }
+        if (plan === "refuse-weblink") {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast_header_refuse_weblink", {
+                templateId: input.templateId,
+            });
+            fail("template_media_required", meta_whatsapp_broadcast_header_1.BROADCAST_HEADER_WEBLINK_ERROR);
+        }
+        fail("template_media_required", "Este template exige mídia de cabeçalho no envio. Sincronize o template ou reenvie a mídia.");
     }
     async createCampaignShortLink(input) {
         const button = input.inspect.urlButton;

@@ -31,6 +31,7 @@ import {
 import {
   applyCampaignReportReadOverride,
   campaignReportHidesClicks,
+  campaignHoldsSubscriberInProgress,
 } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
 import { computeCampaignPerformanceMetrics } from "./waba-campaign-performance-metrics";
@@ -162,7 +163,13 @@ const resolveReportedSentCount = (intake: WabaCampaignIntake): number => {
 };
 
 const toPublicIntake = (intake: WabaCampaignIntake) => {
-  const status = normalizeStoredStatus(intake.status);
+  const storedStatus = normalizeStoredStatus(intake.status);
+  const holdInProgress = campaignHoldsSubscriberInProgress(
+    intake.campaignName,
+    intake.createdAt,
+    intake.id,
+  );
+  const status = holdInProgress ? "in_progress" : storedStatus;
   const importedLineCount = Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
   const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
   const apiKind = resolveIntakeApiKindFromIntake(intake);
@@ -174,17 +181,17 @@ const toPublicIntake = (intake: WabaCampaignIntake) => {
     createdAt: intake.createdAt,
     updatedAt: intake.updatedAt,
     status,
-    displayStatus: toDisplayStatus(status, laboratorioAttended),
+    displayStatus: toDisplayStatus(status, laboratorioAttended && !holdInProgress),
     regionDdd: intake.regionDdd,
     importedLineCount,
     plannedSendCount,
     apiKind,
     planTypeLabel: WABA_DISPATCHES_API_LABELS[apiKind],
     /** Envios confirmados no relatório do operacional (somente campanhas finalizadas). */
-    sentCount: resolveReportedSentCount(intake),
+    sentCount: holdInProgress ? 0 : resolveReportedSentCount(intake),
     hasErrorReport: status === "error_reported",
     laboratorioAttended,
-    reportSource: intake.performanceReport?.source || null,
+    reportSource: holdInProgress ? null : intake.performanceReport?.source || null,
     source: "intake" as const,
   };
 };
@@ -625,7 +632,12 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
     if (!intake || intake.ownerEmail !== auth.email) {
       return res.status(404).json({ error: "Campanha não encontrada." });
     }
-    const status = normalizeStoredStatus(intake.status);
+    const holdInProgress = campaignHoldsSubscriberInProgress(
+      intake.campaignName,
+      intake.createdAt,
+      intake.id,
+    );
+    const status = holdInProgress ? "in_progress" : normalizeStoredStatus(intake.status);
     if (status === "error_reported") {
       return res.status(400).json({
         error: "Esta campanha foi finalizada com erro reportado. Consulte o motivo na lista de campanhas.",

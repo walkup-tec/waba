@@ -4,6 +4,7 @@ import { computeCampaignPerformanceMetrics } from "./waba-campaign-performance-m
 import type { WabaCampaignPerformanceReport } from "./waba-campaign-intake.repository";
 import {
   applyCampaignReportReadOverride,
+  campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
   resolveCampaignReportReadOverride,
 } from "./waba-campaign-report-read-overrides";
@@ -109,5 +110,16 @@ describe("override pontual do relatório", () => {
     assert.equal(got?.read, 518);
     assert.equal(got?.delivered, 700);
     assert.equal(campaignReportHidesClicks("6 DE AGOSTO", augustStamp, stored), false);
+  });
+
+  it("Campanha Jandira 2 fica Em andamento e não casa a Jandira antiga", () => {
+    const created = "2026-09-03T14:11:00.000Z";
+    assert.equal(campaignHoldsSubscriberInProgress("Campanha Jandira 2", created), true);
+    assert.equal(
+      campaignHoldsSubscriberInProgress("Outra", created, "368d053b-d59b-4eed-a235-fe9e9f32c68c"),
+      true,
+    );
+    assert.equal(campaignHoldsSubscriberInProgress("Campanha Jandira", "2026-09-02T10:00:00.000Z"), false);
+    assert.equal(campaignHoldsSubscriberInProgress("Campanha Jandira 2", "2026-09-02T10:00:00.000Z"), false);
   });
 });

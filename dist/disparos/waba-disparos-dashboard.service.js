@@ -33,6 +33,9 @@ const computeRatesFromReport = (report) => {
 const buildCampaignComparisonFromIntakes = (intakes, options) => {
     return intakes
         .filter((intake) => {
+        if ((0, waba_campaign_report_read_overrides_1.campaignHoldsSubscriberInProgress)(intake.campaignName, intake.createdAt, intake.id)) {
+            return false;
+        }
         const status = normalizeStoredStatus(intake.status);
         return status === "completed" && Boolean(intake.performanceReport);
     })
@@ -120,14 +123,15 @@ const aggregateDisparosDashboardFromIntakes = (intakes, comparisonOptions) => {
         alternativa: 0,
     };
     for (const intake of intakes) {
-        const status = normalizeStoredStatus(intake.status);
+        const holdInProgress = (0, waba_campaign_report_read_overrides_1.campaignHoldsSubscriberInProgress)(intake.campaignName, intake.createdAt, intake.id);
+        const status = holdInProgress ? "in_progress" : normalizeStoredStatus(intake.status);
         if (status === "completed" || status === "error_reported")
             completed += 1;
         else if (status === "in_progress")
             inProgress += 1;
         else if (status === "generated")
             awaiting += 1;
-        if (status !== "completed" || !intake.performanceReport)
+        if (holdInProgress || status !== "completed" || !intake.performanceReport)
             continue;
         withReport += 1;
         const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
