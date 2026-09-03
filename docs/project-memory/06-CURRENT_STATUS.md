@@ -21,6 +21,6 @@ Em andamento: aprovação dos templates na Meta (até 24 h). Relatório da Campa
 
 Campanha Jandira 2: lotes 131053 cancelados. O Disparo Cloud de template com mídia no topo só sobe bytes locais e manda `{ id }`. Se o arquivo não estiver no servidor (template aprovado da biblioteca, ou a mesma foto em outro modelo), o operacional envia a foto de novo na tela do disparo. A Meta não reusa o link de exemplo.
 
-Marker: `DEPLOY-2026-09-03-182400-header-id-template-aprovado`.
+Marker: `DEPLOY-2026-09-03-191200-video-header-upload`.
 
-GitHub `walkup-tec/waba` `master` recebe o tip do Disparo Cloud só com arquivo local (`{ id }`). Redeploy EasyPanel do `waba_disparador` fica com o usuário.
+GitHub `walkup-tec/waba` `master` recebe o tip do upload de vídeo no cabeçalho (mensagem real + timeout). Redeploy EasyPanel do `waba_disparador` fica com o usuário.
