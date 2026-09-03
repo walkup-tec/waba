@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 12:30 — Push GitHub master mídia vídeo
+- Tip enviado a `walkup-tec/waba` `master` para o usuário Redeployar.
+- Marker: `DEPLOY-2026-09-03-123000-assinante-midia-video`.
+- LOG: `doc/LOG-2026-09-03__123000__push-github-master-assinante-midia-video.md`
+
 ## 2026-09-03 11:03 — Assinante sobe imagem ou vídeo
 - Wizard da campanha: etapa Mídia com escolha Imagem (PNG/JPG 1080×1080) ou Vídeo (MP4 até 16 MB). Regras visíveis antes do arquivo.
 - LOG: `doc/LOG-2026-09-03__110300__assinante-midia-video.md`
