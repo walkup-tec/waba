@@ -1,0 +1,25 @@
+# LOG — Investigação: falha ao subir template com vídeo (Nésio)
+
+## Sintoma
+
+Usuário tenta cadastrar template Utility com mídia **Vídeo** (`Apresentacao_Nesio.mp4`), modelo «Nésio Fernandes», botão «Saiba Mais» e URL `https://wa.me/5527996632879?...`. Na tela: «Opção 3 salva».
+
+## Bloqueio de evidência
+
+- `VPS_SSH_PRIVATE_KEY` ausente neste ambiente → sem `docker logs` do `waba_disparador`.
+- Produção `/health` ainda no marker `DEPLOY-2026-09-03-171800-oficial-dedupe-ai-edit` (Redeploy do tip `7fe3c7d` ainda não refletiu no Node).
+
+## Hipóteses (sem log)
+
+1. **Alta — falha no Enviar para META no upload resumable do vídeo** (`POST .../templates/ai/header-media`): timeout 60s, MIME, ou recusa Graph → `template_upload_failed`.
+2. **Média — URL wa.me** no botão: destino pode ser encurtado antes da Graph; se o encurtador falhar ou a validação local recusar, aparece `template_url_restricted` / `template_shorten_failed`.
+3. **Baixa — só salvou a opção 3** (editar texto) e ainda não concluiu o Enviar; o texto de ajuda da UI fala só JPEG/PNG (cosmético).
+
+## Próximo passo
+
+1. Pedir o texto do modal de erro **ou** liberar SSH para `docker logs`.
+2. Com o erro exato, corrigir (timeout vídeo / mensagem / accept de arquivo / aviso de URL).
+
+## Palavras-chave
+
+nésio, vídeo, mp4, header-media, template_upload_failed, wa.me, logs VPS
