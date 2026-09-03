@@ -57,7 +57,7 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
       role: auth.role,
     });
     if (!download) {
-      return res.status(404).json({ error: "Imagem da campanha não encontrada." });
+      return res.status(404).json({ error: "Mídia da campanha não encontrada." });
     }
     return res.download(download.filePath, download.fileName);
   });

@@ -16388,10 +16388,101 @@
       .dis-campaign-wizard-image-preview.is-visible {
         display: block;
       }
-      .dis-campaign-wizard-image-preview img {
-        display: block;
+      .dis-campaign-wizard-image-preview img,
+      .dis-campaign-wizard-image-preview video {
+        display: none;
         width: 100%;
         height: auto;
+        max-height: 220px;
+        background: #0f172a;
+      }
+      .dis-campaign-wizard-image-preview.is-image img,
+      .dis-campaign-wizard-image-preview.is-video video {
+        display: block;
+      }
+      .dis-campaign-media-lead {
+        margin: 0 0 14px;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        color: #cbd5e1;
+      }
+      .dis-campaign-media-kind {
+        border: 0;
+        margin: 0 0 14px;
+        padding: 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .dis-campaign-media-kind-card {
+        position: relative;
+        display: grid;
+        gap: 2px;
+        margin: 0;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: rgba(15, 23, 42, 0.45);
+        cursor: pointer;
+      }
+      .dis-campaign-media-kind-card:has(input:checked) {
+        border-color: rgba(52, 211, 153, 0.55);
+        background: rgba(6, 78, 59, 0.28);
+      }
+      .dis-campaign-media-kind-card:focus-within {
+        box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.4);
+      }
+      .dis-campaign-media-kind-card input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .dis-campaign-media-kind-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+      .dis-campaign-media-kind-sub {
+        font-size: 0.78rem;
+        color: #94a3b8;
+      }
+      .dis-campaign-media-rules {
+        margin: 0 0 14px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(251, 191, 36, 0.28);
+        background: rgba(120, 53, 15, 0.22);
+      }
+      .dis-campaign-media-rules-title {
+        margin: 0 0 6px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #fde68a;
+      }
+      .dis-campaign-media-rules-list {
+        margin: 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 4px;
+        font-size: 0.84rem;
+        line-height: 1.45;
+        color: #fef3c7;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      @media (max-width: 640px) {
+        .dis-campaign-media-kind {
+          grid-template-columns: 1fr;
+        }
       }
       .dis-campaign-wizard-success {
         border-radius: 16px;
@@ -20796,7 +20887,7 @@
                   <div class="dis-campaign-wizard-steps" id="dis-campaign-wizard-steps" aria-label="Etapas da campanha">
                     <div class="dis-campaign-wizard-step is-active" data-wizard-step-indicator="1">1. Nome</div>
                     <div class="dis-campaign-wizard-step" data-wizard-step-indicator="2">2. WhatsApp</div>
-                    <div class="dis-campaign-wizard-step" data-wizard-step-indicator="3">3. Imagem</div>
+                    <div class="dis-campaign-wizard-step" data-wizard-step-indicator="3">3. Mídia</div>
                     <div class="dis-campaign-wizard-step" data-wizard-step-indicator="4">4. Textos</div>
                     <div class="dis-campaign-wizard-step" data-wizard-step-indicator="5">5. Leads</div>
                   </div>
@@ -20865,20 +20956,44 @@
                   </div>
 
                   <div class="dis-campaign-wizard-panel" data-wizard-step="3" hidden>
-                    <h3 class="dis-campaign-wizard-panel-title">Imagem da campanha</h3>
+                    <h3 class="dis-campaign-wizard-panel-title">Mídia da campanha</h3>
+                    <p class="dis-campaign-media-lead">
+                      Escolha se o disparo usa <strong>imagem</strong> ou <strong>vídeo</strong>. O formato aceito aparece abaixo antes de você selecionar o arquivo.
+                    </p>
+                    <fieldset class="dis-campaign-media-kind" role="radiogroup" aria-label="Tipo de mídia da campanha">
+                      <legend class="visually-hidden">Tipo de mídia</legend>
+                      <label class="dis-campaign-media-kind-card">
+                        <input type="radio" name="dis-wizard-media-kind" value="image" checked />
+                        <span class="dis-campaign-media-kind-title">Imagem</span>
+                        <span class="dis-campaign-media-kind-sub">PNG ou JPG quadrada</span>
+                      </label>
+                      <label class="dis-campaign-media-kind-card">
+                        <input type="radio" name="dis-wizard-media-kind" value="video" />
+                        <span class="dis-campaign-media-kind-title">Vídeo</span>
+                        <span class="dis-campaign-media-kind-sub">Somente MP4</span>
+                      </label>
+                    </fieldset>
+                    <div id="dis-wizard-media-rules" class="dis-campaign-media-rules" aria-live="polite">
+                      <p class="dis-campaign-media-rules-title">Antes de enviar, use este formato:</p>
+                      <ul id="dis-wizard-media-rules-list" class="dis-campaign-media-rules-list">
+                        <li>Arquivo PNG ou JPG</li>
+                        <li>Exatamente 1080 × 1080 px</li>
+                      </ul>
+                    </div>
                     <div class="aquecedor-field">
-                      <label for="dis-wizard-campaign-image">Imagem 1080 × 1080 px (PNG ou JPG)</label>
+                      <label id="dis-wizard-campaign-media-label" for="dis-wizard-campaign-image">Arquivo da imagem (PNG ou JPG)</label>
                       <input
                         id="dis-wizard-campaign-image"
                         type="file"
                         accept="image/png,image/jpeg,image/jpg"
+                        aria-describedby="dis-wizard-media-rules dis-wizard-image-error"
                         required
                       />
-                      <span class="aquecedor-hint">A imagem precisa ter exatamente 1080 px de largura e 1080 px de altura.</span>
                       <span id="dis-wizard-image-error" class="field-error hidden"></span>
                     </div>
                     <div id="dis-wizard-image-preview" class="dis-campaign-wizard-image-preview" aria-hidden="true">
                       <img id="dis-wizard-image-preview-img" alt="Prévia da imagem da campanha" />
+                      <video id="dis-wizard-image-preview-video" muted playsinline controls></video>
                     </div>
                   </div>
 
@@ -44083,6 +44198,11 @@
 
         adminCampanhasDetailCampaignId = String(campaign.id || "");
         adminCampanhasDetailImageName = campaign.imageFileName || "campanha-imagem";
+        const downloadImageBtn = document.getElementById("admin-campanhas-download-image");
+        if (downloadImageBtn) {
+          downloadImageBtn.textContent =
+            String(campaign.mediaKind || "") === "video" ? "Baixar vídeo" : "Baixar imagem";
+        }
         adminCampanhasDetailWhatsappLogoName =
           campaign.whatsappLogoFileName || "whatsapp-logo";
         adminCampanhasDetailHasWhatsappLogo = Boolean(campaign.hasWhatsappLogo);
@@ -49254,6 +49374,17 @@
       const DIS_CAMPAIGN_WIZARD_TOTAL_STEPS = 5;
       const DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT = 1000;
       let disCampaignWizardImageFile = null;
+      let disCampaignWizardMediaKind = "image";
+      const DIS_CAMPAIGN_MEDIA_RULES = {
+        image: ["Arquivo PNG ou JPG", "Exatamente 1080 × 1080 px"],
+        video: [
+          "Arquivo .mp4 (MP4)",
+          "Vídeo H.264 e áudio AAC, ou sem áudio",
+          "Até 16 MB",
+          "Não use MOV, WebM, AVI, MKV ou GIF",
+        ],
+      };
+      const DIS_CAMPAIGN_VIDEO_MAX_BYTES = 16 * 1024 * 1024;
       let disCampaignWizardWhatsappLogoFile = null;
       let disCampaignWizardLeadsFile = null;
       let disCampaignWizardImportedLineCount = 0;
@@ -49351,12 +49482,17 @@
           return "";
         }
         if (step === 3) {
+          const kind = getDisCampaignWizardMediaKind();
           if (!disCampaignWizardImageFile) {
             const imageFromInput = document.getElementById("dis-wizard-campaign-image")?.files?.[0] || null;
             if (!imageFromInput) {
-              return "Envie a imagem da campanha (1080×1080 px).";
+              return kind === "video"
+                ? "Envie o vídeo da campanha em MP4 (.mp4), até 16 MB."
+                : "Envie a imagem da campanha (PNG ou JPG, 1080×1080 px).";
             }
-            return "Aguarde a validação da imagem ou envie um arquivo 1080×1080 px (PNG ou JPG).";
+            return kind === "video"
+              ? "Aguarde a validação do vídeo ou envie um arquivo MP4 (.mp4) de até 16 MB."
+              : "Aguarde a validação da imagem ou envie um arquivo 1080×1080 px (PNG ou JPG).";
           }
           return "";
         }
@@ -49447,7 +49583,7 @@
             : false;
           if (!imageOk) {
             showDisCampaignWizardSubmitError(
-              "Envie a imagem da campanha com 1080×1080 px (PNG ou JPG).",
+              getDisCampaignWizardMediaMissingMessage(),
               3
             );
             return false;
@@ -49626,6 +49762,7 @@
         );
         formData.append("responseLink", responseLink);
         formData.append("apiKind", apiKind);
+        formData.append("mediaKind", getDisCampaignWizardMediaKind());
         formData.append("image", disCampaignWizardImageFile);
         formData.append("whatsappLogo", disCampaignWizardWhatsappLogoFile);
         formData.append("spreadsheet", disCampaignWizardLeadsFile);
@@ -49705,30 +49842,120 @@
         throw lastError || new Error("Failed to fetch");
       }
 
+      function getDisCampaignWizardMediaKind() {
+        const selected = document.querySelector('input[name="dis-wizard-media-kind"]:checked');
+        const value = String(selected?.value || disCampaignWizardMediaKind || "image").trim().toLowerCase();
+        return value === "video" ? "video" : "image";
+      }
+
+      function getDisCampaignWizardMediaMissingMessage() {
+        return getDisCampaignWizardMediaKind() === "video"
+          ? "Envie o vídeo da campanha em MP4 (.mp4), H.264, até 16 MB."
+          : "Envie a imagem da campanha com 1080×1080 px (PNG ou JPG).";
+      }
+
+      function syncDisCampaignWizardMediaKindUi() {
+        const kind = getDisCampaignWizardMediaKind();
+        disCampaignWizardMediaKind = kind;
+        const list = document.getElementById("dis-wizard-media-rules-list");
+        const label = document.getElementById("dis-wizard-campaign-media-label");
+        const input = document.getElementById("dis-wizard-campaign-image");
+        const rules = DIS_CAMPAIGN_MEDIA_RULES[kind] || DIS_CAMPAIGN_MEDIA_RULES.image;
+        if (list) {
+          list.innerHTML = rules.map((item) => `<li>${item}</li>`).join("");
+        }
+        if (label) {
+          label.textContent =
+            kind === "video" ? "Arquivo do vídeo (somente MP4)" : "Arquivo da imagem (PNG ou JPG)";
+        }
+        if (input) {
+          input.accept = kind === "video" ? "video/mp4,.mp4" : "image/png,image/jpeg,image/jpg";
+        }
+      }
+
+      async function fileLooksLikeMp4(file) {
+        try {
+          const slice = await file.slice(4, 12).arrayBuffer();
+          const bytes = new Uint8Array(slice);
+          if (new TextDecoder().decode(bytes.subarray(0, 4)) !== "ftyp") return false;
+          const brand = new TextDecoder().decode(bytes.subarray(4, 8));
+          if (brand === "qt  " || brand.startsWith("3gp") || brand.startsWith("3g2")) return false;
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function hideDisCampaignWizardMediaPreview() {
+        const previewWrap = document.getElementById("dis-wizard-image-preview");
+        const previewImg = document.getElementById("dis-wizard-image-preview-img");
+        const previewVideo = document.getElementById("dis-wizard-image-preview-video");
+        if (previewImg) previewImg.removeAttribute("src");
+        if (previewVideo) {
+          previewVideo.pause?.();
+          previewVideo.removeAttribute("src");
+          previewVideo.load?.();
+        }
+        if (previewWrap) {
+          previewWrap.classList.remove("is-visible", "is-image", "is-video");
+          previewWrap.setAttribute("aria-hidden", "true");
+        }
+      }
+
       async function validateDisCampaignWizardImageFile(file) {
         const errorEl = document.getElementById("dis-wizard-image-error");
         const previewWrap = document.getElementById("dis-wizard-image-preview");
         const previewImg = document.getElementById("dis-wizard-image-preview-img");
+        const previewVideo = document.getElementById("dis-wizard-image-preview-video");
+        const kind = getDisCampaignWizardMediaKind();
+        const fileInput = document.getElementById("dis-wizard-campaign-image");
+        const showError = (message) => {
+          disCampaignWizardImageFile = null;
+          hideDisCampaignWizardMediaPreview();
+          if (fileInput) fileInput.setAttribute("aria-invalid", "true");
+          if (errorEl) {
+            errorEl.textContent = message;
+            errorEl.classList.remove("hidden");
+          }
+          return false;
+        };
         if (!file) {
           disCampaignWizardImageFile = null;
+          if (fileInput) fileInput.removeAttribute("aria-invalid");
           if (errorEl) {
             errorEl.textContent = "";
             errorEl.classList.add("hidden");
           }
-          if (previewWrap) {
-            previewWrap.classList.remove("is-visible");
-            previewWrap.setAttribute("aria-hidden", "true");
-          }
+          hideDisCampaignWizardMediaPreview();
           return false;
+        }
+        if (kind === "video") {
+          const mime = String(file.type || "").toLowerCase();
+          const name = String(file.name || "").toLowerCase();
+          const looksMp4 = mime === "video/mp4" || name.endsWith(".mp4");
+          if (!looksMp4 || file.size > DIS_CAMPAIGN_VIDEO_MAX_BYTES || !(await fileLooksLikeMp4(file))) {
+            return showError(
+              "Use somente MP4 (.mp4), H.264 com áudio AAC ou sem áudio, até 16 MB. Não envie MOV, WebM, AVI ou GIF."
+            );
+          }
+          const objectUrl = URL.createObjectURL(file);
+          disCampaignWizardImageFile = file;
+          if (fileInput) fileInput.removeAttribute("aria-invalid");
+          if (errorEl) {
+            errorEl.textContent = "";
+            errorEl.classList.add("hidden");
+          }
+          if (previewVideo && previewWrap) {
+            previewVideo.src = objectUrl;
+            previewWrap.classList.add("is-visible", "is-video");
+            previewWrap.classList.remove("is-image");
+            previewWrap.setAttribute("aria-hidden", "false");
+          }
+          return true;
         }
         const mime = String(file.type || "").toLowerCase();
         if (!mime.startsWith("image/")) {
-          disCampaignWizardImageFile = null;
-          if (errorEl) {
-            errorEl.textContent = "Use PNG ou JPG.";
-            errorEl.classList.remove("hidden");
-          }
-          return false;
+          return showError("Use PNG ou JPG.");
         }
         const objectUrl = URL.createObjectURL(file);
         try {
@@ -49739,32 +49966,25 @@
             img.src = objectUrl;
           });
           if (dimensions.width !== 1080 || dimensions.height !== 1080) {
-            disCampaignWizardImageFile = null;
-            if (errorEl) {
-              errorEl.textContent = `A imagem deve ser 1080×1080 px (enviada: ${dimensions.width}×${dimensions.height}).`;
-              errorEl.classList.remove("hidden");
-            }
-            if (previewWrap) previewWrap.classList.remove("is-visible");
-            return false;
+            return showError(
+              `A imagem deve ser 1080×1080 px (enviada: ${dimensions.width}×${dimensions.height}).`
+            );
           }
           disCampaignWizardImageFile = file;
+          if (fileInput) fileInput.removeAttribute("aria-invalid");
           if (errorEl) {
             errorEl.textContent = "";
             errorEl.classList.add("hidden");
           }
           if (previewImg && previewWrap) {
             previewImg.src = objectUrl;
-            previewWrap.classList.add("is-visible");
+            previewWrap.classList.add("is-visible", "is-image");
+            previewWrap.classList.remove("is-video");
             previewWrap.setAttribute("aria-hidden", "false");
           }
           return true;
         } catch {
-          disCampaignWizardImageFile = null;
-          if (errorEl) {
-            errorEl.textContent = "Não foi possível ler a imagem.";
-            errorEl.classList.remove("hidden");
-          }
-          return false;
+          return showError("Não foi possível ler a imagem.");
         }
       }
 
@@ -50046,6 +50266,11 @@
       function resetDisCampaignWizard() {
         disCampaignWizardStep = 1;
         disCampaignWizardImageFile = null;
+        disCampaignWizardMediaKind = "image";
+        document.querySelectorAll('input[name="dis-wizard-media-kind"]').forEach((input) => {
+          input.checked = input.value === "image";
+        });
+        syncDisCampaignWizardMediaKindUi();
         disCampaignWizardWhatsappLogoFile = null;
         disCampaignWizardLeadsFile = null;
         disCampaignWizardSubmitInFlight = false;
@@ -50148,7 +50373,7 @@
             throw new Error("Envie a logo do WhatsApp (500×500 px).");
           }
           if (!disCampaignWizardImageFile) {
-            throw new Error("Envie a imagem da campanha (1080×1080 px).");
+            throw new Error(getDisCampaignWizardMediaMissingMessage());
           }
           if (!disCampaignWizardLeadsFile) {
             throw new Error("Envie o arquivo de leads em Excel (.xlsx, .xls) ou TXT (.txt).");
@@ -50283,6 +50508,15 @@
           const file = event.target?.files?.[0] || null;
           await validateDisCampaignWizardImageFile(file);
         });
+        document.querySelectorAll('input[name="dis-wizard-media-kind"]').forEach((input) => {
+          input.addEventListener("change", () => {
+            const fileInput = document.getElementById("dis-wizard-campaign-image");
+            if (fileInput) fileInput.value = "";
+            syncDisCampaignWizardMediaKindUi();
+            void validateDisCampaignWizardImageFile(null);
+          });
+        });
+        syncDisCampaignWizardMediaKindUi();
 
         const leadsInput = document.getElementById("dis-wizard-leads-file");
         const leadsDropzone = document.getElementById("dis-wizard-leads-dropzone");

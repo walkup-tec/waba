@@ -11,5 +11,6 @@
 - Messages API (`POST /{phone-number-id}/messages`, `type: template`): destino E.164 sem `+`. Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages
 - OpenAI (`OPENAI_API_KEY`) no assistente Utility: few-shot com templates locais aprovados. Sem fine-tune.
 - Cabeçalho IMAGE: upload resumable Graph (`POST /{app-id}/uploads` + binário `upload:{session}`). MIME pelo magic dos bytes; `file_name` só ASCII (`header.png`/`header.jpg`). Sem teto de tamanho no Waba; recusa da Graph aparece no alerta. Doc: https://developers.facebook.com/docs/graph-api/guides/upload
+- Mídia da campanha do assinante (wizard): PNG/JPEG 1080×1080 ou MP4 `video/mp4` até 16 MB (H.264, AAC ou sem áudio). Recusa MOV, WebM, 3GP, AVI. Doc: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media/
 
 Docs oficiais de templates: https://developers.facebook.com/docs/whatsapp/business-management-api/message-templates/components

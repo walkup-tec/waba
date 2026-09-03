@@ -114,6 +114,7 @@ export type OperacionalCampaignDetail = OperacionalCampaignListItem & {
   textOptions: [string, string, string];
   responseLink: string;
   imageFileName: string;
+  mediaKind: "image" | "video";
   spreadsheetFileName: string;
   spreadsheetTrimmedFileName: string;
   updatedAt: string;
@@ -403,6 +404,7 @@ export class WabaOperacionalCampanhasService {
       textOptions: intake.textOptions,
       responseLink: String(intake.responseLink ?? "").trim(),
       imageFileName: intake.imageFileName,
+      mediaKind: intake.campaignMediaKind === "video" ? "video" : "image",
       spreadsheetFileName: intake.spreadsheetFileName,
       spreadsheetTrimmedFileName: trimmedName,
       updatedAt: intake.updatedAt,
@@ -626,9 +628,14 @@ export class WabaOperacionalCampanhasService {
     if (!intake.imageStoredPath || !existsSync(intake.imageStoredPath)) {
       return null;
     }
+    const storedName = path.basename(intake.imageStoredPath);
+    const originalName = String(intake.imageFileName || storedName).trim() || storedName;
+    const isVideo = intake.campaignMediaKind === "video";
+    const fileName =
+      isVideo && !originalName.toLowerCase().endsWith(".mp4") ? storedName : originalName;
     return {
       filePath: intake.imageStoredPath,
-      fileName: intake.imageFileName || path.basename(intake.imageStoredPath),
+      fileName,
     };
   }
 

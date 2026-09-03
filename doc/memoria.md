@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 11:03 — Assinante sobe imagem ou vídeo
+- Wizard da campanha: etapa Mídia com escolha Imagem (PNG/JPG 1080×1080) ou Vídeo (MP4 até 16 MB). Regras visíveis antes do arquivo.
+- LOG: `doc/LOG-2026-09-03__110300__assinante-midia-video.md`
+
 ## 2026-09-03 10:25 — Relatório do assinante sem marcos vazios
 - Só mostra criação/atendimento/aprovação/início/fim quando o horário existe. Sem "—".
 - LOG: `doc/LOG-2026-09-03__102500__relatorio-assinante-timeline-sem-traco.md`

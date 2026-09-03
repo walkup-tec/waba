@@ -26,6 +26,7 @@ const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.rep
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
 const waba_campaign_intake_idempotency_1 = require("./waba-campaign-intake-idempotency");
 const waba_campaign_intake_constants_1 = require("./waba-campaign-intake.constants");
+const waba_campaign_intake_media_1 = require("./waba-campaign-intake-media");
 const intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
 const masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService();
@@ -322,7 +323,9 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             const whatsappLogoFile = files?.whatsappLogo?.[0];
             const spreadsheetFile = files?.spreadsheet?.[0];
             if (!imageFile) {
-                return res.status(400).json({ error: "Envie a imagem da campanha (1080×1080 px)." });
+                return res.status(400).json({
+                    error: "Envie a imagem (PNG ou JPG, 1080×1080) ou o vídeo MP4 da campanha.",
+                });
             }
             if (!whatsappLogoFile) {
                 return res.status(400).json({ error: "Envie a logo do WhatsApp (500×500 px)." });
@@ -330,9 +333,15 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             if (!spreadsheetFile) {
                 return res.status(400).json({ error: "Envie o arquivo Excel ou TXT com a lista de leads." });
             }
-            const imageMime = String(imageFile.mimetype || "").toLowerCase();
-            if (!imageMime.startsWith("image/")) {
-                return res.status(400).json({ error: "A imagem deve ser PNG ou JPG." });
+            const mediaKind = (0, waba_campaign_intake_media_1.parseCampaignMediaKind)(body.mediaKind);
+            const mediaCheck = (0, waba_campaign_intake_media_1.validateCampaignIntakeMedia)({
+                kind: mediaKind,
+                buffer: imageFile.buffer,
+                mime: imageFile.mimetype,
+                fileName: imageFile.originalname,
+            });
+            if (!mediaCheck.ok) {
+                return res.status(400).json({ error: mediaCheck.error });
             }
             const logoMime = String(whatsappLogoFile.mimetype || "").toLowerCase();
             if (!logoMime.startsWith("image/")) {
@@ -397,9 +406,9 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 const now = new Date().toISOString();
                 const intakeId = (0, node_crypto_1.randomUUID)();
                 const storageDir = (0, waba_campaign_intake_repository_1.resolveCampaignIntakeStorageDir)(intakeId);
-                const imageExt = imageMime.includes("png") ? ".png" : ".jpg";
+                const imageExt = mediaCheck.extension;
                 const logoExt = logoMime.includes("png") ? ".png" : ".jpg";
-                const imageStoredPath = node_path_1.default.join(storageDir, `campaign-image${imageExt}`);
+                const imageStoredPath = node_path_1.default.join(storageDir, mediaKind === "video" ? `campaign-media${imageExt}` : `campaign-image${imageExt}`);
                 const whatsappLogoStoredPath = node_path_1.default.join(storageDir, `whatsapp-logo${logoExt}`);
                 const originalLeadsName = spreadsheetFile.originalname ||
                     ((0, waba_campaign_spreadsheet_util_1.isCampaignLeadsTxtFileName)(sheetName) ? "leads.txt" : "leads.xlsx");
@@ -428,7 +437,8 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                     whatsappLogoStoredPath,
                     textOptions,
                     responseLink,
-                    imageFileName: imageFile.originalname || `campaign-image${imageExt}`,
+                    campaignMediaKind: mediaKind,
+                    imageFileName: imageFile.originalname || `campaign-media${imageExt}`,
                     imageStoredPath,
                     spreadsheetFileName: spreadsheetFile.originalname || originalLeadsName,
                     spreadsheetStoredPath,

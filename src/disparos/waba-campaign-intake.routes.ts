@@ -52,6 +52,10 @@ import {
   withCampaignIntakeSubmissionLock,
 } from "./waba-campaign-intake-idempotency";
 import { WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT } from "./waba-campaign-intake.constants";
+import {
+  parseCampaignMediaKind,
+  validateCampaignIntakeMedia,
+} from "./waba-campaign-intake-media";
 
 const intakeRepository = new WabaCampaignIntakeRepository();
 const disparosCreditsService = new WabaDisparosCreditsService();
@@ -399,7 +403,9 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       const spreadsheetFile = files?.spreadsheet?.[0];
 
       if (!imageFile) {
-        return res.status(400).json({ error: "Envie a imagem da campanha (1080×1080 px)." });
+        return res.status(400).json({
+          error: "Envie a imagem (PNG ou JPG, 1080×1080) ou o vídeo MP4 da campanha.",
+        });
       }
       if (!whatsappLogoFile) {
         return res.status(400).json({ error: "Envie a logo do WhatsApp (500×500 px)." });
@@ -408,9 +414,15 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         return res.status(400).json({ error: "Envie o arquivo Excel ou TXT com a lista de leads." });
       }
 
-      const imageMime = String(imageFile.mimetype || "").toLowerCase();
-      if (!imageMime.startsWith("image/")) {
-        return res.status(400).json({ error: "A imagem deve ser PNG ou JPG." });
+      const mediaKind = parseCampaignMediaKind(body.mediaKind);
+      const mediaCheck = validateCampaignIntakeMedia({
+        kind: mediaKind,
+        buffer: imageFile.buffer,
+        mime: imageFile.mimetype,
+        fileName: imageFile.originalname,
+      });
+      if (!mediaCheck.ok) {
+        return res.status(400).json({ error: mediaCheck.error });
       }
       const logoMime = String(whatsappLogoFile.mimetype || "").toLowerCase();
       if (!logoMime.startsWith("image/")) {
@@ -495,9 +507,12 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         const now = new Date().toISOString();
         const intakeId = randomUUID();
         const storageDir = resolveCampaignIntakeStorageDir(intakeId);
-        const imageExt = imageMime.includes("png") ? ".png" : ".jpg";
+        const imageExt = mediaCheck.extension;
         const logoExt = logoMime.includes("png") ? ".png" : ".jpg";
-        const imageStoredPath = path.join(storageDir, `campaign-image${imageExt}`);
+        const imageStoredPath = path.join(
+          storageDir,
+          mediaKind === "video" ? `campaign-media${imageExt}` : `campaign-image${imageExt}`,
+        );
         const whatsappLogoStoredPath = path.join(storageDir, `whatsapp-logo${logoExt}`);
         const originalLeadsName =
           spreadsheetFile.originalname ||
@@ -528,7 +543,8 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           whatsappLogoStoredPath,
           textOptions,
           responseLink,
-          imageFileName: imageFile.originalname || `campaign-image${imageExt}`,
+          campaignMediaKind: mediaKind,
+          imageFileName: imageFile.originalname || `campaign-media${imageExt}`,
           imageStoredPath,
           spreadsheetFileName: spreadsheetFile.originalname || originalLeadsName,
           spreadsheetStoredPath,

@@ -249,6 +249,7 @@ class WabaOperacionalCampanhasService {
             textOptions: intake.textOptions,
             responseLink: String(intake.responseLink ?? "").trim(),
             imageFileName: intake.imageFileName,
+            mediaKind: intake.campaignMediaKind === "video" ? "video" : "image",
             spreadsheetFileName: intake.spreadsheetFileName,
             spreadsheetTrimmedFileName: trimmedName,
             updatedAt: intake.updatedAt,
@@ -415,9 +416,13 @@ class WabaOperacionalCampanhasService {
         if (!intake.imageStoredPath || !(0, node_fs_1.existsSync)(intake.imageStoredPath)) {
             return null;
         }
+        const storedName = node_path_1.default.basename(intake.imageStoredPath);
+        const originalName = String(intake.imageFileName || storedName).trim() || storedName;
+        const isVideo = intake.campaignMediaKind === "video";
+        const fileName = isVideo && !originalName.toLowerCase().endsWith(".mp4") ? storedName : originalName;
         return {
             filePath: intake.imageStoredPath,
-            fileName: intake.imageFileName || node_path_1.default.basename(intake.imageStoredPath),
+            fileName,
         };
     }
     resolveWhatsappLogoDownload(intakeId, staff) {
