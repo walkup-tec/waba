@@ -91,7 +91,7 @@ import { registerMetaWhatsappIntegrationRoutes } from "./integrations/meta-whats
 import { startMetaWhatsappAutomation } from "./integrations/meta-whatsapp/meta-whatsapp-automation.bootstrap";
 import { ensureLabReportFinalizeSweep } from "./integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
 import { ensureVoidedFailedCloudBroadcasts } from "./integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
-import { ensureResumeOrphanedCloudBroadcasts } from "./integrations/meta-whatsapp/meta-whatsapp-broadcast.service";
+import { ensureResumeOrphanedCloudBroadcasts, getCloudBroadcastProtectSnapshot } from "./integrations/meta-whatsapp/meta-whatsapp-broadcast.service";
 import {
   registerMetaWhatsappSubscriptionRoute,
   registerMetaWhatsappWebhookRoutes,
@@ -714,6 +714,7 @@ app.get("/health", (_req, res) => {
     evoHttpTimeoutMs: defaultEvoHttpTimeoutMs(),
     shortPublicBase: peekWabaShortPublicBaseUrl(),
     dataPersistence: getProductionDataPersistenceSnapshot(),
+    cloudBroadcastProtect: getCloudBroadcastProtectSnapshot(),
   });
 });
 
@@ -16655,6 +16656,16 @@ const httpServer = app.listen(PORT, () => {
 });
 
 registerWabaGracefulShutdown(httpServer, async () => {
+  try {
+    const protect = getCloudBroadcastProtectSnapshot();
+    if (protect.blockRedeploy) {
+      console.warn(
+        `[shutdown] Disparo Cloud ativo (pendingLeads=${protect.pendingLeads}, count=${protect.count}) — o loop para agora; resume no próximo boot/watchdog.`,
+      );
+    }
+  } catch (err) {
+    console.error("[shutdown] falha ao ler cloudBroadcastProtect:", err);
+  }
   try {
     const { shutdownLeadsCnpjBrowserRuntime } = await import(
       "./marketing/leads-cnpj/waba-leads-cnpj-browser-runtime"

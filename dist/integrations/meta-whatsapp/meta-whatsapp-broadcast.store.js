@@ -11,6 +11,7 @@ exports.findBroadcastCampaign = findBroadcastCampaign;
 exports.listBroadcastCampaigns = listBroadcastCampaigns;
 exports.listAllBroadcastCampaigns = listAllBroadcastCampaigns;
 exports.findBroadcastByIntakeCampaignId = findBroadcastByIntakeCampaignId;
+exports.listActiveCloudBroadcasts = listActiveCloudBroadcasts;
 exports.broadcastLeadIsPendingSend = broadcastLeadIsPendingSend;
 exports.listResumableOrphanedBroadcasts = listResumableOrphanedBroadcasts;
 exports.listStaleRunningBroadcastsWithoutPending = listStaleRunningBroadcastsWithoutPending;
@@ -181,6 +182,16 @@ function findBroadcastByIntakeCampaignId(intakeCampaignId) {
         .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
     const row = rows[0];
     return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
+}
+/** running/queued sem void — lotes que o operacional não deve interromper com Redeploy. */
+function listActiveCloudBroadcasts() {
+    return readStore()
+        .campaigns.filter((row) => {
+        if (String(row.voidedAt || "").trim())
+            return false;
+        return row.status === "running" || row.status === "queued";
+    })
+        .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
 /** Lead ainda não processado pelo loop de envio (Graph). */
 function broadcastLeadIsPendingSend(lead) {

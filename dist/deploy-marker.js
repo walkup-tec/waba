@@ -2,4 +2,4 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WABA_DEPLOY_MARKER = void 0;
-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-03-193200-broadcast-resume-orphan";
+exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-03-194500-cloud-broadcast-protect";

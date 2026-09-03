@@ -38,6 +38,7 @@ import {
   findBroadcastByIntakeCampaignId,
   findBroadcastCampaign,
   finalizeStaleRunningBroadcast,
+  listActiveCloudBroadcasts,
   listBroadcastCampaigns,
   listResumableOrphanedBroadcasts,
   listStaleRunningBroadcastsWithoutPending,
@@ -47,6 +48,11 @@ import {
   type MetaBroadcastCampaign,
   type MetaBroadcastLead,
 } from "./meta-whatsapp-broadcast.store";
+import {
+  buildCloudBroadcastProtectSnapshot,
+  CLOUD_BROADCAST_RESUME_WATCHDOG_MS,
+  type CloudBroadcastProtectSnapshot,
+} from "./meta-whatsapp-broadcast-protect";
 import { isBroadcastVoided, isCloudBroadcastInactiveForRetry } from "./meta-whatsapp-broadcast-void";
 import { scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
 import { attachCampaignIdToShortLink } from "../../shortener/waba-shortener.service";
@@ -67,6 +73,23 @@ import { toCloudBroadcastHistoryItem } from "./meta-whatsapp-broadcast-history";
 import { lookupTemplateApprovedAt } from "./meta-whatsapp-template-approved-at.store";
 
 const running = new Set<string>();
+let resumeWatchdogTimer: ReturnType<typeof setInterval> | null = null;
+
+export function isCloudBroadcastSendLoopAlive(campaignId: string): boolean {
+  return running.has(String(campaignId || "").trim());
+}
+
+export function getCloudBroadcastProtectSnapshot(): CloudBroadcastProtectSnapshot {
+  return buildCloudBroadcastProtectSnapshot({
+    campaigns: listActiveCloudBroadcasts(),
+    isLoopAlive: isCloudBroadcastSendLoopAlive,
+    watchdogMs: CLOUD_BROADCAST_RESUME_WATCHDOG_MS,
+  });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function requireTenant(auth: WabaRequestAuth) {
   try {
@@ -80,10 +103,6 @@ function fail(code: MetaWhatsappErrorCode, message?: string): never {
   const error = new MetaWhatsappError(code);
   if (message) error.message = message;
   throw error;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function headerMediaType(format: MetaBroadcastTemplateInspect["headerFormat"]): "image" | "video" | "document" | null {
@@ -792,13 +811,24 @@ export class MetaWhatsappBroadcastService {
   }
 }
 
-/** Boot: retoma lotes órfãos após Redeploy (fire-and-forget). */
+/** Boot: retoma lotes órfãos após Redeploy + guardião periódico (fire-and-forget). */
 export function ensureResumeOrphanedCloudBroadcasts(): void {
-  void new MetaWhatsappBroadcastService()
-    .resumeOrphanedCloudBroadcastsOnBoot()
-    .catch((error) => {
-      logMetaWhatsappSafe("broadcast-boot-resume-error", {
-        reason: error instanceof Error ? error.message.slice(0, 120) : "boot_resume_failed",
+  const service = new MetaWhatsappBroadcastService();
+  void service.resumeOrphanedCloudBroadcastsOnBoot().catch((error) => {
+    logMetaWhatsappSafe("broadcast-boot-resume-error", {
+      reason: error instanceof Error ? error.message.slice(0, 120) : "boot_resume_failed",
+    });
+  });
+  if (resumeWatchdogTimer) return;
+  resumeWatchdogTimer = setInterval(() => {
+    void service.resumeOrphanedCloudBroadcastsOnBoot().catch((error) => {
+      logMetaWhatsappSafe("broadcast-watchdog-resume-error", {
+        reason: error instanceof Error ? error.message.slice(0, 120) : "watchdog_resume_failed",
       });
     });
+  }, CLOUD_BROADCAST_RESUME_WATCHDOG_MS);
+  resumeWatchdogTimer.unref?.();
+  logMetaWhatsappSafe("broadcast-protect-watchdog-started", {
+    intervalMs: CLOUD_BROADCAST_RESUME_WATCHDOG_MS,
+  });
 }

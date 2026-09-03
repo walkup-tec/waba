@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 19:45 — Proteção Disparo Cloud (anti-Redeploy)
+- Watchdog 20s + `/health.cloudBroadcastProtect.blockRedeploy` + rule `waba-disparo-cloud-protect`.
+- Marker `DEPLOY-2026-09-03-194500-cloud-broadcast-protect`.
+- LOG: `doc/LOG-2026-09-03__194500__cloud-broadcast-protect.md`
+
 ## 2026-09-03 19:32 — Resume Disparo Cloud órfão (Jandira 2 357/1162)
 - Dump `5552c6f7-…`: 289 delivered/read, 805 queued, sem 131053. Travou no Redeploy.
 - Boot retoma `running` com fila. Marker `DEPLOY-2026-09-03-193200-broadcast-resume-orphan`.

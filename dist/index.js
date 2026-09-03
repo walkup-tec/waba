@@ -501,6 +501,7 @@ app.get("/health", (_req, res) => {
         evoHttpTimeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
         shortPublicBase: (0, waba_shortener_service_1.peekWabaShortPublicBaseUrl)(),
         dataPersistence: (0, production_data_persistence_service_1.getProductionDataPersistenceSnapshot)(),
+        cloudBroadcastProtect: (0, meta_whatsapp_broadcast_service_1.getCloudBroadcastProtectSnapshot)(),
     });
 });
 app.get("/service/maintenance", (_req, res) => {
@@ -14292,6 +14293,15 @@ const httpServer = app.listen(PORT, () => {
     })();
 });
 (0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer, async () => {
+    try {
+        const protect = (0, meta_whatsapp_broadcast_service_1.getCloudBroadcastProtectSnapshot)();
+        if (protect.blockRedeploy) {
+            console.warn(`[shutdown] Disparo Cloud ativo (pendingLeads=${protect.pendingLeads}, count=${protect.count}) — o loop para agora; resume no próximo boot/watchdog.`);
+        }
+    }
+    catch (err) {
+        console.error("[shutdown] falha ao ler cloudBroadcastProtect:", err);
+    }
     try {
         const { shutdownLeadsCnpjBrowserRuntime } = await Promise.resolve().then(() => __importStar(require("./marketing/leads-cnpj/waba-leads-cnpj-browser-runtime")));
         await shutdownLeadsCnpjBrowserRuntime();

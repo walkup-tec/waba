@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetaWhatsappBroadcastService = void 0;
+exports.isCloudBroadcastSendLoopAlive = isCloudBroadcastSendLoopAlive;
+exports.getCloudBroadcastProtectSnapshot = getCloudBroadcastProtectSnapshot;
 exports.ensureResumeOrphanedCloudBroadcasts = ensureResumeOrphanedCloudBroadcasts;
 const node_crypto_1 = require("node:crypto");
 const meta_token_crypto_1 = require("./meta-token-crypto");
@@ -17,6 +19,7 @@ const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-te
 const meta_whatsapp_broadcast_leads_1 = require("./meta-whatsapp-broadcast-leads");
 const meta_whatsapp_broadcast_media_1 = require("./meta-whatsapp-broadcast-media");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_protect_1 = require("./meta-whatsapp-broadcast-protect");
 const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
 const meta_whatsapp_broadcast_report_1 = require("./meta-whatsapp-broadcast-report");
 const waba_shortener_service_1 = require("../../shortener/waba-shortener.service");
@@ -30,6 +33,20 @@ const meta_whatsapp_broadcast_linkable_1 = require("./meta-whatsapp-broadcast-li
 const meta_whatsapp_broadcast_history_1 = require("./meta-whatsapp-broadcast-history");
 const meta_whatsapp_template_approved_at_store_1 = require("./meta-whatsapp-template-approved-at.store");
 const running = new Set();
+let resumeWatchdogTimer = null;
+function isCloudBroadcastSendLoopAlive(campaignId) {
+    return running.has(String(campaignId || "").trim());
+}
+function getCloudBroadcastProtectSnapshot() {
+    return (0, meta_whatsapp_broadcast_protect_1.buildCloudBroadcastProtectSnapshot)({
+        campaigns: (0, meta_whatsapp_broadcast_store_1.listActiveCloudBroadcasts)(),
+        isLoopAlive: isCloudBroadcastSendLoopAlive,
+        watchdogMs: meta_whatsapp_broadcast_protect_1.CLOUD_BROADCAST_RESUME_WATCHDOG_MS,
+    });
+}
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -43,9 +60,6 @@ function fail(code, message) {
     if (message)
         error.message = message;
     throw error;
-}
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 function headerMediaType(format) {
     if (format === "IMAGE")
@@ -673,13 +687,25 @@ class MetaWhatsappBroadcastService {
     }
 }
 exports.MetaWhatsappBroadcastService = MetaWhatsappBroadcastService;
-/** Boot: retoma lotes órfãos após Redeploy (fire-and-forget). */
+/** Boot: retoma lotes órfãos após Redeploy + guardião periódico (fire-and-forget). */
 function ensureResumeOrphanedCloudBroadcasts() {
-    void new MetaWhatsappBroadcastService()
-        .resumeOrphanedCloudBroadcastsOnBoot()
-        .catch((error) => {
+    const service = new MetaWhatsappBroadcastService();
+    void service.resumeOrphanedCloudBroadcastsOnBoot().catch((error) => {
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-boot-resume-error", {
             reason: error instanceof Error ? error.message.slice(0, 120) : "boot_resume_failed",
         });
+    });
+    if (resumeWatchdogTimer)
+        return;
+    resumeWatchdogTimer = setInterval(() => {
+        void service.resumeOrphanedCloudBroadcastsOnBoot().catch((error) => {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-watchdog-resume-error", {
+                reason: error instanceof Error ? error.message.slice(0, 120) : "watchdog_resume_failed",
+            });
+        });
+    }, meta_whatsapp_broadcast_protect_1.CLOUD_BROADCAST_RESUME_WATCHDOG_MS);
+    resumeWatchdogTimer.unref?.();
+    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-protect-watchdog-started", {
+        intervalMs: meta_whatsapp_broadcast_protect_1.CLOUD_BROADCAST_RESUME_WATCHDOG_MS,
     });
 }

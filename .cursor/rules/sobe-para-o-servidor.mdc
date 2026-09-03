@@ -7,6 +7,16 @@ alwaysApply: true
 
 Quando o usuário disser **"sobe para o servidor"** ou equivalente (**publicar no servidor**, **deploy FTP**, **atualizar o que está no ar via Git**), execute **de ponta a ponta** sem só descrever passos: use o terminal no **root do repositório** (`E:\Waba` ou raiz do workspace).
 
+## Antes de pedir Redeploy EasyPanel do `waba_disparador`
+
+Se o Disparo Cloud estiver ativo, **não** sugerir Redeploy do Node. Conferir:
+
+```bash
+curl -sS https://waba.draxsistemas.com.br/health | python3 -c 'import json,sys; p=json.load(sys.stdin).get("cloudBroadcastProtect") or {}; print("blockRedeploy=", p.get("blockRedeploy"), "pending=", p.get("pendingLeads"))'
+```
+
+Rule: `.cursor/rules/waba-disparo-cloud-protect.mdc`. FTP sem reiniciar o container continua permitido.
+
 ## Objetivo
 
 Garantir que **`github.com/walkup-tec/waba` `master`** receba as alterações para o workflow **Deploy FTP (bundle)** e o EasyPanel (`waba_disparador`) alinharem com o Git.

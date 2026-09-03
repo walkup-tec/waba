@@ -1,0 +1,30 @@
+---
+description: Proteger Disparo Cloud ativo — não Redeploy do disparador
+alwaysApply: true
+---
+
+# Disparo Cloud — proteção operacional
+
+Quando o Laboratório está com Disparo Cloud **Enviando** (lote `running`/`queued` com fila), o envio vive no processo Node do `waba_disparador`. Qualquer Redeploy / `docker restart` desse serviço mata o loop (o resume no boot e o watchdog recuperam, mas **atrasam** e geram risco).
+
+## Obrigatório antes de Redeploy EasyPanel do `waba_disparador`
+
+```bash
+curl -sS https://waba.draxsistemas.com.br/health | python3 -c 'import json,sys; p=json.load(sys.stdin).get("cloudBroadcastProtect") or {}; print(p.get("blockRedeploy"), p.get("pendingLeads"), p.get("items"))'
+```
+
+- Se `blockRedeploy` for **true** → **não** Redeployar o disparador. Esperar o lote terminar (`Enviando` → concluído) ou só aplicar mudanças que **não** reiniciam o container.
+- FTP / push Git **sem** Redeploy do Node: OK (não mata o loop).
+- Redeploy de **outros** serviços (landing, Traefik heal publish-only, Evolution): OK se não reiniciar `waba_disparador`.
+
+## Código de resiliência (já no app)
+
+- Resume no boot de lotes órfãos.
+- Watchdog ~20s retoma se o loop morrer sem o processo cair.
+- `/health.cloudBroadcastProtect` expõe `blockRedeploy`, `pendingLeads`, `loopAlive`.
+
+## Proibido
+
+- Voidar lote com `delivered`/`read` > 0 só para “destravar” (ex.: Jandira `5552c6f7`).
+- Redeploy “por hábito” após HTML/JS/docs enquanto Cloud está ativo.
+- Assumir que heal de login (`:30180`) exige Redeploy do app — heal é publish, não rebuild.
