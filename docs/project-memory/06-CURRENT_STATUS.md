@@ -18,6 +18,6 @@ Concluído no laboratório Meta:
 
 Em andamento: aprovação dos templates na Meta (até 24 h). Relatório da Campanha Jandira deste disparo (1.990 / 1.156 / 2) mostra 981 entregues e 431 lidos, sem cliques, via override de leitura. Relatório operacional Lab passa a listar falhas da Meta e envios sem comprovante de entrega. Relatório do assinante passa a listar a linha do tempo (criação, atendimento, aprovação do template, início e fim do disparo) numa trilha de pontos (horizontal no desktop, vertical no celular) e o aviso de até 3 horas da Meta.
 
-Marker: `DEPLOY-2026-09-03-123000-assinante-midia-video`.
+Marker: `DEPLOY-2026-09-03-135600-relatorio-timeline-visual`.
 
 GitHub `walkup-tec/waba` `master` recebe este tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
