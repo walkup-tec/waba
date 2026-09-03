@@ -1,5 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 18:24 — Push GitHub master (header id template aprovado)
+- Tip para `walkup-tec/waba` `master` com marker `DEPLOY-2026-09-03-182400-header-id-template-aprovado`.
+- LOG: `doc/LOG-2026-09-03__182400__push-github-master-header-id.md`
+
 ## 2026-09-03 18:09 — Template aprovado: arquivo local, nunca weblink
 - Mesma foto em 3 templates não é recusa da Meta. O lookaside compartilhado é que gerava 131053.
 - Disparo só `{ id }`. Sem arquivo local, anexar a foto no template aprovado.
