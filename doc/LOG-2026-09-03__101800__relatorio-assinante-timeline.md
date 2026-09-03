@@ -8,10 +8,10 @@ Informar no relatório do assinante: criação da campanha, início do atendimen
 
 - `GET /disparos/campanhas/intake/:id/relatorio` devolve `timeline` com os cinco marcos e `metaCollectionNote`.
 - Criação = `intake.createdAt`. Início do atendimento = `intake.startedAt`.
-- Início do disparo = `sendStartedAt` (quando o Cloud passa a `running`); campanhas antigas usam `createdAt` se já não estão na fila.
+- Início do disparo = `sendStartedAt` (quando o Cloud passa a `running`). Sem esse instante, o marco não aparece.
 - Fim do disparo = `sendFinishedAt`.
-- Aprovação do template: primeira vez que a Meta devolve `APPROVED` (webhook ou sync). O instante é gravado e não é sobrescrito. Campanhas antigas sem esse registro mostram "—".
-- UI do overlay do assinante (`#dis-campaign-report-overlay`) lista a linha do tempo e o aviso das 3 horas. Operacional e fórmulas da Alternativa não mudam.
+- Aprovação do template: primeira vez que a Meta devolve `APPROVED` (webhook ou sync). O instante é gravado e não é sobrescrito. Sem esse registro, o marco não aparece.
+- Só entram na UI os marcos com horário conhecido. O aviso das 3 horas da Meta permanece.
 
 ## Arquivos
 

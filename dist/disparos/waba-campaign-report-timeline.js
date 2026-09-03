@@ -61,13 +61,7 @@ function firstNonEmptyIso(...values) {
 function resolveDispatchStartedAt(input) {
     if (!input)
         return null;
-    const started = firstNonEmptyIso(input.sendStartedAt);
-    if (started)
-        return started;
-    const status = String(input.status || "").trim();
-    if (!status || status === "queued")
-        return null;
-    return firstNonEmptyIso(input.createdAt);
+    return firstNonEmptyIso(input.sendStartedAt);
 }
 function buildSubscriberCampaignTimeline(input) {
     const values = {
@@ -78,12 +72,13 @@ function buildSubscriberCampaignTimeline(input) {
         dispatchFinishedAt: firstNonEmptyIso(input.dispatchFinishedAt),
     };
     return {
-        items: exports.SUBSCRIBER_REPORT_TIMELINE_DEFS.map((def) => ({
-            key: def.key,
-            label: def.label,
-            at: values[def.key],
-            display: formatCampaignReportDateTime(values[def.key]),
-        })),
+        items: exports.SUBSCRIBER_REPORT_TIMELINE_DEFS.flatMap((def) => {
+            const at = values[def.key];
+            const display = formatCampaignReportDateTime(at);
+            if (!at || display === "—")
+                return [];
+            return [{ key: def.key, label: def.label, at, display }];
+        }),
         metaCollectionNote: exports.META_REPORT_COLLECTION_NOTE,
     };
 }

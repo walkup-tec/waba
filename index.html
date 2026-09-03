@@ -55084,23 +55084,29 @@
       }
 
       function buildSubscriberCampaignTimelineHtml(timeline) {
-        const items = Array.isArray(timeline?.items) ? timeline.items : [];
-        if (!items.length) return "";
+        const items = (Array.isArray(timeline?.items) ? timeline.items : []).filter((item) => {
+          const display = String(item?.display || "").trim();
+          return display && display !== "—";
+        });
+        const note = escapeReportHtml(
+          String(timeline?.metaCollectionNote || "").trim() ||
+            "A Meta pode demorar até 3 horas após o fim do disparo para finalizar a coleta e a exibição dos dados deste relatório."
+        );
         const rows = items
           .map((item) => {
             const label = escapeReportHtml(String(item.label || ""));
-            const display = escapeReportHtml(String(item.display || "—"));
+            const display = escapeReportHtml(String(item.display || ""));
             return `<div class="camp-report-timeline-row"><dt>${label}</dt><dd>${display}</dd></div>`;
           })
           .join("");
-        const note = escapeReportHtml(
-          String(timeline.metaCollectionNote || "").trim() ||
-            "A Meta pode demorar até 3 horas após o fim do disparo para finalizar a coleta e a exibição dos dados deste relatório."
-        );
         return `
           <section class="camp-report-timeline" aria-label="Linha do tempo da campanha">
-            <h4 class="camp-report-timeline-title">Linha do tempo</h4>
-            <dl class="camp-report-timeline-list">${rows}</dl>
+            ${
+              items.length
+                ? `<h4 class="camp-report-timeline-title">Linha do tempo</h4>
+            <dl class="camp-report-timeline-list">${rows}</dl>`
+                : ""
+            }
             <p class="camp-report-meta-delay-note">${note}</p>
           </section>
         `;

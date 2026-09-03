@@ -1,7 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 10:25 — Relatório do assinante sem marcos vazios
+- Só mostra criação/atendimento/aprovação/início/fim quando o horário existe. Sem "—".
+- LOG: `doc/LOG-2026-09-03__102500__relatorio-assinante-timeline-sem-traco.md`
+
 ## 2026-09-03 10:18 — Linha do tempo no relatório do assinante
-- Relatório do assinante mostra criação, início do atendimento, aprovação do template, início e fim do disparo (dia completo + hh:mm:ss).
+- Relatório do assinante mostra criação, início do atendimento, aprovação do template, início e fim do disparo (dia completo + hh:mm:ss), só quando o horário existe.
 - Aviso: a Meta pode demorar até 3 horas após o fim do disparo para coletar e exibir os dados.
 - LOG: `doc/LOG-2026-09-03__101800__relatorio-assinante-timeline.md`
 

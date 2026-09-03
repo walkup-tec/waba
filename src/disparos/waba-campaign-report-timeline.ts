@@ -76,11 +76,7 @@ export function resolveDispatchStartedAt(input: {
   status?: string | null;
 } | null | undefined): string | null {
   if (!input) return null;
-  const started = firstNonEmptyIso(input.sendStartedAt);
-  if (started) return started;
-  const status = String(input.status || "").trim();
-  if (!status || status === "queued") return null;
-  return firstNonEmptyIso(input.createdAt);
+  return firstNonEmptyIso(input.sendStartedAt);
 }
 
 export function buildSubscriberCampaignTimeline(input: {
@@ -98,12 +94,12 @@ export function buildSubscriberCampaignTimeline(input: {
     dispatchFinishedAt: firstNonEmptyIso(input.dispatchFinishedAt),
   };
   return {
-    items: SUBSCRIBER_REPORT_TIMELINE_DEFS.map((def) => ({
-      key: def.key,
-      label: def.label,
-      at: values[def.key],
-      display: formatCampaignReportDateTime(values[def.key]),
-    })),
+    items: SUBSCRIBER_REPORT_TIMELINE_DEFS.flatMap((def) => {
+      const at = values[def.key];
+      const display = formatCampaignReportDateTime(at);
+      if (!at || display === "—") return [];
+      return [{ key: def.key, label: def.label, at, display }];
+    }),
     metaCollectionNote: META_REPORT_COLLECTION_NOTE,
   };
 }

@@ -15,13 +15,24 @@ describe("linha do tempo do relatório do assinante", () => {
     );
   });
 
-  it("mostra traço quando o instante não existe", () => {
-    assert.equal(formatCampaignReportDateTime(null), "—");
-    assert.equal(formatCampaignReportDateTime("não-é-data"), "—");
+  it("omite marcos sem horário conhecido", () => {
+    const timeline = buildSubscriberCampaignTimeline({
+      createdAt: "2026-09-02T14:00:00.000Z",
+      attendanceStartedAt: null,
+      templateApprovedAt: "",
+      dispatchStartedAt: null,
+      dispatchFinishedAt: "2026-09-02T19:22:15.000Z",
+    });
+    assert.deepEqual(
+      timeline.items.map((item) => item.key),
+      ["createdAt", "dispatchFinishedAt"],
+    );
+    assert.equal(timeline.items.some((item) => item.display === "—"), false);
   });
 
-  it("usa o início real do envio e não a fila", () => {
+  it("usa só o início real do envio", () => {
     assert.equal(resolveDispatchStartedAt({ status: "queued", createdAt: "2026-09-02T18:00:00.000Z" }), null);
+    assert.equal(resolveDispatchStartedAt({ status: "done", createdAt: "2026-09-02T18:00:00.000Z" }), null);
     assert.equal(
       resolveDispatchStartedAt({
         status: "running",
@@ -29,10 +40,6 @@ describe("linha do tempo do relatório do assinante", () => {
         sendStartedAt: "2026-09-02T18:01:00.000Z",
       }),
       "2026-09-02T18:01:00.000Z",
-    );
-    assert.equal(
-      resolveDispatchStartedAt({ status: "done", createdAt: "2026-09-02T18:00:00.000Z" }),
-      "2026-09-02T18:00:00.000Z",
     );
   });
 
