@@ -51,4 +51,47 @@ describe("preview do cabeçalho de mídia do template", () => {
     process.chdir(originalCwd);
     rmSync(dataRoot, { recursive: true, force: true });
   });
+
+  it("reusa o arquivo local pelo id do template depois que a Graph troca o handle por lookaside", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "waba-tpl-header-alias-"));
+    process.chdir(root);
+    const {
+      copyTemplateHeaderPreview,
+      publicTemplateHeaderPreviewUrl,
+      readTemplateHeaderPreviewForSend,
+      saveTemplateHeaderPreview,
+    } = await import("./meta-whatsapp-template-header-preview.store");
+    const handle = "4::abc-handle-local";
+    const lookaside = "https://lookaside.fbsbx.com/whatsapp/sample.png";
+    saveTemplateHeaderPreview({
+      tenantId: "tenant-a",
+      handle,
+      mime: "video/mp4",
+      fileName: "capa.mp4",
+      bytes: Buffer.from("00000018667479706d703432", "hex"),
+    });
+    copyTemplateHeaderPreview({
+      tenantId: "tenant-a",
+      fromHandle: handle,
+      toHandles: ["tpl-jandira-2", lookaside],
+    });
+    const preview = readTemplateHeaderPreviewForSend({
+      tenantId: "tenant-a",
+      handle: lookaside,
+      templateId: "tpl-jandira-2",
+    });
+    assert.equal(preview?.mime, "video/mp4");
+    assert.equal(
+      publicTemplateHeaderPreviewUrl({
+        id: "tpl-jandira-2",
+        tenantId: "tenant-a",
+        components: [
+          { type: "HEADER", format: "VIDEO", example: { header_handle: [lookaside] } },
+        ],
+      }),
+      "/integrations/meta/whatsapp/templates/tpl-jandira-2/header",
+    );
+    process.chdir(originalCwd);
+    rmSync(root, { recursive: true, force: true });
+  });
 });

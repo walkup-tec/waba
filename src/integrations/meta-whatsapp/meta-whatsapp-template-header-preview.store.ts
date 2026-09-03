@@ -82,6 +82,38 @@ export function saveTemplateHeaderPreview(input: {
   writeFileSync(filePath(input.tenantId, handle, ext), input.bytes);
 }
 
+export function copyTemplateHeaderPreview(input: {
+  tenantId: string;
+  fromHandle: string;
+  toHandles: string[];
+}): void {
+  const preview = readTemplateHeaderPreview(input.tenantId, input.fromHandle);
+  if (!preview) return;
+  for (const raw of input.toHandles) {
+    const toHandle = String(raw || "").trim();
+    if (!toHandle || toHandle === input.fromHandle) continue;
+    saveTemplateHeaderPreview({
+      tenantId: input.tenantId,
+      handle: toHandle,
+      mime: preview.mime,
+      bytes: preview.bytes,
+    });
+  }
+}
+
+export function readTemplateHeaderPreviewForSend(input: {
+  tenantId: string;
+  handle?: string;
+  templateId?: string;
+}): { mime: string; bytes: Buffer } | null {
+  const handle = String(input.handle || "").trim();
+  const templateId = String(input.templateId || "").trim();
+  return (
+    (handle ? readTemplateHeaderPreview(input.tenantId, handle) : null) ||
+    (templateId ? readTemplateHeaderPreview(input.tenantId, templateId) : null)
+  );
+}
+
 export function readTemplateHeaderPreview(
   tenantId: string,
   handle: string,
@@ -110,10 +142,13 @@ export function publicTemplateHeaderPreviewUrl(input: {
   tenantId: string;
   components: unknown;
 }): string | null {
-  const httpsUrl = headerHttpsUrlFromComponents(input.components);
-  if (httpsUrl) return httpsUrl;
   const handle = headerHandleFromComponents(input.components);
   const id = String(input.id || "").trim();
-  if (!handle || !id || !hasTemplateHeaderPreview(input.tenantId, handle)) return null;
-  return `/integrations/meta/whatsapp/templates/${encodeURIComponent(id)}/header`;
+  const hasLocal =
+    Boolean(handle && hasTemplateHeaderPreview(input.tenantId, handle)) ||
+    Boolean(id && hasTemplateHeaderPreview(input.tenantId, id));
+  if (hasLocal && id) {
+    return `/integrations/meta/whatsapp/templates/${encodeURIComponent(id)}/header`;
+  }
+  return headerHttpsUrlFromComponents(input.components);
 }

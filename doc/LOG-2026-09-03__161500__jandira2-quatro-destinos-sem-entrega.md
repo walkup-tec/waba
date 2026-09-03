@@ -23,14 +23,17 @@ Identidade já documentada no repo: Marcelo Pessoal (`51999666841`), WB-5401 (`5
 
 Wizard do assinante exige ≥ 1000 contatos. Quatro linhas sozinhas só entram no **Disparo Cloud** (planilha do Laboratório), não no wizard.
 
-JSON de produção (`meta-whatsapp-broadcasts.json` / intake Jandira 2) **não foi lido**.
+JSON de produção lido no VPS (script no container disparador):
+
+- intake `368d053b-d59b-4eed-a235-fe9e9f32c68c` — Campanha Jandira 2, `in_progress`, 1990 importados
+- broadcast `26d33b09-8868-41dd-af78-afd59e7982f2` — template `jandira_quantun_2`, `done`, 1159 sent, 0 failed no POST Graph, `15:11`–`15:59` UTC
+- `metaStatus` de **todos** os 1159 leads: `failed`
+- Os quatro destinos: `status: sent`, `metaStatus: failed`, `errorCode: 131053`, weblink HTTP 403, `wamid` presente
 
 ## Leitura
 
-Sem o JSON não dá para afirmar se a Graph recusou, aceitou sem `delivered`, ou se o disparo nem gravou leads. Os números em si não são o bloqueio da validação.
-
-Hipótese a checar no JSON: `status`/`metaStatus`/`errorCode`/`wamid` de cada `waId` acima. Para `5181077770`, logs antigos da Evolution usaram `555181077770` (sem o 9); o Cloud mandaria `5551981077770`.
+A Graph aceitou o POST (por isso há `wamid`). O webhook da Meta recusou a mídia do cabeçalho: URL de exemplo lookaside/fbcdn com HTTP 403 (`131053`). Ninguém recebeu no WhatsApp. Correção: `doc/LOG-2026-09-03__163000__fix-header-weblink-403.md`.
 
 ## Palavras-chave
 
-`jandira 2`, `5551999666841`, `5551981077770`, `meta-whatsapp-broadcasts`, `131026`
+`jandira 2`, `5551999666841`, `5551981077770`, `meta-whatsapp-broadcasts`, `131053`, `weblink`

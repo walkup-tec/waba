@@ -374,6 +374,43 @@ describe("erros de envio visíveis ao operacional", () => {
     assert.equal(issues.failures[0]?.error, "Número inválido ou sem WhatsApp.");
     assert.equal(issues.failures[0]?.recipient, "51 •••••-1261");
   });
+
+  it("troca o inglês 131053 da Meta pelo aviso de weblink 403", () => {
+    const issues = summarizeBroadcastSendIssues({
+      id: "bc-j2",
+      tenantId: "t1",
+      connectionId: "c1",
+      templateId: "tpl",
+      templateName: "jandira_quantun_2",
+      language: "pt_BR",
+      phoneNumberId: "phone-1",
+      shortSlug: "abc",
+      shortUrl: "https://wabadisparos.com.br/s/abc",
+      trackedSlug: "abc",
+      clicksAtStart: 0,
+      clicks: 0,
+      status: "done",
+      total: 1,
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      createdAt: "2026-09-03T15:11:44.265Z",
+      updatedAt: "2026-09-03T15:59:32.481Z",
+      leads: [
+        {
+          waId: "5551999666841",
+          status: "sent",
+          metaStatus: "failed",
+          errorCode: "131053",
+          error: "Downloading media from weblink failed with http code 403, status message Forbidden",
+          wamid: "wamid.HBgMNTU1MTk5NjY2ODQxFQIAER",
+        },
+      ],
+    });
+    assert.equal(issues.failureCount, 1);
+    assert.equal(issues.failures[0]?.errorCode, "131053");
+    assert.match(String(issues.failures[0]?.error), /weblink 403/);
+  });
 });
 
 describe("ocupação do número no Disparo Cloud", () => {

@@ -28,8 +28,9 @@ import {
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import { MetaWhatsappTemplateAiRepository } from "./meta-whatsapp-template-ai.repository";
 import {
+  copyTemplateHeaderPreview,
   headerHandleFromComponents,
-  readTemplateHeaderPreview,
+  readTemplateHeaderPreviewForSend,
 } from "./meta-whatsapp-template-header-preview.store";
 
 function requireTenant(auth: WabaRequestAuth) {
@@ -229,6 +230,14 @@ export class MetaWhatsappTemplateService {
       components,
       lastSyncedAt: now,
     });
+    const createHandle = headerHandleFromComponents(components);
+    if (createHandle) {
+      copyTemplateHeaderPreview({
+        tenantId: tenant.tenantId,
+        fromHandle: createHandle,
+        toHandles: [row.id],
+      });
+    }
     logMetaTemplate("CREATE", {
       tenantId: tenant.tenantId,
       name: validated.name,
@@ -288,6 +297,17 @@ export class MetaWhatsappTemplateService {
     const upserted: MetaTemplateRecord[] = [];
     for (const item of listed.items) {
       if (!item) continue;
+      const previous =
+        (item.metaTemplateId
+          ? await this.templates.findByMetaId(tenant.tenantId, item.metaTemplateId)
+          : null) ||
+        (await this.templates.findByWabaNameLanguage(
+          tenant.tenantId,
+          String(connection.wabaId),
+          item.name,
+          item.language,
+        ));
+      const oldHandle = previous ? headerHandleFromComponents(previous.components) : "";
       const saved = await this.templates.upsertFromGraph({
         tenantId: tenant.tenantId,
         connectionId: connection.id,
@@ -302,6 +322,14 @@ export class MetaWhatsappTemplateService {
         rejectedReason: item.rejectedReason,
         lastSyncedAt: now,
       });
+      const newHandle = headerHandleFromComponents(saved.components);
+      if (oldHandle) {
+        copyTemplateHeaderPreview({
+          tenantId: tenant.tenantId,
+          fromHandle: oldHandle,
+          toHandles: [saved.id, newHandle],
+        });
+      }
       upserted.push(saved);
       rememberApprovedTemplate(saved);
       try {
@@ -429,7 +457,10 @@ export class MetaWhatsappTemplateService {
       throw new MetaWhatsappError("template_not_found");
     }
     const handle = headerHandleFromComponents(row.components);
-    if (!handle) return null;
-    return readTemplateHeaderPreview(tenant.tenantId, handle);
+    return readTemplateHeaderPreviewForSend({
+      tenantId: tenant.tenantId,
+      handle,
+      templateId: id,
+    });
   }
 }

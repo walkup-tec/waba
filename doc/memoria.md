@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-03 16:30 — Weblink de cabeçalho 131053 / 403
+- Jandira 2: 1159/1159 `metaStatus=failed` com 131053 (lookaside 403). `wamid` não é entrega.
+- Disparo Cloud deixa de mandar URL de exemplo da Graph como `link`; sobe o arquivo local e envia `{ id }`. Sem arquivo, aborta antes do lote.
+- LOG: `doc/LOG-2026-09-03__163000__fix-header-weblink-403.md`
+
 ## 2026-09-03 16:15 — Jandira 2 sem entrega nos 4 destinos
 - Números passam na normalização Cloud. JSON de produção não lido (sem SSH).
 - LOG: `doc/LOG-2026-09-03__161500__jandira2-quatro-destinos-sem-entrega.md`
