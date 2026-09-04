@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 13:54 — Clipboard de evidências no Lab Meta
+- Erros do Laboratório abrem painel/modal com textarea + Copiar evidências (sanitizado).
+- Destino: modal AI, modal delete ou standalone `#meta-tpl-lab-debug-overlay`.
+- Marker `DEPLOY-2026-09-04-141500-lab-error-debug-clipboard`.
+- LOG: `doc/LOG-2026-09-04__135415__lab-error-debug-clipboard.md`
+- Keywords: lab-error, debug-clipboard, meta-tpl-lab-debug
+
 ## 2026-09-04 13:45 — Header-media: wrap apagava rate limit (#4)
 - Network mostrava fallback “Se for por tamanho…” mesmo com Graph code 4.
 - Causa: wrap só aceitava prefixo “A Meta recusou”; “A Meta limitou…” era descartado.

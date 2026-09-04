@@ -32,3 +32,4 @@ Marker: `DEPLOY-2026-09-04-114500-profile-photo-independent-name` (foto de perfi
 - 2026-09-04: header-media com código Graph na recusa; marker `DEPLOY-2026-09-04-125100-template-header-graph-error-codes`.
 - 2026-09-04: header-media code 4 = rate limit (mensagem correta, sem retry); marker `DEPLOY-2026-09-04-131700-template-header-rate-limit-code4`.
 - 2026-09-04: wrap do header-media preserva rate limit (#4); marker `DEPLOY-2026-09-04-134500-header-upload-preserve-rate-limit`.
+- 2026-09-04: clipboard de evidências de erro no Laboratório Meta (modal AI/delete/standalone); marker `DEPLOY-2026-09-04-141500-lab-error-debug-clipboard`.

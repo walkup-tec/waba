@@ -3980,6 +3980,58 @@
         #meta-tpl-ai-overlay.confirm-overlay {
           z-index: 5300;
         }
+
+        #meta-tpl-lab-debug-overlay.confirm-overlay {
+          z-index: 5400;
+        }
+        .meta-tpl-lab-debug-modal {
+          width: min(96vw, 640px);
+          max-height: min(92vh, 760px);
+          overflow: auto;
+        }
+        .meta-tpl-lab-debug-modal .confirm-title { color: #fca5a5; }
+        .meta-tpl-lab-debug-hint {
+          margin: 0 0 10px;
+          color: #94a3b8;
+          font-size: 0.82rem;
+          line-height: 1.45;
+          text-align: left;
+        }
+        .meta-tpl-lab-debug-box,
+        .meta-tpl-ai-debug-box {
+          width: 100%;
+          min-height: 160px;
+          max-height: 320px;
+          margin: 0 0 10px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          background: rgba(2, 6, 23, 0.72);
+          color: #e2e8f0;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: 11px;
+          line-height: 1.45;
+          resize: vertical;
+          white-space: pre;
+        }
+        .meta-tpl-ai-debug-panel {
+          margin: 8px 0 4px;
+          text-align: left;
+        }
+        .meta-tpl-ai-debug-panel[hidden] { display: none !important; }
+        .meta-tpl-lab-debug-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          justify-content: flex-end;
+        }
+        .meta-tpl-lab-debug-copy-status {
+          margin: 0;
+          min-height: 1.2em;
+          color: #86efac;
+          font-size: 0.78rem;
+          text-align: left;
+        }
         .meta-tpl-ai-modal {
           width: min(94vw, 480px);
         }
@@ -24450,9 +24502,32 @@
           <ol class="meta-tpl-ai-progress-steps" id="meta-tpl-ai-modal-steps"></ol>
         </div>
         <div class="meta-tpl-ai-modal-detail" id="meta-tpl-ai-modal-detail" hidden></div>
+        <div id="meta-tpl-ai-debug-panel" class="meta-tpl-ai-debug-panel" hidden>
+          <p class="meta-tpl-lab-debug-hint">Copie o bloco abaixo e cole no chat para análise do erro.</p>
+          <textarea id="meta-tpl-ai-debug-clipboard" class="meta-tpl-lab-debug-box" readonly rows="10" spellcheck="false" aria-label="Clipboard de evidências"></textarea>
+          <p class="meta-tpl-lab-debug-copy-status" id="meta-tpl-ai-debug-copy-status" role="status" aria-live="polite"></p>
+          <div class="meta-tpl-lab-debug-actions">
+            <button type="button" id="meta-tpl-ai-debug-copy" class="instance-action-btn btn-qrcode enabled">Copiar evidências</button>
+          </div>
+        </div>
         <div class="confirm-actions" id="meta-tpl-ai-modal-actions">
           <button id="meta-tpl-ai-modal-cancel" class="instance-action-btn" type="button">Cancelar</button>
           <button id="meta-tpl-ai-modal-ok" class="instance-action-btn btn-qrcode enabled" type="button">Enviar</button>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="meta-tpl-lab-debug-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal meta-tpl-lab-debug-modal" role="dialog" aria-modal="true" aria-labelledby="meta-tpl-lab-debug-title" aria-describedby="meta-tpl-lab-debug-hint">
+        <div class="confirm-title" id="meta-tpl-lab-debug-title">Erro no Laboratório Meta</div>
+        <div class="confirm-text" id="meta-tpl-lab-debug-text"></div>
+        <p class="meta-tpl-lab-debug-hint" id="meta-tpl-lab-debug-hint">Copie o bloco abaixo e cole no chat para análise do erro.</p>
+        <textarea id="meta-tpl-lab-debug-clipboard" class="meta-tpl-lab-debug-box" readonly rows="14" spellcheck="false" aria-label="Clipboard de evidências"></textarea>
+        <p class="meta-tpl-lab-debug-copy-status" id="meta-tpl-lab-debug-copy-status" role="status" aria-live="polite"></p>
+        <div class="confirm-actions meta-tpl-lab-debug-actions">
+          <button type="button" id="meta-tpl-lab-debug-copy" class="instance-action-btn btn-qrcode enabled">Copiar evidências</button>
+          <button type="button" id="meta-tpl-lab-debug-close" class="instance-action-btn enabled">Fechar</button>
         </div>
       </div>
     </div>
@@ -24470,6 +24545,14 @@
         </div>
         <div class="meta-tpl-delete-progress" id="meta-tpl-delete-progress" hidden>
           <div class="meta-tpl-ai-progress-track" aria-hidden="true"><i></i></div>
+        </div>
+        <div id="meta-tpl-delete-debug-panel" class="meta-tpl-ai-debug-panel" hidden>
+          <p class="meta-tpl-lab-debug-hint">Copie o bloco abaixo e cole no chat para análise do erro.</p>
+          <textarea id="meta-tpl-delete-debug-clipboard" class="meta-tpl-lab-debug-box" readonly rows="8" spellcheck="false" aria-label="Clipboard de evidências"></textarea>
+          <p class="meta-tpl-lab-debug-copy-status" id="meta-tpl-delete-debug-copy-status" role="status" aria-live="polite"></p>
+          <div class="meta-tpl-lab-debug-actions">
+            <button type="button" id="meta-tpl-delete-debug-copy" class="instance-action-btn btn-qrcode enabled">Copiar evidências</button>
+          </div>
         </div>
         <div class="confirm-actions" id="meta-tpl-delete-actions">
           <button id="meta-tpl-delete-cancel" class="instance-action-btn" type="button">Cancelar</button>
@@ -38320,12 +38403,14 @@
           els.ok.classList.toggle("btn-qrcode", phase === "confirm" || phase === "success");
           els.ok.classList.add("enabled");
         }
+        if (phase !== "error") metaTplLabHideAiDebugPanel();
       }
 
       function metaTplAiCloseOverlay(force) {
         if (metaTplAiModalPhase === "processing") return;
         metaTplAiStopProgressTimer();
         metaTplAiProgressSteps = [];
+        metaTplLabHideAiDebugPanel();
         const { overlay } = metaTplAiModalEls();
         if (overlay) {
           try {
@@ -38368,7 +38453,7 @@
         metaTplAiSetSubmitStatus("");
       }
 
-      function metaTplAiShowResult(kind, title, text, detail) {
+      function metaTplAiShowResult(kind, title, text, detail, evidenceInput) {
         metaTplAiStopProgressTimer();
         metaTplAiModalResolver = null;
         metaTplAiSetPhase(kind === "ok" ? "success" : "error", {
@@ -38378,6 +38463,27 @@
           okLabel: "Fechar",
         });
         metaTplAiOpenOverlay();
+        if (kind === "ok") {
+          metaTplLabHideAiDebugPanel();
+          return;
+        }
+        const extra = evidenceInput && typeof evidenceInput === "object" ? evidenceInput : {};
+        metaTplLabPresentError({
+          prefer: "ai",
+          forceAi: true,
+          source: extra.source || "meta-ai-modal",
+          title: title,
+          message: text,
+          detail: detail || "",
+          error: extra.error || null,
+          code: extra.code,
+          httpStatus: extra.httpStatus,
+          path: extra.path,
+          method: extra.method,
+          request: extra.request,
+          response: extra.response,
+          context: extra.context,
+        });
       }
 
       function metaTplAiSentConfirmHtml() {
@@ -38624,7 +38730,14 @@
               : "Não foi possível montar as três opções. Tente gerar novamente.";
           }
         } catch (error) {
-          if (status) status.textContent = error && error.message ? error.message : "Não foi possível usar a IA.";
+          const message = error && error.message ? error.message : "Não foi possível usar a IA.";
+          if (status) status.textContent = message;
+          metaTplLabPresentError({
+            source: "meta-ai-generate",
+            title: "Erro ao gerar opções Utility",
+            message: message,
+            error: error,
+          });
         } finally {
           if (button) button.disabled = false;
         }
@@ -38779,7 +38892,7 @@
           metaTplAiStopProgressTimer();
           const message = error && error.message ? error.message : "Não foi possível cadastrar as opções.";
           metaTplAiSetSubmitStatus("");
-          metaTplAiShowResult("error", "Não foi possível enviar", message);
+          metaTplAiShowResult("error", "Não foi possível enviar", message, "", { error: error, source: "meta-ai-submit-all" });
         } finally {
           if (button) button.disabled = false;
         }
@@ -39008,6 +39121,354 @@
         }
       }
 
+
+      let metaTplLabLastEvidenceText = "";
+      let metaTplLabDebugBound = false;
+
+      function metaTplLabIsOverlayOpen(id) {
+        const el = document.getElementById(id);
+        return Boolean(el && el.classList.contains("open"));
+      }
+
+      function metaTplLabSafeJsonClone(value, depth) {
+        const maxDepth = depth == null ? 6 : depth;
+        if (value == null) return value;
+        if (typeof value === "string") {
+          if (value.length > 4000) return value.slice(0, 4000) + "…[truncated]";
+          return value;
+        }
+        if (typeof value === "number" || typeof value === "boolean") return value;
+        if (typeof FormData !== "undefined" && value instanceof FormData) {
+          const entries = [];
+          value.forEach(function (entry, key) {
+            if (typeof File !== "undefined" && entry instanceof File) {
+              entries.push({
+                key: String(key),
+                fileName: String(entry.name || ""),
+                fileSize: Number(entry.size || 0),
+                fileType: String(entry.type || ""),
+              });
+              return;
+            }
+            entries.push({ key: String(key), value: metaTplLabSafeJsonClone(entry, maxDepth - 1) });
+          });
+          return { formData: entries };
+        }
+        if (typeof File !== "undefined" && value instanceof File) {
+          return {
+            fileName: String(value.name || ""),
+            fileSize: Number(value.size || 0),
+            fileType: String(value.type || ""),
+          };
+        }
+        if (Array.isArray(value)) {
+          if (maxDepth <= 0) return "[array]";
+          return value.slice(0, 40).map(function (item) {
+            return metaTplLabSafeJsonClone(item, maxDepth - 1);
+          });
+        }
+        if (typeof value === "object") {
+          if (maxDepth <= 0) return "[object]";
+          const out = {};
+          const keys = Object.keys(value).slice(0, 60);
+          for (let i = 0; i < keys.length; i += 1) {
+            const key = keys[i];
+            if (/access_token|accessToken|app_secret|appSecret|verify_token|verifyToken|Bearer|authorization|password|private_key|META_TOKEN|ENCRYPTION/i.test(key)) {
+              out[key] = "[redacted]";
+              continue;
+            }
+            out[key] = metaTplLabSafeJsonClone(value[key], maxDepth - 1);
+          }
+          return out;
+        }
+        return String(value).slice(0, 500);
+      }
+
+      function metaTplLabSanitizeEvidence(value) {
+        try {
+          const cloned = metaTplLabSafeJsonClone(value, 6);
+          const raw = JSON.stringify(cloned);
+          if (metaTplLabHasSecret(cloned) || /access_token|Bearer\s+[A-Za-z0-9._\-]+/i.test(raw)) {
+            return JSON.parse(
+              raw
+                .replace(/Bearer\s+[A-Za-z0-9._\-]+/gi, "Bearer [redacted]")
+                .replace(/("?(?:access_token|accessToken|app_secret|verify_token)"?\s*:\s*")([^"]+)(")/gi, "$1[redacted]$3"),
+            );
+          }
+          return cloned;
+        } catch (_error) {
+          return { note: "sanitize_failed" };
+        }
+      }
+
+      function metaTplLabCollectUiContext() {
+        const portfolio = document.getElementById("meta-tpl-lab-portfolio");
+        const filter = document.getElementById("meta-tpl-lab-portfolio-filter");
+        const mediaFormat = document.getElementById("meta-tpl-ai-media-format") || document.getElementById("meta-tpl-ai-media-format");
+        const mediaFile = document.getElementById("meta-tpl-ai-media-file") || document.getElementById("meta-tpl-ai-media-file");
+        const modelName = document.getElementById("meta-tpl-ai-model-name") || document.getElementById("meta-tpl-ai-model-name");
+        const file = mediaFile && mediaFile.files && mediaFile.files[0] ? mediaFile.files[0] : null;
+        let deployMarker = "";
+        try {
+          if (typeof baselineDeployMarker !== "undefined" && baselineDeployMarker) {
+            deployMarker = String(baselineDeployMarker);
+          }
+        } catch (_e) {}
+        return {
+          href: String(location.href || ""),
+          path: String(location.pathname || ""),
+          deployMarker: deployMarker,
+          connectionId: typeof metaTplLabSelectedConnectionId === "function" ? metaTplLabSelectedConnectionId() : "",
+          portfolioLabel: portfolio && portfolio.selectedOptions && portfolio.selectedOptions[0]
+            ? String(portfolio.selectedOptions[0].textContent || "").trim()
+            : "",
+          portfolioFilter: filter ? String(filter.value || "").trim() : "",
+          modelName: modelName ? String(modelName.value || "").trim() : "",
+          mediaFormat: mediaFormat ? String(mediaFormat.value || "").trim() : "",
+          mediaFile: file
+            ? { name: String(file.name || ""), size: Number(file.size || 0), type: String(file.type || "") }
+            : null,
+          aiOverlayOpen: metaTplLabIsOverlayOpen("meta-tpl-ai-overlay"),
+          deleteOverlayOpen: metaTplLabIsOverlayOpen("meta-tpl-delete-overlay"),
+          aiPhase: typeof metaTplAiModalPhase !== "undefined" ? String(metaTplAiModalPhase || "") : "",
+          userAgent: String((navigator && navigator.userAgent) || "").slice(0, 180),
+        };
+      }
+
+      function metaTplLabBuildEvidence(input) {
+        const opts = input || {};
+        const error = opts.error || null;
+        const fromError = error && error.labEvidence && typeof error.labEvidence === "object" ? error.labEvidence : null;
+        const evidence = {
+          kind: "waba-meta-lab-error",
+          capturedAt: new Date().toISOString(),
+          source: String(opts.source || (fromError && fromError.source) || "meta-lab"),
+          title: String(opts.title || "Erro no Laboratório Meta"),
+          message: String(opts.message || (error && error.message) || "").slice(0, 800),
+          code: opts.code != null ? opts.code : fromError && fromError.code != null ? fromError.code : null,
+          httpStatus: opts.httpStatus != null ? opts.httpStatus : fromError && fromError.httpStatus != null ? fromError.httpStatus : null,
+          path: opts.path || (fromError && fromError.path) || null,
+          method: opts.method || (fromError && fromError.method) || null,
+          request: metaTplLabSanitizeEvidence(opts.request != null ? opts.request : fromError && fromError.request),
+          response: metaTplLabSanitizeEvidence(opts.response != null ? opts.response : fromError && fromError.response),
+          context: metaTplLabSanitizeEvidence(
+            Object.assign({}, metaTplLabCollectUiContext(), opts.context || {}, (fromError && fromError.context) || {}),
+          ),
+          detailHtml: opts.detail ? String(opts.detail).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1200) : "",
+          stack: error && error.stack ? String(error.stack).split("\n").slice(0, 8).join("\n") : "",
+        };
+        return evidence;
+      }
+
+      function metaTplLabFormatEvidenceClipboard(evidence) {
+        const rows = [];
+        rows.push("=== WABA Meta Lab · evidências de erro ===");
+        rows.push("capturedAt: " + String(evidence.capturedAt || ""));
+        rows.push("source: " + String(evidence.source || ""));
+        rows.push("title: " + String(evidence.title || ""));
+        rows.push("message: " + String(evidence.message || ""));
+        if (evidence.code != null && evidence.code !== "") rows.push("code: " + String(evidence.code));
+        if (evidence.httpStatus != null) rows.push("httpStatus: " + String(evidence.httpStatus));
+        if (evidence.method || evidence.path) {
+          rows.push("request: " + String(evidence.method || "?") + " " + String(evidence.path || ""));
+        }
+        rows.push("");
+        rows.push("--- context ---");
+        rows.push(JSON.stringify(evidence.context || {}, null, 2));
+        if (evidence.request != null) {
+          rows.push("");
+          rows.push("--- request body (sanitized) ---");
+          rows.push(JSON.stringify(evidence.request, null, 2));
+        }
+        if (evidence.response != null) {
+          rows.push("");
+          rows.push("--- response (sanitized) ---");
+          rows.push(JSON.stringify(evidence.response, null, 2));
+        }
+        if (evidence.detailHtml) {
+          rows.push("");
+          rows.push("--- detail ---");
+          rows.push(evidence.detailHtml);
+        }
+        if (evidence.stack) {
+          rows.push("");
+          rows.push("--- stack ---");
+          rows.push(evidence.stack);
+        }
+        rows.push("");
+        rows.push("=== fim ===");
+        return rows.join("\n");
+      }
+
+      async function metaTplLabCopyText(text, statusEl) {
+        const value = String(text || "");
+        let ok = false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(value);
+            ok = true;
+          }
+        } catch (_error) {
+          ok = false;
+        }
+        if (!ok) {
+          try {
+            const area = document.createElement("textarea");
+            area.value = value;
+            area.setAttribute("readonly", "readonly");
+            area.style.position = "fixed";
+            area.style.left = "-9999px";
+            document.body.appendChild(area);
+            area.select();
+            ok = document.execCommand("copy");
+            document.body.removeChild(area);
+          } catch (_error2) {
+            ok = false;
+          }
+        }
+        if (statusEl) {
+          statusEl.textContent = ok ? "Copiado. Cole no chat para análise." : "Não foi possível copiar automaticamente — selecione o texto e copie manualmente.";
+          statusEl.style.color = ok ? "#86efac" : "#fca5a5";
+        }
+        return ok;
+      }
+
+      function metaTplLabFillDebugFields(clipboardId, statusId, text) {
+        const box = document.getElementById(clipboardId);
+        const status = document.getElementById(statusId);
+        metaTplLabLastEvidenceText = String(text || "");
+        if (box) box.value = metaTplLabLastEvidenceText;
+        if (status) {
+          status.textContent = "";
+          status.style.color = "";
+        }
+      }
+
+      function metaTplLabHideAiDebugPanel() {
+        const panel = document.getElementById("meta-tpl-ai-debug-panel");
+        if (panel) panel.hidden = true;
+        const status = document.getElementById("meta-tpl-ai-debug-copy-status");
+        if (status) status.textContent = "";
+      }
+
+      function metaTplLabHideDeleteDebugPanel() {
+        const panel = document.getElementById("meta-tpl-delete-debug-panel");
+        if (panel) panel.hidden = true;
+        const status = document.getElementById("meta-tpl-delete-debug-copy-status");
+        if (status) status.textContent = "";
+      }
+
+      function metaTplLabShowAiDebugPanel(clipboardText) {
+        const panel = document.getElementById("meta-tpl-ai-debug-panel");
+        metaTplLabFillDebugFields("meta-tpl-ai-debug-clipboard", "meta-tpl-ai-debug-copy-status", clipboardText);
+        if (panel) panel.hidden = false;
+      }
+
+      function metaTplLabShowDeleteDebugPanel(clipboardText) {
+        const panel = document.getElementById("meta-tpl-delete-debug-panel");
+        metaTplLabFillDebugFields("meta-tpl-delete-debug-clipboard", "meta-tpl-delete-debug-copy-status", clipboardText);
+        if (panel) panel.hidden = false;
+      }
+
+      function metaTplLabCloseDebugOverlay() {
+        const overlay = document.getElementById("meta-tpl-lab-debug-overlay");
+        if (!overlay) return;
+        try {
+          if (typeof blurFocusInsideOverlay === "function") blurFocusInsideOverlay(overlay);
+        } catch (_error) {}
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "true");
+      }
+
+      function metaTplLabOpenDebugOverlay(title, message, clipboardText) {
+        const overlay = document.getElementById("meta-tpl-lab-debug-overlay");
+        const titleEl = document.getElementById("meta-tpl-lab-debug-title");
+        const textEl = document.getElementById("meta-tpl-lab-debug-text");
+        if (titleEl) titleEl.textContent = String(title || "Erro no Laboratório Meta");
+        if (textEl) textEl.textContent = String(message || "");
+        metaTplLabFillDebugFields("meta-tpl-lab-debug-clipboard", "meta-tpl-lab-debug-copy-status", clipboardText);
+        if (!overlay) return;
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        const copyBtn = document.getElementById("meta-tpl-lab-debug-copy");
+        if (copyBtn) copyBtn.focus();
+      }
+
+      function metaTplLabPresentError(input) {
+        const opts = input || {};
+        const evidence = metaTplLabBuildEvidence(opts);
+        const clipboard = metaTplLabFormatEvidenceClipboard(evidence);
+        const title = evidence.title;
+        const message = evidence.message;
+        const prefer = String(opts.prefer || "auto");
+        const aiOpen = metaTplLabIsOverlayOpen("meta-tpl-ai-overlay");
+        const deleteOpen = metaTplLabIsOverlayOpen("meta-tpl-delete-overlay");
+        const aiErrorPhase = typeof metaTplAiModalPhase !== "undefined" && metaTplAiModalPhase === "error";
+        const deleteErrorPhase = typeof metaTplLabDeletePhase !== "undefined" && metaTplLabDeletePhase === "error";
+
+        if (prefer === "ai" || opts.forceAi || (prefer === "auto" && aiOpen && aiErrorPhase)) {
+          metaTplLabShowAiDebugPanel(clipboard);
+          return evidence;
+        }
+        if (prefer === "delete" || opts.forceDelete || (prefer === "auto" && deleteOpen && deleteErrorPhase)) {
+          metaTplLabShowDeleteDebugPanel(clipboard);
+          return evidence;
+        }
+        metaTplLabOpenDebugOverlay(title, message, clipboard);
+        return evidence;
+      }
+
+      function metaTplLabBindDebugUi() {
+        if (metaTplLabDebugBound) return;
+        metaTplLabDebugBound = true;
+        document.addEventListener("click", function onMetaTplLabDebugClick(event) {
+          const rawTarget = event.target;
+          if (rawTarget && rawTarget.id === "meta-tpl-lab-debug-overlay") {
+            metaTplLabCloseDebugOverlay();
+            return;
+          }
+          const target = rawTarget && rawTarget.closest
+            ? rawTarget.closest(
+                "#meta-tpl-lab-debug-copy, #meta-tpl-lab-debug-close, #meta-tpl-ai-debug-copy, #meta-tpl-delete-debug-copy",
+              )
+            : null;
+          if (!target) return;
+          if (target.id === "meta-tpl-lab-debug-close") {
+            metaTplLabCloseDebugOverlay();
+            return;
+          }
+          if (target.id === "meta-tpl-lab-debug-copy") {
+            void metaTplLabCopyText(
+              metaTplLabLastEvidenceText || ((document.getElementById("meta-tpl-lab-debug-clipboard") || {}).value || ""),
+              document.getElementById("meta-tpl-lab-debug-copy-status"),
+            );
+            return;
+          }
+          if (target.id === "meta-tpl-ai-debug-copy") {
+            void metaTplLabCopyText(
+              metaTplLabLastEvidenceText || ((document.getElementById("meta-tpl-ai-debug-clipboard") || {}).value || ""),
+              document.getElementById("meta-tpl-ai-debug-copy-status"),
+            );
+            return;
+          }
+          if (target.id === "meta-tpl-delete-debug-copy") {
+            void metaTplLabCopyText(
+              metaTplLabLastEvidenceText || ((document.getElementById("meta-tpl-delete-debug-clipboard") || {}).value || ""),
+              document.getElementById("meta-tpl-delete-debug-copy-status"),
+            );
+          }
+        });
+        document.addEventListener("keydown", function onMetaTplLabDebugEsc(event) {
+          if (event.key !== "Escape") return;
+          const debugOverlay = document.getElementById("meta-tpl-lab-debug-overlay");
+          if (debugOverlay && debugOverlay.classList.contains("open")) {
+            metaTplLabCloseDebugOverlay();
+            event.preventDefault();
+          }
+        });
+      }
+
+
       function metaTplLabHasSecret(payload) {
         return /access_token|accessTokenEncrypted|app_secret|verify_token|Bearer |META_TOKEN/i.test(
           JSON.stringify(payload || {}),
@@ -39142,7 +39603,19 @@
 
       async function metaTplLabFetchJson(path, options) {
         const extra = options || {};
+        const method = String(extra.method || "GET").toUpperCase();
         const isForm = typeof FormData !== "undefined" && extra.body instanceof FormData;
+        let requestSummary = null;
+        try {
+          if (isForm) {
+            requestSummary = metaTplLabSanitizeEvidence(extra.body);
+          } else if (extra.body != null) {
+            const rawBody = typeof extra.body === "string" ? JSON.parse(extra.body) : extra.body;
+            requestSummary = metaTplLabSanitizeEvidence(rawBody);
+          }
+        } catch (_error) {
+          requestSummary = { note: "request_parse_failed" };
+        }
         const response = await fetch(resolveWabaPublicPath(path), {
           credentials: "same-origin",
           ...extra,
@@ -39154,10 +39627,31 @@
         });
         const payload = await response.json().catch(() => ({}));
         if (metaTplLabHasSecret(payload)) {
-          throw new Error("Resposta inválida.");
+          const secretError = new Error("Resposta inválida.");
+          secretError.labEvidence = {
+            source: "meta-lab-fetch",
+            path: String(path || ""),
+            method: method,
+            httpStatus: response.status,
+            code: "secret_stripped",
+            request: requestSummary,
+            response: { ok: false, note: "payload_contained_secret_and_was_stripped" },
+          };
+          throw secretError;
         }
         if (!response.ok || payload.ok === false) {
-          throw new Error(String(payload.error || "Não foi possível concluir."));
+          const message = String(payload.error || "Não foi possível concluir.");
+          const err = new Error(message);
+          err.labEvidence = {
+            source: "meta-lab-fetch",
+            path: String(path || ""),
+            method: method,
+            httpStatus: response.status,
+            code: payload.code != null ? payload.code : null,
+            request: requestSummary,
+            response: metaTplLabSanitizeEvidence(payload),
+          };
+          throw err;
         }
         return payload;
       }
@@ -39213,7 +39707,14 @@
           }
           metaTplBroadcastSetStatus("Não foi possível gravar a foto do topo.");
         } catch (error) {
-          metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível gravar a foto do topo.");
+          const message = error && error.message ? error.message : "Não foi possível gravar a foto do topo.";
+          metaTplBroadcastSetStatus(message);
+          metaTplLabPresentError({
+            source: "meta-broadcast-header-upload",
+            title: "Erro ao gravar foto do topo",
+            message: message,
+            error: error,
+          });
         }
       }
 
@@ -39759,7 +40260,14 @@
         } catch (error) {
           metaTplBroadcastInspect = null;
           metaTplBroadcastSyncHeaderFile({ headerNeedsFile: false });
-          metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível ler o template.");
+          const message = error && error.message ? error.message : "Não foi possível ler o template.";
+          metaTplBroadcastSetStatus(message);
+          metaTplLabPresentError({
+            source: "meta-broadcast-inspect",
+            title: "Erro ao inspecionar template",
+            message: message,
+            error: error,
+          });
         }
       }
 
@@ -39843,7 +40351,14 @@
           metaTplBroadcastSetStatus("Disparo iniciado. Acompanhe o andamento na tabela.");
           void metaTplBroadcastLoadHistory();
         } catch (error) {
-          metaTplBroadcastSetStatus(error && error.message ? error.message : "Não foi possível iniciar o disparo.");
+          const message = error && error.message ? error.message : "Não foi possível iniciar o disparo.";
+          metaTplBroadcastSetStatus(message);
+          metaTplLabPresentError({
+            source: "meta-broadcast-start",
+            title: "Erro ao iniciar disparo Cloud",
+            message: message,
+            error: error,
+          });
         }
       }
 
@@ -39870,7 +40385,14 @@
           void metaTplBroadcastLoadHistory();
         } catch (error) {
           metaTplLabRenderTable([]);
-          metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível listar.");
+          const message = error && error.message ? error.message : "Não foi possível listar.";
+          metaTplLabSetStatus(message);
+          metaTplLabPresentError({
+            source: "meta-lab-list",
+            title: "Erro ao listar templates",
+            message: message,
+            error: error,
+          });
           metaTplBroadcastFillPortfolio();
           void metaTplBroadcastLoadHistory();
         }
@@ -39911,7 +40433,14 @@
               (removed ? ". Removidos da Meta=" + String(removed) : ""),
           );
         } catch (error) {
-          metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível sincronizar.");
+          const message = error && error.message ? error.message : "Não foi possível sincronizar.";
+          metaTplLabSetStatus(message);
+          metaTplLabPresentError({
+            source: "meta-lab-sync",
+            title: "Erro ao sincronizar com a Meta",
+            message: message,
+            error: error,
+          });
         } finally {
           if (btn) btn.disabled = false;
         }
@@ -40118,10 +40647,12 @@
           els.confirm.classList.toggle("btn-delete", phase === "confirm");
           els.confirm.classList.add("enabled");
         }
+        if (phase !== "error") metaTplLabHideDeleteDebugPanel();
       }
 
       function metaTplLabCloseDeleteOverlay(force) {
         if (!force && metaTplLabDeletePhase === "processing") return;
+        metaTplLabHideDeleteDebugPanel();
         const { overlay } = metaTplLabDeleteEls();
         if (overlay) {
           try {
@@ -40195,6 +40726,15 @@
             text: message,
           });
           metaTplLabSetStatus(message);
+          metaTplLabPresentError({
+            prefer: "delete",
+            forceDelete: true,
+            source: "meta-lab-delete",
+            title: "Não foi possível excluir",
+            message: message,
+            error: error,
+            context: { templateId: id, templateName: name },
+          });
           const els = metaTplLabDeleteEls();
           if (els.confirm) els.confirm.focus();
         }
@@ -40343,6 +40883,7 @@
         document.getElementById("meta-tpl-ai-media-file")?.click();
       });
       document.getElementById("meta-tpl-ai-media-file")?.addEventListener("change", metaTplAiSyncMediaFileName);
+      metaTplLabBindDebugUi();
       document.getElementById("meta-tpl-ai-button-text")?.addEventListener("change", function () {
         const text = metaTplAiSelectedButtonText();
         document.querySelectorAll(".meta-tpl-ai-option-btn").forEach((el) => {
@@ -40472,7 +41013,14 @@
         } catch (error) {
           metaAutoLabRenderRules([]);
           metaAutoLabRenderRuns([]);
-          metaAutoLabSetStatus(error && error.message ? error.message : "Não foi possível carregar.");
+          const message = error && error.message ? error.message : "Não foi possível carregar.";
+          metaAutoLabSetStatus(message);
+          metaTplLabPresentError({
+            source: "meta-auto-load",
+            title: "Erro ao carregar automação",
+            message: message,
+            error: error,
+          });
         }
         return false;
       };
@@ -40508,7 +41056,14 @@
           await window.wabaLoadMetaAutomationLab();
           metaAutoLabSetStatus("Configuração salva.");
         } catch (error) {
-          metaAutoLabSetStatus(error && error.message ? error.message : "Não foi possível salvar.");
+          const message = error && error.message ? error.message : "Não foi possível salvar.";
+          metaAutoLabSetStatus(message);
+          metaTplLabPresentError({
+            source: "meta-auto-save-settings",
+            title: "Erro ao salvar automação",
+            message: message,
+            error: error,
+          });
         }
         return false;
       };
@@ -40555,7 +41110,14 @@
           await window.wabaLoadMetaAutomationLab();
           metaAutoLabSetStatus("Regra salva.");
         } catch (error) {
-          metaAutoLabSetStatus(error && error.message ? error.message : "Não foi possível salvar a regra.");
+          const message = error && error.message ? error.message : "Não foi possível salvar a regra.";
+          metaAutoLabSetStatus(message);
+          metaTplLabPresentError({
+            source: "meta-auto-save-rule",
+            title: "Erro ao salvar regra",
+            message: message,
+            error: error,
+          });
         }
         return false;
       };
@@ -40588,7 +41150,14 @@
             }
             await window.wabaLoadMetaAutomationLab();
           } catch (error) {
-            metaAutoLabSetStatus(error && error.message ? error.message : "Não foi possível alterar a regra.");
+            const message = error && error.message ? error.message : "Não foi possível alterar a regra.";
+            metaAutoLabSetStatus(message);
+            metaTplLabPresentError({
+              source: "meta-auto-toggle-rule",
+              title: "Erro ao alterar regra",
+              message: message,
+              error: error,
+            });
           }
         };
         run();
