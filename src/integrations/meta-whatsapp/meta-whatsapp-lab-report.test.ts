@@ -371,7 +371,7 @@ describe("erros de envio visíveis ao operacional", () => {
     assert.equal(issues.pendingConfirmation, 1);
     assert.equal(issues.failureCount, 1);
     assert.equal(issues.failures[0]?.errorCode, "131026");
-    assert.equal(issues.failures[0]?.error, "Número inválido ou sem WhatsApp.");
+    assert.equal(issues.failures[0]?.error, "Número inválido, sem WhatsApp, bloqueou o negócio ou app desatualizado (Message Undeliverable).");
     assert.equal(issues.failures[0]?.recipient, "51 •••••-1261");
   });
 

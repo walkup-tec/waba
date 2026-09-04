@@ -30,6 +30,7 @@ import {
   applyCampaignReportReadOverride,
   campaignReportHidesClicks,
 } from "../disparos/waba-campaign-report-read-overrides";
+import { collectIntakeReportTimeline } from "../disparos/waba-campaign-report-timeline";
 import { campaignAttendedByLaboratorioStaff } from "../disparos/waba-campaign-laboratorio-attended";
 import { finalizeIntakePerformanceReport } from "../disparos/waba-campaign-report-finalize.service";
 import {
@@ -459,6 +460,7 @@ export class WabaOperacionalCampanhasService {
     liveFromMeta: boolean;
     report: OperacionalCampaignReportInput | null;
     sendIssues: ReturnType<typeof summarizeBroadcastSendIssues> | null;
+    timeline: ReturnType<typeof collectIntakeReportTimeline>;
   } {
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
 
@@ -525,6 +527,8 @@ export class WabaOperacionalCampanhasService {
           }
         : null,
       sendIssues,
+      // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
+      timeline: collectIntakeReportTimeline(intake),
     };
   }
 

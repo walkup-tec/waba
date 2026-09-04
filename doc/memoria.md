@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 09:25 — Timeline no relatório operacional
+- Operacional passa a usar a mesma `collectIntakeReportTimeline` do assinante.
+- Esclarecido: “N aceitas sem comprovante” ≠ Falhados (ex.: 17 vs 136 na Jandira 2).
+- Marker `DEPLOY-2026-09-04-092500-operacional-report-timeline`.
+- LOG: `doc/LOG-2026-09-04__092500__operacional-report-timeline.md`
+
 ## 2026-09-03 21:51 — Quantum: números incompletos no portfólio
 - Causa: absorb do dedupe usava `mergePortfolioNumbers` (2ª conexão do mesmo BM perdia chips) + `phone_numbers` sem paginação Graph.
 - Fix: `unionPortfolioNumbers` no absorb + `listWabaPhoneNumbersPaged`.

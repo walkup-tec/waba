@@ -3,7 +3,8 @@ import type { MetaBroadcastCampaign, MetaBroadcastLead } from "./meta-whatsapp-b
 const MAX_FAILURES = 40;
 
 const META_SEND_ERROR_HINT: Record<string, string> = {
-  "131026": "Número inválido ou sem WhatsApp.",
+  "131026": "Número inválido, sem WhatsApp, bloqueou o negócio ou app desatualizado (Message Undeliverable).",
+  "131042": "Problema no método de pagamento / faturamento da WABA na Meta.",
   "131047": "Fora da janela de 24 h. É preciso template.",
   "131051": "A Meta recusou o tipo desta mensagem.",
   "131053":

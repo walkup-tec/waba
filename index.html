@@ -24993,6 +24993,7 @@
             </div>
           </form>
         </div>
+        <div id="admin-campanhas-report-timeline" class="camp-report-timeline-host" aria-live="polite"></div>
         <div id="admin-campanhas-report-dashboard" class="camp-report-dashboard" aria-live="polite"></div>
         <div id="admin-campanhas-report-send-issues" class="camp-report-send-issues" hidden></div>
         <div class="confirm-actions">
@@ -45289,6 +45290,15 @@
         };
       }
 
+      function renderAdminCampanhasReportTimeline(payload) {
+        const host = document.getElementById("admin-campanhas-report-timeline");
+        if (!host) return;
+        const timeline = payload && payload.timeline && typeof payload.timeline === "object" ? payload.timeline : null;
+        const htmlTimeline = buildSubscriberCampaignTimelineHtml(timeline);
+        host.innerHTML = htmlTimeline || "";
+        host.hidden = !String(htmlTimeline || "").trim();
+      }
+
       function renderAdminCampanhasReportSendIssues(payload) {
         const box = document.getElementById("admin-campanhas-report-send-issues");
         if (!box) return;
@@ -45303,9 +45313,9 @@
           return;
         }
         const pendingHtml = pending
-          ? `<p class="camp-report-send-issues-hint">${pending.toLocaleString("pt-BR")} ${
+          ? `<p class="camp-report-send-issues-hint"><strong>${pending.toLocaleString("pt-BR")}</strong> ${
               pending === 1 ? "mensagem aceita" : "mensagens aceitas"
-            } pela Meta ainda sem comprovante de entrega. Isso não entra em Entregues.</p>`
+            } pela Meta ainda <strong>sem comprovante de entrega</strong>. Isso <strong>não</strong> entra em Entregues nem em Falhados — fica em Enviados (pendentes) até o webhook.</p>`
           : "";
         const listHtml = failures.length
           ? `<ul class="camp-report-send-issues-list">${failures
@@ -45324,10 +45334,11 @@
         box.classList.toggle("camp-report-send-issues--pending", failures.length === 0);
         box.innerHTML = `
           <h4 class="camp-report-send-issues-title">${
-            failures.length ? "Erros que impactaram o envio" : "Comprovante de entrega da Meta"
+            failures.length ? "Erros que impactaram o envio" : "Aguardando comprovante de entrega"
           }</h4>
-          ${pendingHtml}
+          ${failures.length ? `<p class="camp-report-send-issues-hint">Estes destinos entraram em <strong>Falhados</strong> (webhook/recusa da Meta).</p>` : ""}
           ${listHtml}
+          ${pendingHtml}
         `;
       }
 
@@ -45436,6 +45447,7 @@
         adminCampanhasReportSource = String(data.source || report.source || "").trim();
         setAdminCampanhasReportReadOnly(Boolean(data.isReadOnly));
         updateAdminCampanhasReportDashboard();
+        renderAdminCampanhasReportTimeline(data);
         renderAdminCampanhasReportSendIssues(data);
       }
 
