@@ -23,6 +23,8 @@ Campanha Jandira 2: lotes 131053 cancelados. O Disparo Cloud de template com mí
 
 Disparo Jandira 2 `5552c6f7-…` (15:51): 357 enviados Graph, **289 delivered/read**, 805 na fila, sem 131053. Travou no Redeploy. Marker `DEPLOY-2026-09-03-193200-broadcast-resume-orphan` retoma no boot — **Redeploy** do `waba_disparador` (não voidar este id).
 
-Marker: `DEPLOY-2026-09-04-110500-quantum-fanout-debug-token` (Quantum: debug_token + nested BM para listar WABAs/chips; se ES só deu 1 WABA, ainda mostra 1 até novo +).
+Marker: `DEPLOY-2026-09-04-114500-profile-photo-independent-name` (foto de perfil não depende mais do sucesso do nome na Meta).
 
 GitHub `walkup-tec/waba` `master` recebe o tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
+
+Marker: `DEPLOY-2026-09-04-114500-profile-photo-independent-name` (foto de perfil independente do nome na Meta).

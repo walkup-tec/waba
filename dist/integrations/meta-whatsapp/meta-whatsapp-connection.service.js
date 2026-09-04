@@ -1008,7 +1008,8 @@ class MetaWhatsappConnectionService {
         if (vertical === null || description === null || address === null || email === null) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         }
-        const hasBiz = vertical !== undefined || description !== undefined || address !== undefined || email !== undefined;
+        // "" do front = campo omitido/sem mudança; não dispara POST de perfil sozinho.
+        const hasBiz = Boolean(vertical || description || address || email);
         if (!phoneNumberId || (!displayName && !photo && !hasBiz)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         }
@@ -1048,6 +1049,9 @@ class MetaWhatsappConnectionService {
         }
         let namePending = false;
         let nameNeedsRegister = false;
+        let nameUpdated = false;
+        let nameFailure = null;
+        const wantsProfile = Boolean(photo) || hasBiz;
         if (displayName) {
             const renamed = await this.graph({
                 token,
@@ -1062,33 +1066,41 @@ class MetaWhatsappConnectionService {
                     status: renamed.status,
                     graphCode: renamed.graphCode,
                 });
-                if (renamed.status === 401)
+                if (renamed.status === 401) {
+                    // Token morto: sem sentido tentar foto/perfil.
                     throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
-                throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_update_failed");
+                }
+                nameFailure = "display_name_update_failed";
+                // Nome e foto são independentes na Graph — segue com foto/dados se houver.
+                if (!wantsProfile)
+                    throw new meta_whatsapp_errors_1.MetaWhatsappError("display_name_update_failed");
             }
-            const nameNode = await this.graph({
-                token,
-                method: "GET",
-                path: phoneNumberId,
-                query: { fields: meta_whatsapp_portfolio_map_1.META_PHONE_NAME_FIELDS },
-            });
-            const named = nameNode.ok
-                ? (0, meta_whatsapp_portfolio_map_1.mapPhoneNameFields)(nameNode.json)
-                : {
-                    verifiedName: null,
-                    nameStatus: null,
-                    newDisplayName: null,
-                    newNameStatus: null,
-                };
-            const nameSync = (0, meta_whatsapp_portfolio_map_1.resolvePhoneNameSync)({
-                verifiedName: named.verifiedName,
-                nameStatus: named.nameStatus,
-                newDisplayName: named.newDisplayName || displayName,
-                newNameStatus: named.newNameStatus,
-                localName: displayName,
-            });
-            namePending = nameSync.nameSyncStatus === "pending";
-            nameNeedsRegister = nameSync.nameNeedsRegister;
+            else {
+                nameUpdated = true;
+                const nameNode = await this.graph({
+                    token,
+                    method: "GET",
+                    path: phoneNumberId,
+                    query: { fields: meta_whatsapp_portfolio_map_1.META_PHONE_NAME_FIELDS },
+                });
+                const named = nameNode.ok
+                    ? (0, meta_whatsapp_portfolio_map_1.mapPhoneNameFields)(nameNode.json)
+                    : {
+                        verifiedName: null,
+                        nameStatus: null,
+                        newDisplayName: null,
+                        newNameStatus: null,
+                    };
+                const nameSync = (0, meta_whatsapp_portfolio_map_1.resolvePhoneNameSync)({
+                    verifiedName: named.verifiedName,
+                    nameStatus: named.nameStatus,
+                    newDisplayName: named.newDisplayName || displayName,
+                    newNameStatus: named.newNameStatus,
+                    localName: displayName,
+                });
+                namePending = nameSync.nameSyncStatus === "pending";
+                nameNeedsRegister = nameSync.nameNeedsRegister;
+            }
         }
         const profileBody = { messaging_product: "whatsapp" };
         if (vertical)
@@ -1099,6 +1111,8 @@ class MetaWhatsappConnectionService {
             profileBody.address = address;
         if (email)
             profileBody.email = email;
+        let photoUpdated = false;
+        let profileUpdated = false;
         if (photo) {
             const appId = (0, meta_config_1.readMetaAppId)();
             if (!appId)
@@ -1124,7 +1138,12 @@ class MetaWhatsappConnectionService {
                     reason: "upload",
                     detail: String(error?.message || "").slice(0, 80),
                 });
-                throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_update_failed");
+                // Se o nome já foi aceito, reporta falha só da foto.
+                if (nameUpdated)
+                    throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_photo_update_failed");
+                if (nameFailure)
+                    throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_update_failed");
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_photo_update_failed");
             }
         }
         if (Object.keys(profileBody).length > 1) {
@@ -1143,25 +1162,30 @@ class MetaWhatsappConnectionService {
                 });
                 if (profile.status === 401)
                     throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
-                throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_update_failed");
+                if (nameUpdated)
+                    throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_photo_update_failed");
+                if (nameFailure)
+                    throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_update_failed");
+                throw new meta_whatsapp_errors_1.MetaWhatsappError(photo ? "profile_photo_update_failed" : "profile_update_failed");
             }
+            photoUpdated = Boolean(photo);
+            profileUpdated = true;
         }
         (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {
-            name: displayName || undefined,
-            channelName: displayName || undefined,
-            photo: photo
+            name: nameUpdated ? displayName || undefined : undefined,
+            channelName: nameUpdated ? displayName || undefined : undefined,
+            photo: photoUpdated && photo
                 ? { ext: photo.mime.includes("png") ? "png" : "jpg", bytes: photo.bytes }
                 : undefined,
-            vertical: vertical !== undefined ? vertical || null : undefined,
-            description: description !== undefined ? description : undefined,
-            address: address !== undefined ? address : undefined,
-            email: email !== undefined ? email || null : undefined,
-            ...(profileBody.profile_picture_handle ? { photoMetaApplied: true, photoSource: "local-upload" } : {}),
-            ...(vertical || description || address || email ? { profileMetaApplied: true } : {}),
+            vertical: profileUpdated && vertical !== undefined ? vertical || null : undefined,
+            description: profileUpdated && description !== undefined ? description : undefined,
+            address: profileUpdated && address !== undefined ? address : undefined,
+            email: profileUpdated && email !== undefined ? email || null : undefined,
+            ...(photoUpdated ? { photoMetaApplied: true, photoSource: "local-upload" } : {}),
+            ...(profileUpdated && (vertical || description || address || email)
+                ? { profileMetaApplied: true }
+                : {}),
         });
-        const nameUpdated = Boolean(displayName);
-        const photoUpdated = Boolean(photo);
-        const profileUpdated = hasBiz || photoUpdated;
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-profile-updated", {
             tenantId: tenant.tenantId,
             namePending,
@@ -1169,8 +1193,10 @@ class MetaWhatsappConnectionService {
             nameUpdated,
             photoUpdated,
             profileUpdated,
+            nameFailure: nameFailure || null,
         });
         const listed = await this.listPortfolioAssets(auth, { connectionId: open.id });
+        // Foto/dados ok + nome recusado: sucesso parcial (não mascara a foto aplicada).
         return {
             ...listed,
             namePending,
@@ -1179,6 +1205,10 @@ class MetaWhatsappConnectionService {
             nameUpdated,
             photoUpdated,
             profileUpdated,
+            nameRejected: Boolean(nameFailure),
+            nameRejectMessage: nameFailure
+                ? "A Meta recusou o novo nome de exibição. A foto e os dados da empresa foram enviados."
+                : null,
         };
     }
     async readPhonePhotoFromAuth(auth, phoneNumberId) {

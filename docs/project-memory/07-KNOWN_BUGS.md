@@ -13,3 +13,5 @@ Resolvido no marker `DEPLOY-2026-09-03-215100-quantum-portfolio-numbers`: portf�
 Resolvido no marker `DEPLOY-2026-09-04-102500-quantum-bm-waba-fanout` (parcial): fan-out só por edges `owned_*`/`client_*` do BM — insuficiente com token ES (403/vazio).
 
 Resolvido no marker `DEPLOY-2026-09-04-110500-quantum-fanout-debug-token`: hydrate descobre WABAs via `debug_token.granular_scopes.target_ids` (+ nested BM / `me/businesses`) antes de paginar `phone_numbers`. Se o ES só compartilhou 1 WABA com o app, a UI continua com 1 chip até novo **+** Embedded Signup nas demais.
+
+Resolvido no marker `DEPLOY-2026-09-04-114500-profile-photo-independent-name`: editar foto falhava com erro genérico quando a Meta recusava o nome (`new_display_name`) — o fluxo abortava antes do `profile_picture_handle`. Nome e foto agora são independentes.

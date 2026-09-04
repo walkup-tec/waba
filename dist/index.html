@@ -36712,6 +36712,10 @@
         phoneNumberId: "",
         connectionId: "",
         originalName: "",
+        originalVertical: "",
+        originalDescription: "",
+        originalAddress: "",
+        originalEmail: "",
         photoBase64: "",
         photoMime: "",
       };
@@ -36748,6 +36752,10 @@
         metaTpEditState.phoneNumberId = "";
         metaTpEditState.connectionId = "";
         metaTpEditState.originalName = "";
+        metaTpEditState.originalVertical = "";
+        metaTpEditState.originalDescription = "";
+        metaTpEditState.originalAddress = "";
+        metaTpEditState.originalEmail = "";
         metaTpEditState.photoBase64 = "";
         metaTpEditState.photoMime = "";
         const file = document.getElementById("meta-tp-edit-photo");
@@ -36783,6 +36791,10 @@
         if (phoneEl) phoneEl.textContent = phone || "";
         if (nameEl) nameEl.value = metaTpEditState.originalName;
         metaTpFillBizFields(row);
+        metaTpEditState.originalVertical = String((row && row.vertical) || "").trim();
+        metaTpEditState.originalDescription = String((row && row.description) || "").trim();
+        metaTpEditState.originalAddress = String((row && row.address) || "").trim();
+        metaTpEditState.originalEmail = String((row && row.email) || "").trim();
         if (file) file.value = "";
         if (preview) {
           preview.removeAttribute("src");
@@ -36802,7 +36814,12 @@
         const description = String((document.getElementById("meta-tp-edit-description") || {}).value || "").trim();
         const address = String((document.getElementById("meta-tp-edit-address") || {}).value || "").trim();
         const email = String((document.getElementById("meta-tp-edit-email") || {}).value || "").trim();
-        const bizChanged = Boolean(vertical || description || address || email);
+        const bizChanged = Boolean(
+          vertical !== metaTpEditState.originalVertical ||
+            description !== metaTpEditState.originalDescription ||
+            address !== metaTpEditState.originalAddress ||
+            email !== metaTpEditState.originalEmail,
+        );
         if (!phoneNumberId) return false;
         const current = (metaTpSession.numbers || []).find(function (item) {
           return String(item.phoneNumberId) === phoneNumberId;
@@ -36828,23 +36845,32 @@
             displayName: nameChanged ? displayName : "",
             photoBase64: metaTpEditState.photoBase64,
             photoMime: metaTpEditState.photoMime,
-            vertical: vertical,
-            description: description,
-            address: address,
-            email: email,
+            vertical: bizChanged ? vertical : "",
+            description: bizChanged ? description : "",
+            address: bizChanged ? address : "",
+            email: bizChanged ? email : "",
           }),
         });
         if (!response.ok || payload.ok === false) {
           metaTpEditStatus(String(payload.error || "Não foi possível salvar na Meta."));
           return false;
         }
-        metaTpSetStatus(
-          payload.photoUpdated
-            ? "Foto enviada à Meta. O cliente passa a vê-la no perfil do WhatsApp."
-            : payload.namePending
-              ? "Nome enviado para aprovação da Meta."
-              : "Perfil atualizado na Meta.",
-        );
+        if (payload.nameRejected && payload.photoUpdated) {
+          metaTpSetStatus(
+            String(
+              payload.nameRejectMessage ||
+                "Foto enviada à Meta. O novo nome foi recusado — ajuste o nome e tente de novo.",
+            ),
+          );
+        } else {
+          metaTpSetStatus(
+            payload.photoUpdated
+              ? "Foto enviada à Meta. O cliente passa a vê-la no perfil do WhatsApp."
+              : payload.namePending
+                ? "Nome enviado para aprovação da Meta."
+                : "Perfil atualizado na Meta.",
+          );
+        }
         metaTpRenderPortfolio(payload);
         metaTpCloseEditNumber();
         if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();

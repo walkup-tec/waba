@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 11:45 — Foto de perfil independente do nome
+- Erro genérico ao editar foto (ex.: Nesio): falha do `new_display_name` abortava o upload.
+- Fix: nome e foto/dados separados; sucesso parcial se a Meta recusar só o nome.
+- Marker `DEPLOY-2026-09-04-114500-profile-photo-independent-name`.
+- LOG: `doc/LOG-2026-09-04__114500__perfil-foto-independente-do-nome.md`
+
 ## 2026-09-04 11:00 — Quantum: fan-out via debug_token
 - Deploy do fan-out BM `owned_*` não bastou: token ES costuma 403/vazio nessas edges.
 - Fix: `debug_token` → `granular_scopes.target_ids` + phones aninhados no BM; marker `DEPLOY-2026-09-04-110500-quantum-fanout-debug-token`.

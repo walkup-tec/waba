@@ -964,6 +964,118 @@ describe("meta portfolio service", () => {
     assert.equal(updated.photoUpdated, true);
   });
 
+  it("aplica a foto mesmo se a Meta recusar o novo nome de exibição", async () => {
+    const png =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const posts: Array<{ path: string; body?: Record<string, unknown>; query?: Record<string, string> }> = [];
+    const graph = async (input: {
+      path: string;
+      method: string;
+      query?: Record<string, string>;
+      body?: Record<string, unknown>;
+    }) => {
+      if (input.method === "POST") {
+        posts.push({ path: input.path, body: input.body, query: input.query });
+        if (input.path === "phone-1" && input.query?.new_display_name) {
+          return {
+            ok: false,
+            status: 400,
+            graphCode: "100",
+            json: { error: { message: "Invalid display name", code: 100 } },
+          };
+        }
+        return { ok: true, status: 200, json: { success: true } };
+      }
+      if (input.path === "4141369862822598") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "4141369862822598",
+            name: "Grupo Walkup",
+            primary_page: { id: "page-walkup", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "phone-1") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            verified_name: "Grupo Walkup",
+            name_status: "APPROVED",
+            status: "CONNECTED",
+          },
+        };
+      }
+      if (input.path === "phone-1/whatsapp_business_profile") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ profile_picture_url: "https://pps.whatsapp.net/v/chip.jpg" }] },
+        };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-1",
+                display_phone_number: "+55 11 95213-7761",
+                verified_name: "Grupo Walkup",
+                status: "CONNECTED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const row = {
+      ...connectedRow(),
+      status: "connected" as const,
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async findOpenByTenant() {
+          return row;
+        },
+        async listOpenByTenant() {
+          return [row];
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+      decryptMetaToken,
+      async () => ({ handle: "HANDLE_PIC_PARTIAL" }),
+    );
+    const updated = await service.updatePhoneProfileFromAuth(auth, {
+      phoneNumberId: "phone-1",
+      displayName: "Nesio",
+      photoBase64: png,
+      photoMime: "image/png",
+    });
+    const profilePost = posts.find((item) => item.path === "phone-1/whatsapp_business_profile");
+    assert.equal(profilePost?.body?.profile_picture_handle, "HANDLE_PIC_PARTIAL");
+    assert.equal(updated.photoUpdated, true);
+    assert.equal(updated.nameUpdated, false);
+    assert.equal(updated.nameRejected, true);
+  });
+
   it("recusa foto de perfil se o número ainda não está ativo na Meta", async () => {
     const png =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

@@ -26,6 +26,8 @@ export type MetaWhatsappErrorCode =
   | "invalid_pin"
   | "register_failed"
   | "profile_update_failed"
+  | "display_name_update_failed"
+  | "profile_photo_update_failed"
   | "phone_not_registered"
   | "portfolio_update_failed"
   | "portfolio_photo_no_page"
@@ -67,6 +69,10 @@ const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   invalid_pin: "Informe um PIN de 6 dígitos para ativar o número.",
   register_failed: "Não foi possível ativar o número na Meta. Confira o PIN e tente de novo.",
   profile_update_failed: "Não foi possível atualizar o nome ou a foto deste número na Meta.",
+  display_name_update_failed:
+    "A Meta recusou o novo nome de exibição. Confira as regras de nome do WhatsApp Business e tente de novo.",
+  profile_photo_update_failed:
+    "Não foi possível atualizar a foto deste número na Meta. Use JPEG ou PNG quadrado de até 5 MB e tente de novo.",
   phone_not_registered:
     "Ative o número com o PIN de 6 dígitos antes de mudar nome ou foto. O cliente do disparo só vê o que a Meta já aplicou.",
   portfolio_update_failed: "Não foi possível atualizar o nome ou a foto deste portfólio na Meta.",
@@ -101,6 +107,8 @@ function defaultStatus(code: MetaWhatsappErrorCode): number {
     code === "template_delete_failed" ||
     code === "register_failed" ||
     code === "profile_update_failed" ||
+    code === "display_name_update_failed" ||
+    code === "profile_photo_update_failed" ||
     code === "portfolio_update_failed"
   ) {
     return 424;
