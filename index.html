@@ -24995,7 +24995,6 @@
         </div>
         <div id="admin-campanhas-report-timeline" class="camp-report-timeline-host" aria-live="polite"></div>
         <div id="admin-campanhas-report-dashboard" class="camp-report-dashboard" aria-live="polite"></div>
-        <div id="admin-campanhas-report-send-issues" class="camp-report-send-issues" hidden></div>
         <div class="confirm-actions">
           <button id="admin-campanhas-report-cancel-btn" class="instance-action-btn" type="button">
             Fechar
@@ -45299,48 +45298,6 @@
         host.hidden = !String(htmlTimeline || "").trim();
       }
 
-      function renderAdminCampanhasReportSendIssues(payload) {
-        const box = document.getElementById("admin-campanhas-report-send-issues");
-        if (!box) return;
-        const issues = payload && payload.sendIssues && typeof payload.sendIssues === "object" ? payload.sendIssues : null;
-        const failures = Array.isArray(issues?.failures) ? issues.failures : [];
-        const pending = Math.max(0, Math.round(Number(issues?.pendingConfirmation || 0)));
-        const failureCount = Math.max(failures.length, Math.round(Number(issues?.failureCount || 0)));
-        if (!issues || (failureCount < 1 && pending < 1)) {
-          box.hidden = true;
-          box.classList.remove("camp-report-send-issues--pending");
-          box.innerHTML = "";
-          return;
-        }
-        const pendingHtml = pending
-          ? `<p class="camp-report-send-issues-hint"><strong>${pending.toLocaleString("pt-BR")}</strong> ${
-              pending === 1 ? "mensagem aceita" : "mensagens aceitas"
-            } pela Meta ainda <strong>sem comprovante de entrega</strong>. Isso <strong>não</strong> entra em Entregues nem em Falhados — fica em Enviados (pendentes) até o webhook.</p>`
-          : "";
-        const listHtml = failures.length
-          ? `<ul class="camp-report-send-issues-list">${failures
-              .map((item) => {
-                const recipient = escapeReportHtml(String(item.recipient || "••••"));
-                const code = escapeReportHtml(String(item.errorCode || ""));
-                const error = escapeReportHtml(String(item.error || "Falha informada pela Meta."));
-                const origin = item.source === "graph" ? "recusa no envio" : "webhook da Meta";
-                return `<li class="camp-report-send-issues-item"><strong>${recipient}${
-                  code ? ` · ${code}` : ""
-                }</strong><span>${error} (${origin})</span></li>`;
-              })
-              .join("")}</ul>`
-          : "";
-        box.hidden = false;
-        box.classList.toggle("camp-report-send-issues--pending", failures.length === 0);
-        box.innerHTML = `
-          <h4 class="camp-report-send-issues-title">${
-            failures.length ? "Erros que impactaram o envio" : "Aguardando comprovante de entrega"
-          }</h4>
-          ${failures.length ? `<p class="camp-report-send-issues-hint">Estes destinos entraram em <strong>Falhados</strong> (webhook/recusa da Meta).</p>` : ""}
-          ${listHtml}
-          ${pendingHtml}
-        `;
-      }
 
       function updateAdminCampanhasReportDashboard() {
         const dashboard = document.getElementById("admin-campanhas-report-dashboard");
@@ -45448,7 +45405,6 @@
         setAdminCampanhasReportReadOnly(Boolean(data.isReadOnly));
         updateAdminCampanhasReportDashboard();
         renderAdminCampanhasReportTimeline(data);
-        renderAdminCampanhasReportSendIssues(data);
       }
 
       async function openAdminCampanhasReport(campaignId, campaignName, options = {}) {

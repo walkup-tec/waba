@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 09:30 — Relatório operacional sem erros de envio
+- Removido bloco “Erros que impactaram o envio” (UI + `sendIssues` na API).
+- Timeline do assinante permanece.
+- Marker `DEPLOY-2026-09-04-093000-operacional-report-sem-erros-envio`.
+- LOG: `doc/LOG-2026-09-04__093000__operacional-report-sem-erros-envio.md`
+
 ## 2026-09-04 09:25 — Timeline no relatório operacional
 - Operacional passa a usar a mesma `collectIntakeReportTimeline` do assinante.
 - Esclarecido: “N aceitas sem comprovante” ≠ Falhados (ex.: 17 vs 136 na Jandira 2).

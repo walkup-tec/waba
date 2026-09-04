@@ -55,7 +55,6 @@ import {
   WabaCampaignSupplierAssignmentService,
 } from "../services/waba-campaign-supplier-assignment.service";
 import { findBroadcastByIntakeCampaignId } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
-import { summarizeBroadcastSendIssues } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-send-issues";
 import { computeMetaLabCampaignMetrics } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
 
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
@@ -459,7 +458,6 @@ export class WabaOperacionalCampanhasService {
     source: "manual" | "meta_lab" | null;
     liveFromMeta: boolean;
     report: OperacionalCampaignReportInput | null;
-    sendIssues: ReturnType<typeof summarizeBroadcastSendIssues> | null;
     timeline: ReturnType<typeof collectIntakeReportTimeline>;
   } {
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
@@ -500,10 +498,6 @@ export class WabaOperacionalCampanhasService {
       report || stored,
     );
     const showClicks = (laboratorioAttended || stored?.source === "meta_lab") && !hideClicks;
-    const sendIssues =
-      laboratorioAttended || stored?.source === "meta_lab"
-        ? summarizeBroadcastSendIssues(broadcast)
-        : null;
     return {
       campaignId: intake.id,
       campaignName: intake.campaignName,
@@ -526,7 +520,6 @@ export class WabaOperacionalCampanhasService {
             ...(showClicks ? { clicks: Math.max(0, Math.round(Number(report.clicks || 0))) } : {}),
           }
         : null,
-      sendIssues,
       // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
       timeline: collectIntakeReportTimeline(intake),
     };
