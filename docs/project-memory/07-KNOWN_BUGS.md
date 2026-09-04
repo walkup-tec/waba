@@ -17,3 +17,4 @@ Resolvido no marker `DEPLOY-2026-09-04-110500-quantum-fanout-debug-token`: hydra
 Resolvido no marker `DEPLOY-2026-09-04-114500-profile-photo-independent-name`: editar foto falhava com erro genérico quando a Meta recusava o nome (`new_display_name`) — o fluxo abortava antes do `profile_picture_handle`. Nome e foto agora são independentes.
 - Upload header-media com mensagem genérica de tamanho: corrigido em 2026-09-04 (código Graph + não culpar <5MB).
 - Header-media “código 4” + pedir reconectar: era rate limit da Meta; corrigido em 2026-09-04 (mensagem de cota, sem retry, sanitizer).
+- Header-media JSON “Se for por tamanho” com Graph #4: wrap descartava “A Meta limitou…” — corrigido em 2026-09-04.

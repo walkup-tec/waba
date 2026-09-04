@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 13:45 — Header-media: wrap apagava rate limit (#4)
+- Network mostrava fallback “Se for por tamanho…” mesmo com Graph code 4.
+- Causa: wrap só aceitava prefixo “A Meta recusou”; “A Meta limitou…” era descartado.
+- Fix: `wrapMetaHeaderUploadError` + testes e2e; marker `DEPLOY-2026-09-04-134500-header-upload-preserve-rate-limit`.
+- LOG: `doc/LOG-2026-09-04__134500__header-upload-preserve-rate-limit.md`
+
 ## 2026-09-04 13:17 — Header-media código 4 (rate limit)
 - Sintoma: modal “código 4” + “reconecte” com PNG pequeno.
 - Causa: Graph rate limit; sanitizer apagava `(#4) Application request limit…`; retry x3 piorava.

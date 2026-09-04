@@ -991,6 +991,62 @@ describe("Assistente IA de templates Utility", () => {
     });
     assert.match(detail, /Application request limit/i);
   });
+
+  it("uploadHeaderMediaFromAuth preserva rate limit (#4) até toPublicMetaError", async () => {
+    const email = "header-rate-limit@example.com";
+    const row = connection(email);
+    const previousAppId = process.env.META_APP_ID;
+    process.env.META_APP_ID = "app-test-rate-limit";
+    const rateLimitText = publicMetaGraphMediaUploadMessage(
+      { error: { message: "(#4) Application request limit reached", code: 4 } },
+      { fileBytes: 14_513 },
+    );
+    const { toPublicMetaError } = await import("./meta-whatsapp-errors");
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          return tenantId === row.tenantId && id === row.id ? row : null;
+        },
+      } as any,
+      {} as any,
+      async () => ({ value: utilityOutput(), model: "gpt-test", responseId: "r", latencyMs: 1 }),
+      {} as any,
+      () => "token-test",
+      async () => {
+        throw new Error(rateLimitText);
+      },
+    );
+    const tinyPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    try {
+      await service.uploadHeaderMediaFromAuth(
+        { email, role: "subscriber" },
+        {
+          connectionId: row.id,
+          mediaFormat: "IMAGE",
+          fileName: "logo.png",
+          mime: "image/png",
+          bytes: tinyPng,
+        },
+      );
+      assert.fail("deveria ter falhado com rate limit");
+    } catch (error) {
+      const publicError = toPublicMetaError(error);
+      assert.equal(publicError.code, "template_upload_failed");
+      assert.match(publicError.error, /limitou temporariamente|código 4/i);
+      assert.doesNotMatch(publicError.error, /Se for por tamanho|reduza a imagem/i);
+      assert.notEqual(
+        publicError.error,
+        "A Meta recusou o arquivo. Se for por tamanho, reduza a imagem e tente novamente.",
+      );
+    } finally {
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+    }
+  });
+
 });
 
 describe("OpenAI Responses com Structured Outputs", () => {

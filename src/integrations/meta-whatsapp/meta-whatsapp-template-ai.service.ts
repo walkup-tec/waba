@@ -5,7 +5,7 @@ import {
 } from "../openai/waba-openai-responses.client";
 import { resolveMetaWhatsappTenant } from "./meta-whatsapp-tenant";
 import { MetaWhatsappConnectionRepository } from "./meta-whatsapp-connection.repository";
-import { MetaWhatsappError } from "./meta-whatsapp-errors";
+import { MetaWhatsappError, wrapMetaHeaderUploadError } from "./meta-whatsapp-errors";
 import { validateTemplateCreate } from "./meta-whatsapp-template-validate";
 import {
   buildMetaTemplateAiInstructions,
@@ -638,17 +638,7 @@ export class MetaWhatsappTemplateAiService {
         bytes: bytes.length,
         reason: msg.slice(0, 160),
       });
-      const wrapped = new MetaWhatsappError("template_upload_failed");
-      if (
-        msg.startsWith("A Meta recusou") ||
-        msg.startsWith("O upload") ||
-        /aborted|timeout/i.test(msg)
-      ) {
-        wrapped.message = msg.startsWith("A Meta")
-          ? msg
-          : "A Meta recusou o arquivo. O upload do vídeo passou do tempo limite. Use MP4 até 16 MB e tente de novo.";
-      }
-      throw wrapped;
+      throw wrapMetaHeaderUploadError(error);
     }
   }
 }

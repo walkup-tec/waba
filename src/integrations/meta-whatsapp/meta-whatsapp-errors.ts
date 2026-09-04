@@ -59,7 +59,7 @@ const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   template_media_too_large:
     "A Meta recusou a mídia do cabeçalho por tamanho. Envie um JPEG ou PNG menor.",
   template_upload_failed:
-    "A Meta recusou o arquivo. Se for por tamanho, reduza a imagem e tente novamente.",
+    "A Meta recusou o arquivo do cabeçalho. Tente de novo em instantes. Se repetir, aguarde alguns minutos (limite da API) ou confira se a imagem é JPEG/PNG.",
   template_not_found: "Este template não pertence à conexão WhatsApp desta conta.",
   template_delete_failed: "Não foi possível excluir o template na Meta. Tente novamente.",
   template_not_ready: "Este template ainda não está aprovado para envio.",
@@ -117,6 +117,28 @@ function defaultStatus(code: MetaWhatsappErrorCode): number {
   if (code === "not_connected" || code === "template_not_ready") return 409;
   if (code === "template_not_found" || code === "conversation_not_found" || code === "automation_not_found") return 404;
   return 400;
+}
+
+/**
+ * Preserva o detalhe vindo do upload Graph (rate limit, tamanho, timeout…)
+ * em vez de cair no fallback genérico de `template_upload_failed`.
+ * Bug 2026-09-04: só aceitava prefixo "A Meta recusou", então
+ * "A Meta limitou temporariamente…" virava a mensagem genérica de tamanho.
+ */
+export function wrapMetaHeaderUploadError(error: unknown): MetaWhatsappError {
+  if (error instanceof MetaWhatsappError) return error;
+  const msg = String((error as { message?: string })?.message || "").replace(/\s+/g, " ").trim();
+  const wrapped = new MetaWhatsappError("template_upload_failed");
+  if (/^A Meta\b/i.test(msg)) {
+    wrapped.message = msg.slice(0, 400);
+    return wrapped;
+  }
+  if (/^O upload\b/i.test(msg) || /aborted|timeout|ETIMEDOUT|ECONNRESET/i.test(msg)) {
+    wrapped.message =
+      "A Meta recusou o arquivo. O upload do vídeo passou do tempo limite. Use MP4 até 16 MB e tente de novo.";
+    return wrapped;
+  }
+  return wrapped;
 }
 
 export function toPublicMetaError(error: unknown): {
