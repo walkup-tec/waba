@@ -3,6 +3,7 @@ import { shouldAbortBroadcastOnHeaderMediaFailure, shouldVoidCloudBroadcast } fr
 import path from "path";
 import { resolveDataFile } from "../../data-path";
 import { canAdvanceMetaMessageStatus, type MetaMessageStatus } from "./meta-whatsapp-messaging.types";
+import { campaignUsesPhoneNumber } from "./meta-whatsapp-broadcast-split";
 
 export type MetaBroadcastLeadStatusLog = {
   status: MetaMessageStatus;
@@ -15,6 +16,8 @@ export type MetaBroadcastLead = {
   nome?: string;
   numero?: string;
   texto?: string;
+  /** Número Cloud que envia este lead (fracionamento multi-número). */
+  phoneNumberId?: string;
   status: "queued" | "sent" | "failed" | "skipped";
   metaStatus?: MetaMessageStatus;
   wamid?: string;
@@ -30,7 +33,12 @@ export type MetaBroadcastCampaign = {
   templateId: string;
   templateName: string;
   language: string;
+  /** Número principal (primeiro da lista) — compatível com campanhas antigas. */
   phoneNumberId: string;
+  /** Todos os números do mesmo portfólio usados neste disparo (relatório unificado). */
+  phoneNumberIds?: string[];
+  /** Cotas planejadas por número (soma = total de envios). */
+  phoneQuotas?: Array<{ phoneNumberId: string; planned: number }>;
   intakeCampaignId?: string;
   shortSlug: string;
   shortUrl: string;
@@ -326,7 +334,7 @@ export function matchBroadcastLeadForMetaStatus(
   const ranked = [...campaigns].sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
   if (wamid) {
     for (const campaign of ranked) {
-      if (phoneNumberId && String(campaign.phoneNumberId || "") !== phoneNumberId) continue;
+      if (phoneNumberId && !campaignUsesPhoneNumber(campaign, phoneNumberId)) continue;
       const lead = campaign.leads.find((item) => String(item.wamid || "").trim() === wamid);
       if (lead) return { campaign, lead };
     }
@@ -337,7 +345,7 @@ export function matchBroadcastLeadForMetaStatus(
   }
   if (!recipient) return null;
   for (const campaign of ranked) {
-    if (phoneNumberId && String(campaign.phoneNumberId || "") !== phoneNumberId) continue;
+    if (phoneNumberId && !campaignUsesPhoneNumber(campaign, phoneNumberId)) continue;
     const lead = campaign.leads.find(
       (item) => recipientDigits(item.waId) === recipient && item.status !== "skipped",
     );
@@ -457,6 +465,10 @@ export function publicBroadcastCampaign(row: MetaBroadcastCampaign) {
     templateName: row.templateName,
     language: row.language,
     phoneNumberId: row.phoneNumberId,
+    phoneNumberIds: Array.isArray(row.phoneNumberIds) && row.phoneNumberIds.length
+      ? row.phoneNumberIds.map((id) => String(id || "").trim()).filter(Boolean)
+      : [String(row.phoneNumberId || "").trim()].filter(Boolean),
+    phoneQuotas: Array.isArray(row.phoneQuotas) ? row.phoneQuotas : undefined,
     shortUrl: row.shortUrl,
     clicks: Math.max(0, Number(row.clicks || 0)),
     intakeCampaignId: row.intakeCampaignId || undefined,

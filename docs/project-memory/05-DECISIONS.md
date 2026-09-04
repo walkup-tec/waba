@@ -46,4 +46,4 @@
 - **Motivo:** no WhatsApp Manager um BM (ex. Quantum Smart Labs) pode ter várias WABAs; Embedded Signup grava só uma.
 - **Impacto:** mais calls Graph por listagem; paginação limitada (20 páginas/edge). Sem HUP Traefik.
 - **Docs:** manage-accounts Embedded Signup + Business reference Marketing API.
-
+- 2026-09-04: Disparo Cloud passa a fracionar envios em múltiplos números (máx. 500/número) no mesmo portfólio, com um único relatório. Motivo: reduzir caracterização de spam mantendo a operação e o relatório do Laboratório unificados.

@@ -4703,3 +4703,4 @@ Palavras-chave para buscar:
 - 2026-08-23: Excluir Leads PJ purga slot Chromium + bloqueia recreate do pool. Marker leads-pj-delete-purge-v1.
 
 - 2026-08-23: Leads PJ retoma cópia após crash/stall (checkpoint + watchdog 90s). Marker leads-pj-resume-on-stall-v1.
+- 2026-09-04: Disparo Cloud fraciona envios em múltiplos números do mesmo portfólio (máx. 500/número) com relatório unificado. Ver `LOG-2026-09-04__121858__disparo-cloud-fracionar-numeros.md`.

@@ -28,3 +28,4 @@ Marker: `DEPLOY-2026-09-04-114500-profile-photo-independent-name` (foto de perfi
 GitHub `walkup-tec/waba` `master` recebe o tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
 
 Marker: `DEPLOY-2026-09-04-114500-profile-photo-independent-name` (foto de perfil independente do nome na Meta).
+- 2026-09-04: UI/API do Disparo Cloud com multi-seleção de números e fracionamento ≤500; marker `DEPLOY-2026-09-04-121500-cloud-broadcast-multi-number-split`.

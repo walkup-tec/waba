@@ -8,6 +8,7 @@ const waba_campaign_intake_repository_1 = require("../../disparos/waba-campaign-
 const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-intake-status");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
 const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
+const meta_whatsapp_broadcast_split_1 = require("./meta-whatsapp-broadcast-split");
 function isCloudPhoneBusyForCampaign(input) {
     if (input.inactive) {
         return input.broadcastStatus === "queued" || input.broadcastStatus === "running";
@@ -26,16 +27,16 @@ function isCloudPhoneBusyForCampaign(input) {
 function collectBusyCloudPhoneNumberIds(campaigns, intakeStatusById) {
     const busy = new Set();
     for (const row of campaigns) {
-        const phoneId = String(row.phoneNumberId || "").trim();
-        if (!phoneId)
-            continue;
         const intakeId = String(row.intakeCampaignId || "").trim();
         const intakeStatus = intakeId ? intakeStatusById.get(intakeId) : undefined;
-        if (isCloudPhoneBusyForCampaign({
+        if (!isCloudPhoneBusyForCampaign({
             broadcastStatus: row.status,
             intakeStatus,
             inactive: (0, meta_whatsapp_broadcast_void_1.isCloudBroadcastInactiveForRetry)(row),
         })) {
+            continue;
+        }
+        for (const phoneId of (0, meta_whatsapp_broadcast_split_1.campaignPhoneNumberIds)(row)) {
             busy.add(phoneId);
         }
     }

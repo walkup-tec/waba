@@ -455,6 +455,22 @@ describe("ocupação do número no Disparo Cloud", () => {
     assert.equal(busy.has("phone-a"), true);
     assert.equal(busy.has("phone-b"), false);
   });
+
+  it("ocupa todos os números de uma campanha fracionada", () => {
+    const busy = collectBusyCloudPhoneNumberIds(
+      [
+        {
+          phoneNumberId: "phone-a",
+          phoneNumberIds: ["phone-a", "phone-c"],
+          status: "running",
+          intakeCampaignId: "multi",
+        },
+      ],
+      new Map([["multi", "in_progress"]]),
+    );
+    assert.equal(busy.has("phone-a"), true);
+    assert.equal(busy.has("phone-c"), true);
+  });
 });
 
 describe("campanha do assinante no Disparo Cloud", () => {

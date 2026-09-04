@@ -5,6 +5,7 @@ import {
   type MetaBroadcastCampaign,
 } from "./meta-whatsapp-broadcast.store";
 import { isCloudBroadcastInactiveForRetry } from "./meta-whatsapp-broadcast-void";
+import { campaignPhoneNumberIds } from "./meta-whatsapp-broadcast-split";
 import type { MetaPortfolioNumberPublic } from "./meta-whatsapp-portfolio.types";
 
 export function isCloudPhoneBusyForCampaign(input: {
@@ -30,6 +31,7 @@ export function isCloudPhoneBusyForCampaign(input: {
 export function collectBusyCloudPhoneNumberIds(
   campaigns: ReadonlyArray<{
     phoneNumberId?: string;
+    phoneNumberIds?: string[];
     status: MetaBroadcastCampaign["status"];
     intakeCampaignId?: string;
     voidedAt?: string;
@@ -39,17 +41,18 @@ export function collectBusyCloudPhoneNumberIds(
 ): Set<string> {
   const busy = new Set<string>();
   for (const row of campaigns) {
-    const phoneId = String(row.phoneNumberId || "").trim();
-    if (!phoneId) continue;
     const intakeId = String(row.intakeCampaignId || "").trim();
     const intakeStatus = intakeId ? intakeStatusById.get(intakeId) : undefined;
     if (
-      isCloudPhoneBusyForCampaign({
+      !isCloudPhoneBusyForCampaign({
         broadcastStatus: row.status,
         intakeStatus,
         inactive: isCloudBroadcastInactiveForRetry(row as MetaBroadcastCampaign),
       })
     ) {
+      continue;
+    }
+    for (const phoneId of campaignPhoneNumberIds(row)) {
       busy.add(phoneId);
     }
   }

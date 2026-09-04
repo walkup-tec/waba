@@ -19,6 +19,7 @@ const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-te
 const meta_whatsapp_broadcast_leads_1 = require("./meta-whatsapp-broadcast-leads");
 const meta_whatsapp_broadcast_media_1 = require("./meta-whatsapp-broadcast-media");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_split_1 = require("./meta-whatsapp-broadcast-split");
 const meta_whatsapp_broadcast_protect_1 = require("./meta-whatsapp-broadcast-protect");
 const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
 const meta_whatsapp_broadcast_report_1 = require("./meta-whatsapp-broadcast-report");
@@ -206,6 +207,17 @@ class MetaWhatsappBroadcastService {
         }
         return requested;
     }
+    async requireActivePhones(auth, connectionId, phoneNumberIds) {
+        const requested = (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(phoneNumberIds);
+        if (!requested.length) {
+            fail("invalid_payload", "Selecione ao menos um número Ativo e disponível do mesmo portfólio.");
+        }
+        const verified = [];
+        for (const phoneNumberId of requested) {
+            verified.push(await this.requireActivePhone(auth, connectionId, phoneNumberId));
+        }
+        return verified;
+    }
     async resolveHeaderMedia(input) {
         const kind = headerMediaType(input.inspect.headerFormat);
         if (!kind)
@@ -240,6 +252,17 @@ class MetaWhatsappBroadcastService {
             templateId: input.templateId,
         });
         fail("template_media_required", meta_whatsapp_broadcast_header_1.BROADCAST_HEADER_MISSING_FILE_ERROR);
+    }
+    async resolveHeaderMediaByPhones(input) {
+        const out = {};
+        const phones = (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(input.phoneNumberIds);
+        for (const phoneNumberId of phones) {
+            out[phoneNumberId] = await this.resolveHeaderMedia({
+                ...input,
+                phoneNumberId,
+            });
+        }
+        return out;
     }
     async createCampaignShortLink(input) {
         const button = input.inspect.urlButton;
@@ -310,7 +333,8 @@ class MetaWhatsappBroadcastService {
         const tenant = requireTenant(auth);
         const connectionId = String(input.connectionId || "").trim();
         const loaded = await this.loadApprovedTemplate(tenant.tenantId, connectionId, String(input.templateId || "").trim());
-        const phoneNumberId = await this.requireActivePhone(auth, loaded.connection.id, String(input.phoneNumberId || ""));
+        const phoneNumberIds = await this.requireActivePhones(auth, loaded.connection.id, (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(input.phoneNumberIds?.length ? input.phoneNumberIds : [String(input.phoneNumberId || "")]));
+        const phoneNumberId = phoneNumberIds[0];
         const preview = this.previewFromBuffer({
             buffer: input.buffer,
             fileName: input.fileName,
@@ -319,6 +343,17 @@ class MetaWhatsappBroadcastService {
         });
         if (!preview.parsed.leads.length) {
             fail("invalid_recipient", "Nenhum número válido após a normatização Meta (E.164 com DDI). Confira a coluna de telefone.");
+        }
+        let phoneQuotas;
+        let assignedLeads;
+        try {
+            phoneQuotas = (0, meta_whatsapp_broadcast_split_1.distributeBroadcastLeadsAcrossPhones)(phoneNumberIds, preview.parsed.leads.length);
+            assignedLeads = (0, meta_whatsapp_broadcast_split_1.assignBroadcastLeadsToPhones)(preview.parsed.leads, phoneNumberIds);
+        }
+        catch (error) {
+            fail("invalid_payload", error instanceof Error
+                ? error.message
+                : `Não foi possível fracionar os envios (máx. ${meta_whatsapp_broadcast_split_1.META_BROADCAST_MAX_SENDS_PER_NUMBER} por número).`);
         }
         let token = "";
         try {
@@ -329,10 +364,10 @@ class MetaWhatsappBroadcastService {
         }
         const campaignId = (0, node_crypto_1.randomUUID)();
         const intakeCampaignId = this.linkSubscriberCampaign(auth, String(input.intakeCampaignId || "").trim());
-        const header = await this.resolveHeaderMedia({
+        const headerByPhone = await this.resolveHeaderMediaByPhones({
             tenantId: tenant.tenantId,
             token,
-            phoneNumberId,
+            phoneNumberIds,
             templateId: loaded.template.id,
             metaTemplateId: loaded.template.metaTemplateId,
             templateName: loaded.template.name,
@@ -366,6 +401,8 @@ class MetaWhatsappBroadcastService {
             templateName: loaded.template.name,
             language: loaded.template.language,
             phoneNumberId,
+            phoneNumberIds,
+            phoneQuotas: phoneQuotas.map((row) => ({ phoneNumberId: row.phoneNumberId, planned: row.planned })),
             intakeCampaignId,
             shortSlug: short.shortSlug,
             shortUrl: short.shortUrl,
@@ -380,7 +417,7 @@ class MetaWhatsappBroadcastService {
             createdAt: now,
             updatedAt: now,
             ...(templateApprovedAt ? { templateApprovedAt } : {}),
-            leads: preview.parsed.leads,
+            leads: assignedLeads,
         };
         (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(campaign);
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-queued", {
@@ -394,8 +431,9 @@ class MetaWhatsappBroadcastService {
             templateName: loaded.template.name,
             language: loaded.template.language,
             phoneNumberId,
+            phoneNumberIds,
             inspect: loaded.inspect,
-            header,
+            headerByPhone,
             buttonSlug: loaded.inspect.urlButton?.hasVariable ? short.shortSlug : undefined,
         });
         return (0, meta_whatsapp_broadcast_store_1.publicBroadcastCampaign)(campaign);
@@ -433,17 +471,21 @@ class MetaWhatsappBroadcastService {
                 if (lead.status === "sent" || lead.status === "failed" || lead.status === "skipped")
                     continue;
                 try {
+                    const leadPhoneNumberId = String(lead.phoneNumberId || ctx.phoneNumberId || "").trim();
+                    const header = (leadPhoneNumberId && ctx.headerByPhone
+                        ? ctx.headerByPhone[leadPhoneNumberId]
+                        : undefined) ?? ctx.header ?? null;
                     const sent = await this.provider.sendTemplate({
                         tenantId,
                         to: lead.waId,
                         templateName: ctx.templateName,
                         language: ctx.language,
                         connectionId: ctx.connectionId,
-                        phoneNumberId: ctx.phoneNumberId,
+                        phoneNumberId: leadPhoneNumberId || ctx.phoneNumberId,
                         components: this.buildComponents({
                             inspect: ctx.inspect,
                             lead,
-                            header: ctx.header,
+                            header,
                             buttonSlug: ctx.buttonSlug,
                         }),
                     });
@@ -600,10 +642,11 @@ class MetaWhatsappBroadcastService {
                 });
                 return false;
             }
-            const header = await this.resolveHeaderMedia({
+            const phoneNumberIds = (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(row.phoneNumberIds?.length ? row.phoneNumberIds : [row.phoneNumberId]);
+            const headerByPhone = await this.resolveHeaderMediaByPhones({
                 tenantId,
                 token,
-                phoneNumberId: row.phoneNumberId,
+                phoneNumberIds,
                 templateId: loaded.template.id,
                 metaTemplateId: loaded.template.metaTemplateId,
                 templateName: loaded.template.name,
@@ -617,14 +660,16 @@ class MetaWhatsappBroadcastService {
                 pending: (row.leads || []).filter((lead) => !lead.status || lead.status === "queued").length,
                 sent: row.sent,
                 total: row.total,
+                phoneCount: phoneNumberIds.length,
             });
             void this.runCampaign(campaignId, tenantId, {
                 connectionId: loaded.connection.id,
                 templateName: loaded.template.name,
                 language: loaded.template.language,
-                phoneNumberId: row.phoneNumberId,
+                phoneNumberId: phoneNumberIds[0] || row.phoneNumberId,
+                phoneNumberIds,
                 inspect: loaded.inspect,
-                header,
+                headerByPhone,
                 buttonSlug: loaded.inspect.urlButton?.hasVariable ? row.shortSlug : undefined,
             });
             return true;

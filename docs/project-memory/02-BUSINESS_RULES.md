@@ -20,3 +20,11 @@
 - Cabeçalho IMAGE/VIDEO/DOCUMENT no Disparo Cloud: o envio usa o arquivo local (`media id`). URL de exemplo da Graph (lookaside/fbcdn) não vai como weblink; sem arquivo local o disparo não começa.
 - A cada geração, a IA consulta só templates do mesmo tenant aprovados como UTILITY. Não usa Marketing, pendentes nem de outro tenant.
 - A IA adapta o formato da biblioteca Utility da Meta (prints) sem trocar o tema do texto base.
+## Disparo Cloud — fracionamento multi-número
+
+- Envios de uma campanha Cloud podem sair de **vários números Ativos do mesmo portfólio**.
+- Teto: **500 envios por número** (`META_BROADCAST_MAX_SENDS_PER_NUMBER`).
+- A UI calcula a cota de cada número a partir do total de envios da campanha do assinante; a soma das cotas deve fechar o total.
+- O relatório final permanece **unificado** (uma campanha Cloud / um intake).
+- Números selecionados ficam ocupados até a finalização e geração do relatório.
+

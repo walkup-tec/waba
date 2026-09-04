@@ -783,10 +783,18 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
                     });
                 }
                 const body = req.body && typeof req.body === "object" ? req.body : {};
+                const rawPhoneIds = body.phoneNumberIds ?? body.phone_number_ids ?? body.phoneNumberId ?? body.phone_number_id;
+                const phoneNumberIds = Array.isArray(rawPhoneIds)
+                    ? rawPhoneIds.map((item) => String(item || "").trim()).filter(Boolean)
+                    : String(rawPhoneIds || "")
+                        .split(/[\s,;]+/)
+                        .map((item) => item.trim())
+                        .filter(Boolean);
                 const campaign = await broadcastService.startFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
                     connectionId: String(body.connectionId || body.connection_id || ""),
                     templateId: String(body.templateId || body.template_id || ""),
-                    phoneNumberId: String(body.phoneNumberId || body.phone_number_id || ""),
+                    phoneNumberId: phoneNumberIds[0] || String(body.phoneNumberId || body.phone_number_id || ""),
+                    phoneNumberIds,
                     buffer: file.buffer,
                     fileName: String(file.originalname || "leads.xlsx"),
                     mapping: broadcastMappingFromBody(body),

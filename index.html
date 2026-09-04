@@ -3843,6 +3843,43 @@
           background: linear-gradient(90deg, #16a34a, #4ade80);
         }
         .meta-tpl-broadcast-progress-label { color: #94a3b8; font-size: 12px; white-space: nowrap; }
+        .meta-tpl-broadcast-numbers {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          max-height: 220px;
+          overflow: auto;
+          padding: 10px 12px;
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.35);
+        }
+        .meta-tpl-broadcast-number-option {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          font-size: 13px;
+          color: #e2e8f0;
+        }
+        .meta-tpl-broadcast-number-option input { margin-top: 3px; }
+        .meta-tpl-broadcast-split {
+          margin-top: 8px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.22);
+          color: #cbd5e1;
+          font-size: 13px;
+        }
+        .meta-tpl-broadcast-split.is-error {
+          background: rgba(239, 68, 68, 0.08);
+          border-color: rgba(239, 68, 68, 0.28);
+          color: #fecaca;
+        }
+        .meta-tpl-broadcast-split table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+        .meta-tpl-broadcast-split th,
+        .meta-tpl-broadcast-split td { text-align: left; padding: 4px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
+
         @media (max-width: 720px) {
           .meta-tpl-broadcast-grid.disparos-grid-2 { grid-template-columns: 1fr; }
           .meta-tpl-broadcast-template-row { grid-template-columns: 1fr; }
@@ -22167,7 +22204,7 @@
                 <span class="muted">Template oficial · números no padrão Meta</span>
               </div>
               <p class="muted" style="margin: 0 0 12px;">
-                Ordem: portfólio, template aprovado, número Ativo e disponível, campanha do assinante atendida no Laboratório e planilha. Ao iniciar o disparo o número fica ocupado; só volta a disponível depois que a campanha for finalizada e o relatório for gerado. Os indicadores e os cliques entram no relatório dessa campanha. Telefones são normalizados para E.164 da Meta (DDI 55, 9º dígito, máscara e número do Excel).
+                Ordem: portfólio, template aprovado, campanha do assinante e um ou mais números Ativos do mesmo portfólio. Os envios são fracionados automaticamente (máx. 500 por número) e o relatório final permanece unificado. Números ocupados somem até o relatório. Telefones da planilha são normalizados para E.164 da Meta (DDI 55, 9º dígito, máscara e número do Excel).
               </p>
               <div class="disparos-grid disparos-grid-2 meta-tpl-broadcast-grid">
                 <div class="aquecedor-field">
@@ -22188,18 +22225,17 @@
                   </div>
                 </div>
                 <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-number">3. Número Ativo e disponível</label>
-                  <select id="meta-tpl-broadcast-number" aria-label="Número Ativo e disponível">
-                    <option value="">Selecione um número Ativo e disponível</option>
-                  </select>
-                  <span class="muted">Os mesmos números Ativos deste portfólio na aba Portfólios. Só entram os disponíveis; ocupados somem até o relatório.</span>
-                </div>
-                <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-intake">4. Campanha do assinante (Laboratório)</label>
+                  <label for="meta-tpl-broadcast-intake">3. Campanha do assinante (Laboratório)</label>
                   <select id="meta-tpl-broadcast-intake" aria-label="Campanha atendida no Laboratório">
                     <option value="">Selecione a campanha</option>
                   </select>
-                  <span class="muted">Só campanhas Em andamento, no formato nome do assinante - campanha - envios.</span>
+                  <span class="muted">Só campanhas Em andamento, no formato nome do assinante - campanha - envios. O total de envios da campanha define o fracionamento.</span>
+                </div>
+                <div class="aquecedor-field">
+                  <label>4. Números Ativos e disponíveis</label>
+                  <div id="meta-tpl-broadcast-numbers" class="meta-tpl-broadcast-numbers" role="group" aria-label="Números Ativos e disponíveis do portfólio"></div>
+                  <div id="meta-tpl-broadcast-split" class="meta-tpl-broadcast-split" hidden></div>
+                  <span class="muted">Selecione um ou mais números do mesmo portfólio. Cada um envia no máximo 500 mensagens; a soma precisa fechar o total da campanha.</span>
                 </div>
                 <div class="aquecedor-field" id="meta-tpl-broadcast-header-wrap" hidden>
                   <label for="meta-tpl-broadcast-header-btn">Foto do topo deste template</label>
@@ -39193,6 +39229,9 @@
           const option = document.createElement("option");
           option.value = item.value;
           option.textContent = item.label;
+          if (item.plannedSends != null && item.plannedSends !== "") {
+            option.setAttribute("data-planned-sends", String(item.plannedSends));
+          }
           select.appendChild(option);
         });
         if ((items || []).some((item) => item.value === previous)) select.value = previous;
@@ -39253,11 +39292,13 @@
               {
                 value: "demo-intake-lab",
                 label: "Maria Silva - Campanha Setembro - 500",
+                plannedSends: 500,
               },
             ],
             "Selecione a campanha Em andamento",
           );
           select.value = "demo-intake-lab";
+          metaTplBroadcastRenderSplitPreview();
           return;
         }
         try {
@@ -39266,20 +39307,25 @@
           metaTplBroadcastFillSelect(
             select,
             items.map(function (item) {
+              const envios = Math.max(0, Math.round(Number(item.plannedSendCount || 0)));
               const ready = String(item.label || "").trim();
-              if (ready) return { value: String(item.id || ""), label: ready };
+              if (ready) {
+                return { value: String(item.id || ""), label: ready, plannedSends: envios };
+              }
               const name = String(item.campaignName || "Campanha").trim() || "Campanha";
               const owner = String(item.ownerName || item.ownerEmail || "Assinante").trim() || "Assinante";
-              const envios = Math.max(0, Math.round(Number(item.plannedSendCount || 0)));
               return {
                 value: String(item.id || ""),
                 label: owner + " - " + name + " - " + envios,
+                plannedSends: envios,
               };
             }),
             items.length ? "Selecione a campanha Em andamento" : "Nenhuma campanha Em andamento no Laboratório",
           );
+          metaTplBroadcastRenderSplitPreview();
         } catch (_error) {
           metaTplBroadcastFillSelect(select, [], "Não foi possível listar as campanhas");
+          metaTplBroadcastRenderSplitPreview();
         }
       }
 
@@ -39364,22 +39410,154 @@
         });
       }
 
-      function metaTplBroadcastFillNumbers() {
+      var META_TPL_BROADCAST_MAX_PER_NUMBER = 500;
+
+      function metaTplBroadcastSelectedPhoneNumberIds() {
+        const root = metaTplBroadcastEl("meta-tpl-broadcast-numbers");
+        if (!root) return [];
+        return Array.prototype.slice
+          .call(root.querySelectorAll('input[type="checkbox"][data-phone-number-id]:checked'))
+          .map(function (el) {
+            return String(el.getAttribute("data-phone-number-id") || "").trim();
+          })
+          .filter(Boolean);
+      }
+
+      function metaTplBroadcastSelectedIntakePlannedSends() {
+        const select = metaTplBroadcastEl("meta-tpl-broadcast-intake");
+        if (!select || !select.value) return 0;
+        const opt = select.options[select.selectedIndex];
+        const fromData = Number(opt && opt.getAttribute("data-planned-sends"));
+        if (Number.isFinite(fromData) && fromData > 0) return Math.round(fromData);
+        const label = String((opt && opt.textContent) || "");
+        const match = label.match(/(\d+)\s*$/);
+        return match ? Math.max(0, Math.round(Number(match[1]) || 0)) : 0;
+      }
+
+      function metaTplBroadcastDistributeSends(phoneNumberIds, totalSends) {
+        const phones = (phoneNumberIds || []).map(function (id) { return String(id || "").trim(); }).filter(Boolean);
+        const total = Math.max(0, Math.floor(Number(totalSends) || 0));
+        const cap = META_TPL_BROADCAST_MAX_PER_NUMBER;
+        if (!phones.length) {
+          return { ok: false, message: "Selecione ao menos um número Ativo e disponível.", quotas: [], total: total };
+        }
+        if (!total) {
+          return { ok: false, message: "Selecione a campanha do assinante para obter o total de envios.", quotas: phones.map(function (id) { return { phoneNumberId: id, planned: 0 }; }), total: 0 };
+        }
+        const capacity = phones.length * cap;
+        if (total > capacity) {
+          const need = Math.ceil(total / cap);
+          return {
+            ok: false,
+            message: "São necessários pelo menos " + need + " números (máx. " + cap + " envios por número). Selecionados: " + phones.length + "; envios: " + total + ".",
+            quotas: [],
+            total: total,
+          };
+        }
+        const base = Math.floor(total / phones.length);
+        let remainder = total % phones.length;
+        const quotas = phones.map(function (phoneNumberId) {
+          const planned = base + (remainder > 0 ? 1 : 0);
+          if (remainder > 0) remainder -= 1;
+          return { phoneNumberId: phoneNumberId, planned: planned };
+        });
+        const sum = quotas.reduce(function (acc, row) { return acc + row.planned; }, 0);
+        if (sum !== total) {
+          return { ok: false, message: "A distribuição não fechou o total de envios.", quotas: quotas, total: total };
+        }
+        return { ok: true, message: "", quotas: quotas, total: total };
+      }
+
+      function metaTplBroadcastPhoneLabel(phoneNumberId) {
         const numbers = metaTplBroadcastActiveNumbers();
-        metaTplBroadcastFillSelect(
-          metaTplBroadcastEl("meta-tpl-broadcast-number"),
-          numbers.map(function (item) {
-            const phone = String(item.displayPhoneNumber || item.phoneNumberId || "").trim();
+        const match = numbers.find(function (item) {
+          return String(item.phoneNumberId || "") === String(phoneNumberId || "");
+        });
+        if (!match) return String(phoneNumberId || "");
+        const phone = String(match.displayPhoneNumber || match.phoneNumberId || "").trim();
+        const name = String(match.verifiedName || "").trim();
+        return name ? name + " · " + phone : phone;
+      }
+
+      function metaTplBroadcastRenderSplitPreview() {
+        const box = metaTplBroadcastEl("meta-tpl-broadcast-split");
+        if (!box) return { ok: false };
+        const phoneNumberIds = metaTplBroadcastSelectedPhoneNumberIds();
+        const total = metaTplBroadcastSelectedIntakePlannedSends();
+        const result = metaTplBroadcastDistributeSends(phoneNumberIds, total);
+        if (!phoneNumberIds.length && !total) {
+          box.hidden = true;
+          box.innerHTML = "";
+          box.classList.remove("is-error");
+          return result;
+        }
+        box.hidden = false;
+        box.classList.toggle("is-error", !result.ok);
+        if (!result.ok) {
+          box.innerHTML = "<strong>Fracionamento incompleto.</strong> " + metaTpEsc(result.message || "");
+          return result;
+        }
+        const rows = result.quotas
+          .map(function (row) {
+            return (
+              "<tr><td>" +
+              metaTpEsc(metaTplBroadcastPhoneLabel(row.phoneNumberId)) +
+              "</td><td>" +
+              String(row.planned) +
+              " envios</td></tr>"
+            );
+          })
+          .join("");
+        box.innerHTML =
+          "<strong>Distribuição dos envios</strong>" +
+          "<div>Total da campanha: " +
+          String(result.total) +
+          " · Números: " +
+          String(result.quotas.length) +
+          " · Máx. " +
+          String(META_TPL_BROADCAST_MAX_PER_NUMBER) +
+          "/número</div>" +
+          "<table><thead><tr><th>Número</th><th>Envios</th></tr></thead><tbody>" +
+          rows +
+          "</tbody></table>" +
+          "<div>Soma: " +
+          String(result.total) +
+          " (fecha o total da campanha). Relatório final unificado.</div>";
+        return result;
+      }
+
+      function metaTplBroadcastFillNumbers() {
+        const root = metaTplBroadcastEl("meta-tpl-broadcast-numbers");
+        if (!root) return;
+        const previous = new Set(metaTplBroadcastSelectedPhoneNumberIds());
+        const numbers = metaTplBroadcastActiveNumbers();
+        if (!numbers.length) {
+          root.innerHTML =
+            '<span class="muted">Nenhum número Ativo e disponível. Números em disparo liberam após o relatório.</span>';
+          metaTplBroadcastRenderSplitPreview();
+          return;
+        }
+        root.innerHTML = numbers
+          .map(function (item) {
+            const id = String(item.phoneNumberId || "").trim();
+            const phone = String(item.displayPhoneNumber || id).trim();
             const name = String(item.verifiedName || "").trim();
-            return {
-              value: String(item.phoneNumberId || ""),
-              label: name ? name + " · " + phone : phone,
-            };
-          }),
-          numbers.length
-            ? "Selecione um número Ativo e disponível"
-            : "Nenhum número Ativo e disponível. Números em disparo liberam após o relatório.",
-        );
+            const label = name ? name + " · " + phone : phone;
+            const checked = previous.has(id) || (previous.size === 0 && numbers.length === 1) ? " checked" : "";
+            return (
+              '<label class="meta-tpl-broadcast-number-option">' +
+              '<input type="checkbox" data-phone-number-id="' +
+              metaTpEsc(id) +
+              '"' +
+              checked +
+              " />" +
+              "<span>" +
+              metaTpEsc(label) +
+              "</span></label>"
+            );
+          })
+          .join("");
+        metaTplBroadcastRenderSplitPreview();
       }
 
       function metaTplBroadcastFillColumns(columns, guessed) {
@@ -39426,7 +39604,11 @@
         const data = new FormData();
         data.append("connectionId", String((metaTplBroadcastEl("meta-tpl-broadcast-portfolio") || {}).value || ""));
         data.append("templateId", String((metaTplBroadcastEl("meta-tpl-broadcast-template") || {}).value || ""));
-        data.append("phoneNumberId", String((metaTplBroadcastEl("meta-tpl-broadcast-number") || {}).value || ""));
+        const phoneNumberIds = metaTplBroadcastSelectedPhoneNumberIds();
+        if (phoneNumberIds[0]) data.append("phoneNumberId", phoneNumberIds[0]);
+        phoneNumberIds.forEach(function (id) {
+          data.append("phoneNumberIds", id);
+        });
         data.append("phoneColumn", String((metaTplBroadcastEl("meta-tpl-broadcast-phone-col") || {}).value || ""));
         data.append("nomeColumn", String((metaTplBroadcastEl("meta-tpl-broadcast-nome-col") || {}).value || ""));
         data.append("numeroColumn", String((metaTplBroadcastEl("meta-tpl-broadcast-numero-col") || {}).value || ""));
@@ -39638,12 +39820,16 @@
           metaTplBroadcastSetStatus("Escolha a planilha com os números.");
           return;
         }
-        if (!String((metaTplBroadcastEl("meta-tpl-broadcast-number") || {}).value || "").trim()) {
-          metaTplBroadcastSetStatus("Selecione um número Ativo e disponível.");
-          return;
-        }
         if (!String((metaTplBroadcastEl("meta-tpl-broadcast-intake") || {}).value || "").trim()) {
           metaTplBroadcastSetStatus("Selecione a campanha Em andamento do assinante.");
+          return;
+        }
+        const splitPreview = metaTplBroadcastRenderSplitPreview();
+        if (!splitPreview || !splitPreview.ok) {
+          metaTplBroadcastSetStatus(
+            (splitPreview && splitPreview.message) ||
+              "Selecione números suficientes para fracionar os envios (máx. 500 por número).",
+          );
           return;
         }
         metaTplBroadcastSetStatus("Iniciando disparo Cloud…");
@@ -40097,6 +40283,14 @@
         metaTplBroadcastFillTemplates();
         metaTplBroadcastFillNumbers();
         metaTplBroadcastLoadInspect();
+      });
+      document.getElementById("meta-tpl-broadcast-intake")?.addEventListener("change", function () {
+        metaTplBroadcastRenderSplitPreview();
+      });
+      document.getElementById("meta-tpl-broadcast-numbers")?.addEventListener("change", function (event) {
+        const target = event && event.target;
+        if (!target || !target.matches || !target.matches('input[type="checkbox"][data-phone-number-id]')) return;
+        metaTplBroadcastRenderSplitPreview();
       });
       document.getElementById("meta-tpl-broadcast-category")?.addEventListener("change", function () {
         metaTplBroadcastFillTemplates();

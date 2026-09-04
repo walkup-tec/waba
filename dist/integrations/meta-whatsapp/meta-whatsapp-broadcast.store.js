@@ -30,6 +30,7 @@ const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void")
 const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../../data-path");
 const meta_whatsapp_messaging_types_1 = require("./meta-whatsapp-messaging.types");
+const meta_whatsapp_broadcast_split_1 = require("./meta-whatsapp-broadcast-split");
 const FILE_NAME = "meta-whatsapp-broadcasts.json";
 function emptyStore() {
     return { version: 1, campaigns: [] };
@@ -292,7 +293,7 @@ function matchBroadcastLeadForMetaStatus(campaigns, input) {
     const ranked = [...campaigns].sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
     if (wamid) {
         for (const campaign of ranked) {
-            if (phoneNumberId && String(campaign.phoneNumberId || "") !== phoneNumberId)
+            if (phoneNumberId && !(0, meta_whatsapp_broadcast_split_1.campaignUsesPhoneNumber)(campaign, phoneNumberId))
                 continue;
             const lead = campaign.leads.find((item) => String(item.wamid || "").trim() === wamid);
             if (lead)
@@ -307,7 +308,7 @@ function matchBroadcastLeadForMetaStatus(campaigns, input) {
     if (!recipient)
         return null;
     for (const campaign of ranked) {
-        if (phoneNumberId && String(campaign.phoneNumberId || "") !== phoneNumberId)
+        if (phoneNumberId && !(0, meta_whatsapp_broadcast_split_1.campaignUsesPhoneNumber)(campaign, phoneNumberId))
             continue;
         const lead = campaign.leads.find((item) => recipientDigits(item.waId) === recipient && item.status !== "skipped");
         if (lead)
@@ -416,6 +417,10 @@ function publicBroadcastCampaign(row) {
         templateName: row.templateName,
         language: row.language,
         phoneNumberId: row.phoneNumberId,
+        phoneNumberIds: Array.isArray(row.phoneNumberIds) && row.phoneNumberIds.length
+            ? row.phoneNumberIds.map((id) => String(id || "").trim()).filter(Boolean)
+            : [String(row.phoneNumberId || "").trim()].filter(Boolean),
+        phoneQuotas: Array.isArray(row.phoneQuotas) ? row.phoneQuotas : undefined,
         shortUrl: row.shortUrl,
         clicks: Math.max(0, Number(row.clicks || 0)),
         intakeCampaignId: row.intakeCampaignId || undefined,
