@@ -49,14 +49,36 @@ function asErrorRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+/**
+ * Códigos Graph de rate limit (doc Meta error-handling).
+ * Retry curto só aumenta o consumo da cota — não repetir na hora.
+ * https://developers.facebook.com/docs/graph-api/guides/error-handling/
+ */
+const RATE_LIMIT_META_CODES = new Set(["4", "17", "341"]);
+
+export function isMetaGraphRateLimitCode(code: string | number | null | undefined): boolean {
+  return RATE_LIMIT_META_CODES.has(String(code ?? "").trim());
+}
+
+/** Detalhe genérico demais para exibir (não confundir com "(#4) Application request limit…"). */
+function isGenericGraphDetail(text: string): boolean {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return true;
+  if (/^invalid parameter\.?$/i.test(t)) return true;
+  if (/^an unexpected error/i.test(t)) return true;
+  if (/^unknown\.?$/i.test(t)) return true;
+  // Só o marcador de código, sem prosa útil
+  if (/^\(?#\d+\)?\.?$/i.test(t)) return true;
+  return false;
+}
+
 export function safePublicGraphTemplateDetail(json: unknown): string {
   const err = asErrorRecord((json as { error?: unknown } | null)?.error);
   const nested = asErrorRecord(err.error_data);
   const candidates = [err.error_user_msg, nested.details, err.message].map((item) =>
     String(item || "").replace(/\s+/g, " ").trim(),
   );
-  const generic = /invalid parameter|^an unexpected error|^unknown|#\d+/i;
-  const text = candidates.find((item) => item && item.length <= 280 && !generic.test(item)) || "";
+  const text = candidates.find((item) => item && item.length <= 280 && !isGenericGraphDetail(item)) || "";
   if (!text) return "";
   if (/EAA[A-Za-z0-9]+|access_token|app_secret|Bearer /i.test(text)) return "";
   return text;
@@ -100,6 +122,10 @@ function formatGraphCodeHint(json: unknown): string {
     .join(", ");
 }
 
+function looksLikeMetaRateLimitText(detail: string): boolean {
+  return /request limit|too many calls|throttl|rate limit|limite (de|temporário)|cota/i.test(detail);
+}
+
 /**
  * Mensagem pública do upload resumable (header de template / mídia).
  * `fileBytes` evita culpar tamanho quando o arquivo já está abaixo do teto típico da Meta (~5 MB).
@@ -109,9 +135,15 @@ export function publicMetaGraphMediaUploadMessage(
   options?: { fileBytes?: number },
 ): string {
   const detail = safePublicGraphTemplateDetail(json);
+  const { code } = extractPublicGraphErrorCodes(json);
   const codeHint = formatGraphCodeHint(json);
   const bytes = Number(options?.fileBytes || 0);
   const smallFile = Number.isFinite(bytes) && bytes > 0 && bytes < 5 * 1024 * 1024;
+
+  if (isMetaGraphRateLimitCode(code) || looksLikeMetaRateLimitText(detail)) {
+    const hint = codeHint || (code ? `código ${code}` : "código 4");
+    return `A Meta limitou temporariamente as chamadas da API (${hint}). Aguarde alguns minutos e tente de novo — não é o tamanho da imagem.`;
+  }
 
   if (detail) {
     if (/size|too large|file length|maximum|tamanho|\b\d+\s*MB\b/i.test(detail)) {
@@ -124,8 +156,8 @@ export function publicMetaGraphMediaUploadMessage(
 
   if (smallFile) {
     return codeHint
-      ? `A Meta recusou o arquivo (${codeHint}). O tamanho está ok — reconecte o WhatsApp Oficial ou tente de novo em instantes.`
-      : "A Meta recusou o arquivo. O tamanho está ok — reconecte o WhatsApp Oficial ou tente de novo em instantes.";
+      ? `A Meta recusou o arquivo (${codeHint}). O tamanho está ok — tente de novo em instantes.`
+      : "A Meta recusou o arquivo. O tamanho está ok — tente de novo em instantes.";
   }
 
   return codeHint

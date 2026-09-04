@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { readMetaAppSecret, readMetaGraphBase, readMetaGraphVersion } from "./meta-config";
-import { classifyMetaGraphError } from "./meta-whatsapp-graph-errors";
+import { classifyMetaGraphError, isMetaGraphRateLimitCode } from "./meta-whatsapp-graph-errors";
 
 export type MetaGraphMessagesResult = {
   ok: boolean;
@@ -103,7 +103,8 @@ export async function postMetaCloudMessage(input: {
         attempts: attempt,
       };
       if (response.ok) return last;
-      if (kind === "permanent" || attempt >= 3) return last;
+      // Rate limit (4/17/341): não retry imediato — esgota a cota da app.
+      if (kind === "permanent" || isMetaGraphRateLimitCode(graphCode) || attempt >= 3) return last;
       await sleep(Math.floor(350 * Math.pow(2, attempt - 1) + Math.random() * 180));
     } catch (error) {
       timeout = String((error as { name?: string })?.name || "") === "AbortError";

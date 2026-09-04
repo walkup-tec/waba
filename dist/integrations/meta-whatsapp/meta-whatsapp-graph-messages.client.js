@@ -80,7 +80,8 @@ async function postMetaCloudMessage(input) {
             };
             if (response.ok)
                 return last;
-            if (kind === "permanent" || attempt >= 3)
+            // Rate limit (4/17/341): não retry imediato — esgota a cota da app.
+            if (kind === "permanent" || (0, meta_whatsapp_graph_errors_1.isMetaGraphRateLimitCode)(graphCode) || attempt >= 3)
                 return last;
             await sleep(Math.floor(350 * Math.pow(2, attempt - 1) + Math.random() * 180));
         }

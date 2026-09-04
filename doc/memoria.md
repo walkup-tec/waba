@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 13:17 — Header-media código 4 (rate limit)
+- Sintoma: modal “código 4” + “reconecte” com PNG pequeno.
+- Causa: Graph rate limit; sanitizer apagava `(#4) Application request limit…`; retry x3 piorava.
+- Fix: mensagem de cota, sanitizer, sem retry em 4/17/341, upload binário alinhado à doc Meta.
+- Marker `DEPLOY-2026-09-04-131700-template-header-rate-limit-code4`.
+- LOG: `doc/LOG-2026-09-04__131700__template-header-rate-limit-code4.md`
+
 ## 2026-09-04 11:45 — Foto de perfil independente do nome
 - Erro genérico ao editar foto (ex.: Nesio): falha do `new_display_name` abortava o upload.
 - Fix: nome e foto/dados separados; sucesso parcial se a Meta recusar só o nome.

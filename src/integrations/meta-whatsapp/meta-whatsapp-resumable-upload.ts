@@ -73,12 +73,13 @@ export async function uploadMetaResumableImage(
   try {
     // Cópia em ArrayBuffer próprio — evita Buffer pooled / tipagem BodyInit opaca no fetch.
     const body = new Uint8Array(input.bytes);
+    // Doc Meta: só Authorization OAuth + file_offset + --data-binary (sem Content-Type).
+    // https://developers.facebook.com/docs/graph-api/guides/upload
     const response = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `OAuth ${token}`,
         file_offset: "0",
-        "Content-Type": "application/octet-stream",
       },
       body,
       signal: controller.signal,

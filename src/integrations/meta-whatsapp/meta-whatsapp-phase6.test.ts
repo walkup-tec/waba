@@ -456,6 +456,24 @@ describe("fase 6 Graph client retry", () => {
     assert.equal(calls, 1);
   });
 
+  it("400 com código 4 (rate limit) não faz retry", async () => {
+    let calls = 0;
+    const result = await postMetaCloudMessage({
+      token: "tok",
+      phoneNumberId: "123",
+      body: {},
+      fetchImpl: (async () => {
+        calls += 1;
+        return new Response(JSON.stringify({ error: { code: 4, message: "(#4) Application request limit reached" } }), {
+          status: 400,
+        });
+      }) as any,
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.graphCode, "4");
+    assert.equal(calls, 1);
+  });
+
   it("429 faz retry", async () => {
     let calls = 0;
     const result = await postMetaCloudMessage({

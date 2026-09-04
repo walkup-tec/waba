@@ -8,7 +8,7 @@ import {
 } from "./meta-whatsapp-template-ai.service";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
-import { publicMetaGraphMediaUploadMessage } from "./meta-whatsapp-graph-errors";
+import { publicMetaGraphMediaUploadMessage, safePublicGraphTemplateDetail } from "./meta-whatsapp-graph-errors";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { MetaTemplateAiModelOutput } from "./meta-whatsapp-template-ai.types";
 import { callOpenAiStructured } from "../openai/waba-openai-responses.client";
@@ -965,6 +965,31 @@ describe("Assistente IA de templates Utility", () => {
     );
     assert.match(text, /código 100/);
     assert.match(text, /reduza/i);
+  });
+
+  it("preserva mensagem de rate limit (#4) e não pede reconectar", () => {
+    const text = publicMetaGraphMediaUploadMessage(
+      {
+        error: {
+          message: "(#4) Application request limit reached",
+          type: "OAuthException",
+          code: 4,
+        },
+      },
+      { fileBytes: 482 * 1024 },
+    );
+    assert.match(text, /limitou temporariamente/i);
+    assert.match(text, /código 4/i);
+    assert.match(text, /Aguarde alguns minutos/i);
+    assert.doesNotMatch(text, /reconecte o WhatsApp/i);
+    assert.doesNotMatch(text, /Reduza a imagem/i);
+  });
+
+  it("não apaga detalhe Graph só porque contém #4 no texto", () => {
+    const detail = safePublicGraphTemplateDetail({
+      error: { message: "(#4) Application request limit reached", code: 4 },
+    });
+    assert.match(detail, /Application request limit/i);
   });
 });
 
