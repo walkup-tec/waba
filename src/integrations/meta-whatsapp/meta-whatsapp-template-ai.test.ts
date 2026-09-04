@@ -940,6 +940,32 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(text, /A Meta recusou o arquivo por tamanho/);
     assert.match(text, /5MB/);
   });
+
+  it("não culpa tamanho em arquivo pequeno e expõe o código Graph", () => {
+    const text = publicMetaGraphMediaUploadMessage(
+      {
+        error: {
+          message: "Invalid parameter",
+          code: 100,
+          error_subcode: 33,
+        },
+      },
+      { fileBytes: 482 * 1024 },
+    );
+    assert.match(text, /tamanho está ok/i);
+    assert.match(text, /código 100/);
+    assert.match(text, /subcódigo 33/);
+    assert.doesNotMatch(text, /Reduza a imagem/i);
+  });
+
+  it("mantém sugestão de reduzir só quando o arquivo pode estar grande", () => {
+    const text = publicMetaGraphMediaUploadMessage(
+      { error: { message: "Invalid parameter", code: 100 } },
+      { fileBytes: 6 * 1024 * 1024 },
+    );
+    assert.match(text, /código 100/);
+    assert.match(text, /reduza/i);
+  });
 });
 
 describe("OpenAI Responses com Structured Outputs", () => {

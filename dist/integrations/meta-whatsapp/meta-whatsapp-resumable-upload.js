@@ -57,7 +57,7 @@ async function uploadMetaResumableImage(input) {
         if (started.timeout) {
             throw new Error("A Meta recusou o arquivo. Tempo esgotado ao abrir a sessão de upload.");
         }
-        throw new Error((0, meta_whatsapp_graph_errors_1.publicMetaGraphMediaUploadMessage)(started.json));
+        throw new Error((0, meta_whatsapp_graph_errors_1.publicMetaGraphMediaUploadMessage)(started.json, { fileBytes: input.bytes.length }));
     }
     const url = `${(0, meta_config_1.readMetaGraphBase)()}/${(0, meta_config_1.readMetaGraphVersion)()}/${sessionId}`;
     const controller = new AbortController();
@@ -86,7 +86,7 @@ async function uploadMetaResumableImage(input) {
         }
         const handle = String(json?.h || "").trim();
         if (!response.ok || !handle) {
-            throw new Error((0, meta_whatsapp_graph_errors_1.publicMetaGraphMediaUploadMessage)(json));
+            throw new Error((0, meta_whatsapp_graph_errors_1.publicMetaGraphMediaUploadMessage)(json, { fileBytes: input.bytes.length }));
         }
         return { handle };
     }

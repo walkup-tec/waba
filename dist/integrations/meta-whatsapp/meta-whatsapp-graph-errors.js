@@ -5,6 +5,7 @@ exports.classifyMetaGraphError = classifyMetaGraphError;
 exports.publicMetaGraphSendMessage = publicMetaGraphSendMessage;
 exports.safePublicGraphTemplateDetail = safePublicGraphTemplateDetail;
 exports.publicMetaGraphTemplateMessage = publicMetaGraphTemplateMessage;
+exports.extractPublicGraphErrorCodes = extractPublicGraphErrorCodes;
 exports.publicMetaGraphMediaUploadMessage = publicMetaGraphMediaUploadMessage;
 const PERMANENT_META_CODES = new Set([
     "100",
@@ -86,12 +87,42 @@ function publicMetaGraphTemplateMessage(kind, status, json) {
     }
     return detail || "Não foi possível gerenciar o template na Meta.";
 }
-function publicMetaGraphMediaUploadMessage(json) {
+function extractPublicGraphErrorCodes(json) {
+    const err = asErrorRecord(json?.error);
+    return {
+        code: String(err.code ?? "").trim(),
+        subcode: String(err.error_subcode ?? "").trim(),
+    };
+}
+function formatGraphCodeHint(json) {
+    const { code, subcode } = extractPublicGraphErrorCodes(json);
+    return [code ? `código ${code}` : "", subcode ? `subcódigo ${subcode}` : ""]
+        .filter(Boolean)
+        .join(", ");
+}
+/**
+ * Mensagem pública do upload resumable (header de template / mídia).
+ * `fileBytes` evita culpar tamanho quando o arquivo já está abaixo do teto típico da Meta (~5 MB).
+ */
+function publicMetaGraphMediaUploadMessage(json, options) {
     const detail = safePublicGraphTemplateDetail(json);
-    if (!detail)
-        return "A Meta recusou o arquivo. Reduza a imagem se ela estiver grande e tente novamente.";
-    if (/size|too large|file length|maximum|tamanho|\b\d+\s*MB\b/i.test(detail)) {
-        return `A Meta recusou o arquivo por tamanho. ${detail} Reduza a imagem e envie de novo.`;
+    const codeHint = formatGraphCodeHint(json);
+    const bytes = Number(options?.fileBytes || 0);
+    const smallFile = Number.isFinite(bytes) && bytes > 0 && bytes < 5 * 1024 * 1024;
+    if (detail) {
+        if (/size|too large|file length|maximum|tamanho|\b\d+\s*MB\b/i.test(detail)) {
+            return `A Meta recusou o arquivo por tamanho. ${detail} Reduza a imagem e envie de novo.`;
+        }
+        return codeHint
+            ? `A Meta recusou o arquivo. ${detail} (${codeHint}).`
+            : `A Meta recusou o arquivo. ${detail}`;
     }
-    return `A Meta recusou o arquivo. ${detail}`;
+    if (smallFile) {
+        return codeHint
+            ? `A Meta recusou o arquivo (${codeHint}). O tamanho está ok — reconecte o WhatsApp Oficial ou tente de novo em instantes.`
+            : "A Meta recusou o arquivo. O tamanho está ok — reconecte o WhatsApp Oficial ou tente de novo em instantes.";
+    }
+    return codeHint
+        ? `A Meta recusou o arquivo (${codeHint}). Se a imagem estiver grande, reduza e tente novamente.`
+        : "A Meta recusou o arquivo. Reduza a imagem se ela estiver grande e tente novamente.";
 }

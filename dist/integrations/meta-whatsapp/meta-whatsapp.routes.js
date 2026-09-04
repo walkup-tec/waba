@@ -440,12 +440,17 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             }
             catch (error) {
                 const cause = error?.cause;
+                const message = String(error?.message || "");
+                const graphCodeMatch = message.match(/código\s+(\d+)/i);
+                const graphSubcodeMatch = message.match(/subcódigo\s+(\d+)/i);
                 (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("header-media-error", {
                     name: String(error?.name || ""),
                     code: String(error?.code || ""),
-                    message: String(error?.message || "").slice(0, 160),
+                    message: message.slice(0, 200),
                     causeMessage: String(cause?.message || "").slice(0, 120),
                     causeCode: String(cause?.code || "").slice(0, 64),
+                    graphCode: graphCodeMatch?.[1] || "",
+                    graphSubcode: graphSubcodeMatch?.[1] || "",
                     mediaFormat: String(req.body?.mediaFormat || req.body?.media_format || ""),
                     bytes: Number(req.file?.size || req.file?.buffer?.length || 0),
                 });

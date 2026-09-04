@@ -15,3 +15,4 @@ Resolvido no marker `DEPLOY-2026-09-04-102500-quantum-bm-waba-fanout` (parcial):
 Resolvido no marker `DEPLOY-2026-09-04-110500-quantum-fanout-debug-token`: hydrate descobre WABAs via `debug_token.granular_scopes.target_ids` (+ nested BM / `me/businesses`) antes de paginar `phone_numbers`. Se o ES só compartilhou 1 WABA com o app, a UI continua com 1 chip até novo **+** Embedded Signup nas demais.
 
 Resolvido no marker `DEPLOY-2026-09-04-114500-profile-photo-independent-name`: editar foto falhava com erro genérico quando a Meta recusava o nome (`new_display_name`) — o fluxo abortava antes do `profile_picture_handle`. Nome e foto agora são independentes.
+- Upload header-media com mensagem genérica de tamanho: corrigido em 2026-09-04 (código Graph + não culpar <5MB).

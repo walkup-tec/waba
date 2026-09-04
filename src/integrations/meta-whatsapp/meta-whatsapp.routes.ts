@@ -480,12 +480,17 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
         return sendPublic(res, 200, { ok: true, ...result });
       } catch (error) {
         const cause = (error as { cause?: { message?: string; code?: string } })?.cause;
+        const message = String((error as { message?: string })?.message || "");
+        const graphCodeMatch = message.match(/código\s+(\d+)/i);
+        const graphSubcodeMatch = message.match(/subcódigo\s+(\d+)/i);
         logMetaWhatsappSafe("header-media-error", {
           name: String((error as { name?: string })?.name || ""),
           code: String((error as { code?: string })?.code || ""),
-          message: String((error as { message?: string })?.message || "").slice(0, 160),
+          message: message.slice(0, 200),
           causeMessage: String(cause?.message || "").slice(0, 120),
           causeCode: String(cause?.code || "").slice(0, 64),
+          graphCode: graphCodeMatch?.[1] || "",
+          graphSubcode: graphSubcodeMatch?.[1] || "",
           mediaFormat: String(req.body?.mediaFormat || req.body?.media_format || ""),
           bytes: Number(req.file?.size || req.file?.buffer?.length || 0),
         });

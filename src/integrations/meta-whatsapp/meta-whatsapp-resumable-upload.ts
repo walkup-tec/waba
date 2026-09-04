@@ -62,7 +62,9 @@ export async function uploadMetaResumableImage(
     if (started.timeout) {
       throw new Error("A Meta recusou o arquivo. Tempo esgotado ao abrir a sessão de upload.");
     }
-    throw new Error(publicMetaGraphMediaUploadMessage(started.json));
+    throw new Error(
+      publicMetaGraphMediaUploadMessage(started.json, { fileBytes: input.bytes.length }),
+    );
   }
   const url = `${readMetaGraphBase()}/${readMetaGraphVersion()}/${sessionId}`;
   const controller = new AbortController();
@@ -90,7 +92,9 @@ export async function uploadMetaResumableImage(
     }
     const handle = String(json?.h || "").trim();
     if (!response.ok || !handle) {
-      throw new Error(publicMetaGraphMediaUploadMessage(json));
+      throw new Error(
+        publicMetaGraphMediaUploadMessage(json, { fileBytes: input.bytes.length }),
+      );
     }
     return { handle };
   } catch (error) {
