@@ -263,23 +263,56 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     (0, meta_whatsapp_portfolio_identity_store_1.writePortfolioBusinessIdentity)(tenantId, card);
     const primaryWabaId = resolvedWaba || storedWaba;
     const businessId = String(card.id || resolvedBm || "").trim();
+    const partnerBm = (0, meta_config_1.readMetaBusinessId)();
     /**
-     * Um BM (ex.: Quantum Smart Labs) pode ter várias WABAs no WhatsApp Manager.
-     * Hydrate só com o wabaId da conexão listava 1 chip (ex.: ES) e escondia SP/RJ.
-     * Doc: owned_whatsapp_business_accounts + client_whatsapp_business_accounts.
+     * Um BM (ex.: Quantum Smart Labs) pode ter várias WABAs / vários chips no Manager.
+     * O token do Embedded Signup costuma falhar em owned_* do BM do cliente (precisa
+     * system user). Descoberta em camadas:
+     * 1) debug_token → target_ids (WABAs que o app realmente enxerga)
+     * 2) phones aninhados em me/businesses + BM cliente + BM parceiro (client_*)
+     * 3) phone_numbers por WABA descoberta
+     * Docs:
+     * https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-accounts/
+     * https://developers.facebook.com/docs/marketing-api/reference/business/owned_whatsapp_business_accounts/
      */
     const wabaIds = new Set();
     if (primaryWabaId)
         wabaIds.add(primaryWabaId);
+    const phoneRows = [];
+    const pushPhones = (rows) => {
+        for (const row of rows)
+            phoneRows.push(row);
+    };
+    // Meta Embedded Signup: debug_token.granular_scopes.target_ids lista as WABAs
+    // que o app realmente recebeu — costuma funcionar quando owned_* do BM dá 403.
+    // https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-accounts/
+    for (const id of await listWabaIdsFromDebugToken(graph, token))
+        wabaIds.add(id);
+    const nestedFromCustomer = businessId
+        ? await collectNestedPhonesFromBusiness(graph, token, businessId)
+        : { wabaIds: [], phones: [] };
+    const nestedFromMe = await collectNestedPhonesFromMeBusinesses(graph, token);
+    const nestedFromPartner = partnerBm && partnerBm !== businessId
+        ? await collectNestedPhonesFromBusiness(graph, token, partnerBm)
+        : { wabaIds: [], phones: [] };
+    for (const id of nestedFromCustomer.wabaIds)
+        wabaIds.add(id);
+    for (const id of nestedFromMe.wabaIds)
+        wabaIds.add(id);
+    for (const id of nestedFromPartner.wabaIds)
+        wabaIds.add(id);
+    pushPhones(nestedFromCustomer.phones);
+    pushPhones(nestedFromMe.phones);
+    pushPhones(nestedFromPartner.phones);
     if (businessId) {
-        const fromBm = await listBusinessWabaIds(graph, token, businessId);
-        for (const id of fromBm)
+        for (const id of await listBusinessWabaIds(graph, token, businessId))
             wabaIds.add(id);
     }
-    if (!wabaIds.size)
-        return { card, directory };
-    const phoneRows = [];
-    let anyPhonesOk = false;
+    if (partnerBm) {
+        for (const id of await listBusinessWabaIds(graph, token, partnerBm))
+            wabaIds.add(id);
+    }
+    let anyPhonesOk = phoneRows.length > 0;
     let lastPhoneStatus = 0;
     for (const wid of wabaIds) {
         const phones = await listWabaPhoneNumbersPaged(graph, token, wid);
@@ -288,8 +321,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
             continue;
         }
         anyPhonesOk = true;
-        for (const row of phones.json.data)
-            phoneRows.push(row);
+        pushPhones(phones.json.data);
     }
     if (!anyPhonesOk) {
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-partial", {
@@ -297,9 +329,17 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
             reason: "phones",
             status: lastPhoneStatus,
             connectionId: open.id,
+            wabaCount: wabaIds.size,
         });
         return { card, directory };
     }
+    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-fanout", {
+        tenantId,
+        connectionId: open.id,
+        businessId: businessId || null,
+        wabaCount: wabaIds.size,
+        phoneRowCount: phoneRows.length,
+    });
     const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: phoneRows });
     // Une Graph (todas as WABAs) + chips já gravados na conexão — não perde parcial.
     const merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(mapped, stored);
@@ -312,6 +352,108 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
         },
         directory,
     };
+}
+/** WABA IDs liberados no token (granular_scopes) — doc Embedded Signup manage-accounts. */
+async function listWabaIdsFromDebugToken(graph, userToken) {
+    const appId = (0, meta_config_1.readMetaAppId)();
+    const appSecret = (0, meta_config_1.readMetaAppSecret)();
+    if (!appId || !appSecret || !userToken)
+        return [];
+    const res = await graph({
+        token: `${appId}|${appSecret}`,
+        method: "GET",
+        path: "debug_token",
+        query: { input_token: userToken },
+    });
+    if (!res.ok)
+        return [];
+    const payload = (res.json && typeof res.json === "object" ? res.json : {});
+    const granular = Array.isArray(payload.data?.granular_scopes) ? payload.data.granular_scopes : [];
+    const ids = new Set();
+    for (const entry of granular) {
+        const scope = String(entry?.scope || "");
+        if (!scope.includes("whatsapp_business"))
+            continue;
+        const targets = Array.isArray(entry?.target_ids) ? entry.target_ids : [];
+        for (const raw of targets) {
+            const id = String(raw || "").trim();
+            if (id)
+                ids.add(id);
+        }
+    }
+    return [...ids];
+}
+function extractWabasAndPhonesFromBusinessNode(node) {
+    const row = node && typeof node === "object" ? node : {};
+    const wabaIds = new Set();
+    const phones = [];
+    for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"]) {
+        const bucket = row[edge];
+        const data = bucket && typeof bucket === "object" ? bucket.data : null;
+        const list = Array.isArray(data) ? data : [];
+        for (const waba of list) {
+            const wabaRow = waba && typeof waba === "object" ? waba : {};
+            const wid = String(wabaRow.id || "").trim();
+            if (wid)
+                wabaIds.add(wid);
+            const phoneBucket = wabaRow.phone_numbers;
+            const phoneData = phoneBucket && typeof phoneBucket === "object"
+                ? phoneBucket.data
+                : null;
+            if (Array.isArray(phoneData)) {
+                for (const phone of phoneData)
+                    phones.push(phone);
+            }
+        }
+    }
+    return { wabaIds: [...wabaIds], phones };
+}
+async function collectNestedPhonesFromBusiness(graph, token, businessId) {
+    const bm = String(businessId || "").trim();
+    if (!bm)
+        return { wabaIds: [], phones: [] };
+    const fields = [
+        "id",
+        "name",
+        `owned_whatsapp_business_accounts{id,name,phone_numbers{${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS}}}`,
+        `client_whatsapp_business_accounts{id,name,phone_numbers{${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS}}}`,
+    ].join(",");
+    const res = await graph({
+        token,
+        method: "GET",
+        path: bm,
+        query: { fields },
+    });
+    if (!res.ok)
+        return { wabaIds: [], phones: [] };
+    return extractWabasAndPhonesFromBusinessNode(res.json);
+}
+async function collectNestedPhonesFromMeBusinesses(graph, token) {
+    const fields = [
+        "id",
+        "name",
+        `owned_whatsapp_business_accounts{id,name,phone_numbers{${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS}}}`,
+        `client_whatsapp_business_accounts{id,name,phone_numbers{${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS}}}`,
+    ].join(",");
+    const res = await graph({
+        token,
+        method: "GET",
+        path: "me/businesses",
+        query: { fields, limit: "50" },
+    });
+    if (!res.ok)
+        return { wabaIds: [], phones: [] };
+    const data = Array.isArray(res.json?.data) ? res.json.data : [];
+    const wabaIds = new Set();
+    const phones = [];
+    for (const node of data) {
+        const extracted = extractWabasAndPhonesFromBusinessNode(node);
+        for (const id of extracted.wabaIds)
+            wabaIds.add(id);
+        for (const phone of extracted.phones)
+            phones.push(phone);
+    }
+    return { wabaIds: [...wabaIds], phones };
 }
 /**
  * Lista WABA IDs de um Business Manager (owned + client).

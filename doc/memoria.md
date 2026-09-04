@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 11:00 — Quantum: fan-out via debug_token
+- Deploy do fan-out BM `owned_*` não bastou: token ES costuma 403/vazio nessas edges.
+- Fix: `debug_token` → `granular_scopes.target_ids` + phones aninhados no BM; marker `DEPLOY-2026-09-04-110500-quantum-fanout-debug-token`.
+- Se Meta só concedeu 1 WABA ao app no ES, ainda mostra 1 — aí precisa **+** por número.
+- LOG: `doc/LOG-2026-09-04__110027__quantum-fanout-debug-token.md`
+
 ## 2026-09-04 10:40 — Relatório operacional: dist em produção
 - Causa: fix só em `index.html`/`src`; Docker serve `dist/` desatualizado (`sendIssues` ainda no bundle).
 - `npm run build` + marker `DEPLOY-2026-09-04-104000-relatorio-operacional-producao`.
