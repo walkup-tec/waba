@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 10:29 — Quantum: fan-out BM→todas as WABAs
+- Hydrate só com 1 `wabaId` listava 1 chip (ES); SP/RJ em outras WABAs do mesmo BM.
+- Fix: `owned_whatsapp_business_accounts` + `client_whatsapp_business_accounts` → `phone_numbers` por WABA; union sem rebaixar CONNECTED.
+- Marker `DEPLOY-2026-09-04-102500-quantum-bm-waba-fanout` — exige Redeploy EasyPanel.
+- LOG: `doc/LOG-2026-09-04__102922__quantum-bm-waba-fanout.md`
+
 ## 2026-09-04 10:15 — Relatório unificado (operacional = assinante)
 - Operacional Lab passa a montar o mesmo bloco do assinante (timeline + dashboard).
 - Sem “Erros que impactaram o envio”.

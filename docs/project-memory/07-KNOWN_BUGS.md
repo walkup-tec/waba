@@ -9,3 +9,5 @@ Redeploy EasyPanel do disparador pode deixar login em 502 até o heal republicar
 A partir do marker `DEPLOY-2026-09-03-193200-broadcast-resume-orphan`, Redeploy retoma Disparo Cloud `running`/`queued` com leads pendentes (não precisa void manual só por restart).
 
 Resolvido no marker `DEPLOY-2026-09-03-215100-quantum-portfolio-numbers`: portfólio Quantum (e outros BM com várias conexões) listava só 1 número porque o absorb do dedupe descartava chips da 2ª conexão e `phone_numbers` não paginava.
+
+Resolvido no marker `DEPLOY-2026-09-04-102500-quantum-bm-waba-fanout`: mesmo BM com várias WABAs (uma conexão) listava só os chips da WABA gravada; hydrate agora faz fan-out via `owned_whatsapp_business_accounts` / `client_whatsapp_business_accounts`.

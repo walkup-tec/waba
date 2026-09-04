@@ -28,7 +28,7 @@ import type {
 import {
   mapMetaPhoneListToPortfolioNumbers,
   mergePortfolioIdentity,
-  mergePortfolioNumbers,
+  unionPortfolioNumbers,
   dedupePortfolioCards,
   isRenderablePortfolioCard,
   businessIdNotWaba,
@@ -357,24 +357,99 @@ async function hydrateOpenConnection(
   };
   writePortfolioBusinessIdentity(tenantId, card);
 
-  const wabaId = resolvedWaba || storedWaba;
-  if (!wabaId) return { card, directory };
+  const primaryWabaId = resolvedWaba || storedWaba;
+  const businessId = String(card.id || resolvedBm || "").trim();
 
-  const phones = await listWabaPhoneNumbersPaged(graph, token, wabaId);
-  if (!phones.ok) {
+  /**
+   * Um BM (ex.: Quantum Smart Labs) pode ter várias WABAs no WhatsApp Manager.
+   * Hydrate só com o wabaId da conexão listava 1 chip (ex.: ES) e escondia SP/RJ.
+   * Doc: owned_whatsapp_business_accounts + client_whatsapp_business_accounts.
+   */
+  const wabaIds = new Set<string>();
+  if (primaryWabaId) wabaIds.add(primaryWabaId);
+  if (businessId) {
+    const fromBm = await listBusinessWabaIds(graph, token, businessId);
+    for (const id of fromBm) wabaIds.add(id);
+  }
+  if (!wabaIds.size) return { card, directory };
+
+  const phoneRows: unknown[] = [];
+  let anyPhonesOk = false;
+  let lastPhoneStatus = 0;
+  for (const wid of wabaIds) {
+    const phones = await listWabaPhoneNumbersPaged(graph, token, wid);
+    if (!phones.ok) {
+      lastPhoneStatus = phones.status;
+      continue;
+    }
+    anyPhonesOk = true;
+    for (const row of phones.json.data) phoneRows.push(row);
+  }
+  if (!anyPhonesOk) {
     logMetaWhatsappSafe("portfolio-list-partial", {
       tenantId,
       reason: "phones",
-      status: phones.status,
+      status: lastPhoneStatus,
       connectionId: open.id,
     });
     return { card, directory };
   }
 
-  const mapped = mapMetaPhoneListToPortfolioNumbers(phones.json);
-  const merged = mergePortfolioNumbers(mapped, stored);
+  const mapped = mapMetaPhoneListToPortfolioNumbers({ data: phoneRows });
+  // Une Graph (todas as WABAs) + chips já gravados na conexão — não perde parcial.
+  const merged = unionPortfolioNumbers(mapped, stored);
   const numbers = await attachPhoneBusinessProfiles(graph, token, merged, tenantId);
-  return { card: { ...card, numbers }, directory };
+  return {
+    card: {
+      ...card,
+      wabaId: card.wabaId || primaryWabaId || "",
+      numbers,
+    },
+    directory,
+  };
+}
+
+/**
+ * Lista WABA IDs de um Business Manager (owned + client).
+ * @see https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-accounts/
+ * @see https://developers.facebook.com/docs/marketing-api/reference/business/
+ */
+async function listBusinessWabaIds(
+  graph: MetaConnectionGraphCaller,
+  token: string,
+  businessId: string,
+): Promise<string[]> {
+  const bm = String(businessId || "").trim();
+  if (!bm) return [];
+  const ids = new Set<string>();
+  for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"] as const) {
+    const seen = new Set<string>();
+    let after = "";
+    for (let page = 0; page < 20; page += 1) {
+      const query: Record<string, string> = {
+        fields: "id,name",
+        limit: "100",
+      };
+      if (after) query.after = after;
+      const res = await graph({
+        token,
+        method: "GET",
+        path: `${bm}/${edge}`,
+        query,
+      });
+      if (!res.ok) break;
+      const batch = Array.isArray(res.json?.data) ? res.json.data : [];
+      for (const row of batch) {
+        const id = String((row as { id?: unknown })?.id || "").trim();
+        if (id) ids.add(id);
+      }
+      const nextAfter = String(res.json?.paging?.cursors?.after || "").trim();
+      if (!nextAfter || nextAfter === after || seen.has(nextAfter) || !batch.length) break;
+      seen.add(nextAfter);
+      after = nextAfter;
+    }
+  }
+  return [...ids];
 }
 
 /** Lista todos os chips do WABA (paginação Graph). Sem isso, só a 1ª página aparecia. */

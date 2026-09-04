@@ -333,15 +333,26 @@ export function unionPortfolioNumbers(
         byId.set(id, { ...item, phoneNumberId: id });
         continue;
       }
-      const preferIncoming =
-        (!String(prev.displayPhoneNumber || "").trim() && String(item.displayPhoneNumber || "").trim()) ||
-        (!String(prev.verifiedName || "").trim() && String(item.verifiedName || "").trim());
+      // Prefer CONNECTED: não deixar stored (metaStatus null / ui pendente)
+      // apagar o status da Graph ao só completar verifiedName/display.
+      const metaStatus =
+        (isMetaPhoneConnected(prev.metaStatus) ? text(prev.metaStatus) : null) ||
+        (isMetaPhoneConnected(item.metaStatus) ? text(item.metaStatus) : null) ||
+        text(prev.metaStatus) ||
+        text(item.metaStatus);
+      const connected = isMetaPhoneConnected(metaStatus);
       byId.set(id, {
         ...prev,
-        ...(preferIncoming ? item : {}),
+        ...item,
         phoneNumberId: id,
         displayPhoneNumber: text(item.displayPhoneNumber) || text(prev.displayPhoneNumber),
         verifiedName: text(item.verifiedName) || text(prev.verifiedName),
+        metaStatus,
+        uiStatus: connected
+          ? "ativo"
+          : item.uiStatus === "ativo" || prev.uiStatus === "ativo"
+            ? "ativo"
+            : "pendente",
       });
     }
   }

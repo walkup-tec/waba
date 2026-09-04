@@ -37,3 +37,11 @@
 - 2026-09-02: exclusão só no `sessionStorage` foi substituída pela Graph + prune no sync.
 - Docker EasyPanel copia `dist/`. Build precisa ir no Git antes do Redeploy.
 - Traefik deste VPS usa entryPoints `http`/`https`, nunca `web`/`websecure`.
+
+## 2026-09-04 — Fan-out BM → WABAs no hydrate do portfólio
+
+- **Decisão:** ao hidratar um card, listar todas as WABAs do Business Manager (`owned` + `client`) e unir `phone_numbers`, não só o `wabaId` da conexão.
+- **Motivo:** no WhatsApp Manager um BM (ex. Quantum Smart Labs) pode ter várias WABAs; Embedded Signup grava só uma.
+- **Impacto:** mais calls Graph por listagem; paginação limitada (20 páginas/edge). Sem HUP Traefik.
+- **Docs:** manage-accounts Embedded Signup + Business reference Marketing API.
+
