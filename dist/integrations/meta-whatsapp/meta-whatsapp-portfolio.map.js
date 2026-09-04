@@ -17,6 +17,7 @@ exports.asPageRef = asPageRef;
 exports.mapMetaBusinessToPortfolio = mapMetaBusinessToPortfolio;
 exports.mergePortfolioIdentity = mergePortfolioIdentity;
 exports.mergePortfolioNumbers = mergePortfolioNumbers;
+exports.unionPortfolioNumbers = unionPortfolioNumbers;
 exports.isRenderablePortfolioCard = isRenderablePortfolioCard;
 exports.dedupePortfolioCards = dedupePortfolioCards;
 exports.firstOwnedPageId = firstOwnedPageId;
@@ -251,11 +252,56 @@ function isListedPortfolioNumber(item) {
         return true;
     return isMetaPhoneConnected(item.metaStatus);
 }
+/**
+ * Graph vs cache local: se a Graph trouxe chips listáveis, eles mandam.
+ * Senão, cai no que já estava gravado.
+ */
 function mergePortfolioNumbers(graphNumbers, stored) {
     const fromGraph = graphNumbers.filter(isListedPortfolioNumber);
     if (fromGraph.length)
         return fromGraph;
     return stored.filter(isListedPortfolioNumber);
+}
+/**
+ * Une listas de números por phoneNumberId (ex.: várias conexões Embedded Signup
+ * do mesmo Business Manager). Não descarta a segunda lista só porque a primeira
+ * já tem itens — isso escondia chips da Quantum/outros portfólios.
+ */
+function unionPortfolioNumbers(...lists) {
+    const byId = new Map();
+    for (const list of lists) {
+        for (const item of (list || []).filter(isListedPortfolioNumber)) {
+            const id = String(item.phoneNumberId || "").trim();
+            if (!id)
+                continue;
+            const prev = byId.get(id);
+            if (!prev) {
+                byId.set(id, { ...item, phoneNumberId: id });
+                continue;
+            }
+            // Prefer CONNECTED: não deixar stored (metaStatus null / ui pendente)
+            // apagar o status da Graph ao só completar verifiedName/display.
+            const metaStatus = (isMetaPhoneConnected(prev.metaStatus) ? text(prev.metaStatus) : null) ||
+                (isMetaPhoneConnected(item.metaStatus) ? text(item.metaStatus) : null) ||
+                text(prev.metaStatus) ||
+                text(item.metaStatus);
+            const connected = isMetaPhoneConnected(metaStatus);
+            byId.set(id, {
+                ...prev,
+                ...item,
+                phoneNumberId: id,
+                displayPhoneNumber: text(item.displayPhoneNumber) || text(prev.displayPhoneNumber),
+                verifiedName: text(item.verifiedName) || text(prev.verifiedName),
+                metaStatus,
+                uiStatus: connected
+                    ? "ativo"
+                    : item.uiStatus === "ativo" || prev.uiStatus === "ativo"
+                        ? "ativo"
+                        : "pendente",
+            });
+        }
+    }
+    return [...byId.values()];
 }
 function isRenderablePortfolioCard(card) {
     if (!card)
@@ -280,7 +326,7 @@ function dedupePortfolioCards(cards) {
         host.primaryPageId = host.primaryPageId || extra.primaryPageId;
         host.profilePictureUrl = host.profilePictureUrl || extra.profilePictureUrl;
         host.wabaId = host.wabaId || extra.wabaId;
-        host.numbers = mergePortfolioNumbers(host.numbers || [], extra.numbers || []);
+        host.numbers = unionPortfolioNumbers(host.numbers || [], extra.numbers || []);
     };
     const dropped = new Set();
     for (const card of list) {

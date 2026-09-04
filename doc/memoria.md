@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 10:40 — Relatório operacional: dist em produção
+- Causa: fix só em `index.html`/`src`; Docker serve `dist/` desatualizado (`sendIssues` ainda no bundle).
+- `npm run build` + marker `DEPLOY-2026-09-04-104000-relatorio-operacional-producao`.
+- LOG: `doc/LOG-2026-09-04__104000__relatorio-operacional-dist-producao.md`
+
 ## 2026-09-04 10:29 — Quantum: fan-out BM→todas as WABAs
 - Hydrate só com 1 `wabaId` listava 1 chip (ES); SP/RJ em outras WABAs do mesmo BM.
 - Fix: `owned_whatsapp_business_accounts` + `client_whatsapp_business_accounts` → `phone_numbers` por WABA; union sem rebaixar CONNECTED.

@@ -15,6 +15,7 @@ const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_operacional_segments_1 = require("../users/waba-operacional-segments");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
 const waba_campaign_report_read_overrides_1 = require("../disparos/waba-campaign-report-read-overrides");
+const waba_campaign_report_timeline_1 = require("../disparos/waba-campaign-report-timeline");
 const waba_campaign_laboratorio_attended_1 = require("../disparos/waba-campaign-laboratorio-attended");
 const waba_campaign_report_finalize_service_1 = require("../disparos/waba-campaign-report-finalize.service");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
@@ -27,7 +28,6 @@ const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operaci
 const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-split.service");
 const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
-const meta_whatsapp_broadcast_send_issues_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-send-issues");
 const meta_whatsapp_broadcast_report_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-report");
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
 exports.CAMPAIGN_START_DEADLINE_MS = waba_campaign_supplier_assignment_service_1.CAMPAIGN_START_OVERDUE_MS;
@@ -308,9 +308,6 @@ class WabaOperacionalCampanhasService {
         }
         const hideClicks = (0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report || stored);
         const showClicks = (laboratorioAttended || stored?.source === "meta_lab") && !hideClicks;
-        const sendIssues = laboratorioAttended || stored?.source === "meta_lab"
-            ? (0, meta_whatsapp_broadcast_send_issues_1.summarizeBroadcastSendIssues)(broadcast)
-            : null;
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,
@@ -333,7 +330,8 @@ class WabaOperacionalCampanhasService {
                     ...(showClicks ? { clicks: Math.max(0, Math.round(Number(report.clicks || 0))) } : {}),
                 }
                 : null,
-            sendIssues,
+            // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
+            timeline: (0, waba_campaign_report_timeline_1.collectIntakeReportTimeline)(intake),
         };
     }
     saveCampaignReport(campaignId, body, staff) {
