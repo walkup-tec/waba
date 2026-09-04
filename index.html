@@ -8871,67 +8871,6 @@
         color: #94a3b8;
       }
 
-      .camp-report-send-issues {
-        margin-top: 16px;
-        padding: 14px 16px;
-        border-radius: 14px;
-        border: 1px solid rgba(248, 113, 113, 0.28);
-        background: rgba(127, 29, 29, 0.18);
-      }
-
-      .camp-report-send-issues[hidden] {
-        display: none;
-      }
-
-      .camp-report-send-issues-title {
-        margin: 0 0 6px;
-        font-size: 0.82rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #fca5a5;
-      }
-
-      .camp-report-send-issues-hint {
-        margin: 0 0 10px;
-        font-size: 0.82rem;
-        line-height: 1.45;
-        color: #fecaca;
-      }
-
-      .camp-report-send-issues-list {
-        margin: 0;
-        padding: 0;
-        list-style: none;
-        display: grid;
-        gap: 8px;
-      }
-
-      .camp-report-send-issues-item {
-        display: grid;
-        gap: 2px;
-        padding: 8px 10px;
-        border-radius: 10px;
-        background: rgba(15, 23, 42, 0.35);
-      }
-
-      .camp-report-send-issues-item strong {
-        font-size: 0.86rem;
-        color: #fff7ed;
-      }
-
-      .camp-report-send-issues--pending {
-        border-color: rgba(148, 163, 184, 0.28);
-        background: rgba(15, 23, 42, 0.35);
-      }
-
-      .camp-report-send-issues--pending .camp-report-send-issues-title {
-        color: #cbd5e1;
-      }
-
-      .camp-report-send-issues--pending .camp-report-send-issues-hint {
-        color: #cbd5e1;
-      }
 
       .camp-report-progress-head {
         display: flex;
@@ -45289,28 +45228,54 @@
         };
       }
 
-      function renderAdminCampanhasReportTimeline(payload) {
-        const host = document.getElementById("admin-campanhas-report-timeline");
-        if (!host) return;
-        const timeline = payload && payload.timeline && typeof payload.timeline === "object" ? payload.timeline : null;
-        const htmlTimeline = buildSubscriberCampaignTimelineHtml(timeline);
-        host.innerHTML = htmlTimeline || "";
-        host.hidden = !String(htmlTimeline || "").trim();
+      let adminCampanhasReportTimelinePayload = null;
+
+      function renderAdminCampanhasReportUnified(payload) {
+        const dashboard = document.getElementById("admin-campanhas-report-dashboard");
+        const timelineHost = document.getElementById("admin-campanhas-report-timeline");
+        if (!dashboard) return;
+        if (payload && typeof payload === "object") {
+          adminCampanhasReportTimelinePayload = payload;
+        }
+        const data = adminCampanhasReportTimelinePayload && typeof adminCampanhasReportTimelinePayload === "object"
+          ? adminCampanhasReportTimelinePayload
+          : {};
+        const subtitle = document.getElementById("admin-campanhas-report-subtitle");
+        const campaignName = String(subtitle?.textContent || data.campaignName || "").trim();
+        const metrics = readAdminCampanhasReportMetrics();
+        const timelineHtml = buildSubscriberCampaignTimelineHtml(data?.timeline);
+        // Mesmo layout do assinante: linha do tempo + dashboard num único bloco.
+        dashboard.innerHTML =
+          timelineHtml +
+          buildCampaignPerformanceDashboardHtml(
+            {
+              totalLeads: metrics.totalLeads,
+              enviados: metrics.sent,
+              entregues: metrics.delivered,
+              lidos: metrics.read,
+              falhados: metrics.failed,
+              cliques: metrics.clicks,
+            },
+            {
+              campaignName: campaignName || "Campanha",
+              isFinalized: adminCampanhasReportReadOnly,
+              hideMessageMetrics: !adminCampanhasReportReadOnly,
+              showClicks: adminCampanhasReportShowClicks,
+              reportSource: adminCampanhasReportSource,
+            }
+          );
+        if (timelineHost) {
+          timelineHost.innerHTML = "";
+          timelineHost.hidden = true;
+        }
       }
 
+      function renderAdminCampanhasReportTimeline(payload) {
+        renderAdminCampanhasReportUnified(payload);
+      }
 
       function updateAdminCampanhasReportDashboard() {
-        const dashboard = document.getElementById("admin-campanhas-report-dashboard");
-        if (!dashboard) return;
-        const subtitle = document.getElementById("admin-campanhas-report-subtitle");
-        const campaignName = String(subtitle?.textContent || "").trim();
-        dashboard.innerHTML = buildCampaignPerformanceDashboardHtml(readAdminCampanhasReportMetrics(), {
-          campaignName: "",
-          isFinalized: adminCampanhasReportReadOnly,
-          hideMessageMetrics: !adminCampanhasReportReadOnly,
-          showClicks: adminCampanhasReportShowClicks,
-          reportSource: adminCampanhasReportSource,
-        });
+        renderAdminCampanhasReportUnified(adminCampanhasReportTimelinePayload);
       }
 
       function setAdminCampanhasReportEntryLoading(isLoading) {
@@ -45402,9 +45367,10 @@
           data.showClicks != null ? Boolean(data.showClicks) : Boolean(data.laboratorioAttended);
         adminCampanhasReportClicks = Math.max(0, Math.round(Number(report.clicks ?? 0)));
         adminCampanhasReportSource = String(data.source || report.source || "").trim();
+        // Grava timeline antes do readOnly (que redesenha o dashboard) para operacional = assinante.
+        adminCampanhasReportTimelinePayload = data;
         setAdminCampanhasReportReadOnly(Boolean(data.isReadOnly));
-        updateAdminCampanhasReportDashboard();
-        renderAdminCampanhasReportTimeline(data);
+        renderAdminCampanhasReportUnified(data);
       }
 
       async function openAdminCampanhasReport(campaignId, campaignName, options = {}) {

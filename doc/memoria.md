@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-04 10:15 — Relatório unificado (operacional = assinante)
+- Operacional Lab passa a montar o mesmo bloco do assinante (timeline + dashboard).
+- Sem “Erros que impactaram o envio”.
+- Marker `DEPLOY-2026-09-04-101500-relatorio-unificado-todos` — exige Redeploy EasyPanel.
+- LOG: `doc/LOG-2026-09-04__101500__relatorio-unificado-todos.md`
+
 ## 2026-09-04 09:30 — Relatório operacional sem erros de envio
 - Removido bloco “Erros que impactaram o envio” (UI + `sendIssues` na API).
 - Timeline do assinante permanece.
