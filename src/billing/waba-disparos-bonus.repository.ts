@@ -130,13 +130,16 @@ export class WabaDisparosBonusRepository {
     return readStore().entries.find((item) => item.email === normalized) ?? null;
   }
 
-  getPendingShipments(email: string, apiKind: WabaDispatchesApiKind): number {
+  getGrantedShipments(email: string, apiKind: WabaDispatchesApiKind): number {
     const entry = this.getEntry(email);
     if (!entry) return 0;
-
-    const granted = entry.grants
+    return entry.grants
       .filter((grant) => grant.apiKind === apiKind)
       .reduce((sum, grant) => sum + Math.max(0, Math.round(Number(grant.shipments ?? 0))), 0);
+  }
+
+  getPendingShipments(email: string, apiKind: WabaDispatchesApiKind): number {
+    const granted = this.getGrantedShipments(email, apiKind);
     const applied = sumAppliedBonusFromOrders(email, apiKind, this.orderRepository);
     return Math.max(0, granted - applied);
   }

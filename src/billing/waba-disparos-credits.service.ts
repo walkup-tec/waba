@@ -16,7 +16,10 @@ import {
 } from "./waba-disparos-api-credits";
 import { WabaDisparosBonusSettlementService } from "./waba-disparos-bonus-settlement.service";
 import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
-import { WabaCleisonOficialBalanceRepair } from "./waba-cleison-oficial-balance-repair";
+import {
+  WabaCleisonOficialBalanceRepair,
+  applyCleisonOficialCreditsOverride,
+} from "./waba-cleison-oficial-balance-repair";
 import { WabaDisparosCreditUsageRepository } from "./waba-disparos-credit-usage.repository";
 import {
   resolveActiveOrderShipmentCount,
@@ -142,12 +145,14 @@ export class WabaDisparosCreditsService {
     const remainingShipments = remainingPaid + remainingBonus;
     const pendingBonusShipments = this.bonusService.getPendingBonusShipments(email, apiKind);
 
-    return {
+    const bucket: DisparosApiCreditsBucket = {
       contractedShipments,
       consumedShipments,
       remainingShipments,
       pendingBonusShipments,
     };
+    applyCleisonOficialCreditsOverride(email, apiKind, bucket, bonusConsumedShipments);
+    return bucket;
   }
 
   private getPaidRemainingForApi(email: string, apiKind: WabaDispatchesApiKind): number {

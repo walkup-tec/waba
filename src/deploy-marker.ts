@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-07-132200-cleison-5829-force";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-07-134500-cleison-5829-override";

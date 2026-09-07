@@ -99,12 +99,14 @@ class WabaDisparosCreditsService {
         const remainingBonus = Math.max(0, bonusContracted - bonusConsumedShipments);
         const remainingShipments = remainingPaid + remainingBonus;
         const pendingBonusShipments = this.bonusService.getPendingBonusShipments(email, apiKind);
-        return {
+        const bucket = {
             contractedShipments,
             consumedShipments,
             remainingShipments,
             pendingBonusShipments,
         };
+        (0, waba_cleison_oficial_balance_repair_1.applyCleisonOficialCreditsOverride)(email, apiKind, bucket, bonusConsumedShipments);
+        return bucket;
     }
     getPaidRemainingForApi(email, apiKind) {
         const paidOrders = this.listPaidOrdersForEmail(email).filter((order) => (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order) === apiKind && order.grantSource !== "admin-bonus-envios");
