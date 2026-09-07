@@ -174,4 +174,49 @@ describe("Webhook Asaas PAYMENT_RECEIVED (fluxo existente)", () => {
     assert.equal(after.byApi.oficial.remainingShipments, 5000 + 829);
     assert.equal(orders.getById(NEW_ORDER_ID)?.bonusShipmentsApplied, 829);
   });
+
+  it("grant admin expirado não zera os 829 pendentes da campanha", async () => {
+    resetBillingStore();
+
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
+    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+
+    const orders = new WabaBillingOrderRepository();
+    new WabaDisparosBonusRepository().grantFromCampaign(
+      EMAIL,
+      "368d053b-d59b-4eed-a235-fe9e9f32c68c",
+      829,
+      "oficial",
+    );
+    orders.create(
+      baseOrder({
+        id: "11111111-1111-4111-8111-111111111111",
+        shipmentCount: 1849,
+        valueCents: 55500,
+        status: "paid",
+        paidAt: "2026-08-01T15:00:00.000Z",
+        bonusShipmentsApplied: 0,
+        bonusSettlementAt: "2026-08-01T15:00:00.000Z",
+      }),
+    );
+    orders.create(
+      baseOrder({
+        id: "22222222-2222-4222-8222-222222222222",
+        shipmentCount: 5829,
+        valueCents: 0,
+        status: "paid",
+        paidAt: "2026-09-04T12:00:00.000Z",
+        grantSource: "admin-bonus-envios",
+        grantActive: true,
+        creditsValidUntil: "2026-09-05T12:00:00.000Z",
+        bonusShipmentsApplied: 829,
+        bonusSettlementAt: "2026-09-04T12:00:00.000Z",
+      }),
+    );
+
+    const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
+    assert.equal(summary.byApi.oficial.remainingShipments, 1849);
+    assert.equal(summary.byApi.oficial.pendingBonusShipments, 829);
+  });
 });

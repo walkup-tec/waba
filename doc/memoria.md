@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-07 13:18 — Saldos: poll Asaas na tela de créditos
+- Sintoma pós-deploy: Cleison ainda 1.849 / Bonificados 0. Pedidos em disco sem escrita desde 05/09 19:26Z.
+- Causa: GET `/billing/disparos/credits` (tela Saldos) não chamava `reconcileOrderPayment`; só o QR fazia. Webhook antigo já tinha 200. Grant vencido podia “comer” os 829 no pending.
+- Fix: créditos/compras reconciliam pending do e-mail; pending ignora `bonusShipmentsApplied` de pedido inativo/expirado.
+- Marker `DEPLOY-2026-09-07-131800-credits-pix-reconcile`.
+- LOG: `doc/LOG-2026-09-07__131800__credits-pix-reconcile.md`
+
 ## 2026-09-07 12:48 — Webhook Asaas: PIX pago não era reconhecido
 - Sintoma: PIX confirmado no Asaas, pedido WABA `pending_payment`, saldo sem os 5.000; 829 ficavam a bonificar.
 - Causa: `handleAsaasWebhook` ignorava o evento se `externalReference` não começava com `waba:`, **antes** de achar o pedido pelo `payment.id`. Settlement podia carimbar bônus 0.

@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-07-124800-asaas-webhook-pix-paid";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-07-131800-credits-pix-reconcile";

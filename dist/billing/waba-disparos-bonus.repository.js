@@ -5,6 +5,7 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
+const waba_disparos_order_shipments_1 = require("./waba-disparos-order-shipments");
 const data_path_1 = require("../data-path");
 const FILE_NAME = "waba-disparos-bonus-balances.json";
 const normalizeEmail = (value) => value.trim().toLowerCase();
@@ -67,7 +68,8 @@ const sumAppliedBonusFromOrders = (email, apiKind, orderRepository) => {
         .filter((order) => order.product === "waba-disparos" &&
         order.status === "paid" &&
         normalizeEmail(order.ownerEmail) === normalized &&
-        (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order) === apiKind)
+        (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order) === apiKind &&
+        (0, waba_disparos_order_shipments_1.isOrderCreditsActive)(order))
         .reduce((sum, order) => sum + Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0))), 0);
 };
 class WabaDisparosBonusRepository {

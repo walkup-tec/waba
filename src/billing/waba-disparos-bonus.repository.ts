@@ -7,6 +7,7 @@ import {
 } from "../disparos/waba-dispatches-api-kind";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
+import { isOrderCreditsActive } from "./waba-disparos-order-shipments";
 import { resolveDataFile } from "../data-path";
 
 type BonusGrant = {
@@ -114,7 +115,8 @@ const sumAppliedBonusFromOrders = (
         order.product === "waba-disparos" &&
         order.status === "paid" &&
         normalizeEmail(order.ownerEmail) === normalized &&
-        resolveOrderApiKind(order) === apiKind,
+        resolveOrderApiKind(order) === apiKind &&
+        isOrderCreditsActive(order),
     )
     .reduce((sum, order) => sum + Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0))), 0);
 };

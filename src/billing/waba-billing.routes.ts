@@ -80,10 +80,18 @@ export const registerWabaBillingRoutes = (app: Express) => {
     });
   });
 
-  app.get("/billing/disparos/credits", (req, res) => {
+  app.get("/billing/disparos/credits", async (req, res) => {
     const auth = resolveRequestAuth(req);
     if (!auth.email) {
       return res.status(401).json({ error: "Faça login para consultar seus créditos." });
+    }
+    try {
+      await billingService.reconcilePendingDisparosOrdersForEmail(auth.email);
+    } catch (error) {
+      console.warn(
+        "[AsaasReconcile] créditos:",
+        error instanceof Error ? error.message : error,
+      );
     }
     return res.status(200).json({
       ...disparosCreditsService.getCreditsSummary(auth.email),
@@ -91,10 +99,18 @@ export const registerWabaBillingRoutes = (app: Express) => {
     });
   });
 
-  app.get("/billing/disparos/purchases", (req, res) => {
+  app.get("/billing/disparos/purchases", async (req, res) => {
     const auth = resolveRequestAuth(req);
     if (!auth.email) {
       return res.status(401).json({ error: "Faça login para consultar suas compras." });
+    }
+    try {
+      await billingService.reconcilePendingDisparosOrdersForEmail(auth.email);
+    } catch (error) {
+      console.warn(
+        "[AsaasReconcile] compras:",
+        error instanceof Error ? error.message : error,
+      );
     }
     const limitRaw = Number(req.query.limit ?? 20);
     const limit = Number.isFinite(limitRaw) ? limitRaw : 20;

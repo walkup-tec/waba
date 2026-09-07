@@ -623,6 +623,28 @@ export class WabaBillingService {
     return this.toPublicOrder(this.finalizePaidOrder(paidOrder));
   }
 
+  /** Mesmo reconcile do GET do pedido, para o e-mail que está na tela de Saldos. */
+  async reconcilePendingDisparosOrdersForEmail(email: string): Promise<void> {
+    const normalized = String(email ?? "").trim().toLowerCase();
+    if (!normalized) return;
+    const pending = this.orderRepository.list().filter(
+      (order) =>
+        order.product === "waba-disparos" &&
+        order.status === "pending_payment" &&
+        String(order.ownerEmail ?? "").trim().toLowerCase() === normalized,
+    );
+    for (const order of pending) {
+      try {
+        await this.reconcileOrderPayment(order.id);
+      } catch (error) {
+        console.warn(
+          `[AsaasReconcile] pedido ${order.id}:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+  }
+
   async handleAsaasWebhook(
     event: string,
     payment: { id?: string; externalReference?: string; status?: string },
