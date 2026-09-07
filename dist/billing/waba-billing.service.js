@@ -469,9 +469,6 @@ class WabaBillingService {
         const normalizedEvent = String(event ?? "").trim().toUpperCase();
         const paymentId = String(payment.id ?? "").trim();
         const paymentExternalReference = String(payment.externalReference ?? "").trim();
-        if (paymentExternalReference && !(0, asaas_identifiers_1.isWabaAsaasExternalReference)(paymentExternalReference)) {
-            return { ignored: true, reason: "externalReference não é WABA" };
-        }
         let order = null;
         if (paymentId) {
             order = this.orderRepository.getByAsaasPaymentId(paymentId);
@@ -485,6 +482,11 @@ class WabaBillingService {
             }
         }
         if (!order) {
+            if (paymentExternalReference &&
+                !paymentId &&
+                !(0, asaas_identifiers_1.isWabaAsaasExternalReference)(paymentExternalReference)) {
+                return { ignored: true, reason: "externalReference não é WABA" };
+            }
             return { ignored: true, reason: "pedido WABA não encontrado" };
         }
         if (normalizedEvent === "PAYMENT_OVERDUE") {
@@ -493,6 +495,7 @@ class WabaBillingService {
         }
         if (normalizedEvent === "PAYMENT_RECEIVED" ||
             normalizedEvent === "PAYMENT_CONFIRMED" ||
+            normalizedEvent === "PAYMENT_RECEIVED_IN_CASH" ||
             isPaidAsaasStatus(payment.status)) {
             const paid = this.orderRepository.update(order.id, {
                 status: "paid",

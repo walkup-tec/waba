@@ -631,10 +631,6 @@ export class WabaBillingService {
     const paymentId = String(payment.id ?? "").trim();
     const paymentExternalReference = String(payment.externalReference ?? "").trim();
 
-    if (paymentExternalReference && !isWabaAsaasExternalReference(paymentExternalReference)) {
-      return { ignored: true, reason: "externalReference não é WABA" };
-    }
-
     let order: WabaBillingOrder | null = null;
     if (paymentId) {
       order = this.orderRepository.getByAsaasPaymentId(paymentId);
@@ -647,6 +643,13 @@ export class WabaBillingService {
       }
     }
     if (!order) {
+      if (
+        paymentExternalReference &&
+        !paymentId &&
+        !isWabaAsaasExternalReference(paymentExternalReference)
+      ) {
+        return { ignored: true, reason: "externalReference não é WABA" };
+      }
       return { ignored: true, reason: "pedido WABA não encontrado" };
     }
 
@@ -658,6 +661,7 @@ export class WabaBillingService {
     if (
       normalizedEvent === "PAYMENT_RECEIVED" ||
       normalizedEvent === "PAYMENT_CONFIRMED" ||
+      normalizedEvent === "PAYMENT_RECEIVED_IN_CASH" ||
       isPaidAsaasStatus(payment.status)
     ) {
       const paid =

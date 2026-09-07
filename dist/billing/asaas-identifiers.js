@@ -63,15 +63,24 @@ function splitLineExternalReferencesMatch(stored, incoming) {
     const baseB = baseSplitLineExternalReference(b);
     return baseA === baseB;
 }
+const WABA_ORDER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 function parseWabaOrderIdFromExternalReference(externalReference) {
     const normalized = String(externalReference ?? "").trim();
-    if (!normalized.startsWith(exports.WABA_ASAAS_ORDER_PREFIX))
+    const prefix = exports.WABA_ASAAS_ORDER_PREFIX;
+    if (!normalized.toLowerCase().startsWith(prefix))
         return null;
-    const orderId = normalized.slice(exports.WABA_ASAAS_ORDER_PREFIX.length).trim();
-    return orderId || null;
+    const rest = normalized.slice(prefix.length).trim();
+    if (!rest || rest.toLowerCase().startsWith("sp:") || rest.toLowerCase().startsWith("split:")) {
+        return null;
+    }
+    const uuid = rest.match(WABA_ORDER_UUID_RE);
+    if (uuid)
+        return uuid[0];
+    return rest || null;
 }
 function isWabaAsaasExternalReference(externalReference) {
-    return parseWabaOrderIdFromExternalReference(externalReference) !== null;
+    const normalized = String(externalReference ?? "").trim();
+    return normalized.toLowerCase().startsWith(exports.WABA_ASAAS_ORDER_PREFIX);
 }
 function buildWabaPaymentDescription(apiKind) {
     const label = apiKind === "oficial" ? "API Oficial" : "API Alternativa";

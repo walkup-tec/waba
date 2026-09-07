@@ -67,15 +67,25 @@ export function splitLineExternalReferencesMatch(stored: string, incoming: strin
   return baseA === baseB;
 }
 
+const WABA_ORDER_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 export function parseWabaOrderIdFromExternalReference(externalReference: string): string | null {
   const normalized = String(externalReference ?? "").trim();
-  if (!normalized.startsWith(WABA_ASAAS_ORDER_PREFIX)) return null;
-  const orderId = normalized.slice(WABA_ASAAS_ORDER_PREFIX.length).trim();
-  return orderId || null;
+  const prefix = WABA_ASAAS_ORDER_PREFIX;
+  if (!normalized.toLowerCase().startsWith(prefix)) return null;
+  const rest = normalized.slice(prefix.length).trim();
+  if (!rest || rest.toLowerCase().startsWith("sp:") || rest.toLowerCase().startsWith("split:")) {
+    return null;
+  }
+  const uuid = rest.match(WABA_ORDER_UUID_RE);
+  if (uuid) return uuid[0];
+  return rest || null;
 }
 
 export function isWabaAsaasExternalReference(externalReference: string): boolean {
-  return parseWabaOrderIdFromExternalReference(externalReference) !== null;
+  const normalized = String(externalReference ?? "").trim();
+  return normalized.toLowerCase().startsWith(WABA_ASAAS_ORDER_PREFIX);
 }
 
 export function buildWabaPaymentDescription(apiKind: "oficial" | "alternativa"): string {

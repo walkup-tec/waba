@@ -322,9 +322,10 @@ export const registerWabaBillingRoutes = (app: Express) => {
 
     const body = req.body as {
       event?: string;
+      type?: string;
       payment?: { id?: string; externalReference?: string; status?: string };
     };
-    const event = String(body.event ?? "");
+    const event = String(body.event ?? body.type ?? "");
     const payment = body.payment ?? {};
 
     // Asaas só considera entrega OK com HTTP 200 — responder rápido e processar depois.

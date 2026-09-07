@@ -47,9 +47,10 @@ export class WabaDisparosBonusSettlementService {
     const grantTime = new Date(earliestGrantAt).getTime();
     const eligible = this.listPaidDisparosOrdersForEmail(email).filter((order) => {
       if (resolveOrderApiKind(order) !== apiKind) return false;
+      if (order.grantSource === "admin-bonus-envios") return false;
       const applied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
       if (applied > 0) return false;
-      const paidAt = String(order.paidAt ?? "").trim();
+      const paidAt = String(order.paidAt ?? order.createdAt ?? "").trim();
       if (!paidAt) return false;
       return new Date(paidAt).getTime() >= grantTime;
     });
@@ -80,7 +81,11 @@ export class WabaDisparosBonusSettlementService {
     }
 
     const hasSettlementMark = String(order.bonusSettlementAt ?? "").trim().length > 0;
-    if (hasSettlementMark && bonusToApply <= 0) return order;
+    if (bonusToApply <= 0) {
+      const pending = this.bonusService.getPendingBonusShipments(order.ownerEmail, apiKind);
+      if (pending > 0) return order;
+      if (hasSettlementMark) return order;
+    }
 
     return (
       this.orderRepository.update(order.id, {

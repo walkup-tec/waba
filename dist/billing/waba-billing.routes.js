@@ -301,7 +301,7 @@ const registerWabaBillingRoutes = (app) => {
             return res.status(401).json({ error: "Webhook Asaas não autorizado." });
         }
         const body = req.body;
-        const event = String(body.event ?? "");
+        const event = String(body.event ?? body.type ?? "");
         const payment = body.payment ?? {};
         // Asaas só considera entrega OK com HTTP 200 — responder rápido e processar depois.
         res.status(200).json({ ok: true, accepted: true });

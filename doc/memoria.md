@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-07 12:48 — Webhook Asaas: PIX pago não era reconhecido
+- Sintoma: PIX confirmado no Asaas, pedido WABA `pending_payment`, saldo sem os 5.000; 829 ficavam a bonificar.
+- Causa: `handleAsaasWebhook` ignorava o evento se `externalReference` não começava com `waba:`, **antes** de achar o pedido pelo `payment.id`. Settlement podia carimbar bônus 0.
+- Fix no fluxo existente (sem reconciliação nova): lookup por `asaasPaymentId` primeiro; settlement não carimba 0 com bônus pendente.
+- Marker `DEPLOY-2026-09-07-124800-asaas-webhook-pix-paid`.
+- LOG: `doc/LOG-2026-09-07__124800__asaas-webhook-pix-paid.md`
+
 ## 2026-09-04 13:54 — Clipboard de evidências no Lab Meta
 - Erros do Laboratório abrem painel/modal com textarea + Copiar evidências (sanitizado).
 - Destino: modal AI, modal delete ou standalone `#meta-tpl-lab-debug-overlay`.
