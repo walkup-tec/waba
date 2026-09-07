@@ -3877,6 +3877,24 @@
           color: #e2e8f0;
         }
         .meta-tpl-broadcast-number-option input { margin-top: 3px; }
+        .meta-tpl-lab-portfolios {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          max-height: 200px;
+          overflow: auto;
+          padding: 10px 12px;
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.35);
+        }
+        .meta-tpl-lab-portfolios .meta-tpl-broadcast-number-option {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          font-size: 13px;
+          color: #e2e8f0;
+        }
         .meta-tpl-broadcast-split {
           margin-top: 8px;
           padding: 10px 12px;
@@ -22168,10 +22186,14 @@
                 <span class="muted">Revisão humana antes da Meta</span>
               </div>
               <div class="aquecedor-field">
-                <label for="meta-tpl-lab-portfolio">1. Portfólio</label>
-                <select id="meta-tpl-lab-portfolio">
-                  <option value="">Selecione um portfólio</option>
-                </select>
+                <label id="meta-tpl-lab-portfolio-label">1. Portfólio</label>
+                <div
+                  id="meta-tpl-lab-portfolios"
+                  class="meta-tpl-lab-portfolios"
+                  role="group"
+                  aria-labelledby="meta-tpl-lab-portfolio-label"
+                ></div>
+                <span class="muted">A Meta cadastra o template em cada WABA. Selecione um ou mais portfólios; o mesmo nome, idioma, categoria e componentes vão para cada um.</span>
               </div>
               <div class="meta-tpl-ai-box">
                 <div class="meta-tpl-ai-head">
@@ -38128,22 +38150,32 @@
       }
 
       function metaTplLabFillPortfolioSelect() {
-        const select = document.getElementById("meta-tpl-lab-portfolio");
-        if (!select) return;
-        const previous = String(select.value || "").trim();
+        const root = document.getElementById("meta-tpl-lab-portfolios");
+        if (!root) return;
+        const previous = new Set(metaTplLabSelectedConnectionIds());
         const options = metaTplLabPortfolioOptions();
-        select.innerHTML = '<option value="">Selecione um portfólio</option>';
-        options.forEach(function (item) {
-          const option = document.createElement("option");
-          option.value = item.connectionId;
-          option.textContent = item.label;
-          select.appendChild(option);
-        });
-        if (options.some((item) => item.connectionId === previous)) {
-          select.value = previous;
-        } else if (options.length === 1) {
-          select.value = options[0].connectionId;
+        if (!options.length) {
+          root.innerHTML = '<span class="muted">Nenhum portfólio conectado.</span>';
+          return;
         }
+        root.innerHTML = options
+          .map(function (item) {
+            const id = String(item.connectionId || "").trim();
+            const checked =
+              previous.has(id) || (previous.size === 0 && options.length === 1) ? " checked" : "";
+            return (
+              '<label class="meta-tpl-broadcast-number-option">' +
+              '<input type="checkbox" data-connection-id="' +
+              metaTpEsc(id) +
+              '"' +
+              checked +
+              " />" +
+              "<span>" +
+              metaTpEsc(item.label) +
+              "</span></label>"
+            );
+          })
+          .join("");
       }
 
       function metaTplLabFillPortfolioFilter() {
@@ -38179,8 +38211,31 @@
         sessionStorage.setItem(META_TPL_LAB_HIDDEN_KEY, JSON.stringify(Array.from(next)));
       }
 
+      function metaTplLabSelectedConnectionIds() {
+        const root = document.getElementById("meta-tpl-lab-portfolios");
+        if (!root) return [];
+        return Array.prototype.slice
+          .call(root.querySelectorAll('input[type="checkbox"][data-connection-id]:checked'))
+          .map(function (el) {
+            return String(el.getAttribute("data-connection-id") || "").trim();
+          })
+          .filter(Boolean);
+      }
+
       function metaTplLabSelectedConnectionId() {
-        return String((document.getElementById("meta-tpl-lab-portfolio") || {}).value || "").trim();
+        return metaTplLabSelectedConnectionIds()[0] || "";
+      }
+
+      function metaTplLabSelectedPortfolioLabels() {
+        const root = document.getElementById("meta-tpl-lab-portfolios");
+        if (!root) return [];
+        return Array.prototype.slice
+          .call(root.querySelectorAll('input[type="checkbox"][data-connection-id]:checked'))
+          .map(function (el) {
+            const label = el.closest("label");
+            return String((label && label.textContent) || "").trim();
+          })
+          .filter(Boolean);
       }
 
       function metaTplAiSelectedButtonText() {
@@ -38544,33 +38599,55 @@
 
       function metaTplAiSubmitResultHtml(payload) {
         const rows = Array.isArray(payload && payload.results) ? payload.results : [];
-        const list = rows
-          .map(function (row) {
-            const name = escapeAdminHtml(String((row && row.name) || "template"));
-            const status = String((row && row.status) || "").toUpperCase();
-            if (row && row.ok && (row.alreadySubmitted || status === "ALREADY_SUBMITTED")) {
-              return "<li>✓ " + name + " — já estava neste portfólio (não reenviado agora)</li>";
-            }
-            if (row && row.ok) {
-              return "<li>✓ " + name + " — aceito pela Meta (" + escapeAdminHtml(status || "PENDING") + ")</li>";
-            }
-            return "<li>✕ " + name + ": " + escapeAdminHtml(String((row && row.error) || "erro")) + "</li>";
+        const groups = [];
+        rows.forEach(function (row) {
+          const key = String((row && (row.connectionId || row.portfolioName)) || "");
+          const last = groups[groups.length - 1];
+          if (!last || last.key !== key) {
+            groups.push({
+              key: key,
+              portfolioName: String((row && row.portfolioName) || "").trim(),
+              wabaId: String((row && row.wabaId) || "").trim(),
+              rows: [row],
+            });
+            return;
+          }
+          last.rows.push(row);
+        });
+        if (!groups.length) {
+          groups.push({
+            key: "",
+            portfolioName: String((payload && payload.portfolioName) || "").trim(),
+            wabaId: String((payload && payload.wabaId) || "").trim(),
+            rows: rows,
+          });
+        }
+        return groups
+          .map(function (group) {
+            const list = group.rows
+              .map(function (row) {
+                const name = escapeAdminHtml(String((row && row.name) || "template"));
+                const status = String((row && row.status) || "").toUpperCase();
+                if (row && row.ok && (row.alreadySubmitted || status === "ALREADY_SUBMITTED")) {
+                  return "<li>✓ " + name + " — já estava neste WABA (não reenviado agora)</li>";
+                }
+                if (row && row.ok) {
+                  return "<li>✓ " + name + " — aceito pela Meta (" + escapeAdminHtml(status || "PENDING") + ")</li>";
+                }
+                return "<li>✕ " + name + ": " + escapeAdminHtml(String((row && row.error) || "erro")) + "</li>";
+              })
+              .join("");
+            const portfolio = escapeAdminHtml(group.portfolioName);
+            const wabaId = escapeAdminHtml(group.wabaId);
+            const where = portfolio
+              ? "<p class=\"meta-tpl-ai-sent-wait\">Portfólio: " +
+                portfolio +
+                (wabaId ? " · WABA " + wabaId : "") +
+                "</p>"
+              : "";
+            return '<ul class="meta-tpl-ai-sent-list">' + list + "</ul>" + where;
           })
           .join("");
-        const portfolio = escapeAdminHtml(String((payload && payload.portfolioName) || "").trim());
-        const wabaId = escapeAdminHtml(String((payload && payload.wabaId) || "").trim());
-        const where = portfolio
-          ? "<p class=\"meta-tpl-ai-sent-wait\">Portfólio: " +
-            portfolio +
-            (wabaId ? " · WABA " + wabaId : "") +
-            "</p>"
-          : "";
-        return (
-          '<ul class="meta-tpl-ai-sent-list">' +
-          list +
-          "</ul>" +
-          where
-        );
       }
 
       function metaTplAiValidateButtonUrl(raw) {
@@ -38754,7 +38831,7 @@
         const status = document.getElementById("meta-tpl-ai-status");
         const button = document.getElementById("meta-tpl-ai-generate");
         if (!connectionId) {
-          if (status) status.textContent = "Selecione primeiro o portfólio.";
+          if (status) status.textContent = "Selecione ao menos um portfólio.";
           return;
         }
         if (!baseText) {
@@ -38789,7 +38866,8 @@
       }
 
       async function metaTplSubmitAllAiOptions() {
-        const connectionId = metaTplLabSelectedConnectionId();
+        const connectionIds = metaTplLabSelectedConnectionIds();
+        const connectionId = connectionIds[0] || "";
         const analysisId = String(metaTplLabAiAnalysisId || "").trim();
         const button = document.getElementById("meta-tpl-ai-submit-all");
         const shell = metaTplAiReadShell();
@@ -38797,12 +38875,12 @@
         const mediaInput = document.getElementById("meta-tpl-ai-media-file");
         const hasMediaFile = Boolean(mediaInput && mediaInput.files && mediaInput.files[0]);
         if (!connectionId) {
-          metaTplAiShowResult("error", "Não foi possível enviar", "Selecione primeiro o portfólio.");
+          metaTplAiShowResult("error", "Não foi possível enviar", "Selecione ao menos um portfólio.");
           metaTplAiSetSubmitStatus("");
           return;
         }
         if (!analysisId || !Array.isArray(metaTplLabAiResult?.options) || metaTplLabAiResult.options.length !== 3) {
-          metaTplAiShowResult("error", "Não foi possível enviar", "Gere primeiro as três opções Utility para este portfólio.");
+          metaTplAiShowResult("error", "Não foi possível enviar", "Gere primeiro as três opções Utility.");
           metaTplAiSetSubmitStatus("");
           return;
         }
@@ -38844,8 +38922,8 @@
         if (metaTplAiProgressSteps[0]) metaTplAiProgressSteps[0].state = "current";
         metaTplAiShowProcessing(
           needsMedia
-            ? "Enviando o arquivo de mídia e, em seguida, cada uma das três opções."
-            : "Cadastrando cada uma das três opções no portfólio selecionado.",
+            ? "Enviando o arquivo de mídia em cada WABA e, em seguida, as três opções."
+            : "Cadastrando as três opções em cada WABA selecionado (POST /message_templates).",
         );
         await new Promise(function (resolve) {
           window.requestAnimationFrame(function () {
@@ -38878,13 +38956,20 @@
         }
         try {
           if (needsMedia) metaTplAiSetStepState("media", "current");
-          const headerHandle = await metaTplAiUploadHeaderIfNeeded(connectionId, shell.mediaFormat);
+          const headerHandles = {};
+          let headerHandle = "";
+          for (let i = 0; i < connectionIds.length; i += 1) {
+            const uploaded = await metaTplAiUploadHeaderIfNeeded(connectionIds[i], shell.mediaFormat);
+            if (uploaded) headerHandles[connectionIds[i]] = uploaded;
+            if (uploaded && !headerHandle) headerHandle = uploaded;
+          }
           if (needsMedia) await markStepDone("media");
           metaTplAiStartBusyCycle();
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/submit-all", {
             method: "POST",
             body: JSON.stringify({
               connectionId,
+              connectionIds,
               analysisId,
               modelName: shell.modelName,
               variableType: shell.variableType,
@@ -38892,6 +38977,7 @@
               buttonText: shell.buttonText,
               buttonUrl: shell.buttonUrl,
               headerHandle,
+              headerHandles,
               optionBodies,
             }),
           });
@@ -38925,7 +39011,7 @@
             metaTplAiShowResult(
               "ok",
               "Nada novo enviado à Meta",
-              "Os três nomes já existiam neste portfólio. Nada foi reenviado agora.",
+              "Os três nomes já existiam nestes portfólios. Nada foi reenviado agora.",
               resultHtml,
             );
           } else {
@@ -38957,17 +39043,22 @@
         metaTpSession.portfolios = [
           {
             id: "demo-business",
-            name: "Drax Sistemas",
+            name: "Drax Sistemas 2000",
             wabaId: "demo-waba",
             connectionId: "demo-connection",
+            numbers: [],
+          },
+          {
+            id: "demo-business-c",
+            name: "Quantum Smart Labs",
+            wabaId: "demo-waba-c",
+            connectionId: "demo-connection-c",
             numbers: [],
           },
         ];
         document.body.classList.add("waba-laboratorio-visible");
         setActiveTab("whatsapp-templates", { skipPolicyCheck: true });
         metaTplLabFillPortfolioSelect();
-        const select = document.getElementById("meta-tpl-lab-portfolio");
-        if (select) select.value = "demo-connection";
         const modelName = document.getElementById("meta-tpl-ai-model-name");
         if (modelName) modelName.value = "retorno_lead";
         const buttonUrl = document.getElementById("meta-tpl-ai-button-url");
@@ -39127,8 +39218,6 @@
         metaTplLabCache = metaDisparoCloudPreviewTemplates();
         metaTplLabFillPortfolioSelect();
         metaTplLabFillPortfolioFilter();
-        const listPortfolio = document.getElementById("meta-tpl-lab-portfolio");
-        if (listPortfolio) listPortfolio.value = "demo-connection";
         const filter = document.getElementById("meta-tpl-lab-portfolio-filter");
         if (filter) filter.value = "demo-connection";
         const statusFilter = document.getElementById("meta-tpl-lab-status-filter");
@@ -39262,7 +39351,7 @@
       }
 
       function metaTplLabCollectUiContext() {
-        const portfolio = document.getElementById("meta-tpl-lab-portfolio");
+        const portfolio = document.getElementById("meta-tpl-lab-portfolios");
         const filter = document.getElementById("meta-tpl-lab-portfolio-filter");
         const mediaFormat = document.getElementById("meta-tpl-ai-media-format") || document.getElementById("meta-tpl-ai-media-format");
         const mediaFile = document.getElementById("meta-tpl-ai-media-file") || document.getElementById("meta-tpl-ai-media-file");
@@ -39279,9 +39368,11 @@
           path: String(location.pathname || ""),
           deployMarker: deployMarker,
           connectionId: typeof metaTplLabSelectedConnectionId === "function" ? metaTplLabSelectedConnectionId() : "",
-          portfolioLabel: portfolio && portfolio.selectedOptions && portfolio.selectedOptions[0]
-            ? String(portfolio.selectedOptions[0].textContent || "").trim()
-            : "",
+          connectionIds: typeof metaTplLabSelectedConnectionIds === "function" ? metaTplLabSelectedConnectionIds() : [],
+          portfolioLabel:
+            typeof metaTplLabSelectedPortfolioLabels === "function"
+              ? metaTplLabSelectedPortfolioLabels().join(" · ")
+              : "",
           portfolioFilter: filter ? String(filter.value || "").trim() : "",
           modelName: modelName ? String(modelName.value || "").trim() : "",
           mediaFormat: mediaFormat ? String(mediaFormat.value || "").trim() : "",
@@ -40974,15 +41065,6 @@
       });
       document.getElementById("meta-tpl-broadcast-start")?.addEventListener("click", function () {
         metaTplBroadcastStart();
-      });
-      document.getElementById("meta-tpl-lab-portfolio")?.addEventListener("change", function () {
-        metaTplLabAiResult = null;
-        metaTplLabAiAnalysisId = "";
-        const result = document.getElementById("meta-tpl-ai-result");
-        if (result) {
-          result.hidden = false;
-          result.innerHTML = '<div class="meta-tpl-ai-placeholder">As três opções aparecerão aqui para sua conferência antes de qualquer envio à Meta.</div>';
-        }
       });
       document.getElementById("meta-tpl-lab-status-filter")?.addEventListener("change", function () {
         metaTplLabRenderTable();

@@ -71,7 +71,6 @@ export class MetaWhatsappTemplateAiRepository {
       .update({ result_json: result })
       .eq("id", analysisId)
       .eq("tenant_id", tenantId)
-      .eq("connection_id", connectionId)
       .select("id")
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -93,7 +92,6 @@ export class MetaWhatsappTemplateAiRepository {
       .select("id, language, eligible_for_utility, result_json")
       .eq("id", analysisId)
       .eq("tenant_id", tenantId)
-      .eq("connection_id", connectionId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) return null;
@@ -122,7 +120,6 @@ export class MetaWhatsappTemplateAiRepository {
       .select("id, result_json")
       .eq("id", input.analysisId)
       .eq("tenant_id", input.tenantId)
-      .eq("connection_id", input.connectionId)
       .maybeSingle();
     if (analysisError) throw new Error(analysisError.message);
     if (!analysis) throw new Error("Análise não encontrada para este portfólio.");

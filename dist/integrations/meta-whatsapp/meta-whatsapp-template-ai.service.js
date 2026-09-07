@@ -170,6 +170,25 @@ class MetaWhatsappTemplateAiService {
         }
         return row;
     }
+    async resolveSubmitPortfolios(tenantId, connectionIds) {
+        const requested = [...new Set(connectionIds.map((id) => String(id || "").trim()).filter(Boolean))];
+        if (!requested.length)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        const out = [];
+        const seenWaba = new Set();
+        for (const id of requested) {
+            const row = await this.requirePortfolio(tenantId, id);
+            const wabaId = String(row.wabaId || "").trim();
+            if (wabaId && seenWaba.has(wabaId))
+                continue;
+            if (wabaId)
+                seenWaba.add(wabaId);
+            out.push(row);
+        }
+        if (!out.length)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
+        return out;
+    }
     async generateFromAuth(auth, input) {
         if (!isEnabled())
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_ai_unavailable");
@@ -328,13 +347,12 @@ class MetaWhatsappTemplateAiService {
     }
     async submitAllFromAuth(auth, input, publicBaseHints) {
         const tenant = requireTenant(auth);
-        const connectionId = String(input?.connectionId || input?.connection_id || "").trim();
+        const connectionIds = (0, meta_whatsapp_template_ai_shell_1.parseTemplateAiConnectionIds)(input);
         const analysisId = String(input?.analysisId || input?.analysis_id || "").trim();
-        if (!connectionId || !analysisId)
+        if (!connectionIds.length || !analysisId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
-        const shell = (0, meta_whatsapp_template_ai_shell_1.parseMetaTemplateAiShell)(input);
-        const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
-        const analysis = await this.analyses.findForSubmission(tenant.tenantId, connectionId, analysisId);
+        const portfolios = await this.resolveSubmitPortfolios(tenant.tenantId, connectionIds);
+        let analysis = await this.analyses.findForSubmission(tenant.tenantId, portfolios[0].id, analysisId);
         if (!analysis ||
             !analysis.eligibleForUtility ||
             analysis.result.recommendedCategory !== "UTILITY" ||
@@ -347,41 +365,31 @@ class MetaWhatsappTemplateAiService {
         if (optionEdits.length) {
             analysisResult = this.applyOptionBodyEdits(analysis.result, optionEdits);
             try {
-                await this.analyses.updateResult(tenant.tenantId, connectionId, analysisId, analysisResult);
+                await this.analyses.updateResult(tenant.tenantId, portfolios[0].id, analysisId, analysisResult);
             }
             catch {
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("persist_failed");
             }
         }
+        const headerHandles = (0, meta_whatsapp_template_ai_shell_1.parseTemplateAiHeaderHandles)(input);
+        const fallbackHandle = String(input?.headerHandle || input?.header_handle || "").trim();
+        const firstHandle = headerHandles[portfolios[0].id] || fallbackHandle;
+        const shell = (0, meta_whatsapp_template_ai_shell_1.parseMetaTemplateAiShell)({
+            ...input,
+            headerHandle: firstHandle,
+        });
         const results = [];
-        const alreadySubmitted = await this.analyses.listSubmittedNames(tenant.tenantId, connectionId, analysisId);
-        const pendingIndexes = [];
-        for (let index = 0; index < analysisResult.options.length; index += 1) {
-            const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
-            if (!alreadySubmitted.has(name)) {
-                pendingIndexes.push(index);
-                continue;
+        const anyPending = [];
+        for (const connection of portfolios) {
+            const alreadySubmitted = await this.analyses.listSubmittedNames(tenant.tenantId, connection.id, analysisId);
+            for (let index = 0; index < analysisResult.options.length; index += 1) {
+                const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
+                if (!alreadySubmitted.has(name))
+                    anyPending.push(index);
             }
-            const localFinder = this.templates;
-            const local = typeof localFinder.findByNameForConnection === "function"
-                ? await localFinder.findByNameForConnection(tenant.tenantId, connectionId, name, analysis.language)
-                : null;
-            if (local) {
-                results.push({
-                    index,
-                    name,
-                    ok: true,
-                    alreadySubmitted: true,
-                    status: local.status || "ALREADY_SUBMITTED",
-                    templateId: local.id,
-                    error: null,
-                });
-                continue;
-            }
-            pendingIndexes.push(index);
         }
         let metaButtonUrl = null;
-        if (pendingIndexes.length) {
+        if (anyPending.length) {
             metaButtonUrl = await this.createButtonShortUrl({
                 destinationUrl: shell.buttonUrl,
                 tenantId: tenant.tenantId,
@@ -389,59 +397,112 @@ class MetaWhatsappTemplateAiService {
             });
             (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
                 tenantId: tenant.tenantId,
-                connectionId,
+                connectionId: portfolios[0].id,
                 buttonShortened: true,
                 destinationHost: safeHost(shell.buttonUrl),
                 shortHost: safeHost(metaButtonUrl),
             });
         }
-        const graphShell = metaButtonUrl ? { ...shell, buttonUrl: metaButtonUrl } : shell;
-        for (const index of pendingIndexes) {
-            const option = analysisResult.options[index];
-            const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
-            try {
-                const template = await this.templates.createFromAuth(auth, {
-                    connectionId,
-                    aiAnalysisId: analysisId,
-                    aiOptionIndex: index,
-                    name,
-                    language: analysis.language,
-                    category: "UTILITY",
-                    components: (0, meta_whatsapp_template_ai_shell_1.componentsFromAiOptionAndShell)(option, graphShell),
-                });
-                results.push({
-                    index,
-                    name,
-                    ok: true,
-                    alreadySubmitted: false,
-                    status: template.status,
-                    templateId: template.id,
-                    error: null,
-                });
-            }
-            catch (error) {
-                results.push({
-                    index,
-                    name,
-                    ok: false,
-                    alreadySubmitted: false,
-                    status: null,
-                    templateId: null,
-                    error: error instanceof meta_whatsapp_errors_1.MetaWhatsappError
-                        ? error.message
-                        : "Não foi possível cadastrar esta opção.",
-                });
+        for (const connection of portfolios) {
+            const portfolioName = String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio";
+            const wabaId = String(connection.wabaId || "");
+            const handle = headerHandles[connection.id] || firstHandle;
+            const graphShell = {
+                ...shell,
+                buttonUrl: metaButtonUrl || shell.buttonUrl,
+                headerHandle: handle || shell.headerHandle,
+            };
+            const alreadySubmitted = await this.analyses.listSubmittedNames(tenant.tenantId, connection.id, analysisId);
+            for (let index = 0; index < analysisResult.options.length; index += 1) {
+                const option = analysisResult.options[index];
+                const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
+                if (alreadySubmitted.has(name)) {
+                    const localFinder = this.templates;
+                    const local = typeof localFinder.findByNameForConnection === "function"
+                        ? await localFinder.findByNameForConnection(tenant.tenantId, connection.id, name, analysis.language)
+                        : null;
+                    if (local) {
+                        results.push({
+                            index,
+                            name,
+                            ok: true,
+                            alreadySubmitted: true,
+                            status: local.status || "ALREADY_SUBMITTED",
+                            templateId: local.id,
+                            error: null,
+                            connectionId: connection.id,
+                            portfolioName,
+                            wabaId,
+                        });
+                        continue;
+                    }
+                }
+                try {
+                    const template = await this.templates.createFromAuth(auth, {
+                        connectionId: connection.id,
+                        aiAnalysisId: analysisId,
+                        aiOptionIndex: index,
+                        name,
+                        language: analysis.language,
+                        category: "UTILITY",
+                        components: (0, meta_whatsapp_template_ai_shell_1.componentsFromAiOptionAndShell)(option, graphShell),
+                    });
+                    results.push({
+                        index,
+                        name,
+                        ok: true,
+                        alreadySubmitted: false,
+                        status: template.status,
+                        templateId: template.id,
+                        error: null,
+                        connectionId: connection.id,
+                        portfolioName,
+                        wabaId,
+                    });
+                }
+                catch (error) {
+                    results.push({
+                        index,
+                        name,
+                        ok: false,
+                        alreadySubmitted: false,
+                        status: null,
+                        templateId: null,
+                        error: error instanceof meta_whatsapp_errors_1.MetaWhatsappError
+                            ? error.message
+                            : "Não foi possível cadastrar esta opção.",
+                        connectionId: connection.id,
+                        portfolioName,
+                        wabaId,
+                    });
+                }
             }
         }
-        results.sort((a, b) => a.index - b.index);
+        results.sort((a, b) => {
+            const byPortfolio = a.connectionId.localeCompare(b.connectionId);
+            if (byPortfolio)
+                return byPortfolio;
+            return a.index - b.index;
+        });
         const submitted = results.filter((item) => item.ok && !item.alreadySubmitted).length;
         const failed = results.filter((item) => !item.ok).length;
+        const portfolioSummaries = portfolios.map((connection) => {
+            const rows = results.filter((item) => item.connectionId === connection.id);
+            return {
+                connectionId: connection.id,
+                portfolioName: String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio",
+                wabaId: String(connection.wabaId || ""),
+                submitted: rows.filter((item) => item.ok && !item.alreadySubmitted).length,
+                failed: rows.filter((item) => !item.ok).length,
+            };
+        });
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
             tenantId: tenant.tenantId,
-            connectionId,
+            connectionId: portfolios[0].id,
             batchSubmit: true,
             submitted,
             failed,
+            portfolios: portfolios.length,
             skippedLive: results.filter((item) => item.alreadySubmitted).length,
         });
         return {
@@ -449,8 +510,9 @@ class MetaWhatsappTemplateAiService {
             submitted,
             failed,
             results,
-            portfolioName: String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio",
-            wabaId: String(connection.wabaId || ""),
+            portfolioName: portfolioSummaries.map((row) => row.portfolioName).join(" · "),
+            wabaId: portfolioSummaries.map((row) => row.wabaId).filter(Boolean).join(" · "),
+            portfolios: portfolioSummaries,
         };
     }
     async uploadHeaderMediaFromAuth(auth, input) {

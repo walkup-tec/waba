@@ -22,6 +22,7 @@ import {
   META_TEMPLATE_AI_FIXED_HEADER_TEXT,
   componentsFromAiOptionAndShell,
   parseMetaTemplateAiShell,
+  parseTemplateAiConnectionIds,
   templateNameForOption,
 } from "./meta-whatsapp-template-ai-shell";
 import { shapeMetaUtilityOptionBody } from "./meta-whatsapp-template-ai-utility-shape";
@@ -343,6 +344,145 @@ describe("Assistente IA de templates Utility", () => {
       ?.find((item) => item.type === "HEADER");
     assert.equal(header?.format, "TEXT");
     assert.equal(header?.text, META_TEMPLATE_AI_FIXED_HEADER_TEXT);
+  });
+
+  it("normaliza connectionIds e mantém o connectionId legado", () => {
+    assert.deepEqual(parseTemplateAiConnectionIds({ connectionId: "conn-a" }), ["conn-a"]);
+    assert.deepEqual(parseTemplateAiConnectionIds({ connectionIds: ["b", " a ", "b"] }), ["b", "a"]);
+  });
+
+  it("envia o mesmo lote Graph para cada WABA selecionado", async () => {
+    const email = "ai-multi-waba@example.com";
+    const rowA = connection(email);
+    const rowB = connection(email, { id: "conn-b", wabaId: "waba-b", verifiedName: "Quantum" });
+    const calls: Array<Record<string, unknown>> = [];
+    let savedResult: MetaTemplateAiModelOutput | null = null;
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          if (tenantId !== rowA.tenantId) return null;
+          if (id === rowA.id) return rowA;
+          if (id === rowB.id) return rowB;
+          return null;
+        },
+      } as any,
+      {
+        async create(input: Record<string, unknown>) {
+          savedResult = input.result as MetaTemplateAiModelOutput;
+          return "analysis-1";
+        },
+        async findForSubmission(tenantId: string, _connectionId: string, analysisId: string) {
+          if (tenantId !== rowA.tenantId || analysisId !== "analysis-1" || !savedResult) return null;
+          return {
+            id: analysisId,
+            language: "pt_BR",
+            eligibleForUtility: savedResult.eligibleForUtility,
+            result: savedResult,
+          };
+        },
+        async updateResult() {},
+        async listSubmittedNames() {
+          return new Set<string>();
+        },
+      } as any,
+      async () => ({
+        value: utilityOutput(),
+        model: "gpt-test",
+        responseId: "resp-1",
+        latencyMs: 12,
+      }),
+      {
+        async findByNameForConnection() {
+          return null;
+        },
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(input);
+          return { id: `local-${String(input.connectionId)}-${String(input.name)}`, status: "PENDING" };
+        },
+      } as any,
+      undefined,
+      undefined,
+      async () => "https://waba.draxsistemas.com.br/s/tpltest1",
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      submitShell({ connectionIds: ["conn-utility", "conn-b"] }),
+    );
+    assert.equal(calls.length, 6);
+    assert.equal(result.total, 6);
+    assert.equal(result.submitted, 6);
+    assert.equal(result.failed, 0);
+    assert.equal(result.portfolios.length, 2);
+    assert.deepEqual(
+      calls.map((row) => String(row.connectionId)),
+      ["conn-utility", "conn-utility", "conn-utility", "conn-b", "conn-b", "conn-b"],
+    );
+  });
+
+  it("não posta duas vezes no mesmo WABA", async () => {
+    const email = "ai-same-waba@example.com";
+    const rowA = connection(email);
+    const rowClone = connection(email, { id: "conn-clone", wabaId: "waba-1", verifiedName: "Clone" });
+    const calls: string[] = [];
+    let savedResult: MetaTemplateAiModelOutput | null = null;
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          if (tenantId !== rowA.tenantId) return null;
+          if (id === rowA.id) return rowA;
+          if (id === rowClone.id) return rowClone;
+          return null;
+        },
+      } as any,
+      {
+        async create(input: Record<string, unknown>) {
+          savedResult = input.result as MetaTemplateAiModelOutput;
+          return "analysis-1";
+        },
+        async findForSubmission(tenantId: string, _connectionId: string, analysisId: string) {
+          if (tenantId !== rowA.tenantId || analysisId !== "analysis-1" || !savedResult) return null;
+          return {
+            id: analysisId,
+            language: "pt_BR",
+            eligibleForUtility: savedResult.eligibleForUtility,
+            result: savedResult,
+          };
+        },
+        async listSubmittedNames() {
+          return new Set<string>();
+        },
+      } as any,
+      async () => ({
+        value: utilityOutput(),
+        model: "gpt-test",
+        responseId: "resp-1",
+        latencyMs: 12,
+      }),
+      {
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(String(input.connectionId));
+          return { id: `local-${String(input.name)}`, status: "PENDING" };
+        },
+      } as any,
+      undefined,
+      undefined,
+      async () => "https://waba.draxsistemas.com.br/s/tpltest1",
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      submitShell({ connectionIds: ["conn-utility", "conn-clone"] }),
+    );
+    assert.equal(calls.length, 3);
+    assert.equal(result.portfolios.length, 1);
+    assert.equal(result.portfolios[0]?.wabaId, "waba-1");
   });
 
   it("reenvia à Graph se a análise já tinha o nome mas o template local foi apagado", async () => {

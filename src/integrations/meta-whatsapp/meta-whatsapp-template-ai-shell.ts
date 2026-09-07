@@ -82,6 +82,38 @@ function requireDestinationUrl(raw: string): string {
   return url;
 }
 
+export function parseTemplateAiConnectionIds(input: Record<string, unknown> | undefined): string[] {
+  const body = asRecord(input);
+  const raw = body.connectionIds ?? body.connection_ids ?? body.connectionId ?? body.connection_id;
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(/[\s,;]+/)
+      : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of list) {
+    const id = String(item || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+export function parseTemplateAiHeaderHandles(input: Record<string, unknown> | undefined): Record<string, string> {
+  const body = asRecord(input);
+  const raw = body.headerHandles ?? body.header_handles;
+  const out: Record<string, string> = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const connectionId = String(key || "").trim();
+    const handle = String(value || "").trim();
+    if (connectionId && handle) out[connectionId] = handle;
+  }
+  return out;
+}
+
 export function parseMetaTemplateAiShell(input: Record<string, unknown> | undefined): MetaTemplateAiShell {
   const body = asRecord(input);
   const modelName = sanitizeMetaTemplateName(String(body.modelName || body.model_name || ""));

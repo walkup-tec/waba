@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT = exports.META_TEMPLATE_AI_OPTION_BUTTONS = exports.META_TEMPLATE_AI_BUTTON_LABELS = void 0;
 exports.sanitizeMetaTemplateName = sanitizeMetaTemplateName;
 exports.templateNameForOption = templateNameForOption;
+exports.parseTemplateAiConnectionIds = parseTemplateAiConnectionIds;
+exports.parseTemplateAiHeaderHandles = parseTemplateAiHeaderHandles;
 exports.parseMetaTemplateAiShell = parseMetaTemplateAiShell;
 exports.stripTemplatePlaceholders = stripTemplatePlaceholders;
 exports.componentsFromAiOptionAndShell = componentsFromAiOptionAndShell;
@@ -68,6 +70,39 @@ function requireDestinationUrl(raw) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_url_https");
     }
     return url;
+}
+function parseTemplateAiConnectionIds(input) {
+    const body = asRecord(input);
+    const raw = body.connectionIds ?? body.connection_ids ?? body.connectionId ?? body.connection_id;
+    const list = Array.isArray(raw)
+        ? raw
+        : typeof raw === "string"
+            ? raw.split(/[\s,;]+/)
+            : [];
+    const seen = new Set();
+    const out = [];
+    for (const item of list) {
+        const id = String(item || "").trim();
+        if (!id || seen.has(id))
+            continue;
+        seen.add(id);
+        out.push(id);
+    }
+    return out;
+}
+function parseTemplateAiHeaderHandles(input) {
+    const body = asRecord(input);
+    const raw = body.headerHandles ?? body.header_handles;
+    const out = {};
+    if (!raw || typeof raw !== "object" || Array.isArray(raw))
+        return out;
+    for (const [key, value] of Object.entries(raw)) {
+        const connectionId = String(key || "").trim();
+        const handle = String(value || "").trim();
+        if (connectionId && handle)
+            out[connectionId] = handle;
+    }
+    return out;
 }
 function parseMetaTemplateAiShell(input) {
     const body = asRecord(input);
