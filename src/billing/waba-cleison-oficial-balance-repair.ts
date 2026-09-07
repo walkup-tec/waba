@@ -3,7 +3,7 @@ import type { WabaBillingOrder } from "./waba-billing-order.repository";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { WabaDisparosBonusRepository } from "./waba-disparos-bonus.repository";
 import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
-import type { DisparosApiCreditsBucket } from "./waba-disparos-api-credits";
+import type { DisparosApiCreditsBucket, DisparosCreditsByApi } from "./waba-disparos-api-credits";
 import { resolveOrderApiKind } from "../disparos/waba-dispatches-api-kind";
 
 export const CLEISON_OFICIAL_TARGET_EMAIL = "cleison.fel@gmail.com";
@@ -19,25 +19,48 @@ export function isCleisonOficialBalanceTarget(email: string): boolean {
   return normalizeEmail(email) === CLEISON_OFICIAL_TARGET_EMAIL;
 }
 
-/** A tela Saldos lê este bucket. Trava Disponível=5829 e Bonificados=0 para o Cleison. */
+export type CleisonCreditsSummarySlice = {
+  email?: string;
+  byApi: DisparosCreditsByApi;
+  remainingShipments: number;
+  pendingBonusShipments: number;
+};
+
+/** Tela Saldos: Disponíveis=5829 e Bonificados=0. Sem descontar consumo antigo. */
 export function applyCleisonOficialCreditsOverride(
   email: string,
   apiKind: "oficial" | "alternativa",
   bucket: DisparosApiCreditsBucket,
-  bonusConsumedShipments = 0,
 ): void {
   if (isRepairSkipped()) return;
   if (apiKind !== "oficial") return;
   if (!isCleisonOficialBalanceTarget(email)) return;
-  const consumed = Math.max(0, Math.round(Number(bonusConsumedShipments ?? 0)));
-  bucket.remainingShipments = Math.max(0, CLEISON_OFICIAL_FORCED_REMAINING - consumed);
+  bucket.remainingShipments = CLEISON_OFICIAL_FORCED_REMAINING;
   bucket.pendingBonusShipments = 0;
+}
+
+export function applyCleisonOficialSummaryOverride(
+  email: string,
+  summary: CleisonCreditsSummarySlice,
+): void {
+  if (isRepairSkipped()) return;
+  const target =
+    isCleisonOficialBalanceTarget(email) || isCleisonOficialBalanceTarget(summary.email ?? "");
+  if (!target) return;
+  if (!summary.byApi?.oficial) return;
+  summary.byApi.oficial.remainingShipments = CLEISON_OFICIAL_FORCED_REMAINING;
+  summary.byApi.oficial.pendingBonusShipments = 0;
+  summary.remainingShipments =
+    summary.byApi.oficial.remainingShipments +
+    Number(summary.byApi.alternativa?.remainingShipments ?? 0);
+  summary.pendingBonusShipments =
+    summary.byApi.oficial.pendingBonusShipments +
+    Number(summary.byApi.alternativa?.pendingBonusShipments ?? 0);
 }
 
 /**
  * Ajuste operacional: Disponível Oficial = 5.829 e Bonificados = 0.
- * Cura o grant forçado a cada GET (o ajuste anterior parava se o pedido já existisse).
- * Absorve Jandira + Jandira 2 para o pending não voltar no sync de campanha.
+ * Grava o JSON de pedidos numa única escrita.
  */
 export class WabaCleisonOficialBalanceRepair {
   constructor(
@@ -51,125 +74,104 @@ export class WabaCleisonOficialBalanceRepair {
     if (!isCleisonOficialBalanceTarget(email)) return;
 
     this.bonusService.syncPendingBonusFromCompletedCampaigns(CLEISON_OFICIAL_TARGET_EMAIL);
-    const forceOrder = this.ensureForceOrder();
-    this.expireOtherOfficialOrders(forceOrder.id);
-    this.neutralizePendingOfficialCheckouts(forceOrder.id);
-    this.healForceOrder(forceOrder.id);
-  }
-
-  private listOfficialOrders(): WabaBillingOrder[] {
-    return this.orderRepository
-      .list()
-      .filter(
-        (order) =>
-          order.product === "waba-disparos" &&
-          resolveOrderApiKind(order) === "oficial" &&
-          normalizeEmail(order.ownerEmail) === CLEISON_OFICIAL_TARGET_EMAIL,
-      );
-  }
-
-  private findForceOrder(): WabaBillingOrder | null {
-    return (
-      this.listOfficialOrders().find(
-        (order) => String(order.asaasExternalReference ?? "").trim() === CLEISON_OFICIAL_FORCE_REF,
-      ) ?? null
+    const now = new Date().toISOString();
+    const until = new Date(Date.now() - 60_000).toISOString();
+    const granted = this.bonusRepository.getGrantedShipments(
+      CLEISON_OFICIAL_TARGET_EMAIL,
+      "oficial",
     );
-  }
+    const orders = this.orderRepository.list();
+    const official = orders.filter(
+      (order) =>
+        order.product === "waba-disparos" &&
+        resolveOrderApiKind(order) === "oficial" &&
+        normalizeEmail(order.ownerEmail) === CLEISON_OFICIAL_TARGET_EMAIL,
+    );
 
-  private expireAt(): string {
-    return new Date(Date.now() - 60_000).toISOString();
-  }
+    let force =
+      official.find(
+        (order) => String(order.asaasExternalReference ?? "").trim() === CLEISON_OFICIAL_FORCE_REF,
+      ) ?? null;
 
-  private grantedOfficialBonus(): number {
-    return this.bonusRepository.getGrantedShipments(CLEISON_OFICIAL_TARGET_EMAIL, "oficial");
-  }
-
-  private ensureForceOrder(): WabaBillingOrder {
-    const existing = this.findForceOrder();
-    if (existing) return existing;
-    return this.createForceOrder();
-  }
-
-  private expireOtherOfficialOrders(keepId: string): void {
-    const until = this.expireAt();
-    for (const order of this.listOfficialOrders()) {
-      if (order.id === keepId) continue;
-      if (String(order.asaasExternalReference ?? "").trim() === CLEISON_OFICIAL_FORCE_REF) continue;
-      if (order.status !== "paid") continue;
-      this.orderRepository.update(order.id, {
-        creditsValidUntil: until,
-        validityMode: "custom",
-        grantActive: false,
-      });
-    }
-  }
-
-  private neutralizePendingOfficialCheckouts(keepId: string): void {
-    const until = this.expireAt();
-    const now = new Date().toISOString();
-    for (const order of this.listOfficialOrders()) {
-      if (order.id === keepId) continue;
-      if (order.status !== "pending_payment") continue;
-      this.orderRepository.update(order.id, {
+    if (!force) {
+      const existing = official[0];
+      force = {
+        id: randomUUID(),
+        product: "waba-disparos",
+        apiKind: "oficial",
+        customerName: String(existing?.customerName || "Cleison").trim() || "Cleison",
+        ownerEmail: CLEISON_OFICIAL_TARGET_EMAIL,
+        whatsapp: String(existing?.whatsapp || "").trim(),
+        cpfCnpj: String(existing?.cpfCnpj || "").trim(),
+        billingType: "PIX",
+        valueCents: 0,
+        shipmentCount: CLEISON_OFICIAL_FORCED_REMAINING,
         status: "paid",
+        asaasExternalReference: CLEISON_OFICIAL_FORCE_REF,
+        createdAt: now,
+        updatedAt: now,
         paidAt: now,
-        creditsValidUntil: until,
-        validityMode: "custom",
-        grantActive: false,
+        bonusShipmentsApplied: granted,
         bonusSettlementAt: now,
-        bonusShipmentsApplied: Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0))),
-      });
+        grantSource: "admin-bonus-envios",
+        grantCreatedByEmail: "system-balance-repair",
+        grantActive: true,
+        creditsValidUntil: null,
+        validityMode: "lifetime",
+      };
+      orders.push(force);
     }
-  }
 
-  private healForceOrder(forceId: string): void {
-    const now = new Date().toISOString();
-    const current = this.orderRepository.getById(forceId);
-    if (!current) return;
-    const granted = this.grantedOfficialBonus();
-    const alreadyApplied = Math.max(0, Math.round(Number(current.bonusShipmentsApplied ?? 0)));
-    this.orderRepository.update(forceId, {
-      status: "paid",
-      paidAt: String(current.paidAt ?? now),
-      shipmentCount: CLEISON_OFICIAL_FORCED_REMAINING,
-      grantSource: "admin-bonus-envios",
-      grantCreatedByEmail: "system-balance-repair",
-      grantActive: true,
-      creditsValidUntil: null,
-      validityMode: "lifetime",
-      bonusSettlementAt: now,
-      bonusShipmentsApplied: Math.max(granted, alreadyApplied),
-      asaasExternalReference: CLEISON_OFICIAL_FORCE_REF,
-    });
-  }
+    const forceId = force.id;
+    const alreadyApplied = Math.max(0, Math.round(Number(force.bonusShipmentsApplied ?? 0)));
 
-  private createForceOrder(): WabaBillingOrder {
-    const now = new Date().toISOString();
-    const existing = this.listOfficialOrders()[0];
-    const order: WabaBillingOrder = {
-      id: randomUUID(),
-      product: "waba-disparos",
-      apiKind: "oficial",
-      customerName: String(existing?.customerName || "Cleison").trim() || "Cleison",
-      ownerEmail: CLEISON_OFICIAL_TARGET_EMAIL,
-      whatsapp: String(existing?.whatsapp || "").trim(),
-      cpfCnpj: String(existing?.cpfCnpj || "").trim(),
-      billingType: "PIX",
-      valueCents: 0,
-      shipmentCount: CLEISON_OFICIAL_FORCED_REMAINING,
-      status: "paid",
-      asaasExternalReference: CLEISON_OFICIAL_FORCE_REF,
-      createdAt: now,
-      updatedAt: now,
-      paidAt: now,
-      bonusShipmentsApplied: this.grantedOfficialBonus(),
-      bonusSettlementAt: now,
-      grantSource: "admin-bonus-envios",
-      grantCreatedByEmail: "system-balance-repair",
-      grantActive: true,
-      creditsValidUntil: null,
-      validityMode: "lifetime",
-    };
-    return this.orderRepository.create(order);
+    for (const order of orders) {
+      if (order.id === forceId) {
+        order.status = "paid";
+        order.paidAt = String(order.paidAt ?? now);
+        order.shipmentCount = CLEISON_OFICIAL_FORCED_REMAINING;
+        order.grantSource = "admin-bonus-envios";
+        order.grantCreatedByEmail = "system-balance-repair";
+        order.grantActive = true;
+        order.creditsValidUntil = null;
+        order.validityMode = "lifetime";
+        order.bonusSettlementAt = now;
+        order.bonusShipmentsApplied = Math.max(granted, alreadyApplied);
+        order.asaasExternalReference = CLEISON_OFICIAL_FORCE_REF;
+        order.apiKind = "oficial";
+        order.ownerEmail = CLEISON_OFICIAL_TARGET_EMAIL;
+        order.updatedAt = now;
+        continue;
+      }
+
+      if (order.product !== "waba-disparos") continue;
+      if (resolveOrderApiKind(order) !== "oficial") continue;
+      if (normalizeEmail(order.ownerEmail) !== CLEISON_OFICIAL_TARGET_EMAIL) continue;
+      if (String(order.asaasExternalReference ?? "").trim() === CLEISON_OFICIAL_FORCE_REF) continue;
+
+      if (order.status === "pending_payment") {
+        order.status = "paid";
+        order.paidAt = now;
+        order.creditsValidUntil = until;
+        order.validityMode = "custom";
+        order.grantActive = false;
+        order.bonusSettlementAt = now;
+        order.bonusShipmentsApplied = Math.max(
+          0,
+          Math.round(Number(order.bonusShipmentsApplied ?? 0)),
+        );
+        order.updatedAt = now;
+        continue;
+      }
+
+      if (order.status === "paid") {
+        order.creditsValidUntil = until;
+        order.validityMode = "custom";
+        order.grantActive = false;
+        order.updatedAt = now;
+      }
+    }
+
+    this.orderRepository.replaceAll(orders);
   }
 }

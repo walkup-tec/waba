@@ -105,7 +105,7 @@ class WabaDisparosCreditsService {
             remainingShipments,
             pendingBonusShipments,
         };
-        (0, waba_cleison_oficial_balance_repair_1.applyCleisonOficialCreditsOverride)(email, apiKind, bucket, bonusConsumedShipments);
+        (0, waba_cleison_oficial_balance_repair_1.applyCleisonOficialCreditsOverride)(email, apiKind, bucket);
         return bucket;
     }
     getPaidRemainingForApi(email, apiKind) {
@@ -143,7 +143,7 @@ class WabaDisparosCreditsService {
             : byApi.oficial.remainingShipments + byApi.alternativa.remainingShipments;
         const pendingBonusShipments = byApi.oficial.pendingBonusShipments + byApi.alternativa.pendingBonusShipments;
         const contractedValueCents = paidOrders.reduce((sum, order) => sum + Math.round(Number(order.valueCents ?? 0)), 0);
-        return {
+        const summary = {
             hasCredits: unlimitedCredits || contractedShipments > 0,
             unlimitedCredits,
             email: normalized,
@@ -157,6 +157,8 @@ class WabaDisparosCreditsService {
             lastPaidAt: paidOrders[0]?.paidAt ?? "",
             pendingBonusShipments,
         };
+        (0, waba_cleison_oficial_balance_repair_1.applyCleisonOficialSummaryOverride)(normalized, summary);
+        return summary;
     }
     /**
      * Consome créditos (pago primeiro, depois bônus) e devolve o breakdown.

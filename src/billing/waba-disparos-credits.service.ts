@@ -19,6 +19,7 @@ import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
 import {
   WabaCleisonOficialBalanceRepair,
   applyCleisonOficialCreditsOverride,
+  applyCleisonOficialSummaryOverride,
 } from "./waba-cleison-oficial-balance-repair";
 import { WabaDisparosCreditUsageRepository } from "./waba-disparos-credit-usage.repository";
 import {
@@ -151,7 +152,7 @@ export class WabaDisparosCreditsService {
       remainingShipments,
       pendingBonusShipments,
     };
-    applyCleisonOficialCreditsOverride(email, apiKind, bucket, bonusConsumedShipments);
+    applyCleisonOficialCreditsOverride(email, apiKind, bucket);
     return bucket;
   }
 
@@ -208,7 +209,7 @@ export class WabaDisparosCreditsService {
       0,
     );
 
-    return {
+    const summary = {
       hasCredits: unlimitedCredits || contractedShipments > 0,
       unlimitedCredits,
       email: normalized,
@@ -222,6 +223,8 @@ export class WabaDisparosCreditsService {
       lastPaidAt: paidOrders[0]?.paidAt ?? "",
       pendingBonusShipments,
     };
+    applyCleisonOficialSummaryOverride(normalized, summary);
+    return summary;
   }
 
   /**

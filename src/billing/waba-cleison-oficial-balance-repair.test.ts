@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { Server } from "node:http";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -26,6 +27,10 @@ function resetStore() {
   writeFileSync(path.join(dataDir, "waba-disparos-credit-usage.json"), emptyUsage);
   writeFileSync(path.join(dataDir, "v01", "waba-disparos-credit-usage.json"), emptyUsage);
   writeFileSync(path.join(dataDir, "v02", "waba-disparos-credit-usage.json"), emptyUsage);
+  const emptyIntakes = JSON.stringify({ version: 1, intakes: [] });
+  writeFileSync(path.join(dataDir, "waba-campaign-intakes.json"), emptyIntakes);
+  writeFileSync(path.join(dataDir, "v01", "waba-campaign-intakes.json"), emptyIntakes);
+  writeFileSync(path.join(dataDir, "v02", "waba-campaign-intakes.json"), emptyIntakes);
 }
 
 function baseOrder(overrides: Partial<WabaBillingOrder>): WabaBillingOrder {
@@ -165,5 +170,163 @@ describe("Força saldo Oficial Cleison 5829 / 0 bonificados", () => {
     assert.equal(force?.grantActive, true);
     assert.equal(force?.shipmentCount, 5829);
     assert.ok(Number(force?.bonusShipmentsApplied ?? 0) >= 829 + 834);
+  });
+
+  it("não desconta consumo antigo: 1002+bônus ainda mostra 5829 / 0", async () => {
+    resetStore();
+    delete process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR;
+
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaDisparosCreditUsageRepository } = await import(
+      "./waba-disparos-credit-usage.repository"
+    );
+    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+
+    const orders = new WabaBillingOrderRepository();
+    orders.create(
+      baseOrder({
+        id: "11111111-1111-4111-8111-111111111111",
+        shipmentCount: 1849,
+        status: "paid",
+        paidAt: "2026-08-01T15:00:00.000Z",
+      }),
+    );
+    const usage = new WabaDisparosCreditUsageRepository();
+    usage.setConsumedByApi(EMAIL, { oficial: 1002, alternativa: 0 });
+    usage.incrementBonusConsumedShipments(EMAIL, 4982, "oficial");
+
+    const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
+    assert.equal(summary.byApi.oficial.remainingShipments, 5829);
+    assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
+  });
+
+  it("GET /billing/disparos/credits (tela Saldos) devolve Disponíveis=5829 e Bonificados=0", async () => {
+    resetStore();
+    delete process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR;
+
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
+    const { WabaDisparosCreditUsageRepository } = await import(
+      "./waba-disparos-credit-usage.repository"
+    );
+
+    const orders = new WabaBillingOrderRepository();
+    orders.create(
+      baseOrder({
+        id: "11111111-1111-4111-8111-111111111111",
+        shipmentCount: 1849,
+        status: "paid",
+        paidAt: "2026-08-01T15:00:00.000Z",
+        bonusShipmentsApplied: 0,
+      }),
+    );
+    const bonus = new WabaDisparosBonusRepository();
+    bonus.grantFromCampaign(EMAIL, "jandira-2", 829, "oficial");
+    bonus.grantFromCampaign(EMAIL, "jandira-1", 834, "oficial");
+    new WabaDisparosCreditUsageRepository().setConsumedByApi(EMAIL, {
+      oficial: 1002,
+      alternativa: 0,
+    });
+
+    const now = new Date().toISOString();
+    writeFileSync(
+      path.join(process.cwd(), "data", "waba-campaign-intakes.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          intakes: [
+            {
+              id: "jandira-1",
+              ownerEmail: EMAIL,
+              campaignName: "Jandira",
+              regionDdd: "11",
+              textOptions: ["a", "b", "c"],
+              imageFileName: "x.png",
+              imageStoredPath: "x.png",
+              spreadsheetFileName: "x.xlsx",
+              spreadsheetStoredPath: "x.xlsx",
+              importedLineCount: 1990,
+              plannedSendCount: 1990,
+              apiKind: "oficial",
+              status: "completed",
+              performanceReport: {
+                totalLeads: 1990,
+                sent: 1156,
+                delivered: 0,
+                read: 0,
+                failed: 0,
+                filledAt: now,
+                filledByEmail: EMAIL,
+              },
+              createdAt: now,
+              updatedAt: now,
+            },
+            {
+              id: "jandira-2",
+              ownerEmail: EMAIL,
+              campaignName: "Jandira 2",
+              regionDdd: "11",
+              textOptions: ["a", "b", "c"],
+              imageFileName: "x.png",
+              imageStoredPath: "x.png",
+              spreadsheetFileName: "x.xlsx",
+              spreadsheetStoredPath: "x.xlsx",
+              importedLineCount: 1990,
+              plannedSendCount: 1990,
+              apiKind: "oficial",
+              status: "completed",
+              performanceReport: {
+                totalLeads: 1990,
+                sent: 1161,
+                delivered: 0,
+                read: 0,
+                failed: 0,
+                filledAt: now,
+                filledByEmail: EMAIL,
+              },
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+
+    const express = (await import("express")).default;
+    const { registerWabaBillingRoutes } = await import("./waba-billing.routes");
+    const { createWabaSessionToken } = await import("../auth/waba-auth.service");
+
+    const app = express();
+    registerWabaBillingRoutes(app);
+    const server: Server = await new Promise<Server>((resolve) => {
+      const started = app.listen(0, "127.0.0.1", () => resolve(started));
+    });
+    try {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const token = createWabaSessionToken(EMAIL, "subscriber");
+      const first = await fetch(`http://127.0.0.1:${port}/billing/disparos/credits`, {
+        headers: { cookie: `waba_session=${token}` },
+      });
+      assert.equal(first.status, 200);
+      const body = await first.json();
+      const disponiveis = Number(body.byApi.oficial.remainingShipments);
+      const bonificados = Number(body.byApi.oficial.pendingBonusShipments);
+      assert.equal(disponiveis, 5829);
+      assert.equal(bonificados, 0);
+      assert.equal(disponiveis.toLocaleString("pt-BR"), "5.829");
+      assert.equal(bonificados.toLocaleString("pt-BR"), "0");
+
+      const second = await fetch(`http://127.0.0.1:${port}/billing/disparos/credits`, {
+        headers: { cookie: `waba_session=${token}` },
+      });
+      const again = await second.json();
+      assert.equal(again.byApi.oficial.remainingShipments, 5829);
+      assert.equal(again.byApi.oficial.pendingBonusShipments, 0);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });

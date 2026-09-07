@@ -7,6 +7,7 @@ import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { WabaBillingService } from "./waba-billing.service";
 import { WabaAlternativaNumbersService } from "./waba-alternativa-numbers.service";
 import { WabaDisparosCreditsService } from "./waba-disparos-credits.service";
+import { applyCleisonOficialSummaryOverride } from "./waba-cleison-oficial-balance-repair";
 import { getAlternativaDispatchRulesMeta } from "../disparos/alternativa-dispatch-rules";
 import { isBetsSubscriberEmail } from "../subscribers/waba-subscriber-segment";
 
@@ -93,8 +94,10 @@ export const registerWabaBillingRoutes = (app: Express) => {
         error instanceof Error ? error.message : error,
       );
     }
+    const summary = disparosCreditsService.getCreditsSummary(auth.email);
+    applyCleisonOficialSummaryOverride(auth.email, summary);
     return res.status(200).json({
-      ...disparosCreditsService.getCreditsSummary(auth.email),
+      ...summary,
       role: auth.role,
     });
   });

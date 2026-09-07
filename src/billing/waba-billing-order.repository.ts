@@ -117,4 +117,9 @@ export class WabaBillingOrderRepository {
     saveOrders(orders);
     return next;
   }
+
+  /** Um único write do arquivo inteiro (evita corrida entre vários update()). */
+  replaceAll(orders: WabaBillingOrder[]): void {
+    saveOrders(Array.isArray(orders) ? orders : []);
+  }
 }

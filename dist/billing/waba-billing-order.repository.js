@@ -70,5 +70,9 @@ class WabaBillingOrderRepository {
         saveOrders(orders);
         return next;
     }
+    /** Um único write do arquivo inteiro (evita corrida entre vários update()). */
+    replaceAll(orders) {
+        saveOrders(Array.isArray(orders) ? orders : []);
+    }
 }
 exports.WabaBillingOrderRepository = WabaBillingOrderRepository;

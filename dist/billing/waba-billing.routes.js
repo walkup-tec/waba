@@ -9,6 +9,7 @@ const waba_billing_order_repository_1 = require("./waba-billing-order.repository
 const waba_billing_service_1 = require("./waba-billing.service");
 const waba_alternativa_numbers_service_1 = require("./waba-alternativa-numbers.service");
 const waba_disparos_credits_service_1 = require("./waba-disparos-credits.service");
+const waba_cleison_oficial_balance_repair_1 = require("./waba-cleison-oficial-balance-repair");
 const alternativa_dispatch_rules_1 = require("../disparos/alternativa-dispatch-rules");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository();
@@ -77,8 +78,10 @@ const registerWabaBillingRoutes = (app) => {
         catch (error) {
             console.warn("[AsaasReconcile] créditos:", error instanceof Error ? error.message : error);
         }
+        const summary = disparosCreditsService.getCreditsSummary(auth.email);
+        (0, waba_cleison_oficial_balance_repair_1.applyCleisonOficialSummaryOverride)(auth.email, summary);
         return res.status(200).json({
-            ...disparosCreditsService.getCreditsSummary(auth.email),
+            ...summary,
             role: auth.role,
         });
     });
