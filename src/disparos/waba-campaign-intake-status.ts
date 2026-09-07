@@ -1,4 +1,12 @@
+import type { CloudBroadcastProgressHint } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 import type { WabaCampaignIntakeStatus } from "./waba-campaign-intake.repository";
+
+export type CampaignIntakeDisplayOptions = {
+  laboratorioAttended?: boolean;
+  broadcastStatus?: string | null;
+  dispatchStarted?: boolean;
+  dispatchFinished?: boolean;
+};
 
 export const normalizeCampaignIntakeStatus = (status: string): WabaCampaignIntakeStatus => {
   const raw = String(status || "").trim().toLowerCase();
@@ -15,20 +23,41 @@ export const isCampaignIntakeFinalized = (status: string): boolean => {
   return normalized === "completed" || normalized === "error_reported";
 };
 
+export function campaignIntakeDisplayOptionsFromBroadcast(
+  laboratorioAttended: boolean,
+  progress?: CloudBroadcastProgressHint | null,
+): CampaignIntakeDisplayOptions {
+  return {
+    laboratorioAttended,
+    broadcastStatus: progress?.status || null,
+    dispatchStarted: Boolean(String(progress?.sendStartedAt || "").trim()),
+    dispatchFinished: Boolean(String(progress?.sendFinishedAt || "").trim()),
+  };
+}
+
+function labInProgressDisplayLabel(options: CampaignIntakeDisplayOptions): string {
+  const broadcast = String(options.broadcastStatus || "").trim();
+  if (broadcast === "failed") return "Falha no envio";
+  if (broadcast === "done" || options.dispatchFinished) return "Coletando relatório da Meta";
+  if (broadcast === "running" || options.dispatchStarted) return "Enviando";
+  if (broadcast === "queued") return "Na fila";
+  return "Meta analisando template";
+}
+
 export const toCampaignIntakeDisplayStatus = (
   status: WabaCampaignIntakeStatus,
   audience: "operacional" | "subscriber" = "subscriber",
-  options?: { laboratorioAttended?: boolean },
+  options?: CampaignIntakeDisplayOptions,
 ): string => {
-  if (status === "in_progress" && options?.laboratorioAttended) {
-    return "Coletando relatório da Meta";
-  }
-  if (status === "in_progress") return "Em andamento";
   if (status === "error_reported") {
     return audience === "operacional" ? "Erro reportado" : "Erro Reportado";
   }
   if (status === "completed") return "Finalizado";
   if (status === "cancelled") return "Cancelada";
+  if (status === "in_progress") {
+    if (options?.laboratorioAttended) return labInProgressDisplayLabel(options);
+    return "Em andamento";
+  }
   return audience === "operacional" ? "Aguardando configuração" : "Gerada";
 };
 

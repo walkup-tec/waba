@@ -34,6 +34,7 @@ import { collectIntakeReportTimeline } from "../disparos/waba-campaign-report-ti
 import { campaignAttendedByLaboratorioStaff } from "../disparos/waba-campaign-laboratorio-attended";
 import { finalizeIntakePerformanceReport } from "../disparos/waba-campaign-report-finalize.service";
 import {
+  campaignIntakeDisplayOptionsFromBroadcast,
   normalizeCampaignIntakeStatus,
   toCampaignIntakeDisplayStatus,
 } from "../disparos/waba-campaign-intake-status";
@@ -54,7 +55,12 @@ import {
   CAMPAIGN_START_OVERDUE_MS,
   WabaCampaignSupplierAssignmentService,
 } from "../services/waba-campaign-supplier-assignment.service";
-import { findBroadcastByIntakeCampaignId } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
+import {
+  findBroadcastByIntakeCampaignId,
+  findBroadcastProgressByIntakeCampaignId,
+  indexBroadcastProgressByIntakeId,
+  type CloudBroadcastProgressHint,
+} from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 import { computeMetaLabCampaignMetrics } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
 
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
@@ -146,7 +152,13 @@ const normalizeStoredStatus = (status: string): WabaCampaignIntakeStatus =>
 const toDisplayStatus = (
   status: WabaCampaignIntakeStatus,
   laboratorioAttended = false,
-): string => toCampaignIntakeDisplayStatus(status, "operacional", { laboratorioAttended });
+  broadcastProgress?: CloudBroadcastProgressHint | null,
+): string =>
+  toCampaignIntakeDisplayStatus(
+    status,
+    "operacional",
+    campaignIntakeDisplayOptionsFromBroadcast(laboratorioAttended, broadcastProgress),
+  );
 
 const isCampaignAwaitingConfiguration = (status: WabaCampaignIntakeStatus): boolean =>
   status === "generated" || status === "in_progress";
@@ -306,6 +318,7 @@ export class WabaOperacionalCampanhasService {
   private toListItem(
     intake: WabaCampaignIntake,
     staff?: OperacionalCampanhasStaffContext,
+    broadcastProgress?: CloudBroadcastProgressHint | null,
   ): OperacionalCampaignListItem {
     const email = normalizeEmail(intake.ownerEmail);
     const subscriber = this.subscriberRepository.getByEmail(email);
@@ -341,7 +354,7 @@ export class WabaOperacionalCampanhasService {
       plannedSendCount,
       importedLineCount,
       status,
-      displayStatus: toDisplayStatus(status, laboratorioAttended),
+      displayStatus: toDisplayStatus(status, laboratorioAttended, broadcastProgress),
       needsConfiguration: isCampaignAwaitingConfiguration(status),
       canStartCampaign: status === "generated",
       canFillReport: !laboratorioAttended && (status === "in_progress" || status === "completed"),
@@ -361,6 +374,7 @@ export class WabaOperacionalCampanhasService {
 
   listCampaigns(staff: OperacionalCampanhasStaffContext): OperacionalCampaignListItem[] {
     this.intakeRepository.backfillBonusFundingForOpenCampaigns();
+    const broadcastProgressByIntake = indexBroadcastProgressByIntakeId();
     return this.intakeRepository
       .listAll()
       .map((intake) => {
@@ -368,7 +382,7 @@ export class WabaOperacionalCampanhasService {
         return this.assignmentService.ensureInitialAssignment(intake);
       })
       .filter((intake) => this.matchesStaffCampaignFilter(intake, staff))
-      .map((intake) => this.toListItem(intake, staff))
+      .map((intake) => this.toListItem(intake, staff, broadcastProgressByIntake.get(intake.id) || null))
       .sort((a, b) => {
         if (a.needsConfiguration !== b.needsConfiguration) {
           return a.needsConfiguration ? -1 : 1;
@@ -384,7 +398,7 @@ export class WabaOperacionalCampanhasService {
     const intake = this.intakeRepository.getById(campaignId);
     if (!intake || !this.matchesStaffCampaignFilter(intake, staff)) return null;
 
-    const base = this.toListItem(intake, staff);
+    const base = this.toListItem(intake, staff, findBroadcastProgressByIntakeCampaignId(intake.id));
     const plannedSendCount = base.plannedSendCount;
     const trimmedName =
       intake.spreadsheetTrimmedFileName ||
@@ -502,7 +516,17 @@ export class WabaOperacionalCampanhasService {
       campaignId: intake.id,
       campaignName: intake.campaignName,
       status,
-      displayStatus: toDisplayStatus(status, laboratorioAttended),
+      displayStatus: toDisplayStatus(
+        status,
+        laboratorioAttended,
+        broadcast
+          ? {
+              status: broadcast.status,
+              sendStartedAt: broadcast.sendStartedAt,
+              sendFinishedAt: broadcast.sendFinishedAt,
+            }
+          : null,
+      ),
       plannedSendCount: totalLeads,
       totalLeads,
       isReadOnly: laboratorioAttended || status === "completed" || status === "error_reported",

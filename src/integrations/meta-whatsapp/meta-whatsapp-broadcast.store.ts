@@ -227,11 +227,48 @@ export function listAllBroadcastCampaigns(tenantId: string): MetaBroadcastCampai
     .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
 
+export type CloudBroadcastProgressHint = {
+  status: MetaBroadcastCampaign["status"];
+  sendStartedAt?: string;
+  sendFinishedAt?: string;
+};
+
+function isActiveBroadcastRow(row: MetaBroadcastCampaign): boolean {
+  return !String(row.voidedAt || "").trim();
+}
+
+export function indexBroadcastProgressByIntakeId(): Map<string, CloudBroadcastProgressHint> {
+  const map = new Map<string, CloudBroadcastProgressHint>();
+  const createdAtById = new Map<string, string>();
+  for (const row of readStore().campaigns) {
+    const id = String(row.intakeCampaignId || "").trim();
+    if (!id || !isActiveBroadcastRow(row)) continue;
+    const createdAt = String(row.createdAt || "");
+    const previousCreated = createdAtById.get(id) || "";
+    if (previousCreated && previousCreated > createdAt) continue;
+    createdAtById.set(id, createdAt);
+    map.set(id, {
+      status: row.status,
+      sendStartedAt: row.sendStartedAt,
+      sendFinishedAt: row.sendFinishedAt,
+    });
+  }
+  return map;
+}
+
+export function findBroadcastProgressByIntakeCampaignId(
+  intakeCampaignId: string,
+): CloudBroadcastProgressHint | null {
+  const id = String(intakeCampaignId || "").trim();
+  if (!id) return null;
+  return indexBroadcastProgressByIntakeId().get(id) || null;
+}
+
 export function findBroadcastByIntakeCampaignId(intakeCampaignId: string): MetaBroadcastCampaign | null {
   const id = String(intakeCampaignId || "").trim();
   if (!id) return null;
   const rows = readStore()
-    .campaigns.filter((item) => String(item.intakeCampaignId || "") === id && !String(item.voidedAt || "").trim())
+    .campaigns.filter((item) => String(item.intakeCampaignId || "") === id && isActiveBroadcastRow(item))
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   const row = rows[0];
   return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shouldCountCampaignIntakeCredits = exports.toCampaignIntakeDisplayStatus = exports.isCampaignIntakeFinalized = exports.normalizeCampaignIntakeStatus = void 0;
+exports.campaignIntakeDisplayOptionsFromBroadcast = campaignIntakeDisplayOptionsFromBroadcast;
 const normalizeCampaignIntakeStatus = (status) => {
     const raw = String(status || "").trim().toLowerCase();
     if (raw === "pending_review" || raw === "generated")
@@ -21,12 +22,27 @@ const isCampaignIntakeFinalized = (status) => {
     return normalized === "completed" || normalized === "error_reported";
 };
 exports.isCampaignIntakeFinalized = isCampaignIntakeFinalized;
-const toCampaignIntakeDisplayStatus = (status, audience = "subscriber", options) => {
-    if (status === "in_progress" && options?.laboratorioAttended) {
+function campaignIntakeDisplayOptionsFromBroadcast(laboratorioAttended, progress) {
+    return {
+        laboratorioAttended,
+        broadcastStatus: progress?.status || null,
+        dispatchStarted: Boolean(String(progress?.sendStartedAt || "").trim()),
+        dispatchFinished: Boolean(String(progress?.sendFinishedAt || "").trim()),
+    };
+}
+function labInProgressDisplayLabel(options) {
+    const broadcast = String(options.broadcastStatus || "").trim();
+    if (broadcast === "failed")
+        return "Falha no envio";
+    if (broadcast === "done" || options.dispatchFinished)
         return "Coletando relatório da Meta";
-    }
-    if (status === "in_progress")
-        return "Em andamento";
+    if (broadcast === "running" || options.dispatchStarted)
+        return "Enviando";
+    if (broadcast === "queued")
+        return "Na fila";
+    return "Meta analisando template";
+}
+const toCampaignIntakeDisplayStatus = (status, audience = "subscriber", options) => {
     if (status === "error_reported") {
         return audience === "operacional" ? "Erro reportado" : "Erro Reportado";
     }
@@ -34,6 +50,11 @@ const toCampaignIntakeDisplayStatus = (status, audience = "subscriber", options)
         return "Finalizado";
     if (status === "cancelled")
         return "Cancelada";
+    if (status === "in_progress") {
+        if (options?.laboratorioAttended)
+            return labInProgressDisplayLabel(options);
+        return "Em andamento";
+    }
     return audience === "operacional" ? "Aguardando configuração" : "Gerada";
 };
 exports.toCampaignIntakeDisplayStatus = toCampaignIntakeDisplayStatus;

@@ -49,7 +49,7 @@ const formatDateLabel = (iso) => {
     });
 };
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
-const toDisplayStatus = (status, laboratorioAttended = false) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "operacional", { laboratorioAttended });
+const toDisplayStatus = (status, laboratorioAttended = false, broadcastProgress) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "operacional", (0, waba_campaign_intake_status_1.campaignIntakeDisplayOptionsFromBroadcast)(laboratorioAttended, broadcastProgress));
 const isCampaignAwaitingConfiguration = (status) => status === "generated" || status === "in_progress";
 const parseNonNegativeInt = (value) => {
     const parsed = Math.round(Number(value));
@@ -165,7 +165,7 @@ class WabaOperacionalCampanhasService {
         }
         return intake;
     }
-    toListItem(intake, staff) {
+    toListItem(intake, staff, broadcastProgress) {
         const email = normalizeEmail(intake.ownerEmail);
         const subscriber = this.subscriberRepository.getByEmail(email);
         const status = normalizeStoredStatus(intake.status);
@@ -195,7 +195,7 @@ class WabaOperacionalCampanhasService {
             plannedSendCount,
             importedLineCount,
             status,
-            displayStatus: toDisplayStatus(status, laboratorioAttended),
+            displayStatus: toDisplayStatus(status, laboratorioAttended, broadcastProgress),
             needsConfiguration: isCampaignAwaitingConfiguration(status),
             canStartCampaign: status === "generated",
             canFillReport: !laboratorioAttended && (status === "in_progress" || status === "completed"),
@@ -214,6 +214,7 @@ class WabaOperacionalCampanhasService {
     }
     listCampaigns(staff) {
         this.intakeRepository.backfillBonusFundingForOpenCampaigns();
+        const broadcastProgressByIntake = (0, meta_whatsapp_broadcast_store_1.indexBroadcastProgressByIntakeId)();
         return this.intakeRepository
             .listAll()
             .map((intake) => {
@@ -222,7 +223,7 @@ class WabaOperacionalCampanhasService {
             return this.assignmentService.ensureInitialAssignment(intake);
         })
             .filter((intake) => this.matchesStaffCampaignFilter(intake, staff))
-            .map((intake) => this.toListItem(intake, staff))
+            .map((intake) => this.toListItem(intake, staff, broadcastProgressByIntake.get(intake.id) || null))
             .sort((a, b) => {
             if (a.needsConfiguration !== b.needsConfiguration) {
                 return a.needsConfiguration ? -1 : 1;
@@ -234,7 +235,7 @@ class WabaOperacionalCampanhasService {
         const intake = this.intakeRepository.getById(campaignId);
         if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
             return null;
-        const base = this.toListItem(intake, staff);
+        const base = this.toListItem(intake, staff, (0, meta_whatsapp_broadcast_store_1.findBroadcastProgressByIntakeCampaignId)(intake.id));
         const plannedSendCount = base.plannedSendCount;
         const trimmedName = intake.spreadsheetTrimmedFileName ||
             `leads-${plannedSendCount}-envios.xlsx`;
@@ -312,7 +313,13 @@ class WabaOperacionalCampanhasService {
             campaignId: intake.id,
             campaignName: intake.campaignName,
             status,
-            displayStatus: toDisplayStatus(status, laboratorioAttended),
+            displayStatus: toDisplayStatus(status, laboratorioAttended, broadcast
+                ? {
+                    status: broadcast.status,
+                    sendStartedAt: broadcast.sendStartedAt,
+                    sendFinishedAt: broadcast.sendFinishedAt,
+                }
+                : null),
             plannedSendCount: totalLeads,
             totalLeads,
             isReadOnly: laboratorioAttended || status === "completed" || status === "error_reported",

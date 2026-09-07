@@ -10,6 +10,8 @@ exports.saveBroadcastCampaign = saveBroadcastCampaign;
 exports.findBroadcastCampaign = findBroadcastCampaign;
 exports.listBroadcastCampaigns = listBroadcastCampaigns;
 exports.listAllBroadcastCampaigns = listAllBroadcastCampaigns;
+exports.indexBroadcastProgressByIntakeId = indexBroadcastProgressByIntakeId;
+exports.findBroadcastProgressByIntakeCampaignId = findBroadcastProgressByIntakeCampaignId;
 exports.findBroadcastByIntakeCampaignId = findBroadcastByIntakeCampaignId;
 exports.listActiveCloudBroadcasts = listActiveCloudBroadcasts;
 exports.broadcastLeadIsPendingSend = broadcastLeadIsPendingSend;
@@ -176,12 +178,41 @@ function listAllBroadcastCampaigns(tenantId) {
         .campaigns.filter((item) => item.tenantId === tenantId)
         .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
+function isActiveBroadcastRow(row) {
+    return !String(row.voidedAt || "").trim();
+}
+function indexBroadcastProgressByIntakeId() {
+    const map = new Map();
+    const createdAtById = new Map();
+    for (const row of readStore().campaigns) {
+        const id = String(row.intakeCampaignId || "").trim();
+        if (!id || !isActiveBroadcastRow(row))
+            continue;
+        const createdAt = String(row.createdAt || "");
+        const previousCreated = createdAtById.get(id) || "";
+        if (previousCreated && previousCreated > createdAt)
+            continue;
+        createdAtById.set(id, createdAt);
+        map.set(id, {
+            status: row.status,
+            sendStartedAt: row.sendStartedAt,
+            sendFinishedAt: row.sendFinishedAt,
+        });
+    }
+    return map;
+}
+function findBroadcastProgressByIntakeCampaignId(intakeCampaignId) {
+    const id = String(intakeCampaignId || "").trim();
+    if (!id)
+        return null;
+    return indexBroadcastProgressByIntakeId().get(id) || null;
+}
 function findBroadcastByIntakeCampaignId(intakeCampaignId) {
     const id = String(intakeCampaignId || "").trim();
     if (!id)
         return null;
     const rows = readStore()
-        .campaigns.filter((item) => String(item.intakeCampaignId || "") === id && !String(item.voidedAt || "").trim())
+        .campaigns.filter((item) => String(item.intakeCampaignId || "") === id && isActiveBroadcastRow(item))
         .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
     const row = rows[0];
     return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;

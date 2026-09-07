@@ -18,6 +18,7 @@ const waba_campaign_intake_oficial_dedupe_1 = require("./waba-campaign-intake-of
 const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.util");
 const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 const waba_campaign_laboratorio_attended_1 = require("./waba-campaign-laboratorio-attended");
+const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 const waba_campaign_performance_metrics_1 = require("./waba-campaign-performance-metrics");
 const waba_campaign_report_timeline_1 = require("./waba-campaign-report-timeline");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
@@ -57,7 +58,7 @@ const normalizeDdd = (value) => {
     return digits;
 };
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
-const toDisplayStatus = (status, laboratorioAttended = false) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "subscriber", { laboratorioAttended });
+const toDisplayStatus = (status, laboratorioAttended = false, broadcastProgress) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "subscriber", (0, waba_campaign_intake_status_1.campaignIntakeDisplayOptionsFromBroadcast)(laboratorioAttended, broadcastProgress));
 const parseRequestedPlannedSendCount = (body) => {
     const raw = body.plannedSendCount;
     if (raw === undefined || raw === null || String(raw).trim() === "")
@@ -120,7 +121,7 @@ const resolveReportedSentCount = (intake) => {
         return 0;
     return sent;
 };
-const toPublicIntake = (intake) => {
+const toPublicIntake = (intake, broadcastProgress) => {
     const storedStatus = normalizeStoredStatus(intake.status);
     const holdInProgress = (0, waba_campaign_report_read_overrides_1.campaignHoldsSubscriberInProgress)(intake.campaignName, intake.createdAt, intake.id);
     const status = holdInProgress ? "in_progress" : storedStatus;
@@ -128,6 +129,7 @@ const toPublicIntake = (intake) => {
     const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
     const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
     const laboratorioAttended = (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake);
+    const labDisplay = laboratorioAttended && !holdInProgress;
     return {
         id: intake.id,
         name: intake.campaignName,
@@ -135,7 +137,7 @@ const toPublicIntake = (intake) => {
         createdAt: intake.createdAt,
         updatedAt: intake.updatedAt,
         status,
-        displayStatus: toDisplayStatus(status, laboratorioAttended && !holdInProgress),
+        displayStatus: toDisplayStatus(status, labDisplay, labDisplay ? broadcastProgress : null),
         regionDdd: intake.regionDdd,
         importedLineCount,
         plannedSendCount,
@@ -518,7 +520,10 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             if (!auth.email) {
                 return res.status(401).json({ error: "Faça login para listar suas campanhas." });
             }
-            const items = intakeRepository.listByEmail(auth.email).map(toPublicIntake);
+            const progressByIntake = (0, meta_whatsapp_broadcast_store_1.indexBroadcastProgressByIntakeId)();
+            const items = intakeRepository
+                .listByEmail(auth.email)
+                .map((intake) => toPublicIntake(intake, progressByIntake.get(intake.id) || null));
             res.setHeader("Cache-Control", "no-store");
             return res.status(200).json({ items });
         }
