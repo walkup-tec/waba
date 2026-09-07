@@ -1,6 +1,6 @@
 export type MetaPortfolioDispatchStatus = "livre" | "em_disparo";
 
-export type MetaPortfolioNumberUiStatus = "ativo" | "pendente";
+export type MetaPortfolioNumberUiStatus = "ativo" | "pendente" | "restrito";
 
 export type MetaProfileSyncStatus = "pending" | "applied" | "ready" | "declined";
 
@@ -22,6 +22,7 @@ export type MetaPortfolioNumberPublic = {
   qualityRating: string | null;
   metaStatus: string | null;
   codeVerificationStatus: string | null;
+  healthCanSend: string | null;
   uiStatus: MetaPortfolioNumberUiStatus;
   dispatchStatus: MetaPortfolioDispatchStatus;
   canActivate: boolean;

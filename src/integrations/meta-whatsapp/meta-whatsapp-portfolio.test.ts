@@ -443,6 +443,63 @@ describe("meta portfolio mapper", () => {
     assert.equal(row?.canActivate, true);
   });
 
+  it("RESTRICTED/BANNED e health BLOCKED aparecem como Restrito/Banido sem PIN", () => {
+    const restricted = mapMetaPhoneToPortfolioNumber({
+      id: "phone-restricted",
+      display_phone_number: "+55 27 92836-1199",
+      verified_name: "Quantum Smart Labs",
+      status: "RESTRICTED",
+      code_verification_status: "VERIFIED",
+    });
+    assert.equal(restricted?.uiStatus, "restrito");
+    assert.equal(restricted?.canActivate, false);
+
+    const banned = mapMetaPhoneToPortfolioNumber({
+      id: "phone-banned",
+      display_phone_number: "+55 11 95213-1900",
+      status: "BANNED",
+      code_verification_status: "VERIFIED",
+    });
+    assert.equal(banned?.uiStatus, "restrito");
+    assert.equal(banned?.canActivate, false);
+
+    const disconnected = mapMetaPhoneToPortfolioNumber({
+      id: "phone-disc",
+      display_phone_number: "+55 21 92368-3286",
+      status: "DISCONNECTED",
+      code_verification_status: "VERIFIED",
+    });
+    assert.equal(disconnected?.uiStatus, "restrito");
+    assert.equal(disconnected?.canActivate, false);
+
+    const blockedHealth = mapMetaPhoneToPortfolioNumber({
+      id: "phone-blocked",
+      display_phone_number: "+55 11 90000-0000",
+      status: "CONNECTED",
+      code_verification_status: "VERIFIED",
+      health_status: {
+        can_send_message: "BLOCKED",
+        entities: [
+          { entity_type: "PHONE_NUMBER", id: "phone-blocked", can_send_message: "BLOCKED" },
+        ],
+      },
+    });
+    assert.equal(blockedHealth?.uiStatus, "restrito");
+    assert.equal(blockedHealth?.canActivate, false);
+    assert.equal(blockedHealth?.healthCanSend, "BLOCKED");
+  });
+
+  it("DISCONNECTED sem verificação continua pendente de PIN", () => {
+    const row = mapMetaPhoneToPortfolioNumber({
+      id: "phone-new",
+      display_phone_number: "+55 11 90000-1111",
+      status: "DISCONNECTED",
+      code_verification_status: "UNVERIFIED",
+    });
+    assert.equal(row?.uiStatus, "pendente");
+    assert.equal(row?.canActivate, true);
+  });
+
   it("lê new_display_name e exige PIN quando a Meta já aprovou", () => {
     const pending = mapMetaPhoneToPortfolioNumber({
       id: "phone-1",
@@ -555,6 +612,7 @@ describe("meta portfolio mapper", () => {
         qualityRating: null,
         metaStatus: "CONNECTED",
         codeVerificationStatus: "VERIFIED",
+        healthCanSend: null,
         uiStatus: "ativo",
         dispatchStatus: "livre",
         canActivate: false,
@@ -1220,6 +1278,7 @@ describe("meta portfolio service", () => {
       qualityRating: null,
       metaStatus: "CONNECTED",
       codeVerificationStatus: "VERIFIED",
+      healthCanSend: null,
       uiStatus: "ativo",
       dispatchStatus: "livre",
       canActivate: false,
@@ -1256,6 +1315,7 @@ describe("meta portfolio service", () => {
         qualityRating: null,
         metaStatus: "CONNECTED",
         codeVerificationStatus: "VERIFIED",
+        healthCanSend: null,
         uiStatus: "ativo",
         dispatchStatus: "livre",
         canActivate: false,

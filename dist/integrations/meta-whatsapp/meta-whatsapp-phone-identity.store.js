@@ -315,7 +315,11 @@ function applyLocalPhoneIdentities(tenantId, numbers) {
             newDisplayName: row.newDisplayName,
             newNameStatus: row.newNameStatus,
         });
-        const connected = (0, meta_whatsapp_portfolio_map_1.isMetaPhoneConnected)(row.metaStatus);
+        const uiStatus = (0, meta_whatsapp_portfolio_map_1.resolveMetaPhoneUiStatus)({
+            metaStatus: row.metaStatus,
+            codeVerificationStatus: row.codeVerificationStatus,
+            healthCanSend: row.healthCanSend,
+        });
         const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
         if (isPhoneInboxEnabled(identity) && row.verifiedName) {
             syncInboxChannelNameFromMeta(tenantId, row.phoneNumberId, row.verifiedName, row.displayPhoneNumber);
@@ -325,7 +329,8 @@ function applyLocalPhoneIdentities(tenantId, numbers) {
             requestedName: nameSync.requestedName,
             nameSyncStatus: nameSync.nameSyncStatus,
             nameNeedsRegister: nameSync.nameNeedsRegister,
-            canActivate: !connected || nameSync.nameNeedsRegister,
+            canActivate: (0, meta_whatsapp_portfolio_map_1.canActivateMetaPhoneNumber)(uiStatus, nameSync.nameNeedsRegister),
+            uiStatus,
             profilePictureUrl: localPhoto || row.profilePictureUrl,
             inboxEnabled: isPhoneInboxEnabled(identity),
             photoSyncStatus: localPhoto ? "applied" : row.photoSyncStatus,

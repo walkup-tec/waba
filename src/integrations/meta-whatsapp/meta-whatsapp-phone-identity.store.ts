@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, w
 import path from "node:path";
 import { resolveDataDir } from "../../data-path";
 import type { MetaPortfolioNumberPublic, MetaProfileSyncStatus } from "./meta-whatsapp-portfolio.types";
-import { isMetaPhoneConnected, resolvePhoneNameSync } from "./meta-whatsapp-portfolio.map";
+import { resolvePhoneNameSync, resolveMetaPhoneUiStatus, canActivateMetaPhoneNumber } from "./meta-whatsapp-portfolio.map";
 
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
@@ -382,7 +382,11 @@ export function applyLocalPhoneIdentities(
       newDisplayName: row.newDisplayName,
       newNameStatus: row.newNameStatus,
     });
-    const connected = isMetaPhoneConnected(row.metaStatus);
+    const uiStatus = resolveMetaPhoneUiStatus({
+      metaStatus: row.metaStatus,
+      codeVerificationStatus: row.codeVerificationStatus,
+      healthCanSend: row.healthCanSend,
+    });
     const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
     if (isPhoneInboxEnabled(identity) && row.verifiedName) {
       syncInboxChannelNameFromMeta(
@@ -397,7 +401,8 @@ export function applyLocalPhoneIdentities(
       requestedName: nameSync.requestedName,
       nameSyncStatus: nameSync.nameSyncStatus,
       nameNeedsRegister: nameSync.nameNeedsRegister,
-      canActivate: !connected || nameSync.nameNeedsRegister,
+      canActivate: canActivateMetaPhoneNumber(uiStatus, nameSync.nameNeedsRegister),
+      uiStatus,
       profilePictureUrl: localPhoto || row.profilePictureUrl,
       inboxEnabled: isPhoneInboxEnabled(identity),
       photoSyncStatus: localPhoto ? "applied" : row.photoSyncStatus,

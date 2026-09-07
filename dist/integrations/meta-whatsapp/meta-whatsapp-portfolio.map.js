@@ -6,6 +6,9 @@ exports.graphPhotoDownloadUrl = graphPhotoDownloadUrl;
 exports.graphPhotoSourceKey = graphPhotoSourceKey;
 exports.safePublicPhotoUrl = safePublicPhotoUrl;
 exports.isMetaPhoneConnected = isMetaPhoneConnected;
+exports.parseMetaHealthCanSend = parseMetaHealthCanSend;
+exports.resolveMetaPhoneUiStatus = resolveMetaPhoneUiStatus;
+exports.canActivateMetaPhoneNumber = canActivateMetaPhoneNumber;
 exports.namesEqual = namesEqual;
 exports.mapPhoneNameFields = mapPhoneNameFields;
 exports.resolvePhoneNameSync = resolvePhoneNameSync;
@@ -23,7 +26,7 @@ exports.dedupePortfolioCards = dedupePortfolioCards;
 exports.firstOwnedPageId = firstOwnedPageId;
 exports.mapMetaPhoneToPortfolioNumber = mapMetaPhoneToPortfolioNumber;
 exports.mapMetaPhoneListToPortfolioNumbers = mapMetaPhoneListToPortfolioNumbers;
-exports.META_PHONE_NUMBER_LIST_FIELDS = "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,name_status,new_display_name,new_name_status";
+exports.META_PHONE_NUMBER_LIST_FIELDS = "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,name_status,new_display_name,new_name_status,health_status";
 exports.META_PHONE_NAME_FIELDS = "verified_name,name_status,new_display_name,new_name_status";
 exports.META_WABA_IDENTITY_FIELDS = "id,name,owner_business_info{id,name,profile_picture_uri,primary_page{id,name,picture}},on_behalf_of_business_info{id,name,profile_picture_uri,primary_page{id,name,picture}}";
 exports.META_WABA_IDENTITY_FIELDS_MINIMAL = "id,name,owner_business_info{id,name,primary_page{id,name}},on_behalf_of_business_info{id,name}";
@@ -106,6 +109,83 @@ function safePublicPhotoUrl(value) {
 }
 function isMetaPhoneConnected(metaStatus) {
     return String(metaStatus || "").trim().toUpperCase() === "CONNECTED";
+}
+const META_PHONE_RESTRICTED_STATUSES = new Set([
+    "BANNED",
+    "RESTRICTED",
+    "FLAGGED",
+    "RATE_LIMITED",
+    "DISABLED",
+    "LOCKED",
+    "DELETED",
+]);
+/** Graph `health_status.can_send_message`: AVAILABLE | LIMITED | BLOCKED. */
+function parseMetaHealthCanSend(json) {
+    const row = asRecord(json);
+    const health = asRecord(row.health_status);
+    const entities = Array.isArray(health.entities) ? health.entities : [];
+    const values = [text(health.can_send_message)];
+    for (const entity of entities) {
+        const item = asRecord(entity);
+        const type = String(item.entity_type || "").trim().toUpperCase();
+        if (type === "PHONE_NUMBER" || type === "WABA" || type === "BUSINESS") {
+            values.push(text(item.can_send_message));
+        }
+    }
+    const upper = values.map((value) => String(value || "").trim().toUpperCase()).filter(Boolean);
+    if (upper.includes("BLOCKED"))
+        return "BLOCKED";
+    if (upper.includes("LIMITED"))
+        return "LIMITED";
+    return text(health.can_send_message);
+}
+/**
+ * status da Graph (CONNECTED/RESTRICTED/BANNED/…) + health_status.
+ * Número já verificado e desconectado entra como restrição, não como PIN.
+ */
+function resolveMetaPhoneUiStatus(input) {
+    const status = String(input.metaStatus || "").trim().toUpperCase();
+    const verified = String(input.codeVerificationStatus || "").trim().toUpperCase();
+    const health = String(input.healthCanSend || "").trim().toUpperCase();
+    if (META_PHONE_RESTRICTED_STATUSES.has(status))
+        return "restrito";
+    if (status === "CONNECTED") {
+        return health === "BLOCKED" ? "restrito" : "ativo";
+    }
+    if (status === "DISCONNECTED" && (verified === "VERIFIED" || verified === "EXPIRED")) {
+        return "restrito";
+    }
+    return "pendente";
+}
+function canActivateMetaPhoneNumber(uiStatus, nameNeedsRegister) {
+    if (uiStatus === "restrito")
+        return false;
+    if (uiStatus === "pendente")
+        return true;
+    return Boolean(nameNeedsRegister);
+}
+function preferMetaPhoneStatus(left, right) {
+    const a = text(left);
+    const b = text(right);
+    const ua = String(a || "").toUpperCase();
+    const ub = String(b || "").toUpperCase();
+    if (META_PHONE_RESTRICTED_STATUSES.has(ua))
+        return a;
+    if (META_PHONE_RESTRICTED_STATUSES.has(ub))
+        return b;
+    if (ua === "CONNECTED")
+        return a;
+    if (ub === "CONNECTED")
+        return b;
+    return a || b;
+}
+function preferHealthCanSend(left, right) {
+    const a = text(left);
+    const b = text(right);
+    if (String(a || "").toUpperCase() === "BLOCKED" || String(b || "").toUpperCase() === "BLOCKED") {
+        return "BLOCKED";
+    }
+    return a || b;
 }
 function namesEqual(left, right) {
     const a = String(left || "").trim().toLowerCase();
@@ -281,11 +361,15 @@ function unionPortfolioNumbers(...lists) {
             }
             // Prefer CONNECTED: não deixar stored (metaStatus null / ui pendente)
             // apagar o status da Graph ao só completar verifiedName/display.
-            const metaStatus = (isMetaPhoneConnected(prev.metaStatus) ? text(prev.metaStatus) : null) ||
-                (isMetaPhoneConnected(item.metaStatus) ? text(item.metaStatus) : null) ||
-                text(prev.metaStatus) ||
-                text(item.metaStatus);
-            const connected = isMetaPhoneConnected(metaStatus);
+            const metaStatus = preferMetaPhoneStatus(prev.metaStatus, item.metaStatus);
+            const healthCanSend = preferHealthCanSend(prev.healthCanSend, item.healthCanSend);
+            const codeVerificationStatus = text(item.codeVerificationStatus) || text(prev.codeVerificationStatus);
+            const uiStatus = resolveMetaPhoneUiStatus({
+                metaStatus,
+                codeVerificationStatus,
+                healthCanSend,
+            });
+            const nameNeedsRegister = Boolean(item.nameNeedsRegister || prev.nameNeedsRegister);
             byId.set(id, {
                 ...prev,
                 ...item,
@@ -293,11 +377,11 @@ function unionPortfolioNumbers(...lists) {
                 displayPhoneNumber: text(item.displayPhoneNumber) || text(prev.displayPhoneNumber),
                 verifiedName: text(item.verifiedName) || text(prev.verifiedName),
                 metaStatus,
-                uiStatus: connected
-                    ? "ativo"
-                    : item.uiStatus === "ativo" || prev.uiStatus === "ativo"
-                        ? "ativo"
-                        : "pendente",
+                healthCanSend,
+                codeVerificationStatus,
+                uiStatus,
+                canActivate: canActivateMetaPhoneNumber(uiStatus, nameNeedsRegister),
+                nameNeedsRegister,
             });
         }
     }
@@ -399,7 +483,8 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
     if (!phoneNumberId)
         return null;
     const metaStatus = text(row.status);
-    const connected = isMetaPhoneConnected(metaStatus);
+    const codeVerificationStatus = text(row.code_verification_status);
+    const healthCanSend = parseMetaHealthCanSend(row);
     const busy = busyPhoneIds.has(phoneNumberId);
     const verifiedName = text(row.verified_name);
     const nameStatus = text(row.name_status);
@@ -411,16 +496,22 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
         newDisplayName,
         newNameStatus,
     });
+    const uiStatus = resolveMetaPhoneUiStatus({
+        metaStatus,
+        codeVerificationStatus,
+        healthCanSend,
+    });
     return {
         phoneNumberId,
         displayPhoneNumber: text(row.display_phone_number),
         verifiedName,
         qualityRating: text(row.quality_rating),
         metaStatus,
-        codeVerificationStatus: text(row.code_verification_status),
-        uiStatus: connected ? "ativo" : "pendente",
+        codeVerificationStatus,
+        healthCanSend,
+        uiStatus,
         dispatchStatus: busy ? "em_disparo" : "livre",
-        canActivate: !connected || nameSync.nameNeedsRegister,
+        canActivate: canActivateMetaPhoneNumber(uiStatus, nameSync.nameNeedsRegister),
         nameNeedsRegister: nameSync.nameNeedsRegister,
         nameStatus,
         newDisplayName,
