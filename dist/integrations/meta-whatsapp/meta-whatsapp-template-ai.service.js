@@ -389,12 +389,14 @@ class MetaWhatsappTemplateAiService {
             }
         }
         let metaButtonUrl = null;
-        if (anyPending.length) {
-            metaButtonUrl = await this.createButtonShortUrl({
+        const ensureMetaButtonUrl = async () => {
+            if (metaButtonUrl)
+                return metaButtonUrl;
+            metaButtonUrl = (0, meta_whatsapp_template_ai_short_url_1.assertMetaReadyButtonShortUrl)(await this.createButtonShortUrl({
                 destinationUrl: shell.buttonUrl,
                 tenantId: tenant.tenantId,
                 publicBaseHints,
-            });
+            }));
             (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
                 tenantId: tenant.tenantId,
                 connectionId: portfolios[0].id,
@@ -402,16 +404,14 @@ class MetaWhatsappTemplateAiService {
                 destinationHost: safeHost(shell.buttonUrl),
                 shortHost: safeHost(metaButtonUrl),
             });
-        }
+            return metaButtonUrl;
+        };
+        if (anyPending.length)
+            await ensureMetaButtonUrl();
         for (const connection of portfolios) {
             const portfolioName = String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio";
             const wabaId = String(connection.wabaId || "");
             const handle = headerHandles[connection.id] || firstHandle;
-            const graphShell = {
-                ...shell,
-                buttonUrl: metaButtonUrl || shell.buttonUrl,
-                headerHandle: handle || shell.headerHandle,
-            };
             const alreadySubmitted = await this.analyses.listSubmittedNames(tenant.tenantId, connection.id, analysisId);
             for (let index = 0; index < analysisResult.options.length; index += 1) {
                 const option = analysisResult.options[index];
@@ -438,6 +438,7 @@ class MetaWhatsappTemplateAiService {
                     }
                 }
                 try {
+                    const buttonUrl = await ensureMetaButtonUrl();
                     const template = await this.templates.createFromAuth(auth, {
                         connectionId: connection.id,
                         aiAnalysisId: analysisId,
@@ -445,7 +446,11 @@ class MetaWhatsappTemplateAiService {
                         name,
                         language: analysis.language,
                         category: "UTILITY",
-                        components: (0, meta_whatsapp_template_ai_shell_1.componentsFromAiOptionAndShell)(option, graphShell),
+                        components: (0, meta_whatsapp_template_ai_shell_1.componentsFromAiOptionAndShell)(option, {
+                            ...shell,
+                            buttonUrl,
+                            headerHandle: handle || shell.headerHandle,
+                        }),
                     });
                     results.push({
                         index,

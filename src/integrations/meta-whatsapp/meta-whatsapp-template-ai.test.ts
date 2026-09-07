@@ -957,6 +957,36 @@ describe("Assistente IA de templates Utility", () => {
     ]);
   });
 
+  it("nunca envia o destino cru (wa.me) à Graph se o encurtador devolver URL inválida", async () => {
+    const email = "ai-short-raw@example.com";
+    const calls: Array<Record<string, unknown>> = [];
+    const { service } = serviceFor(
+      email,
+      utilityOutput(),
+      {
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(input);
+          return { id: `local-${String(input.name)}`, status: "PENDING" };
+        },
+      },
+      {},
+      async () => "https://wa.me/5511999999999",
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    await assert.rejects(
+      () =>
+        service.submitAllFromAuth(
+          { email, role: "subscriber" },
+          submitShell({ buttonUrl: "https://wa.me/5511999999999" }),
+        ),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_restricted",
+    );
+    assert.equal(calls.length, 0);
+  });
+
   it("falha o lote se o encurtador WABA não gerar o link curto", async () => {
     const email = "ai-short-fail@example.com";
     const { service } = serviceFor(
