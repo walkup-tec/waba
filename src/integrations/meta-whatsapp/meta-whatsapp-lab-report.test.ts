@@ -213,6 +213,27 @@ describe("fechamento automático do relatório Meta", () => {
     assert.equal(metrics.failed, 1);
     assert.equal(metrics.clicks, 7);
   });
+
+  it("relatório único soma envios de números e portfólios diferentes", () => {
+    const metrics = computeMetaLabCampaignMetrics(
+      base({
+        phoneNumberId: "b1",
+        phoneNumberIds: ["b1", "c1"],
+        clicks: 5,
+        leads: [
+          { waId: "1", phoneNumberId: "b1", connectionId: "conn-b", status: "sent", metaStatus: "read" },
+          { waId: "2", phoneNumberId: "c1", connectionId: "conn-c", status: "sent", metaStatus: "delivered" },
+          { waId: "3", phoneNumberId: "b1", connectionId: "conn-b", status: "failed", metaStatus: "failed" },
+        ],
+      }),
+      3,
+    );
+    assert.equal(metrics.sent, 2);
+    assert.equal(metrics.delivered, 2);
+    assert.equal(metrics.read, 1);
+    assert.equal(metrics.failed, 1);
+    assert.equal(metrics.clicks, 5);
+  });
 });
 
 describe("webhook do Disparo Cloud não perde entregue/lido", () => {
@@ -329,6 +350,24 @@ describe("webhook do Disparo Cloud não perde entregue/lido", () => {
       { wamid: "wamid.X" },
     );
     assert.equal(byWamid?.lead.wamid, "wamid.X");
+  });
+
+  it("webhook de qualquer número/portfólio da campanha entra no mesmo relatório", () => {
+    const rows = [
+      campaign({
+        phoneNumberId: "b1",
+        phoneNumberIds: ["b1", "c1"],
+        leads: [
+          { waId: "5551999887766", phoneNumberId: "b1", status: "sent", wamid: "wamid.b" },
+          { waId: "5551982001261", phoneNumberId: "c1", status: "sent", wamid: "wamid.c" },
+        ],
+      }),
+    ];
+    const fromC = matchBroadcastLeadForMetaStatus(rows, { wamid: "wamid.c", phoneNumberId: "c1" });
+    const fromB = matchBroadcastLeadForMetaStatus(rows, { wamid: "wamid.b", phoneNumberId: "b1" });
+    assert.equal(fromC?.lead.wamid, "wamid.c");
+    assert.equal(fromB?.lead.wamid, "wamid.b");
+    assert.equal(fromB?.campaign.id, fromC?.campaign.id);
   });
 });
 
@@ -456,20 +495,21 @@ describe("ocupação do número no Disparo Cloud", () => {
     assert.equal(busy.has("phone-b"), false);
   });
 
-  it("ocupa todos os números de uma campanha fracionada", () => {
+  it("ocupa números de portfólios diferentes na mesma campanha", () => {
     const busy = collectBusyCloudPhoneNumberIds(
       [
         {
-          phoneNumberId: "phone-a",
-          phoneNumberIds: ["phone-a", "phone-c"],
+          phoneNumberId: "b1",
+          phoneNumberIds: ["b1", "c1"],
           status: "running",
-          intakeCampaignId: "multi",
+          intakeCampaignId: "camp-a",
         },
       ],
-      new Map([["multi", "in_progress"]]),
+      new Map([["camp-a", "in_progress"]]),
     );
-    assert.equal(busy.has("phone-a"), true);
-    assert.equal(busy.has("phone-c"), true);
+    assert.equal(busy.has("b1"), true);
+    assert.equal(busy.has("c1"), true);
+    assert.equal(busy.has("c2"), false);
   });
 });
 

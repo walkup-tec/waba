@@ -128,6 +128,8 @@ function mergeBroadcastCampaignPreservingMeta(incoming, stored) {
         return {
             ...lead,
             wamid: String(lead.wamid || previous.wamid || "").trim() || lead.wamid || previous.wamid,
+            phoneNumberId: lead.phoneNumberId || previous.phoneNumberId,
+            connectionId: lead.connectionId || previous.connectionId,
             metaStatus: keepStored ? previous.metaStatus : lead.metaStatus || previous.metaStatus,
             error: lead.error || previous.error,
             errorCode: previous.errorCode || lead.errorCode,
@@ -421,6 +423,7 @@ function publicBroadcastCampaign(row) {
             ? row.phoneNumberIds.map((id) => String(id || "").trim()).filter(Boolean)
             : [String(row.phoneNumberId || "").trim()].filter(Boolean),
         phoneQuotas: Array.isArray(row.phoneQuotas) ? row.phoneQuotas : undefined,
+        phoneBindings: Array.isArray(row.phoneBindings) ? row.phoneBindings : undefined,
         shortUrl: row.shortUrl,
         clicks: Math.max(0, Number(row.clicks || 0)),
         intakeCampaignId: row.intakeCampaignId || undefined,

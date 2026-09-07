@@ -55,7 +55,7 @@ function distributeBroadcastLeadsAcrossPhones(phoneNumberIds, totalLeads, maxPer
     const total = Math.max(0, Math.floor(Number(totalLeads) || 0));
     const cap = Math.max(1, Math.floor(Number(maxPerNumber) || exports.META_BROADCAST_MAX_SENDS_PER_NUMBER));
     if (!phones.length) {
-        throw new Error("Selecione ao menos um número Ativo e disponível do mesmo portfólio.");
+        throw new Error("Selecione ao menos um número Ativo e disponível.");
     }
     if (!total) {
         return phones.map((phoneNumberId) => ({ phoneNumberId, planned: 0 }));

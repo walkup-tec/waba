@@ -20,6 +20,7 @@ const meta_whatsapp_broadcast_leads_1 = require("./meta-whatsapp-broadcast-leads
 const meta_whatsapp_broadcast_media_1 = require("./meta-whatsapp-broadcast-media");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
 const meta_whatsapp_broadcast_split_1 = require("./meta-whatsapp-broadcast-split");
+const meta_whatsapp_broadcast_phones_1 = require("./meta-whatsapp-broadcast-phones");
 const meta_whatsapp_broadcast_protect_1 = require("./meta-whatsapp-broadcast-protect");
 const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
 const meta_whatsapp_broadcast_report_1 = require("./meta-whatsapp-broadcast-report");
@@ -186,37 +187,47 @@ class MetaWhatsappBroadcastService {
             samples: preview.samples,
         };
     }
-    async requireActivePhone(auth, connectionId, phoneNumberId) {
-        const requested = String(phoneNumberId || "").trim();
-        if (!requested) {
-            fail("invalid_payload", "Selecione um número Ativo e disponível do portfólio.");
-        }
-        const assets = await this.portfolios.listPortfolioAssets(auth, { connectionId });
-        const numbers = [
-            ...(assets.numbers || []),
-            ...((assets.portfolios || []).flatMap((item) => item.numbers || [])),
-        ];
-        const match = numbers.find((item) => String(item.phoneNumberId || "").trim() === requested);
-        if (!match)
-            fail("invalid_payload", "Este número não pertence ao portfólio selecionado.");
-        if (String(match.uiStatus || "") !== "ativo") {
-            fail("phone_not_registered", "O disparo Cloud só sai de um número Ativo.");
-        }
-        if (String(match.dispatchStatus || "") === "em_disparo") {
-            fail("invalid_payload", "Este número está ocupado em outro disparo. Ele volta a ficar disponível depois que a campanha for finalizada e o relatório for gerado.");
-        }
-        return requested;
-    }
-    async requireActivePhones(auth, connectionId, phoneNumberIds) {
+    async requireActivePhoneBindings(auth, phoneNumberIds) {
         const requested = (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(phoneNumberIds);
         if (!requested.length) {
-            fail("invalid_payload", "Selecione ao menos um número Ativo e disponível do mesmo portfólio.");
+            fail("invalid_payload", "Selecione ao menos um número Ativo e disponível.");
         }
-        const verified = [];
-        for (const phoneNumberId of requested) {
-            verified.push(await this.requireActivePhone(auth, connectionId, phoneNumberId));
+        const assets = await this.portfolios.listPortfolioAssets(auth);
+        const catalog = (0, meta_whatsapp_broadcast_phones_1.indexBroadcastPortfolioPhones)(assets.portfolios || []);
+        try {
+            return (0, meta_whatsapp_broadcast_phones_1.resolveBroadcastPhoneBindings)(requested, catalog);
         }
-        return verified;
+        catch (error) {
+            const reason = error instanceof meta_whatsapp_broadcast_phones_1.BroadcastPhoneSelectionError ? error.reason : "unknown";
+            const message = error instanceof Error ? error.message : "Não foi possível validar os números selecionados.";
+            if (reason === "inactive")
+                fail("phone_not_registered", message);
+            fail("invalid_payload", message);
+        }
+    }
+    async assertTemplateOnPhoneBindings(input) {
+        const seen = new Set();
+        for (const binding of input.bindings) {
+            const connectionId = String(binding.connectionId || "").trim();
+            if (!connectionId || seen.has(connectionId))
+                continue;
+            seen.add(connectionId);
+            if (!(0, meta_whatsapp_broadcast_phones_1.connectionNeedsLocalTemplate)({
+                connectionId,
+                wabaId: binding.wabaId,
+                templateConnectionId: input.templateConnectionId,
+                templateWabaId: input.templateWabaId,
+            })) {
+                continue;
+            }
+            const other = await this.templates.findForSend(input.tenantId, connectionId, input.templateName, input.templateLanguage);
+            if (!other || !(0, meta_whatsapp_template_types_1.isTemplateApprovedForSend)(other.status)) {
+                fail("invalid_payload", (0, meta_whatsapp_broadcast_phones_1.templateMissingOnPortfolioMessage)({
+                    templateName: input.templateName,
+                    portfolioName: binding.portfolioName,
+                }));
+            }
+        }
     }
     async resolveHeaderMedia(input) {
         const kind = headerMediaType(input.inspect.headerFormat);
@@ -253,13 +264,37 @@ class MetaWhatsappBroadcastService {
         });
         fail("template_media_required", meta_whatsapp_broadcast_header_1.BROADCAST_HEADER_MISSING_FILE_ERROR);
     }
-    async resolveHeaderMediaByPhones(input) {
+    async resolveHeaderMediaForBindings(input) {
         const out = {};
-        const phones = (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(input.phoneNumberIds);
-        for (const phoneNumberId of phones) {
+        const tokenByConnection = new Map();
+        for (const binding of input.bindings) {
+            const connectionId = String(binding.connectionId || "").trim();
+            const phoneNumberId = String(binding.phoneNumberId || "").trim();
+            if (!connectionId || !phoneNumberId)
+                continue;
+            let token = tokenByConnection.get(connectionId);
+            if (!token) {
+                const connection = await this.connections.findByIdForTenant(input.tenantId, connectionId);
+                if (!connection)
+                    throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
+                try {
+                    token = this.decrypt(connection.accessTokenEncrypted);
+                }
+                catch {
+                    throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
+                }
+                tokenByConnection.set(connectionId, token);
+            }
             out[phoneNumberId] = await this.resolveHeaderMedia({
-                ...input,
+                tenantId: input.tenantId,
+                token,
                 phoneNumberId,
+                templateId: input.templateId,
+                metaTemplateId: input.metaTemplateId,
+                templateName: input.templateName,
+                language: input.language,
+                components: input.components,
+                inspect: input.inspect,
             });
         }
         return out;
@@ -333,7 +368,16 @@ class MetaWhatsappBroadcastService {
         const tenant = requireTenant(auth);
         const connectionId = String(input.connectionId || "").trim();
         const loaded = await this.loadApprovedTemplate(tenant.tenantId, connectionId, String(input.templateId || "").trim());
-        const phoneNumberIds = await this.requireActivePhones(auth, loaded.connection.id, (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(input.phoneNumberIds?.length ? input.phoneNumberIds : [String(input.phoneNumberId || "")]));
+        const phoneBindings = await this.requireActivePhoneBindings(auth, (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(input.phoneNumberIds?.length ? input.phoneNumberIds : [String(input.phoneNumberId || "")]));
+        await this.assertTemplateOnPhoneBindings({
+            tenantId: tenant.tenantId,
+            templateName: loaded.template.name,
+            templateLanguage: loaded.template.language,
+            templateConnectionId: loaded.connection.id,
+            templateWabaId: loaded.connection.wabaId,
+            bindings: phoneBindings,
+        });
+        const phoneNumberIds = phoneBindings.map((row) => row.phoneNumberId);
         const phoneNumberId = phoneNumberIds[0];
         const preview = this.previewFromBuffer({
             buffer: input.buffer,
@@ -348,26 +392,18 @@ class MetaWhatsappBroadcastService {
         let assignedLeads;
         try {
             phoneQuotas = (0, meta_whatsapp_broadcast_split_1.distributeBroadcastLeadsAcrossPhones)(phoneNumberIds, preview.parsed.leads.length);
-            assignedLeads = (0, meta_whatsapp_broadcast_split_1.assignBroadcastLeadsToPhones)(preview.parsed.leads, phoneNumberIds);
+            assignedLeads = (0, meta_whatsapp_broadcast_phones_1.attachBroadcastLeadPhoneBindings)((0, meta_whatsapp_broadcast_split_1.assignBroadcastLeadsToPhones)(preview.parsed.leads, phoneNumberIds), phoneBindings);
         }
         catch (error) {
             fail("invalid_payload", error instanceof Error
                 ? error.message
                 : `Não foi possível fracionar os envios (máx. ${meta_whatsapp_broadcast_split_1.META_BROADCAST_MAX_SENDS_PER_NUMBER} por número).`);
         }
-        let token = "";
-        try {
-            token = this.decrypt(loaded.connection.accessTokenEncrypted);
-        }
-        catch {
-            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
-        }
         const campaignId = (0, node_crypto_1.randomUUID)();
         const intakeCampaignId = this.linkSubscriberCampaign(auth, String(input.intakeCampaignId || "").trim());
-        const headerByPhone = await this.resolveHeaderMediaByPhones({
+        const headerByPhone = await this.resolveHeaderMediaForBindings({
             tenantId: tenant.tenantId,
-            token,
-            phoneNumberIds,
+            bindings: phoneBindings,
             templateId: loaded.template.id,
             metaTemplateId: loaded.template.metaTemplateId,
             templateName: loaded.template.name,
@@ -402,6 +438,7 @@ class MetaWhatsappBroadcastService {
             language: loaded.template.language,
             phoneNumberId,
             phoneNumberIds,
+            phoneBindings,
             phoneQuotas: phoneQuotas.map((row) => ({ phoneNumberId: row.phoneNumberId, planned: row.planned })),
             intakeCampaignId,
             shortSlug: short.shortSlug,
@@ -428,6 +465,7 @@ class MetaWhatsappBroadcastService {
         });
         void this.runCampaign(campaign.id, tenant.tenantId, {
             connectionId: loaded.connection.id,
+            connectionByPhone: (0, meta_whatsapp_broadcast_phones_1.connectionIdByPhoneNumber)(phoneBindings),
             templateName: loaded.template.name,
             language: loaded.template.language,
             phoneNumberId,
@@ -472,6 +510,12 @@ class MetaWhatsappBroadcastService {
                     continue;
                 try {
                     const leadPhoneNumberId = String(lead.phoneNumberId || ctx.phoneNumberId || "").trim();
+                    const leadConnectionId = String(lead.connectionId ||
+                        (leadPhoneNumberId && ctx.connectionByPhone
+                            ? ctx.connectionByPhone[leadPhoneNumberId]
+                            : "") ||
+                        ctx.connectionId ||
+                        "").trim();
                     const header = (leadPhoneNumberId && ctx.headerByPhone
                         ? ctx.headerByPhone[leadPhoneNumberId]
                         : undefined) ?? ctx.header ?? null;
@@ -480,7 +524,7 @@ class MetaWhatsappBroadcastService {
                         to: lead.waId,
                         templateName: ctx.templateName,
                         language: ctx.language,
-                        connectionId: ctx.connectionId,
+                        connectionId: leadConnectionId || ctx.connectionId,
                         phoneNumberId: leadPhoneNumberId || ctx.phoneNumberId,
                         components: this.buildComponents({
                             inspect: ctx.inspect,
@@ -631,22 +675,15 @@ class MetaWhatsappBroadcastService {
             return false;
         try {
             const loaded = await this.loadApprovedTemplate(tenantId, row.connectionId, row.templateId);
-            let token = "";
-            try {
-                token = this.decrypt(loaded.connection.accessTokenEncrypted);
-            }
-            catch {
-                (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-resume-skipped", {
-                    campaignId,
-                    reason: "invalid_token",
-                });
-                return false;
-            }
             const phoneNumberIds = (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(row.phoneNumberIds?.length ? row.phoneNumberIds : [row.phoneNumberId]);
-            const headerByPhone = await this.resolveHeaderMediaByPhones({
-                tenantId,
-                token,
+            const phoneBindings = (0, meta_whatsapp_broadcast_phones_1.bindingsFromCampaignPhones)({
                 phoneNumberIds,
+                fallbackConnectionId: loaded.connection.id,
+                stored: row.phoneBindings,
+            });
+            const headerByPhone = await this.resolveHeaderMediaForBindings({
+                tenantId,
+                bindings: phoneBindings,
                 templateId: loaded.template.id,
                 metaTemplateId: loaded.template.metaTemplateId,
                 templateName: loaded.template.name,
@@ -664,6 +701,7 @@ class MetaWhatsappBroadcastService {
             });
             void this.runCampaign(campaignId, tenantId, {
                 connectionId: loaded.connection.id,
+                connectionByPhone: (0, meta_whatsapp_broadcast_phones_1.connectionIdByPhoneNumber)(phoneBindings),
                 templateName: loaded.template.name,
                 language: loaded.template.language,
                 phoneNumberId: phoneNumberIds[0] || row.phoneNumberId,

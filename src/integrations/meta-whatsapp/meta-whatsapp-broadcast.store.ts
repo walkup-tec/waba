@@ -18,6 +18,8 @@ export type MetaBroadcastLead = {
   texto?: string;
   /** Número Cloud que envia este lead (fracionamento multi-número). */
   phoneNumberId?: string;
+  /** Portfólio/conexão do número que envia este lead. */
+  connectionId?: string;
   status: "queued" | "sent" | "failed" | "skipped";
   metaStatus?: MetaMessageStatus;
   wamid?: string;
@@ -35,10 +37,17 @@ export type MetaBroadcastCampaign = {
   language: string;
   /** Número principal (primeiro da lista) — compatível com campanhas antigas. */
   phoneNumberId: string;
-  /** Todos os números do mesmo portfólio usados neste disparo (relatório unificado). */
+  /** Todos os números usados neste disparo (podem ser de portfólios diferentes). */
   phoneNumberIds?: string[];
   /** Cotas planejadas por número (soma = total de envios). */
   phoneQuotas?: Array<{ phoneNumberId: string; planned: number }>;
+  /** Ligação número → portfólio para token Graph e relatório único. */
+  phoneBindings?: Array<{
+    phoneNumberId: string;
+    connectionId: string;
+    portfolioName?: string | null;
+    wabaId?: string | null;
+  }>;
   intakeCampaignId?: string;
   shortSlug: string;
   shortUrl: string;
@@ -166,6 +175,8 @@ export function mergeBroadcastCampaignPreservingMeta(
     return {
       ...lead,
       wamid: String(lead.wamid || previous.wamid || "").trim() || lead.wamid || previous.wamid,
+      phoneNumberId: lead.phoneNumberId || previous.phoneNumberId,
+      connectionId: lead.connectionId || previous.connectionId,
       metaStatus: keepStored ? previous.metaStatus : lead.metaStatus || previous.metaStatus,
       error: lead.error || previous.error,
       errorCode: previous.errorCode || lead.errorCode,
@@ -469,6 +480,7 @@ export function publicBroadcastCampaign(row: MetaBroadcastCampaign) {
       ? row.phoneNumberIds.map((id) => String(id || "").trim()).filter(Boolean)
       : [String(row.phoneNumberId || "").trim()].filter(Boolean),
     phoneQuotas: Array.isArray(row.phoneQuotas) ? row.phoneQuotas : undefined,
+    phoneBindings: Array.isArray(row.phoneBindings) ? row.phoneBindings : undefined,
     shortUrl: row.shortUrl,
     clicks: Math.max(0, Number(row.clicks || 0)),
     intakeCampaignId: row.intakeCampaignId || undefined,
