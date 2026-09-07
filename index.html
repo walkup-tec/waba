@@ -8938,7 +8938,8 @@
       }
 
       #admin-campanhas-report-overlay,
-      #dis-campaign-report-overlay {
+      #dis-campaign-report-overlay,
+      #admin-campanhas-detail-overlay.confirm-overlay {
         z-index: 2200;
       }
 
@@ -36757,7 +36758,7 @@
           if (!el) return false;
           if (
             el.closest(
-              "[data-meta-inbox-filter], [data-meta-inbox-channel], [data-meta-inbox-open], [data-waba-tab], .waba-tab, .menu-item, .drawer-nav",
+              "[data-meta-inbox-filter], [data-meta-inbox-channel], [data-meta-inbox-open], [data-waba-tab], .waba-tab, .menu-item, .drawer-nav, #admin-campanhas-tbody",
             )
           ) {
             return false;
@@ -45359,8 +45360,19 @@
         const subtitle = document.getElementById("admin-campanhas-detail-subtitle");
         const body = document.getElementById("admin-campanhas-detail-body");
         const materialsBody = document.getElementById("admin-campanhas-detail-materials-body");
-        if (!overlay || !body || !campaign?.id) return;
+        if (!overlay || !body) {
+          showToast("Não foi possível abrir o modal de detalhes.", "error");
+          return false;
+        }
+        if (!campaign?.id) {
+          showToast("Campanha sem identificador para abrir os detalhes.", "error");
+          return false;
+        }
+        if (typeof blurFocusTrappedInClosedOverlays === "function") blurFocusTrappedInClosedOverlays();
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
 
+        try {
         const campaignName = String(campaign.campaignName || "Campanha").trim() || "Campanha";
         if (subtitle) {
           subtitle.textContent = campaignName;
@@ -45541,8 +45553,17 @@
           );
         }
 
+        } catch (error) {
+          body.innerHTML = `<p class="muted">${escapeAdminHtml(
+            error?.message || "Falha ao montar os detalhes da campanha."
+          )}</p>`;
+          showToast(error?.message || "Falha ao abrir os detalhes da campanha.", "error");
+          return false;
+        }
+
         overlay.classList.add("open");
         overlay.setAttribute("aria-hidden", "false");
+        return true;
       }
 
       function applyAdminCampanhasBmInoperanteButtonState(campaign) {
@@ -46525,21 +46546,32 @@
       }
 
       async function openAdminCampanhasDetail(campaignId) {
-        if (!campaignId) return;
+        const id = String(campaignId || "").trim();
+        if (!id) return;
+        const cached = (Array.isArray(adminCampanhasCache) ? adminCampanhasCache : []).find(
+          (row) => String(row?.id || "").trim() === id
+        );
+        if (cached) openAdminCampanhasDetailModal(cached);
         try {
           const response = await fetchAdminOperacionalJson(
-            `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}`,
+            `/admin/operacional/campanhas/${encodeURIComponent(id)}`,
             {},
-            15000,
+            20000,
             2
           );
           const payload = await response.json().catch(() => ({}));
+          const contentType = String(response.headers.get("content-type") || "").toLowerCase();
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível carregar os detalhes da campanha.");
           }
+          if (!contentType.includes("json") || !payload.campaign || !payload.campaign.id) {
+            throw new Error("A campanha voltou sem dados para o modal.");
+          }
           openAdminCampanhasDetailModal(payload.campaign);
         } catch (error) {
-          showToast(error?.message || "Falha ao carregar detalhes da campanha.", "error");
+          const message = error?.message || "Falha ao carregar detalhes da campanha.";
+          if (cached) setAdminCampanhasDetailActionError(message);
+          else showToast(message, "error");
         }
       }
 
@@ -46625,7 +46657,7 @@
         });
 
         document.getElementById("admin-campanhas-tbody")?.addEventListener("click", (event) => {
-          const target = event.target;
+          const target = event.target instanceof Element ? event.target : event.target?.parentElement;
           if (!(target instanceof Element)) return;
           const openBtn = target.closest(".admin-campanhas-open-btn");
           if (openBtn) {

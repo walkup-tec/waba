@@ -22,14 +22,21 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
   app.get("/admin/operacional/campanhas/:id", (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
-    const detail = operacionalCampanhasService.getCampaignDetail(req.params.id, {
-      email: auth.email,
-      role: auth.role,
-    });
-    if (!detail) {
-      return res.status(404).json({ error: "Campanha não encontrada." });
+    try {
+      const detail = operacionalCampanhasService.getCampaignDetail(req.params.id, {
+        email: auth.email,
+        role: auth.role,
+      });
+      if (!detail) {
+        return res.status(404).json({ error: "Campanha não encontrada." });
+      }
+      return res.status(200).json({ campaign: detail });
+    } catch (error) {
+      console.error("[operacional/campanhas/detalhe] erro:", error);
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível carregar os detalhes da campanha.",
+      });
     }
-    return res.status(200).json({ campaign: detail });
   });
 
   app.get("/admin/operacional/campanhas/:id/operacionais-transferencia", (req, res) => {

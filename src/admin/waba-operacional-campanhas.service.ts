@@ -398,7 +398,13 @@ export class WabaOperacionalCampanhasService {
     const intake = this.intakeRepository.getById(campaignId);
     if (!intake || !this.matchesStaffCampaignFilter(intake, staff)) return null;
 
-    const base = this.toListItem(intake, staff, findBroadcastProgressByIntakeCampaignId(intake.id));
+    let broadcastProgress: CloudBroadcastProgressHint | null = null;
+    try {
+      broadcastProgress = findBroadcastProgressByIntakeCampaignId(intake.id);
+    } catch {
+      broadcastProgress = null;
+    }
+    const base = this.toListItem(intake, staff, broadcastProgress);
     const plannedSendCount = base.plannedSendCount;
     const trimmedName =
       intake.spreadsheetTrimmedFileName ||

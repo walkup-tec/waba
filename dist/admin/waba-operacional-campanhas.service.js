@@ -235,7 +235,14 @@ class WabaOperacionalCampanhasService {
         const intake = this.intakeRepository.getById(campaignId);
         if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
             return null;
-        const base = this.toListItem(intake, staff, (0, meta_whatsapp_broadcast_store_1.findBroadcastProgressByIntakeCampaignId)(intake.id));
+        let broadcastProgress = null;
+        try {
+            broadcastProgress = (0, meta_whatsapp_broadcast_store_1.findBroadcastProgressByIntakeCampaignId)(intake.id);
+        }
+        catch {
+            broadcastProgress = null;
+        }
+        const base = this.toListItem(intake, staff, broadcastProgress);
         const plannedSendCount = base.plannedSendCount;
         const trimmedName = intake.spreadsheetTrimmedFileName ||
             `leads-${plannedSendCount}-envios.xlsx`;
