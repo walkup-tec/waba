@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-09-07 13:22 — Cleison: força 5.829 Oficiais / 0 bonificados
+- Pedido: se o PIX antigo não entrar, saldo = **5.829 disponíveis** e **0 bonificados** (não 1.849+5.000+829).
+- Ajuste único no GET de créditos: expira pedidos Oficiais ativos, neutraliza PIX `pending_payment` e cria grant lifetime `waba:force-balance:cleison-oficial-5829`.
+- Marker `DEPLOY-2026-09-07-132200-cleison-5829-force`.
+- LOG: `doc/LOG-2026-09-07__132200__cleison-5829-force.md`
+
 ## 2026-09-07 13:18 — Saldos: poll Asaas na tela de créditos
 - Sintoma pós-deploy: Cleison ainda 1.849 / Bonificados 0. Pedidos em disco sem escrita desde 05/09 19:26Z.
 - Causa: GET `/billing/disparos/credits` (tela Saldos) não chamava `reconcileOrderPayment`; só o QR fazia. Webhook antigo já tinha 200. Grant vencido podia “comer” os 829 no pending.

@@ -2,4 +2,4 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WABA_DEPLOY_MARKER = void 0;
-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-07-131800-credits-pix-reconcile";
+exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-07-132200-cleison-5829-force";

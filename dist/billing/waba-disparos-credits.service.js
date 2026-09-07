@@ -10,19 +10,21 @@ Object.defineProperty(exports, "emptyDisparosApiCreditsBucket", { enumerable: tr
 Object.defineProperty(exports, "emptyDisparosCreditsByApi", { enumerable: true, get: function () { return waba_disparos_api_credits_1.emptyDisparosCreditsByApi; } });
 const waba_disparos_bonus_settlement_service_1 = require("./waba-disparos-bonus-settlement.service");
 const waba_disparos_bonus_service_1 = require("./waba-disparos-bonus.service");
+const waba_cleison_oficial_balance_repair_1 = require("./waba-cleison-oficial-balance-repair");
 const waba_disparos_credit_usage_repository_1 = require("./waba-disparos-credit-usage.repository");
 const waba_disparos_order_shipments_1 = require("./waba-disparos-order-shipments");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const UNLIMITED_CREDITS_REMAINING = 9999999;
 class WabaDisparosCreditsService {
-    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), usageRepository = new waba_disparos_credit_usage_repository_1.WabaDisparosCreditUsageRepository(), bonusService = new waba_disparos_bonus_service_1.WabaDisparosBonusService(), bonusSettlementService = new waba_disparos_bonus_settlement_service_1.WabaDisparosBonusSettlementService(), intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository(), masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService()) {
+    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), usageRepository = new waba_disparos_credit_usage_repository_1.WabaDisparosCreditUsageRepository(), bonusService = new waba_disparos_bonus_service_1.WabaDisparosBonusService(), bonusSettlementService = new waba_disparos_bonus_settlement_service_1.WabaDisparosBonusSettlementService(), intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository(), masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService(), cleisonBalanceRepair = new waba_cleison_oficial_balance_repair_1.WabaCleisonOficialBalanceRepair()) {
         this.orderRepository = orderRepository;
         this.usageRepository = usageRepository;
         this.bonusService = bonusService;
         this.bonusSettlementService = bonusSettlementService;
         this.intakeRepository = intakeRepository;
         this.masterPolicyService = masterPolicyService;
+        this.cleisonBalanceRepair = cleisonBalanceRepair;
     }
     listPaidOrdersForEmail(email) {
         const normalized = normalizeEmail(email);
@@ -117,6 +119,7 @@ class WabaDisparosCreditsService {
         const normalized = normalizeEmail(email);
         const unlimitedCredits = this.masterPolicyService.hasUnlimitedCredits(normalized);
         this.ensureUsageMigrated(normalized);
+        this.cleisonBalanceRepair.applyIfNeeded(normalized);
         this.bonusSettlementService.settleAllUnsettledPaidOrdersForEmail(normalized);
         const paidOrders = this.listPaidOrdersForEmail(normalized);
         const byApi = {

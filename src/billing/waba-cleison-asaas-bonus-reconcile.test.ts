@@ -6,6 +6,8 @@ import { after, before, describe, it } from "node:test";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
 import { parseWabaOrderIdFromExternalReference } from "./asaas-identifiers";
 
+process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR = "1";
+
 const EMAIL = "cleison.fel@gmail.com";
 const NEW_ORDER_ID = "7c1e5000-0ff1-4c1a-9c1e-000000005000";
 const originalCwd = process.cwd();

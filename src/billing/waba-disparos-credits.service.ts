@@ -16,6 +16,7 @@ import {
 } from "./waba-disparos-api-credits";
 import { WabaDisparosBonusSettlementService } from "./waba-disparos-bonus-settlement.service";
 import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
+import { WabaCleisonOficialBalanceRepair } from "./waba-cleison-oficial-balance-repair";
 import { WabaDisparosCreditUsageRepository } from "./waba-disparos-credit-usage.repository";
 import {
   resolveActiveOrderShipmentCount,
@@ -50,6 +51,7 @@ export class WabaDisparosCreditsService {
     private readonly bonusSettlementService = new WabaDisparosBonusSettlementService(),
     private readonly intakeRepository = new WabaCampaignIntakeRepository(),
     private readonly masterPolicyService = new WabaMasterDisparosPolicyService(),
+    private readonly cleisonBalanceRepair = new WabaCleisonOficialBalanceRepair(),
   ) {}
 
   private listPaidOrdersForEmail(email: string): WabaBillingOrder[] {
@@ -169,6 +171,7 @@ export class WabaDisparosCreditsService {
     const normalized = normalizeEmail(email);
     const unlimitedCredits = this.masterPolicyService.hasUnlimitedCredits(normalized);
     this.ensureUsageMigrated(normalized);
+    this.cleisonBalanceRepair.applyIfNeeded(normalized);
     this.bonusSettlementService.settleAllUnsettledPaidOrdersForEmail(normalized);
     const paidOrders = this.listPaidOrdersForEmail(normalized);
 
