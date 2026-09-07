@@ -51186,29 +51186,43 @@
         }
       }
 
-      async function validateDisCampaignWizardWhatsappLogoFile(file) {
-        const errorEl = document.getElementById("dis-wizard-whatsapp-logo-error");
+      function setDisCampaignWizardWhatsappLogoPreview(objectUrl) {
         const previewWrap = document.getElementById("dis-wizard-whatsapp-logo-preview");
         const previewImg = document.getElementById("dis-wizard-whatsapp-logo-preview-img");
+        if (!previewWrap || !previewImg) return;
+        if (objectUrl) {
+          previewImg.src = objectUrl;
+          previewWrap.classList.add("is-visible", "is-image");
+          previewWrap.setAttribute("aria-hidden", "false");
+          return;
+        }
+        previewImg.removeAttribute("src");
+        previewWrap.classList.remove("is-visible", "is-image");
+        previewWrap.setAttribute("aria-hidden", "true");
+      }
+
+      async function validateDisCampaignWizardWhatsappLogoFile(file) {
+        const errorEl = document.getElementById("dis-wizard-whatsapp-logo-error");
         if (!file) {
           disCampaignWizardWhatsappLogoFile = null;
           if (errorEl) {
             errorEl.textContent = "";
             errorEl.classList.add("hidden");
           }
-          if (previewWrap) {
-            previewWrap.classList.remove("is-visible");
-            previewWrap.setAttribute("aria-hidden", "true");
-          }
+          setDisCampaignWizardWhatsappLogoPreview("");
           return false;
         }
         const mime = String(file.type || "").toLowerCase();
-        if (!mime.startsWith("image/")) {
+        const name = String(file.name || "").toLowerCase();
+        const looksImage =
+          mime.startsWith("image/") || name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg");
+        if (!looksImage) {
           disCampaignWizardWhatsappLogoFile = null;
           if (errorEl) {
             errorEl.textContent = "Use PNG ou JPG.";
             errorEl.classList.remove("hidden");
           }
+          setDisCampaignWizardWhatsappLogoPreview("");
           return false;
         }
         const objectUrl = URL.createObjectURL(file);
@@ -51219,13 +51233,13 @@
             img.onerror = () => reject(new Error("invalid"));
             img.src = objectUrl;
           });
+          setDisCampaignWizardWhatsappLogoPreview(objectUrl);
           if (dimensions.width !== 500 || dimensions.height !== 500) {
             disCampaignWizardWhatsappLogoFile = null;
             if (errorEl) {
               errorEl.textContent = `A logo deve ser 500×500 px (enviada: ${dimensions.width}×${dimensions.height}).`;
               errorEl.classList.remove("hidden");
             }
-            if (previewWrap) previewWrap.classList.remove("is-visible");
             return false;
           }
           disCampaignWizardWhatsappLogoFile = file;
@@ -51233,14 +51247,10 @@
             errorEl.textContent = "";
             errorEl.classList.add("hidden");
           }
-          if (previewImg && previewWrap) {
-            previewImg.src = objectUrl;
-            previewWrap.classList.add("is-visible");
-            previewWrap.setAttribute("aria-hidden", "false");
-          }
           return true;
         } catch {
           disCampaignWizardWhatsappLogoFile = null;
+          setDisCampaignWizardWhatsappLogoPreview("");
           if (errorEl) {
             errorEl.textContent = "Não foi possível ler a logo.";
             errorEl.classList.remove("hidden");
