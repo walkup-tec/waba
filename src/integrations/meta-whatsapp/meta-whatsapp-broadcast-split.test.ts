@@ -16,33 +16,38 @@ describe("meta-whatsapp-broadcast-split", () => {
     assert.deepEqual(normalizeBroadcastPhoneNumberIds("a,b; a"), ["a", "b"]);
   });
 
-  it("calcula o mínimo de números para o teto de 500", () => {
+  it("calcula o mínimo de números para o teto de 1000", () => {
     assert.equal(minPhonesRequiredForBroadcast(0), 0);
     assert.equal(minPhonesRequiredForBroadcast(1), 1);
     assert.equal(minPhonesRequiredForBroadcast(500), 1);
-    assert.equal(minPhonesRequiredForBroadcast(501), 2);
-    assert.equal(minPhonesRequiredForBroadcast(1500), 3);
+    assert.equal(minPhonesRequiredForBroadcast(1000), 1);
+    assert.equal(minPhonesRequiredForBroadcast(1001), 2);
+    assert.equal(minPhonesRequiredForBroadcast(1500), 2);
+    assert.equal(minPhonesRequiredForBroadcast(2001), 3);
   });
 
-  it("distribui de forma equilibrada sem ultrapassar 500", () => {
+  it("distribui de forma equilibrada sem ultrapassar 1000", () => {
     assert.deepEqual(distributeBroadcastLeadsAcrossPhones(["p1", "p2", "p3"], 1200), [
       { phoneNumberId: "p1", planned: 400 },
       { phoneNumberId: "p2", planned: 400 },
       { phoneNumberId: "p3", planned: 400 },
     ]);
-    assert.deepEqual(distributeBroadcastLeadsAcrossPhones(["p1", "p2"], 1000), [
-      { phoneNumberId: "p1", planned: 500 },
-      { phoneNumberId: "p2", planned: 500 },
+    assert.deepEqual(distributeBroadcastLeadsAcrossPhones(["p1", "p2"], 2000), [
+      { phoneNumberId: "p1", planned: 1000 },
+      { phoneNumberId: "p2", planned: 1000 },
+    ]);
+    assert.deepEqual(distributeBroadcastLeadsAcrossPhones(["p1"], 1000), [
+      { phoneNumberId: "p1", planned: 1000 },
     ]);
   });
 
   it("rejeita quando faltam números para o total", () => {
     assert.throws(
-      () => distributeBroadcastLeadsAcrossPhones(["p1", "p2"], 1001),
+      () => distributeBroadcastLeadsAcrossPhones(["p1", "p2"], 2001),
       /pelo menos 3 números/i,
     );
     assert.throws(
-      () => distributeBroadcastLeadsAcrossPhones(["p1"], 501),
+      () => distributeBroadcastLeadsAcrossPhones(["p1"], 1001),
       /pelo menos 2 números/i,
     );
   });
