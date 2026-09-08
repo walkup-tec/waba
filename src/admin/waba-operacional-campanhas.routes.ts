@@ -8,6 +8,17 @@ const operacionalCampanhasService = new WabaOperacionalCampanhasService();
 const rejectOperacionalCampanhasAccess = (req: Parameters<typeof rejectUnlessStaffMenu>[0], res: Parameters<typeof rejectUnlessStaffMenu>[1]) =>
   rejectUnlessStaffMenu(req, res, OPERACIONAL_CAMPANHAS_MENU_ID);
 
+const rejectIfIndicadorMutation = (
+  auth: { role: string },
+  res: Parameters<typeof rejectUnlessStaffMenu>[1],
+) => {
+  if (auth.role === "indicador") {
+    res.status(403).json({ error: "Indicador pode apenas consultar campanhas, sem ações operacionais." });
+    return true;
+  }
+  return false;
+};
+
 export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
   app.get("/admin/operacional/campanhas", (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
@@ -106,6 +117,7 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
   app.post("/admin/operacional/campanhas/:id/iniciar", (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
+    if (rejectIfIndicadorMutation(auth, res)) return;
     try {
       const campaign = operacionalCampanhasService.markCampaignStarted(req.params.id, {
         email: auth.email,
@@ -151,6 +163,7 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
   app.put("/admin/operacional/campanhas/:id/relatorio", (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
+    if (rejectIfIndicadorMutation(auth, res)) return;
     try {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const campaign = operacionalCampanhasService.saveCampaignReport(req.params.id, body, {
@@ -168,6 +181,7 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
   app.post("/admin/operacional/campanhas/:id/bm-inoperante", async (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
+    if (rejectIfIndicadorMutation(auth, res)) return;
     try {
       const result = await operacionalCampanhasService.markBmInoperante(req.params.id, {
         email: auth.email,
@@ -198,6 +212,7 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
   app.post("/admin/operacional/campanhas/:id/atribuir", async (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
+    if (rejectIfIndicadorMutation(auth, res)) return;
     try {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const campaign = await operacionalCampanhasService.assignCampaignToOperacional(
@@ -228,6 +243,7 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
   app.post("/admin/operacional/campanhas/:id/reenviar-email-operacional", async (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
+    if (rejectIfIndicadorMutation(auth, res)) return;
     try {
       const result = await operacionalCampanhasService.resendOperacionalNotifyEmail(req.params.id, {
         email: auth.email,
@@ -244,6 +260,7 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
   app.post("/admin/operacional/campanhas/:id/reportar-erro", (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
+    if (rejectIfIndicadorMutation(auth, res)) return;
     try {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const campaign = operacionalCampanhasService.reportCampaignError(
