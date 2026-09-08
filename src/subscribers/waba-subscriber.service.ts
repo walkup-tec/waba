@@ -41,6 +41,7 @@ export type RegisterSubscriberInput = {
   aquecedorGranted?: boolean;
   segment?: unknown;
   signupOrigin?: unknown;
+  indicatorUserId?: string | null;
 };
 
 export type UpdateSubscriberInput = {
@@ -127,6 +128,7 @@ export class WabaSubscriberService {
       cpfCnpj,
       segment,
       aquecedorGranted: aquecedorGranted || undefined,
+      indicatorUserId: String(input.indicatorUserId ?? "").trim() || null,
       createdAt: now,
       updatedAt: now,
     });
