@@ -7,6 +7,8 @@ exports.campaignPhoneNumberIds = campaignPhoneNumberIds;
 exports.campaignUsesPhoneNumber = campaignUsesPhoneNumber;
 exports.minPhonesRequiredForBroadcast = minPhonesRequiredForBroadcast;
 exports.distributeBroadcastLeadsAcrossPhones = distributeBroadcastLeadsAcrossPhones;
+exports.parseBroadcastPhoneQuotasInput = parseBroadcastPhoneQuotasInput;
+exports.resolveBroadcastLeadQuotas = resolveBroadcastLeadQuotas;
 exports.assignBroadcastLeadsToPhones = assignBroadcastLeadsToPhones;
 exports.META_BROADCAST_MAX_SENDS_PER_NUMBER = 1000;
 function normalizeBroadcastPhoneNumberIds(raw) {
@@ -82,12 +84,80 @@ function distributeBroadcastLeadsAcrossPhones(phoneNumberIds, totalLeads, maxPer
     }
     return quotas;
 }
-function assignBroadcastLeadsToPhones(leads, phoneNumberIds, maxPerNumber = exports.META_BROADCAST_MAX_SENDS_PER_NUMBER) {
-    const quotas = distributeBroadcastLeadsAcrossPhones(phoneNumberIds, leads.length, maxPerNumber);
+function parseBroadcastPhoneQuotasInput(raw) {
+    let list = raw;
+    if (typeof raw === "string" && raw.trim()) {
+        try {
+            list = JSON.parse(raw);
+        }
+        catch {
+            throw new Error("Não foi possível ler as quantidades de envio por número.");
+        }
+    }
+    if (!Array.isArray(list))
+        return [];
+    const out = [];
+    for (const item of list) {
+        const row = item && typeof item === "object" ? item : {};
+        const phoneNumberId = String(row.phoneNumberId || "").trim();
+        const planned = Math.floor(Number(row.planned));
+        if (!phoneNumberId || !Number.isFinite(planned))
+            continue;
+        out.push({ phoneNumberId, planned });
+    }
+    return out;
+}
+/**
+ * Cotas manuais: cada número 0–teto, soma ≥ 1 e não maior que o total da planilha/campanha.
+ * Números com 0 saem do disparo.
+ */
+function resolveBroadcastLeadQuotas(phoneNumberIds, totalLeads, customQuotas, maxPerNumber = exports.META_BROADCAST_MAX_SENDS_PER_NUMBER) {
+    const phones = normalizeBroadcastPhoneNumberIds(phoneNumberIds);
+    const total = Math.max(0, Math.floor(Number(totalLeads) || 0));
+    const cap = Math.max(1, Math.floor(Number(maxPerNumber) || exports.META_BROADCAST_MAX_SENDS_PER_NUMBER));
+    if (customQuotas == null) {
+        return distributeBroadcastLeadsAcrossPhones(phones, total, cap);
+    }
+    if (!phones.length) {
+        throw new Error("Selecione ao menos um número Ativo e disponível.");
+    }
+    const allowed = new Set(phones);
+    const byPhone = new Map();
+    for (const id of phones)
+        byPhone.set(id, 0);
+    for (const row of customQuotas) {
+        const id = String(row.phoneNumberId || "").trim();
+        if (!id || !allowed.has(id))
+            continue;
+        const planned = Math.floor(Number(row.planned));
+        if (!Number.isFinite(planned) || planned < 0) {
+            throw new Error("Informe a quantidade de envios de cada número com um número inteiro.");
+        }
+        if (planned > cap) {
+            throw new Error(`Cada número envia no máximo ${cap} mensagens.`);
+        }
+        byPhone.set(id, planned);
+    }
+    const quotas = phones
+        .map((phoneNumberId) => ({ phoneNumberId, planned: byPhone.get(phoneNumberId) || 0 }))
+        .filter((row) => row.planned > 0);
+    if (!quotas.length) {
+        throw new Error("Informe ao menos 1 envio em algum número.");
+    }
+    const sum = quotas.reduce((acc, row) => acc + row.planned, 0);
+    if (sum > total) {
+        throw new Error(`A soma dos envios (${sum}) não pode passar o total da campanha (${total}).`);
+    }
+    return quotas;
+}
+function assignBroadcastLeadsToPhones(leads, phoneNumberIds, maxPerNumber = exports.META_BROADCAST_MAX_SENDS_PER_NUMBER, customQuotas) {
+    const quotas = resolveBroadcastLeadQuotas(phoneNumberIds, leads.length, customQuotas, maxPerNumber);
+    const sendCount = quotas.reduce((acc, row) => acc + row.planned, 0);
+    const batch = leads.slice(0, sendCount);
     const remaining = new Map(quotas.map((row) => [row.phoneNumberId, row.planned]));
     const order = quotas.map((row) => row.phoneNumberId);
     let cursor = 0;
-    return leads.map((lead) => {
+    return batch.map((lead) => {
         let assigned = "";
         for (let step = 0; step < order.length; step += 1) {
             const idx = (cursor + step) % order.length;
