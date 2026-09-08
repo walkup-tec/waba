@@ -92,6 +92,7 @@ export type OperacionalCampaignListItem = {
   assignedOperacionalEmail: string;
   assignedOperacionalName: string;
   canTransferOperacional: boolean;
+  readOnly: boolean;
   createdAt: string;
   createdAtLabel: string;
 };
@@ -297,10 +298,22 @@ export class WabaOperacionalCampanhasService {
     if (staff.role === "master" || isWabaMasterEmail(staff.email) || staff.role === "suporte") {
       return true;
     }
+    if (staff.role === "indicador") {
+      const user = this.systemUserService.getByEmail(staff.email);
+      if (!user) return false;
+      const subscriber = this.subscriberRepository.getByEmail(normalizeEmail(intake.ownerEmail));
+      return Boolean(subscriber && subscriber.indicatorUserId === user.id);
+    }
     if (staff.role === "operacional") {
       return this.assignmentService.matchesAssignedOperacional(intake, staff.email);
     }
     return true;
+  }
+
+  private assertCanMutateCampaigns(staff: OperacionalCampanhasStaffContext) {
+    if (staff.role === "indicador") {
+      throw new Error("Indicador pode apenas consultar campanhas, sem ações operacionais.");
+    }
   }
 
   private getIntakeForStaffOrThrow(
@@ -340,6 +353,7 @@ export class WabaOperacionalCampanhasService {
       (staff!.role === "master" || isWabaMasterEmail(staff!.email));
     const canTransferOperacional =
       isMaster && (status === "generated" || status === "in_progress");
+    const readOnly = staff?.role === "indicador";
 
     return {
       id: intake.id,
@@ -356,17 +370,19 @@ export class WabaOperacionalCampanhasService {
       status,
       displayStatus: toDisplayStatus(status, laboratorioAttended, broadcastProgress),
       needsConfiguration: isCampaignAwaitingConfiguration(status),
-      canStartCampaign: status === "generated",
-      canFillReport: !laboratorioAttended && (status === "in_progress" || status === "completed"),
-      canReportError: status === "generated" || status === "in_progress",
-      canBmInoperante: status === "generated" && !String(intake.bmInoperanteRegisteredAt || "").trim(),
+      canStartCampaign: !readOnly && status === "generated",
+      canFillReport: !readOnly && !laboratorioAttended && (status === "in_progress" || status === "completed"),
+      canReportError: !readOnly && (status === "generated" || status === "in_progress"),
+      canBmInoperante:
+        !readOnly && status === "generated" && !String(intake.bmInoperanteRegisteredAt || "").trim(),
       bmInoperanteRegistered: Boolean(String(intake.bmInoperanteRegisteredAt || "").trim()),
       laboratorioAttended,
       isStartOverdue: isCampaignStartOverdue(intake, this.assignmentService),
       startDeadlineAt: resolveCampaignStartDeadlineAt(intake),
       assignedOperacionalEmail,
       assignedOperacionalName: assignedOperacionalName || "—",
-      canTransferOperacional,
+      canTransferOperacional: !readOnly && canTransferOperacional,
+      readOnly,
       createdAt: intake.createdAt,
       createdAtLabel: formatDateLabel(intake.createdAt),
     };
@@ -438,6 +454,7 @@ export class WabaOperacionalCampanhasService {
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
   ): OperacionalCampaignListItem {
+    this.assertCanMutateCampaigns(staff);
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
     const status = normalizeStoredStatus(intake.status);
     if (status !== "generated") {
@@ -560,6 +577,7 @@ export class WabaOperacionalCampanhasService {
     body: Record<string, unknown>,
     staff: OperacionalCampanhasStaffContext,
   ): OperacionalCampaignDetail {
+    this.assertCanMutateCampaigns(staff);
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
     if (campaignAttendedByLaboratorioStaff(intake)) {
       throw new Error(
@@ -602,6 +620,7 @@ export class WabaOperacionalCampanhasService {
     justificationRaw: string,
     staff: OperacionalCampanhasStaffContext,
   ): OperacionalCampaignDetail {
+    this.assertCanMutateCampaigns(staff);
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
     const status = normalizeStoredStatus(intake.status);
     if (status === "completed" || status === "error_reported") {
@@ -727,6 +746,7 @@ export class WabaOperacionalCampanhasService {
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
   ): Promise<OperacionalBmInoperanteResult> {
+    this.assertCanMutateCampaigns(staff);
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
     const status = normalizeStoredStatus(intake.status);
     if (status !== "generated") {
@@ -777,6 +797,7 @@ export class WabaOperacionalCampanhasService {
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
   ): Promise<OperacionalNotifyResult> {
+    this.assertCanMutateCampaigns(staff);
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
     const result = await notifyOperacionalStaffOnCampaignCreated(intake);
     this.intakeRepository.updateById(intake.id, {
