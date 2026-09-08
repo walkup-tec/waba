@@ -42,12 +42,13 @@ const ROLE_LABELS = {
     master: "Master",
     operacional: "Operacional",
     suporte: "Suporte",
+    indicador: "Indicador",
 };
 const parseRole = (value) => {
     const raw = String(value ?? "")
         .trim()
         .toLowerCase();
-    if (raw === "master" || raw === "operacional" || raw === "suporte")
+    if (raw === "master" || raw === "operacional" || raw === "suporte" || raw === "indicador")
         return raw;
     return null;
 };
@@ -266,7 +267,7 @@ class WabaSystemUserService {
         if (password.length < 6)
             throw new Error("A senha deve ter pelo menos 6 caracteres.");
         if (!role)
-            throw new Error("Selecione o tipo de usuário (Master, Operacional ou Suporte).");
+            throw new Error("Selecione o tipo de usuário (Master, Operacional, Suporte ou Indicador).");
         const menuPermissions = (0, waba_menu_permissions_service_1.parseMenuPermissionsForCreate)(role, input.menuPermissions);
         if (role !== "master" && (0, waba_menu_permissions_service_1.countEnabledMenus)(menuPermissions) === 0) {
             throw new Error("Selecione pelo menos um menu para o usuário.");
@@ -297,7 +298,7 @@ class WabaSystemUserService {
             createdAt: now,
             updatedAt: now,
         });
-        if (role === "operacional" || role === "suporte") {
+        if (role === "operacional" || role === "suporte" || role === "indicador") {
             (0, waba_mail_delivery_1.notifyStaffWelcome)({
                 email,
                 fullName,
@@ -427,7 +428,7 @@ class WabaSystemUserService {
     }
 }
 exports.WabaSystemUserService = WabaSystemUserService;
-const isStaffRole = (role) => role === "master" || role === "operacional" || role === "suporte";
+const isStaffRole = (role) => role === "master" || role === "operacional" || role === "suporte" || role === "indicador";
 exports.isStaffRole = isStaffRole;
 const getStaffRoleLabel = (role) => ROLE_LABELS[role];
 exports.getStaffRoleLabel = getStaffRoleLabel;
