@@ -50,6 +50,7 @@ class WabaEntitlementService {
         if (role === "master" ||
             role === "operacional" ||
             role === "suporte" ||
+            role === "indicador" ||
             (0, waba_auth_service_1.isWabaMasterEmail)(normalizedEmail)) {
             return {
                 active: true,
