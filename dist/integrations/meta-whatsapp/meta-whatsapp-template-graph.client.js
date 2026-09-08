@@ -43,6 +43,8 @@ async function listWabaMessageTemplates(input) {
             method: "GET",
             path: `${input.wabaId}/message_templates`,
             query,
+            maxAttempts: input.maxAttempts,
+            timeoutMs: input.timeoutMs,
         });
         if (!result.ok)
             return { ok: false, result };
