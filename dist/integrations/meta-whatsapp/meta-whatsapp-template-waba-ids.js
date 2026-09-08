@@ -24,8 +24,10 @@ function wabaIdsFromDebugTokenJson(json) {
     const ids = new Set();
     for (const entry of list) {
         const row = asRecord(entry);
-        const scope = String(row.scope || "");
-        if (!scope.includes("whatsapp_business"))
+        const scope = String(row.scope || "").trim();
+        // Só management traz WABA IDs. messaging traz phone_number_id — GET /{id}/message_templates
+        // nesses chips falha/demora e o Traefik devolve 502 vazio no "Atualizar da Meta".
+        if (scope !== "whatsapp_business_management")
             continue;
         const targets = Array.isArray(row.target_ids) ? row.target_ids : [];
         for (const raw of targets) {
@@ -49,6 +51,7 @@ function wabaIdsFromBusinessEdgeJson(json) {
     }
     return ids;
 }
+const DISCOVER_GRAPH = { maxAttempts: 1, timeoutMs: 8000 };
 async function discoverTemplateWabaIds(input) {
     const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
     const primary = String(input.connection.wabaId || "").trim();
@@ -63,6 +66,7 @@ async function discoverTemplateWabaIds(input) {
             method: "GET",
             path: "debug_token",
             query: { input_token: input.token },
+            ...DISCOVER_GRAPH,
         });
         if (debug.ok) {
             for (const id of wabaIdsFromDebugTokenJson(debug.json))
@@ -77,6 +81,7 @@ async function discoverTemplateWabaIds(input) {
                 method: "GET",
                 path: `${bm}/${edge}`,
                 query: { fields: "id,name", limit: "100" },
+                ...DISCOVER_GRAPH,
             });
             if (!res.ok)
                 continue;
