@@ -22131,14 +22131,12 @@
                 >
                   Atualizar da Meta
                 </button>
-                <button
-                  id="meta-tpl-lab-reload"
-                  type="button"
-                  class="instance-action-btn btn-refresh enabled"
-                  onclick="return window.wabaLoadMetaTemplatesLab(event);"
-                >
-                  Recarregar lista
-                </button>
+                <select id="meta-tpl-lab-category-filter" class="meta-tpl-status-filter is-wide" aria-label="Filtrar templates por categoria">
+                  <option value="ALL">Todas as categorias</option>
+                  <option value="UTILITY">Utilidade</option>
+                  <option value="MARKETING">Marketing</option>
+                  <option value="AUTHENTICATION">Autenticação</option>
+                </select>
                 <select id="meta-tpl-lab-portfolio-filter" class="meta-tpl-status-filter is-wide" aria-label="Filtrar templates por portfólio">
                   <option value="">Todos os Portfólios</option>
                 </select>
@@ -39705,6 +39703,9 @@
         if (Array.isArray(templates)) metaTplLabCache = templates;
         const allRows = Array.isArray(metaTplLabCache) ? metaTplLabCache : [];
         const statusFilter = String((document.getElementById("meta-tpl-lab-status-filter") || {}).value || "ALL");
+        const categoryFilter = String((document.getElementById("meta-tpl-lab-category-filter") || {}).value || "ALL")
+          .trim()
+          .toUpperCase();
         const portfolioFilter = String((document.getElementById("meta-tpl-lab-portfolio-filter") || {}).value || "").trim();
         const nameFilter = String((document.getElementById("meta-tpl-lab-name-filter") || {}).value || "")
           .trim()
@@ -39716,6 +39717,7 @@
             const id = String(entry.item?.id || "").trim();
             if (id && hidden.has(id)) return false;
             if (statusFilter !== "ALL" && String(entry.item?.status || "").toUpperCase() !== statusFilter) return false;
+            if (categoryFilter && categoryFilter !== "ALL" && String(entry.item?.category || "").toUpperCase() !== categoryFilter) return false;
             if (portfolioFilter && String(entry.item?.connectionId || "").trim() !== portfolioFilter) return false;
             if (nameFilter && String(entry.item?.name || "").toLowerCase().indexOf(nameFilter) === -1) return false;
             return true;
@@ -41068,6 +41070,9 @@
         metaTplBroadcastStart();
       });
       document.getElementById("meta-tpl-lab-status-filter")?.addEventListener("change", function () {
+        metaTplLabRenderTable();
+      });
+      document.getElementById("meta-tpl-lab-category-filter")?.addEventListener("change", function () {
         metaTplLabRenderTable();
       });
       document.getElementById("meta-tpl-lab-portfolio-filter")?.addEventListener("change", function () {
