@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-08-100800-tpl-filtro-categoria";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-08-101200-portfolio-atualizar";

@@ -3260,6 +3260,22 @@
           text-transform: uppercase;
           color: rgba(226, 232, 240, 0.58);
         }
+        .meta-portfolio-heading {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin: 0 0 14px;
+        }
+        .meta-portfolio-heading .meta-lab-card-title {
+          margin: 0;
+        }
+        .meta-portfolio-heading .instance-action-btn {
+          min-height: 34px;
+          padding: 6px 12px;
+          font-size: 12px;
+          flex: 0 0 auto;
+        }
         .meta-lab-card .meta-onboard-hero { margin-bottom: 16px; }
         .meta-lab-card .meta-onboard-steps { margin-bottom: 0; }
         .meta-portfolio { margin: 0 0 18px; }
@@ -21977,7 +21993,17 @@
                   </div>
                 </article>
                 <article id="meta-tp-portfolio" class="meta-lab-card meta-portfolio" hidden>
-                  <h3 class="meta-lab-card-title">Portfólios</h3>
+                  <div class="meta-portfolio-heading">
+                    <h3 class="meta-lab-card-title">Portfólios</h3>
+                    <button
+                      type="button"
+                      class="instance-action-btn btn-refresh enabled"
+                      id="meta-tp-portfolio-refresh"
+                      onclick="return window.wabaRefreshMetaPortfolios(event);"
+                    >
+                      Atualizar
+                    </button>
+                  </div>
                   <div id="meta-tp-portfolio-list" class="meta-portfolio-shell"></div>
                   <div class="meta-portfolio-toolbar">
                     <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" id="meta-tp-reset-lab" data-meta-reset-portfolio="1">Excluir e recomeçar</button>
@@ -37606,7 +37632,15 @@
 
       async function metaTpLoadPortfolio(opts) {
         const silent = Boolean(opts && opts.silent);
-        if (metaTpPortfolioInflight) return metaTpPortfolioInflight;
+        const force = Boolean(opts && opts.force);
+        if (metaTpPortfolioInflight && !force) return metaTpPortfolioInflight;
+        if (force && metaTpPortfolioInflight) {
+          try {
+            await metaTpPortfolioInflight;
+          } catch {
+            /* a carga anterior não bloqueia o Atualizar */
+          }
+        }
         metaTpPortfolioInflight = (async function () {
         const enabled =
           typeof window !== "undefined" &&
@@ -37620,15 +37654,15 @@
         try {
           const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/portfolio");
           if (!response.ok || payload.ok === false) {
-            if (!silent) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+            if (!silent && !force) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
             return;
           }
           const next = metaTpAssetsFingerprint(payload);
-          if (silent && next === metaTpPortfolioFingerprint) return;
+          if (silent && !force && next === metaTpPortfolioFingerprint) return;
           metaTpPortfolioFingerprint = next;
           metaTpRenderPortfolio(payload);
         } catch {
-          if (!silent) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+          if (!silent && !force) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
         }
         })();
         try {
@@ -37708,6 +37742,26 @@
           await metaTpRefreshStatusSilent();
         } catch {
           metaTpSetStatus("Falha de rede ao ler o status.");
+        }
+        return false;
+      };
+
+      window.wabaRefreshMetaPortfolios = async function wabaRefreshMetaPortfolios(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        const btn = document.getElementById("meta-tp-portfolio-refresh");
+        if (btn) {
+          btn.textContent = "Atualizando…";
+          btn.setAttribute("disabled", "true");
+        }
+        try {
+          await metaTpLoadPortfolio({ silent: true, force: true });
+        } catch {
+          metaTpSetStatus("Não foi possível atualizar os portfólios.");
+        } finally {
+          if (btn) {
+          btn.textContent = "Atualizar";
+          btn.removeAttribute("disabled");
+        }
         }
         return false;
       };
