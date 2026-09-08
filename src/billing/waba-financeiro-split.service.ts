@@ -52,6 +52,20 @@ type SplitCostBreakdown = {
 
 const roundPercent = (value: number): number => Math.round(value * 100) / 100;
 
+export function resolveSplitSettlementSubscriberName(input: {
+  customerName?: string | null;
+  ownerEmail?: string | null;
+  orderId?: string | null;
+  subscriberFullName?: string | null;
+}): string {
+  const cadastro = String(input.subscriberFullName || "").trim();
+  if (cadastro) return cadastro;
+  const campaignOnly = String(input.orderId || "").trim().startsWith("campaign-supplier:");
+  const paidName = String(input.customerName || "").trim();
+  if (!campaignOnly && paidName) return paidName;
+  return String(input.ownerEmail || "").trim() || "—";
+}
+
 const buildSplitCostBreakdown = (
   paidValueCents: number,
   purchasedShipmentCount: number,
@@ -162,6 +176,7 @@ export class WabaFinanceiroSplitService {
     private readonly indicatorCommissionService = new WabaIndicatorCommissionService(),
     private readonly indicatorProfileRepository = new WabaIndicatorProfileRepository(),
     private readonly systemUserService = new WabaSystemUserService(),
+    private readonly subscriberRepository = new WabaSubscriberRepository(),
   ) {}
 
   getConfig(): FinanceiroSplitConfig {
@@ -174,7 +189,19 @@ export class WabaFinanceiroSplitService {
 
   listSettlements(limit = 100) {
     this.absorbSyntheticCampaignSupplierSettlements();
-    return filterOutMetricsExcludedOwners(this.settlementRepository.list(limit));
+    const items = filterOutMetricsExcludedOwners(this.settlementRepository.list(limit));
+    const byEmail = new Map(
+      this.subscriberRepository.list().map((item) => [String(item.email || "").trim().toLowerCase(), item]),
+    );
+    return items.map((item) => ({
+      ...item,
+      subscriberName: resolveSplitSettlementSubscriberName({
+        customerName: item.customerName,
+        ownerEmail: item.ownerEmail,
+        orderId: item.orderId,
+        subscriberFullName: byEmail.get(this.normalizeOwnerEmail(item.ownerEmail))?.fullName,
+      }),
+    }));
   }
 
   /** Remove settlements já gravados de owners excluídos das métricas/split. */
