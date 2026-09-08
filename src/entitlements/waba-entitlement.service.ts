@@ -3,7 +3,7 @@ import { WabaBillingOrderRepository } from "../billing/waba-billing-order.reposi
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 
-export type WabaAuthRole = "master" | "operacional" | "suporte" | "subscriber" | "guest";
+export type WabaAuthRole = "master" | "operacional" | "suporte" | "indicador" | "subscriber" | "guest";
 
 const AQUECEDOR_ACCESS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -69,6 +69,7 @@ export class WabaEntitlementService {
       role === "master" ||
       role === "operacional" ||
       role === "suporte" ||
+      role === "indicador" ||
       isWabaMasterEmail(normalizedEmail)
     ) {
       return {
