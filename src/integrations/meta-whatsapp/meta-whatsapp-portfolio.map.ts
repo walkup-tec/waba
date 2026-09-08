@@ -240,6 +240,19 @@ export function resolvePhoneNameSync(input: {
   return { requestedName: null, nameSyncStatus: verified ? "applied" : null, nameNeedsRegister: false };
 }
 
+/** Nome visível no card: o pedido em análise/aprovado, senão o verified_name da Meta. */
+export function phoneNumberCardName(input: {
+  verifiedName?: string | null;
+  requestedName?: string | null;
+  nameSyncStatus?: MetaProfileSyncStatus | null;
+  fallback?: string | null;
+}): string | null {
+  const requested = text(input.requestedName);
+  const status = String(input.nameSyncStatus || "");
+  if (requested && (status === "pending" || status === "ready")) return requested;
+  return text(input.verifiedName) || text(input.fallback);
+}
+
 export function businessIdNotWaba(
   id: string | null | undefined,
   wabaId: string | null | undefined,
@@ -432,7 +445,14 @@ export function unionPortfolioNumbers(
         ...item,
         phoneNumberId: id,
         displayPhoneNumber: text(item.displayPhoneNumber) || text(prev.displayPhoneNumber),
-        verifiedName: text(item.verifiedName) || text(prev.verifiedName),
+        // Graph primeiro: o verified_name gravado na conexão no Embedded Signup
+        // não pode tapar o nome novo que a listagem acabou de ler.
+        verifiedName: text(prev.verifiedName) || text(item.verifiedName),
+        nameStatus: text(prev.nameStatus) || text(item.nameStatus),
+        newDisplayName: text(prev.newDisplayName) || text(item.newDisplayName),
+        newNameStatus: text(prev.newNameStatus) || text(item.newNameStatus),
+        requestedName: text(prev.requestedName) || text(item.requestedName),
+        nameSyncStatus: prev.nameSyncStatus || item.nameSyncStatus,
         metaStatus,
         healthCanSend,
         codeVerificationStatus,
