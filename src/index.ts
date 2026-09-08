@@ -161,6 +161,7 @@ import {
 } from "./instances/campaign-instance-slots";
 import { runEvoIntegrationProbe } from "./services/evo-integration-probe.service";
 import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
+import { registerWabaIndicatorRoutes } from "./indicators/waba-indicator.routes";
 import { configureWabaFazendaPool, wabaFazendaPoolService } from "./instances/waba-fazenda-pool.service";
 import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
 import { registerWabaPushRoutes } from "./push/waba-push.routes";
@@ -16495,6 +16496,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
 
 configureWabaFazendaPool({ loadInstanceUsageMap });
 registerWabaBillingRoutes(app);
+registerWabaIndicatorRoutes(app);
 registerWabaCampaignIntakeRoutes(app);
 registerWabaSupportRoutes(app);
 registerWabaPushRoutes(app);
