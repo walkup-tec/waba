@@ -46,6 +46,13 @@ export type WabaBillingOrder = {
   /** Quando preenchido, envios deste pedido deixam de contar no Disponível após a data. */
   creditsValidUntil?: string | null;
   validityMode?: "12h" | "24h" | "custom" | "lifetime";
+  indicatorUserId?: string;
+  purchasedShipmentCount?: number;
+  baseUnitPriceCents?: number;
+  spreadUnitPriceCents?: number;
+  customerUnitPriceCents?: number;
+  baseAmountCents?: number;
+  spreadAmountCents?: number;
 };
 
 const ORDERS_FILE = resolveDataFile("waba-billing-orders.json");
