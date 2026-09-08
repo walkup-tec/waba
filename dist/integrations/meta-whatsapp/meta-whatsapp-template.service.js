@@ -10,6 +10,7 @@ const meta_whatsapp_template_log_1 = require("./meta-whatsapp-template-log");
 const meta_whatsapp_template_approved_at_store_1 = require("./meta-whatsapp-template-approved-at.store");
 const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.repository");
 const meta_whatsapp_template_graph_client_1 = require("./meta-whatsapp-template-graph.client");
+const meta_whatsapp_template_waba_ids_1 = require("./meta-whatsapp-template-waba-ids");
 const meta_whatsapp_template_silent_block_button_1 = require("./meta-whatsapp-template-silent-block-button");
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
 const meta_whatsapp_template_ai_approved_examples_1 = require("./meta-whatsapp-template-ai-approved-examples");
@@ -263,76 +264,104 @@ class MetaWhatsappTemplateService {
         catch {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
         }
-        const listed = await (0, meta_whatsapp_template_graph_client_1.listWabaMessageTemplates)({
+        const listedByWaba = [];
+        let pages = 0;
+        const wabaIds = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
             token,
-            wabaId: String(connection.wabaId),
+            connection,
             graph: this.graph,
         });
-        if (!listed.ok) {
-            throwFromGraph(listed.result);
+        const targets = wabaIds.length ? wabaIds : [String(connection.wabaId)];
+        for (const wabaId of targets) {
+            const listed = await (0, meta_whatsapp_template_graph_client_1.listWabaMessageTemplates)({
+                token,
+                wabaId,
+                graph: this.graph,
+            });
+            if (!listed.ok) {
+                if (wabaId === String(connection.wabaId))
+                    throwFromGraph(listed.result);
+                (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
+                    reason: "skip_extra_waba",
+                    tenantId: tenant.tenantId,
+                    wabaId,
+                    status: listed.result.status,
+                });
+                continue;
+            }
+            pages += listed.pages;
+            listedByWaba.push({ wabaId, items: listed.items, pages: listed.pages, complete: listed.complete });
+        }
+        if (!listedByWaba.length) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", 424);
         }
         const now = new Date().toISOString();
         const upserted = [];
-        for (const item of listed.items) {
-            if (!item)
-                continue;
-            const previous = (item.metaTemplateId
-                ? await this.templates.findByMetaId(tenant.tenantId, item.metaTemplateId)
-                : null) ||
-                (await this.templates.findByWabaNameLanguage(tenant.tenantId, String(connection.wabaId), item.name, item.language));
-            const oldHandle = previous ? (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(previous.components) : "";
-            const saved = await this.templates.upsertFromGraph({
-                tenantId: tenant.tenantId,
-                connectionId: connection.id,
-                wabaId: String(connection.wabaId),
-                metaTemplateId: item.metaTemplateId,
-                name: item.name,
-                language: item.language,
-                category: item.category,
-                status: item.status,
-                components: item.components,
-                qualityScore: item.qualityScore,
-                rejectedReason: item.rejectedReason,
-                lastSyncedAt: now,
-            });
-            const newHandle = (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(saved.components);
-            (0, meta_whatsapp_template_header_preview_store_1.bindTemplateHeaderPreview)({
-                tenantId: tenant.tenantId,
-                handle: newHandle,
-                previousHandle: oldHandle,
-                templateId: saved.id,
-                metaTemplateId: saved.metaTemplateId,
-                name: saved.name,
-                language: saved.language,
-            });
-            upserted.push(saved);
-            rememberApprovedTemplate(saved);
-            try {
-                await this.analyses.patchMetaOutcome({
+        const keepMetaIds = new Set();
+        const keepNameLang = new Set();
+        const completedWabas = new Set();
+        for (const listed of listedByWaba) {
+            if (listed.complete)
+                completedWabas.add(listed.wabaId);
+            for (const item of listed.items) {
+                if (!item)
+                    continue;
+                keepMetaIds.add(String(item.metaTemplateId || "").trim());
+                keepNameLang.add(`${listed.wabaId}::${item.name}::${item.language}`);
+                const previous = (item.metaTemplateId
+                    ? await this.templates.findByMetaId(tenant.tenantId, item.metaTemplateId)
+                    : null) ||
+                    (await this.templates.findByWabaNameLanguage(tenant.tenantId, listed.wabaId, item.name, item.language));
+                const oldHandle = previous ? (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(previous.components) : "";
+                const saved = await this.templates.upsertFromGraph({
                     tenantId: tenant.tenantId,
+                    connectionId: connection.id,
+                    wabaId: listed.wabaId,
+                    metaTemplateId: item.metaTemplateId,
+                    name: item.name,
+                    language: item.language,
+                    category: item.category,
+                    status: item.status,
+                    components: item.components,
+                    qualityScore: item.qualityScore,
+                    rejectedReason: item.rejectedReason,
+                    lastSyncedAt: now,
+                });
+                const newHandle = (0, meta_whatsapp_template_header_preview_store_1.headerHandleFromComponents)(saved.components);
+                (0, meta_whatsapp_template_header_preview_store_1.bindTemplateHeaderPreview)({
+                    tenantId: tenant.tenantId,
+                    handle: newHandle,
+                    previousHandle: oldHandle,
                     templateId: saved.id,
                     metaTemplateId: saved.metaTemplateId,
-                    metaStatus: saved.status,
-                    metaCategory: saved.category,
-                    rejectedReason: saved.rejectedReason,
+                    name: saved.name,
+                    language: saved.language,
                 });
-            }
-            catch {
-                (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", { reason: "ai_outcome_sync_failed", tenantId: tenant.tenantId });
+                upserted.push(saved);
+                rememberApprovedTemplate(saved);
+                try {
+                    await this.analyses.patchMetaOutcome({
+                        tenantId: tenant.tenantId,
+                        templateId: saved.id,
+                        metaTemplateId: saved.metaTemplateId,
+                        metaStatus: saved.status,
+                        metaCategory: saved.category,
+                        rejectedReason: saved.rejectedReason,
+                    });
+                }
+                catch {
+                    (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", { reason: "ai_outcome_sync_failed", tenantId: tenant.tenantId });
+                }
             }
         }
         let removed = 0;
-        if (listed.complete) {
-            const keepMetaIds = new Set(listed.items
-                .map((item) => String(item?.metaTemplateId || "").trim())
-                .filter(Boolean));
-            const keepNameLang = new Set(listed.items
-                .filter((item) => Boolean(item))
-                .map((item) => `${item.name}::${item.language}`));
+        if (completedWabas.size) {
             const locals = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
             for (const row of locals) {
+                if (!completedWabas.has(row.wabaId))
+                    continue;
                 const keepById = Boolean(row.metaTemplateId && keepMetaIds.has(row.metaTemplateId));
-                const keepByName = keepNameLang.has(`${row.name}::${row.language}`);
+                const keepByName = keepNameLang.has(`${row.wabaId}::${row.name}::${row.language}`);
                 if (keepById || keepByName)
                     continue;
                 if (await this.templates.deleteForTenant(tenant.tenantId, row.id))
@@ -343,20 +372,21 @@ class MetaWhatsappTemplateService {
             (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
                 reason: "skip_prune_incomplete_list",
                 tenantId: tenant.tenantId,
-                pages: listed.pages,
+                pages,
             });
         }
         (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
             tenantId: tenant.tenantId,
-            pages: listed.pages,
+            pages,
             upserted: upserted.length,
             removed,
-            complete: listed.complete,
+            wabaCount: listedByWaba.length,
+            complete: completedWabas.size === listedByWaba.length,
         });
         const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
         return {
             templates: rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection))),
-            pages: listed.pages,
+            pages,
             removed,
         };
     }
@@ -381,7 +411,7 @@ class MetaWhatsappTemplateService {
             }
             const result = await (0, meta_whatsapp_template_graph_client_1.deleteWabaMessageTemplate)({
                 token,
-                wabaId: String(connection.wabaId),
+                wabaId: String(row.wabaId || connection.wabaId),
                 name: row.name,
                 metaTemplateId: row.metaTemplateId,
                 graph: this.graph,
