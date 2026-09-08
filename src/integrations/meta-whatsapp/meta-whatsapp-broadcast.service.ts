@@ -51,8 +51,8 @@ import {
 import {
   META_BROADCAST_MAX_SENDS_PER_NUMBER,
   assignBroadcastLeadsToPhones,
-  distributeBroadcastLeadsAcrossPhones,
   normalizeBroadcastPhoneNumberIds,
+  resolveBroadcastLeadQuotas,
 } from "./meta-whatsapp-broadcast-split";
 import {
   attachBroadcastLeadPhoneBindings,
@@ -517,6 +517,7 @@ export class MetaWhatsappBroadcastService {
       mapping: MetaBroadcastLeadMapping;
       intakeCampaignId?: string;
       publicBaseHints?: WabaPublicBaseRequestHints;
+      phoneQuotas?: Array<{ phoneNumberId?: string; planned?: unknown }> | null;
     },
   ) {
     const tenant = requireTenant(auth);
@@ -553,9 +554,18 @@ export class MetaWhatsappBroadcastService {
     let phoneQuotas;
     let assignedLeads;
     try {
-      phoneQuotas = distributeBroadcastLeadsAcrossPhones(phoneNumberIds, preview.parsed.leads.length);
+      phoneQuotas = resolveBroadcastLeadQuotas(
+        phoneNumberIds,
+        preview.parsed.leads.length,
+        input.phoneQuotas,
+      );
       assignedLeads = attachBroadcastLeadPhoneBindings(
-        assignBroadcastLeadsToPhones(preview.parsed.leads, phoneNumberIds),
+        assignBroadcastLeadsToPhones(
+          preview.parsed.leads,
+          phoneNumberIds,
+          META_BROADCAST_MAX_SENDS_PER_NUMBER,
+          input.phoneQuotas,
+        ),
         phoneBindings,
       );
     } catch (error) {
@@ -566,11 +576,15 @@ export class MetaWhatsappBroadcastService {
           : `Não foi possível fracionar os envios (máx. ${META_BROADCAST_MAX_SENDS_PER_NUMBER} por número).`,
       );
     }
+    const sendingPhoneIds = new Set(phoneQuotas.map((row) => row.phoneNumberId));
+    const sendingBindings = phoneBindings.filter((row) => sendingPhoneIds.has(row.phoneNumberId));
+    const sendingPhoneNumberIds = sendingBindings.map((row) => row.phoneNumberId);
+    const sendingPhoneNumberId = sendingPhoneNumberIds[0] || phoneNumberId;
     const campaignId = randomUUID();
     const intakeCampaignId = this.linkSubscriberCampaign(auth, String(input.intakeCampaignId || "").trim());
     const headerByPhone = await this.resolveHeaderMediaForBindings({
       tenantId: tenant.tenantId,
-      bindings: phoneBindings,
+      bindings: sendingBindings,
       templateId: loaded.template.id,
       metaTemplateId: loaded.template.metaTemplateId,
       templateName: loaded.template.name,
@@ -604,9 +618,9 @@ export class MetaWhatsappBroadcastService {
       templateId: loaded.template.id,
       templateName: loaded.template.name,
       language: loaded.template.language,
-      phoneNumberId,
-      phoneNumberIds,
-      phoneBindings,
+      phoneNumberId: sendingPhoneNumberId,
+      phoneNumberIds: sendingPhoneNumberIds,
+      phoneBindings: sendingBindings,
       phoneQuotas: phoneQuotas.map((row) => ({ phoneNumberId: row.phoneNumberId, planned: row.planned })),
       intakeCampaignId,
       shortSlug: short.shortSlug,
@@ -615,7 +629,7 @@ export class MetaWhatsappBroadcastService {
       clicksAtStart: short.clicksAtStart,
       clicks: 0,
       status: "queued",
-      total: preview.parsed.leads.length,
+      total: assignedLeads.length,
       sent: 0,
       failed: 0,
       skipped: preview.parsed.invalid.length,
@@ -633,11 +647,11 @@ export class MetaWhatsappBroadcastService {
     });
     void this.runCampaign(campaign.id, tenant.tenantId, {
       connectionId: loaded.connection.id,
-      connectionByPhone: connectionIdByPhoneNumber(phoneBindings),
+      connectionByPhone: connectionIdByPhoneNumber(sendingBindings),
       templateName: loaded.template.name,
       language: loaded.template.language,
-      phoneNumberId,
-      phoneNumberIds,
+      phoneNumberId: sendingPhoneNumberId,
+      phoneNumberIds: sendingPhoneNumberIds,
       inspect: loaded.inspect,
       headerByPhone,
       buttonSlug: loaded.inspect.urlButton?.hasVariable ? short.shortSlug : undefined,
