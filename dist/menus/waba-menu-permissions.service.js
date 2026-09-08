@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.countEnabledMenus = exports.parseMenuPermissionsForUpdate = exports.parseMenuPermissionsForCreate = exports.isTabAllowedForUser = exports.isMenuAllowedForUser = exports.listAllowedMenuIds = exports.buildDefaultOperacionalMenuPermissions = exports.buildLegacyMigrationPermissions = exports.resolveEffectiveMenuPermissions = exports.buildNoMenusEnabled = exports.buildAllMenusEnabled = void 0;
+exports.countEnabledMenus = exports.parseMenuPermissionsForUpdate = exports.parseMenuPermissionsForCreate = exports.isTabAllowedForUser = exports.isMenuAllowedForUser = exports.listAllowedMenuIds = exports.buildDefaultIndicadorMenuPermissions = exports.INDICADOR_MENU_IDS = exports.buildDefaultOperacionalMenuPermissions = exports.buildLegacyMigrationPermissions = exports.resolveEffectiveMenuPermissions = exports.buildNoMenusEnabled = exports.buildAllMenusEnabled = void 0;
 const waba_laboratorio_access_1 = require("./waba-laboratorio-access");
 const waba_menu_registry_1 = require("./waba-menu-registry");
 const normalizePermissionsInput = (input, allowedIds) => {
@@ -41,10 +41,23 @@ function applyLaboratorioMenuPolicy(user, permissions) {
     }
     return result;
 }
+function clampIndicadorExclusiveMenus(user, permissions) {
+    if (user.role === "indicador") {
+        return (0, exports.buildDefaultIndicadorMenuPermissions)();
+    }
+    const result = { ...permissions };
+    for (const id of exports.INDICADOR_MENU_IDS) {
+        result[id] = false;
+    }
+    return result;
+}
 /** Resolve permissões efetivas; chaves ausentes = desabilitado. */
 const resolveEffectiveMenuPermissions = (user) => {
     if (user.role === "master") {
-        return applyLaboratorioMenuPolicy(user, (0, exports.buildAllMenusEnabled)());
+        return clampIndicadorExclusiveMenus(user, applyLaboratorioMenuPolicy(user, (0, exports.buildAllMenusEnabled)()));
+    }
+    if (user.role === "indicador") {
+        return (0, exports.buildDefaultIndicadorMenuPermissions)();
     }
     const allIds = (0, waba_menu_registry_1.listWabaMenuIds)();
     const stored = user.menuPermissions;
@@ -52,7 +65,7 @@ const resolveEffectiveMenuPermissions = (user) => {
     for (const id of allIds) {
         result[id] = stored?.[id] === true;
     }
-    return applyLaboratorioMenuPolicy(user, result);
+    return clampIndicadorExclusiveMenus(user, applyLaboratorioMenuPolicy(user, result));
 };
 exports.resolveEffectiveMenuPermissions = resolveEffectiveMenuPermissions;
 /** Migra usuário legado (sem menuPermissions): concede todos os menus atuais uma vez. */
@@ -74,6 +87,20 @@ const buildDefaultOperacionalMenuPermissions = () => {
     return result;
 };
 exports.buildDefaultOperacionalMenuPermissions = buildDefaultOperacionalMenuPermissions;
+exports.INDICADOR_MENU_IDS = [
+    "indicador-dashboard",
+    "indicador-assinantes",
+    "indicador-campanhas",
+    "indicador-financeiro",
+];
+const buildDefaultIndicadorMenuPermissions = () => {
+    const result = (0, exports.buildNoMenusEnabled)();
+    for (const id of exports.INDICADOR_MENU_IDS) {
+        result[id] = true;
+    }
+    return result;
+};
+exports.buildDefaultIndicadorMenuPermissions = buildDefaultIndicadorMenuPermissions;
 const listAllowedMenuIds = (user) => {
     const effective = (0, exports.resolveEffectiveMenuPermissions)(user);
     return Object.entries(effective)
@@ -96,6 +123,9 @@ exports.isTabAllowedForUser = isTabAllowedForUser;
 const parseMenuPermissionsForCreate = (role, input) => {
     if (role === "master") {
         return (0, exports.buildAllMenusEnabled)();
+    }
+    if (role === "indicador") {
+        return (0, exports.buildDefaultIndicadorMenuPermissions)();
     }
     const allowedIds = new Set((0, waba_menu_registry_1.listWabaMenuIds)());
     const parsed = normalizePermissionsInput(input, allowedIds);
