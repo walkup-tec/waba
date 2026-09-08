@@ -1025,6 +1025,43 @@ describe("fase 7 sync", () => {
     );
     assert.equal(result.templates.some((row) => row.name === "jandira_cp2_1"), true);
   });
+
+  it("sync da WABA principal continua se a WABA extra falhar", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({ wabaId: "waba-a", metaBusinessId: "1398783195605765" }),
+    );
+    const templates = new FakeTemplates();
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input: { path: string }) => {
+        if (input.path === "1398783195605765/owned_whatsapp_business_accounts") {
+          return graphJson({ data: [{ id: "waba-b", name: "Drax Sistemas 01" }] });
+        }
+        if (input.path === "waba-a/message_templates") {
+          return graphJson({
+            data: [
+              {
+                id: "tpl-ok",
+                name: "ok_local",
+                language: "pt_BR",
+                status: "APPROVED",
+              },
+            ],
+          });
+        }
+        if (input.path === "waba-b/message_templates") {
+          return graphErr(502, { kind: "transient" });
+        }
+        return graphJson({ data: [] });
+      },
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A), "conn-a");
+    assert.equal(templates.rows.some((row) => row.name === "ok_local"), true);
+    assert.equal(result.pages >= 1, true);
+  });
 });
 
 describe("fase 7 webhook de template", () => {
