@@ -1934,6 +1934,155 @@ describe("meta portfolio service", () => {
     }
   });
 
+  it("lista chip Pendente da Graph para ativar com PIN", async () => {
+    const drax = {
+      ...connectedRow(),
+      id: "conn-drax-2000",
+      metaBusinessId: "4141369862822598",
+      wabaId: "waba-drax-2000",
+      displayPhoneNumber: "+55 51 8200-1279",
+      verifiedName: "Drax Sistemas 2000",
+      status: "connected" as const,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [drax];
+      },
+      async findOpenByTenant() {
+        return drax;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "waba-drax-2000/phone_numbers") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-old",
+                display_phone_number: "+55 51 8200-1279",
+                verified_name: "Drax Sistemas 2000",
+                status: "CONNECTED",
+                code_verification_status: "VERIFIED",
+              },
+              {
+                id: "phone-jandira-3607",
+                display_phone_number: "+55 21 92368-3607",
+                verified_name: "Deputada Jandira",
+                status: "PENDING",
+                code_verification_status: "UNVERIFIED",
+                new_name_status: "PENDING_REVIEW",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const numbers = (assets.portfolios || []).flatMap((item) => item.numbers || []);
+    const pending = numbers.find((item) => String(item.displayPhoneNumber || "").includes("92368-3607"));
+    assert.ok(pending);
+    assert.equal(pending?.uiStatus, "pendente");
+    assert.equal(pending?.canActivate, true);
+  });
+
+  it("inclui chip do debug_token messaging sem tratar phone_number_id como WABA", async () => {
+    const previousAppId = process.env.META_APP_ID;
+    const previousAppSecret = process.env.META_APP_SECRET;
+    process.env.META_APP_ID = "app-test";
+    process.env.META_APP_SECRET = "secret-test";
+    try {
+      const drax = {
+        ...connectedRow(),
+        id: "conn-drax-msg",
+        metaBusinessId: "4141369862822598",
+        wabaId: "waba-drax-2000",
+        displayPhoneNumber: "+55 51 8200-1279",
+        status: "connected" as const,
+      };
+      const repo = {
+        async listOpenByTenant() {
+          return [drax];
+        },
+        async findOpenByTenant() {
+          return drax;
+        },
+      };
+      const paths: string[] = [];
+      const graph = async (input: { path: string }) => {
+        paths.push(input.path);
+        if (input.path === "debug_token") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              data: {
+                granular_scopes: [
+                  { scope: "whatsapp_business_management", target_ids: ["waba-drax-2000"] },
+                  { scope: "whatsapp_business_messaging", target_ids: ["phone-jandira-3607"] },
+                ],
+              },
+            },
+          };
+        }
+        if (input.path === "phone-jandira-3607") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              id: "phone-jandira-3607",
+              display_phone_number: "+55 21 92368-3607",
+              verified_name: "Deputada Jandira",
+              status: "PENDING",
+              code_verification_status: "UNVERIFIED",
+            },
+          };
+        }
+        if (input.path === "waba-drax-2000/phone_numbers") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              data: [
+                {
+                  id: "phone-old",
+                  display_phone_number: "+55 51 8200-1279",
+                  status: "CONNECTED",
+                  code_verification_status: "VERIFIED",
+                },
+              ],
+            },
+          };
+        }
+        return { ok: true, status: 200, json: { data: [] } };
+      };
+      const service = new MetaWhatsappConnectionService(
+        repo as any,
+        { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+        graph as any,
+      );
+      const assets = await service.listPortfolioAssets(auth);
+      const numbers = (assets.portfolios || []).flatMap((item) => item.numbers || []);
+      assert.ok(numbers.some((item) => String(item.displayPhoneNumber || "").includes("92368-3607")));
+      assert.equal(
+        paths.some((path) => path === "phone-jandira-3607/phone_numbers"),
+        false,
+      );
+    } finally {
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+      if (previousAppSecret === undefined) delete process.env.META_APP_SECRET;
+      else process.env.META_APP_SECRET = previousAppSecret;
+    }
+  });
+
   it("não lista pending_token vazio criado ao adicionar número em portfólio existente", async () => {
     const drax = {
       ...connectedRow(),
