@@ -37839,6 +37839,13 @@
         return "";
       }
 
+      function metaTpNumberVisibleName(item, groupName) {
+        const requested = String((item && item.requestedName) || "").trim();
+        const state = String((item && item.nameSyncStatus) || "");
+        if (requested && (state === "pending" || state === "ready")) return requested;
+        return String((item && item.verifiedName) || groupName || "Sem nome de exibição");
+      }
+
       function metaTpNumberCardsHtml(numbers, portfolio) {
         const groupName = metaTpPortfolioTitle(portfolio || {});
         const connectionId = String((portfolio && portfolio.connectionId) || "");
@@ -37846,7 +37853,7 @@
           .filter((item) => String(item.displayPhoneNumber || "").trim())
           .map((item) => {
             const phone = metaTpEsc(item.displayPhoneNumber);
-            const verified = metaTpEsc(item.verifiedName || groupName || "Sem nome de exibição");
+            const verified = metaTpEsc(metaTpNumberVisibleName(item, groupName));
             const requested = String(item.requestedName || "").trim();
             const nameState = String(item.nameSyncStatus || "");
             const requestedPrefix =
@@ -37880,10 +37887,10 @@
               ? '<img class="meta-number-photo" alt="' + verified + '" src="' + metaTpEsc(photoSrc) + '" />'
               : ativo
                 ? '<span class="meta-number-photo is-initials" aria-hidden="true">' +
-                  metaTpEsc(metaTpInitials(item.verifiedName || item.displayPhoneNumber || "WA")) +
+                  metaTpEsc(metaTpInitials(metaTpNumberVisibleName(item, item.displayPhoneNumber || "WA"))) +
                   "</span>"
                 : phoneIcon;
-            const editName = metaTpEsc(item.verifiedName || item.requestedName || groupName || "");
+            const editName = metaTpEsc(metaTpNumberVisibleName(item, groupName));
             const editAttrs = ativo
               ? ' data-meta-edit="' +
                 id +
@@ -38162,6 +38169,7 @@
                   id: row.phoneNumberId || "",
                   name: row.verifiedName || "",
                   requested: row.requestedName || "",
+                  nameState: row.nameSyncStatus || "",
                   phone: row.displayPhoneNumber || "",
                   photo: row.profilePictureUrl || "",
                   status: row.uiStatus || "",
@@ -40780,8 +40788,8 @@
         });
         if (!match) return String(phoneNumberId || "");
         const phone = String(match.item.displayPhoneNumber || match.item.phoneNumberId || "").trim();
-        const name = String(match.item.verifiedName || "").trim();
-        return name ? name + " · " + phone : phone;
+        const name = metaTpNumberVisibleName(match.item, "");
+        return name && name !== "Sem nome de exibição" ? name + " · " + phone : phone;
       }
 
       function metaTplBroadcastPhonePortfolio(phoneNumberId) {
@@ -40873,7 +40881,8 @@
                 const item = entry.item;
                 const id = String(item.phoneNumberId || "").trim();
                 const phone = String(item.displayPhoneNumber || id).trim();
-                const name = String(item.verifiedName || "").trim();
+                const visible = metaTpNumberVisibleName(item, "");
+                const name = visible === "Sem nome de exibição" ? "" : visible;
                 const label = name ? name + " · " + phone : phone;
                 const checked = previous.has(id) || (previous.size === 0 && entries.length === 1) ? " checked" : "";
                 return (
