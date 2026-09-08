@@ -151,10 +151,22 @@ class WabaOperacionalCampanhasService {
         if (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email) || staff.role === "suporte") {
             return true;
         }
+        if (staff.role === "indicador") {
+            const user = this.systemUserService.getByEmail(staff.email);
+            if (!user)
+                return false;
+            const subscriber = this.subscriberRepository.getByEmail(normalizeEmail(intake.ownerEmail));
+            return Boolean(subscriber && subscriber.indicatorUserId === user.id);
+        }
         if (staff.role === "operacional") {
             return this.assignmentService.matchesAssignedOperacional(intake, staff.email);
         }
         return true;
+    }
+    assertCanMutateCampaigns(staff) {
+        if (staff.role === "indicador") {
+            throw new Error("Indicador pode apenas consultar campanhas, sem ações operacionais.");
+        }
     }
     getIntakeForStaffOrThrow(campaignId, staff) {
         const intake = this.intakeRepository.getById(campaignId);
@@ -182,6 +194,7 @@ class WabaOperacionalCampanhasService {
         const isMaster = Boolean(staff) &&
             (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email));
         const canTransferOperacional = isMaster && (status === "generated" || status === "in_progress");
+        const readOnly = staff?.role === "indicador";
         return {
             id: intake.id,
             subscriberId: subscriber?.id ?? "—",
@@ -197,17 +210,18 @@ class WabaOperacionalCampanhasService {
             status,
             displayStatus: toDisplayStatus(status, laboratorioAttended, broadcastProgress),
             needsConfiguration: isCampaignAwaitingConfiguration(status),
-            canStartCampaign: status === "generated",
-            canFillReport: !laboratorioAttended && (status === "in_progress" || status === "completed"),
-            canReportError: status === "generated" || status === "in_progress",
-            canBmInoperante: status === "generated" && !String(intake.bmInoperanteRegisteredAt || "").trim(),
+            canStartCampaign: !readOnly && status === "generated",
+            canFillReport: !readOnly && !laboratorioAttended && (status === "in_progress" || status === "completed"),
+            canReportError: !readOnly && (status === "generated" || status === "in_progress"),
+            canBmInoperante: !readOnly && status === "generated" && !String(intake.bmInoperanteRegisteredAt || "").trim(),
             bmInoperanteRegistered: Boolean(String(intake.bmInoperanteRegisteredAt || "").trim()),
             laboratorioAttended,
             isStartOverdue: isCampaignStartOverdue(intake, this.assignmentService),
             startDeadlineAt: resolveCampaignStartDeadlineAt(intake),
             assignedOperacionalEmail,
             assignedOperacionalName: assignedOperacionalName || "—",
-            canTransferOperacional,
+            canTransferOperacional: !readOnly && canTransferOperacional,
+            readOnly,
             createdAt: intake.createdAt,
             createdAtLabel: formatDateLabel(intake.createdAt),
         };
@@ -267,6 +281,7 @@ class WabaOperacionalCampanhasService {
         };
     }
     markCampaignStarted(campaignId, staff) {
+        this.assertCanMutateCampaigns(staff);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
         const status = normalizeStoredStatus(intake.status);
         if (status !== "generated") {
@@ -349,6 +364,7 @@ class WabaOperacionalCampanhasService {
         };
     }
     saveCampaignReport(campaignId, body, staff) {
+        this.assertCanMutateCampaigns(staff);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
         if ((0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake)) {
             throw new Error("Esta campanha é atendida pelo Laboratório. Os indicadores vêm da Meta automaticamente.");
@@ -382,6 +398,7 @@ class WabaOperacionalCampanhasService {
         return detail;
     }
     reportCampaignError(campaignId, justificationRaw, staff) {
+        this.assertCanMutateCampaigns(staff);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
         const status = normalizeStoredStatus(intake.status);
         if (status === "completed" || status === "error_reported") {
@@ -478,6 +495,7 @@ class WabaOperacionalCampanhasService {
         };
     }
     async markBmInoperante(campaignId, staff) {
+        this.assertCanMutateCampaigns(staff);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
         const status = normalizeStoredStatus(intake.status);
         if (status !== "generated") {
@@ -520,6 +538,7 @@ class WabaOperacionalCampanhasService {
         };
     }
     async resendOperacionalNotifyEmail(campaignId, staff) {
+        this.assertCanMutateCampaigns(staff);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
         const result = await (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignCreated)(intake);
         this.intakeRepository.updateById(intake.id, {
