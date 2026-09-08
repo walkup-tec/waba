@@ -3142,6 +3142,10 @@
           --menu-section-accent-rgb: 250, 204, 21;
         }
 
+        .menu-group[data-menu-group="indicador"] {
+          --menu-section-accent-rgb: 52, 211, 153;
+        }
+
         .menu-group[data-menu-group="marketing"] {
           --menu-section-accent-rgb: 251, 113, 133;
         }
@@ -4614,6 +4618,54 @@
 
       body:not(.waba-menu-admin-visible) .menu-group[data-menu-group="admin"] {
         display: none !important;
+      }
+
+      body:not(.waba-indicador-visible) .menu-group[data-menu-group="indicador"],
+      body:not(.waba-indicador-visible) .mobile-tabs-section-label[data-menu-section="indicador"],
+      body:not(.waba-indicador-visible) .tab-button[data-menu-key^="indicador-"] {
+        display: none !important;
+      }
+
+      #tab-admin-indicadores .panel,
+      #tab-indicador-dashboard .panel,
+      #tab-indicador-assinantes .panel,
+      #tab-indicador-campanhas .panel,
+      #tab-indicador-financeiro .panel {
+        padding: 28px 24px 32px;
+      }
+
+      .indicador-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .indicador-kpi-card {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 14px;
+        padding: 14px 16px;
+        background: rgba(15, 23, 42, 0.35);
+      }
+
+      .indicador-kpi-card span {
+        display: block;
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      .indicador-kpi-card strong {
+        display: block;
+        margin-top: 6px;
+        font-size: 20px;
+        color: #f8fafc;
+      }
+
+      .indicador-subnav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
       }
 
       body:not(.waba-ui-production):not(.waba-subscriber-disparos-menus) .menu-group[data-menu-group="lab-api-oficial"],
@@ -19268,6 +19320,113 @@
                     aria-hidden="true"
                   >0</span>
                 </button>
+                <button
+                  id="tab-btn-admin-indicadores"
+                  class="tab-button admin-tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-admin-indicadores"
+                  data-tab="admin-indicadores"
+                  data-menu-key="admin-indicadores"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <circle cx="8" cy="8" r="3"></circle>
+                      <path d="M3 19c0-2.8 2.2-5 5-5s5 2.2 5 5"></path>
+                      <path d="M16 11l2 2 4-4"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Indicadores</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="menu-group" data-menu-group="indicador">
+              <button
+                type="button"
+                class="menu-group-toggle"
+                data-menu-group-toggle="indicador"
+                aria-expanded="false"
+              >
+                <span class="menu-group-title">Indicador</span>
+                <span class="menu-group-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="menu-group-items">
+                <button
+                  id="tab-btn-indicador-dashboard"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-indicador-dashboard"
+                  data-tab="indicador-dashboard"
+                  data-menu-key="indicador-dashboard"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <rect x="3" y="3" width="8" height="8" rx="1.5"></rect>
+                      <rect x="13" y="3" width="8" height="5" rx="1.5"></rect>
+                      <rect x="13" y="10" width="8" height="11" rx="1.5"></rect>
+                      <rect x="3" y="13" width="8" height="8" rx="1.5"></rect>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Dashboard</span>
+                </button>
+                <button
+                  id="tab-btn-indicador-assinantes"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-indicador-assinantes"
+                  data-tab="indicador-assinantes"
+                  data-menu-key="indicador-assinantes"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <circle cx="9" cy="8" r="3"></circle>
+                      <path d="M3 19c0-3 2.7-5 6-5s6 2 6 5"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Meus assinantes</span>
+                </button>
+                <button
+                  id="tab-btn-indicador-campanhas"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-indicador-campanhas"
+                  data-tab="indicador-campanhas"
+                  data-menu-key="indicador-campanhas"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M4 6h16v12H4z"></path>
+                      <path d="M8 10h8M8 14h5"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Campanhas</span>
+                </button>
+                <button
+                  id="tab-btn-indicador-financeiro"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-indicador-financeiro"
+                  data-tab="indicador-financeiro"
+                  data-menu-key="indicador-financeiro"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <rect x="2" y="6" width="20" height="13" rx="2"></rect>
+                      <path d="M2 10h20"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Financeiro</span>
+                </button>
               </div>
             </div>
 
@@ -19677,6 +19836,59 @@
                 hidden
                 aria-hidden="true"
               >0</span>
+            </button>
+            <button
+              class="tab-button admin-tab-button"
+              type="button"
+              data-tab="admin-indicadores"
+              data-menu-key="admin-indicadores"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              <span>Indicadores</span>
+            </button>
+            <div class="mobile-tabs-section-label" data-menu-section="indicador">
+              Indicador
+            </div>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="indicador-dashboard"
+              data-menu-key="indicador-dashboard"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Dashboard
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="indicador-assinantes"
+              data-menu-key="indicador-assinantes"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Meus assinantes
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="indicador-campanhas"
+              data-menu-key="indicador-campanhas"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Campanhas
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="indicador-financeiro"
+              data-menu-key="indicador-financeiro"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Financeiro
             </button>
             <div class="mobile-tabs-section-label admin-master-only" data-menu-section="suporte">
               Suporte
@@ -24367,6 +24579,293 @@
           </div>
         </div>
 
+        <div id="tab-admin-indicadores" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Admin · Indicadores</div>
+                <span class="muted">Cadastre revendedores, defina o spread por envio e acompanhe comissões.</span>
+              </div>
+              <div class="aquecedor-section">
+                <div class="indicador-subnav" role="tablist">
+                  <button type="button" class="admin-campanhas-bucket-btn is-active" data-admin-indicadores-pane="lista">Indicadores</button>
+                  <button type="button" class="admin-campanhas-bucket-btn" data-admin-indicadores-pane="assinantes">Assinantes</button>
+                  <button type="button" class="admin-campanhas-bucket-btn" data-admin-indicadores-pane="comissoes">Comissões</button>
+                </div>
+
+                <div id="admin-indicadores-pane-lista">
+                  <form id="admin-indicador-form" class="admin-users-form" autocomplete="off" novalidate>
+                    <input type="hidden" id="admin-indicador-id" value="" />
+                    <div class="admin-users-form-grid">
+                      <div class="aquecedor-field">
+                        <label for="admin-indicador-name">Nome</label>
+                        <input id="admin-indicador-name" type="text" required minlength="2" placeholder="João Silva" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-indicador-email">E-mail</label>
+                        <input id="admin-indicador-email" type="email" required placeholder="joao@empresa.com" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-indicador-password">Senha</label>
+                        <input id="admin-indicador-password" type="password" minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-indicador-whatsapp">WhatsApp</label>
+                        <input id="admin-indicador-whatsapp" type="tel" placeholder="(11) 99999-9999" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-indicador-cpf">CPF ou CNPJ</label>
+                        <input id="admin-indicador-cpf" type="text" placeholder="000.000.000-00" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-indicador-spread">Spread por envio (R$)</label>
+                        <input id="admin-indicador-spread" type="text" inputmode="decimal" placeholder="0,03" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-indicador-pix">Chave PIX</label>
+                        <input id="admin-indicador-pix" type="text" required placeholder="e-mail, CPF, celular ou aleatória" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-indicador-pix-type">Tipo da chave PIX</label>
+                        <select id="admin-indicador-pix-type">
+                          <option value="">Detectar automaticamente</option>
+                          <option value="CPF">CPF</option>
+                          <option value="CNPJ">CNPJ</option>
+                          <option value="EMAIL">E-mail</option>
+                          <option value="PHONE">Telefone</option>
+                          <option value="EVP">Aleatória</option>
+                        </select>
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-indicador-status">Status</label>
+                        <select id="admin-indicador-status">
+                          <option value="active">Ativo</option>
+                          <option value="inactive">Inativo</option>
+                        </select>
+                      </div>
+                    </div>
+                    <p id="admin-indicador-form-error" class="admin-user-edit-error" hidden role="alert"></p>
+                    <div class="admin-users-form-footer">
+                      <button id="admin-indicador-save-btn" class="instance-action-btn btn-qrcode enabled" type="submit">Cadastrar indicador</button>
+                      <button id="admin-indicador-cancel-btn" class="instance-action-btn" type="button" hidden>Cancelar edição</button>
+                    </div>
+                  </form>
+                  <div class="admin-subscribers-toolbar">
+                    <span id="admin-indicadores-summary" class="admin-subscribers-summary">Carregando indicadores…</span>
+                  </div>
+                  <div class="admin-subscribers-table-wrap">
+                    <table class="admin-subscribers-table" aria-label="Indicadores">
+                      <thead>
+                        <tr>
+                          <th>Nome</th>
+                          <th>Spread</th>
+                          <th>PIX</th>
+                          <th>Status</th>
+                          <th class="admin-subscribers-num">Assinantes</th>
+                          <th class="admin-subscribers-num">Comissão acumulada</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody id="admin-indicadores-tbody"><tr><td colspan="7" class="muted">Carregando…</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div id="admin-indicadores-pane-assinantes" hidden>
+                  <div class="admin-subscribers-table-wrap">
+                    <table class="admin-subscribers-table" aria-label="Assinantes vinculados">
+                      <thead>
+                        <tr>
+                          <th>Assinante</th>
+                          <th>E-mail</th>
+                          <th>Indicador</th>
+                          <th>Desde</th>
+                        </tr>
+                      </thead>
+                      <tbody id="admin-indicadores-subscribers-tbody"><tr><td colspan="4" class="muted">Carregando…</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div id="admin-indicadores-pane-comissoes" hidden>
+                  <div class="indicador-kpi-grid" id="admin-indicadores-commissions-kpis"></div>
+                  <div class="admin-subscribers-table-wrap">
+                    <table class="admin-subscribers-table" aria-label="Comissões de indicadores">
+                      <thead>
+                        <tr>
+                          <th>Data</th>
+                          <th>Indicador</th>
+                          <th>Assinante</th>
+                          <th class="admin-subscribers-num">Envios</th>
+                          <th class="admin-subscribers-num">Comissão</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody id="admin-indicadores-commissions-tbody"><tr><td colspan="6" class="muted">Carregando…</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-indicador-dashboard" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Indicador · Dashboard</div>
+                <span class="muted">Somente os seus assinantes, campanhas e comissões.</span>
+              </div>
+              <div class="aquecedor-section">
+                <div id="indicador-dashboard-kpis" class="indicador-kpi-grid"></div>
+                <p id="indicador-dashboard-error" class="muted">Carregando…</p>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-indicador-assinantes" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Indicador · Meus assinantes</div>
+                <span class="muted">O vínculo comercial é gravado automaticamente na sua conta.</span>
+              </div>
+              <div class="aquecedor-section">
+                <form id="indicador-subscriber-form" class="admin-users-form" autocomplete="off" novalidate>
+                  <div class="admin-users-form-grid">
+                    <div class="aquecedor-field">
+                      <label for="indicador-sub-name">Nome</label>
+                      <input id="indicador-sub-name" type="text" required minlength="2" />
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="indicador-sub-email">E-mail</label>
+                      <input id="indicador-sub-email" type="email" required />
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="indicador-sub-password">Senha</label>
+                      <input id="indicador-sub-password" type="password" required minlength="6" autocomplete="new-password" />
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="indicador-sub-whatsapp">WhatsApp</label>
+                      <input id="indicador-sub-whatsapp" type="tel" required />
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="indicador-sub-cpf">CPF ou CNPJ</label>
+                      <input id="indicador-sub-cpf" type="text" required />
+                    </div>
+                    <div class="aquecedor-field">
+                      <label for="indicador-sub-bonus">Bônus de envios (máx. 100 no total)</label>
+                      <input id="indicador-sub-bonus" type="number" min="0" max="100" placeholder="Opcional" />
+                    </div>
+                  </div>
+                  <p id="indicador-subscriber-form-error" class="admin-user-edit-error" hidden role="alert"></p>
+                  <div class="admin-users-form-footer">
+                    <button class="instance-action-btn btn-qrcode enabled" type="submit">Cadastrar assinante</button>
+                  </div>
+                </form>
+                <div class="admin-subscribers-table-wrap">
+                  <table class="admin-subscribers-table" aria-label="Meus assinantes">
+                    <thead>
+                      <tr>
+                        <th>Assinante</th>
+                        <th>Status</th>
+                        <th class="admin-subscribers-num">Contratados</th>
+                        <th class="admin-subscribers-num">Disponíveis</th>
+                        <th class="admin-subscribers-num">Campanhas</th>
+                        <th class="admin-subscribers-num">Comissão</th>
+                        <th>Bônus restante</th>
+                      </tr>
+                    </thead>
+                    <tbody id="indicador-subscribers-tbody"><tr><td colspan="7" class="muted">Carregando…</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-indicador-campanhas" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Indicador · Campanhas</div>
+                <span class="muted">Consulta somente leitura das campanhas dos seus assinantes.</span>
+              </div>
+              <div class="aquecedor-section">
+                <div class="admin-subscribers-table-wrap">
+                  <table class="admin-subscribers-table" aria-label="Campanhas dos assinantes">
+                    <thead>
+                      <tr>
+                        <th>Cliente</th>
+                        <th>Campanha</th>
+                        <th>Status</th>
+                        <th class="admin-subscribers-num">Envios</th>
+                        <th>Criada em</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="indicador-campanhas-tbody"><tr><td colspan="6" class="muted">Carregando…</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-indicador-financeiro" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Indicador · Financeiro</div>
+                <span class="muted">Comissões geradas no pagamento confirmado dos seus assinantes.</span>
+              </div>
+              <div class="aquecedor-section">
+                <div id="indicador-financeiro-kpis" class="indicador-kpi-grid"></div>
+                <div class="admin-users-form-grid" style="margin-bottom:16px">
+                  <div class="aquecedor-field">
+                    <label for="indicador-fin-from">De</label>
+                    <input id="indicador-fin-from" type="date" />
+                  </div>
+                  <div class="aquecedor-field">
+                    <label for="indicador-fin-to">Até</label>
+                    <input id="indicador-fin-to" type="date" />
+                  </div>
+                  <div class="aquecedor-field">
+                    <label for="indicador-fin-status">Status</label>
+                    <select id="indicador-fin-status">
+                      <option value="">Todos</option>
+                      <option value="pending">Pendente</option>
+                      <option value="processing">Processando</option>
+                      <option value="paid">Pago</option>
+                      <option value="failed">Falhou</option>
+                      <option value="canceled">Cancelado</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="admin-subscribers-table-wrap">
+                  <table class="admin-subscribers-table" aria-label="Comissões do indicador">
+                    <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th>Assinante</th>
+                        <th>Compra</th>
+                        <th class="admin-subscribers-num">Envios</th>
+                        <th class="admin-subscribers-num">Spread</th>
+                        <th class="admin-subscribers-num">Comissão</th>
+                        <th>Status</th>
+                        <th>Pagamento</th>
+                      </tr>
+                    </thead>
+                    <tbody id="indicador-financeiro-tbody"><tr><td colspan="8" class="muted">Carregando…</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
         <div id="tab-meta-disparo" class="tab-panel tab-hidden">
           <div class="row g-3">
             <section class="panel col-12">
@@ -24975,6 +25474,17 @@
           <button id="admin-campanhas-detail-close-btn" class="instance-action-btn" type="button">
             Fechar
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="indicador-campanha-detail-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal admin-campanhas-detail-modal" role="dialog" aria-modal="true" aria-labelledby="indicador-campanha-detail-title">
+        <div class="confirm-title" id="indicador-campanha-detail-title">Detalhes da campanha</div>
+        <p class="confirm-text" id="indicador-campanha-detail-subtitle"></p>
+        <div id="indicador-campanha-detail-body" class="admin-campanhas-detail-sections"></div>
+        <div class="confirm-actions">
+          <button id="indicador-campanha-detail-close-btn" class="instance-action-btn" type="button">Fechar</button>
         </div>
       </div>
     </div>
@@ -28833,7 +29343,7 @@
       }
 
       function isStaffRole(role) {
-        return role === "master" || role === "operacional" || role === "suporte";
+        return role === "master" || role === "operacional" || role === "suporte" || role === "indicador";
       }
 
       function isSubscriberAccount() {
@@ -28936,7 +29446,8 @@
           wabaStaffAllowedMenuIds.has("admin-assinantes") ||
           wabaStaffAllowedMenuIds.has("admin-campanhas") ||
           wabaStaffAllowedMenuIds.has("admin-usuarios") ||
-          wabaStaffAllowedMenuIds.has("admin-financeiro")
+          wabaStaffAllowedMenuIds.has("admin-financeiro") ||
+          wabaStaffAllowedMenuIds.has("admin-indicadores")
         );
       }
 
@@ -29389,15 +29900,40 @@
       }
 
       function syncStaffMenuPermissions() {
+        const indicadorKeys = new Set([
+          "indicador-dashboard",
+          "indicador-assinantes",
+          "indicador-campanhas",
+          "indicador-financeiro",
+        ]);
+        document.querySelectorAll(".tab-button[data-menu-key]").forEach((btn) => {
+          const key = btn.getAttribute("data-menu-key") || "";
+          if (!indicadorKeys.has(key)) return;
+          const allowed = wabaAuthRole === "indicador";
+          btn.hidden = !allowed;
+          btn.classList.toggle("menu-permission-denied", !allowed);
+          btn.setAttribute("aria-hidden", allowed ? "false" : "true");
+        });
+        document.querySelectorAll(".menu-group[data-menu-group='indicador']").forEach((group) => {
+          group.style.display = wabaAuthRole === "indicador" ? "" : "none";
+        });
+
         if (!isStaffRole(wabaAuthRole) || wabaAuthRole === "master") {
           document.querySelectorAll(".tab-button[data-menu-key]").forEach((btn) => {
+            const key = btn.getAttribute("data-menu-key") || "";
+            if (indicadorKeys.has(key)) return;
             btn.classList.remove("menu-permission-denied");
+            if (wabaAuthRole === "master") {
+              btn.hidden = false;
+              btn.setAttribute("aria-hidden", "false");
+            }
           });
           return;
         }
 
         document.querySelectorAll(".tab-button[data-menu-key]").forEach((btn) => {
           const key = btn.getAttribute("data-menu-key") || "";
+          if (indicadorKeys.has(key)) return;
           const allowed = hasStaffMenuAccess(key);
           btn.classList.toggle("menu-permission-denied", !allowed);
           btn.hidden = !allowed;
@@ -29409,9 +29945,9 @@
           const buttons = group.querySelectorAll(".tab-button[data-menu-key]");
           let anyVisible = false;
           buttons.forEach((btn) => {
-            if (!btn.classList.contains("menu-permission-denied")) anyVisible = true;
+            if (!btn.classList.contains("menu-permission-denied") && !btn.hidden) anyVisible = true;
           });
-          if (section === "admin") return;
+          if (section === "admin" && wabaAuthRole !== "indicador") return;
           group.style.display = anyVisible ? "" : "none";
         });
       }
@@ -29521,6 +30057,7 @@
       }
 
       function getMenuSectionForTab(tabName) {
+        if (String(tabName || "").startsWith("indicador-")) return "indicador";
         if (isMarketingTab(tabName)) return "marketing";
         if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
@@ -29544,6 +30081,15 @@
 
       function isTabBlockedByMenuPolicy(tabName) {
         if (!tabName) return false;
+        if (wabaAuthRole === "indicador") {
+          return ![
+            "indicador-dashboard",
+            "indicador-assinantes",
+            "indicador-campanhas",
+            "indicador-financeiro",
+          ].includes(tabName);
+        }
+        if (String(tabName).startsWith("indicador-")) return true;
         if (tabName === "dispositivos" && !canAccessDeviceCloudMenu()) return true;
         if (getMenuSectionForTab(tabName) === "lab-api-oficial" && !canAccessLaboratorioMenu()) return true;
         if (tabName === "admin-usuarios") return !hasMasterAccess();
@@ -29622,6 +30168,7 @@
       }
 
       function resolveFirstAllowedStaffTab() {
+        if (wabaAuthRole === "indicador") return "indicador-dashboard";
         if (!isStaffRole(wabaAuthRole) || wabaAuthRole === "master") {
           return defaultDisparosTab();
         }
@@ -29761,6 +30308,7 @@
 
       function applyMenuSectionAccess() {
         document.body.classList.toggle("waba-menu-admin-visible", hasAdminAccess());
+        document.body.classList.toggle("waba-indicador-visible", wabaAuthRole === "indicador");
         document.body.classList.toggle("waba-master-visible", hasMasterAccess());
         document.body.classList.toggle("waba-laboratorio-visible", canAccessLaboratorioMenu());
         document.body.classList.toggle(
@@ -30815,7 +31363,17 @@
         return isSubscriberAccount() && getSubscriberSegment() === "bets";
       }
 
+      let disparosCustomerPackagesCache = { oficial: null, alternativa: null };
+
       function getDisparosPricingTiers(apiKind) {
+        const remote = disparosCustomerPackagesCache[apiKind];
+        if (Array.isArray(remote) && remote.length) {
+          return remote.map((pack) => ({
+            shipments: pack.shipments,
+            totalCents: pack.valueCents,
+            pricePerSend: Number(pack.unitPriceCents || 0) / 100,
+          }));
+        }
         let tiers;
         if (getSubscriberSegment() === "bets") {
           if (apiKind === "alternativa") return [];
@@ -30900,7 +31458,9 @@
             ".disparos-api-min-creditos:not(:has(.disparos-api-min-outros))"
           );
 
-          const outrosPrice = formatDisparosPriceRangeFromTiers(DISPAROS_PRICING_TIERS.oficial);
+          const outrosPrice = formatDisparosPriceRangeFromTiers(
+            isSubscriberAccount() ? getDisparosPricingTiers("oficial") : DISPAROS_PRICING_TIERS.oficial
+          );
           const betsPrice = formatDisparosPriceRangeFromTiers(DISPAROS_PRICING_TIERS.betsOficial);
 
           if (priceOutros && outrosPrice) priceOutros.textContent = outrosPrice;
@@ -33936,7 +34496,7 @@
       const ADMIN_SUBSCRIBER_ICON_EDIT = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 1.33H5v-.92l9.06-9.06.92.92L5.92 18.58zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/></svg>`;
 
       function sortSplitSettlementLines(lines) {
-        const order = { cet: 0, supplier: 1, partner: 2 };
+        const order = { cet: 0, supplier: 1, indicator: 2, partner: 3 };
         return (Array.isArray(lines) ? lines : [])
           .slice()
           .sort((a, b) => {
@@ -34030,6 +34590,9 @@
         if (line?.lineKind === "cet") {
           return `${amount} <span class="admin-financeiro-split-line-value-note">(retido na fonte)</span>`;
         }
+        if (line?.lineKind === "indicator") {
+          return `${amount} <span class="admin-financeiro-split-line-value-note">(despesa — comissão)</span>`;
+        }
         const share = escapeAdminHtml(String(line?.sharePercent ?? 0));
         return `${amount} <span class="admin-financeiro-split-line-value-note">participação ${share}%</span>`;
       }
@@ -34044,6 +34607,9 @@
         }
         if (line?.lineKind === "cet") {
           return `${label}: ${amount} (retido na fonte)`;
+        }
+        if (line?.lineKind === "indicator") {
+          return `${label}: ${amount} (despesa)`;
         }
         const share = escapeAdminHtml(String(line?.sharePercent ?? 0));
         return `${label}: ${amount} participação ${share}%`;
@@ -45618,11 +46184,12 @@
         const errorBlock = document.getElementById("admin-campanhas-error-report-block");
         const errorText = document.getElementById("admin-campanhas-error-report-text");
         const campaignStatus = String(campaign?.status || "").trim().toLowerCase();
-        const canReportError = Boolean(campaign?.canReportError);
+        const readOnlyCampaign = Boolean(campaign?.readOnly) || wabaAuthRole === "indicador";
+        const canReportError = !readOnlyCampaign && Boolean(campaign?.canReportError);
         const errorJustification = String(campaign?.errorReport?.justification || "").trim();
 
         if (startBtn) {
-          const canStart = Boolean(campaign.canStartCampaign);
+          const canStart = !readOnlyCampaign && Boolean(campaign.canStartCampaign);
           startBtn.textContent = ADMIN_CAMPANHAS_START_BTN_LABEL;
           startBtn.hidden = !canStart;
           startBtn.removeAttribute("disabled");
@@ -49942,6 +50509,7 @@
           renderDisparosCreditsPanel(disparosCreditsCache);
           syncDisparosResumoSide();
           syncAquecedorSectionVisual();
+          void loadDisparosCustomerPackages();
           if (disCampaignWizardStep === DIS_CAMPAIGN_WIZARD_TOTAL_STEPS) {
             updateDisCampaignWizardLeadsCountUi();
           }
@@ -58100,6 +58668,19 @@
           );
         }
 
+        [
+          ["tab-admin-indicadores", "admin-indicadores"],
+          ["tab-indicador-dashboard", "indicador-dashboard"],
+          ["tab-indicador-assinantes", "indicador-assinantes"],
+          ["tab-indicador-campanhas", "indicador-campanhas"],
+          ["tab-indicador-financeiro", "indicador-financeiro"],
+        ].forEach(([id, tab]) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.classList.toggle("tab-hidden", nextTab !== tab);
+          el.setAttribute("aria-hidden", nextTab !== tab ? "true" : "false");
+        });
+
         document.body.classList.toggle("admin-section-active", isMasterWorkspaceTab(nextTab));
         document.body.classList.toggle("suporte-section-active", isSuporteTab(nextTab));
         document.body.classList.toggle("marketing-section-active", isMarketingTab(nextTab));
@@ -58203,6 +58784,36 @@
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
           void loadAdminFinanceiro();
+        } else if (nextTab === "admin-indicadores") {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
+          stopDisparosDashboardPolling();
+          stopAdminCampanhasPolling();
+          void loadAdminIndicadores();
+        } else if (nextTab === "indicador-dashboard") {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
+          stopDisparosDashboardPolling();
+          stopAdminCampanhasPolling();
+          void loadIndicadorDashboard();
+        } else if (nextTab === "indicador-assinantes") {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
+          stopDisparosDashboardPolling();
+          stopAdminCampanhasPolling();
+          void loadIndicadorSubscribers();
+        } else if (nextTab === "indicador-campanhas") {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
+          stopDisparosDashboardPolling();
+          stopAdminCampanhasPolling();
+          void loadIndicadorCampanhas();
+        } else if (nextTab === "indicador-financeiro") {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
+          stopDisparosDashboardPolling();
+          stopAdminCampanhasPolling();
+          void loadIndicadorFinanceiro();
         } else if (nextTab === "admin-chamados") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
@@ -62421,6 +63032,7 @@
       }
 
       function resolveMenuGroupForTab(tabName) {
+        if (String(tabName || "").startsWith("indicador-")) return "indicador";
         if (isMarketingTab(tabName)) return "marketing";
         if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
@@ -62432,7 +63044,7 @@
       /** Ao expandir a sidebar, abre só o grupo da aba ativa (evita menu maior que a tela). */
       function focusDesktopMenuGroupForActiveTab() {
         const activeGroup = resolveMenuGroupForTab(activeTab);
-        ["nao-oficial", "oficial", "lab-api-oficial", "admin", "suporte", "marketing"].forEach((groupName) => {
+        ["nao-oficial", "oficial", "lab-api-oficial", "admin", "indicador", "suporte", "marketing"].forEach((groupName) => {
           setDesktopMenuGroupOpen(groupName, groupName === activeGroup);
         });
       }
@@ -62524,7 +63136,8 @@
           tabName === "admin-assinantes" ||
           tabName === "admin-campanhas" ||
           tabName === "admin-usuarios" ||
-          tabName === "admin-financeiro"
+          tabName === "admin-financeiro" ||
+          tabName === "admin-indicadores"
         );
       }
 
@@ -65299,6 +65912,528 @@
         });
       }
 
+      async function loadDisparosCustomerPackages() {
+        if (!isSubscriberAccount()) return;
+        try {
+          const oficialRes = await fetch("/billing/disparos/packages?apiKind=oficial");
+          if (oficialRes.ok) {
+            const payload = await oficialRes.json();
+            if (Array.isArray(payload.packages)) {
+              disparosCustomerPackagesCache.oficial = payload.packages;
+            }
+          }
+          if (!isBetsSubscriberAccount()) {
+            const altRes = await fetch("/billing/disparos/packages?apiKind=alternativa");
+            if (altRes.ok) {
+              const payload = await altRes.json();
+              if (Array.isArray(payload.packages)) {
+                disparosCustomerPackagesCache.alternativa = payload.packages;
+              }
+            }
+          }
+          syncDisparosPricingBoardForSegment();
+        } catch {
+          /* fallback na tabela-base local */
+        }
+      }
+
+      function parseSpreadInputToCents(raw) {
+        const normalized = String(raw || "").trim().replace(/\s/g, "").replace(",", ".");
+        const value = Number(normalized);
+        if (!Number.isFinite(value) || value < 0) return NaN;
+        return Math.round(value * 100);
+      }
+
+      function formatSpreadInputFromCents(cents) {
+        const n = Math.max(0, Math.round(Number(cents || 0))) / 100;
+        return n.toFixed(2).replace(".", ",");
+      }
+
+      function renderIndicadorKpis(rootId, items) {
+        const root = document.getElementById(rootId);
+        if (!root) return;
+        root.innerHTML = items
+          .map(
+            (item) =>
+              `<div class="indicador-kpi-card"><span>${escapeAdminHtml(item.label)}</span><strong>${escapeAdminHtml(
+                item.value
+              )}</strong></div>`
+          )
+          .join("");
+      }
+
+      async function loadAdminIndicadores() {
+        if (!hasMasterAccess()) return;
+        const tbody = document.getElementById("admin-indicadores-tbody");
+        const summary = document.getElementById("admin-indicadores-summary");
+        try {
+          const response = await fetch("/admin/indicadores");
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || "Não foi possível carregar os indicadores.");
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (summary) {
+            summary.textContent =
+              items.length === 1 ? "1 indicador" : `${items.length.toLocaleString("pt-BR")} indicadores`;
+          }
+          if (!tbody) return;
+          if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="muted">Nenhum indicador cadastrado.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = items
+            .map((item) => {
+              const id = escapeAdminHtml(item.id);
+              return `<tr>
+                <td><strong>${escapeAdminHtml(item.fullName || "—")}</strong><div class="muted">${escapeAdminHtml(
+                item.email || ""
+              )}</div></td>
+                <td>${escapeAdminHtml(item.spreadLabel || formatSpreadInputFromCents(item.spreadCentsPerSend))}</td>
+                <td>${escapeAdminHtml(item.pixKey || "—")}</td>
+                <td>${escapeAdminHtml(item.statusLabel || item.status || "—")}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(String(item.subscriberCount ?? 0))}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(item.commissionGeneratedLabel || "R$ 0,00")}</td>
+                <td>
+                  <button type="button" class="instance-action-btn enabled" data-edit-indicador="${id}">Editar</button>
+                </td>
+              </tr>`;
+            })
+            .join("");
+        } catch (error) {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="7" class="muted">${escapeAdminHtml(
+              error?.message || "Falha ao carregar."
+            )}</td></tr>`;
+          }
+        }
+      }
+
+      async function loadAdminIndicadorAssinantes() {
+        const tbody = document.getElementById("admin-indicadores-subscribers-tbody");
+        try {
+          const response = await fetch("/admin/indicadores/subscribers");
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || "Não foi possível carregar os assinantes.");
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (!tbody) return;
+          if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="muted">Nenhum assinante vinculado.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = items
+            .map(
+              (item) => `<tr>
+                <td>${escapeAdminHtml(item.fullName || "—")}</td>
+                <td>${escapeAdminHtml(item.email || "—")}</td>
+                <td>${escapeAdminHtml(item.indicatorName || "—")}</td>
+                <td>${escapeAdminHtml(item.createdAtLabel || "—")}</td>
+              </tr>`
+            )
+            .join("");
+        } catch (error) {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="4" class="muted">${escapeAdminHtml(
+              error?.message || "Falha ao carregar."
+            )}</td></tr>`;
+          }
+        }
+      }
+
+      async function loadAdminIndicadorComissoes() {
+        const tbody = document.getElementById("admin-indicadores-commissions-tbody");
+        try {
+          const response = await fetch("/admin/indicadores/commissions");
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || "Não foi possível carregar as comissões.");
+          renderIndicadorKpis("admin-indicadores-commissions-kpis", [
+            { label: "Gerada", value: formatDisparosMoneyFromCents(payload.generatedCents || 0) },
+            { label: "Pendente", value: formatDisparosMoneyFromCents(payload.pendingCents || 0) },
+            { label: "Paga", value: formatDisparosMoneyFromCents(payload.paidCents || 0) },
+          ]);
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (!tbody) return;
+          if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="muted">Nenhuma comissão lançada.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = items
+            .map(
+              (item) => `<tr>
+                <td>${escapeAdminHtml(item.createdAtLabel || "—")}</td>
+                <td>${escapeAdminHtml(item.indicatorName || "—")}</td>
+                <td>${escapeAdminHtml(item.subscriberName || item.subscriberEmail || "—")}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(String(item.quantity ?? 0))}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(item.commissionAmountLabel || "—")}</td>
+                <td>${escapeAdminHtml(item.statusLabel || item.status || "—")}</td>
+              </tr>`
+            )
+            .join("");
+        } catch (error) {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeAdminHtml(
+              error?.message || "Falha ao carregar."
+            )}</td></tr>`;
+          }
+        }
+      }
+
+      function fillAdminIndicadorForm(item) {
+        document.getElementById("admin-indicador-id").value = item?.id || "";
+        document.getElementById("admin-indicador-name").value = item?.fullName || "";
+        document.getElementById("admin-indicador-email").value = item?.email || "";
+        document.getElementById("admin-indicador-password").value = "";
+        document.getElementById("admin-indicador-whatsapp").value = item?.whatsapp || "";
+        document.getElementById("admin-indicador-cpf").value = item?.cpfCnpj || "";
+        document.getElementById("admin-indicador-spread").value = formatSpreadInputFromCents(item?.spreadCentsPerSend || 0);
+        document.getElementById("admin-indicador-pix").value = item?.pixKey || "";
+        document.getElementById("admin-indicador-pix-type").value = item?.pixKeyType || "";
+        document.getElementById("admin-indicador-status").value = item?.status || "active";
+        const saveBtn = document.getElementById("admin-indicador-save-btn");
+        const cancelBtn = document.getElementById("admin-indicador-cancel-btn");
+        if (saveBtn) saveBtn.textContent = item?.id ? "Salvar alterações" : "Cadastrar indicador";
+        if (cancelBtn) cancelBtn.hidden = !item?.id;
+      }
+
+      async function loadIndicadorDashboard() {
+        const errorEl = document.getElementById("indicador-dashboard-error");
+        try {
+          const response = await fetch("/indicador/dashboard");
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || "Não foi possível carregar o dashboard.");
+          renderIndicadorKpis("indicador-dashboard-kpis", [
+            { label: "Assinantes", value: String(payload.subscribers?.total ?? 0) },
+            { label: "Novos no período", value: String(payload.subscribers?.newInPeriod ?? 0) },
+            { label: "Campanhas", value: String(payload.campaigns?.total ?? 0) },
+            { label: "Em processamento", value: String(payload.campaigns?.processing ?? 0) },
+            { label: "Envios contratados", value: String(payload.shipments?.contracted ?? 0) },
+            { label: "Envios consumidos", value: String(payload.shipments?.consumed ?? 0) },
+            { label: "Comissão gerada", value: formatDisparosMoneyFromCents(payload.finance?.generatedCents || 0) },
+            { label: "Comissão pendente", value: formatDisparosMoneyFromCents(payload.finance?.pendingCents || 0) },
+            { label: "Comissão paga", value: formatDisparosMoneyFromCents(payload.finance?.paidCents || 0) },
+          ]);
+          if (errorEl) errorEl.hidden = true;
+        } catch (error) {
+          if (errorEl) {
+            errorEl.hidden = false;
+            errorEl.textContent = error?.message || "Falha ao carregar o dashboard.";
+          }
+        }
+      }
+
+      async function loadIndicadorSubscribers() {
+        const tbody = document.getElementById("indicador-subscribers-tbody");
+        try {
+          const response = await fetch("/indicador/subscribers");
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || "Não foi possível listar os assinantes.");
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (!tbody) return;
+          if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = items
+            .map(
+              (item) => `<tr>
+                <td><strong>${escapeAdminHtml(item.fullName || "—")}</strong><div class="muted">${escapeAdminHtml(
+                item.email || ""
+              )}</div></td>
+                <td>${escapeAdminHtml(item.statusLabel || "Ativo")}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(String(item.contractedShipments ?? 0))}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(String(item.remainingShipments ?? 0))}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(String(item.campaigns ?? 0))}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(item.commissionGeneratedLabel || "R$ 0,00")}</td>
+                <td>${escapeAdminHtml(String(item.remainingBonusQuota ?? 0))} envios</td>
+              </tr>`
+            )
+            .join("");
+        } catch (error) {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="7" class="muted">${escapeAdminHtml(
+              error?.message || "Falha ao carregar."
+            )}</td></tr>`;
+          }
+        }
+      }
+
+      async function loadIndicadorCampanhas() {
+        const tbody = document.getElementById("indicador-campanhas-tbody");
+        try {
+          const response = await fetch("/indicador/campanhas");
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || "Não foi possível listar as campanhas.");
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (!tbody) return;
+          if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="muted">Nenhuma campanha dos seus assinantes.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = items
+            .map(
+              (item) => `<tr>
+                <td>${escapeAdminHtml(item.subscriberName || item.subscriberEmail || "—")}</td>
+                <td>${escapeAdminHtml(item.campaignName || "—")}</td>
+                <td>${escapeAdminHtml(item.displayStatus || item.status || "—")}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(String(item.plannedSendCount ?? item.importedLineCount ?? 0))}</td>
+                <td>${escapeAdminHtml(item.createdAtLabel || "—")}</td>
+                <td><button type="button" class="instance-action-btn enabled" data-indicador-campanha="${escapeAdminHtml(
+                  item.id
+                )}">Ver</button></td>
+              </tr>`
+            )
+            .join("");
+        } catch (error) {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeAdminHtml(
+              error?.message || "Falha ao carregar."
+            )}</td></tr>`;
+          }
+        }
+      }
+
+      async function openIndicadorCampanhaDetail(campaignId) {
+        const overlay = document.getElementById("indicador-campanha-detail-overlay");
+        const body = document.getElementById("indicador-campanha-detail-body");
+        const subtitle = document.getElementById("indicador-campanha-detail-subtitle");
+        if (overlay) {
+          overlay.classList.add("open");
+          overlay.setAttribute("aria-hidden", "false");
+        }
+        if (body) body.innerHTML = '<p class="muted">Carregando…</p>';
+        try {
+          const response = await fetch(`/indicador/campanhas/${encodeURIComponent(campaignId)}`);
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || "Campanha não encontrada.");
+          const campaign = payload.campaign || {};
+          if (subtitle) {
+            subtitle.textContent = `${campaign.subscriberName || campaign.subscriberEmail || "Assinante"} · somente leitura`;
+          }
+          const report = campaign.performanceReport || {};
+          if (body) {
+            body.innerHTML = [
+              `<div class="admin-campanhas-detail-section"><h3 class="admin-campanhas-detail-section-title">Campanha</h3>
+                <p><strong>Nome:</strong> ${escapeAdminHtml(campaign.campaignName || "—")}</p>
+                <p><strong>Status:</strong> ${escapeAdminHtml(campaign.displayStatus || campaign.status || "—")}</p>
+                <p><strong>Quantidade:</strong> ${escapeAdminHtml(String(campaign.plannedSendCount ?? 0))}</p>
+                <p><strong>Criada em:</strong> ${escapeAdminHtml(campaign.createdAtLabel || "—")}</p>
+              </div>`,
+              `<div class="admin-campanhas-detail-section"><h3 class="admin-campanhas-detail-section-title">Métricas</h3>
+                <p><strong>Enviados:</strong> ${escapeAdminHtml(String(report.sent ?? 0))}</p>
+                <p><strong>Entregues:</strong> ${escapeAdminHtml(String(report.delivered ?? 0))}</p>
+                <p><strong>Falhas:</strong> ${escapeAdminHtml(String(report.failed ?? 0))}</p>
+                <p><strong>Lidos:</strong> ${escapeAdminHtml(String(report.read ?? 0))}</p>
+              </div>`,
+            ].join("");
+          }
+        } catch (error) {
+          if (body) body.innerHTML = `<p class="muted">${escapeAdminHtml(error?.message || "Falha ao abrir a campanha.")}</p>`;
+        }
+      }
+
+      async function loadIndicadorFinanceiro() {
+        const tbody = document.getElementById("indicador-financeiro-tbody");
+        const params = new URLSearchParams();
+        const from = document.getElementById("indicador-fin-from")?.value;
+        const to = document.getElementById("indicador-fin-to")?.value;
+        const status = document.getElementById("indicador-fin-status")?.value;
+        if (from) params.set("from", from);
+        if (to) params.set("to", `${to}T23:59:59`);
+        if (status) params.set("status", status);
+        try {
+          const response = await fetch(`/indicador/financeiro?${params.toString()}`);
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || "Não foi possível carregar o financeiro.");
+          renderIndicadorKpis("indicador-financeiro-kpis", [
+            { label: "Comissão gerada", value: formatDisparosMoneyFromCents(payload.generatedCents || 0) },
+            { label: "Pendente", value: formatDisparosMoneyFromCents(payload.pendingCents || 0) },
+            { label: "Paga", value: formatDisparosMoneyFromCents(payload.paidCents || 0) },
+          ]);
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (!tbody) return;
+          if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="muted">Nenhum lançamento no filtro atual.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = items
+            .map((item) => {
+              const receipt = item.hasReceipt
+                ? `<button type="button" class="instance-action-btn enabled" data-indicador-recibo="${escapeAdminHtml(
+                    item.id
+                  )}">Ver comprovante</button>`
+                : escapeAdminHtml(item.payoutExternalReference || item.asaasTransferId || "—");
+              return `<tr>
+                <td>${escapeAdminHtml(item.createdAtLabel || "—")}</td>
+                <td>${escapeAdminHtml(item.subscriberName || item.subscriberEmail || "—")}</td>
+                <td>${escapeAdminHtml(item.orderId || "—")}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(String(item.quantity ?? 0))}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(item.spreadUnitPriceLabel || "—")}</td>
+                <td class="admin-subscribers-num">${escapeAdminHtml(item.commissionAmountLabel || "—")}</td>
+                <td>${escapeAdminHtml(item.statusLabel || item.status || "—")}</td>
+                <td>${receipt}</td>
+              </tr>`;
+            })
+            .join("");
+        } catch (error) {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="8" class="muted">${escapeAdminHtml(
+              error?.message || "Falha ao carregar."
+            )}</td></tr>`;
+          }
+        }
+      }
+
+      function initIndicadorModuleUi() {
+        document.querySelectorAll("[data-admin-indicadores-pane]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const pane = btn.getAttribute("data-admin-indicadores-pane");
+            document.querySelectorAll("[data-admin-indicadores-pane]").forEach((item) => {
+              item.classList.toggle("is-active", item === btn);
+            });
+            document.getElementById("admin-indicadores-pane-lista").hidden = pane !== "lista";
+            document.getElementById("admin-indicadores-pane-assinantes").hidden = pane !== "assinantes";
+            document.getElementById("admin-indicadores-pane-comissoes").hidden = pane !== "comissoes";
+            if (pane === "lista") void loadAdminIndicadores();
+            if (pane === "assinantes") void loadAdminIndicadorAssinantes();
+            if (pane === "comissoes") void loadAdminIndicadorComissoes();
+          });
+        });
+
+        document.getElementById("admin-indicador-form")?.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const errorEl = document.getElementById("admin-indicador-form-error");
+          const id = String(document.getElementById("admin-indicador-id")?.value || "").trim();
+          const spreadCents = parseSpreadInputToCents(document.getElementById("admin-indicador-spread")?.value);
+          if (!Number.isFinite(spreadCents)) {
+            if (errorEl) {
+              errorEl.hidden = false;
+              errorEl.textContent = "Informe o spread em reais, por envio.";
+            }
+            return;
+          }
+          const body = {
+            fullName: document.getElementById("admin-indicador-name")?.value,
+            email: document.getElementById("admin-indicador-email")?.value,
+            password: document.getElementById("admin-indicador-password")?.value,
+            whatsapp: document.getElementById("admin-indicador-whatsapp")?.value,
+            cpfCnpj: document.getElementById("admin-indicador-cpf")?.value,
+            pixKey: document.getElementById("admin-indicador-pix")?.value,
+            pixKeyType: document.getElementById("admin-indicador-pix-type")?.value,
+            spreadCentsPerSend: spreadCents,
+            status: document.getElementById("admin-indicador-status")?.value,
+          };
+          try {
+            const response = await fetch(id ? `/admin/indicadores/${encodeURIComponent(id)}` : "/admin/indicadores", {
+              method: id ? "PATCH" : "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.error || "Não foi possível salvar o indicador.");
+            fillAdminIndicadorForm(null);
+            if (errorEl) errorEl.hidden = true;
+            showToast(id ? "Indicador atualizado." : "Indicador cadastrado.", "success");
+            void loadAdminIndicadores();
+          } catch (error) {
+            if (errorEl) {
+              errorEl.hidden = false;
+              errorEl.textContent = error?.message || "Falha ao salvar.";
+            }
+          }
+        });
+
+        document.getElementById("admin-indicador-cancel-btn")?.addEventListener("click", () => {
+          fillAdminIndicadorForm(null);
+        });
+
+        document.getElementById("admin-indicadores-tbody")?.addEventListener("click", async (event) => {
+          const btn = event.target.closest("[data-edit-indicador]");
+          if (!btn) return;
+          const id = btn.getAttribute("data-edit-indicador");
+          try {
+            const response = await fetch(`/admin/indicadores/${encodeURIComponent(id)}`);
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.error || "Indicador não encontrado.");
+            fillAdminIndicadorForm(payload.indicator);
+          } catch (error) {
+            showToast(error?.message || "Não foi possível abrir o indicador.", "error");
+          }
+        });
+
+        document.getElementById("indicador-subscriber-form")?.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const errorEl = document.getElementById("indicador-subscriber-form-error");
+          const body = {
+            fullName: document.getElementById("indicador-sub-name")?.value,
+            email: document.getElementById("indicador-sub-email")?.value,
+            password: document.getElementById("indicador-sub-password")?.value,
+            whatsapp: document.getElementById("indicador-sub-whatsapp")?.value,
+            cpfCnpj: document.getElementById("indicador-sub-cpf")?.value,
+          };
+          try {
+            const response = await fetch("/indicador/subscribers", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.error || "Não foi possível cadastrar o assinante.");
+            const bonusQty = Math.max(0, Math.round(Number(document.getElementById("indicador-sub-bonus")?.value || 0)));
+            if (bonusQty > 0 && payload.subscriber?.id) {
+              const bonusRes = await fetch(`/indicador/subscribers/${encodeURIComponent(payload.subscriber.id)}/bonus-envios`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ shipmentCount: bonusQty, apiKind: "oficial", validityMode: "lifetime" }),
+              });
+              const bonusPayload = await bonusRes.json().catch(() => ({}));
+              if (!bonusRes.ok) throw new Error(bonusPayload.error || "Assinante criado, mas o bônus foi recusado.");
+            }
+            event.target.reset();
+            if (errorEl) errorEl.hidden = true;
+            showToast("Assinante cadastrado.", "success");
+            void loadIndicadorSubscribers();
+          } catch (error) {
+            if (errorEl) {
+              errorEl.hidden = false;
+              errorEl.textContent = error?.message || "Falha ao cadastrar.";
+            }
+          }
+        });
+
+        document.getElementById("indicador-campanhas-tbody")?.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-indicador-campanha]");
+          if (!btn) return;
+          void openIndicadorCampanhaDetail(btn.getAttribute("data-indicador-campanha"));
+        });
+        document.getElementById("indicador-campanha-detail-close-btn")?.addEventListener("click", () => {
+          const overlay = document.getElementById("indicador-campanha-detail-overlay");
+          overlay?.classList.remove("open");
+          overlay?.setAttribute("aria-hidden", "true");
+        });
+        document.getElementById("indicador-campanha-detail-overlay")?.addEventListener("click", (event) => {
+          if (event.target.id === "indicador-campanha-detail-overlay") {
+            event.target.classList.remove("open");
+            event.target.setAttribute("aria-hidden", "true");
+          }
+        });
+
+        ["indicador-fin-from", "indicador-fin-to", "indicador-fin-status"].forEach((id) => {
+          document.getElementById(id)?.addEventListener("change", () => void loadIndicadorFinanceiro());
+        });
+        document.getElementById("indicador-financeiro-tbody")?.addEventListener("click", async (event) => {
+          const btn = event.target.closest("[data-indicador-recibo]");
+          if (!btn) return;
+          try {
+            const response = await fetch(
+              `/indicador/financeiro/${encodeURIComponent(btn.getAttribute("data-indicador-recibo"))}/comprovante`
+            );
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.error || "Comprovante indisponível.");
+            if (payload.url) window.open(payload.url, "_blank", "noopener");
+          } catch (error) {
+            showToast(error?.message || "Não foi possível abrir o comprovante.", "error");
+          }
+        });
+      }
+
       initWabaAuthUi();
       applyAlternativaNumbersPurchaseUi();
       initAdminSubscribersUi();
@@ -65309,6 +66444,7 @@
       initAdminMonitorCpuUi();
       initAdminLogsSistemaUi();
       initAdminUsersUi();
+      initIndicadorModuleUi();
       initDisCampaignWizard();
       enhanceWabaProductLabelElements(document);
 
@@ -65337,6 +66473,8 @@
               ? resolveSubscriberPostLoginTab(postLoginTab)
               : postLoginTab;
             sessionStorage.removeItem("waba.postLoginTab");
+          } else if (wabaAuthRole === "indicador") {
+            initialTab = "indicador-dashboard";
           } else if (isSubscriberAccount() && (isProductionUi() || isBaselineUi())) {
             initialTab = "disparos-dashboard";
           } else if (shouldUseCampanhasSubscriberUi()) {
