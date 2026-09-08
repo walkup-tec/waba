@@ -68,6 +68,11 @@ function throwFromGraph(result) {
     });
     if (result.status === 401)
         throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
+    if ((0, meta_whatsapp_graph_errors_1.isMetaGraphRateLimitPayload)(result.json, result.graphCode)) {
+        const error = new meta_whatsapp_errors_1.MetaWhatsappError("graph_rate_limited");
+        error.message = (0, meta_whatsapp_graph_errors_1.publicMetaGraphTemplateMessage)(result.kind, result.status, result.json);
+        throw error;
+    }
     if (result.status === 400) {
         const error = new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
         error.message = (0, meta_whatsapp_graph_errors_1.publicMetaGraphTemplateMessage)(result.kind, result.status, result.json);

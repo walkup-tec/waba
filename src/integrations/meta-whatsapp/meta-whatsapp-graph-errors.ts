@@ -51,13 +51,29 @@ function asErrorRecord(value: unknown): Record<string, unknown> {
 
 /**
  * Códigos Graph de rate limit (doc Meta error-handling).
- * Retry curto só aumenta o consumo da cota — não repetir na hora.
+ * 80007/80008 = cota da WABA Cloud. Retry curto só aumenta o consumo.
  * https://developers.facebook.com/docs/graph-api/guides/error-handling/
  */
-const RATE_LIMIT_META_CODES = new Set(["4", "17", "341"]);
+const RATE_LIMIT_META_CODES = new Set(["4", "17", "32", "613", "341", "80007", "80008"]);
 
 export function isMetaGraphRateLimitCode(code: string | number | null | undefined): boolean {
   return RATE_LIMIT_META_CODES.has(String(code ?? "").trim());
+}
+
+export function isMetaGraphRateLimitPayload(
+  json?: unknown,
+  graphCode?: string | number | null,
+): boolean {
+  const extracted = extractPublicGraphErrorCodes(json);
+  const resolved = String(graphCode || extracted.code || "").trim();
+  if (isMetaGraphRateLimitCode(resolved)) return true;
+  return looksLikeMetaRateLimitText(safePublicGraphTemplateDetail(json));
+}
+
+export function publicMetaGraphRateLimitMessage(json?: unknown): string {
+  const { code } = extractPublicGraphErrorCodes(json);
+  const hint = code ? `código ${code}` : "código 80008";
+  return `A Meta limitou temporariamente as consultas desta conta WhatsApp (${hint}). Aguarde alguns minutos e clique de novo em Atualizar da Meta. A lista que já está no WABA continua disponível.`;
 }
 
 /** Detalhe genérico demais para exibir (não confundir com "(#4) Application request limit…"). */
@@ -89,6 +105,9 @@ export function publicMetaGraphTemplateMessage(
   status: number,
   json?: unknown,
 ): string {
+  if (isMetaGraphRateLimitPayload(json)) {
+    return publicMetaGraphRateLimitMessage(json);
+  }
   if (kind === "transient") {
     return "A Meta está temporariamente indisponível. Tente de novo em instantes.";
   }

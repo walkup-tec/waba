@@ -3,7 +3,11 @@ import { resolveMetaWhatsappTenant } from "./meta-whatsapp-tenant";
 import { decryptMetaToken } from "./meta-token-crypto";
 import { MetaWhatsappConnectionRepository } from "./meta-whatsapp-connection.repository";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
-import { publicMetaGraphTemplateMessage, safePublicGraphTemplateDetail } from "./meta-whatsapp-graph-errors";
+import {
+  isMetaGraphRateLimitPayload,
+  publicMetaGraphTemplateMessage,
+  safePublicGraphTemplateDetail,
+} from "./meta-whatsapp-graph-errors";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
 import { rememberTemplateApprovedAt } from "./meta-whatsapp-template-approved-at.store";
 import { MetaWhatsappTemplateRepository } from "./meta-whatsapp-template.repository";
@@ -94,6 +98,11 @@ function throwFromGraph(result: {
     graphDetail: detail || null,
   });
   if (result.status === 401) throw new MetaWhatsappError("invalid_token");
+  if (isMetaGraphRateLimitPayload(result.json, result.graphCode)) {
+    const error = new MetaWhatsappError("graph_rate_limited");
+    error.message = publicMetaGraphTemplateMessage(result.kind, result.status, result.json);
+    throw error;
+  }
   if (result.status === 400) {
     const error = new MetaWhatsappError("template_invalid");
     error.message = publicMetaGraphTemplateMessage(result.kind, result.status, result.json);

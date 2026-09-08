@@ -39809,6 +39809,18 @@
           .join("");
       }
 
+      function metaTplLabIsRateLimitError(error) {
+        const evidence = error && error.labEvidence ? error.labEvidence : {};
+        const payload = evidence.response && typeof evidence.response === "object" ? evidence.response : {};
+        const code = String(evidence.code || payload.code || "").trim();
+        if (code === "graph_rate_limited") return true;
+        const http = Number(evidence.httpStatus || 0);
+        if (http === 429) return true;
+        return /limitou temporariamente|#80008|too many calls|rate.?limit|80008/i.test(
+          String((error && error.message) || payload.error || ""),
+        );
+      }
+
       async function metaTplLabFetchJson(path, options) {
         const extra = options || {};
         const method = String(extra.method || "GET").toUpperCase();
@@ -40680,30 +40692,59 @@
         try {
           let pages = 0;
           let removed = 0;
+          let rateLimited = false;
+          let rateLimitMessage = "";
           for (let i = 0; i < ids.length; i += 1) {
-            const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/sync", {
-              method: "POST",
-              body: JSON.stringify({ connectionId: ids[i] }),
-            });
-            pages += Number(payload.pages || 1);
-            removed += Number(payload.removed || 0);
+            try {
+              const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/sync", {
+                method: "POST",
+                body: JSON.stringify({ connectionId: ids[i] }),
+              });
+              pages += Number(payload.pages || 1);
+              removed += Number(payload.removed || 0);
+            } catch (error) {
+              if (metaTplLabIsRateLimitError(error)) {
+                rateLimited = true;
+                rateLimitMessage =
+                  error && error.message
+                    ? String(error.message)
+                    : "A Meta limitou temporariamente as consultas. Aguarde alguns minutos e tente de novo.";
+                break;
+              }
+              throw error;
+            }
+            if (i < ids.length - 1) {
+              await new Promise((resolve) => setTimeout(resolve, 700));
+            }
           }
           const listed = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
           metaTplLabRenderTable(listed.templates);
-          metaTplLabSetStatus(
-            "Sincronizado. páginas=" +
-              String(pages) +
-              (removed ? ". Removidos da Meta=" + String(removed) : ""),
-          );
+          if (rateLimited) {
+            metaTplLabSetStatus(rateLimitMessage);
+          } else {
+            metaTplLabSetStatus(
+              "Sincronizado. páginas=" +
+                String(pages) +
+                (removed ? ". Removidos da Meta=" + String(removed) : ""),
+            );
+          }
         } catch (error) {
           const message = error && error.message ? error.message : "Não foi possível sincronizar.";
+          try {
+            const listed = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
+            metaTplLabRenderTable(listed.templates);
+          } catch {
+            /* mantém a tabela que já estava na tela */
+          }
           metaTplLabSetStatus(message);
-          metaTplLabPresentError({
-            source: "meta-lab-sync",
-            title: "Erro ao sincronizar com a Meta",
-            message: message,
-            error: error,
-          });
+          if (!metaTplLabIsRateLimitError(error)) {
+            metaTplLabPresentError({
+              source: "meta-lab-sync",
+              title: "Erro ao sincronizar com a Meta",
+              message: message,
+              error: error,
+            });
+          }
         } finally {
           if (btn) btn.disabled = false;
         }

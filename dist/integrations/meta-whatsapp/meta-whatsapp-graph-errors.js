@@ -4,6 +4,8 @@ exports.classifyMetaGraphHttpStatus = classifyMetaGraphHttpStatus;
 exports.classifyMetaGraphError = classifyMetaGraphError;
 exports.publicMetaGraphSendMessage = publicMetaGraphSendMessage;
 exports.isMetaGraphRateLimitCode = isMetaGraphRateLimitCode;
+exports.isMetaGraphRateLimitPayload = isMetaGraphRateLimitPayload;
+exports.publicMetaGraphRateLimitMessage = publicMetaGraphRateLimitMessage;
 exports.safePublicGraphTemplateDetail = safePublicGraphTemplateDetail;
 exports.publicMetaGraphTemplateMessage = publicMetaGraphTemplateMessage;
 exports.extractPublicGraphErrorCodes = extractPublicGraphErrorCodes;
@@ -57,12 +59,24 @@ function asErrorRecord(value) {
 }
 /**
  * Códigos Graph de rate limit (doc Meta error-handling).
- * Retry curto só aumenta o consumo da cota — não repetir na hora.
+ * 80007/80008 = cota da WABA Cloud. Retry curto só aumenta o consumo.
  * https://developers.facebook.com/docs/graph-api/guides/error-handling/
  */
-const RATE_LIMIT_META_CODES = new Set(["4", "17", "341"]);
+const RATE_LIMIT_META_CODES = new Set(["4", "17", "32", "613", "341", "80007", "80008"]);
 function isMetaGraphRateLimitCode(code) {
     return RATE_LIMIT_META_CODES.has(String(code ?? "").trim());
+}
+function isMetaGraphRateLimitPayload(json, graphCode) {
+    const extracted = extractPublicGraphErrorCodes(json);
+    const resolved = String(graphCode || extracted.code || "").trim();
+    if (isMetaGraphRateLimitCode(resolved))
+        return true;
+    return looksLikeMetaRateLimitText(safePublicGraphTemplateDetail(json));
+}
+function publicMetaGraphRateLimitMessage(json) {
+    const { code } = extractPublicGraphErrorCodes(json);
+    const hint = code ? `código ${code}` : "código 80008";
+    return `A Meta limitou temporariamente as consultas desta conta WhatsApp (${hint}). Aguarde alguns minutos e clique de novo em Atualizar da Meta. A lista que já está no WABA continua disponível.`;
 }
 /** Detalhe genérico demais para exibir (não confundir com "(#4) Application request limit…"). */
 function isGenericGraphDetail(text) {
@@ -92,6 +106,9 @@ function safePublicGraphTemplateDetail(json) {
     return text;
 }
 function publicMetaGraphTemplateMessage(kind, status, json) {
+    if (isMetaGraphRateLimitPayload(json)) {
+        return publicMetaGraphRateLimitMessage(json);
+    }
     if (kind === "transient") {
         return "A Meta está temporariamente indisponível. Tente de novo em instantes.";
     }

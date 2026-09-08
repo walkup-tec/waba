@@ -892,6 +892,42 @@ describe("fase 7 sync", () => {
     assert.equal(result.templates.every((row) => !("accessTokenEncrypted" in row)), true);
   });
 
+  it("sync Graph 80008 não trata como template inválido", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(connectedRow());
+    const templates = new FakeTemplates();
+    templates.rows.push(templateRow({ id: "keep", name: "local_ok", metaTemplateId: "keep-1" }));
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async () =>
+        graphErr(400, {
+          graphCode: "80008",
+          json: {
+            error: {
+              code: 80008,
+              message:
+                "(#80008) There have been too many calls to this WhatsApp Business account. Wait a bit and try again.",
+            },
+          },
+        }),
+      () => "tok",
+    );
+    await assert.rejects(
+      () => service.syncFromAuth(auth(EMAIL_A)),
+      (error: unknown) => {
+        if (!(error instanceof MetaWhatsappError) || error.code !== "graph_rate_limited") return false;
+        const publicError = toPublicMetaError(error);
+        return (
+          publicError.status === 429 &&
+          /limitou temporariamente/i.test(publicError.error) &&
+          !/recusou o template/i.test(publicError.error)
+        );
+      },
+    );
+    assert.equal(templates.rows.some((row) => row.name === "local_ok"), true);
+  });
+
   it("não apaga template de outro portfólio do mesmo tenant", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow());

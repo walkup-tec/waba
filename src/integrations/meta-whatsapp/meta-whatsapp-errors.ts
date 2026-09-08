@@ -33,7 +33,8 @@ export type MetaWhatsappErrorCode =
   | "portfolio_photo_no_page"
   | "template_ai_unavailable"
   | "template_ai_rate_limited"
-  | "template_ai_invalid_output";
+  | "template_ai_invalid_output"
+  | "graph_rate_limited";
 
 const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   unauthenticated: "Faça login para conectar o WhatsApp Oficial.",
@@ -81,6 +82,8 @@ const PUBLIC_MESSAGES: Record<MetaWhatsappErrorCode, string> = {
   template_ai_unavailable: "O Assistente de Templates está temporariamente indisponível.",
   template_ai_rate_limited: "Limite de análises por IA atingido. Aguarde um minuto e tente novamente.",
   template_ai_invalid_output: "A IA não conseguiu gerar opções seguras e válidas. Revise o texto base e tente novamente.",
+  graph_rate_limited:
+    "A Meta limitou temporariamente as consultas desta conta WhatsApp. Aguarde alguns minutos e tente de novo. A lista que já está no WABA continua disponível.",
 };
 
 export class MetaWhatsappError extends Error {
@@ -97,7 +100,7 @@ export class MetaWhatsappError extends Error {
 
 function defaultStatus(code: MetaWhatsappErrorCode): number {
   if (code === "unauthenticated") return 401;
-  if (code === "template_ai_rate_limited") return 429;
+  if (code === "template_ai_rate_limited" || code === "graph_rate_limited") return 429;
   if (code === "template_ai_unavailable") return 503;
   if (code === "template_ai_invalid_output") return 422;
   if (code === "config_invalid" || code === "persist_failed") return 503;

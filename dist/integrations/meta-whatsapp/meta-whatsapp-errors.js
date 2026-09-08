@@ -40,6 +40,7 @@ const PUBLIC_MESSAGES = {
     template_ai_unavailable: "O Assistente de Templates está temporariamente indisponível.",
     template_ai_rate_limited: "Limite de análises por IA atingido. Aguarde um minuto e tente novamente.",
     template_ai_invalid_output: "A IA não conseguiu gerar opções seguras e válidas. Revise o texto base e tente novamente.",
+    graph_rate_limited: "A Meta limitou temporariamente as consultas desta conta WhatsApp. Aguarde alguns minutos e tente de novo. A lista que já está no WABA continua disponível.",
 };
 class MetaWhatsappError extends Error {
     constructor(code, status) {
@@ -53,7 +54,7 @@ exports.MetaWhatsappError = MetaWhatsappError;
 function defaultStatus(code) {
     if (code === "unauthenticated")
         return 401;
-    if (code === "template_ai_rate_limited")
+    if (code === "template_ai_rate_limited" || code === "graph_rate_limited")
         return 429;
     if (code === "template_ai_unavailable")
         return 503;
