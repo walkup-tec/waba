@@ -40388,6 +40388,16 @@
           .join("");
       }
 
+      function metaTplLabHttpFallbackMessage(status) {
+        if (status === 502 || status === 504) {
+          return "O servidor não concluiu a sincronização a tempo. Espere um minuto e clique de novo em Atualizar da Meta.";
+        }
+        if (status === 503) {
+          return "A Meta ou o servidor está temporariamente indisponível. Tente de novo em instantes.";
+        }
+        return "Não foi possível concluir.";
+      }
+
       function metaTplLabIsRateLimitError(error) {
         const evidence = error && error.labEvidence ? error.labEvidence : {};
         const payload = evidence.response && typeof evidence.response === "object" ? evidence.response : {};
@@ -40439,7 +40449,7 @@
           throw secretError;
         }
         if (!response.ok || payload.ok === false) {
-          const message = String(payload.error || "Não foi possível concluir.");
+          const message = String(payload.error || metaTplLabHttpFallbackMessage(response.status));
           const err = new Error(message);
           err.labEvidence = {
             source: "meta-lab-fetch",
