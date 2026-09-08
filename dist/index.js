@@ -84,6 +84,7 @@ const campaign_instance_identity_1 = require("./instances/campaign-instance-iden
 const campaign_instance_slots_1 = require("./instances/campaign-instance-slots");
 const evo_integration_probe_service_1 = require("./services/evo-integration-probe.service");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
+const waba_indicator_routes_1 = require("./indicators/waba-indicator.routes");
 const waba_fazenda_pool_service_1 = require("./instances/waba-fazenda-pool.service");
 const waba_admin_routes_1 = require("./admin/waba-admin.routes");
 const waba_push_routes_1 = require("./push/waba-push.routes");
@@ -14178,6 +14179,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
 });
 (0, waba_fazenda_pool_service_1.configureWabaFazendaPool)({ loadInstanceUsageMap });
 (0, waba_billing_routes_1.registerWabaBillingRoutes)(app);
+(0, waba_indicator_routes_1.registerWabaIndicatorRoutes)(app);
 (0, waba_campaign_intake_routes_1.registerWabaCampaignIntakeRoutes)(app);
 (0, waba_support_routes_1.registerWabaSupportRoutes)(app);
 (0, waba_push_routes_1.registerWabaPushRoutes)(app);
