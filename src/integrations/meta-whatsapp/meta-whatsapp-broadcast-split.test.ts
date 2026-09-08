@@ -8,6 +8,8 @@ import {
   distributeBroadcastLeadsAcrossPhones,
   minPhonesRequiredForBroadcast,
   normalizeBroadcastPhoneNumberIds,
+  parseBroadcastPhoneQuotasInput,
+  resolveBroadcastLeadQuotas,
 } from "./meta-whatsapp-broadcast-split";
 
 describe("meta-whatsapp-broadcast-split", () => {
@@ -75,6 +77,95 @@ describe("meta-whatsapp-broadcast-split", () => {
       counts[row.phoneNumberId as keyof typeof counts] += 1;
     }
     assert.deepEqual(counts, { n1: 3, n2: 2, n3: 2 });
+  });
+
+  it("aceita cotas manuais menores que o total da planilha (limite diário da BM)", () => {
+    const leads = Array.from({ length: 2996 }, (_, index) => ({ waId: `55${index}` }));
+    const custom = [
+      { phoneNumberId: "p1", planned: 700 },
+      { phoneNumberId: "p2", planned: 700 },
+      { phoneNumberId: "p3", planned: 600 },
+    ];
+    const quotas = resolveBroadcastLeadQuotas(["p1", "p2", "p3"], leads.length, custom);
+    assert.deepEqual(quotas, custom);
+    const assigned = assignBroadcastLeadsToPhones(leads, ["p1", "p2", "p3"], META_BROADCAST_MAX_SENDS_PER_NUMBER, custom);
+    assert.equal(assigned.length, 2000);
+    const counts = { p1: 0, p2: 0, p3: 0 };
+    for (const row of assigned) {
+      counts[row.phoneNumberId as keyof typeof counts] += 1;
+    }
+    assert.deepEqual(counts, { p1: 700, p2: 700, p3: 600 });
+  });
+
+  it("rejeita cota acima de 1000 por número", () => {
+    assert.throws(
+      () =>
+        resolveBroadcastLeadQuotas(["p1", "p2"], 2000, [
+          { phoneNumberId: "p1", planned: 1001 },
+          { phoneNumberId: "p2", planned: 500 },
+        ]),
+      /no máximo 1000/i,
+    );
+  });
+
+  it("rejeita soma maior que o total da campanha", () => {
+    assert.throws(
+      () =>
+        resolveBroadcastLeadQuotas(["p1", "p2"], 1000, [
+          { phoneNumberId: "p1", planned: 600 },
+          { phoneNumberId: "p2", planned: 500 },
+        ]),
+      /não pode passar o total da campanha/i,
+    );
+  });
+
+  it("permite soma menor que o total da campanha", () => {
+    const quotas = resolveBroadcastLeadQuotas(["p1", "p2"], 2996, [
+      { phoneNumberId: "p1", planned: 1000 },
+      { phoneNumberId: "p2", planned: 1000 },
+    ]);
+    assert.equal(
+      quotas.reduce((sum, row) => sum + row.planned, 0),
+      2000,
+    );
+  });
+
+  it("número com 0 envios sai do disparo", () => {
+    const quotas = resolveBroadcastLeadQuotas(["p1", "p2", "p3"], 1500, [
+      { phoneNumberId: "p1", planned: 800 },
+      { phoneNumberId: "p2", planned: 0 },
+      { phoneNumberId: "p3", planned: 200 },
+    ]);
+    assert.deepEqual(quotas, [
+      { phoneNumberId: "p1", planned: 800 },
+      { phoneNumberId: "p3", planned: 200 },
+    ]);
+    const leads = Array.from({ length: 1500 }, (_, index) => ({ waId: `55${index}` }));
+    const assigned = assignBroadcastLeadsToPhones(leads, ["p1", "p2", "p3"], META_BROADCAST_MAX_SENDS_PER_NUMBER, [
+      { phoneNumberId: "p1", planned: 800 },
+      { phoneNumberId: "p2", planned: 0 },
+      { phoneNumberId: "p3", planned: 200 },
+    ]);
+    assert.equal(assigned.length, 1000);
+    assert.equal(
+      assigned.every((row) => row.phoneNumberId !== "p2"),
+      true,
+    );
+  });
+
+  it("lê cotas de JSON de formulário", () => {
+    assert.deepEqual(
+      parseBroadcastPhoneQuotasInput('[{"phoneNumberId":"p1","planned":700},{"phoneNumberId":"p2","planned":300}]'),
+      [
+        { phoneNumberId: "p1", planned: 700 },
+        { phoneNumberId: "p2", planned: 300 },
+      ],
+    );
+    assert.throws(() => parseBroadcastPhoneQuotasInput("{not-json"), /quantidades de envio/i);
+  });
+
+  it("array vazio de cotas não volta à distribuição automática", () => {
+    assert.throws(() => resolveBroadcastLeadQuotas(["p1"], 10, []), /ao menos 1 envio/i);
   });
 
   it("campaignPhoneNumberIds mantém compatibilidade com campanha antiga", () => {
