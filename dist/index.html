@@ -38233,6 +38233,9 @@
         try {
           const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/portfolio");
           if (!response.ok || payload.ok === false) {
+            if (response.status === 502 || response.status === 504) {
+              metaTpSetStatus("O servidor não concluiu a leitura dos números a tempo. Clique de novo em Atualizar.");
+            }
             if (!silent && !force) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
             return;
           }
