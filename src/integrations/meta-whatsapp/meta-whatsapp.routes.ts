@@ -21,6 +21,7 @@ import { MetaWhatsappAutomationService } from "./meta-whatsapp-automation.servic
 import { MetaWhatsappTemplateAiService } from "./meta-whatsapp-template-ai.service";
 import { publicBaseHintsFromExpressRequest } from "../../lib/waba-public-base-url";
 import { MetaWhatsappBroadcastService } from "./meta-whatsapp-broadcast.service";
+import { parseBroadcastPhoneQuotasInput } from "./meta-whatsapp-broadcast-split";
 import { isMetaTemplateRouteId } from "./meta-whatsapp-template-route-id";
 
 const service = new MetaWhatsappConnectionService();
@@ -890,6 +891,11 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
               .split(/[\s,;]+/)
               .map((item) => item.trim())
               .filter(Boolean);
+        const rawPhoneQuotas = body.phoneQuotas ?? body.phone_quotas;
+        const phoneQuotas =
+          rawPhoneQuotas == null || String(rawPhoneQuotas).trim() === ""
+            ? undefined
+            : parseBroadcastPhoneQuotasInput(rawPhoneQuotas);
         const campaign = await broadcastService.startFromAuth(resolveWabaRequestAuth(req), {
           connectionId: String(body.connectionId || body.connection_id || ""),
           templateId: String(body.templateId || body.template_id || ""),
@@ -900,6 +906,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
           mapping: broadcastMappingFromBody(body),
           intakeCampaignId: String(body.intakeCampaignId || body.intake_campaign_id || ""),
           publicBaseHints: publicBaseHintsFromExpressRequest(req),
+          phoneQuotas,
         });
         return sendPublic(res, 202, { ok: true, campaign });
       } catch (error) {
