@@ -52,6 +52,8 @@ const normalizeLineKind = (value) => {
         return "supplier";
     if (normalized === "cet")
         return "cet";
+    if (normalized === "indicator")
+        return "indicator";
     return "partner";
 };
 const normalizeLine = (line) => ({
