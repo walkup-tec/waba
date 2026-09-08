@@ -110,6 +110,19 @@ class WabaAdminBonusEnviosService {
         if (shipmentCount > 5000000) {
             throw new Error("Quantidade de envios acima do limite permitido.");
         }
+        if (input.applyIndicatorBonusCap) {
+            const alreadyGranted = this.orderRepository
+                .list()
+                .filter((order) => isBonusGrantOrder(order) &&
+                normalizeEmail(order.ownerEmail) === ownerEmail)
+                .reduce((sum, order) => sum + Math.max(0, Math.round(Number(order.shipmentCount ?? 0))), 0);
+            const remaining = Math.max(0, 100 - alreadyGranted);
+            if (shipmentCount > remaining) {
+                throw new Error(remaining <= 0
+                    ? "Limite de 100 envios bônus esgotado para este assinante."
+                    : `Restam apenas ${remaining} envios bônus para este assinante.`);
+            }
+        }
         const apiKind = (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(input.apiKind);
         if (!apiKind) {
             throw new Error("Selecione o tipo de plano (API Oficial ou API Alternativa).");
