@@ -24525,6 +24525,7 @@
                         <tr>
                           <th scope="col">Data</th>
                           <th scope="col">Pedido</th>
+                          <th scope="col">Assinante</th>
                           <th scope="col">Plano</th>
                           <th scope="col" class="admin-subscribers-num">Pago</th>
                           <th scope="col" class="admin-subscribers-num">Custo total</th>
@@ -24535,7 +24536,7 @@
                       </thead>
                       <tbody id="admin-financeiro-split-settlements-tbody">
                         <tr>
-                          <td colspan="8" class="muted">Nenhum split calculado ainda.</td>
+                          <td colspan="9" class="muted">Nenhum split calculado ainda.</td>
                         </tr>
                       </tbody>
                     </table>
@@ -34644,7 +34645,7 @@
         const rows = Array.isArray(items) ? items : [];
         if (!rows.length) {
           tbody.innerHTML =
-            '<tr><td colspan="8" class="muted">Nenhum split calculado ainda.</td></tr>';
+            '<tr><td colspan="9" class="muted">Nenhum split calculado ainda.</td></tr>';
           return;
         }
         tbody.innerHTML = rows
@@ -34653,10 +34654,14 @@
             const rateio = renderSplitSettlementLinesBlock(item?.lines, item) || '<span class="muted">—</span>';
             const repasseCell = renderSplitRepasseCell(item);
             const orderId = escapeAdminHtml(item?.orderId || "");
+            const subscriber = escapeAdminHtml(
+              String(item?.subscriberName || item?.customerName || item?.ownerEmail || "").trim() || "—"
+            );
             return `
               <tr>
                 <td>${escapeAdminHtml(formatAdminDateTimeLabel(item?.createdAt))}</td>
                 <td><code>${orderId || "—"}</code></td>
+                <td>${subscriber}</td>
                 <td>${renderWabaApiKindLabelHtml(planKind)}</td>
                 <td class="admin-subscribers-num">${escapeAdminHtml(
                   formatDisparosMoneyFromCents(item?.paidValueCents || 0)
