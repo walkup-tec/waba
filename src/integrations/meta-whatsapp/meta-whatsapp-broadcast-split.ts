@@ -1,6 +1,6 @@
-/** Fracionamento do Disparo Cloud: no máx. 500 envios por número WhatsApp. */
+/** Fracionamento do Disparo Cloud: no máx. 1000 envios por número WhatsApp. */
 
-export const META_BROADCAST_MAX_SENDS_PER_NUMBER = 500;
+export const META_BROADCAST_MAX_SENDS_PER_NUMBER = 1000;
 
 export type MetaBroadcastPhoneQuota = {
   phoneNumberId: string;
