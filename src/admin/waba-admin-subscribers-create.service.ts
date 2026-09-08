@@ -10,6 +10,7 @@ export type AdminCreateSubscriberInput = {
   cpfCnpj: string;
   aquecedorGranted?: boolean;
   segment: WabaSubscriberSegment | unknown;
+  indicatorUserId?: string | null;
 };
 
 export class WabaAdminSubscribersCreateService {
@@ -25,6 +26,7 @@ export class WabaAdminSubscribersCreateService {
       cpfCnpj: String(input.cpfCnpj ?? ""),
       aquecedorGranted: input.aquecedorGranted === true,
       segment: input.segment,
+      indicatorUserId: input.indicatorUserId,
     });
   }
 }
