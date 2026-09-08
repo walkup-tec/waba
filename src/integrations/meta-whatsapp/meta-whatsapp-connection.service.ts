@@ -262,6 +262,18 @@ async function cacheGraphBusinessPhoto(
   return writePortfolioBusinessPhoto(tenantId, id, downloaded, url) || local;
 }
 
+const HYDRATE_GRAPH = { maxAttempts: 1, timeoutMs: 8000 } as const;
+const HYDRATE_PHONE_BUDGET_MS = 18_000;
+
+function withHydrateLimits(graph: MetaConnectionGraphCaller): MetaConnectionGraphCaller {
+  return (input) =>
+    graph({
+      ...input,
+      maxAttempts: input.maxAttempts ?? HYDRATE_GRAPH.maxAttempts,
+      timeoutMs: input.timeoutMs ?? HYDRATE_GRAPH.timeoutMs,
+    });
+}
+
 async function hydrateOpenConnection(
   graph: MetaConnectionGraphCaller,
   decrypt: (value: string) => string,
@@ -282,13 +294,15 @@ async function hydrateOpenConnection(
     return { card: fallback, directory: [] };
   }
 
+  const g = withHydrateLimits(graph);
+
   const storedWaba = String(open.wabaId || "").trim();
   const storedBm = String(open.metaBusinessId || "").trim();
   if (!storedWaba && !storedBm) {
     return { card: fallback, directory: [] };
   }
   const wabaLookup = storedWaba || storedBm;
-  const waba = wabaLookup ? await fetchWabaOwner(graph, token, wabaLookup) : { hint: { wabaId: null, wabaName: null, businessId: null, businessName: null, primaryPageId: null, primaryPageName: null, profilePictureUrl: null }, json: null, ok: false };
+  const waba = wabaLookup ? await fetchWabaOwner(g, token, wabaLookup) : { hint: { wabaId: null, wabaName: null, businessId: null, businessName: null, primaryPageId: null, primaryPageName: null, profilePictureUrl: null }, json: null, ok: false };
   if (wabaLookup && !waba.ok) {
     logMetaWhatsappSafe("portfolio-list-partial", {
       tenantId,
@@ -305,9 +319,9 @@ async function hydrateOpenConnection(
     hint.businessId || businessIdNotWaba(storedBm, resolvedWaba || storedWaba) || "";
 
   const [assignedJson, fetchedBm] = await Promise.all([
-    fetchAssignedBusinesses(graph, token),
+    fetchAssignedBusinesses(g, token),
     resolvedBm
-      ? fetchBusinessFromGraph(graph, token, resolvedBm)
+      ? fetchBusinessFromGraph(g, token, resolvedBm)
       : Promise.resolve({
           card: null as MetaPortfolioPublic | null,
           isWaba: false,
@@ -345,7 +359,7 @@ async function hydrateOpenConnection(
     primaryPageName: card.primaryPageName || hint.primaryPageName,
   };
   if (card.primaryPageId && !card.primaryPageName) {
-    card = await fillPageNameById(graph, token, card.id || resolvedBm, card);
+    card = await fillPageNameById(g, token, card.id || resolvedBm, card);
   }
   card = applyLocalPortfolioBusinessIdentity(tenantId, card);
 
@@ -370,7 +384,7 @@ async function hydrateOpenConnection(
    * Um BM (ex.: Quantum Smart Labs) pode ter várias WABAs / vários chips no Manager.
    * O token do Embedded Signup costuma falhar em owned_* do BM do cliente (precisa
    * system user). Descoberta em camadas:
-   * 1) debug_token → target_ids (WABAs que o app realmente enxerga)
+   * 1) debug_token → WABAs (management) e chips (messaging)
    * 2) phones aninhados em me/businesses + BM cliente + BM parceiro (client_*)
    * 3) phone_numbers por WABA descoberta
    * Docs:
@@ -385,17 +399,16 @@ async function hydrateOpenConnection(
     for (const row of rows) phoneRows.push(row);
   };
 
-  // Meta Embedded Signup: debug_token.granular_scopes.target_ids lista as WABAs
-  // que o app realmente recebeu — costuma funcionar quando owned_* do BM dá 403.
-  // https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-accounts/
-  for (const id of await listWabaIdsFromDebugToken(graph, token)) wabaIds.add(id);
+  const debugTargets = await listDebugTokenWhatsappTargets(g, token);
+  for (const id of debugTargets.wabaIds) wabaIds.add(id);
+  pushPhones(await fetchPhoneNodes(g, token, debugTargets.phoneIds));
 
   const nestedFromCustomer = businessId
-    ? await collectNestedPhonesFromBusiness(graph, token, businessId)
+    ? await collectNestedPhonesFromBusiness(g, token, businessId)
     : { wabaIds: [] as string[], phones: [] as unknown[] };
-  const nestedFromMe = await collectNestedPhonesFromMeBusinesses(graph, token);
+  const nestedFromMe = await collectNestedPhonesFromMeBusinesses(g, token);
   const nestedFromPartner = partnerBm && partnerBm !== businessId
-    ? await collectNestedPhonesFromBusiness(graph, token, partnerBm)
+    ? await collectNestedPhonesFromBusiness(g, token, partnerBm)
     : { wabaIds: [] as string[], phones: [] as unknown[] };
 
   for (const id of nestedFromCustomer.wabaIds) wabaIds.add(id);
@@ -406,16 +419,28 @@ async function hydrateOpenConnection(
   pushPhones(nestedFromPartner.phones);
 
   if (businessId) {
-    for (const id of await listBusinessWabaIds(graph, token, businessId)) wabaIds.add(id);
+    for (const id of await listBusinessWabaIds(g, token, businessId)) wabaIds.add(id);
   }
   if (partnerBm) {
-    for (const id of await listBusinessWabaIds(graph, token, partnerBm)) wabaIds.add(id);
+    for (const id of await listBusinessWabaIds(g, token, partnerBm)) wabaIds.add(id);
   }
 
   let anyPhonesOk = phoneRows.length > 0;
   let lastPhoneStatus = 0;
-  for (const wid of wabaIds) {
-    const phones = await listWabaPhoneNumbersPaged(graph, token, wid);
+  const extraWabas = [...wabaIds].filter((id) => id && id !== primaryWabaId);
+  const orderedWabas = [primaryWabaId, ...extraWabas].filter(Boolean);
+  const startedAt = Date.now();
+  for (const wid of orderedWabas) {
+    if (Date.now() - startedAt >= HYDRATE_PHONE_BUDGET_MS && phoneRows.length) {
+      logMetaWhatsappSafe("portfolio-hydrate-budget", {
+        tenantId,
+        connectionId: open.id,
+        wabaId: wid,
+        listed: phoneRows.length,
+      });
+      break;
+    }
+    const phones = await listWabaPhoneNumbersPaged(g, token, wid);
     if (!phones.ok) {
       lastPhoneStatus = phones.status;
       continue;
@@ -443,9 +468,13 @@ async function hydrateOpenConnection(
   });
 
   const mapped = mapMetaPhoneListToPortfolioNumbers({ data: phoneRows });
-  // Une Graph (todas as WABAs) + chips já gravados na conexão — não perde parcial.
   const merged = unionPortfolioNumbers(mapped, stored);
-  const numbers = await attachPhoneBusinessProfiles(graph, token, merged, tenantId);
+  const pending = merged.filter((row) => row.uiStatus !== "ativo");
+  const active = merged.filter((row) => row.uiStatus === "ativo");
+  const withProfiles = active.length
+    ? await attachPhoneBusinessProfiles(g, token, active, tenantId)
+    : [];
+  const numbers = unionPortfolioNumbers(withProfiles, pending);
   return {
     card: {
       ...card,
@@ -456,36 +485,59 @@ async function hydrateOpenConnection(
   };
 }
 
-/** WABA IDs liberados no token (granular_scopes) — doc Embedded Signup manage-accounts. */
-async function listWabaIdsFromDebugToken(
+/** WABAs (management) e chips (messaging) liberados no token — Embedded Signup manage-accounts. */
+async function listDebugTokenWhatsappTargets(
   graph: MetaConnectionGraphCaller,
   userToken: string,
-): Promise<string[]> {
+): Promise<{ wabaIds: string[]; phoneIds: string[] }> {
   const appId = readMetaAppId();
   const appSecret = readMetaAppSecret();
-  if (!appId || !appSecret || !userToken) return [];
+  if (!appId || !appSecret || !userToken) return { wabaIds: [], phoneIds: [] };
   const res = await graph({
     token: `${appId}|${appSecret}`,
     method: "GET",
     path: "debug_token",
     query: { input_token: userToken },
   });
-  if (!res.ok) return [];
+  if (!res.ok) return { wabaIds: [], phoneIds: [] };
   const payload = (res.json && typeof res.json === "object" ? res.json : {}) as {
     data?: { granular_scopes?: Array<{ scope?: unknown; target_ids?: unknown }> };
   };
   const granular = Array.isArray(payload.data?.granular_scopes) ? payload.data!.granular_scopes! : [];
-  const ids = new Set<string>();
+  const wabaIds = new Set<string>();
+  const phoneIds = new Set<string>();
   for (const entry of granular) {
-    const scope = String(entry?.scope || "");
-    if (!scope.includes("whatsapp_business")) continue;
+    const scope = String(entry?.scope || "").trim();
     const targets = Array.isArray(entry?.target_ids) ? entry.target_ids : [];
     for (const raw of targets) {
       const id = String(raw || "").trim();
-      if (id) ids.add(id);
+      if (!id) continue;
+      if (scope === "whatsapp_business_management") wabaIds.add(id);
+      else if (scope === "whatsapp_business_messaging") phoneIds.add(id);
     }
   }
-  return [...ids];
+  return { wabaIds: [...wabaIds], phoneIds: [...phoneIds] };
+}
+
+async function fetchPhoneNodes(
+  graph: MetaConnectionGraphCaller,
+  token: string,
+  phoneIds: string[],
+): Promise<unknown[]> {
+  const out: unknown[] = [];
+  for (const id of phoneIds) {
+    const res = await graph({
+      token,
+      method: "GET",
+      path: id,
+      query: { fields: META_PHONE_NUMBER_LIST_FIELDS },
+    });
+    if (!res.ok || !res.json || typeof res.json !== "object") continue;
+    const display = String((res.json as { display_phone_number?: unknown }).display_phone_number || "").trim();
+    if (!display) continue;
+    out.push(res.json);
+  }
+  return out;
 }
 
 function extractWabasAndPhonesFromBusinessNode(node: unknown): {
@@ -746,6 +798,8 @@ export type MetaConnectionGraphCaller = (input: {
   path: string;
   query?: Record<string, string>;
   body?: Record<string, unknown>;
+  maxAttempts?: number;
+  timeoutMs?: number;
 }) => Promise<MetaGraphJsonResult>;
 
 function wabaIdFromPhoneJson(json: unknown): string {
