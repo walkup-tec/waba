@@ -32,6 +32,8 @@ import {
   isBetsSubscriberEmail,
 } from "../subscribers/waba-subscriber-segment";
 import { applyOficialPerSendSurchargeToPackages } from "./waba-oficial-pricing-overrides";
+import { wabaPricingService } from "./waba-pricing.service";
+import { WabaIndicatorCommissionService } from "../indicators/waba-indicator-commission.service";
 
 export type CreateAlternativaNumbersCheckoutInput = {
   customerName: string;
@@ -181,6 +183,7 @@ export class WabaBillingService {
     private readonly splitService = new WabaFinanceiroSplitService(),
     private readonly alternativaNumbersService = new WabaAlternativaNumbersService(),
     private readonly couponService = new WabaCouponService(),
+    private readonly indicatorCommissionService = new WabaIndicatorCommissionService(),
   ) {}
 
   private finalizePaidOrder(order: WabaBillingOrder): WabaBillingOrder {
@@ -188,6 +191,7 @@ export class WabaBillingService {
       return order;
     }
     const settled = this.bonusSettlementService.settlePaidOrder(order);
+    this.indicatorCommissionService.ensureForPaidOrder(settled);
     void this.splitService.settleAndPayoutPaidOrder(settled).catch((error) => {
       console.error(
         `[FinanceiroSplit] erro ao liquidar/repassar pedido ${settled.id}:`,
@@ -195,6 +199,13 @@ export class WabaBillingService {
       );
     });
     return settled;
+  }
+
+  getDisparosCustomerPackages(ownerEmail: string, apiKind: "oficial" | "alternativa" = "oficial") {
+    return {
+      apiKind,
+      packages: wabaPricingService.listCustomerPackages({ apiKind, ownerEmail }),
+    };
   }
 
   getDisparosConfig() {
@@ -267,12 +278,13 @@ export class WabaBillingService {
       throw new Error("Assinantes do segmento Bets contratam créditos apenas na API Oficial.");
     }
     const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
-    const listValueCents = resolveListValueCentsForPackage(
+    const ownerEmail = String(input.ownerEmail ?? "").trim().toLowerCase();
+    const pricingQuote = wabaPricingService.quote({
       apiKind,
       shipmentCount,
-      segment,
-      String(input.ownerEmail ?? ""),
-    );
+      ownerEmail,
+    });
+    const listValueCents = pricingQuote?.totalAmountCents ?? null;
     if (!listValueCents) {
       throw new Error("Pacote de envios inválido.");
     }
@@ -320,10 +332,11 @@ export class WabaBillingService {
 
     const minCreditCents = resolveMinCreditCents(apiKind);
     const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
-    const listValueCentsFromPackage =
+    const quote =
       shipmentCount > 0
-        ? resolveListValueCentsForPackage(apiKind, shipmentCount, segment, ownerEmail)
+        ? wabaPricingService.quote({ apiKind, shipmentCount, ownerEmail, segment })
         : null;
+    const listValueCentsFromPackage = quote?.totalAmountCents ?? null;
 
     let listValueCents = listValueCentsFromPackage ?? Math.round(Number(input.valueCents ?? minCreditCents));
     if (!Number.isFinite(listValueCents) || listValueCents <= 0) {
@@ -332,7 +345,7 @@ export class WabaBillingService {
 
     if (shipmentCount > 0) {
       if (!listValueCentsFromPackage) {
-        const salePackages = getDisparosSalePackages(apiKind, segment, ownerEmail);
+        const salePackages = wabaPricingService.listCustomerPackages({ apiKind, ownerEmail, segment });
         const maxShipments = salePackages[salePackages.length - 1]?.shipments ?? 0;
         throw new Error(
           maxShipments > 0
@@ -390,6 +403,13 @@ export class WabaBillingService {
       couponId,
       couponAlias: normalizedCouponAlias,
       shipmentCount: shipmentCount > 0 ? shipmentCount : undefined,
+      indicatorUserId: quote?.indicatorUserId || undefined,
+      purchasedShipmentCount: quote?.quantity,
+      baseUnitPriceCents: quote?.baseUnitPriceCents,
+      spreadUnitPriceCents: quote?.spreadUnitPriceCents,
+      customerUnitPriceCents: quote?.customerUnitPriceCents,
+      baseAmountCents: quote?.baseAmountCents,
+      spreadAmountCents: quote?.spreadAmountCents,
     };
   }
 
@@ -484,6 +504,13 @@ export class WabaBillingService {
       couponAlias: validated.couponAlias,
       couponId: validated.couponId,
       shipmentCount: validated.shipmentCount,
+      indicatorUserId: validated.indicatorUserId,
+      purchasedShipmentCount: validated.purchasedShipmentCount,
+      baseUnitPriceCents: validated.baseUnitPriceCents,
+      spreadUnitPriceCents: validated.spreadUnitPriceCents,
+      customerUnitPriceCents: validated.customerUnitPriceCents,
+      baseAmountCents: validated.baseAmountCents,
+      spreadAmountCents: validated.spreadAmountCents,
       status: "pending_payment",
       asaasExternalReference,
       createdAt: now,
@@ -676,8 +703,24 @@ export class WabaBillingService {
     }
 
     if (normalizedEvent === "PAYMENT_OVERDUE") {
-      this.orderRepository.update(order.id, { status: "cancelled" });
+      if (order.status === "pending_payment") {
+        this.orderRepository.update(order.id, { status: "cancelled" });
+      }
       return { ok: true, orderId: order.id, status: "cancelled" };
+    }
+
+    if (
+      normalizedEvent === "PAYMENT_REFUNDED" ||
+      normalizedEvent === "PAYMENT_PARTIALLY_REFUNDED" ||
+      normalizedEvent === "PAYMENT_DELETED" ||
+      normalizedEvent === "PAYMENT_CHARGEBACK_REQUESTED" ||
+      normalizedEvent === "PAYMENT_CHARGEBACK_DISPUTE"
+    ) {
+      this.indicatorCommissionService.cancelForReversedPayment(
+        order.id,
+        `Evento Asaas ${normalizedEvent}`,
+      );
+      return { ok: true, orderId: order.id, status: order.status, commission: "canceled" };
     }
 
     if (
@@ -686,6 +729,10 @@ export class WabaBillingService {
       normalizedEvent === "PAYMENT_RECEIVED_IN_CASH" ||
       isPaidAsaasStatus(payment.status)
     ) {
+      if (order.status === "paid") {
+        const settled = this.finalizePaidOrder(order);
+        return { ok: true, orderId: settled.id, status: settled.status, duplicate: true };
+      }
       const paid =
         this.orderRepository.update(order.id, {
           status: "paid",
