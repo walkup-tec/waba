@@ -316,7 +316,9 @@ export class WabaFinanceiroSplitPayoutService {
     const description =
       line.lineKind === "supplier"
         ? `WABA split fornecedor ${settlement.orderId}`
-        : `WABA split lucro ${settlement.orderId}`;
+        : line.lineKind === "indicator"
+          ? String(line.participantLabel || `Comissão de indicador ${settlement.orderId}`)
+          : `WABA split lucro ${settlement.orderId}`;
 
     try {
       const transfer = await createAsaasPixTransfer({
