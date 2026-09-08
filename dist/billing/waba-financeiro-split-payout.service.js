@@ -225,7 +225,9 @@ class WabaFinanceiroSplitPayoutService {
         const pixAddressKey = (0, asaas_pix_key_1.normalizePixKeyForAsaas)(line.pixKey, keyType);
         const description = line.lineKind === "supplier"
             ? `WABA split fornecedor ${settlement.orderId}`
-            : `WABA split lucro ${settlement.orderId}`;
+            : line.lineKind === "indicator"
+                ? String(line.participantLabel || `Comissão de indicador ${settlement.orderId}`)
+                : `WABA split lucro ${settlement.orderId}`;
         try {
             const transfer = await (0, asaas_client_1.createAsaasPixTransfer)({
                 value: centsToCurrency(line.amountCents),
