@@ -81,6 +81,15 @@ export const registerWabaBillingRoutes = (app: Express) => {
     });
   });
 
+  app.get("/billing/disparos/packages", (req, res) => {
+    const auth = resolveRequestAuth(req);
+    if (!auth.email) {
+      return res.status(401).json({ error: "Faça login para consultar os pacotes." });
+    }
+    const apiKind = req.query.apiKind === "alternativa" ? "alternativa" : "oficial";
+    return res.status(200).json(billingService.getDisparosCustomerPackages(auth.email, apiKind));
+  });
+
   app.get("/billing/disparos/credits", async (req, res) => {
     const auth = resolveRequestAuth(req);
     if (!auth.email) {
