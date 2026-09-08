@@ -19,6 +19,7 @@ export type GrantBonusEnviosInput = {
   validityMode: BonusEnviosValidityMode;
   validUntil?: string;
   createdByEmail: string;
+  applyIndicatorBonusCap?: boolean;
 };
 
 export type PublicBonusEnviosItem = {
@@ -171,6 +172,24 @@ export class WabaAdminBonusEnviosService {
     }
     if (shipmentCount > 5_000_000) {
       throw new Error("Quantidade de envios acima do limite permitido.");
+    }
+    if (input.applyIndicatorBonusCap) {
+      const alreadyGranted = this.orderRepository
+        .list()
+        .filter(
+          (order) =>
+            isBonusGrantOrder(order) &&
+            normalizeEmail(order.ownerEmail) === ownerEmail,
+        )
+        .reduce((sum, order) => sum + Math.max(0, Math.round(Number(order.shipmentCount ?? 0))), 0);
+      const remaining = Math.max(0, 100 - alreadyGranted);
+      if (shipmentCount > remaining) {
+        throw new Error(
+          remaining <= 0
+            ? "Limite de 100 envios bônus esgotado para este assinante."
+            : `Restam apenas ${remaining} envios bônus para este assinante.`,
+        );
+      }
     }
 
     const apiKind = normalizeDispatchesApiKind(input.apiKind);
