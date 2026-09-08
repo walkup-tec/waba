@@ -1,4 +1,4 @@
-export type WabaMenuSection = "nao-oficial" | "oficial" | "lab-api-oficial" | "admin" | "suporte";
+export type WabaMenuSection = "nao-oficial" | "oficial" | "lab-api-oficial" | "admin" | "indicador" | "suporte";
 
 export type WabaMenuProfile = "all" | "production" | "full";
 
@@ -18,6 +18,7 @@ export const WABA_MENU_SECTION_LABELS: Record<WabaMenuSection, string> = {
   oficial: "Disparos",
   "lab-api-oficial": "Laboratório",
   admin: "Admin",
+  indicador: "Indicador",
   suporte: "Suporte",
 };
 
@@ -203,6 +204,46 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
     tab: "admin-financeiro",
     section: "admin",
     sectionLabel: SECTION_LABELS.admin,
+    profile: "all",
+  },
+  {
+    id: "admin-indicadores",
+    label: "Indicadores",
+    tab: "admin-indicadores",
+    section: "admin",
+    sectionLabel: SECTION_LABELS.admin,
+    profile: "all",
+  },
+  {
+    id: "indicador-dashboard",
+    label: "Dashboard",
+    tab: "indicador-dashboard",
+    section: "indicador",
+    sectionLabel: SECTION_LABELS.indicador,
+    profile: "all",
+  },
+  {
+    id: "indicador-assinantes",
+    label: "Meus assinantes",
+    tab: "indicador-assinantes",
+    section: "indicador",
+    sectionLabel: SECTION_LABELS.indicador,
+    profile: "all",
+  },
+  {
+    id: "indicador-campanhas",
+    label: "Campanhas",
+    tab: "indicador-campanhas",
+    section: "indicador",
+    sectionLabel: SECTION_LABELS.indicador,
+    profile: "all",
+  },
+  {
+    id: "indicador-financeiro",
+    label: "Financeiro",
+    tab: "indicador-financeiro",
+    section: "indicador",
+    sectionLabel: SECTION_LABELS.indicador,
     profile: "all",
   },
   {
