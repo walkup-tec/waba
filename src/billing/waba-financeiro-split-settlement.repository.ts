@@ -4,7 +4,7 @@ import path from "node:path";
 import { resolveDataFile } from "../data-path";
 import type { WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
 
-export type SplitSettlementLineKind = "supplier" | "partner" | "cet";
+export type SplitSettlementLineKind = "supplier" | "partner" | "cet" | "indicator";
 
 export type SplitSettlementPayoutStatus =
   | "pending"
@@ -121,6 +121,7 @@ const normalizeLineKind = (value: unknown): SplitSettlementLineKind => {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (normalized === "supplier") return "supplier";
   if (normalized === "cet") return "cet";
+  if (normalized === "indicator") return "indicator";
   return "partner";
 };
 
