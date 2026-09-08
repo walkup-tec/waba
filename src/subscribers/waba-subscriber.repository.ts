@@ -15,6 +15,8 @@ export type WabaSubscriber = {
   segment?: WabaSubscriberSegment;
   /** Liberado pelo master sem exigir compra de envios (parceiros). */
   aquecedorGranted?: boolean;
+  /** Usuário sistema INDICADOR dono comercial deste assinante. */
+  indicatorUserId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
