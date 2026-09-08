@@ -17,6 +17,7 @@ import {
   graphPhotoSourceKey,
   META_BUSINESS_IDENTITY_FIELDS,
   resolvePhoneNameSync,
+  phoneNumberCardName,
   META_PHONE_NUMBER_LIST_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
 import { fetchBusinessFromGraph, fetchKnownBusinessPortfolios, fetchWabaOwner, directoryFromAssigned } from "./meta-whatsapp-portfolio-graph";
@@ -373,6 +374,40 @@ describe("meta portfolio mapper", () => {
     assert.equal(rows[0]?.verifiedName, "Quantum Smart Labs");
   });
 
+  it("union não tapa o verified_name novo da Graph com o nome antigo da conexão", () => {
+    const rows = unionPortfolioNumbers(
+      [
+        {
+          phoneNumberId: "phone-1",
+          displayPhoneNumber: "+55 21 92368-3257",
+          verifiedName: "Walkup Oficial",
+          newDisplayName: "Walkup Oficial",
+          newNameStatus: "APPROVED",
+          requestedName: null,
+          nameSyncStatus: "applied",
+          metaStatus: "CONNECTED",
+          uiStatus: "ativo",
+        } as any,
+      ],
+      [
+        {
+          phoneNumberId: "phone-1",
+          displayPhoneNumber: "+55 21 92368-3257",
+          verifiedName: "Grupo Walkup",
+          newDisplayName: null,
+          newNameStatus: null,
+          requestedName: null,
+          nameSyncStatus: null,
+          metaStatus: null,
+          uiStatus: "pendente",
+        } as any,
+      ],
+    );
+    assert.equal(rows[0]?.verifiedName, "Walkup Oficial");
+    assert.equal(rows[0]?.newDisplayName, "Walkup Oficial");
+    assert.equal(rows[0]?.newNameStatus, "APPROVED");
+  });
+
   it("ao deduplicar o mesmo BM, preserva todos os chips das conexões", () => {
     const cards = dedupePortfolioCards([
       {
@@ -638,6 +673,71 @@ describe("meta portfolio mapper", () => {
     assert.match(String(pending[0]?.profilePictureUrl || ""), /\/integrations\/meta\/whatsapp\/phone-numbers\/photo/);
     assert.equal(pending[0]?.inboxEnabled, true);
     purgePhoneIdentities(tenantId);
+  });
+
+  it("usa o nome do Editar quando a Graph ainda não devolveu new_display_name", () => {
+    const tenantId = deriveStableMetaTenantId("nome-card@exemplo.com");
+    purgePhoneIdentities(tenantId);
+    writePhoneIdentity(tenantId, "phone-1", { name: "Walkup Oficial" });
+    const rows = applyLocalPhoneIdentities(tenantId, [
+      {
+        phoneNumberId: "phone-1",
+        displayPhoneNumber: "+55 21 92368-3257",
+        verifiedName: "Grupo Walkup",
+        qualityRating: null,
+        metaStatus: "CONNECTED",
+        codeVerificationStatus: "VERIFIED",
+        healthCanSend: null,
+        uiStatus: "ativo",
+        dispatchStatus: "livre",
+        canActivate: false,
+        nameNeedsRegister: false,
+        nameStatus: "APPROVED",
+        newDisplayName: null,
+        newNameStatus: null,
+        profilePictureUrl: null,
+        vertical: null,
+        description: null,
+        address: null,
+        email: null,
+        requestedName: null,
+        nameSyncStatus: null,
+        photoSyncStatus: null,
+        profileSyncStatus: null,
+        inboxEnabled: false,
+      },
+    ]);
+    assert.equal(rows[0]?.verifiedName, "Grupo Walkup");
+    assert.equal(rows[0]?.requestedName, "Walkup Oficial");
+    assert.equal(rows[0]?.nameSyncStatus, "pending");
+    assert.equal(
+      phoneNumberCardName({
+        verifiedName: rows[0]?.verifiedName,
+        requestedName: rows[0]?.requestedName,
+        nameSyncStatus: rows[0]?.nameSyncStatus,
+      }),
+      "Walkup Oficial",
+    );
+    purgePhoneIdentities(tenantId);
+  });
+
+  it("card volta ao verified_name da Meta quando o pedido já foi aplicado", () => {
+    assert.equal(
+      phoneNumberCardName({
+        verifiedName: "Walkup Oficial",
+        requestedName: null,
+        nameSyncStatus: "applied",
+      }),
+      "Walkup Oficial",
+    );
+    assert.equal(
+      phoneNumberCardName({
+        verifiedName: "Grupo Walkup",
+        requestedName: "Nome Recusado",
+        nameSyncStatus: "declined",
+      }),
+      "Grupo Walkup",
+    );
   });
 });
 
@@ -1132,6 +1232,98 @@ describe("meta portfolio service", () => {
     assert.equal(updated.photoUpdated, true);
     assert.equal(updated.nameUpdated, false);
     assert.equal(updated.nameRejected, true);
+  });
+
+  it("depois do Editar, o card mostra o nome novo mesmo se a Graph ainda devolver o verified_name antigo", async () => {
+    const row = {
+      ...connectedRow(),
+      status: "connected" as const,
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      verifiedName: "Grupo Walkup",
+    };
+    const graph = async (input: {
+      path: string;
+      method: string;
+      query?: Record<string, string>;
+    }) => {
+      if (input.method === "POST" && input.path === "phone-1" && input.query?.new_display_name) {
+        return { ok: true, status: 200, json: { success: true } };
+      }
+      if (input.path === "4141369862822598") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4141369862822598", name: "Drax Sistemas 2000", primary_page: { id: "page-1", name: "Drax" } },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "1014470201624992", owner_business_info: { id: "4141369862822598", name: "Drax Sistemas 2000" } },
+        };
+      }
+      if (input.path === "phone-1") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            verified_name: "Grupo Walkup",
+            name_status: "APPROVED",
+            status: "CONNECTED",
+          },
+        };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-1",
+                display_phone_number: "+55 21 92368-3257",
+                verified_name: "Grupo Walkup",
+                status: "CONNECTED",
+                code_verification_status: "VERIFIED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async findOpenByTenant() {
+          return row;
+        },
+        async listOpenByTenant() {
+          return [row];
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+      decryptMetaToken,
+    );
+    const updated = await service.updatePhoneProfileFromAuth(auth, {
+      phoneNumberId: "phone-1",
+      displayName: "Walkup Oficial",
+    });
+    const chip = updated.numbers.find((item) => item.phoneNumberId === "phone-1");
+    assert.equal(updated.nameUpdated, true);
+    assert.equal(chip?.verifiedName, "Grupo Walkup");
+    assert.equal(chip?.requestedName, "Walkup Oficial");
+    assert.equal(chip?.nameSyncStatus, "pending");
+    assert.equal(
+      phoneNumberCardName({
+        verifiedName: chip?.verifiedName,
+        requestedName: chip?.requestedName,
+        nameSyncStatus: chip?.nameSyncStatus,
+      }),
+      "Walkup Oficial",
+    );
   });
 
   it("recusa foto de perfil se o número ainda não está ativo na Meta", async () => {
