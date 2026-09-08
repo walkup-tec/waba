@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaFinanceiroSplitService = void 0;
+exports.resolveSplitSettlementSubscriberName = resolveSplitSettlementSubscriberName;
 const node_crypto_1 = require("node:crypto");
 const waba_master_disparos_policy_service_1 = require("../users/waba-master-disparos-policy.service");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
@@ -52,6 +53,16 @@ const waba_indicator_profile_repository_1 = require("../indicators/waba-indicato
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const PERCENT_SUM_TOLERANCE = 0.01;
 const roundPercent = (value) => Math.round(value * 100) / 100;
+function resolveSplitSettlementSubscriberName(input) {
+    const cadastro = String(input.subscriberFullName || "").trim();
+    if (cadastro)
+        return cadastro;
+    const campaignOnly = String(input.orderId || "").trim().startsWith("campaign-supplier:");
+    const paidName = String(input.customerName || "").trim();
+    if (!campaignOnly && paidName)
+        return paidName;
+    return String(input.ownerEmail || "").trim() || "—";
+}
 const buildSplitCostBreakdown = (paidValueCents, purchasedShipmentCount, costPerShipmentCents) => {
     const supplierCostCents = Math.max(0, Math.round(purchasedShipmentCount * Math.max(0, costPerShipmentCents)));
     const cetCents = (0, waba_financeiro_cet_1.resolveFinanceiroCetCentsForPaidOrder)();
@@ -135,7 +146,7 @@ const normalizeSupplier = (input) => {
     };
 };
 class WabaFinanceiroSplitService {
-    constructor(configRepository = new waba_financeiro_split_repository_1.WabaFinanceiroSplitRepository(), settlementRepository = new waba_financeiro_split_settlement_repository_1.WabaFinanceiroSplitSettlementRepository(), payoutService = new waba_financeiro_split_payout_service_1.WabaFinanceiroSplitPayoutService(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService(), indicatorCommissionService = new waba_indicator_commission_service_1.WabaIndicatorCommissionService(), indicatorProfileRepository = new waba_indicator_profile_repository_1.WabaIndicatorProfileRepository(), systemUserService = new waba_system_user_service_1.WabaSystemUserService()) {
+    constructor(configRepository = new waba_financeiro_split_repository_1.WabaFinanceiroSplitRepository(), settlementRepository = new waba_financeiro_split_settlement_repository_1.WabaFinanceiroSplitSettlementRepository(), payoutService = new waba_financeiro_split_payout_service_1.WabaFinanceiroSplitPayoutService(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService(), indicatorCommissionService = new waba_indicator_commission_service_1.WabaIndicatorCommissionService(), indicatorProfileRepository = new waba_indicator_profile_repository_1.WabaIndicatorProfileRepository(), systemUserService = new waba_system_user_service_1.WabaSystemUserService(), subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository()) {
         this.configRepository = configRepository;
         this.settlementRepository = settlementRepository;
         this.payoutService = payoutService;
@@ -144,6 +155,7 @@ class WabaFinanceiroSplitService {
         this.indicatorCommissionService = indicatorCommissionService;
         this.indicatorProfileRepository = indicatorProfileRepository;
         this.systemUserService = systemUserService;
+        this.subscriberRepository = subscriberRepository;
     }
     getConfig() {
         return this.configRepository.get();
@@ -153,7 +165,17 @@ class WabaFinanceiroSplitService {
     }
     listSettlements(limit = 100) {
         this.absorbSyntheticCampaignSupplierSettlements();
-        return (0, waba_metrics_excluded_owners_1.filterOutMetricsExcludedOwners)(this.settlementRepository.list(limit));
+        const items = (0, waba_metrics_excluded_owners_1.filterOutMetricsExcludedOwners)(this.settlementRepository.list(limit));
+        const byEmail = new Map(this.subscriberRepository.list().map((item) => [String(item.email || "").trim().toLowerCase(), item]));
+        return items.map((item) => ({
+            ...item,
+            subscriberName: resolveSplitSettlementSubscriberName({
+                customerName: item.customerName,
+                ownerEmail: item.ownerEmail,
+                orderId: item.orderId,
+                subscriberFullName: byEmail.get(this.normalizeOwnerEmail(item.ownerEmail))?.fullName,
+            }),
+        }));
     }
     /** Remove settlements já gravados de owners excluídos das métricas/split. */
     purgeExcludedOwnerSettlements() {
