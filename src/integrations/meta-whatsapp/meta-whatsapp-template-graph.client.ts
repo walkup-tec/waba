@@ -11,6 +11,8 @@ export type TemplateGraphCaller = (input: {
   path: string;
   query?: Record<string, string>;
   body?: Record<string, unknown>;
+  maxAttempts?: number;
+  timeoutMs?: number;
 }) => Promise<MetaGraphJsonResult>;
 
 export function mapGraphTemplate(raw: MetaGraphTemplate): {
@@ -42,6 +44,8 @@ export async function listWabaMessageTemplates(input: {
   token: string;
   wabaId: string;
   graph?: TemplateGraphCaller;
+  maxAttempts?: number;
+  timeoutMs?: number;
 }): Promise<
   | { ok: true; items: ReturnType<typeof mapGraphTemplate>[]; pages: number; complete: boolean }
   | { ok: false; result: MetaGraphJsonResult }
@@ -64,6 +68,8 @@ export async function listWabaMessageTemplates(input: {
       method: "GET",
       path: `${input.wabaId}/message_templates`,
       query,
+      maxAttempts: input.maxAttempts,
+      timeoutMs: input.timeoutMs,
     });
     if (!result.ok) return { ok: false, result };
     pages += 1;
