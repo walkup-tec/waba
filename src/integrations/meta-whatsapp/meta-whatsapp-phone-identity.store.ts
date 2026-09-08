@@ -381,6 +381,7 @@ export function applyLocalPhoneIdentities(
       nameStatus: row.nameStatus,
       newDisplayName: row.newDisplayName,
       newNameStatus: row.newNameStatus,
+      localName: identity?.name || null,
     });
     const uiStatus = resolveMetaPhoneUiStatus({
       metaStatus: row.metaStatus,
