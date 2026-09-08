@@ -32,7 +32,7 @@ export const getWabaAuthPublicConfig = () => ({
   sessionCookieName: SESSION_COOKIE,
 });
 
-export type WabaSessionRole = "master" | "operacional" | "suporte" | "subscriber";
+export type WabaSessionRole = "master" | "operacional" | "suporte" | "indicador" | "subscriber";
 
 type SessionPayload = {
   email: string;
