@@ -18,6 +18,8 @@ const meta_whatsapp_template_types_1 = require("./meta-whatsapp-template.types")
 const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
 const meta_whatsapp_template_header_preview_store_1 = require("./meta-whatsapp-template-header-preview.store");
 const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-template");
+/** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. */
+const META_TEMPLATE_SYNC_BUDGET_MS = 20000;
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -266,20 +268,41 @@ class MetaWhatsappTemplateService {
         }
         const listedByWaba = [];
         let pages = 0;
+        const startedAt = Date.now();
+        const primaryWabaId = String(connection.wabaId);
         const wabaIds = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
             token,
             connection,
             graph: this.graph,
         });
-        const targets = wabaIds.length ? wabaIds : [String(connection.wabaId)];
+        const targets = wabaIds.length ? wabaIds : [primaryWabaId];
         for (const wabaId of targets) {
+            const elapsed = Date.now() - startedAt;
+            if (elapsed >= META_TEMPLATE_SYNC_BUDGET_MS) {
+                if (!listedByWaba.length) {
+                    const error = new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", 503);
+                    error.message =
+                        "A Meta demorou demais para listar os templates. Tente de novo em instantes.";
+                    throw error;
+                }
+                (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
+                    reason: "skip_sync_budget",
+                    tenantId: tenant.tenantId,
+                    wabaId,
+                    elapsedMs: elapsed,
+                    listed: listedByWaba.length,
+                });
+                break;
+            }
             const listed = await (0, meta_whatsapp_template_graph_client_1.listWabaMessageTemplates)({
                 token,
                 wabaId,
                 graph: this.graph,
+                maxAttempts: 1,
+                timeoutMs: Math.min(8000, Math.max(2000, META_TEMPLATE_SYNC_BUDGET_MS - elapsed)),
             });
             if (!listed.ok) {
-                if (wabaId === String(connection.wabaId))
+                if (wabaId === primaryWabaId)
                     throwFromGraph(listed.result);
                 (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
                     reason: "skip_extra_waba",
