@@ -14,6 +14,8 @@ const waba_alternativa_numbers_service_1 = require("./waba-alternativa-numbers.s
 const waba_coupon_service_1 = require("./waba-coupon.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const waba_oficial_pricing_overrides_1 = require("./waba-oficial-pricing-overrides");
+const waba_pricing_service_1 = require("./waba-pricing.service");
+const waba_indicator_commission_service_1 = require("../indicators/waba-indicator-commission.service");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const normalizeDigits = (value) => value.replace(/\D/g, "");
 const formatDueDate = (daysAhead) => (0, asaas_pix_qr_1.formatDueDateInBrazil)(daysAhead);
@@ -98,22 +100,30 @@ const resolveListValueCentsForPackage = (apiKind, shipmentCount, segment = "outr
 };
 const ASAAS_MIN_CHARGE_CENTS = 500;
 class WabaBillingService {
-    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), bonusSettlementService = new waba_disparos_bonus_settlement_service_1.WabaDisparosBonusSettlementService(), splitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService(), alternativaNumbersService = new waba_alternativa_numbers_service_1.WabaAlternativaNumbersService(), couponService = new waba_coupon_service_1.WabaCouponService()) {
+    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), bonusSettlementService = new waba_disparos_bonus_settlement_service_1.WabaDisparosBonusSettlementService(), splitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService(), alternativaNumbersService = new waba_alternativa_numbers_service_1.WabaAlternativaNumbersService(), couponService = new waba_coupon_service_1.WabaCouponService(), indicatorCommissionService = new waba_indicator_commission_service_1.WabaIndicatorCommissionService()) {
         this.orderRepository = orderRepository;
         this.bonusSettlementService = bonusSettlementService;
         this.splitService = splitService;
         this.alternativaNumbersService = alternativaNumbersService;
         this.couponService = couponService;
+        this.indicatorCommissionService = indicatorCommissionService;
     }
     finalizePaidOrder(order) {
         if (order.product !== "waba-disparos") {
             return order;
         }
         const settled = this.bonusSettlementService.settlePaidOrder(order);
+        this.indicatorCommissionService.ensureForPaidOrder(settled);
         void this.splitService.settleAndPayoutPaidOrder(settled).catch((error) => {
             console.error(`[FinanceiroSplit] erro ao liquidar/repassar pedido ${settled.id}:`, error instanceof Error ? error.message : error);
         });
         return settled;
+    }
+    getDisparosCustomerPackages(ownerEmail, apiKind = "oficial") {
+        return {
+            apiKind,
+            packages: waba_pricing_service_1.wabaPricingService.listCustomerPackages({ apiKind, ownerEmail }),
+        };
     }
     getDisparosConfig() {
         const minCreditCentsOficial = resolveMinCreditCents("oficial");
@@ -176,7 +186,13 @@ class WabaBillingService {
             throw new Error("Assinantes do segmento Bets contratam créditos apenas na API Oficial.");
         }
         const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
-        const listValueCents = resolveListValueCentsForPackage(apiKind, shipmentCount, segment, String(input.ownerEmail ?? ""));
+        const ownerEmail = String(input.ownerEmail ?? "").trim().toLowerCase();
+        const pricingQuote = waba_pricing_service_1.wabaPricingService.quote({
+            apiKind,
+            shipmentCount,
+            ownerEmail,
+        });
+        const listValueCents = pricingQuote?.totalAmountCents ?? null;
         if (!listValueCents) {
             throw new Error("Pacote de envios inválido.");
         }
@@ -215,16 +231,17 @@ class WabaBillingService {
         const whatsapp = (0, phone_1.formatBrazilMobileForAsaas)(String(input.whatsapp ?? ""));
         const minCreditCents = resolveMinCreditCents(apiKind);
         const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
-        const listValueCentsFromPackage = shipmentCount > 0
-            ? resolveListValueCentsForPackage(apiKind, shipmentCount, segment, ownerEmail)
+        const quote = shipmentCount > 0
+            ? waba_pricing_service_1.wabaPricingService.quote({ apiKind, shipmentCount, ownerEmail, segment })
             : null;
+        const listValueCentsFromPackage = quote?.totalAmountCents ?? null;
         let listValueCents = listValueCentsFromPackage ?? Math.round(Number(input.valueCents ?? minCreditCents));
         if (!Number.isFinite(listValueCents) || listValueCents <= 0) {
             throw new Error("Valor do pacote inválido.");
         }
         if (shipmentCount > 0) {
             if (!listValueCentsFromPackage) {
-                const salePackages = getDisparosSalePackages(apiKind, segment, ownerEmail);
+                const salePackages = waba_pricing_service_1.wabaPricingService.listCustomerPackages({ apiKind, ownerEmail, segment });
                 const maxShipments = salePackages[salePackages.length - 1]?.shipments ?? 0;
                 throw new Error(maxShipments > 0
                     ? `Informe uma quantidade maior que ${maxShipments.toLocaleString("pt-BR")} envios.`
@@ -271,6 +288,13 @@ class WabaBillingService {
             couponId,
             couponAlias: normalizedCouponAlias,
             shipmentCount: shipmentCount > 0 ? shipmentCount : undefined,
+            indicatorUserId: quote?.indicatorUserId || undefined,
+            purchasedShipmentCount: quote?.quantity,
+            baseUnitPriceCents: quote?.baseUnitPriceCents,
+            spreadUnitPriceCents: quote?.spreadUnitPriceCents,
+            customerUnitPriceCents: quote?.customerUnitPriceCents,
+            baseAmountCents: quote?.baseAmountCents,
+            spreadAmountCents: quote?.spreadAmountCents,
         };
     }
     async persistPixOnOrder(order, payment, extra) {
@@ -352,6 +376,13 @@ class WabaBillingService {
             couponAlias: validated.couponAlias,
             couponId: validated.couponId,
             shipmentCount: validated.shipmentCount,
+            indicatorUserId: validated.indicatorUserId,
+            purchasedShipmentCount: validated.purchasedShipmentCount,
+            baseUnitPriceCents: validated.baseUnitPriceCents,
+            spreadUnitPriceCents: validated.spreadUnitPriceCents,
+            customerUnitPriceCents: validated.customerUnitPriceCents,
+            baseAmountCents: validated.baseAmountCents,
+            spreadAmountCents: validated.spreadAmountCents,
             status: "pending_payment",
             asaasExternalReference,
             createdAt: now,
@@ -507,13 +538,27 @@ class WabaBillingService {
             return { ignored: true, reason: "pedido WABA não encontrado" };
         }
         if (normalizedEvent === "PAYMENT_OVERDUE") {
-            this.orderRepository.update(order.id, { status: "cancelled" });
+            if (order.status === "pending_payment") {
+                this.orderRepository.update(order.id, { status: "cancelled" });
+            }
             return { ok: true, orderId: order.id, status: "cancelled" };
+        }
+        if (normalizedEvent === "PAYMENT_REFUNDED" ||
+            normalizedEvent === "PAYMENT_PARTIALLY_REFUNDED" ||
+            normalizedEvent === "PAYMENT_DELETED" ||
+            normalizedEvent === "PAYMENT_CHARGEBACK_REQUESTED" ||
+            normalizedEvent === "PAYMENT_CHARGEBACK_DISPUTE") {
+            this.indicatorCommissionService.cancelForReversedPayment(order.id, `Evento Asaas ${normalizedEvent}`);
+            return { ok: true, orderId: order.id, status: order.status, commission: "canceled" };
         }
         if (normalizedEvent === "PAYMENT_RECEIVED" ||
             normalizedEvent === "PAYMENT_CONFIRMED" ||
             normalizedEvent === "PAYMENT_RECEIVED_IN_CASH" ||
             isPaidAsaasStatus(payment.status)) {
+            if (order.status === "paid") {
+                const settled = this.finalizePaidOrder(order);
+                return { ok: true, orderId: settled.id, status: settled.status, duplicate: true };
+            }
             const paid = this.orderRepository.update(order.id, {
                 status: "paid",
                 paidAt: new Date().toISOString(),
