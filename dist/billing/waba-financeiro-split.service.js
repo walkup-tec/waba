@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaFinanceiroSplitService = void 0;
 const node_crypto_1 = require("node:crypto");
@@ -14,6 +47,9 @@ const waba_financeiro_split_payout_service_1 = require("./waba-financeiro-split-
 const waba_financeiro_cet_1 = require("./waba-financeiro-cet");
 const waba_metrics_excluded_owners_1 = require("./waba-metrics-excluded-owners");
 const waba_campaign_credit_funding_1 = require("./waba-campaign-credit-funding");
+const waba_indicator_commission_service_1 = require("../indicators/waba-indicator-commission.service");
+const waba_indicator_profile_repository_1 = require("../indicators/waba-indicator-profile.repository");
+const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const PERCENT_SUM_TOLERANCE = 0.01;
 const roundPercent = (value) => Math.round(value * 100) / 100;
 const buildSplitCostBreakdown = (paidValueCents, purchasedShipmentCount, costPerShipmentCents) => {
@@ -99,12 +135,15 @@ const normalizeSupplier = (input) => {
     };
 };
 class WabaFinanceiroSplitService {
-    constructor(configRepository = new waba_financeiro_split_repository_1.WabaFinanceiroSplitRepository(), settlementRepository = new waba_financeiro_split_settlement_repository_1.WabaFinanceiroSplitSettlementRepository(), payoutService = new waba_financeiro_split_payout_service_1.WabaFinanceiroSplitPayoutService(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService()) {
+    constructor(configRepository = new waba_financeiro_split_repository_1.WabaFinanceiroSplitRepository(), settlementRepository = new waba_financeiro_split_settlement_repository_1.WabaFinanceiroSplitSettlementRepository(), payoutService = new waba_financeiro_split_payout_service_1.WabaFinanceiroSplitPayoutService(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService(), indicatorCommissionService = new waba_indicator_commission_service_1.WabaIndicatorCommissionService(), indicatorProfileRepository = new waba_indicator_profile_repository_1.WabaIndicatorProfileRepository(), systemUserService = new waba_system_user_service_1.WabaSystemUserService()) {
         this.configRepository = configRepository;
         this.settlementRepository = settlementRepository;
         this.payoutService = payoutService;
         this.orderRepository = orderRepository;
         this.masterPolicyService = masterPolicyService;
+        this.indicatorCommissionService = indicatorCommissionService;
+        this.indicatorProfileRepository = indicatorProfileRepository;
+        this.systemUserService = systemUserService;
     }
     getConfig() {
         return this.configRepository.get();
@@ -317,8 +356,11 @@ class WabaFinanceiroSplitService {
         const costPerShipmentCents = Math.max(0, Math.round(Number((paySuppliers ? supplier?.costPerShipmentCents : 0) ?? 0)));
         const paidValueCents = Math.max(0, Math.round(Number(order.valueCents ?? 0)));
         const breakdown = buildSplitCostBreakdown(paidValueCents, purchasedShipmentCount, costPerShipmentCents);
-        const { supplierCostCents, cetCents, totalCostCents, distributableCents } = breakdown;
+        const { supplierCostCents, cetCents, totalCostCents, distributableCents: baseDistributable } = breakdown;
         const effectiveSupplierCostCents = paySuppliers ? supplierCostCents : 0;
+        const indicatorCommission = this.indicatorCommissionService.getByOrderId(order.id);
+        const indicatorCommissionCents = Math.max(0, Math.round(Number(indicatorCommission?.commissionAmountCents ?? 0)));
+        const distributableCents = Math.max(0, baseDistributable - indicatorCommissionCents);
         if (distributableCents > 0 && payProfits) {
             if (!activeParticipants.length) {
                 this.logSettlementSkip(order, "lucro distribuível sem participantes ativos");
@@ -360,6 +402,24 @@ class WabaFinanceiroSplitService {
                     : "skipped",
             });
         }
+        if (indicatorCommission && indicatorCommissionCents > 0) {
+            const profile = this.indicatorProfileRepository.getByUserId(indicatorCommission.indicatorUserId);
+            const indicatorUser = this.systemUserService.listPublicUsers().find((item) => item.id === indicatorCommission.indicatorUserId);
+            const indicatorName = String(indicatorUser?.fullName || "Indicador").trim() || "Indicador";
+            lines.push({
+                lineKind: "indicator",
+                participantId: indicatorCommission.indicatorUserId,
+                participantLabel: `Comissão de indicador — ${indicatorName}`,
+                participantEmail: indicatorUser?.email || "",
+                pixKey: String(profile?.pixKey ?? "").trim(),
+                sharePercent: 0,
+                amountCents: indicatorCommissionCents,
+                shipmentCount: indicatorCommission.quantity,
+                costPerShipmentCents: indicatorCommission.spreadUnitPriceCents,
+                payoutStatus: profile?.pixKey ? "pending" : "failed",
+                failureReason: profile?.pixKey ? undefined : "Chave PIX do indicador ausente.",
+            });
+        }
         if (distributableCents > 0 && payProfits && activeParticipants.length) {
             const percents = activeParticipants.map((item) => item.sharePercent);
             const amounts = distributeCentsByPercents(distributableCents, percents);
@@ -398,16 +458,78 @@ class WabaFinanceiroSplitService {
     }
     async settleAndPayoutPaidOrder(order) {
         const settlement = this.settlePaidOrder(order);
-        if (!settlement)
+        if (!settlement) {
+            await this.payoutStandaloneIndicatorCommission(order.id);
             return null;
-        if (!this.payoutService.isPayoutEnabled())
+        }
+        if (!this.payoutService.isPayoutEnabled()) {
+            this.syncIndicatorCommissionFromSettlement(settlement);
             return settlement;
+        }
         try {
-            return await this.payoutService.executeForSettlement(settlement);
+            const paid = await this.payoutService.executeForSettlement(settlement);
+            this.syncIndicatorCommissionFromSettlement(paid ?? settlement);
+            return paid;
         }
         catch (error) {
             console.error(`[FinanceiroSplit] falha no repasse PIX do pedido ${order.id}:`, error instanceof Error ? error.message : error);
+            this.syncIndicatorCommissionFromSettlement(settlement);
             return settlement;
+        }
+    }
+    syncIndicatorCommissionFromSettlement(settlement) {
+        const line = settlement.lines.find((item) => item.lineKind === "indicator");
+        if (!line)
+            return;
+        this.indicatorCommissionService.syncFromPayout({
+            orderId: settlement.orderId,
+            status: line.payoutStatus,
+            asaasTransferId: line.asaasTransferId,
+            transactionReceiptUrl: line.transactionReceiptUrl,
+            failureReason: line.failureReason,
+            paidAt: line.paidAt,
+        });
+    }
+    async payoutStandaloneIndicatorCommission(orderId) {
+        const commission = this.indicatorCommissionService.getByOrderId(orderId);
+        if (!commission || commission.status !== "pending")
+            return;
+        // Sem settlement (ex.: fornecedor sem PIX). O repasse do indicador segue o mesmo PIX Asaas.
+        const profile = this.indicatorProfileRepository.getByUserId(commission.indicatorUserId);
+        if (!profile?.pixKey) {
+            this.indicatorCommissionService.syncFromPayout({
+                orderId,
+                status: "failed",
+                failureReason: "Chave PIX do indicador ausente.",
+            });
+            return;
+        }
+        if (!this.payoutService.isPayoutEnabled())
+            return;
+        try {
+            const { createAsaasPixTransfer } = await Promise.resolve().then(() => __importStar(require("./asaas.client")));
+            const { normalizePixKeyForAsaas, resolveAsaasPixKeyType } = await Promise.resolve().then(() => __importStar(require("./asaas-pix-key")));
+            const keyType = resolveAsaasPixKeyType(profile.pixKey);
+            const transfer = await createAsaasPixTransfer({
+                value: Number((commission.commissionAmountCents / 100).toFixed(2)),
+                pixAddressKey: normalizePixKeyForAsaas(profile.pixKey, keyType),
+                pixAddressKeyType: keyType,
+                description: `Comissão de indicador — pedido ${orderId}`,
+                externalReference: commission.payoutExternalReference,
+            });
+            this.indicatorCommissionService.syncFromPayout({
+                orderId,
+                status: "processing",
+                asaasTransferId: transfer.id,
+                transactionReceiptUrl: transfer.transactionReceiptUrl,
+            });
+        }
+        catch (error) {
+            this.indicatorCommissionService.syncFromPayout({
+                orderId,
+                status: "failed",
+                failureReason: error instanceof Error ? error.message : "Falha no PIX da comissão.",
+            });
         }
     }
     async retryPayoutForOrder(orderId) {
