@@ -17,6 +17,7 @@ const meta_whatsapp_automation_service_1 = require("./meta-whatsapp-automation.s
 const meta_whatsapp_template_ai_service_1 = require("./meta-whatsapp-template-ai.service");
 const waba_public_base_url_1 = require("../../lib/waba-public-base-url");
 const meta_whatsapp_broadcast_service_1 = require("./meta-whatsapp-broadcast.service");
+const meta_whatsapp_broadcast_split_1 = require("./meta-whatsapp-broadcast-split");
 const meta_whatsapp_template_route_id_1 = require("./meta-whatsapp-template-route-id");
 const service = new meta_whatsapp_connection_service_1.MetaWhatsappConnectionService();
 const messagingService = new meta_whatsapp_messaging_service_1.MetaWhatsappMessagingService();
@@ -795,6 +796,10 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
                         .split(/[\s,;]+/)
                         .map((item) => item.trim())
                         .filter(Boolean);
+                const rawPhoneQuotas = body.phoneQuotas ?? body.phone_quotas;
+                const phoneQuotas = rawPhoneQuotas == null || String(rawPhoneQuotas).trim() === ""
+                    ? undefined
+                    : (0, meta_whatsapp_broadcast_split_1.parseBroadcastPhoneQuotasInput)(rawPhoneQuotas);
                 const campaign = await broadcastService.startFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
                     connectionId: String(body.connectionId || body.connection_id || ""),
                     templateId: String(body.templateId || body.template_id || ""),
@@ -805,6 +810,7 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
                     mapping: broadcastMappingFromBody(body),
                     intakeCampaignId: String(body.intakeCampaignId || body.intake_campaign_id || ""),
                     publicBaseHints: (0, waba_public_base_url_1.publicBaseHintsFromExpressRequest)(req),
+                    phoneQuotas,
                 });
                 return sendPublic(res, 202, { ok: true, campaign });
             }
