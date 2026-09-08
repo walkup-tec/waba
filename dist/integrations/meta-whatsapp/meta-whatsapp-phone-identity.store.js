@@ -314,6 +314,7 @@ function applyLocalPhoneIdentities(tenantId, numbers) {
             nameStatus: row.nameStatus,
             newDisplayName: row.newDisplayName,
             newNameStatus: row.newNameStatus,
+            localName: identity?.name || null,
         });
         const uiStatus = (0, meta_whatsapp_portfolio_map_1.resolveMetaPhoneUiStatus)({
             metaStatus: row.metaStatus,
