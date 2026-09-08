@@ -35,6 +35,8 @@ async function callMetaGraphJson(input) {
     const endpoint = `${(0, meta_config_1.readMetaGraphBase)()}/${(0, meta_config_1.readMetaGraphVersion)()}/${path}${qs ? `?${qs}` : ""}`;
     const url = withProof(endpoint, token);
     const fetchFn = input.fetchImpl || fetch;
+    const maxAttempts = Math.min(3, Math.max(1, Math.floor(Number(input.maxAttempts) || 3)));
+    const timeoutMs = Math.min(20000, Math.max(1500, Math.floor(Number(input.timeoutMs) || 12000)));
     let last = {
         ok: false,
         status: 0,
@@ -45,9 +47,9 @@ async function callMetaGraphJson(input) {
         graphCode: null,
         attempts: 0,
     };
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         try {
             const response = await fetchFn(url, {
                 method: input.method,
@@ -81,7 +83,7 @@ async function callMetaGraphJson(input) {
             if (response.ok)
                 return last;
             // Rate limit (4/17/341): backoff curto só piora a cota — não retry imediato.
-            if (kind === "permanent" || (0, meta_whatsapp_graph_errors_1.isMetaGraphRateLimitCode)(graphCode) || attempt >= 3)
+            if (kind === "permanent" || (0, meta_whatsapp_graph_errors_1.isMetaGraphRateLimitCode)(graphCode) || attempt >= maxAttempts)
                 return last;
             await sleep(Math.floor(350 * Math.pow(2, attempt - 1) + Math.random() * 180));
         }
@@ -97,7 +99,7 @@ async function callMetaGraphJson(input) {
                 graphCode: null,
                 attempts: attempt,
             };
-            if (attempt >= 3)
+            if (attempt >= maxAttempts)
                 return last;
             await sleep(Math.floor(350 * Math.pow(2, attempt - 1) + Math.random() * 180));
         }
