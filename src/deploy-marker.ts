@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-08-104500-tpl-sync-rate-limit";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-08-184000-tpl-sync-gateway-timeout";
