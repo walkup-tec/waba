@@ -52,12 +52,32 @@ function applyLaboratorioMenuPolicy(
   return result;
 }
 
+function clampIndicadorExclusiveMenus(
+  user: Pick<WabaSystemUser, "role">,
+  permissions: MenuPermissionsMap,
+): MenuPermissionsMap {
+  if (user.role === "indicador") {
+    return buildDefaultIndicadorMenuPermissions();
+  }
+  const result = { ...permissions };
+  for (const id of INDICADOR_MENU_IDS) {
+    result[id] = false;
+  }
+  return result;
+}
+
 /** Resolve permissões efetivas; chaves ausentes = desabilitado. */
 export const resolveEffectiveMenuPermissions = (
   user: Pick<WabaSystemUser, "role" | "menuPermissions" | "email">,
 ): MenuPermissionsMap => {
   if (user.role === "master") {
-    return applyLaboratorioMenuPolicy(user, buildAllMenusEnabled());
+    return clampIndicadorExclusiveMenus(
+      user,
+      applyLaboratorioMenuPolicy(user, buildAllMenusEnabled()),
+    );
+  }
+  if (user.role === "indicador") {
+    return buildDefaultIndicadorMenuPermissions();
   }
 
   const allIds = listWabaMenuIds();
@@ -68,7 +88,7 @@ export const resolveEffectiveMenuPermissions = (
     result[id] = stored?.[id] === true;
   }
 
-  return applyLaboratorioMenuPolicy(user, result);
+  return clampIndicadorExclusiveMenus(user, applyLaboratorioMenuPolicy(user, result));
 };
 
 /** Migra usuário legado (sem menuPermissions): concede todos os menus atuais uma vez. */
@@ -86,6 +106,21 @@ export const buildDefaultOperacionalMenuPermissions = (): MenuPermissionsMap => 
   ]);
   for (const id of listWabaMenuIds()) {
     result[id] = defaults.has(id);
+  }
+  return result;
+};
+
+export const INDICADOR_MENU_IDS = [
+  "indicador-dashboard",
+  "indicador-assinantes",
+  "indicador-campanhas",
+  "indicador-financeiro",
+] as const;
+
+export const buildDefaultIndicadorMenuPermissions = (): MenuPermissionsMap => {
+  const result = buildNoMenusEnabled();
+  for (const id of INDICADOR_MENU_IDS) {
+    result[id] = true;
   }
   return result;
 };
@@ -122,6 +157,9 @@ export const parseMenuPermissionsForCreate = (
 ): MenuPermissionsMap => {
   if (role === "master") {
     return buildAllMenusEnabled();
+  }
+  if (role === "indicador") {
+    return buildDefaultIndicadorMenuPermissions();
   }
 
   const allowedIds = new Set(listWabaMenuIds());
