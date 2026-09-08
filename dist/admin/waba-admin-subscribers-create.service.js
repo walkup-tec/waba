@@ -16,6 +16,7 @@ class WabaAdminSubscribersCreateService {
             cpfCnpj: String(input.cpfCnpj ?? ""),
             aquecedorGranted: input.aquecedorGranted === true,
             segment: input.segment,
+            indicatorUserId: input.indicatorUserId,
         });
     }
 }
