@@ -1,5 +1,5 @@
 "use strict";
-/** Fracionamento do Disparo Cloud: no máx. 500 envios por número WhatsApp. */
+/** Fracionamento do Disparo Cloud: no máx. 1000 envios por número WhatsApp. */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_BROADCAST_MAX_SENDS_PER_NUMBER = void 0;
 exports.normalizeBroadcastPhoneNumberIds = normalizeBroadcastPhoneNumberIds;
@@ -8,7 +8,7 @@ exports.campaignUsesPhoneNumber = campaignUsesPhoneNumber;
 exports.minPhonesRequiredForBroadcast = minPhonesRequiredForBroadcast;
 exports.distributeBroadcastLeadsAcrossPhones = distributeBroadcastLeadsAcrossPhones;
 exports.assignBroadcastLeadsToPhones = assignBroadcastLeadsToPhones;
-exports.META_BROADCAST_MAX_SENDS_PER_NUMBER = 500;
+exports.META_BROADCAST_MAX_SENDS_PER_NUMBER = 1000;
 function normalizeBroadcastPhoneNumberIds(raw) {
     const list = Array.isArray(raw)
         ? raw
