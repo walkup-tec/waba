@@ -5,11 +5,22 @@ export const JANDIRA2_VOID_BROADCAST_ID = "26d33b09-8868-41dd-af78-afd59e7982f2"
 export const JANDIRA2_RERUN_VOID_BROADCAST_ID = "c8e99348-4579-476c-b52d-af4f05d509df";
 export const JANDIRA2_VOID_INTAKE_ID = "368d053b-d59b-4eed-a235-fe9e9f32c68c";
 
-/** Opt in PTX: lote failed com fila; retomar de onde parou (1980/2996). */
-export const OPT_IN_PTX_RESUME_INTAKE_ID = "66c63991-9c2f-42a2-b024-7aeab1b71546";
+/** Opt in PTX / Paulo Teixeira: lote Cloud 1980 falhas sem fila (intake da tela pode ser outro UUID). */
+export const OPT_IN_PTX_RESUME_INTAKE_ID = "c213963a-209a-465e-b3b6-85fef1328caf";
+export const OPT_IN_PTX_RESUME_INTAKE_ID_LEGACY = "66c63991-9c2f-42a2-b024-7aeab1b71546";
+export const OPT_IN_PTX_RESUME_BROADCAST_ID = "18c8340d-da12-47f1-8577-67f8a762aa32";
 
 export function isOptInPtxResumeIntake(intakeCampaignId: string | null | undefined): boolean {
-  return String(intakeCampaignId || "").trim() === OPT_IN_PTX_RESUME_INTAKE_ID;
+  const id = String(intakeCampaignId || "").trim();
+  return id === OPT_IN_PTX_RESUME_INTAKE_ID || id === OPT_IN_PTX_RESUME_INTAKE_ID_LEGACY;
+}
+
+export function isOptInPtxResumeCampaign(row: {
+  id?: string | null;
+  intakeCampaignId?: string | null;
+}): boolean {
+  if (String(row.id || "").trim() === OPT_IN_PTX_RESUME_BROADCAST_ID) return true;
+  return isOptInPtxResumeIntake(row.intakeCampaignId);
 }
 
 function leadCountsAsDelivered(lead: MetaBroadcastLead): boolean {
@@ -51,7 +62,7 @@ export function isBroadcastAbandonedForRetry(
 
 export function shouldVoidCloudBroadcast(row: MetaBroadcastCampaign): boolean {
   if (isBroadcastVoided(row)) return false;
-  if (isOptInPtxResumeIntake(row.intakeCampaignId)) return false;
+  if (isOptInPtxResumeCampaign(row)) return false;
   if (String(row.id || "") === JANDIRA2_VOID_BROADCAST_ID) return true;
   if (String(row.id || "") === JANDIRA2_RERUN_VOID_BROADCAST_ID) return true;
   if (shouldAbortBroadcastOnHeaderMediaFailure(row)) return true;
