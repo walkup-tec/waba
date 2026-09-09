@@ -398,6 +398,7 @@ function unionPortfolioNumbers(...lists) {
                 uiStatus,
                 canActivate: canActivateMetaPhoneNumber(uiStatus, nameNeedsRegister),
                 nameNeedsRegister,
+                wabaId: text(item.wabaId) || text(prev.wabaId) || null,
             });
         }
     }
@@ -542,6 +543,7 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
         photoSyncStatus: null,
         profileSyncStatus: null,
         inboxEnabled: false,
+        wabaId: text(row._portfolio_waba_id) || text(row.waba_id) || null,
     };
 }
 function mapMetaPhoneListToPortfolioNumbers(json, busyPhoneIds = new Set()) {
