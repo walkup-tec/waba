@@ -433,8 +433,8 @@ describe("meta-whatsapp phase 3", () => {
   it("Graph validation marca connected só com WABA e Phone da mesma conta", async () => {
     const repo = new FakeMetaRepo();
     const graphCalls: string[] = [];
-    const graph = async (input: { path: string }) => {
-      graphCalls.push(input.path);
+    const graph = async (input: { path: string; method?: string }) => {
+      graphCalls.push(`${input.method || "GET"}:${input.path}`);
       if (input.path === "waba-1") {
         return { ok: true, status: 200, json: { id: "waba-1" } };
       }
@@ -462,10 +462,10 @@ describe("meta-whatsapp phase 3", () => {
     assert.equal(confirmed.connected, true);
     assert.equal(confirmed.qualityRating, "GREEN");
     assert.equal(confirmed.verifiedName, "Loja");
-    assert.deepEqual(graphCalls, ["waba-1", "phone-1"]);
+    assert.deepEqual(graphCalls, ["GET:waba-1", "GET:phone-1", "POST:phone-1"]);
     const again = await service.confirmFromAuth(authA);
     assert.equal(again.status, "connected");
-    assert.equal(graphCalls.length, 2);
+    assert.equal(graphCalls.length, 3);
   });
 
   it("Graph 401 não marca connected", async () => {

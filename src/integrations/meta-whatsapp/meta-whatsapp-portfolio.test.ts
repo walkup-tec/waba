@@ -25,7 +25,7 @@ import { encryptMetaToken, decryptMetaToken } from "./meta-token-crypto";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
-import { parseDisplayName, parseProfilePhoto, parseProfilePhotoFromBytes, parseVertical, parseDescription, parseEmail, mapWhatsappBusinessProfile, fetchHttpsProfileImage } from "./meta-whatsapp-phone-profile";
+import { parseDisplayName, parseProfilePhoto, parseProfilePhotoFromBytes, parseVertical, parseDescription, parseEmail, mapWhatsappBusinessProfile, fetchHttpsProfileImage, META_WHATSAPP_DEFAULT_DISPLAY_NAME } from "./meta-whatsapp-phone-profile";
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity, writePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 import { applyLocalPhoneIdentities, listPhoneInboxChannels, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
@@ -609,6 +609,7 @@ describe("meta portfolio mapper", () => {
   it("valida nome e foto do perfil do número", () => {
     assert.equal(parseDisplayName("So"), null);
     assert.equal(parseDisplayName("Soma Promotora"), "Soma Promotora");
+    assert.equal(parseDisplayName("Relacionamento e Atendimento"), "Relacionamento e Atendimento");
     assert.equal(parseProfilePhoto({ photoBase64: "abc", photoMime: "image/gif" }), null);
     const png =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -1039,7 +1040,9 @@ describe("meta portfolio service", () => {
     const assets = await service.registerPhoneFromAuth(auth, { phoneNumberId: "phone-1", pin: "482917" });
     assert.equal(posts[0]?.path, "phone-1/register");
     assert.equal(posts[0]?.body?.pin, "482917");
+    assert.equal(posts.some((item) => item.path === "phone-1"), true);
     assert.equal(assets.numbers[0].uiStatus, "ativo");
+    assert.equal(assets.numbers[0].requestedName, META_WHATSAPP_DEFAULT_DISPLAY_NAME);
   });
 
   it("envia a foto do chip à Meta com profile_picture_handle", async () => {
@@ -1474,6 +1477,7 @@ describe("meta portfolio service", () => {
     });
     assert.equal(posts[0]?.path, "phone-walkup/register");
     assert.equal(posts[0]?.token, "token-walkup");
+    assert.equal(posts.some((item) => item.path === "phone-walkup"), true);
   });
 
   it("rejeita PIN inválido sem chamar a Meta", async () => {

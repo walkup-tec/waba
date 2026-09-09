@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_WHATSAPP_VERTICALS = void 0;
+exports.META_WHATSAPP_VERTICALS = exports.META_WHATSAPP_DEFAULT_DISPLAY_NAME = void 0;
 exports.parseDisplayName = parseDisplayName;
 exports.parseProfilePhotoFromBytes = parseProfilePhotoFromBytes;
 exports.parseProfilePhoto = parseProfilePhoto;
@@ -13,6 +13,8 @@ exports.mapWhatsappBusinessProfilePicture = mapWhatsappBusinessProfilePicture;
 exports.fetchHttpsProfileImage = fetchHttpsProfileImage;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png"]);
+/** Nome de exibição padrão de todo número Oficial adicionado a um portfólio. */
+exports.META_WHATSAPP_DEFAULT_DISPLAY_NAME = "Relacionamento e Atendimento";
 exports.META_WHATSAPP_VERTICALS = [
     { value: "OTHER", label: "Outro" },
     { value: "PROF_SERVICES", label: "Serviços profissionais" },

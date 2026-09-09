@@ -5,6 +5,8 @@ import { describe, it } from "node:test";
 
 const html = readFileSync(path.join(__dirname, "../../../index.html"), "utf8");
 const indexSrc = readFileSync(path.join(__dirname, "../../index.ts"), "utf8");
+const connectionSrc = readFileSync(path.join(__dirname, "./meta-whatsapp-connection.service.ts"), "utf8");
+const phoneProfileSrc = readFileSync(path.join(__dirname, "./meta-whatsapp-phone-profile.ts"), "utf8");
 
 describe("Laboratório Conexão: só altera a imagem do número", () => {
   it("o botão Imagem abre o seletor de arquivo e envia a foto, sem modal de perfil", () => {
@@ -22,6 +24,17 @@ describe("Laboratório Conexão: só altera a imagem do número", () => {
     assert.doesNotMatch(html, /id="meta-tp-edit-name"/);
     assert.doesNotMatch(html, /wabaSaveMetaWhatsappNumberProfile/);
     assert.match(indexSrc, /phone-numbers\/profile[\s\S]{0,180}multipart\/form-data/);
+  });
+});
+
+describe("Laboratório Conexão: nome de exibição padrão ao adicionar número", () => {
+  it("não usa o nome da WABA no card e pede Relacionamento e Atendimento", () => {
+    assert.match(html, /META_TP_DEFAULT_DISPLAY_NAME = "Relacionamento e Atendimento"/);
+    assert.match(html, /function metaTpNumberVisibleName\(item\)/);
+    assert.doesNotMatch(html, /function metaTpNumberVisibleName\(item, groupName\)/);
+    assert.match(phoneProfileSrc, /META_WHATSAPP_DEFAULT_DISPLAY_NAME = "Relacionamento e Atendimento"/);
+    assert.match(connectionSrc, /new_display_name: META_WHATSAPP_DEFAULT_DISPLAY_NAME/);
+    assert.match(connectionSrc, /rememberOfficialPhoneDisplayName/);
   });
 });
 

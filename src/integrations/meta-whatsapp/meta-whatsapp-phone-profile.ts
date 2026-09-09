@@ -1,6 +1,9 @@
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png"]);
 
+/** Nome de exibição padrão de todo número Oficial adicionado a um portfólio. */
+export const META_WHATSAPP_DEFAULT_DISPLAY_NAME = "Relacionamento e Atendimento";
+
 export const META_WHATSAPP_VERTICALS = [
   { value: "OTHER", label: "Outro" },
   { value: "PROF_SERVICES", label: "Serviços profissionais" },

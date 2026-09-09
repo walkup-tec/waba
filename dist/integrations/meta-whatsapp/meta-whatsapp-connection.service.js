@@ -747,6 +747,40 @@ function pickConnectionsForWebhookSubscribe(open, opts) {
     }
     return out;
 }
+function rememberOfficialPhoneDisplayName(tenantId, phoneNumberId) {
+    const id = String(phoneNumberId || "").trim();
+    if (!id)
+        return;
+    try {
+        (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenantId, id, {
+            name: meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME,
+            channelName: meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME,
+        });
+    }
+    catch {
+        // Identidade local não pode abortar o cadastro do número.
+    }
+}
+async function requestOfficialPhoneDisplayName(graph, input) {
+    rememberOfficialPhoneDisplayName(input.tenantId, input.phoneNumberId);
+    if ((0, meta_whatsapp_portfolio_map_1.namesEqual)(input.currentVerifiedName, meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME))
+        return;
+    const renamed = await graph({
+        token: input.token,
+        method: "POST",
+        path: input.phoneNumberId,
+        query: { new_display_name: meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME },
+    });
+    if (!renamed.ok) {
+        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-default-name-failed", {
+            tenantId: input.tenantId,
+            status: renamed.status,
+            graphCode: renamed.graphCode,
+        });
+        return;
+    }
+    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-default-name-requested", { tenantId: input.tenantId });
+}
 class MetaWhatsappConnectionService {
     constructor(repository = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), oauth = { exchangeEmbeddedSignupCode: meta_whatsapp_oauth_1.exchangeEmbeddedSignupCode }, graph = (input) => (0, meta_whatsapp_graph_client_1.callMetaGraphJson)(input), decrypt = meta_token_crypto_1.decryptMetaToken, uploadImage = meta_whatsapp_resumable_upload_1.uploadMetaResumableImage, setPagePicture = meta_whatsapp_resumable_upload_1.publishMetaPageProfilePicture, webhookSubscriptions = new meta_whatsapp_webhook_subscription_service_1.MetaWhatsappWebhookSubscriptionService()) {
         this.repository = repository;
@@ -897,6 +931,9 @@ class MetaWhatsappConnectionService {
             if (typeof repo.disconnectEmptyPendingTokens === "function") {
                 await repo.disconnectEmptyPendingTokens(tenant.tenantId, tenant.ownerEmail, row.id);
             }
+            if (phoneNumberId) {
+                rememberOfficialPhoneDisplayName(tenant.tenantId, phoneNumberId);
+            }
             return toMetaWhatsappPublicConnection(row);
         }
         catch {
@@ -989,6 +1026,17 @@ class MetaWhatsappConnectionService {
             hasQuality: Boolean(connected.qualityRating),
             status: connected.status,
         });
+        try {
+            await requestOfficialPhoneDisplayName(this.graph, {
+                token,
+                tenantId: tenant.tenantId,
+                phoneNumberId,
+                currentVerifiedName: connected.verifiedName,
+            });
+        }
+        catch {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-default-name-skip", { tenantId: tenant.tenantId });
+        }
         return toMetaWhatsappPublicConnection(connected);
     }
     async listPortfolioAssets(auth, opts) {
@@ -1089,6 +1137,17 @@ class MetaWhatsappConnectionService {
             catch {
                 (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-register-confirm-skip", { tenantId: tenant.tenantId });
             }
+        }
+        try {
+            await requestOfficialPhoneDisplayName(this.graph, {
+                token,
+                tenantId: tenant.tenantId,
+                phoneNumberId,
+                currentVerifiedName: open.verifiedName,
+            });
+        }
+        catch {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-default-name-skip", { tenantId: tenant.tenantId });
         }
         return this.listPortfolioAssets(auth);
     }

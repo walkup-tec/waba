@@ -38,6 +38,7 @@ import {
   resolvePhoneNameSync,
   resolveMetaPhoneUiStatus,
   canActivateMetaPhoneNumber,
+  namesEqual,
   graphPhotoDownloadUrl,
   graphPhotoSourceKey,
   safePublicPhotoUrl,
@@ -79,6 +80,7 @@ import {
   parseDisplayName,
   parseProfilePhoto,
   parseProfilePhotoFromBytes,
+  META_WHATSAPP_DEFAULT_DISPLAY_NAME,
   parseVertical,
   parseDescription,
   parseAddress,
@@ -900,6 +902,42 @@ export function pickConnectionsForWebhookSubscribe(
   return out;
 }
 
+function rememberOfficialPhoneDisplayName(tenantId: string, phoneNumberId: string): void {
+  const id = String(phoneNumberId || "").trim();
+  if (!id) return;
+  try {
+    writePhoneIdentity(tenantId, id, {
+      name: META_WHATSAPP_DEFAULT_DISPLAY_NAME,
+      channelName: META_WHATSAPP_DEFAULT_DISPLAY_NAME,
+    });
+  } catch {
+    // Identidade local não pode abortar o cadastro do número.
+  }
+}
+
+async function requestOfficialPhoneDisplayName(
+  graph: MetaConnectionGraphCaller,
+  input: { token: string; tenantId: string; phoneNumberId: string; currentVerifiedName?: string | null },
+): Promise<void> {
+  rememberOfficialPhoneDisplayName(input.tenantId, input.phoneNumberId);
+  if (namesEqual(input.currentVerifiedName, META_WHATSAPP_DEFAULT_DISPLAY_NAME)) return;
+  const renamed = await graph({
+    token: input.token,
+    method: "POST",
+    path: input.phoneNumberId,
+    query: { new_display_name: META_WHATSAPP_DEFAULT_DISPLAY_NAME },
+  });
+  if (!renamed.ok) {
+    logMetaWhatsappSafe("phone-default-name-failed", {
+      tenantId: input.tenantId,
+      status: renamed.status,
+      graphCode: renamed.graphCode,
+    });
+    return;
+  }
+  logMetaWhatsappSafe("phone-default-name-requested", { tenantId: input.tenantId });
+}
+
 export class MetaWhatsappConnectionService {
   constructor(
     private readonly repository = new MetaWhatsappConnectionRepository(),
@@ -1082,6 +1120,9 @@ export class MetaWhatsappConnectionService {
       if (typeof repo.disconnectEmptyPendingTokens === "function") {
         await repo.disconnectEmptyPendingTokens(tenant.tenantId, tenant.ownerEmail, row.id);
       }
+      if (phoneNumberId) {
+        rememberOfficialPhoneDisplayName(tenant.tenantId, phoneNumberId);
+      }
       return toMetaWhatsappPublicConnection(row);
     } catch {
       throw new MetaWhatsappError("persist_failed");
@@ -1172,6 +1213,16 @@ export class MetaWhatsappConnectionService {
       hasQuality: Boolean(connected.qualityRating),
       status: connected.status,
     });
+    try {
+      await requestOfficialPhoneDisplayName(this.graph, {
+        token,
+        tenantId: tenant.tenantId,
+        phoneNumberId,
+        currentVerifiedName: connected.verifiedName,
+      });
+    } catch {
+      logMetaWhatsappSafe("phone-default-name-skip", { tenantId: tenant.tenantId });
+    }
     return toMetaWhatsappPublicConnection(connected);
   }
 
@@ -1289,6 +1340,17 @@ export class MetaWhatsappConnectionService {
       } catch {
         logMetaWhatsappSafe("phone-register-confirm-skip", { tenantId: tenant.tenantId });
       }
+    }
+
+    try {
+      await requestOfficialPhoneDisplayName(this.graph, {
+        token,
+        tenantId: tenant.tenantId,
+        phoneNumberId,
+        currentVerifiedName: open.verifiedName,
+      });
+    } catch {
+      logMetaWhatsappSafe("phone-default-name-skip", { tenantId: tenant.tenantId });
     }
 
     return this.listPortfolioAssets(auth);
