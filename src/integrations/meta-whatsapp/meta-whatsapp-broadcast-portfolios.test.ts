@@ -16,5 +16,7 @@ describe("Disparo Cloud: portfólios, WABAs, números e limite diário", () => {
     assert.match(html, /não pode passar o limite diário/);
     assert.doesNotMatch(html, /id="meta-tpl-broadcast-portfolio"/);
     assert.match(html, /Marque os portfólios para ver as contas WABA/);
+    assert.match(html, /function metaTplBroadcastRefreshWabasFromMeta/);
+    assert.match(html, /templates\/wabas\?connectionId=/);
   });
 });

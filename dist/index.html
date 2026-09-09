@@ -38325,6 +38325,7 @@
           return all.concat(Array.isArray(item.numbers) ? item.numbers : []);
         }, []);
         metaTpRenderPortfolioCards(bundles, selectedBiz === "—" ? "" : selectedBiz);
+        if (typeof metaTplBroadcastFillWabas === "function") metaTplBroadcastFillWabas();
         if (typeof metaTplBroadcastFillNumbers === "function") metaTplBroadcastFillNumbers();
       }
 
@@ -39053,6 +39054,18 @@
         });
       }
 
+      function metaTplMapGraphWabaItems(payload) {
+        const wabas = Array.isArray(payload && payload.wabas) ? payload.wabas : [];
+        return wabas
+          .map(function (row) {
+            const id = String((row && row.id) || "").trim();
+            if (!id) return null;
+            const name = String((row && row.name) || "").trim();
+            return { id: id, label: name && name !== id ? name + " · " + id : name || "WABA " + id };
+          })
+          .filter(Boolean);
+      }
+
       function metaTplLabFillWabaSelect(groupsInput) {
         const root = document.getElementById("meta-tpl-lab-wabas");
         if (!root) return;
@@ -39126,14 +39139,8 @@
             const payload = await metaTplLabFetchJson(
               "/integrations/meta/whatsapp/templates/wabas?connectionId=" + encodeURIComponent(connectionId),
             );
-            const wabas = Array.isArray(payload.wabas) ? payload.wabas : [];
-            if (wabas.length) {
-              items = wabas.map(function (row) {
-                const id = String((row && row.id) || "").trim();
-                const name = String((row && row.name) || "").trim();
-                return { id: id, label: name && name !== id ? name + " · " + id : name || "WABA " + id };
-              });
-            }
+            const mapped = metaTplMapGraphWabaItems(payload);
+            if (mapped.length) items = mapped;
           } catch (_error) {
             /* mantém a lista local dos chips */
           }
@@ -41037,7 +41044,7 @@
         return String(connectionId || "").trim() + ":" + String(wabaId || "").trim();
       }
 
-      function metaTplBroadcastFillWabas() {
+      function metaTplBroadcastFillWabas(groupsInput) {
         const root = metaTplBroadcastEl("meta-tpl-broadcast-wabas");
         if (!root) return;
         const connectionIds = metaTplBroadcastSelectedConnectionIds();
@@ -41051,7 +41058,9 @@
           return;
         }
         const groups =
-          typeof metaTplLabWabaGroupsFromLocal === "function"
+          Array.isArray(groupsInput) && groupsInput.length
+            ? groupsInput
+            : typeof metaTplLabWabaGroupsFromLocal === "function"
             ? metaTplLabWabaGroupsFromLocal(connectionIds)
             : connectionIds.map(function (connectionId) {
                 const portfolio = metaTplBroadcastPortfolioByConnectionId(connectionId);
@@ -41113,6 +41122,49 @@
           .join("");
       }
 
+      async function metaTplBroadcastRefreshWabasFromMeta() {
+        const connectionIds = metaTplBroadcastSelectedConnectionIds();
+        const root = metaTplBroadcastEl("meta-tpl-broadcast-wabas");
+        if (!connectionIds.length || !root) return;
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) return;
+        if (typeof isMetaTemplateAiUiPreview === "function" && isMetaTemplateAiUiPreview()) return;
+        const groups = [];
+        for (let i = 0; i < connectionIds.length; i += 1) {
+          const connectionId = connectionIds[i];
+          const portfolio =
+            typeof metaTplLabPortfolioByConnectionId === "function"
+              ? metaTplLabPortfolioByConnectionId(connectionId)
+              : metaTplBroadcastPortfolioByConnectionId(connectionId);
+          const localItems =
+            typeof metaTplLabWabasFromPortfolio === "function"
+              ? metaTplLabWabasFromPortfolio(portfolio)
+              : [];
+          let items = localItems;
+          try {
+            const payload = await metaTplLabFetchJson(
+              "/integrations/meta/whatsapp/templates/wabas?connectionId=" + encodeURIComponent(connectionId),
+            );
+            const mapped =
+              typeof metaTplMapGraphWabaItems === "function"
+                ? metaTplMapGraphWabaItems(payload)
+                : [];
+            if (mapped.length) items = mapped;
+          } catch (_error) {
+            /* mantém a lista local dos chips */
+          }
+          groups.push({
+            connectionId: connectionId,
+            label:
+              typeof metaTpPortfolioTitle === "function"
+                ? metaTpPortfolioTitle(portfolio || { connectionId: connectionId })
+                : String((portfolio && portfolio.name) || "Portfólio"),
+            items: items,
+          });
+        }
+        metaTplBroadcastFillWabas(groups);
+        metaTplBroadcastFillNumbers();
+      }
+
       let metaTplBroadcastPortfolioBound = false;
       function metaTplBroadcastBindWizardChange() {
         if (metaTplBroadcastPortfolioBound) return;
@@ -41121,6 +41173,7 @@
         if (portfolios) {
           portfolios.addEventListener("change", function () {
             metaTplBroadcastFillWabas();
+            void metaTplBroadcastRefreshWabasFromMeta();
             metaTplBroadcastFillTemplates();
             metaTplBroadcastFillNumbers();
             void metaTplBroadcastLoadInspect();
@@ -41170,6 +41223,7 @@
           .join("");
         metaTplBroadcastBindWizardChange();
         metaTplBroadcastFillWabas();
+        void metaTplBroadcastRefreshWabasFromMeta();
         metaTplBroadcastFillTemplates();
         metaTplBroadcastFillNumbers();
         void metaTplBroadcastLoadLinkableCampaigns();

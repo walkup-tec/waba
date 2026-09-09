@@ -448,7 +448,7 @@ async function hydrateOpenConnection(
       continue;
     }
     anyPhonesOk = true;
-    pushPhones(phones.json.data);
+    pushPhones(stampPhoneRowsWithWabaId(phones.json.data, wid));
   }
   if (!anyPhonesOk) {
     logMetaWhatsappSafe("portfolio-list-partial", {
@@ -564,7 +564,7 @@ function extractWabasAndPhonesFromBusinessNode(node: unknown): {
           ? (phoneBucket as { data?: unknown }).data
           : null;
       if (Array.isArray(phoneData)) {
-        for (const phone of phoneData) phones.push(phone);
+        for (const phone of stampPhoneRowsWithWabaId(phoneData, wid)) phones.push(phone);
       }
     }
   }
@@ -698,6 +698,16 @@ async function listWabaPhoneNumbersPagedWithFields(
     after = nextAfter;
   }
   return { ok: true, json: { data } };
+}
+
+/** Graph `/{wabaId}/phone_numbers` não devolve waba_id; o Disparo Cloud agrupa pelo campo no chip. */
+function stampPhoneRowsWithWabaId(rows: unknown[], wabaId: string): unknown[] {
+  const wid = String(wabaId || "").trim();
+  if (!wid) return rows;
+  return rows.map((row) => {
+    if (!row || typeof row !== "object") return row;
+    return { ...(row as Record<string, unknown>), _portfolio_waba_id: wid };
+  });
 }
 
 /** Lista todos os chips do WABA (paginação Graph). Sem isso, só a 1ª página aparecia. */

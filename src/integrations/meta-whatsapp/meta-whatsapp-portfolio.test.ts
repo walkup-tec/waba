@@ -595,6 +595,17 @@ describe("meta portfolio mapper", () => {
     assert.equal(rows[1].dispatchStatus, "em_disparo");
   });
 
+  it("preserva o WABA do chip quando a Graph não manda waba_id", () => {
+    const rows = mapMetaPhoneListToPortfolioNumbers({
+      data: [
+        { id: "phone-a", status: "CONNECTED", _portfolio_waba_id: "waba-a" },
+        { id: "phone-b", status: "CONNECTED", whatsapp_business_account: { id: "waba-b" } },
+      ],
+    });
+    assert.equal(rows[0].wabaId, "waba-a");
+    assert.equal(rows[1].wabaId, "waba-b");
+  });
+
   it("valida nome e foto do perfil do número", () => {
     assert.equal(parseDisplayName("So"), null);
     assert.equal(parseDisplayName("Soma Promotora"), "Soma Promotora");
@@ -1934,6 +1945,11 @@ describe("meta portfolio service", () => {
       assert.ok((card?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("92836-1199")));
       assert.ok((card?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("95213-1900")));
       assert.ok((card?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("92368-3286")));
+      const wabaIds = new Set((card?.numbers || []).map((item) => String(item.wabaId || "").trim()).filter(Boolean));
+      assert.equal(wabaIds.size, 3);
+      assert.ok(wabaIds.has("1056945243858578"));
+      assert.ok(wabaIds.has("waba-sp-quantum"));
+      assert.ok(wabaIds.has("waba-rj-quantum"));
     } finally {
       if (previousAppId === undefined) delete process.env.META_APP_ID;
       else process.env.META_APP_ID = previousAppId;

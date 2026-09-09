@@ -11,6 +11,7 @@ describe("criação de template: portfólios e depois WABAs", () => {
     assert.match(html, /id="meta-tpl-lab-wabas"/);
     assert.match(html, /Marque os portfólios para ver as contas WABA/);
     assert.match(html, /function metaTplLabSelectedWabaTargets/);
+    assert.match(html, /function metaTplMapGraphWabaItems/);
     assert.match(html, /wabaTargets,/);
     assert.doesNotMatch(html, /id="meta-tpl-lab-portfolio"/);
     assert.doesNotMatch(html, /cadastra o template em cada WABA/);

@@ -545,7 +545,10 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
         photoSyncStatus: null,
         profileSyncStatus: null,
         inboxEnabled: false,
-        wabaId: text(row._portfolio_waba_id) || text(row.waba_id) || null,
+        wabaId: text(row._portfolio_waba_id) ||
+            text(row.waba_id) ||
+            text(asRecord(row.whatsapp_business_account).id) ||
+            null,
         messagingLimit: text(row.messaging_limit_tier) || text(row.messaging_limit) || null,
     };
 }
