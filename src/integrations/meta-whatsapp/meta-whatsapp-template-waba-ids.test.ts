@@ -4,6 +4,7 @@ import type { MetaGraphJsonResult } from "./meta-whatsapp-graph.client";
 import {
   discoverTemplateWabaIds,
   isProbablyMessageTemplateRow,
+  wabaIdentityMatchesBusiness,
   wabaIdsFromBusinessEdgeJson,
   wabaIdsFromDebugTokenJson,
 } from "./meta-whatsapp-template-waba-ids";
@@ -71,6 +72,30 @@ describe("template waba ids", () => {
     );
   });
 
+  it("só aceita WABA cujo owner ou on_behalf é o BM marcado", () => {
+    assert.equal(
+      wabaIdentityMatchesBusiness(
+        { id: "4653699361527400", owner_business_info: { id: "bm-drax-01" } },
+        "bm-drax-2000",
+      ),
+      false,
+    );
+    assert.equal(
+      wabaIdentityMatchesBusiness(
+        { id: "waba-01", owner_business_info: { id: "bm-drax-2000" } },
+        "bm-drax-2000",
+      ),
+      true,
+    );
+    assert.equal(
+      wabaIdentityMatchesBusiness(
+        { id: "waba-client", on_behalf_of_business_info: { id: "bm-drax-2000" } },
+        "bm-drax-2000",
+      ),
+      true,
+    );
+  });
+
   describe("discoverTemplateWabaIds", () => {
     const previousId = process.env.META_APP_ID;
     const previousSecret = process.env.META_APP_SECRET;
@@ -102,6 +127,13 @@ describe("template waba ids", () => {
                   { scope: "whatsapp_business_management", target_ids: ["waba-a", "waba-b"] },
                 ],
               },
+            });
+          }
+          if (input.path === "waba-a" || input.path === "waba-b") {
+            return graphOk({
+              id: input.path,
+              name: input.path === "waba-a" ? "Conta A" : "Conta B",
+              owner_business_info: { id: "bm-1" },
             });
           }
           return graphOk({ data: [] });
@@ -154,6 +186,69 @@ describe("template waba ids", () => {
       });
       assert.deepEqual(ids.sort(), ["1603712454491063", "2283911612192961", "waba-jailton"].sort());
       assert.equal(ids.includes("4653699361527400"), false);
+    });
+
+    it("com BM sem edges, debug_token não traz BTM/Nesio/Drax 01", async () => {
+      const ids = await discoverTemplateWabaIds({
+        token: "tok",
+        connection: { wabaId: "1603712454491063", metaBusinessId: "bm-drax-2000" },
+        graph: async (input) => {
+          if (input.path === "bm-drax-2000") {
+            return graphOk({ id: "bm-drax-2000", name: "Drax Sistemas 2000" });
+          }
+          if (
+            input.path === "bm-drax-2000/owned_whatsapp_business_accounts" ||
+            input.path === "bm-drax-2000/client_whatsapp_business_accounts"
+          ) {
+            return { ...graphOk({ error: { message: "permissions" } }), ok: false, status: 403 };
+          }
+          if (input.path === "debug_token") {
+            return graphOk({
+              data: {
+                granular_scopes: [
+                  {
+                    scope: "whatsapp_business_management",
+                    target_ids: [
+                      "1603712454491063",
+                      "2283911612192961",
+                      "1588398522658537",
+                      "waba-jailton",
+                      "4653699361527400",
+                      "1566864861033771",
+                      "1085817753933768",
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+          const owners: Record<string, { name: string; bm: string }> = {
+            "1603712454491063": { name: "Conta WABA 01", bm: "bm-drax-2000" },
+            "2283911612192961": { name: "Conta WABA 02", bm: "bm-drax-2000" },
+            "1588398522658537": { name: "Conta WABA 03", bm: "bm-drax-2000" },
+            "waba-jailton": { name: "52.685.982 Jailton Lucas Ferreira dos Reis", bm: "bm-drax-2000" },
+            "4653699361527400": { name: "Drax Sistemas 01", bm: "bm-drax-01" },
+            "1566864861033771": { name: "BTM Soluções", bm: "bm-btm" },
+            "1085817753933768": { name: "Deputado Nesio", bm: "bm-nesio" },
+          };
+          const row = owners[input.path];
+          if (row) {
+            return graphOk({
+              id: input.path,
+              name: row.name,
+              owner_business_info: { id: row.bm },
+            });
+          }
+          return graphOk({ data: [] });
+        },
+      });
+      assert.ok(ids.includes("1603712454491063"));
+      assert.ok(ids.includes("2283911612192961"));
+      assert.ok(ids.includes("1588398522658537"));
+      assert.ok(ids.includes("waba-jailton"));
+      assert.equal(ids.includes("4653699361527400"), false);
+      assert.equal(ids.includes("1566864861033771"), false);
+      assert.equal(ids.includes("1085817753933768"), false);
     });
   });
 });

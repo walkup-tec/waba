@@ -38326,6 +38326,7 @@
         }, []);
         metaTpRenderPortfolioCards(bundles, selectedBiz === "—" ? "" : selectedBiz);
         if (typeof metaTplBroadcastFillWabas === "function") metaTplBroadcastFillWabas();
+        if (typeof metaTplBroadcastRefreshWabasFromMeta === "function") void metaTplBroadcastRefreshWabasFromMeta();
         if (typeof metaTplBroadcastFillNumbers === "function") metaTplBroadcastFillNumbers();
       }
 
@@ -39041,6 +39042,18 @@
             label: hint ? hint + " · " + row.id : "WABA " + row.id,
           };
         });
+      }
+
+      function metaTplPrimaryWabasFromPortfolio(portfolio) {
+        const id = String((portfolio && portfolio.wabaId) || "").trim();
+        if (!id) return [];
+        const name = String((portfolio && portfolio.name) || "").trim();
+        return [
+          {
+            id: id,
+            label: name && name !== id ? name + " · " + id : "WABA " + id,
+          },
+        ];
       }
 
       function metaTplLabWabaGroupsFromLocal(connectionIds) {
@@ -41057,25 +41070,34 @@
           root.innerHTML = '<span class="muted">Marque os portfólios para ver as contas WABA.</span>';
           return;
         }
+        const preview =
+          (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) ||
+          (typeof isMetaTemplateAiUiPreview === "function" && isMetaTemplateAiUiPreview());
         const groups =
           Array.isArray(groupsInput) && groupsInput.length
             ? groupsInput
-            : typeof metaTplLabWabaGroupsFromLocal === "function"
-            ? metaTplLabWabaGroupsFromLocal(connectionIds)
-            : connectionIds.map(function (connectionId) {
-                const portfolio = metaTplBroadcastPortfolioByConnectionId(connectionId);
-                return {
-                  connectionId: connectionId,
-                  label:
-                    typeof metaTpPortfolioTitle === "function"
-                      ? metaTpPortfolioTitle(portfolio || { connectionId: connectionId })
-                      : String((portfolio && portfolio.name) || "Portfólio"),
-                  items:
-                    typeof metaTplLabWabasFromPortfolio === "function"
-                      ? metaTplLabWabasFromPortfolio(portfolio)
-                      : [],
-                };
-              });
+            : preview
+            ? typeof metaTplLabWabaGroupsFromLocal === "function"
+              ? metaTplLabWabaGroupsFromLocal(connectionIds)
+              : connectionIds.map(function (connectionId) {
+                  const portfolio = metaTplBroadcastPortfolioByConnectionId(connectionId);
+                  return {
+                    connectionId: connectionId,
+                    label:
+                      typeof metaTpPortfolioTitle === "function"
+                        ? metaTpPortfolioTitle(portfolio || { connectionId: connectionId })
+                        : String((portfolio && portfolio.name) || "Portfólio"),
+                    items:
+                      typeof metaTplLabWabasFromPortfolio === "function"
+                        ? metaTplLabWabasFromPortfolio(portfolio)
+                        : [],
+                  };
+                })
+            : null;
+        if (!groups) {
+          root.innerHTML = '<span class="muted">Carregando contas WABA deste portfólio…</span>';
+          return;
+        }
         const totalItems = groups.reduce(function (sum, group) {
           return sum + ((group && group.items) || []).length;
         }, 0);
@@ -41136,8 +41158,8 @@
               ? metaTplLabPortfolioByConnectionId(connectionId)
               : metaTplBroadcastPortfolioByConnectionId(connectionId);
           const localItems =
-            typeof metaTplLabWabasFromPortfolio === "function"
-              ? metaTplLabWabasFromPortfolio(portfolio)
+            typeof metaTplPrimaryWabasFromPortfolio === "function"
+              ? metaTplPrimaryWabasFromPortfolio(portfolio)
               : [];
           let items = localItems;
           try {
@@ -41150,7 +41172,7 @@
                 : [];
             if (mapped.length) items = mapped;
           } catch (_error) {
-            /* mantém a lista local dos chips */
+            /* sem a Graph, só a WABA da conexão — nunca o dump do token */
           }
           groups.push({
             connectionId: connectionId,

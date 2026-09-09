@@ -13,6 +13,7 @@ const meta_whatsapp_connection_repository_1 = require("./meta-whatsapp-connectio
 const meta_whatsapp_tenant_1 = require("./meta-whatsapp-tenant");
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
+const meta_whatsapp_template_waba_ids_1 = require("./meta-whatsapp-template-waba-ids");
 const meta_whatsapp_portfolio_graph_1 = require("./meta-whatsapp-portfolio-graph");
 const meta_whatsapp_portfolio_identity_store_1 = require("./meta-whatsapp-portfolio-identity.store");
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
@@ -302,22 +303,37 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     for (const id of fromThisBm)
         wabaIds.add(id);
     pushPhones(nestedFromCustomer.phones);
+    const nestedFromMe = await collectNestedPhonesFromMeBusinesses(g, token, businessId);
+    for (const id of nestedFromMe.wabaIds) {
+        fromThisBm.add(id);
+        wabaIds.add(id);
+    }
+    pushPhones(nestedFromMe.phones);
     const debugTargets = await listDebugTokenWhatsappTargets(g, token);
+    pushPhones(await fetchPhoneNodes(g, token, debugTargets.phoneIds));
     if (fromThisBm.size) {
         for (const id of debugTargets.wabaIds) {
             if (fromThisBm.has(id))
                 wabaIds.add(id);
         }
     }
+    else if (businessId) {
+        const owned = await (0, meta_whatsapp_template_waba_ids_1.filterWabaIdsOwnedByBusiness)({
+            token,
+            businessId,
+            ids: debugTargets.wabaIds,
+            graph: (input) => g({
+                ...input,
+                method: input.method === "DELETE" ? "GET" : input.method,
+            }),
+        });
+        for (const row of owned)
+            wabaIds.add(row.id);
+    }
     else {
         for (const id of debugTargets.wabaIds)
             wabaIds.add(id);
-        pushPhones(await fetchPhoneNodes(g, token, debugTargets.phoneIds));
     }
-    const nestedFromMe = await collectNestedPhonesFromMeBusinesses(g, token, businessId);
-    for (const id of nestedFromMe.wabaIds)
-        wabaIds.add(id);
-    pushPhones(nestedFromMe.phones);
     let anyPhonesOk = phoneRows.length > 0;
     let lastPhoneStatus = 0;
     const extraWabas = [...wabaIds].filter((id) => id && id !== primaryWabaId);

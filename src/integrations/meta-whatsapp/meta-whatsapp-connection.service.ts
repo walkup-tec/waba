@@ -45,6 +45,7 @@ import {
   META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT,
   META_PHONE_NAME_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
+import { filterWabaIdsOwnedByBusiness } from "./meta-whatsapp-template-waba-ids";
 import {
   fetchWabaOwner,
   fetchBusinessFromGraph,
@@ -406,19 +407,34 @@ async function hydrateOpenConnection(
   for (const id of fromThisBm) wabaIds.add(id);
   pushPhones(nestedFromCustomer.phones);
 
+  const nestedFromMe = await collectNestedPhonesFromMeBusinesses(g, token, businessId);
+  for (const id of nestedFromMe.wabaIds) {
+    fromThisBm.add(id);
+    wabaIds.add(id);
+  }
+  pushPhones(nestedFromMe.phones);
+
   const debugTargets = await listDebugTokenWhatsappTargets(g, token);
+  pushPhones(await fetchPhoneNodes(g, token, debugTargets.phoneIds));
   if (fromThisBm.size) {
     for (const id of debugTargets.wabaIds) {
       if (fromThisBm.has(id)) wabaIds.add(id);
     }
+  } else if (businessId) {
+    const owned = await filterWabaIdsOwnedByBusiness({
+      token,
+      businessId,
+      ids: debugTargets.wabaIds,
+      graph: (input) =>
+        g({
+          ...input,
+          method: input.method === "DELETE" ? "GET" : input.method,
+        }),
+    });
+    for (const row of owned) wabaIds.add(row.id);
   } else {
     for (const id of debugTargets.wabaIds) wabaIds.add(id);
-    pushPhones(await fetchPhoneNodes(g, token, debugTargets.phoneIds));
   }
-
-  const nestedFromMe = await collectNestedPhonesFromMeBusinesses(g, token, businessId);
-  for (const id of nestedFromMe.wabaIds) wabaIds.add(id);
-  pushPhones(nestedFromMe.phones);
 
   let anyPhonesOk = phoneRows.length > 0;
   let lastPhoneStatus = 0;
