@@ -102,6 +102,7 @@ const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
 const waba_public_base_url_1 = require("./lib/waba-public-base-url");
 const waba_system_user_service_1 = require("./users/waba-system-user.service");
 const waba_campaign_intake_routes_1 = require("./disparos/waba-campaign-intake.routes");
+const waba_campaign_intake_clone_1 = require("./disparos/waba-campaign-intake-clone");
 const waba_dispatches_api_kind_1 = require("./disparos/waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./disparos/waba-campaign-spreadsheet.util");
 const waba_campaign_messenger_images_service_1 = require("./disparos/waba-campaign-messenger-images.service");
@@ -14295,6 +14296,8 @@ const httpServer = app.listen(PORT, () => {
         (0, uptime_monitor_service_1.startUptimeMonitorScheduler)();
         (0, waba_campaign_supplier_assignment_service_1.startCampaignSupplierAssignmentScheduler)();
         (0, vps_cpu_monitor_service_1.startVpsCpuLocalSampler)();
+        const optInPtxClone = (0, waba_campaign_intake_clone_1.runOptInPtx1000CloneOneshot)();
+        console.log(`[campanhas] clone Opt in PTX 1000: ${optInPtxClone.message}`);
     })();
 });
 (0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer, async () => {
