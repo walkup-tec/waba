@@ -395,6 +395,18 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  app.get("/integrations/meta/whatsapp/templates/wabas", async (req: Request, res: Response) => {
+    try {
+      const result = await templateService.listWabasFromAuth(
+        resolveWabaRequestAuth(req),
+        String(req.query.connectionId || req.query.connection_id || ""),
+      );
+      return sendPublic(res, 200, { ok: true, ...result });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
   app.post("/integrations/meta/whatsapp/templates", async (req: Request, res: Response) => {
     try {
       warnClientTenantClaim(req);
