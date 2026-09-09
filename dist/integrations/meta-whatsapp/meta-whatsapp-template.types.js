@@ -39,6 +39,7 @@ function toPublicTemplate(row, portfolioName) {
         lastSyncedAt: row.lastSyncedAt,
         connectionId: row.connectionId,
         portfolioName: name || null,
+        wabaId: String(row.wabaId || "").trim() || null,
         headerPreviewUrl,
         headerReady: Boolean(headerPreviewUrl),
     };
