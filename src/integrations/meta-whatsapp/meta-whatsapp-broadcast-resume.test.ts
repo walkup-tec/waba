@@ -84,4 +84,50 @@ describe("resume de Disparo Cloud órfão pós-Redeploy", () => {
     assert.ok(stale.includes("camp-done-ish"));
     assert.equal(finalizeStaleRunningBroadcast("camp-done-ish")?.status, "done");
   });
+
+  it("reabre a Opt in PTX failed com fila e não reenvia os já sent", async () => {
+    process.chdir(dataRoot);
+    const { OPT_IN_PTX_RESUME_INTAKE_ID } = await import("./meta-whatsapp-broadcast-void");
+    const {
+      listResumableOrphanedBroadcasts,
+      reopenOptInPtxBroadcastToContinue,
+      saveBroadcastCampaign,
+    } = await import("./meta-whatsapp-broadcast.store");
+
+    saveBroadcastCampaign(
+      base({
+        id: "opt-in-ptx-broadcast",
+        intakeCampaignId: OPT_IN_PTX_RESUME_INTAKE_ID,
+        status: "failed",
+        voidedAt: "2026-09-07T18:00:00.000Z",
+        sendFinishedAt: "2026-09-07T18:00:00.000Z",
+        sent: 1980,
+        total: 2996,
+        leads: [
+          { waId: "5511999000001", status: "sent", metaStatus: "accepted" },
+          { waId: "5511999000002", status: "failed", errorCode: "4" },
+          { waId: "5511999000003", status: "queued" },
+          { waId: "5511999000004", status: "queued" },
+        ],
+      }),
+    );
+
+    const reopened = reopenOptInPtxBroadcastToContinue();
+    assert.equal(reopened?.id, "opt-in-ptx-broadcast");
+    assert.equal(reopened?.status, "running");
+    assert.equal(reopened?.voidedAt, undefined);
+    assert.equal(reopened?.sendFinishedAt, undefined);
+    assert.equal(reopened?.sent, 1980);
+    assert.equal(
+      (reopened?.leads || []).filter((lead) => lead.status === "queued").length,
+      2,
+    );
+    assert.equal(
+      (reopened?.leads || []).filter((lead) => lead.status === "sent").length,
+      1,
+    );
+
+    const resumable = listResumableOrphanedBroadcasts().map((row) => row.id);
+    assert.ok(resumable.includes("opt-in-ptx-broadcast"));
+  });
 });
