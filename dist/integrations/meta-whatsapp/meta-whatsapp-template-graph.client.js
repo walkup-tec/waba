@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapGraphTemplate = mapGraphTemplate;
 exports.listWabaMessageTemplates = listWabaMessageTemplates;
+exports.findWabaMessageTemplatesByName = findWabaMessageTemplatesByName;
 exports.deleteWabaMessageTemplate = deleteWabaMessageTemplate;
 exports.createWabaMessageTemplate = createWabaMessageTemplate;
 const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
@@ -63,6 +64,32 @@ async function listWabaMessageTemplates(input) {
             complete = false;
     }
     return { ok: true, items, pages, complete };
+}
+async function findWabaMessageTemplatesByName(input) {
+    const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
+    const name = String(input.name || "").trim();
+    const wabaId = String(input.wabaId || "").trim();
+    if (!name || !wabaId)
+        return { ok: true, items: [] };
+    const result = await graph({
+        token: input.token,
+        method: "GET",
+        path: `${wabaId}/message_templates`,
+        query: {
+            name,
+            fields: LIST_FIELDS,
+            limit: "30",
+        },
+        maxAttempts: input.maxAttempts ?? 1,
+        timeoutMs: input.timeoutMs ?? 8000,
+    });
+    if (!result.ok)
+        return { ok: false, result };
+    const data = Array.isArray(result.json?.data) ? result.json.data : [];
+    return {
+        ok: true,
+        items: data.map((row) => mapGraphTemplate(row)),
+    };
 }
 async function deleteWabaMessageTemplate(input) {
     const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
