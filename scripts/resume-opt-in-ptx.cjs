@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-/** Força resume do lote paulo_teix_v2_2 (18c8340d) no JSON do Disparo Cloud. */
+/**
+ * Força resume do lote paulo_teix_v2_2 (18c8340d) no JSON do Disparo Cloud.
+ * O watchdog NÃO reabre mais status=failed sozinho (pausa do operacional permanece).
+ * Só rode depois de 1 envio Graph ok no chip (senão queima a fila com 132001).
+ */
 const fs = require("fs");
 const path = require("path");
 
