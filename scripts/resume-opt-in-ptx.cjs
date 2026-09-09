@@ -1,10 +1,14 @@
 #!/usr/bin/env node
-/** Força resume da Opt in PTX no JSON do Disparo Cloud. Rodar DENTRO do container. */
+/** Força resume do lote paulo_teix_v2_2 (18c8340d) no JSON do Disparo Cloud. */
 const fs = require("fs");
 const path = require("path");
 
-const intakeId = String(process.argv[2] || "66c63991-9c2f-42a2-b024-7aeab1b71546").trim();
-const filePath = String(process.argv[3] || "/app/data/meta-whatsapp-broadcasts.json");
+const BROADCAST_ID = "18c8340d-da12-47f1-8577-67f8a762aa32";
+const INTAKE_IDS = new Set([
+  "c213963a-209a-465e-b3b6-85fef1328caf",
+  "66c63991-9c2f-42a2-b024-7aeab1b71546",
+]);
+const filePath = String(process.argv[2] || "/app/data/meta-whatsapp-broadcasts.json");
 
 if (!fs.existsSync(filePath)) {
   console.error("ARQUIVO AUSENTE", filePath);
@@ -29,6 +33,16 @@ function hist(leads) {
   return out;
 }
 
+function errorHist(leads) {
+  const out = {};
+  for (const lead of leads || []) {
+    if (String(lead.status || "") !== "failed") continue;
+    const key = String(lead.errorCode || lead.error || "(sem codigo)").slice(0, 80);
+    out[key] = (out[key] || 0) + 1;
+  }
+  return out;
+}
+
 function pendingLead(lead) {
   const status = String((lead && lead.status) || "").trim();
   return !status || status === "queued";
@@ -38,68 +52,55 @@ function hasWamid(lead) {
   return Boolean(String((lead && lead.wamid) || "").trim());
 }
 
-const byIntake = campaigns.filter((row) => String(row.intakeCampaignId || "") === intakeId);
-const byProgress = campaigns.filter((row) => {
-  const sent = Number(row.sent || 0);
-  const total = Number(row.total || 0);
-  return sent >= 1900 && sent <= 2050 && total >= 2900 && total <= 3100;
-});
+function isTarget(row) {
+  if (String(row.id || "") === BROADCAST_ID) return true;
+  return INTAKE_IDS.has(String(row.intakeCampaignId || ""));
+}
 
 console.log("campaigns_total", campaigns.length);
-console.log(
-  "match_intake",
-  byIntake.length,
-  JSON.stringify(
-    byIntake.map((row) => ({
-      id: row.id,
-      status: row.status,
-      voidedAt: row.voidedAt || null,
-      sent: row.sent,
-      failed: row.failed,
-      total: row.total,
-      pending: (row.leads || []).filter(pendingLead).length,
-      hist: hist(row.leads),
-    })),
-  ),
-);
-console.log(
-  "match_1980_2996",
-  byProgress.length,
-  JSON.stringify(
-    byProgress.map((row) => ({
-      id: row.id,
-      intakeCampaignId: row.intakeCampaignId || null,
-      status: row.status,
-      voidedAt: row.voidedAt || null,
-      sent: row.sent,
-      failed: row.failed,
-      total: row.total,
-      pending: (row.leads || []).filter(pendingLead).length,
-      hist: hist(row.leads),
-    })),
-  ),
-);
+for (const r of campaigns) {
+  console.log(
+    JSON.stringify({
+      id: r.id,
+      intake: r.intakeCampaignId || null,
+      status: r.status,
+      sent: r.sent,
+      failed: r.failed,
+      total: r.total,
+      template: r.templateName,
+      hist: hist(r.leads),
+      target: isTarget(r),
+    }),
+  );
+}
 
-const row = byIntake[0] || byProgress[0];
+const row = campaigns.find(isTarget);
 if (!row) {
   console.error("CAMPANHA NAO ENCONTRADA");
   process.exit(3);
 }
+
+console.log("ANTES_ERROS", JSON.stringify(errorHist(row.leads)));
+console.log(
+  "ANTES_WAMID",
+  JSON.stringify({
+    withWamid: (row.leads || []).filter(hasWamid).length,
+    withoutWamid: (row.leads || []).filter((lead) => !hasWamid(lead)).length,
+  }),
+);
 
 let queuedReset = 0;
 for (const lead of row.leads || []) {
   const status = String(lead.status || "").trim();
   if (status === "sent" || status === "skipped") continue;
   if (hasWamid(lead)) continue;
-  if (status === "failed") {
+  if (status === "failed" || !status) {
     lead.status = "queued";
-    lead.metaStatus = "queued";
+    delete lead.metaStatus;
     delete lead.error;
     delete lead.errorCode;
     queuedReset += 1;
-    continue;
   }
-  if (!status || status === "queued") lead.status = "queued";
 }
 
 row.status = "running";
