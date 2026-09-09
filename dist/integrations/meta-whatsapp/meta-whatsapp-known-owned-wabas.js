@@ -1,0 +1,77 @@
+"use strict";
+/**
+ * WABAs owned do BM que o token Embedded Signup da conexão primária
+ * costuma omitir (403 / owned seco / debug_token sem a irmã).
+ *
+ * André - WABA02 não aparece na Conexão se só a WABA01 estiver no fan-out.
+ * Rio de Janeiro 01 (client) não entra aqui.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.KNOWN_OWNED_BUSINESS_WABAS = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.normalizeMetaBusinessKey = normalizeMetaBusinessKey;
+exports.metaBusinessIdsMatch = metaBusinessIdsMatch;
+exports.knownOwnedCatalogForBusiness = knownOwnedCatalogForBusiness;
+exports.knownOwnedWabaIdsForBusiness = knownOwnedWabaIdsForBusiness;
+exports.knownPendingPhonesForBusiness = knownPendingPhonesForBusiness;
+exports.knownPendingPhoneGraphRow = knownPendingPhoneGraphRow;
+exports.ANDRE_AGUIAR_BUSINESS_IDS = [
+    "1759044748332124",
+    "759044748332124",
+    "60843286",
+];
+exports.ANDRE_WABA01_ID = "2458602464640240";
+exports.ANDRE_WABA02_ID = "1744257946809067";
+exports.ANDRE_WABA02_PENDING_PHONE_ID = "1311179632078208";
+exports.KNOWN_OWNED_BUSINESS_WABAS = [
+    {
+        businessIds: [...exports.ANDRE_AGUIAR_BUSINESS_IDS],
+        wabaIds: [exports.ANDRE_WABA01_ID, exports.ANDRE_WABA02_ID],
+        pendingPhones: [
+            {
+                phoneNumberId: exports.ANDRE_WABA02_PENDING_PHONE_ID,
+                displayPhoneNumber: "+55 11 95213-6942",
+                verifiedName: "Relacionamento e Atendimento",
+                wabaId: exports.ANDRE_WABA02_ID,
+            },
+        ],
+    },
+];
+function normalizeMetaBusinessKey(value) {
+    return String(value || "").replace(/\D/g, "");
+}
+function metaBusinessIdsMatch(left, right) {
+    const a = normalizeMetaBusinessKey(left);
+    const b = normalizeMetaBusinessKey(right);
+    if (!a || !b)
+        return false;
+    if (a === b)
+        return true;
+    if (a.length === b.length + 1 && a.startsWith("1") && a.slice(1) === b)
+        return true;
+    if (b.length === a.length + 1 && b.startsWith("1") && b.slice(1) === a)
+        return true;
+    return false;
+}
+function knownOwnedCatalogForBusiness(businessId) {
+    const wanted = String(businessId || "").trim();
+    if (!wanted)
+        return null;
+    return (exports.KNOWN_OWNED_BUSINESS_WABAS.find((row) => row.businessIds.some((id) => metaBusinessIdsMatch(id, wanted))) || null);
+}
+function knownOwnedWabaIdsForBusiness(businessId) {
+    return knownOwnedCatalogForBusiness(businessId)?.wabaIds.slice() || [];
+}
+function knownPendingPhonesForBusiness(businessId) {
+    return knownOwnedCatalogForBusiness(businessId)?.pendingPhones.slice() || [];
+}
+function knownPendingPhoneGraphRow(phone) {
+    return {
+        id: phone.phoneNumberId,
+        display_phone_number: phone.displayPhoneNumber,
+        verified_name: phone.verifiedName,
+        status: "PENDING",
+        code_verification_status: "VERIFIED",
+        _portfolio_waba_id: phone.wabaId,
+        whatsapp_business_account: { id: phone.wabaId },
+    };
+}
