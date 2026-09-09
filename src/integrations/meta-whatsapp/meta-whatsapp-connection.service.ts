@@ -48,6 +48,7 @@ import {
 } from "./meta-whatsapp-portfolio.map";
 import { filterWabaIdsOwnedByBusiness, extraWabaIdsFromConnections } from "./meta-whatsapp-template-waba-ids";
 import {
+  isKnownClientWabaForBusiness,
   knownOwnedWabaIdsForBusiness,
   knownPendingPhoneGraphRow,
   knownPendingPhonesForBusiness,
@@ -448,6 +449,10 @@ async function hydrateOpenConnection(
   if (businessId) {
     const unknownWabas = new Set<string>();
     for (const id of debugTargets.wabaIds) {
+      if (isKnownClientWabaForBusiness(businessId, id)) {
+        clientIds.add(id);
+        continue;
+      }
       if (id && !wabaIds.has(id) && !clientIds.has(id)) unknownWabas.add(id);
     }
     for (const row of debugPhoneNodes) {
