@@ -117,10 +117,10 @@ describe("resume de Disparo Cloud órfão pós-Redeploy", () => {
     assert.equal(reopened?.status, "running");
     assert.equal(reopened?.voidedAt, undefined);
     assert.equal(reopened?.sendFinishedAt, undefined);
-    assert.equal(reopened?.sent, 1980);
+    assert.equal(reopened?.sent, 1);
     assert.equal(
       (reopened?.leads || []).filter((lead) => lead.status === "queued").length,
-      2,
+      3,
     );
     assert.equal(
       (reopened?.leads || []).filter((lead) => lead.status === "sent").length,
@@ -129,5 +129,43 @@ describe("resume de Disparo Cloud órfão pós-Redeploy", () => {
 
     const resumable = listResumableOrphanedBroadcasts().map((row) => row.id);
     assert.ok(resumable.includes("opt-in-ptx-broadcast"));
+  });
+
+  it("reabre o lote paulo_teix 1980 failed sem wamid", async () => {
+    process.chdir(dataRoot);
+    const { OPT_IN_PTX_RESUME_BROADCAST_ID } = await import("./meta-whatsapp-broadcast-void");
+    const { listResumableOrphanedBroadcasts, reopenOptInPtxBroadcastToContinue, saveBroadcastCampaign } =
+      await import("./meta-whatsapp-broadcast.store");
+
+    saveBroadcastCampaign(
+      base({
+        id: OPT_IN_PTX_RESUME_BROADCAST_ID,
+        intakeCampaignId: "c213963a-209a-465e-b3b6-85fef1328caf",
+        templateName: "paulo_teix_v2_2",
+        status: "failed",
+        sent: 0,
+        failed: 1980,
+        total: 1980,
+        leads: [
+          { waId: "5511999000001", status: "failed", error: "rate limit", errorCode: "4" },
+          { waId: "5511999000002", status: "failed", wamid: "wamid.keep", metaStatus: "failed" },
+          { waId: "5511999000003", status: "failed", errorCode: "130429" },
+        ],
+      }),
+    );
+
+    const reopened = reopenOptInPtxBroadcastToContinue();
+    assert.equal(reopened?.id, OPT_IN_PTX_RESUME_BROADCAST_ID);
+    assert.equal(reopened?.status, "running");
+    assert.equal(reopened?.sent, 0);
+    assert.equal(
+      (reopened?.leads || []).filter((lead) => lead.status === "queued").length,
+      2,
+    );
+    assert.equal(
+      (reopened?.leads || []).filter((lead) => lead.status === "failed" && lead.wamid).length,
+      1,
+    );
+    assert.ok(listResumableOrphanedBroadcasts().some((row) => row.id === OPT_IN_PTX_RESUME_BROADCAST_ID));
   });
 });
