@@ -36287,6 +36287,7 @@
 
       let adminCouponsCache = [];
       let adminBonusEnviosCache = [];
+      let adminBonusEnviosInFlight = false;
       let adminCuponsKindFilter = "desconto";
       let adminCouponsActiveBucket = "active";
       let adminCouponsPollTimer = null;
@@ -37079,7 +37080,7 @@
           if (summary && adminCuponsKindFilter === "envios") summary.textContent = "Acesso negado.";
           return;
         }
-        if (adminCuponsKindFilter === "envios") {
+        if (adminCuponsKindFilter === "envios" && adminBonusEnviosCache.length === 0) {
           if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="muted">Carregando…</td></tr>';
           if (summary) summary.textContent = "Carregando cupons…";
         }
@@ -37140,6 +37141,7 @@
 
       async function creditAdminBonusEnvios(event) {
         event?.preventDefault();
+        if (adminBonusEnviosInFlight) return;
         if (!hasMasterAccess()) {
           showToast("Área restrita ao usuário master.", "warning");
           return;
@@ -37196,6 +37198,7 @@
           submitBtn.disabled = true;
           submitBtn.textContent = "Creditando…";
         }
+        adminBonusEnviosInFlight = true;
 
         try {
           const response = await fetchWithTimeout(
@@ -37213,7 +37216,7 @@
                 validUntil: validUntilIso,
               }),
             },
-            20000
+            60000
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -37226,6 +37229,15 @@
             "success",
             6200
           );
+          if (payload?.order?.id) {
+            adminBonusEnviosCache = [
+              payload.order,
+              ...adminBonusEnviosCache.filter((item) => String(item?.id || "") !== String(payload.order.id)),
+            ];
+            adminCuponsKindFilter = "envios";
+            adminCouponsActiveBucket = "active";
+            renderAdminCuponsTableFromCache();
+          }
           resetAdminBonusEnviosForm();
           adminCuponsKindFilter = "envios";
           adminCouponsActiveBucket = "active";
@@ -37234,6 +37246,7 @@
         } catch (error) {
           showToast(resolveAdminSubscriberFetchError(error, "Erro ao creditar envios."), "error", 5200);
         } finally {
+          adminBonusEnviosInFlight = false;
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.textContent = "Creditar Envios";

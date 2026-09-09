@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { Server } from "node:http";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 import os from "os";
 import path from "path";
 import { after, before, describe, it } from "node:test";
@@ -34,6 +34,13 @@ function resetStore() {
   writeFileSync(path.join(dataDir, "v01", "waba-campaign-intakes.json"), emptyIntakes);
   writeFileSync(path.join(dataDir, "v02", "waba-campaign-intakes.json"), emptyIntakes);
   writeFileSync(path.join(dataDir, "waba-subscribers.json"), JSON.stringify({ version: 1, subscribers: [] }));
+  for (const marker of [
+    path.join(dataDir, "waba-cleison-void-1016-admin-grants.json"),
+    path.join(dataDir, "v01", "waba-cleison-void-1016-admin-grants.json"),
+    path.join(dataDir, "v02", "waba-cleison-void-1016-admin-grants.json"),
+  ]) {
+    if (existsSync(marker)) unlinkSync(marker);
+  }
 }
 
 function baseOrder(overrides: Partial<WabaBillingOrder>): WabaBillingOrder {
@@ -315,5 +322,109 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
     assert.equal(summary.byApi.oficial.remainingShipments, 3016);
+  });
+
+  it("desativa os três bônus master 1016 vitalícios duplicados do Cleison", async () => {
+    resetStore();
+    delete process.env.WABA_ENABLE_CLEISON_BALANCE_REPAIR;
+    process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR = "1";
+
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaAdminBonusEnviosService } = await import("../admin/waba-admin-bonus-envios.service");
+    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+    const { WabaSubscriberRepository } = await import("../subscribers/waba-subscriber.repository");
+
+    const orders = new WabaBillingOrderRepository();
+    for (const id of [
+      "b1016001-0001-4000-8000-000000000001",
+      "b1016001-0001-4000-8000-000000000002",
+      "b1016001-0001-4000-8000-000000000003",
+    ]) {
+      orders.create(
+        baseOrder({
+          id,
+          valueCents: 0,
+          shipmentCount: 1016,
+          status: "paid",
+          paidAt: "2026-09-09T14:20:00.000Z",
+          createdAt: "2026-09-09T14:20:00.000Z",
+          asaasExternalReference: `waba:bonus-envios:${id}`,
+          grantSource: "admin-bonus-envios",
+          grantCreatedByEmail: "marcelo.mozart@icloud.com",
+          grantActive: true,
+          creditsValidUntil: null,
+          validityMode: "lifetime",
+          bonusShipmentsApplied: 0,
+        }),
+      );
+    }
+
+    const listed = new WabaAdminBonusEnviosService(
+      new WabaSubscriberRepository(),
+      orders,
+      new WabaDisparosCreditsService(orders),
+    ).listPublicGrants();
+    assert.equal(
+      listed.filter((item) => item.grantActive && item.shipmentCount === 1016).length,
+      0,
+    );
+    assert.equal(orders.getById("b1016001-0001-4000-8000-000000000001")?.grantActive, false);
+    assert.equal(orders.getById("b1016001-0001-4000-8000-000000000002")?.grantActive, false);
+    assert.equal(orders.getById("b1016001-0001-4000-8000-000000000003")?.grantActive, false);
+
+    const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
+    assert.equal(summary.byApi.oficial.remainingShipments, 0);
+  });
+
+  it("segundo clique no mesmo bônus master não cria outro pedido", async () => {
+    resetStore();
+    delete process.env.WABA_ENABLE_CLEISON_BALANCE_REPAIR;
+    process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR = "1";
+
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+    const { WabaAdminBonusEnviosService } = await import("../admin/waba-admin-bonus-envios.service");
+    const { WabaSubscriberRepository } = await import("../subscribers/waba-subscriber.repository");
+
+    const orders = new WabaBillingOrderRepository();
+    const now = new Date().toISOString();
+    new WabaSubscriberRepository().create({
+      id: "sub-cleison",
+      email: EMAIL,
+      passwordHash: "x",
+      fullName: "Cleison",
+      whatsapp: "11999999999",
+      phone: "11999999999",
+      cpfCnpj: "00000000191",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const service = new WabaAdminBonusEnviosService(
+      new WabaSubscriberRepository(),
+      orders,
+      new WabaDisparosCreditsService(orders),
+    );
+    const first = service.grant({
+      subscriberId: "sub-cleison",
+      shipmentCount: 400,
+      apiKind: "oficial",
+      validityMode: "lifetime",
+      createdByEmail: "marcelo.mozart@icloud.com",
+    });
+    const second = service.grant({
+      subscriberId: "sub-cleison",
+      shipmentCount: 400,
+      apiKind: "oficial",
+      validityMode: "lifetime",
+      createdByEmail: "marcelo.mozart@icloud.com",
+    });
+
+    assert.equal(second.order.id, first.order.id);
+    assert.equal(
+      orders.list().filter((order) => order.grantSource === "admin-bonus-envios" && order.grantActive !== false)
+        .length,
+      1,
+    );
   });
 });

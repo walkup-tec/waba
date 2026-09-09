@@ -7,6 +7,7 @@ import type { WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind
 import { normalizeDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
 import { isOrderCreditsActive } from "../billing/waba-disparos-order-shipments";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
+import { WabaCleisonOficialBalanceRepair } from "../billing/waba-cleison-oficial-balance-repair";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 
 export type BonusEnviosValidityMode = "12h" | "24h" | "custom" | "lifetime";
@@ -124,6 +125,7 @@ export class WabaAdminBonusEnviosService {
   }
 
   listPublicGrants(): PublicBonusEnviosItem[] {
+    new WabaCleisonOficialBalanceRepair(this.orderRepository).voidDuplicate1016AdminGrantsOnce();
     return this.orderRepository
       .list()
       .filter(isBonusGrantOrder)
@@ -209,6 +211,41 @@ export class WabaAdminBonusEnviosService {
 
     const now = new Date().toISOString();
     const { validUntil } = resolveValidityWindow(validityMode, now, input.validUntil);
+    const duplicateWindowMs = 120_000;
+    const createdMs = Date.parse(now);
+    const recentDuplicate = this.orderRepository
+      .list()
+      .filter(
+        (item) =>
+          isBonusGrantOrder(item) &&
+          item.grantActive !== false &&
+          normalizeEmail(item.ownerEmail) === ownerEmail &&
+          normalizeDispatchesApiKind(item.apiKind) === apiKind &&
+          Math.max(0, Math.round(Number(item.shipmentCount ?? 0))) === shipmentCount &&
+          String(item.validityMode || "") === validityMode &&
+          Date.parse(String(item.createdAt || 0)) >= createdMs - duplicateWindowMs,
+      )
+      .sort((a, b) => Date.parse(String(b.createdAt || 0)) - Date.parse(String(a.createdAt || 0)))[0];
+
+    if (recentDuplicate) {
+      const credits = this.creditsService.getCreditsSummary(ownerEmail);
+      const bucket = credits.byApi[apiKind];
+      return {
+        ok: true,
+        order: this.toPublicItem(recentDuplicate),
+        credits: {
+          remainingShipments: bucket.remainingShipments,
+          contractedShipments: bucket.contractedShipments,
+          pendingBonusShipments: bucket.pendingBonusShipments,
+        },
+        subscriber: {
+          id: subscriber.id,
+          email: ownerEmail,
+          fullName: subscriber.fullName,
+        },
+      };
+    }
+
     const id = randomUUID();
 
     const order: WabaBillingOrder = {

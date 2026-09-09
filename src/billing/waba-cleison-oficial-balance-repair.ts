@@ -1,11 +1,16 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import type { DisparosApiCreditsBucket } from "./waba-disparos-api-credits";
 import { resolveOrderApiKind } from "../disparos/waba-dispatches-api-kind";
+import { resolveDataFile } from "../data-path";
 
 export const CLEISON_OFICIAL_TARGET_EMAIL = "cleison.fel@gmail.com";
 export const CLEISON_OFICIAL_FORCED_REMAINING = 5829;
 export const CLEISON_OFICIAL_FORCE_REF = "waba:force-balance:cleison-oficial-5829";
+export const CLEISON_VOID_1016_ADMIN_GRANTS_MARKER = "waba-cleison-void-1016-admin-grants.json";
+const DUPLICATE_1016_ADMIN_GRANT = 1016;
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
@@ -65,6 +70,52 @@ export class WabaCleisonOficialBalanceRepair {
   applyIfNeeded(email: string): void {
     if (!isCleisonOficialBalanceTarget(email)) return;
     this.restoreOrdersDamagedByForceBalance();
+    this.voidDuplicate1016AdminGrantsOnce();
+  }
+
+  /**
+   * Uma vez: desativa os bônus master 1016 vitalícios duplicados do Cleison.
+   * Não mexe na compra Asaas nem no bônus de campanha liquidado nela.
+   */
+  voidDuplicate1016AdminGrantsOnce(): void {
+    const markerPath = resolveDataFile(CLEISON_VOID_1016_ADMIN_GRANTS_MARKER);
+    if (existsSync(markerPath)) return;
+
+    const now = new Date().toISOString();
+    const orders = this.orderRepository.list();
+    const voidedIds: string[] = [];
+
+    for (const order of orders) {
+      if (order.product !== "waba-disparos") continue;
+      if (resolveOrderApiKind(order) !== "oficial") continue;
+      if (normalizeEmail(order.ownerEmail) !== CLEISON_OFICIAL_TARGET_EMAIL) continue;
+      if (order.grantSource !== "admin-bonus-envios") continue;
+      if (isForceBalanceOrder(order) || order.grantCreatedByEmail === "system-balance-repair") continue;
+      if (order.grantActive === false) continue;
+      if (Math.max(0, Math.round(Number(order.shipmentCount ?? 0))) !== DUPLICATE_1016_ADMIN_GRANT) {
+        continue;
+      }
+      const lifetime =
+        order.validityMode === "lifetime" || !String(order.creditsValidUntil ?? "").trim();
+      if (!lifetime) continue;
+      const createdMs = Date.parse(String(order.createdAt ?? ""));
+      if (!Number.isFinite(createdMs) || createdMs >= Date.parse("2026-09-09T15:00:00.000Z")) {
+        continue;
+      }
+
+      order.grantActive = false;
+      order.updatedAt = now;
+      voidedIds.push(order.id);
+    }
+
+    if (!voidedIds.length) return;
+    this.orderRepository.replaceAll(orders);
+    mkdirSync(dirname(markerPath), { recursive: true });
+    writeFileSync(
+      markerPath,
+      JSON.stringify({ voidedAt: now, orderIds: voidedIds }, null, 2),
+      "utf-8",
+    );
   }
 
   restoreOrdersDamagedByForceBalance(): void {

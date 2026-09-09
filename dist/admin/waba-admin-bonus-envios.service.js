@@ -6,6 +6,7 @@ const waba_billing_order_repository_1 = require("../billing/waba-billing-order.r
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_disparos_order_shipments_1 = require("../billing/waba-disparos-order-shipments");
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
+const waba_cleison_oficial_balance_repair_1 = require("../billing/waba-cleison-oficial-balance-repair");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const addHours = (iso, hours) => {
@@ -65,6 +66,7 @@ class WabaAdminBonusEnviosService {
         };
     }
     listPublicGrants() {
+        new waba_cleison_oficial_balance_repair_1.WabaCleisonOficialBalanceRepair(this.orderRepository).voidDuplicate1016AdminGrantsOnce();
         return this.orderRepository
             .list()
             .filter(isBonusGrantOrder)
@@ -137,6 +139,36 @@ class WabaAdminBonusEnviosService {
         }
         const now = new Date().toISOString();
         const { validUntil } = resolveValidityWindow(validityMode, now, input.validUntil);
+        const duplicateWindowMs = 120000;
+        const createdMs = Date.parse(now);
+        const recentDuplicate = this.orderRepository
+            .list()
+            .filter((item) => isBonusGrantOrder(item) &&
+            item.grantActive !== false &&
+            normalizeEmail(item.ownerEmail) === ownerEmail &&
+            (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(item.apiKind) === apiKind &&
+            Math.max(0, Math.round(Number(item.shipmentCount ?? 0))) === shipmentCount &&
+            String(item.validityMode || "") === validityMode &&
+            Date.parse(String(item.createdAt || 0)) >= createdMs - duplicateWindowMs)
+            .sort((a, b) => Date.parse(String(b.createdAt || 0)) - Date.parse(String(a.createdAt || 0)))[0];
+        if (recentDuplicate) {
+            const credits = this.creditsService.getCreditsSummary(ownerEmail);
+            const bucket = credits.byApi[apiKind];
+            return {
+                ok: true,
+                order: this.toPublicItem(recentDuplicate),
+                credits: {
+                    remainingShipments: bucket.remainingShipments,
+                    contractedShipments: bucket.contractedShipments,
+                    pendingBonusShipments: bucket.pendingBonusShipments,
+                },
+                subscriber: {
+                    id: subscriber.id,
+                    email: ownerEmail,
+                    fullName: subscriber.fullName,
+                },
+            };
+        }
         const id = (0, node_crypto_1.randomUUID)();
         const order = {
             id,
