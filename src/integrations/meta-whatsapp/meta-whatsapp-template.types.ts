@@ -14,6 +14,7 @@ export type MetaTemplatePublic = {
   lastSyncedAt: string | null;
   connectionId: string;
   portfolioName: string | null;
+  wabaId: string | null;
   headerPreviewUrl: string | null;
   headerReady: boolean;
 };
@@ -72,6 +73,7 @@ export function toPublicTemplate(
     lastSyncedAt: row.lastSyncedAt,
     connectionId: row.connectionId,
     portfolioName: name || null,
+    wabaId: String(row.wabaId || "").trim() || null,
     headerPreviewUrl,
     headerReady: Boolean(headerPreviewUrl),
   };
