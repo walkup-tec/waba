@@ -165,6 +165,133 @@ export function resolveBroadcastLeadQuotas(
   return quotas;
 }
 
+const META_DAILY_TIER_CAPS: Record<string, number> = {
+  TIER_50: 50,
+  TIER_250: 250,
+  TIER_1K: 1000,
+  TIER_2K: 2000,
+  TIER_10K: 10000,
+  TIER_100K: 100000,
+};
+
+/**
+ * Converte o limite diário da Meta (tier ou número) em quantidade de envios.
+ * `UNLIMITED` / vazio → sem teto conhecido (não bloqueia).
+ */
+export function parseMetaDailySendLimit(raw: unknown): number | null {
+  if (raw == null) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  const upper = text.toUpperCase().replace(/[\s-]+/g, "_");
+  if (upper === "UNLIMITED" || upper === "TIER_UNLIMITED" || upper.includes("UNLIMITED")) {
+    return null;
+  }
+  if (Object.prototype.hasOwnProperty.call(META_DAILY_TIER_CAPS, upper)) {
+    return META_DAILY_TIER_CAPS[upper];
+  }
+  const tierMatch = upper.match(/^TIER_(\d+)K$/);
+  if (tierMatch) {
+    const thousands = Number(tierMatch[1]);
+    if (Number.isFinite(thousands) && thousands > 0) return thousands * 1000;
+  }
+  const tierPlain = upper.match(/^TIER_(\d+)$/);
+  if (tierPlain) {
+    const n = Number(tierPlain[1]);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const compact = upper.replace(/[_\s]/g, "");
+  const kMatch = compact.match(/^(\d+)K$/);
+  if (kMatch) {
+    const thousands = Number(kMatch[1]);
+    if (Number.isFinite(thousands) && thousands > 0) return thousands * 1000;
+  }
+  const digits = text.replace(/[^\d]/g, "");
+  if (digits && /^\d+$/.test(digits)) {
+    const n = Number(digits);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+export function resolvePortfolioDailySendCap(portfolio: {
+  messagingLimit?: string | null;
+  numbers?: ReadonlyArray<{ messagingLimit?: string | null }> | null;
+}): number | null {
+  const fromCard = parseMetaDailySendLimit(portfolio?.messagingLimit);
+  if (fromCard != null) return fromCard;
+  let sum = 0;
+  let known = 0;
+  for (const number of portfolio?.numbers || []) {
+    const cap = parseMetaDailySendLimit(number?.messagingLimit);
+    if (cap == null) continue;
+    sum += cap;
+    known += 1;
+  }
+  return known ? sum : null;
+}
+
+export type BroadcastPortfolioDailyCapInput = {
+  connectionId?: string | null;
+  name?: string | null;
+  messagingLimit?: string | null;
+  numbers?: ReadonlyArray<{ messagingLimit?: string | null }> | null;
+};
+
+/**
+ * A soma das cotas dos números de um portfólio não pode passar o limite diário desse portfólio.
+ * Sem limite conhecido, não bloqueia o disparo.
+ */
+export function assertBroadcastQuotasWithinPortfolioDailyCaps(
+  quotas: ReadonlyArray<MetaBroadcastPhoneQuota>,
+  bindings: ReadonlyArray<{
+    phoneNumberId?: string | null;
+    connectionId?: string | null;
+    portfolioName?: string | null;
+  }>,
+  portfolios: ReadonlyArray<BroadcastPortfolioDailyCapInput>,
+): void {
+  const capByConnection = new Map<string, { label: string; cap: number | null }>();
+  for (const portfolio of portfolios || []) {
+    const connectionId = String(portfolio.connectionId || "").trim();
+    if (!connectionId) continue;
+    const label = String(portfolio.name || "").trim() || "Portfólio";
+    capByConnection.set(connectionId, {
+      label,
+      cap: resolvePortfolioDailySendCap(portfolio),
+    });
+  }
+  const connByPhone = new Map<string, string>();
+  const labelByPhoneConn = new Map<string, string>();
+  for (const binding of bindings || []) {
+    const phone = String(binding.phoneNumberId || "").trim();
+    const connectionId = String(binding.connectionId || "").trim();
+    if (!phone || !connectionId) continue;
+    connByPhone.set(phone, connectionId);
+    const label = String(binding.portfolioName || "").trim();
+    if (label) labelByPhoneConn.set(connectionId, label);
+  }
+  const sumByConnection = new Map<string, number>();
+  for (const row of quotas || []) {
+    const phone = String(row.phoneNumberId || "").trim();
+    const planned = Math.floor(Number(row.planned) || 0);
+    if (!phone || planned <= 0) continue;
+    const connectionId = connByPhone.get(phone);
+    if (!connectionId) continue;
+    sumByConnection.set(connectionId, (sumByConnection.get(connectionId) || 0) + planned);
+  }
+  for (const [connectionId, sum] of sumByConnection) {
+    const meta = capByConnection.get(connectionId);
+    const cap = meta?.cap ?? null;
+    if (cap == null) continue;
+    if (sum > cap) {
+      const label = meta?.label || labelByPhoneConn.get(connectionId) || "Portfólio";
+      throw new Error(
+        `A soma dos envios do portfólio ${label} (${sum}) não pode passar o limite diário (${cap}).`,
+      );
+    }
+  }
+}
+
 export function assignBroadcastLeadsToPhones<T extends object>(
   leads: T[],
   phoneNumberIds: string[],

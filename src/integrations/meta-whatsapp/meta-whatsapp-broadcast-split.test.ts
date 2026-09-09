@@ -9,7 +9,10 @@ import {
   minPhonesRequiredForBroadcast,
   normalizeBroadcastPhoneNumberIds,
   parseBroadcastPhoneQuotasInput,
+  parseMetaDailySendLimit,
   resolveBroadcastLeadQuotas,
+  resolvePortfolioDailySendCap,
+  assertBroadcastQuotasWithinPortfolioDailyCaps,
 } from "./meta-whatsapp-broadcast-split";
 
 describe("meta-whatsapp-broadcast-split", () => {
@@ -177,5 +180,79 @@ describe("meta-whatsapp-broadcast-split", () => {
     assert.equal(campaignUsesPhoneNumber({ phoneNumberIds: ["b", "c"] }, "c"), true);
     assert.equal(campaignUsesPhoneNumber({ phoneNumberIds: ["b", "c"] }, "z"), false);
     assert.equal(campaignUsesPhoneNumber({ phoneNumberId: "a" }, ""), true);
+  });
+
+  it("lê o limite diário da Meta (tier ou número)", () => {
+    assert.equal(parseMetaDailySendLimit("TIER_50"), 50);
+    assert.equal(parseMetaDailySendLimit("TIER_250"), 250);
+    assert.equal(parseMetaDailySendLimit("TIER_1K"), 1000);
+    assert.equal(parseMetaDailySendLimit("TIER_2K"), 2000);
+    assert.equal(parseMetaDailySendLimit("TIER_10K"), 10000);
+    assert.equal(parseMetaDailySendLimit("TIER_100K"), 100000);
+    assert.equal(parseMetaDailySendLimit("2000"), 2000);
+    assert.equal(parseMetaDailySendLimit("2K"), 2000);
+    assert.equal(parseMetaDailySendLimit("UNLIMITED"), null);
+    assert.equal(parseMetaDailySendLimit(""), null);
+    assert.equal(parseMetaDailySendLimit(null), null);
+  });
+
+  it("usa o limite do portfólio antes da soma dos chips", () => {
+    assert.equal(
+      resolvePortfolioDailySendCap({
+        messagingLimit: "TIER_2K",
+        numbers: [{ messagingLimit: "TIER_1K" }, { messagingLimit: "TIER_1K" }, { messagingLimit: "TIER_1K" }],
+      }),
+      2000,
+    );
+    assert.equal(
+      resolvePortfolioDailySendCap({
+        numbers: [{ messagingLimit: "TIER_1K" }, { messagingLimit: "TIER_1K" }],
+      }),
+      2000,
+    );
+    assert.equal(resolvePortfolioDailySendCap({ numbers: [{}, {}] }), null);
+  });
+
+  it("bloqueia soma das cotas acima do limite diário do portfólio", () => {
+    const bindings = [
+      { phoneNumberId: "p1", connectionId: "bm-a", portfolioName: "Drax" },
+      { phoneNumberId: "p2", connectionId: "bm-a", portfolioName: "Drax" },
+      { phoneNumberId: "p3", connectionId: "bm-a", portfolioName: "Drax" },
+    ];
+    const portfolios = [{ connectionId: "bm-a", name: "Drax", messagingLimit: "2000" }];
+    assert.doesNotThrow(() =>
+      assertBroadcastQuotasWithinPortfolioDailyCaps(
+        [
+          { phoneNumberId: "p1", planned: 700 },
+          { phoneNumberId: "p2", planned: 700 },
+          { phoneNumberId: "p3", planned: 600 },
+        ],
+        bindings,
+        portfolios,
+      ),
+    );
+    assert.throws(
+      () =>
+        assertBroadcastQuotasWithinPortfolioDailyCaps(
+          [
+            { phoneNumberId: "p1", planned: 700 },
+            { phoneNumberId: "p2", planned: 700 },
+            { phoneNumberId: "p3", planned: 700 },
+          ],
+          bindings,
+          portfolios,
+        ),
+      /limite diário \(2000\)/i,
+    );
+  });
+
+  it("não bloqueia o disparo quando o limite diário do portfólio é desconhecido", () => {
+    assert.doesNotThrow(() =>
+      assertBroadcastQuotasWithinPortfolioDailyCaps(
+        [{ phoneNumberId: "p1", planned: 1000 }],
+        [{ phoneNumberId: "p1", connectionId: "bm-a", portfolioName: "Drax" }],
+        [{ connectionId: "bm-a", name: "Drax" }],
+      ),
+    );
   });
 });

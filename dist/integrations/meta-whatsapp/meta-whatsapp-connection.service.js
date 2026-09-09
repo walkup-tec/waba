@@ -145,6 +145,7 @@ function cardFromConnection(open) {
         profilePictureUrl: null,
         wabaId: open.wabaId,
         connectionId: open.id,
+        messagingLimit: open.messagingLimit,
     };
 }
 const BUSINESS_PHOTO_TTL_MS = 30 * 1000;
@@ -374,6 +375,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
         card: {
             ...card,
             wabaId: card.wabaId || primaryWabaId || "",
+            messagingLimit: open.messagingLimit || card.messagingLimit || null,
             numbers,
         },
         directory,
@@ -545,14 +547,13 @@ async function listBusinessWabaIds(graph, token, businessId) {
     }
     return [...ids];
 }
-/** Lista todos os chips do WABA (paginação Graph). Sem isso, só a 1ª página aparecia. */
-async function listWabaPhoneNumbersPaged(graph, token, wabaId) {
+async function listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, fields) {
     const data = [];
     const seen = new Set();
     let after = "";
     for (let page = 0; page < 20; page += 1) {
         const query = {
-            fields: meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS,
+            fields,
             limit: "100",
         };
         if (after)
@@ -578,6 +579,18 @@ async function listWabaPhoneNumbersPaged(graph, token, wabaId) {
         after = nextAfter;
     }
     return { ok: true, json: { data } };
+}
+/** Lista todos os chips do WABA (paginação Graph). Sem isso, só a 1ª página aparecia. */
+async function listWabaPhoneNumbersPaged(graph, token, wabaId) {
+    const withLimit = await listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT);
+    if (withLimit.ok && withLimit.json.data.length)
+        return withLimit;
+    const fallback = await listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS);
+    if (fallback.ok && fallback.json.data.length)
+        return fallback;
+    if (withLimit.ok)
+        return withLimit;
+    return fallback;
 }
 async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {
     const identity = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenantId, phoneNumberId);

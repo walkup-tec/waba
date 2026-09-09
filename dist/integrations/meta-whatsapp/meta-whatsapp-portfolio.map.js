@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_OWNED_PAGES_FIELDS = exports.META_BUSINESS_IDENTITY_FIELDS_MINIMAL = exports.META_BUSINESS_IDENTITY_FIELDS = exports.META_WABA_IDENTITY_FIELDS_MINIMAL = exports.META_WABA_IDENTITY_FIELDS = exports.META_PHONE_NAME_FIELDS = exports.META_PHONE_NUMBER_LIST_FIELDS = void 0;
+exports.META_OWNED_PAGES_FIELDS = exports.META_BUSINESS_IDENTITY_FIELDS_MINIMAL = exports.META_BUSINESS_IDENTITY_FIELDS = exports.META_WABA_IDENTITY_FIELDS_MINIMAL = exports.META_WABA_IDENTITY_FIELDS = exports.META_PHONE_NAME_FIELDS = exports.META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT = exports.META_PHONE_MESSAGING_LIMIT_FIELD = exports.META_PHONE_NUMBER_LIST_FIELDS = void 0;
 exports.isGenericMetaBusinessName = isGenericMetaBusinessName;
 exports.graphPhotoDownloadUrl = graphPhotoDownloadUrl;
 exports.graphPhotoSourceKey = graphPhotoSourceKey;
@@ -28,6 +28,8 @@ exports.firstOwnedPageId = firstOwnedPageId;
 exports.mapMetaPhoneToPortfolioNumber = mapMetaPhoneToPortfolioNumber;
 exports.mapMetaPhoneListToPortfolioNumbers = mapMetaPhoneListToPortfolioNumbers;
 exports.META_PHONE_NUMBER_LIST_FIELDS = "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,name_status,new_display_name,new_name_status,health_status";
+exports.META_PHONE_MESSAGING_LIMIT_FIELD = "messaging_limit_tier";
+exports.META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT = `${exports.META_PHONE_NUMBER_LIST_FIELDS},${exports.META_PHONE_MESSAGING_LIMIT_FIELD}`;
 exports.META_PHONE_NAME_FIELDS = "verified_name,name_status,new_display_name,new_name_status";
 exports.META_WABA_IDENTITY_FIELDS = "id,name,owner_business_info{id,name,profile_picture_uri,primary_page{id,name,picture}},on_behalf_of_business_info{id,name,profile_picture_uri,primary_page{id,name,picture}}";
 exports.META_WABA_IDENTITY_FIELDS_MINIMAL = "id,name,owner_business_info{id,name,primary_page{id,name}},on_behalf_of_business_info{id,name}";
@@ -544,6 +546,7 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
         profileSyncStatus: null,
         inboxEnabled: false,
         wabaId: text(row._portfolio_waba_id) || text(row.waba_id) || null,
+        messagingLimit: text(row.messaging_limit_tier) || text(row.messaging_limit) || null,
     };
 }
 function mapMetaPhoneListToPortfolioNumbers(json, busyPhoneIds = new Set()) {

@@ -8,6 +8,11 @@ import type {
 export const META_PHONE_NUMBER_LIST_FIELDS =
   "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,name_status,new_display_name,new_name_status,health_status";
 
+export const META_PHONE_MESSAGING_LIMIT_FIELD = "messaging_limit_tier";
+
+export const META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT =
+  `${META_PHONE_NUMBER_LIST_FIELDS},${META_PHONE_MESSAGING_LIMIT_FIELD}`;
+
 export const META_PHONE_NAME_FIELDS = "verified_name,name_status,new_display_name,new_name_status";
 
 export const META_WABA_IDENTITY_FIELDS =
@@ -608,6 +613,7 @@ export function mapMetaPhoneToPortfolioNumber(
     profileSyncStatus: null,
     inboxEnabled: false,
     wabaId: text(row._portfolio_waba_id) || text(row.waba_id) || null,
+    messagingLimit: text(row.messaging_limit_tier) || text(row.messaging_limit) || null,
   };
 }
 

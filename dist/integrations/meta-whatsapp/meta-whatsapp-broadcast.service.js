@@ -231,7 +231,10 @@ class MetaWhatsappBroadcastService {
         const assets = await this.portfolios.listPortfolioAssets(auth);
         const catalog = (0, meta_whatsapp_broadcast_phones_1.indexBroadcastPortfolioPhones)(assets.portfolios || []);
         try {
-            return (0, meta_whatsapp_broadcast_phones_1.resolveBroadcastPhoneBindings)(requested, catalog);
+            return {
+                bindings: (0, meta_whatsapp_broadcast_phones_1.resolveBroadcastPhoneBindings)(requested, catalog),
+                portfolios: assets.portfolios || [],
+            };
         }
         catch (error) {
             const reason = error instanceof meta_whatsapp_broadcast_phones_1.BroadcastPhoneSelectionError ? error.reason : "unknown";
@@ -397,7 +400,7 @@ class MetaWhatsappBroadcastService {
         const tenant = requireTenant(auth);
         const connectionId = String(input.connectionId || "").trim();
         const loaded = await this.loadApprovedTemplate(tenant.tenantId, connectionId, String(input.templateId || "").trim());
-        const phoneBindings = await this.requireActivePhoneBindings(auth, (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(input.phoneNumberIds?.length ? input.phoneNumberIds : [String(input.phoneNumberId || "")]));
+        const { bindings: phoneBindings, portfolios: selectedPortfolios } = await this.requireActivePhoneBindings(auth, (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(input.phoneNumberIds?.length ? input.phoneNumberIds : [String(input.phoneNumberId || "")]));
         await this.assertTemplateOnPhoneBindings({
             tenantId: tenant.tenantId,
             templateName: loaded.template.name,
@@ -421,6 +424,7 @@ class MetaWhatsappBroadcastService {
         let assignedLeads;
         try {
             phoneQuotas = (0, meta_whatsapp_broadcast_split_1.resolveBroadcastLeadQuotas)(phoneNumberIds, preview.parsed.leads.length, input.phoneQuotas);
+            (0, meta_whatsapp_broadcast_split_1.assertBroadcastQuotasWithinPortfolioDailyCaps)(phoneQuotas, phoneBindings, selectedPortfolios);
             assignedLeads = (0, meta_whatsapp_broadcast_phones_1.attachBroadcastLeadPhoneBindings)((0, meta_whatsapp_broadcast_split_1.assignBroadcastLeadsToPhones)(preview.parsed.leads, phoneNumberIds, meta_whatsapp_broadcast_split_1.META_BROADCAST_MAX_SENDS_PER_NUMBER, input.phoneQuotas), phoneBindings);
         }
         catch (error) {

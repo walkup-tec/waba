@@ -12,6 +12,8 @@ export type MetaPortfolioPublic = {
   profilePictureUrl: string | null;
   wabaId: string | null;
   connectionId?: string | null;
+  /** Limite diário de envios do portfólio (tier Meta, ex. TIER_2K, ou número). */
+  messagingLimit?: string | null;
   numbers?: MetaPortfolioNumberPublic[];
 };
 
@@ -42,6 +44,8 @@ export type MetaPortfolioNumberPublic = {
   inboxEnabled: boolean;
   /** Conta WhatsApp (WABA) dona deste chip. Sem isso o Disparo Cloud mistura template de uma WABA com número de outra. */
   wabaId?: string | null;
+  /** Tier diário da Meta neste chip (`messaging_limit_tier`). */
+  messagingLimit?: string | null;
 };
 
 export type MetaPortfolioAssetsPublic = {

@@ -43,6 +43,7 @@ import {
   graphPhotoSourceKey,
   safePublicPhotoUrl,
   META_PHONE_NUMBER_LIST_FIELDS,
+  META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT,
   META_PHONE_NAME_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
 import {
@@ -226,6 +227,7 @@ function cardFromConnection(open: MetaWhatsappConnectionRecord): MetaPortfolioPu
     profilePictureUrl: null,
     wabaId: open.wabaId,
     connectionId: open.id,
+    messagingLimit: open.messagingLimit,
   };
 }
 
@@ -479,6 +481,7 @@ async function hydrateOpenConnection(
     card: {
       ...card,
       wabaId: card.wabaId || primaryWabaId || "",
+      messagingLimit: open.messagingLimit || card.messagingLimit || null,
       numbers,
     },
     directory,
@@ -662,18 +665,18 @@ async function listBusinessWabaIds(
   return [...ids];
 }
 
-/** Lista todos os chips do WABA (paginação Graph). Sem isso, só a 1ª página aparecia. */
-async function listWabaPhoneNumbersPaged(
+async function listWabaPhoneNumbersPagedWithFields(
   graph: MetaConnectionGraphCaller,
   token: string,
   wabaId: string,
+  fields: string,
 ): Promise<{ ok: true; json: { data: unknown[] } } | { ok: false; status: number }> {
   const data: unknown[] = [];
   const seen = new Set<string>();
   let after = "";
   for (let page = 0; page < 20; page += 1) {
     const query: Record<string, string> = {
-      fields: META_PHONE_NUMBER_LIST_FIELDS,
+      fields,
       limit: "100",
     };
     if (after) query.after = after;
@@ -695,6 +698,30 @@ async function listWabaPhoneNumbersPaged(
     after = nextAfter;
   }
   return { ok: true, json: { data } };
+}
+
+/** Lista todos os chips do WABA (paginação Graph). Sem isso, só a 1ª página aparecia. */
+async function listWabaPhoneNumbersPaged(
+  graph: MetaConnectionGraphCaller,
+  token: string,
+  wabaId: string,
+): Promise<{ ok: true; json: { data: unknown[] } } | { ok: false; status: number }> {
+  const withLimit = await listWabaPhoneNumbersPagedWithFields(
+    graph,
+    token,
+    wabaId,
+    META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT,
+  );
+  if (withLimit.ok && withLimit.json.data.length) return withLimit;
+  const fallback = await listWabaPhoneNumbersPagedWithFields(
+    graph,
+    token,
+    wabaId,
+    META_PHONE_NUMBER_LIST_FIELDS,
+  );
+  if (fallback.ok && fallback.json.data.length) return fallback;
+  if (withLimit.ok) return withLimit;
+  return fallback;
 }
 
 async function cacheGraphPhonePhoto(

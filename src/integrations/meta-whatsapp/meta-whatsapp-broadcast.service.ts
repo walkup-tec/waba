@@ -63,6 +63,7 @@ import {
   assignBroadcastLeadsToPhones,
   normalizeBroadcastPhoneNumberIds,
   resolveBroadcastLeadQuotas,
+  assertBroadcastQuotasWithinPortfolioDailyCaps,
 } from "./meta-whatsapp-broadcast-split";
 import {
   attachBroadcastLeadPhoneBindings,
@@ -333,7 +334,12 @@ export class MetaWhatsappBroadcastService {
   private async requireActivePhoneBindings(
     auth: WabaRequestAuth,
     phoneNumberIds: string[],
-  ): Promise<MetaBroadcastPhoneBinding[]> {
+  ): Promise<{ bindings: MetaBroadcastPhoneBinding[]; portfolios: Array<{
+    connectionId?: string | null;
+    name?: string | null;
+    messagingLimit?: string | null;
+    numbers?: Array<{ messagingLimit?: string | null }>;
+  }> }> {
     const requested = normalizeBroadcastPhoneNumberIds(phoneNumberIds);
     if (!requested.length) {
       fail("invalid_payload", "Selecione ao menos um número Ativo e disponível.");
@@ -341,7 +347,10 @@ export class MetaWhatsappBroadcastService {
     const assets = await this.portfolios.listPortfolioAssets(auth);
     const catalog = indexBroadcastPortfolioPhones(assets.portfolios || []);
     try {
-      return resolveBroadcastPhoneBindings(requested, catalog);
+      return {
+        bindings: resolveBroadcastPhoneBindings(requested, catalog),
+        portfolios: assets.portfolios || [],
+      };
     } catch (error) {
       const reason = error instanceof BroadcastPhoneSelectionError ? error.reason : "unknown";
       const message =
@@ -569,7 +578,7 @@ export class MetaWhatsappBroadcastService {
     const tenant = requireTenant(auth);
     const connectionId = String(input.connectionId || "").trim();
     const loaded = await this.loadApprovedTemplate(tenant.tenantId, connectionId, String(input.templateId || "").trim());
-    const phoneBindings = await this.requireActivePhoneBindings(
+    const { bindings: phoneBindings, portfolios: selectedPortfolios } = await this.requireActivePhoneBindings(
       auth,
       normalizeBroadcastPhoneNumberIds(
         input.phoneNumberIds?.length ? input.phoneNumberIds : [String(input.phoneNumberId || "")],
@@ -604,6 +613,11 @@ export class MetaWhatsappBroadcastService {
         phoneNumberIds,
         preview.parsed.leads.length,
         input.phoneQuotas,
+      );
+      assertBroadcastQuotasWithinPortfolioDailyCaps(
+        phoneQuotas,
+        phoneBindings,
+        selectedPortfolios,
       );
       assignedLeads = attachBroadcastLeadPhoneBindings(
         assignBroadcastLeadsToPhones(

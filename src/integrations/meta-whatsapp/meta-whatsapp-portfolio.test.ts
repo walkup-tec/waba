@@ -456,6 +456,7 @@ describe("meta portfolio mapper", () => {
       verified_name: "Walkup",
       status: "CONNECTED",
       code_verification_status: "VERIFIED",
+      messaging_limit_tier: "TIER_2K",
     });
     assert.equal(row?.uiStatus, "ativo");
     assert.equal(row?.dispatchStatus, "livre");
@@ -465,6 +466,7 @@ describe("meta portfolio mapper", () => {
     assert.equal(row?.photoSyncStatus, null);
     assert.equal(row?.profileSyncStatus, null);
     assert.equal(row?.inboxEnabled, false);
+    assert.equal(row?.messagingLimit, "TIER_2K");
   });
 
   it("PENDING fica pendente e pode ativar", () => {
@@ -863,7 +865,13 @@ describe("meta portfolio service", () => {
     assert.ok(graphFields.some((item) => /profile_picture_uri/.test(item)));
     assert.ok(graphFields.some((item) => /primary_page/.test(item)));
     // Nested BM fields also embed new_display_name inside phone_numbers{...}; match exact list fields.
-    assert.ok(graphFields.some((item) => item === META_PHONE_NUMBER_LIST_FIELDS));
+    assert.ok(
+      graphFields.some(
+        (item) =>
+          item === META_PHONE_NUMBER_LIST_FIELDS ||
+          item === `${META_PHONE_NUMBER_LIST_FIELDS},messaging_limit_tier`,
+      ),
+    );
     assert.equal(assets.numbers.length, 1);
     assert.equal(assets.numbers[0].uiStatus, "pendente");
     assert.equal(assets.numbers[0].dispatchStatus, "livre");
