@@ -22441,14 +22441,21 @@
                 <span class="muted">Revisão humana antes da Meta</span>
               </div>
               <div class="aquecedor-field">
-                <label id="meta-tpl-lab-portfolio-label">1. Portfólio</label>
+                <label for="meta-tpl-lab-portfolio">1. Portfólio</label>
+                <select id="meta-tpl-lab-portfolio" aria-label="Portfólio do template">
+                  <option value="">Selecione um portfólio</option>
+                </select>
+                <span class="muted">O portfólio é a BM. O template só vale na conta WABA que você marcar abaixo — não em todas as contas do portfólio.</span>
+              </div>
+              <div class="aquecedor-field">
+                <label id="meta-tpl-lab-waba-label">2. Conta WABA</label>
                 <div
-                  id="meta-tpl-lab-portfolios"
+                  id="meta-tpl-lab-wabas"
                   class="meta-tpl-lab-portfolios"
                   role="group"
-                  aria-labelledby="meta-tpl-lab-portfolio-label"
+                  aria-labelledby="meta-tpl-lab-waba-label"
                 ></div>
-                <span class="muted">A Meta cadastra o template em cada WABA. Selecione um ou mais portfólios; o mesmo nome, idioma, categoria e componentes vão para cada um.</span>
+                <span class="muted">A Meta cadastra o modelo só nesta conta WhatsApp. Número de outra WABA do mesmo portfólio não dispara este template.</span>
               </div>
               <div class="meta-tpl-ai-box">
                 <div class="meta-tpl-ai-head">
@@ -22512,7 +22519,7 @@
                   <div class="meta-tpl-ai-pane">
                     <p class="meta-tpl-ai-pane-title">Texto base</p>
                     <div class="aquecedor-field">
-                      <label for="meta-tpl-ai-base-text">2. Informe a mensagem</label>
+                      <label for="meta-tpl-ai-base-text">3. Informe a mensagem</label>
                       <textarea id="meta-tpl-ai-base-text" rows="8" maxlength="4000" placeholder="Cole a mensagem. A IA mantém o tema e reescreve em três templates Utility."></textarea>
                     </div>
                     <div class="disparos-inline-actions" style="margin-top:10px;">
@@ -38803,32 +38810,134 @@
       }
 
       function metaTplLabFillPortfolioSelect() {
-        const root = document.getElementById("meta-tpl-lab-portfolios");
-        if (!root) return;
-        const previous = new Set(metaTplLabSelectedConnectionIds());
+        const select = document.getElementById("meta-tpl-lab-portfolio");
+        if (!select) return;
+        const previous = String(select.value || metaTplLabSelectedConnectionId() || "").trim();
         const options = metaTplLabPortfolioOptions();
-        if (!options.length) {
-          root.innerHTML = '<span class="muted">Nenhum portfólio conectado.</span>';
+        select.innerHTML = '<option value="">Selecione um portfólio</option>';
+        options.forEach(function (item) {
+          const option = document.createElement("option");
+          option.value = item.connectionId;
+          option.textContent = item.label;
+          select.appendChild(option);
+        });
+        if (previous && options.some((item) => item.connectionId === previous)) {
+          select.value = previous;
+        } else if (options.length === 1) {
+          select.value = options[0].connectionId;
+        }
+        metaTplLabBindPortfolioChange();
+        metaTplLabFillWabaSelect();
+        void metaTplLabRefreshWabasFromMeta();
+      }
+
+      let metaTplLabPortfolioBound = false;
+      function metaTplLabBindPortfolioChange() {
+        if (metaTplLabPortfolioBound) return;
+        const select = document.getElementById("meta-tpl-lab-portfolio");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          metaTplLabFillWabaSelect();
+          void metaTplLabRefreshWabasFromMeta();
+        });
+        metaTplLabPortfolioBound = true;
+      }
+
+      function metaTplLabPortfolioByConnectionId(connectionId) {
+        const id = String(connectionId || "").trim();
+        if (!id) return null;
+        return (
+          (metaTpSession.portfolios || []).find(function (item) {
+            return String((item && item.connectionId) || "") === id;
+          }) || null
+        );
+      }
+
+      function metaTplLabWabasFromPortfolio(portfolio) {
+        const map = new Map();
+        function add(wabaId, hint) {
+          const id = String(wabaId || "").trim();
+          if (!id) return;
+          const prev = map.get(id) || { id: id, hints: [] };
+          const label = String(hint || "").trim();
+          if (label && prev.hints.indexOf(label) === -1) prev.hints.push(label);
+          map.set(id, prev);
+        }
+        if (!portfolio) return [];
+        add(portfolio.wabaId, portfolio.name);
+        (portfolio.numbers || []).forEach(function (num) {
+          add(
+            num && num.wabaId,
+            (num && (num.verifiedName || num.displayPhoneNumber)) || "",
+          );
+        });
+        return Array.from(map.values()).map(function (row) {
+          const hint = row.hints.filter(Boolean).slice(0, 2).join(" · ");
+          return {
+            id: row.id,
+            label: hint ? hint + " · " + row.id : "WABA " + row.id,
+          };
+        });
+      }
+
+      function metaTplLabFillWabaSelect(list) {
+        const root = document.getElementById("meta-tpl-lab-wabas");
+        if (!root) return;
+        const connectionId = metaTplLabSelectedConnectionId();
+        const previous = new Set(metaTplLabSelectedWabaIds());
+        const items =
+          Array.isArray(list) && list.length
+            ? list
+            : metaTplLabWabasFromPortfolio(metaTplLabPortfolioByConnectionId(connectionId));
+        if (!connectionId) {
+          root.innerHTML = '<span class="muted">Selecione um portfólio para ver as contas WABA.</span>';
           return;
         }
-        root.innerHTML = options
+        if (!items.length) {
+          root.innerHTML = '<span class="muted">Nenhuma conta WABA neste portfólio.</span>';
+          return;
+        }
+        root.innerHTML = items
           .map(function (item) {
-            const id = String(item.connectionId || "").trim();
+            const id = String(item.id || "").trim();
             const checked =
-              previous.has(id) || (previous.size === 0 && options.length === 1) ? " checked" : "";
+              previous.has(id) || (previous.size === 0 && items.length === 1) ? " checked" : "";
             return (
               '<label class="meta-tpl-broadcast-number-option">' +
-              '<input type="checkbox" data-connection-id="' +
+              '<input type="checkbox" data-waba-id="' +
               metaTpEsc(id) +
               '"' +
               checked +
               " />" +
               "<span>" +
-              metaTpEsc(item.label) +
+              metaTpEsc(item.label || id) +
               "</span></label>"
             );
           })
           .join("");
+      }
+
+      async function metaTplLabRefreshWabasFromMeta() {
+        const connectionId = metaTplLabSelectedConnectionId();
+        const root = document.getElementById("meta-tpl-lab-wabas");
+        if (!connectionId || !root) return;
+        if (typeof isMetaTemplateAiUiPreview === "function" && isMetaTemplateAiUiPreview()) return;
+        try {
+          const payload = await metaTplLabFetchJson(
+            "/integrations/meta/whatsapp/templates/wabas?connectionId=" + encodeURIComponent(connectionId),
+          );
+          const wabas = Array.isArray(payload.wabas) ? payload.wabas : [];
+          if (!wabas.length) return;
+          metaTplLabFillWabaSelect(
+            wabas.map(function (row) {
+              const id = String((row && row.id) || "").trim();
+              const name = String((row && row.name) || "").trim();
+              return { id: id, label: name && name !== id ? name + " · " + id : name || "WABA " + id };
+            }),
+          );
+        } catch (_error) {
+          /* mantém a lista local dos chips */
+        }
       }
 
       function metaTplLabFillPortfolioFilter() {
@@ -38865,30 +38974,30 @@
       }
 
       function metaTplLabSelectedConnectionIds() {
-        const root = document.getElementById("meta-tpl-lab-portfolios");
-        if (!root) return [];
-        return Array.prototype.slice
-          .call(root.querySelectorAll('input[type="checkbox"][data-connection-id]:checked'))
-          .map(function (el) {
-            return String(el.getAttribute("data-connection-id") || "").trim();
-          })
-          .filter(Boolean);
+        const id = metaTplLabSelectedConnectionId();
+        return id ? [id] : [];
       }
 
       function metaTplLabSelectedConnectionId() {
-        return metaTplLabSelectedConnectionIds()[0] || "";
+        return String((document.getElementById("meta-tpl-lab-portfolio") || {}).value || "").trim();
+      }
+
+      function metaTplLabSelectedWabaIds() {
+        const root = document.getElementById("meta-tpl-lab-wabas");
+        if (!root) return [];
+        return Array.prototype.slice
+          .call(root.querySelectorAll('input[type="checkbox"][data-waba-id]:checked'))
+          .map(function (el) {
+            return String(el.getAttribute("data-waba-id") || "").trim();
+          })
+          .filter(Boolean);
       }
 
       function metaTplLabSelectedPortfolioLabels() {
-        const root = document.getElementById("meta-tpl-lab-portfolios");
-        if (!root) return [];
-        return Array.prototype.slice
-          .call(root.querySelectorAll('input[type="checkbox"][data-connection-id]:checked'))
-          .map(function (el) {
-            const label = el.closest("label");
-            return String((label && label.textContent) || "").trim();
-          })
-          .filter(Boolean);
+        const select = document.getElementById("meta-tpl-lab-portfolio");
+        if (!select) return [];
+        const label = String((select.options[select.selectedIndex] && select.options[select.selectedIndex].text) || "").trim();
+        return label && select.value ? [label] : [];
       }
 
       function metaTplAiSelectedButtonText() {
@@ -39484,7 +39593,7 @@
         const status = document.getElementById("meta-tpl-ai-status");
         const button = document.getElementById("meta-tpl-ai-generate");
         if (!connectionId) {
-          if (status) status.textContent = "Selecione ao menos um portfólio.";
+          if (status) status.textContent = "Selecione o portfólio.";
           return;
         }
         if (!baseText) {
@@ -39521,6 +39630,7 @@
       async function metaTplSubmitAllAiOptions() {
         const connectionIds = metaTplLabSelectedConnectionIds();
         const connectionId = connectionIds[0] || "";
+        const wabaIds = metaTplLabSelectedWabaIds();
         const analysisId = String(metaTplLabAiAnalysisId || "").trim();
         const button = document.getElementById("meta-tpl-ai-submit-all");
         const shell = metaTplAiReadShell();
@@ -39528,7 +39638,12 @@
         const mediaInput = document.getElementById("meta-tpl-ai-media-file");
         const hasMediaFile = Boolean(mediaInput && mediaInput.files && mediaInput.files[0]);
         if (!connectionId) {
-          metaTplAiShowResult("error", "Não foi possível enviar", "Selecione ao menos um portfólio.");
+          metaTplAiShowResult("error", "Não foi possível enviar", "Selecione o portfólio.");
+          metaTplAiSetSubmitStatus("");
+          return;
+        }
+        if (!wabaIds.length) {
+          metaTplAiShowResult("error", "Não foi possível enviar", "Selecione a conta WABA onde este template deve ser cadastrado.");
           metaTplAiSetSubmitStatus("");
           return;
         }
@@ -39623,6 +39738,8 @@
             body: JSON.stringify({
               connectionId,
               connectionIds,
+              wabaIds,
+              wabaId: wabaIds[0] || "",
               analysisId,
               modelName: shell.modelName,
               variableType: shell.variableType,
@@ -40004,7 +40121,7 @@
       }
 
       function metaTplLabCollectUiContext() {
-        const portfolio = document.getElementById("meta-tpl-lab-portfolios");
+        const portfolio = document.getElementById("meta-tpl-lab-portfolio");
         const filter = document.getElementById("meta-tpl-lab-portfolio-filter");
         const mediaFormat = document.getElementById("meta-tpl-ai-media-format") || document.getElementById("meta-tpl-ai-media-format");
         const mediaFile = document.getElementById("meta-tpl-ai-media-file") || document.getElementById("meta-tpl-ai-media-file");
@@ -40022,10 +40139,12 @@
           deployMarker: deployMarker,
           connectionId: typeof metaTplLabSelectedConnectionId === "function" ? metaTplLabSelectedConnectionId() : "",
           connectionIds: typeof metaTplLabSelectedConnectionIds === "function" ? metaTplLabSelectedConnectionIds() : [],
+          wabaIds: typeof metaTplLabSelectedWabaIds === "function" ? metaTplLabSelectedWabaIds() : [],
           portfolioLabel:
             typeof metaTplLabSelectedPortfolioLabels === "function"
               ? metaTplLabSelectedPortfolioLabels().join(" · ")
               : "",
+          portfolioValue: portfolio ? String(portfolio.value || "").trim() : "",
           portfolioFilter: filter ? String(filter.value || "").trim() : "",
           modelName: modelName ? String(modelName.value || "").trim() : "",
           mediaFormat: mediaFormat ? String(mediaFormat.value || "").trim() : "",
