@@ -370,6 +370,15 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             return handleMetaError(res, error);
         }
     });
+    app.get("/integrations/meta/whatsapp/templates/wabas", async (req, res) => {
+        try {
+            const result = await templateService.listWabasFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(req.query.connectionId || req.query.connection_id || ""));
+            return sendPublic(res, 200, { ok: true, ...result });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
     app.post("/integrations/meta/whatsapp/templates", async (req, res) => {
         try {
             warnClientTenantClaim(req);
