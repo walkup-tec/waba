@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OPT_IN_PTX_RESUME_INTAKE_ID = exports.JANDIRA2_VOID_INTAKE_ID = exports.JANDIRA2_RERUN_VOID_BROADCAST_ID = exports.JANDIRA2_VOID_BROADCAST_ID = void 0;
+exports.OPT_IN_PTX_RESUME_BROADCAST_ID = exports.OPT_IN_PTX_RESUME_INTAKE_ID_LEGACY = exports.OPT_IN_PTX_RESUME_INTAKE_ID = exports.JANDIRA2_VOID_INTAKE_ID = exports.JANDIRA2_RERUN_VOID_BROADCAST_ID = exports.JANDIRA2_VOID_BROADCAST_ID = void 0;
 exports.isOptInPtxResumeIntake = isOptInPtxResumeIntake;
+exports.isOptInPtxResumeCampaign = isOptInPtxResumeCampaign;
 exports.isBroadcastVoided = isBroadcastVoided;
 exports.shouldAbortBroadcastOnHeaderMediaFailure = shouldAbortBroadcastOnHeaderMediaFailure;
 exports.isBroadcastAbandonedForRetry = isBroadcastAbandonedForRetry;
@@ -11,10 +12,18 @@ exports.isCloudBroadcastInactiveForRetry = isCloudBroadcastInactiveForRetry;
 exports.JANDIRA2_VOID_BROADCAST_ID = "26d33b09-8868-41dd-af78-afd59e7982f2";
 exports.JANDIRA2_RERUN_VOID_BROADCAST_ID = "c8e99348-4579-476c-b52d-af4f05d509df";
 exports.JANDIRA2_VOID_INTAKE_ID = "368d053b-d59b-4eed-a235-fe9e9f32c68c";
-/** Opt in PTX: lote failed com fila; retomar de onde parou (1980/2996). */
-exports.OPT_IN_PTX_RESUME_INTAKE_ID = "66c63991-9c2f-42a2-b024-7aeab1b71546";
+/** Opt in PTX / Paulo Teixeira: lote Cloud 1980 falhas sem fila (intake da tela pode ser outro UUID). */
+exports.OPT_IN_PTX_RESUME_INTAKE_ID = "c213963a-209a-465e-b3b6-85fef1328caf";
+exports.OPT_IN_PTX_RESUME_INTAKE_ID_LEGACY = "66c63991-9c2f-42a2-b024-7aeab1b71546";
+exports.OPT_IN_PTX_RESUME_BROADCAST_ID = "18c8340d-da12-47f1-8577-67f8a762aa32";
 function isOptInPtxResumeIntake(intakeCampaignId) {
-    return String(intakeCampaignId || "").trim() === exports.OPT_IN_PTX_RESUME_INTAKE_ID;
+    const id = String(intakeCampaignId || "").trim();
+    return id === exports.OPT_IN_PTX_RESUME_INTAKE_ID || id === exports.OPT_IN_PTX_RESUME_INTAKE_ID_LEGACY;
+}
+function isOptInPtxResumeCampaign(row) {
+    if (String(row.id || "").trim() === exports.OPT_IN_PTX_RESUME_BROADCAST_ID)
+        return true;
+    return isOptInPtxResumeIntake(row.intakeCampaignId);
 }
 function leadCountsAsDelivered(lead) {
     const meta = String(lead.metaStatus || "");
@@ -51,7 +60,7 @@ function isBroadcastAbandonedForRetry(row) {
 function shouldVoidCloudBroadcast(row) {
     if (isBroadcastVoided(row))
         return false;
-    if (isOptInPtxResumeIntake(row.intakeCampaignId))
+    if (isOptInPtxResumeCampaign(row))
         return false;
     if (String(row.id || "") === exports.JANDIRA2_VOID_BROADCAST_ID)
         return true;
