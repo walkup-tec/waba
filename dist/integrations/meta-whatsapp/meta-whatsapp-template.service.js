@@ -156,25 +156,34 @@ class MetaWhatsappTemplateService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
         }
         const graph = this.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
-        const ids = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
+        const discovered = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabas)({
             token,
             connection,
             graph,
         });
-        const unique = [...new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))];
+        const unique = new Map();
+        for (const row of discovered) {
+            const id = String((row && row.id) || "").trim();
+            if (!id)
+                continue;
+            unique.set(id, String((row && row.name) || "").trim());
+        }
         const wabas = [];
-        for (const id of unique) {
-            const result = await graph({
-                token,
-                method: "GET",
-                path: id,
-                query: { fields: "id,name" },
-                maxAttempts: 1,
-                timeoutMs: 6000,
-            });
-            const name = result.ok
-                ? String(result.json?.name || "").trim()
-                : "";
+        for (const [id, listedName] of unique) {
+            let name = listedName && listedName !== `WABA ${id}` ? listedName : "";
+            if (!name) {
+                const result = await graph({
+                    token,
+                    method: "GET",
+                    path: id,
+                    query: { fields: "id,name" },
+                    maxAttempts: 1,
+                    timeoutMs: 6000,
+                });
+                name = result.ok
+                    ? String(result.json?.name || "").trim()
+                    : "";
+            }
             wabas.push({ id, name: name || `WABA ${id}` });
         }
         if (!wabas.length && connection.wabaId) {

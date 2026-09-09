@@ -1958,6 +1958,148 @@ describe("meta portfolio service", () => {
     }
   });
 
+  it("não coloca WABA de outro BM no card Drax Sistemas 2000", async () => {
+    const previousAppId = process.env.META_APP_ID;
+    const previousAppSecret = process.env.META_APP_SECRET;
+    process.env.META_APP_ID = "meta-app-test";
+    process.env.META_APP_SECRET = "meta-secret-test";
+    const drax2000 = {
+      ...connectedRow(),
+      id: "conn-drax-2000",
+      metaBusinessId: "bm-drax-2000",
+      wabaId: "1603712454491063",
+      displayPhoneNumber: "+55 11 90000-0001",
+      verifiedName: "Conta WABA 01",
+      status: "connected" as const,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [drax2000];
+      },
+      async findOpenByTenant() {
+        return drax2000;
+      },
+    };
+    try {
+      const graph = async (input: { path: string }) => {
+        if (input.path === "1603712454491063") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              id: "1603712454491063",
+              name: "Conta WABA 01",
+              owner_business_info: { id: "bm-drax-2000", name: "Drax Sistemas 2000" },
+            },
+          };
+        }
+        if (input.path === "bm-drax-2000") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              id: "bm-drax-2000",
+              name: "Drax Sistemas 2000",
+              owned_whatsapp_business_accounts: {
+                data: [
+                  {
+                    id: "1603712454491063",
+                    name: "Conta WABA 01",
+                    phone_numbers: {
+                      data: [
+                        {
+                          id: "phone-waba-01",
+                          display_phone_number: "+55 11 90000-0001",
+                          verified_name: "Conta WABA 01",
+                          status: "CONNECTED",
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    id: "waba-jailton",
+                    name: "52.685.982 Jailton Lucas Ferreira dos Reis",
+                    phone_numbers: {
+                      data: [
+                        {
+                          id: "phone-jailton",
+                          display_phone_number: "+55 11 90000-0010",
+                          verified_name: "Jailton",
+                          status: "CONNECTED",
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+              client_whatsapp_business_accounts: { data: [] },
+            },
+          };
+        }
+        if (input.path === "debug_token") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              data: {
+                granular_scopes: [
+                  {
+                    scope: "whatsapp_business_management",
+                    target_ids: ["1603712454491063", "waba-jailton", "4653699361527400"],
+                  },
+                ],
+              },
+            },
+          };
+        }
+        if (input.path === "4653699361527400/phone_numbers") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              data: [
+                {
+                  id: "phone-drax-01",
+                  display_phone_number: "+55 11 91111-0001",
+                  verified_name: "Drax Sistemas 01",
+                  status: "CONNECTED",
+                },
+              ],
+            },
+          };
+        }
+        if (input.path.endsWith("/phone_numbers")) {
+          return { ok: true, status: 200, json: { data: [] } };
+        }
+        return { ok: true, status: 200, json: { data: [] } };
+      };
+      const service = new MetaWhatsappConnectionService(
+        repo as any,
+        { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+        graph as any,
+      );
+      const assets = await service.listPortfolioAssets(auth);
+      const card = (assets.portfolios || []).find((item) => item.id === "bm-drax-2000");
+      assert.ok(card);
+      const numbers = card?.numbers || [];
+      assert.ok(numbers.some((item) => String(item.displayPhoneNumber || "").includes("90000-0001")));
+      assert.ok(numbers.some((item) => String(item.displayPhoneNumber || "").includes("90000-0010")));
+      assert.equal(
+        numbers.some((item) => String(item.verifiedName || "").includes("Drax Sistemas 01")),
+        false,
+      );
+      const wabaIds = new Set(numbers.map((item) => String(item.wabaId || "").trim()).filter(Boolean));
+      assert.equal(wabaIds.has("4653699361527400"), false);
+      assert.ok(wabaIds.has("1603712454491063"));
+      assert.ok(wabaIds.has("waba-jailton"));
+    } finally {
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+      if (previousAppSecret === undefined) delete process.env.META_APP_SECRET;
+      else process.env.META_APP_SECRET = previousAppSecret;
+    }
+  });
+
   it("lista chip Pendente da Graph para ativar com PIN", async () => {
     const drax = {
       ...connectedRow(),

@@ -113,5 +113,47 @@ describe("template waba ids", () => {
         false,
       );
     });
+
+    it("não mistura WABAs de outros BMs quando o portfólio já listou as contas", async () => {
+      const ids = await discoverTemplateWabaIds({
+        token: "tok",
+        connection: { wabaId: "1603712454491063", metaBusinessId: "bm-drax-2000" },
+        graph: async (input) => {
+          if (input.path === "bm-drax-2000") {
+            return graphOk({
+              id: "bm-drax-2000",
+              owned_whatsapp_business_accounts: {
+                data: [
+                  { id: "1603712454491063", name: "Conta WABA 01" },
+                  { id: "2283911612192961", name: "Conta WABA 02" },
+                  { id: "waba-jailton", name: "52.685.982 Jailton Lucas Ferreira dos Reis" },
+                ],
+              },
+              client_whatsapp_business_accounts: { data: [] },
+            });
+          }
+          if (input.path === "debug_token") {
+            return graphOk({
+              data: {
+                granular_scopes: [
+                  {
+                    scope: "whatsapp_business_management",
+                    target_ids: [
+                      "1603712454491063",
+                      "2283911612192961",
+                      "waba-jailton",
+                      "4653699361527400",
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+          return graphOk({ data: [] });
+        },
+      });
+      assert.deepEqual(ids.sort(), ["1603712454491063", "2283911612192961", "waba-jailton"].sort());
+      assert.equal(ids.includes("4653699361527400"), false);
+    });
   });
 });

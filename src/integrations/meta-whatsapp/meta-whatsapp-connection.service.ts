@@ -3,7 +3,6 @@ import {
   isMetaTechProviderConfigured,
   readMetaAppId,
   readMetaAppSecret,
-  readMetaBusinessId,
   readMetaConfigId,
   readMetaJsSdkGraphVersion,
 } from "./meta-config";
@@ -380,15 +379,11 @@ async function hydrateOpenConnection(
 
   const primaryWabaId = resolvedWaba || storedWaba;
   const businessId = String(card.id || resolvedBm || "").trim();
-  const partnerBm = readMetaBusinessId();
 
   /**
    * Um BM (ex.: Quantum Smart Labs) pode ter várias WABAs / vários chips no Manager.
-   * O token do Embedded Signup costuma falhar em owned_* do BM do cliente (precisa
-   * system user). Descoberta em camadas:
-   * 1) debug_token → WABAs (management) e chips (messaging)
-   * 2) phones aninhados em me/businesses + BM cliente + BM parceiro (client_*)
-   * 3) phone_numbers por WABA descoberta
+   * Lista só as contas desse BM (owned + client), igual ao WhatsApp Manager.
+   * debug_token só entra como fallback quando o BM não devolveu WABAs (token ES 403).
    * Docs:
    * https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-accounts/
    * https://developers.facebook.com/docs/marketing-api/reference/business/owned_whatsapp_business_accounts/
@@ -401,31 +396,29 @@ async function hydrateOpenConnection(
     for (const row of rows) phoneRows.push(row);
   };
 
-  const debugTargets = await listDebugTokenWhatsappTargets(g, token);
-  for (const id of debugTargets.wabaIds) wabaIds.add(id);
-  pushPhones(await fetchPhoneNodes(g, token, debugTargets.phoneIds));
-
   const nestedFromCustomer = businessId
     ? await collectNestedPhonesFromBusiness(g, token, businessId)
     : { wabaIds: [] as string[], phones: [] as unknown[] };
-  const nestedFromMe = await collectNestedPhonesFromMeBusinesses(g, token);
-  const nestedFromPartner = partnerBm && partnerBm !== businessId
-    ? await collectNestedPhonesFromBusiness(g, token, partnerBm)
-    : { wabaIds: [] as string[], phones: [] as unknown[] };
-
-  for (const id of nestedFromCustomer.wabaIds) wabaIds.add(id);
-  for (const id of nestedFromMe.wabaIds) wabaIds.add(id);
-  for (const id of nestedFromPartner.wabaIds) wabaIds.add(id);
-  pushPhones(nestedFromCustomer.phones);
-  pushPhones(nestedFromMe.phones);
-  pushPhones(nestedFromPartner.phones);
-
+  const fromThisBm = new Set<string>(nestedFromCustomer.wabaIds);
   if (businessId) {
-    for (const id of await listBusinessWabaIds(g, token, businessId)) wabaIds.add(id);
+    for (const id of await listBusinessWabaIds(g, token, businessId)) fromThisBm.add(id);
   }
-  if (partnerBm) {
-    for (const id of await listBusinessWabaIds(g, token, partnerBm)) wabaIds.add(id);
+  for (const id of fromThisBm) wabaIds.add(id);
+  pushPhones(nestedFromCustomer.phones);
+
+  const debugTargets = await listDebugTokenWhatsappTargets(g, token);
+  if (fromThisBm.size) {
+    for (const id of debugTargets.wabaIds) {
+      if (fromThisBm.has(id)) wabaIds.add(id);
+    }
+  } else {
+    for (const id of debugTargets.wabaIds) wabaIds.add(id);
+    pushPhones(await fetchPhoneNodes(g, token, debugTargets.phoneIds));
   }
+
+  const nestedFromMe = await collectNestedPhonesFromMeBusinesses(g, token, businessId);
+  for (const id of nestedFromMe.wabaIds) wabaIds.add(id);
+  pushPhones(nestedFromMe.phones);
 
   let anyPhonesOk = phoneRows.length > 0;
   let lastPhoneStatus = 0;
@@ -476,7 +469,13 @@ async function hydrateOpenConnection(
   const withProfiles = active.length
     ? await attachPhoneBusinessProfiles(g, token, active, tenantId)
     : [];
-  const numbers = unionPortfolioNumbers(withProfiles, pending);
+  let numbers = unionPortfolioNumbers(withProfiles, pending);
+  if (fromThisBm.size) {
+    numbers = numbers.filter((row) => {
+      const wid = String(row.wabaId || "").trim();
+      return wid ? wabaIds.has(wid) : false;
+    });
+  }
   return {
     card: {
       ...card,
@@ -597,6 +596,7 @@ async function collectNestedPhonesFromBusiness(
 async function collectNestedPhonesFromMeBusinesses(
   graph: MetaConnectionGraphCaller,
   token: string,
+  onlyBusinessId?: string,
 ): Promise<{ wabaIds: string[]; phones: unknown[] }> {
   const fields = [
     "id",
@@ -612,9 +612,14 @@ async function collectNestedPhonesFromMeBusinesses(
   });
   if (!res.ok) return { wabaIds: [], phones: [] };
   const data = Array.isArray(res.json?.data) ? res.json.data : [];
+  const only = String(onlyBusinessId || "").trim();
   const wabaIds = new Set<string>();
   const phones: unknown[] = [];
   for (const node of data) {
+    const nodeId = String(
+      (node && typeof node === "object" ? (node as { id?: unknown }).id : "") || "",
+    ).trim();
+    if (only && nodeId !== only) continue;
     const extracted = extractWabasAndPhonesFromBusinessNode(node);
     for (const id of extracted.wabaIds) wabaIds.add(id);
     for (const phone of extracted.phones) phones.push(phone);
