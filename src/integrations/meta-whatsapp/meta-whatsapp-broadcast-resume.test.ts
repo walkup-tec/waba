@@ -85,43 +85,8 @@ describe("resume de Disparo Cloud órfão pós-Redeploy", () => {
     assert.equal(finalizeStaleRunningBroadcast("camp-done-ish")?.status, "done");
   });
 
-  it("não reabre Opt in PTX failed sem WABA_FORCE_OPT_IN_PTX_RESUME", async () => {
-    process.chdir(dataRoot);
-    const previous = process.env.WABA_FORCE_OPT_IN_PTX_RESUME;
-    delete process.env.WABA_FORCE_OPT_IN_PTX_RESUME;
-    try {
-      const { OPT_IN_PTX_RESUME_BROADCAST_ID } = await import("./meta-whatsapp-broadcast-void");
-      const { reopenOptInPtxBroadcastToContinue, saveBroadcastCampaign, findBroadcastCampaign } =
-        await import("./meta-whatsapp-broadcast.store");
-
-      saveBroadcastCampaign(
-        base({
-          id: OPT_IN_PTX_RESUME_BROADCAST_ID,
-          intakeCampaignId: "c213963a-209a-465e-b3b6-85fef1328caf",
-          status: "failed",
-          sent: 0,
-          failed: 2,
-          total: 2,
-          leads: [
-            { waId: "5511999000001", status: "failed", errorCode: "132001" },
-            { waId: "5511999000002", status: "queued" },
-          ],
-        }),
-      );
-
-      assert.equal(reopenOptInPtxBroadcastToContinue(), null);
-      const kept = findBroadcastCampaign("tenant-a", OPT_IN_PTX_RESUME_BROADCAST_ID);
-      assert.equal(kept?.status, "failed");
-      assert.equal((kept?.leads || []).filter((lead) => lead.status === "queued").length, 1);
-    } finally {
-      if (previous === undefined) delete process.env.WABA_FORCE_OPT_IN_PTX_RESUME;
-      else process.env.WABA_FORCE_OPT_IN_PTX_RESUME = previous;
-    }
-  });
-
   it("reabre a Opt in PTX failed com fila e não reenvia os já sent", async () => {
     process.chdir(dataRoot);
-    process.env.WABA_FORCE_OPT_IN_PTX_RESUME = "1";
     const { OPT_IN_PTX_RESUME_INTAKE_ID } = await import("./meta-whatsapp-broadcast-void");
     const {
       listResumableOrphanedBroadcasts,
@@ -164,12 +129,10 @@ describe("resume de Disparo Cloud órfão pós-Redeploy", () => {
 
     const resumable = listResumableOrphanedBroadcasts().map((row) => row.id);
     assert.ok(resumable.includes("opt-in-ptx-broadcast"));
-    delete process.env.WABA_FORCE_OPT_IN_PTX_RESUME;
   });
 
   it("reabre o lote paulo_teix 1980 failed sem wamid", async () => {
     process.chdir(dataRoot);
-    process.env.WABA_FORCE_OPT_IN_PTX_RESUME = "1";
     const { OPT_IN_PTX_RESUME_BROADCAST_ID } = await import("./meta-whatsapp-broadcast-void");
     const { listResumableOrphanedBroadcasts, reopenOptInPtxBroadcastToContinue, saveBroadcastCampaign } =
       await import("./meta-whatsapp-broadcast.store");
@@ -204,6 +167,5 @@ describe("resume de Disparo Cloud órfão pós-Redeploy", () => {
       1,
     );
     assert.ok(listResumableOrphanedBroadcasts().some((row) => row.id === OPT_IN_PTX_RESUME_BROADCAST_ID));
-    delete process.env.WABA_FORCE_OPT_IN_PTX_RESUME;
   });
 });
