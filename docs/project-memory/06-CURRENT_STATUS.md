@@ -13,23 +13,16 @@ Concluído no laboratório Meta:
 - **Editar perfil** no card do número envia a foto (JPEG/PNG até 5 MB) à Meta; o cliente passa a vê-la no WhatsApp. O botão e o clique na foto só existem no número **Ativo**.
 - operacional/suporte vê a seção Laboratório quando os menus estão marcados no cadastro (não só a conta Mozart).
 - Com esse privilégio, o operacional vê os portfólios, números e templates já conectados no Laboratório (mesmo workspace do dono).
-- Disparo Cloud é menu da seção Laboratório, acima de Automação. Templates ficou só lista/criar. Planilha com telefones em qualquer formato comum no Brasil, sem prévia por número. Envio só de template aprovado, pelo número Ativo e disponível **do mesmo card do portfólio**. Depois de iniciar, a tabela mostra data, campanha, cliente, envios, barra de andamento e status. O campo de template tem filtro de categoria (primeira opção todas) e o rótulo é `nome-categoria`. A campanha do assinante só lista **Em andamento**, no formato `nome - campanha - envios`. Colunas de telefone/nome só depois do template; se houver variável, é nome ou número. Ao usar o número ele fica ocupado até a campanha finalizar e o relatório ser gerado. O relatório dessa campanha fecha com dados da Meta e cliques. Campanhas de operadores sem Laboratório permanecem com relatório manual.
+- Disparo Cloud é menu da seção Laboratório, acima de Automação. Templates ficou só lista/criar. Planilha com telefones em qualquer formato comum no Brasil, sem prévia por número. Envio só de template aprovado, pelo número Ativo e disponível **do mesmo card do portfólio**. Depois de iniciar, a tabela mostra data, campanha, cliente, envios, barra de andamento e status. O campo de template tem filtro de categoria (primeira opção todas) e o rótulo é `nome-categoria`. A campanha do assinante só lista **Em andamento**, no formato `nome - campanha - envios`. Colunas de telefone/nome só depois do template; se houver variável, é nome ou número. Ao usar o número ele fica ocupado até a campanha finalizar e o relatório ser gerado. O relatório dessa campanha coleta o webhook da Meta (não fecha só com Graph 200) e inclui cliques. Campanhas de operadores sem Laboratório permanecem com relatório manual.
 - Wizard da campanha: etapa **Mídia** com Imagem (PNG/JPG, 1080×1080) ou Vídeo (somente MP4, H.264, AAC ou sem áudio, até 16 MB). As regras aparecem antes do arquivo. Na API Oficial, a planilha entra sem telefones duplicados (1 envio por número).
 - Assistente de templates: após Gerar, cada uma das 3 opções tem **Editar** / **Salvar**. O Enviar para META usa o texto salvo.
 
-Em andamento: aprovação dos templates na Meta (até 24 h). Relatório da Campanha Jandira deste disparo (1.990 / 1.156 / 2) mostra 981 entregues e 431 lidos, sem cliques, via override de leitura. Relatório operacional Lab passa a listar falhas da Meta e envios sem comprovante de entrega. Relatório do assinante passa a listar a linha do tempo (criação, atendimento, aprovação do template, início e fim do disparo) numa trilha de pontos (horizontal no desktop, vertical no celular) e o aviso de até 3 horas da Meta.
+Relatório Lab: coleta entregues/lidos pelo webhook da Meta; o JSON **não fecha** só com aceite Graph. Marker no GitHub `master`: `DEPLOY-2026-09-09-204800-lab-report-wait-meta-statuses` (`d6aed15`). EasyPanel só aplica depois do Redeploy autorizado. Campanha nova, após esse marker no `/health`, permanece em coleta até delivered/read/failed.
 
-Campanha Jandira 2: lotes 131053 cancelados. O Disparo Cloud de template com mídia no topo só sobe bytes locais e manda `{ id }`. Se o arquivo não estiver no servidor (template aprovado da biblioteca, ou a mesma foto em outro modelo), o operacional envia a foto de novo na tela do disparo. A Meta não reusa o link de exemplo.
+Overrides só de leitura (não são coleta ao vivo): Campanha Jandira 1.990 / 1.156 / 2 → 981 entregues, 431 lidos, sem cliques; Opt in PTX 2996 / 1980 / 0 → 1724 / 986 / 232.
 
-Disparo Jandira 2 `5552c6f7-…` (15:51): 357 enviados Graph, **289 delivered/read**, 805 na fila, sem 131053. Travou no Redeploy. Marker `DEPLOY-2026-09-03-193200-broadcast-resume-orphan` retoma no boot — **Redeploy** do `waba_disparador` (não voidar este id).
+Disparo Cloud: resume no boot se o processo cair; não Redeployar com `blockRedeploy=true`. Cabeçalho de mídia só `{ id }` local (sem weblink lookaside). Fracionamento ≤500 por número, um relatório só. Número ocupado até o relatório fechar.
 
-Marker: `DEPLOY-2026-09-04-114500-profile-photo-independent-name` (foto de perfil não depende mais do sucesso do nome na Meta).
+Campanha Jandira 2: lotes 131053 cancelados. Disparo 15:51 (Cleison) travou no Redeploy; resume órfão já está no código. Eventos Meta daquele dia não voltam.
 
-GitHub `walkup-tec/waba` `master` recebe o tip. Redeploy EasyPanel do `waba_disparador` fica com o usuário.
-
-Marker: `DEPLOY-2026-09-04-114500-profile-photo-independent-name` (foto de perfil independente do nome na Meta).
-- 2026-09-04: UI/API do Disparo Cloud com multi-seleção de números e fracionamento ≤500; marker `DEPLOY-2026-09-04-121500-cloud-broadcast-multi-number-split`.
-- 2026-09-04: header-media com código Graph na recusa; marker `DEPLOY-2026-09-04-125100-template-header-graph-error-codes`.
-- 2026-09-04: header-media code 4 = rate limit (mensagem correta, sem retry); marker `DEPLOY-2026-09-04-131700-template-header-rate-limit-code4`.
-- 2026-09-04: wrap do header-media preserva rate limit (#4); marker `DEPLOY-2026-09-04-134500-header-upload-preserve-rate-limit`.
-- 2026-09-04: clipboard de evidências de erro no Laboratório Meta (modal AI/delete/standalone); marker `DEPLOY-2026-09-04-141500-lab-error-debug-clipboard`.
+Em andamento: aprovação dos templates na Meta (até 24 h). Redeploy do marker `204800` quando o usuário autorizar. Validar coleta num disparo novo depois disso.
