@@ -38880,9 +38880,12 @@
 
       function metaTplLabWabasFromPortfolio(portfolio) {
         const map = new Map();
+        const ownedId = String((portfolio && portfolio.wabaId) || "").trim();
         function add(wabaId, hint) {
           const id = String(wabaId || "").trim();
           if (!id) return;
+          // Chip de WABA client (ex.: Rio de Janeiro 01) não entra no portfólio marcado.
+          if (ownedId && id !== ownedId) return;
           const prev = map.get(id) || { id: id, hints: [] };
           const label = String(hint || "").trim();
           if (label && prev.hints.indexOf(label) === -1) prev.hints.push(label);
