@@ -27,3 +27,11 @@ describe("Laboratório Conexão: sem trilha de etapas", () => {
     assert.doesNotMatch(html, /Escolha o chip oficial/);
   });
 });
+
+describe("Laboratório: menu Automação fora da tela", () => {
+  it("não mostra o botão Automação no menu do Laboratório", () => {
+    assert.doesNotMatch(html, /id="tab-btn-whatsapp-automation"/);
+    assert.doesNotMatch(html, /<span class="tab-label">Automação<\/span>/);
+    assert.match(html, /\.tab-button\[data-menu-key="whatsapp-automation"\][\s\S]{0,80}display:\s*none\s*!important/);
+  });
+});
