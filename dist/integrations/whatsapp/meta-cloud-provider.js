@@ -57,10 +57,10 @@ class MetaCloudProvider {
         const recipient = (0, meta_whatsapp_recipient_1.normalizeCloudApiRecipient)(input.to);
         if (!recipient.ok)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_recipient");
-        const connection = await this.requireConnected(input.tenantId, input.connectionId, input.phoneNumberId);
+        const connection = await this.requireConnected(input.tenantId, input.connectionId, input.phoneNumberId, { preferConnectionToken: Boolean(input.preferConnectionToken) });
         const template = {
             name,
-            language: { code: language },
+            language: { policy: "deterministic", code: language },
         };
         const components = sanitizeTemplateComponents(input.components);
         if (components.length)
@@ -72,9 +72,21 @@ class MetaCloudProvider {
             template,
         }, input.phoneNumberId);
     }
-    async requireConnected(tenantId, connectionId, phoneNumberId) {
+    async requireConnected(tenantId, connectionId, phoneNumberId, options) {
         let row = null;
+        const connId = String(connectionId || "").trim();
         const phone = String(phoneNumberId || "").trim();
+        if (options?.preferConnectionToken && connId) {
+            row = await this.connections.findByIdForTenant(tenantId, connId);
+            const usable = Boolean(row) &&
+                row.tenantId === tenantId &&
+                !row.disconnectedAt &&
+                Boolean(row.phoneNumberId) &&
+                (row.status === "connected" || row.status === "pending_confirmation");
+            if (!usable || !row)
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
+            return row;
+        }
         if (phone) {
             row = await this.connections.findConnectedByPhoneNumberId(phone);
             const usableByPhone = Boolean(row) &&
@@ -85,8 +97,8 @@ class MetaCloudProvider {
                 return row;
             row = null;
         }
-        if (connectionId) {
-            row = await this.connections.findByIdForTenant(tenantId, connectionId);
+        if (connId) {
+            row = await this.connections.findByIdForTenant(tenantId, connId);
             const usable = Boolean(row) &&
                 row.tenantId === tenantId &&
                 !row.disconnectedAt &&
