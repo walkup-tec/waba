@@ -31,6 +31,7 @@ const buildCampaignIntakeSubmissionFingerprint = (input) => {
         String(input.whatsappName || "").trim().toLowerCase(),
         String(Math.max(0, Math.round(Number(input.plannedSendCount || 0)))),
         String(input.apiKind || "").trim().toLowerCase(),
+        String(input.scheduledSendAt || "").trim(),
         String(Math.max(0, Math.round(Number(input.imageByteLength || 0)))),
         String(Math.max(0, Math.round(Number(input.whatsappLogoByteLength || 0)))),
         String(Math.max(0, Math.round(Number(input.spreadsheetByteLength || 0)))),

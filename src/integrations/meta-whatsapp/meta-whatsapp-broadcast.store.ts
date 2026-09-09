@@ -8,6 +8,7 @@ import path from "path";
 import { resolveDataFile } from "../../data-path";
 import { canAdvanceMetaMessageStatus, type MetaMessageStatus } from "./meta-whatsapp-messaging.types";
 import { campaignUsesPhoneNumber } from "./meta-whatsapp-broadcast-split";
+import { formatScheduledSendLabel, isScheduledSendPending } from "../../disparos/waba-campaign-schedule";
 
 export type MetaBroadcastLeadStatusLog = {
   status: MetaMessageStatus;
@@ -72,6 +73,8 @@ export type MetaBroadcastCampaign = {
   skipped: number;
   createdAt: string;
   updatedAt: string;
+  /** ISO UTC: o loop de envio só começa neste instante. */
+  scheduledSendAt?: string;
   leads: MetaBroadcastLead[];
 };
 
@@ -235,6 +238,7 @@ export type CloudBroadcastProgressHint = {
   status: MetaBroadcastCampaign["status"];
   sendStartedAt?: string;
   sendFinishedAt?: string;
+  scheduledSendAt?: string;
 };
 
 function isActiveBroadcastRow(row: MetaBroadcastCampaign): boolean {
@@ -255,6 +259,7 @@ export function indexBroadcastProgressByIntakeId(): Map<string, CloudBroadcastPr
       status: row.status,
       sendStartedAt: row.sendStartedAt,
       sendFinishedAt: row.sendFinishedAt,
+      scheduledSendAt: row.scheduledSendAt,
     });
   }
   return map;
@@ -303,6 +308,7 @@ export function listResumableOrphanedBroadcasts(): MetaBroadcastCampaign[] {
     .campaigns.filter((row) => {
       if (String(row.voidedAt || "").trim()) return false;
       if (row.status !== "running" && row.status !== "queued") return false;
+      if (row.status !== "running" && isScheduledSendPending(row.scheduledSendAt)) return false;
       return (row.leads || []).some(broadcastLeadIsPendingSend);
     })
     .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
@@ -579,5 +585,7 @@ export function publicBroadcastCampaign(row: MetaBroadcastCampaign) {
     skipped: row.skipped,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    scheduledSendAt: row.scheduledSendAt || undefined,
+    scheduledSendLabel: formatScheduledSendLabel(row.scheduledSendAt) || undefined,
   };
 }

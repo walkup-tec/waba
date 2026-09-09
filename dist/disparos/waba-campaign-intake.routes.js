@@ -29,6 +29,7 @@ const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
 const waba_campaign_intake_idempotency_1 = require("./waba-campaign-intake-idempotency");
 const waba_campaign_intake_constants_1 = require("./waba-campaign-intake.constants");
 const waba_campaign_intake_media_1 = require("./waba-campaign-intake-media");
+const waba_campaign_schedule_1 = require("./waba-campaign-schedule");
 const intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
 const masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService();
@@ -58,7 +59,10 @@ const normalizeDdd = (value) => {
     return digits;
 };
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
-const toDisplayStatus = (status, laboratorioAttended = false, broadcastProgress) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "subscriber", (0, waba_campaign_intake_status_1.campaignIntakeDisplayOptionsFromBroadcast)(laboratorioAttended, broadcastProgress));
+const toDisplayStatus = (status, laboratorioAttended = false, broadcastProgress, scheduledSendAt) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "subscriber", {
+    ...(0, waba_campaign_intake_status_1.campaignIntakeDisplayOptionsFromBroadcast)(laboratorioAttended, broadcastProgress),
+    scheduledSendAt: scheduledSendAt || broadcastProgress?.scheduledSendAt || null,
+});
 const parseRequestedPlannedSendCount = (body) => {
     const raw = body.plannedSendCount;
     if (raw === undefined || raw === null || String(raw).trim() === "")
@@ -137,12 +141,14 @@ const toPublicIntake = (intake, broadcastProgress) => {
         createdAt: intake.createdAt,
         updatedAt: intake.updatedAt,
         status,
-        displayStatus: toDisplayStatus(status, labDisplay, labDisplay ? broadcastProgress : null),
+        displayStatus: toDisplayStatus(status, labDisplay, labDisplay ? broadcastProgress : null, intake.scheduledSendAt || broadcastProgress?.scheduledSendAt),
         regionDdd: intake.regionDdd,
         importedLineCount,
         plannedSendCount,
         apiKind,
         planTypeLabel: waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[apiKind],
+        scheduledSendAt: intake.scheduledSendAt || "",
+        scheduledSendLabel: (0, waba_campaign_schedule_1.formatScheduledSendLabel)(intake.scheduledSendAt),
         /** Envios confirmados no relatório do operacional (somente campanhas finalizadas). */
         sentCount: holdInProgress ? 0 : resolveReportedSentCount(intake),
         hasErrorReport: status === "error_reported",
@@ -183,6 +189,10 @@ const buildIntakeSuccessPayload = (intake, options = {}) => {
     if (duplicatesRemoved > 0) {
         importSummary += ` ${duplicatesRemoved} telefone(s) duplicado(s) foram excluídos (1 envio por número).`;
     }
+    const scheduledLabel = (0, waba_campaign_schedule_1.formatScheduledSendLabel)(intake.scheduledSendAt);
+    if (scheduledLabel) {
+        importSummary += ` Disparo agendado para ${scheduledLabel}.`;
+    }
     return {
         ok: true,
         deduplicated: Boolean(options.deduplicated),
@@ -191,7 +201,9 @@ const buildIntakeSuccessPayload = (intake, options = {}) => {
         operacionalNotify: options.operacionalNotify,
         message: options.deduplicated
             ? "Campanha já havia sido registrada. Não foi criada duplicata."
-            : "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
+            : scheduledLabel
+                ? `Campanha gerada. O disparo está agendado para ${scheduledLabel}.`
+                : "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
         importSummary,
     };
 };
@@ -368,6 +380,16 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             if (apiKindError) {
                 return res.status(400).json({ error: apiKindError });
             }
+            let scheduledSendAt = "";
+            try {
+                scheduledSendAt =
+                    apiKind === "oficial" ? (0, waba_campaign_schedule_1.parseScheduledSendAt)(body.scheduledSendAt, { requireFuture: true }) : "";
+            }
+            catch (error) {
+                return res.status(400).json({
+                    error: error instanceof Error ? error.message : "Data de agendamento inválida.",
+                });
+            }
             let importedLineCount = 0;
             let leadsBufferForTrim = spreadsheetFile.buffer;
             let phoneDuplicatesRemoved = 0;
@@ -407,6 +429,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 whatsappName,
                 plannedSendCount,
                 apiKind,
+                scheduledSendAt,
                 imageByteLength: imageFile.buffer.length,
                 whatsappLogoByteLength: whatsappLogoFile.buffer.length,
                 spreadsheetByteLength: spreadsheetFile.buffer.length,
@@ -476,6 +499,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                     status: "generated",
                     clientRequestId: clientRequestId || undefined,
                     submissionFingerprint,
+                    ...(scheduledSendAt ? { scheduledSendAt } : {}),
                     createdAt: now,
                     updatedAt: now,
                 });

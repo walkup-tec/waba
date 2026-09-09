@@ -34,6 +34,7 @@ const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../../data-path");
 const meta_whatsapp_messaging_types_1 = require("./meta-whatsapp-messaging.types");
 const meta_whatsapp_broadcast_split_1 = require("./meta-whatsapp-broadcast-split");
+const waba_campaign_schedule_1 = require("../../disparos/waba-campaign-schedule");
 const FILE_NAME = "meta-whatsapp-broadcasts.json";
 function emptyStore() {
     return { version: 1, campaigns: [] };
@@ -198,6 +199,7 @@ function indexBroadcastProgressByIntakeId() {
             status: row.status,
             sendStartedAt: row.sendStartedAt,
             sendFinishedAt: row.sendFinishedAt,
+            scheduledSendAt: row.scheduledSendAt,
         });
     }
     return map;
@@ -243,6 +245,8 @@ function listResumableOrphanedBroadcasts() {
         if (String(row.voidedAt || "").trim())
             return false;
         if (row.status !== "running" && row.status !== "queued")
+            return false;
+        if (row.status !== "running" && (0, waba_campaign_schedule_1.isScheduledSendPending)(row.scheduledSendAt))
             return false;
         return (row.leads || []).some(broadcastLeadIsPendingSend);
     })
@@ -513,5 +517,7 @@ function publicBroadcastCampaign(row) {
         skipped: row.skipped,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        scheduledSendAt: row.scheduledSendAt || undefined,
+        scheduledSendLabel: (0, waba_campaign_schedule_1.formatScheduledSendLabel)(row.scheduledSendAt) || undefined,
     };
 }

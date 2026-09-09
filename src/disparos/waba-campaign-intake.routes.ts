@@ -67,6 +67,7 @@ import {
   parseCampaignMediaKind,
   validateCampaignIntakeMedia,
 } from "./waba-campaign-intake-media";
+import { formatScheduledSendLabel, parseScheduledSendAt } from "./waba-campaign-schedule";
 
 const intakeRepository = new WabaCampaignIntakeRepository();
 const disparosCreditsService = new WabaDisparosCreditsService();
@@ -105,12 +106,12 @@ const toDisplayStatus = (
   status: WabaCampaignIntake["status"],
   laboratorioAttended = false,
   broadcastProgress?: CloudBroadcastProgressHint | null,
+  scheduledSendAt?: string | null,
 ): string =>
-  toCampaignIntakeDisplayStatus(
-    status,
-    "subscriber",
-    campaignIntakeDisplayOptionsFromBroadcast(laboratorioAttended, broadcastProgress),
-  );
+  toCampaignIntakeDisplayStatus(status, "subscriber", {
+    ...campaignIntakeDisplayOptionsFromBroadcast(laboratorioAttended, broadcastProgress),
+    scheduledSendAt: scheduledSendAt || broadcastProgress?.scheduledSendAt || null,
+  });
 
 const parseRequestedPlannedSendCount = (body: Record<string, unknown>): number | null => {
   const raw = body.plannedSendCount;
@@ -201,12 +202,19 @@ const toPublicIntake = (
     createdAt: intake.createdAt,
     updatedAt: intake.updatedAt,
     status,
-    displayStatus: toDisplayStatus(status, labDisplay, labDisplay ? broadcastProgress : null),
+    displayStatus: toDisplayStatus(
+      status,
+      labDisplay,
+      labDisplay ? broadcastProgress : null,
+      intake.scheduledSendAt || broadcastProgress?.scheduledSendAt,
+    ),
     regionDdd: intake.regionDdd,
     importedLineCount,
     plannedSendCount,
     apiKind,
     planTypeLabel: WABA_DISPATCHES_API_LABELS[apiKind],
+    scheduledSendAt: intake.scheduledSendAt || "",
+    scheduledSendLabel: formatScheduledSendLabel(intake.scheduledSendAt),
     /** Envios confirmados no relatório do operacional (somente campanhas finalizadas). */
     sentCount: holdInProgress ? 0 : resolveReportedSentCount(intake),
     hasErrorReport: status === "error_reported",
@@ -263,6 +271,10 @@ const buildIntakeSuccessPayload = (
   if (duplicatesRemoved > 0) {
     importSummary += ` ${duplicatesRemoved} telefone(s) duplicado(s) foram excluídos (1 envio por número).`;
   }
+  const scheduledLabel = formatScheduledSendLabel(intake.scheduledSendAt);
+  if (scheduledLabel) {
+    importSummary += ` Disparo agendado para ${scheduledLabel}.`;
+  }
 
   return {
     ok: true,
@@ -273,7 +285,9 @@ const buildIntakeSuccessPayload = (
     message:
       options.deduplicated
         ? "Campanha já havia sido registrada. Não foi criada duplicata."
-        : "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
+        : scheduledLabel
+          ? `Campanha gerada. O disparo está agendado para ${scheduledLabel}.`
+          : "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
     importSummary,
   };
 };
@@ -475,6 +489,16 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         return res.status(400).json({ error: apiKindError });
       }
 
+      let scheduledSendAt = "";
+      try {
+        scheduledSendAt =
+          apiKind === "oficial" ? parseScheduledSendAt(body.scheduledSendAt, { requireFuture: true }) : "";
+      } catch (error) {
+        return res.status(400).json({
+          error: error instanceof Error ? error.message : "Data de agendamento inválida.",
+        });
+      }
+
       let importedLineCount = 0;
       let leadsBufferForTrim = spreadsheetFile.buffer;
       let phoneDuplicatesRemoved = 0;
@@ -521,6 +545,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         whatsappName,
         plannedSendCount,
         apiKind,
+        scheduledSendAt,
         imageByteLength: imageFile.buffer.length,
         whatsappLogoByteLength: whatsappLogoFile.buffer.length,
         spreadsheetByteLength: spreadsheetFile.buffer.length,
@@ -602,6 +627,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           status: "generated",
           clientRequestId: clientRequestId || undefined,
           submissionFingerprint,
+          ...(scheduledSendAt ? { scheduledSendAt } : {}),
           createdAt: now,
           updatedAt: now,
         });

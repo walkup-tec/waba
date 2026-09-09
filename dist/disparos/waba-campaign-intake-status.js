@@ -28,6 +28,7 @@ function campaignIntakeDisplayOptionsFromBroadcast(laboratorioAttended, progress
         broadcastStatus: progress?.status || null,
         dispatchStarted: Boolean(String(progress?.sendStartedAt || "").trim()),
         dispatchFinished: Boolean(String(progress?.sendFinishedAt || "").trim()),
+        scheduledSendAt: progress?.scheduledSendAt || null,
     };
 }
 function labInProgressDisplayLabel(options) {
@@ -38,6 +39,12 @@ function labInProgressDisplayLabel(options) {
         return "Coletando relatório da Meta";
     if (broadcast === "running" || options.dispatchStarted)
         return "Enviando";
+    const scheduled = String(options.scheduledSendAt || "").trim();
+    if (scheduled && (broadcast === "queued" || !broadcast)) {
+        const dueMs = Date.parse(scheduled);
+        if (Number.isFinite(dueMs) && dueMs > Date.now())
+            return "Agendado";
+    }
     if (broadcast === "queued")
         return "Na fila";
     return "Meta analisando template";

@@ -36,6 +36,7 @@ const waba_subscriber_repository_1 = require("../../subscribers/waba-subscriber.
 const meta_whatsapp_broadcast_linkable_1 = require("./meta-whatsapp-broadcast-linkable");
 const meta_whatsapp_broadcast_history_1 = require("./meta-whatsapp-broadcast-history");
 const meta_whatsapp_template_approved_at_store_1 = require("./meta-whatsapp-template-approved-at.store");
+const waba_campaign_schedule_1 = require("../../disparos/waba-campaign-schedule");
 const running = new Set();
 let resumeWatchdogTimer = null;
 function isCloudBroadcastSendLoopAlive(campaignId) {
@@ -493,24 +494,30 @@ class MetaWhatsappBroadcastService {
             ...(templateApprovedAt ? { templateApprovedAt } : {}),
             leads: assignedLeads,
         };
+        const scheduledSendAt = this.resolveIntakeScheduledSendAt(intakeCampaignId);
+        if (scheduledSendAt)
+            campaign.scheduledSendAt = scheduledSendAt;
         (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(campaign);
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-queued", {
             tenantId: tenant.tenantId,
             total: campaign.total,
             skippedInvalid: campaign.skipped,
             duplicatesRemoved: preview.parsed.duplicatesRemoved,
+            scheduledSendAt: scheduledSendAt || "",
         });
-        void this.runCampaign(campaign.id, tenant.tenantId, {
-            connectionId: loaded.connection.id,
-            connectionByPhone: (0, meta_whatsapp_broadcast_phones_1.connectionIdByPhoneNumber)(sendingBindings),
-            templateName: loaded.template.name,
-            language: loaded.template.language,
-            phoneNumberId: sendingPhoneNumberId,
-            phoneNumberIds: sendingPhoneNumberIds,
-            inspect: loaded.inspect,
-            headerByPhone,
-            buttonSlug: loaded.inspect.urlButton?.hasVariable ? short.shortSlug : undefined,
-        });
+        if (!(0, waba_campaign_schedule_1.isScheduledSendPending)(scheduledSendAt)) {
+            void this.runCampaign(campaign.id, tenant.tenantId, {
+                connectionId: loaded.connection.id,
+                connectionByPhone: (0, meta_whatsapp_broadcast_phones_1.connectionIdByPhoneNumber)(sendingBindings),
+                templateName: loaded.template.name,
+                language: loaded.template.language,
+                phoneNumberId: sendingPhoneNumberId,
+                phoneNumberIds: sendingPhoneNumberIds,
+                inspect: loaded.inspect,
+                headerByPhone,
+                buttonSlug: loaded.inspect.urlButton?.hasVariable ? short.shortSlug : undefined,
+            });
+        }
         return (0, meta_whatsapp_broadcast_store_1.publicBroadcastCampaign)(campaign);
     }
     async runCampaign(campaignId, tenantId, ctx) {
@@ -724,6 +731,13 @@ class MetaWhatsappBroadcastService {
             const ownerEmail = String(intake.ownerEmail || "").trim().toLowerCase();
             const subscriberName = String(subscribers.getByEmail(ownerEmail)?.fullName || "").trim();
             const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount || 0)));
+            const scheduledLabel = (0, waba_campaign_schedule_1.formatScheduledSendLabel)(intake.scheduledSendAt);
+            const baseLabel = (0, meta_whatsapp_broadcast_linkable_1.formatCloudLinkableCampaignLabel)({
+                subscriberName,
+                ownerEmail,
+                campaignName: intake.campaignName,
+                plannedSendCount,
+            });
             return {
                 id: intake.id,
                 campaignName: intake.campaignName,
@@ -732,12 +746,9 @@ class MetaWhatsappBroadcastService {
                 status: (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status),
                 plannedSendCount,
                 assignedOperacionalEmail: String(intake.assignedOperacionalEmail || "").trim().toLowerCase(),
-                label: (0, meta_whatsapp_broadcast_linkable_1.formatCloudLinkableCampaignLabel)({
-                    subscriberName,
-                    ownerEmail,
-                    campaignName: intake.campaignName,
-                    plannedSendCount,
-                }),
+                scheduledSendAt: intake.scheduledSendAt || "",
+                scheduledSendLabel: scheduledLabel,
+                label: scheduledLabel ? `${baseLabel} · Agendado ${scheduledLabel}` : baseLabel,
             };
         });
     }
@@ -753,6 +764,8 @@ class MetaWhatsappBroadcastService {
         if (running.has(campaignId))
             return false;
         if ((0, meta_whatsapp_broadcast_void_1.isBroadcastVoided)(row))
+            return false;
+        if (row.status !== "running" && (0, waba_campaign_schedule_1.isScheduledSendPending)(row.scheduledSendAt))
             return false;
         try {
             const loaded = await this.loadApprovedTemplate(tenantId, row.connectionId, row.templateId);
@@ -859,6 +872,19 @@ class MetaWhatsappBroadcastService {
             (0, meta_whatsapp_broadcast_store_1.voidBroadcastCampaignForRetry)(existing.id);
         }
         return intake.id;
+    }
+    resolveIntakeScheduledSendAt(intakeId) {
+        const id = String(intakeId || "").trim();
+        if (!id)
+            return undefined;
+        const intake = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository().getById(id);
+        try {
+            const iso = (0, waba_campaign_schedule_1.parseScheduledSendAt)(intake?.scheduledSendAt);
+            return iso || undefined;
+        }
+        catch {
+            return undefined;
+        }
     }
 }
 exports.MetaWhatsappBroadcastService = MetaWhatsappBroadcastService;

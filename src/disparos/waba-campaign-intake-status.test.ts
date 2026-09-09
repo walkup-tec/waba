@@ -68,4 +68,18 @@ describe("status visível da campanha", () => {
       "Em andamento",
     );
   });
+
+  it("queued com horário futuro aparece como Agendado", () => {
+    assert.equal(
+      toCampaignIntakeDisplayStatus(
+        "in_progress",
+        "operacional",
+        campaignIntakeDisplayOptionsFromBroadcast(true, {
+          status: "queued",
+          scheduledSendAt: new Date(Date.now() + 3600_000).toISOString(),
+        }),
+      ),
+      "Agendado",
+    );
+  });
 });

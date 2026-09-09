@@ -168,4 +168,37 @@ describe("resume de Disparo Cloud órfão pós-Redeploy", () => {
     );
     assert.ok(listResumableOrphanedBroadcasts().some((row) => row.id === OPT_IN_PTX_RESUME_BROADCAST_ID));
   });
+
+  it("não retoma lote queued cujo disparo ainda está agendado no futuro", async () => {
+    process.chdir(dataRoot);
+    const { listResumableOrphanedBroadcasts, saveBroadcastCampaign } = await import(
+      "./meta-whatsapp-broadcast.store"
+    );
+    saveBroadcastCampaign(
+      base({
+        id: "camp-agendada",
+        status: "queued",
+        sendStartedAt: undefined,
+        scheduledSendAt: new Date(Date.now() + 3600_000).toISOString(),
+        leads: [
+          { waId: "5511999990001", status: "queued" },
+          { waId: "5511999990002", status: "queued" },
+        ],
+      }),
+    );
+    assert.equal(
+      listResumableOrphanedBroadcasts().some((row) => row.id === "camp-agendada"),
+      false,
+    );
+    saveBroadcastCampaign(
+      base({
+        id: "camp-hora-chegou",
+        status: "queued",
+        sendStartedAt: undefined,
+        scheduledSendAt: new Date(Date.now() - 1_000).toISOString(),
+        leads: [{ waId: "5511999990001", status: "queued" }],
+      }),
+    );
+    assert.ok(listResumableOrphanedBroadcasts().some((row) => row.id === "camp-hora-chegou"));
+  });
 });

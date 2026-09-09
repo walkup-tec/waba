@@ -119,6 +119,8 @@ export type WabaCampaignIntake = {
   clientRequestId?: string;
   /** Hash leve do envio (nome, DDD, envios, API, tamanhos) — dedupe de duplo clique. */
   submissionFingerprint?: string;
+  /** ISO UTC: disparo Cloud só sai neste instante (API Oficial). */
+  scheduledSendAt?: string;
   createdAt: string;
   updatedAt: string;
 };

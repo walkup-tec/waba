@@ -6,6 +6,7 @@ export type CampaignIntakeDisplayOptions = {
   broadcastStatus?: string | null;
   dispatchStarted?: boolean;
   dispatchFinished?: boolean;
+  scheduledSendAt?: string | null;
 };
 
 export const normalizeCampaignIntakeStatus = (status: string): WabaCampaignIntakeStatus => {
@@ -32,6 +33,7 @@ export function campaignIntakeDisplayOptionsFromBroadcast(
     broadcastStatus: progress?.status || null,
     dispatchStarted: Boolean(String(progress?.sendStartedAt || "").trim()),
     dispatchFinished: Boolean(String(progress?.sendFinishedAt || "").trim()),
+    scheduledSendAt: progress?.scheduledSendAt || null,
   };
 }
 
@@ -40,6 +42,11 @@ function labInProgressDisplayLabel(options: CampaignIntakeDisplayOptions): strin
   if (broadcast === "failed") return "Falha no envio";
   if (broadcast === "done" || options.dispatchFinished) return "Coletando relatório da Meta";
   if (broadcast === "running" || options.dispatchStarted) return "Enviando";
+  const scheduled = String(options.scheduledSendAt || "").trim();
+  if (scheduled && (broadcast === "queued" || !broadcast)) {
+    const dueMs = Date.parse(scheduled);
+    if (Number.isFinite(dueMs) && dueMs > Date.now()) return "Agendado";
+  }
   if (broadcast === "queued") return "Na fila";
   return "Meta analisando template";
 }

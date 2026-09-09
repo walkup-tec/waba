@@ -4,6 +4,7 @@ exports.cloudBroadcastProgress = cloudBroadcastProgress;
 exports.cloudBroadcastDisplayStatus = cloudBroadcastDisplayStatus;
 exports.toCloudBroadcastHistoryItem = toCloudBroadcastHistoryItem;
 const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-intake-status");
+const waba_campaign_schedule_1 = require("../../disparos/waba-campaign-schedule");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
 function cloudBroadcastProgress(input) {
     const requested = Math.max(0, Math.round(Number(input.plannedSendCount || input.total || 0)));
@@ -31,6 +32,9 @@ function cloudBroadcastDisplayStatus(input) {
     if (intake === "cancelled")
         return { key: "cancelled", label: "Cancelada" };
     const broadcast = String(input.broadcastStatus || "");
+    if (broadcast === "queued" && (0, waba_campaign_schedule_1.isScheduledSendPending)(input.scheduledSendAt)) {
+        return { key: "scheduled", label: "Agendado" };
+    }
     if (broadcast === "queued")
         return { key: "queued", label: "Na fila" };
     if (broadcast === "running")
@@ -59,7 +63,9 @@ function toCloudBroadcastHistoryItem(input) {
         broadcastStatus: input.campaign.status,
         intakeStatus: input.intakeStatus,
         voided: Boolean(String(input.campaign.voidedAt || "").trim()),
+        scheduledSendAt: input.campaign.scheduledSendAt,
     });
+    const scheduledSendAt = String(input.campaign.scheduledSendAt || "").trim();
     return {
         ...(0, meta_whatsapp_broadcast_store_1.publicBroadcastCampaign)(input.campaign),
         startedAt: input.campaign.createdAt,
@@ -70,5 +76,7 @@ function toCloudBroadcastHistoryItem(input) {
         progressPercent: progress.percent,
         statusKey: display.key,
         statusLabel: display.label,
+        scheduledSendAt: scheduledSendAt || undefined,
+        scheduledSendLabel: (0, waba_campaign_schedule_1.formatScheduledSendLabel)(scheduledSendAt),
     };
 }

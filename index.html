@@ -16651,6 +16651,86 @@
       .dis-campaign-wizard-nav button[hidden] {
         display: none !important;
       }
+      .dis-campaign-wizard-nav-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-left: auto;
+      }
+      .dis-wizard-schedule-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(2, 6, 23, 0.72);
+      }
+      .dis-wizard-schedule-overlay[hidden] {
+        display: none !important;
+      }
+      .dis-wizard-schedule-dialog {
+        width: min(420px, 100%);
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: #0f172a;
+        padding: 20px 18px 16px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+      }
+      .dis-wizard-schedule-dialog h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+        color: #f8fafc;
+      }
+      .dis-wizard-schedule-dialog p {
+        margin: 0 0 14px;
+        font-size: 0.88rem;
+        line-height: 1.45;
+        color: #cbd5e1;
+      }
+      .dis-wizard-schedule-dialog input[type="datetime-local"] {
+        width: 100%;
+        min-height: 44px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: #020617;
+        color: #f8fafc;
+        padding: 8px 10px;
+        font-size: 1rem;
+      }
+      .dis-wizard-schedule-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .dis-campaign-intake-schedule-tag,
+      .meta-tpl-broadcast-schedule-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: #fde68a;
+        background: rgba(234, 179, 8, 0.16);
+        border: 1px solid rgba(234, 179, 8, 0.4);
+      }
+      .meta-tpl-broadcast-schedule-tag {
+        margin-left: 8px;
+        vertical-align: middle;
+      }
+      @media (max-width: 720px) {
+        .dis-campaign-wizard-nav-actions {
+          width: 100%;
+          margin-left: 0;
+        }
+        .dis-campaign-wizard-nav-actions .instance-action-btn {
+          flex: 1 1 calc(50% - 4px);
+        }
+      }
       .dis-campaign-wizard-submit-error {
         margin-top: 12px;
         padding: 10px 12px;
@@ -21548,9 +21628,28 @@
                   <div class="dis-campaign-wizard-nav" id="dis-campaign-wizard-nav">
                     <button id="dis-wizard-prev-btn" class="instance-action-btn enabled" type="button">Voltar</button>
                     <button id="dis-wizard-next-btn" class="instance-action-btn btn-qrcode enabled" type="button">Continuar</button>
-                    <button id="dis-wizard-generate-btn" class="instance-action-btn btn-qrcode enabled" type="button" hidden>
-                      Gerar Campanha
-                    </button>
+                    <div class="dis-campaign-wizard-nav-actions">
+                      <button id="dis-wizard-schedule-btn" class="instance-action-btn enabled" type="button" hidden>
+                        Agendar Disparo
+                      </button>
+                      <button id="dis-wizard-generate-btn" class="instance-action-btn btn-qrcode enabled" type="button" hidden>
+                        Gerar Campanha
+                      </button>
+                    </div>
+                  </div>
+                  <div id="dis-wizard-schedule-overlay" class="dis-wizard-schedule-overlay" hidden>
+                    <div class="dis-wizard-schedule-dialog" role="dialog" aria-labelledby="dis-wizard-schedule-title" aria-modal="true">
+                      <h3 id="dis-wizard-schedule-title">Agendar disparo</h3>
+                      <p>Escolha o dia e a hora em que o disparo deve sair. O operacional inicia no Cloud, e o envio só acontece neste horário.</p>
+                      <label class="aquecedor-field" for="dis-wizard-schedule-at" style="display:block;margin:0;">
+                        <span class="muted" style="display:block;margin-bottom:6px;">Data e hora</span>
+                        <input id="dis-wizard-schedule-at" type="datetime-local" step="60" />
+                      </label>
+                      <div class="dis-wizard-schedule-actions">
+                        <button id="dis-wizard-schedule-cancel" class="instance-action-btn enabled" type="button">Cancelar</button>
+                        <button id="dis-wizard-schedule-confirm" class="instance-action-btn btn-qrcode enabled" type="button">Confirmar agendamento</button>
+                      </div>
+                    </div>
                   </div>
                   <div
                     id="dis-wizard-submit-error"
@@ -22618,6 +22717,7 @@
                     <option value="">Selecione a campanha</option>
                   </select>
                   <span class="muted">Só campanhas Em andamento, no formato nome do assinante - campanha - envios. O total de envios da campanha define o fracionamento.</span>
+                  <span id="meta-tpl-broadcast-schedule-hint" class="muted" hidden></span>
                 </div>
                 <div class="aquecedor-field">
                   <label>5. Números Ativos e disponíveis</label>
@@ -40843,6 +40943,9 @@
           if (item.plannedSends != null && item.plannedSends !== "") {
             option.setAttribute("data-planned-sends", String(item.plannedSends));
           }
+          if (item.scheduledLabel) {
+            option.setAttribute("data-scheduled-label", String(item.scheduledLabel));
+          }
           select.appendChild(option);
         });
         if ((items || []).some((item) => item.value === previous)) select.value = previous;
@@ -41073,6 +41176,24 @@
         void metaTplBroadcastLoadInspect();
       }
 
+      function metaTplBroadcastSyncScheduleHint() {
+        const hint = document.getElementById("meta-tpl-broadcast-schedule-hint");
+        const select = metaTplBroadcastEl("meta-tpl-broadcast-intake");
+        if (!hint || !select) return;
+        const selected = select.options[select.selectedIndex];
+        const label = selected ? String(selected.getAttribute("data-scheduled-label") || "").trim() : "";
+        if (!label) {
+          hint.hidden = true;
+          hint.textContent = "";
+          return;
+        }
+        hint.hidden = false;
+        hint.textContent =
+          "Disparo agendado pelo assinante para " +
+          label +
+          ". Ao clicar em Iniciar disparo, o envio só sai neste horário.";
+      }
+
       async function metaTplBroadcastLoadLinkableCampaigns() {
         const select = metaTplBroadcastEl("meta-tpl-broadcast-intake");
         if (!select) return;
@@ -41090,6 +41211,7 @@
           );
           select.value = "demo-intake-lab";
           metaTplBroadcastRenderSplitPreview();
+          metaTplBroadcastSyncScheduleHint();
           return;
         }
         try {
@@ -41101,7 +41223,12 @@
               const envios = Math.max(0, Math.round(Number(item.plannedSendCount || 0)));
               const ready = String(item.label || "").trim();
               if (ready) {
-                return { value: String(item.id || ""), label: ready, plannedSends: envios };
+                return {
+                  value: String(item.id || ""),
+                  label: ready,
+                  plannedSends: envios,
+                  scheduledLabel: String(item.scheduledSendLabel || "").trim(),
+                };
               }
               const name = String(item.campaignName || "Campanha").trim() || "Campanha";
               const owner = String(item.ownerName || item.ownerEmail || "Assinante").trim() || "Assinante";
@@ -41109,14 +41236,17 @@
                 value: String(item.id || ""),
                 label: owner + " - " + name + " - " + envios,
                 plannedSends: envios,
+                scheduledLabel: String(item.scheduledSendLabel || "").trim(),
               };
             }),
             items.length ? "Selecione a campanha Em andamento" : "Nenhuma campanha Em andamento no Laboratório",
           );
           metaTplBroadcastRenderSplitPreview();
+          metaTplBroadcastSyncScheduleHint();
         } catch (_error) {
           metaTplBroadcastFillSelect(select, [], "Não foi possível listar as campanhas");
           metaTplBroadcastRenderSplitPreview();
+          metaTplBroadcastSyncScheduleHint();
         }
       }
 
@@ -41716,6 +41846,7 @@
       function metaTplBroadcastHistoryStatusMeta(item) {
         const key = String((item && item.statusKey) || item && item.status || "").trim();
         if (key === "completed" || key === "done") return { label: item.statusLabel || "Finalizado", cls: "is-approved" };
+        if (key === "scheduled") return { label: item.statusLabel || "Agendado", cls: "is-pending" };
         if (key === "running" || key === "in_progress") return { label: item.statusLabel || "Enviando", cls: "is-pending" };
         if (key === "collecting") return { label: item.statusLabel || "Coletando relatório da Meta", cls: "is-pending" };
         if (key === "queued") return { label: item.statusLabel || "Na fila", cls: "is-pending" };
@@ -41742,6 +41873,7 @@
             const processed = Math.max(0, Math.round(Number(item.processedCount || item.sent || 0)));
             const percent = Math.max(0, Math.min(100, Math.round(Number(item.progressPercent || 0))));
             const status = metaTplBroadcastHistoryStatusMeta(item);
+            const scheduleTag = String((item && item.scheduledSendLabel) || "").trim();
             return (
               "<tr>" +
               "<td>" +
@@ -41749,6 +41881,9 @@
               "</td>" +
               "<td>" +
               campaign +
+              (scheduleTag
+                ? '<span class="meta-tpl-broadcast-schedule-tag">' + metaTpEsc(scheduleTag) + "</span>"
+                : "") +
               "</td>" +
               "<td>" +
               client +
@@ -41784,7 +41919,7 @@
       function metaTplBroadcastHistoryNeedsPoll(items) {
         return (items || []).some(function (item) {
           const key = String((item && item.statusKey) || item && item.status || "");
-          return key === "queued" || key === "running" || key === "collecting" || key === "in_progress";
+          return key === "queued" || key === "scheduled" || key === "running" || key === "collecting" || key === "in_progress";
         });
       }
 
@@ -41945,7 +42080,17 @@
           });
           const campaign = payload.campaign || {};
           metaTplBroadcastCampaignId = String(campaign.id || "");
-          metaTplBroadcastSetStatus("Disparo iniciado. Acompanhe o andamento na tabela.");
+          const scheduledLabel = String(campaign.scheduledSendLabel || "").trim();
+          const scheduledAt = String(campaign.scheduledSendAt || "").trim();
+          if (scheduledAt && Date.parse(scheduledAt) > Date.now()) {
+            metaTplBroadcastSetStatus(
+              "Disparo agendado para " +
+                (scheduledLabel || scheduledAt) +
+                ". O envio só começa neste horário.",
+            );
+          } else {
+            metaTplBroadcastSetStatus("Disparo iniciado. Acompanhe o andamento na tabela.");
+          }
           void metaTplBroadcastLoadHistory();
         } catch (error) {
           const message = error && error.message ? error.message : "Não foi possível iniciar o disparo.";
@@ -42447,6 +42592,7 @@
 
       document.getElementById("meta-tpl-broadcast-intake")?.addEventListener("change", function () {
         metaTplBroadcastRenderSplitPreview();
+        metaTplBroadcastSyncScheduleHint();
       });
       document.getElementById("meta-tpl-broadcast-numbers")?.addEventListener("change", function (event) {
         const target = event && event.target;
@@ -52121,6 +52267,7 @@
       let disCampaignWizardDuplicatesRemoved = 0;
       let disCampaignWizardSubmitInFlight = false;
       let disCampaignWizardSubmitRequestId = "";
+      let disCampaignWizardScheduledSendAt = "";
 
       function renderDisCampaignWizardStep() {
         const step = disCampaignWizardStep;
@@ -52137,9 +52284,11 @@
         const prevBtn = document.getElementById("dis-wizard-prev-btn");
         const nextBtn = document.getElementById("dis-wizard-next-btn");
         const generateBtn = document.getElementById("dis-wizard-generate-btn");
+        const scheduleBtn = document.getElementById("dis-wizard-schedule-btn");
         if (prevBtn) prevBtn.hidden = step <= 1;
         if (nextBtn) nextBtn.hidden = step >= DIS_CAMPAIGN_WIZARD_TOTAL_STEPS;
         if (generateBtn) generateBtn.hidden = step !== DIS_CAMPAIGN_WIZARD_TOTAL_STEPS;
+        if (scheduleBtn) scheduleBtn.hidden = step !== DIS_CAMPAIGN_WIZARD_TOTAL_STEPS;
         if (step === DIS_CAMPAIGN_WIZARD_TOTAL_STEPS) {
           updateDisCampaignWizardLeadsCountUi();
         }
@@ -52498,6 +52647,9 @@
         formData.append("whatsappLogo", disCampaignWizardWhatsappLogoFile);
         formData.append("spreadsheet", disCampaignWizardLeadsFile);
         formData.append("plannedSendCount", String(getDisCampaignWizardPlannedSendCountValue()));
+        if (disCampaignWizardScheduledSendAt) {
+          formData.append("scheduledSendAt", disCampaignWizardScheduledSendAt);
+        }
         if (disCampaignWizardSubmitRequestId) {
           formData.append("clientRequestId", disCampaignWizardSubmitRequestId);
         }
@@ -53106,6 +53258,8 @@
         disCampaignWizardLeadsFile = null;
         disCampaignWizardSubmitInFlight = false;
         disCampaignWizardSubmitRequestId = "";
+        disCampaignWizardScheduledSendAt = "";
+        closeDisCampaignWizardScheduleOverlay();
         clearDisCampaignWizardSubmitError();
         const wizard = document.getElementById("dis-campaign-wizard");
         const success = document.getElementById("dis-campaign-wizard-success");
@@ -53140,6 +53294,60 @@
         renderDisCampaignWizardStep();
       }
 
+      function formatDisCampaignWizardLocalDateTime(date) {
+        const pad = (n) => String(n).padStart(2, "0");
+        return (
+          date.getFullYear() +
+          "-" +
+          pad(date.getMonth() + 1) +
+          "-" +
+          pad(date.getDate()) +
+          "T" +
+          pad(date.getHours()) +
+          ":" +
+          pad(date.getMinutes())
+        );
+      }
+
+      function closeDisCampaignWizardScheduleOverlay() {
+        const overlay = document.getElementById("dis-wizard-schedule-overlay");
+        if (overlay) overlay.hidden = true;
+      }
+
+      function openDisCampaignWizardScheduleOverlay() {
+        const overlay = document.getElementById("dis-wizard-schedule-overlay");
+        const input = document.getElementById("dis-wizard-schedule-at");
+        const min = new Date(Date.now() + 60_000);
+        if (input) {
+          const minValue = formatDisCampaignWizardLocalDateTime(min);
+          input.min = minValue;
+          if (!input.value || input.value < minValue) input.value = minValue;
+        }
+        if (overlay) overlay.hidden = false;
+        input?.focus();
+      }
+
+      function confirmDisCampaignWizardSchedule() {
+        const input = document.getElementById("dis-wizard-schedule-at");
+        const raw = String(input?.value || "").trim();
+        if (!raw) {
+          showToast("Escolha o dia e a hora do disparo.", "warning");
+          return;
+        }
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) {
+          showToast("Data e hora inválidas.", "warning");
+          return;
+        }
+        if (parsed.getTime() < Date.now() + 60_000) {
+          showToast("O disparo precisa ser agendado pelo menos 1 minuto no futuro.", "warning");
+          return;
+        }
+        disCampaignWizardScheduledSendAt = parsed.toISOString();
+        closeDisCampaignWizardScheduleOverlay();
+        void submitDisCampaignWizard();
+      }
+
       function showDisCampaignWizardSuccess(message) {
         clearDisCampaignWizardSubmitError();
         const wizard = document.getElementById("dis-campaign-wizard");
@@ -53169,9 +53377,14 @@
         }
 
         const generateBtn = document.getElementById("dis-wizard-generate-btn");
+        const scheduleBtn = document.getElementById("dis-wizard-schedule-btn");
         if (generateBtn) {
           generateBtn.disabled = true;
           generateBtn.textContent = "Enviando…";
+        }
+        if (scheduleBtn) {
+          scheduleBtn.disabled = true;
+          scheduleBtn.textContent = "Agendando…";
         }
         stopDisparosCampaignsPolling();
 
@@ -53295,6 +53508,13 @@
             generateBtn.disabled = false;
             generateBtn.textContent = "Gerar Campanha";
           }
+          if (scheduleBtn) {
+            scheduleBtn.disabled = false;
+            scheduleBtn.textContent = "Agendar Disparo";
+          }
+          if (submitSucceeded) {
+            disCampaignWizardScheduledSendAt = "";
+          }
         }
       }
 
@@ -53318,7 +53538,22 @@
         });
 
         document.getElementById("dis-wizard-generate-btn")?.addEventListener("click", () => {
+          disCampaignWizardScheduledSendAt = "";
           void submitDisCampaignWizard();
+        });
+        document.getElementById("dis-wizard-schedule-btn")?.addEventListener("click", () => {
+          openDisCampaignWizardScheduleOverlay();
+        });
+        document.getElementById("dis-wizard-schedule-cancel")?.addEventListener("click", () => {
+          closeDisCampaignWizardScheduleOverlay();
+        });
+        document.getElementById("dis-wizard-schedule-confirm")?.addEventListener("click", () => {
+          confirmDisCampaignWizardSchedule();
+        });
+        document.getElementById("dis-wizard-schedule-overlay")?.addEventListener("click", (event) => {
+          if (event.target && event.target.id === "dis-wizard-schedule-overlay") {
+            closeDisCampaignWizardScheduleOverlay();
+          }
         });
 
         document.getElementById("dis-wizard-new-campaign-btn")?.addEventListener("click", () => {
@@ -57082,6 +57317,10 @@
         );
         const planTag = resolveCampaignIntakePlanTag(item);
         const planLabelHtml = renderWabaApiKindLabelHtml(planTag.apiKind);
+        const scheduleLabel = String(item?.scheduledSendLabel || "")
+          .trim()
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
         const isErrorReported = status === "error_reported";
         if (isErrorReported) {
           row.classList.add("disparos-campaign-item--error_reported");
@@ -57101,6 +57340,11 @@
           <div class="dis-campaign-intake-meta">Criada em ${createdLabel}</div>
           <div class="dis-campaign-intake-tags">
             <span class="dis-campaign-intake-plan-tag dis-campaign-intake-plan-tag--${planTag.apiKind}">${planLabelHtml}</span>
+            ${
+              scheduleLabel
+                ? `<span class="dis-campaign-intake-schedule-tag">${scheduleLabel}</span>`
+                : ""
+            }
             <span class="dis-campaign-intake-status dis-campaign-intake-status--${status}">${displayStatus}</span>
           </div>
         `;

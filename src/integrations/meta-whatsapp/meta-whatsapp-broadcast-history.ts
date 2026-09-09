@@ -1,4 +1,5 @@
 import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
+import { formatScheduledSendLabel, isScheduledSendPending } from "../../disparos/waba-campaign-schedule";
 import { publicBroadcastCampaign, type MetaBroadcastCampaign } from "./meta-whatsapp-broadcast.store";
 
 export function cloudBroadcastProgress(input: {
@@ -26,6 +27,7 @@ export function cloudBroadcastDisplayStatus(input: {
   broadcastStatus?: string | null;
   intakeStatus?: string | null;
   voided?: boolean;
+  scheduledSendAt?: string | null;
 }): { key: string; label: string } {
   if (input.voided) return { key: "cancelled", label: "Cancelado" };
   const intake = input.intakeStatus ? normalizeCampaignIntakeStatus(input.intakeStatus) : "";
@@ -33,6 +35,9 @@ export function cloudBroadcastDisplayStatus(input: {
   if (intake === "error_reported") return { key: "error", label: "Erro reportado" };
   if (intake === "cancelled") return { key: "cancelled", label: "Cancelada" };
   const broadcast = String(input.broadcastStatus || "");
+  if (broadcast === "queued" && isScheduledSendPending(input.scheduledSendAt)) {
+    return { key: "scheduled", label: "Agendado" };
+  }
   if (broadcast === "queued") return { key: "queued", label: "Na fila" };
   if (broadcast === "running") return { key: "running", label: "Enviando" };
   if (broadcast === "failed") return { key: "failed", label: "Falha no envio" };
@@ -63,7 +68,9 @@ export function toCloudBroadcastHistoryItem(input: {
     broadcastStatus: input.campaign.status,
     intakeStatus: input.intakeStatus,
     voided: Boolean(String(input.campaign.voidedAt || "").trim()),
+    scheduledSendAt: input.campaign.scheduledSendAt,
   });
+  const scheduledSendAt = String(input.campaign.scheduledSendAt || "").trim();
   return {
     ...publicBroadcastCampaign(input.campaign),
     startedAt: input.campaign.createdAt,
@@ -74,5 +81,7 @@ export function toCloudBroadcastHistoryItem(input: {
     progressPercent: progress.percent,
     statusKey: display.key,
     statusLabel: display.label,
+    scheduledSendAt: scheduledSendAt || undefined,
+    scheduledSendLabel: formatScheduledSendLabel(scheduledSendAt),
   };
 }

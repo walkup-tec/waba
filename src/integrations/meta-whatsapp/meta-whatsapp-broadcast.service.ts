@@ -99,6 +99,11 @@ import {
 } from "./meta-whatsapp-broadcast-linkable";
 import { toCloudBroadcastHistoryItem } from "./meta-whatsapp-broadcast-history";
 import { lookupTemplateApprovedAt } from "./meta-whatsapp-template-approved-at.store";
+import {
+  formatScheduledSendLabel,
+  isScheduledSendPending,
+  parseScheduledSendAt,
+} from "../../disparos/waba-campaign-schedule";
 
 const running = new Set<string>();
 let resumeWatchdogTimer: ReturnType<typeof setInterval> | null = null;
@@ -698,24 +703,29 @@ export class MetaWhatsappBroadcastService {
       ...(templateApprovedAt ? { templateApprovedAt } : {}),
       leads: assignedLeads,
     };
+    const scheduledSendAt = this.resolveIntakeScheduledSendAt(intakeCampaignId);
+    if (scheduledSendAt) campaign.scheduledSendAt = scheduledSendAt;
     saveBroadcastCampaign(campaign);
     logMetaWhatsappSafe("broadcast-queued", {
       tenantId: tenant.tenantId,
       total: campaign.total,
       skippedInvalid: campaign.skipped,
       duplicatesRemoved: preview.parsed.duplicatesRemoved,
+      scheduledSendAt: scheduledSendAt || "",
     });
-    void this.runCampaign(campaign.id, tenant.tenantId, {
-      connectionId: loaded.connection.id,
-      connectionByPhone: connectionIdByPhoneNumber(sendingBindings),
-      templateName: loaded.template.name,
-      language: loaded.template.language,
-      phoneNumberId: sendingPhoneNumberId,
-      phoneNumberIds: sendingPhoneNumberIds,
-      inspect: loaded.inspect,
-      headerByPhone,
-      buttonSlug: loaded.inspect.urlButton?.hasVariable ? short.shortSlug : undefined,
-    });
+    if (!isScheduledSendPending(scheduledSendAt)) {
+      void this.runCampaign(campaign.id, tenant.tenantId, {
+        connectionId: loaded.connection.id,
+        connectionByPhone: connectionIdByPhoneNumber(sendingBindings),
+        templateName: loaded.template.name,
+        language: loaded.template.language,
+        phoneNumberId: sendingPhoneNumberId,
+        phoneNumberIds: sendingPhoneNumberIds,
+        inspect: loaded.inspect,
+        headerByPhone,
+        buttonSlug: loaded.inspect.urlButton?.hasVariable ? short.shortSlug : undefined,
+      });
+    }
     return publicBroadcastCampaign(campaign);
   }
 
@@ -939,6 +949,13 @@ export class MetaWhatsappBroadcastService {
         const ownerEmail = String(intake.ownerEmail || "").trim().toLowerCase();
         const subscriberName = String(subscribers.getByEmail(ownerEmail)?.fullName || "").trim();
         const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount || 0)));
+        const scheduledLabel = formatScheduledSendLabel(intake.scheduledSendAt);
+        const baseLabel = formatCloudLinkableCampaignLabel({
+          subscriberName,
+          ownerEmail,
+          campaignName: intake.campaignName,
+          plannedSendCount,
+        });
         return {
           id: intake.id,
           campaignName: intake.campaignName,
@@ -947,12 +964,9 @@ export class MetaWhatsappBroadcastService {
           status: normalizeCampaignIntakeStatus(intake.status),
           plannedSendCount,
           assignedOperacionalEmail: String(intake.assignedOperacionalEmail || "").trim().toLowerCase(),
-          label: formatCloudLinkableCampaignLabel({
-            subscriberName,
-            ownerEmail,
-            campaignName: intake.campaignName,
-            plannedSendCount,
-          }),
+          scheduledSendAt: intake.scheduledSendAt || "",
+          scheduledSendLabel: scheduledLabel,
+          label: scheduledLabel ? `${baseLabel} · Agendado ${scheduledLabel}` : baseLabel,
         };
       });
   }
@@ -967,6 +981,7 @@ export class MetaWhatsappBroadcastService {
     if (!campaignId || !tenantId) return false;
     if (running.has(campaignId)) return false;
     if (isBroadcastVoided(row)) return false;
+    if (row.status !== "running" && isScheduledSendPending(row.scheduledSendAt)) return false;
     try {
       const loaded = await this.loadApprovedTemplate(tenantId, row.connectionId, row.templateId);
       const phoneNumberIds = normalizeBroadcastPhoneNumberIds(
@@ -1075,6 +1090,18 @@ export class MetaWhatsappBroadcastService {
       voidBroadcastCampaignForRetry(existing.id);
     }
     return intake.id;
+  }
+
+  private resolveIntakeScheduledSendAt(intakeId: string | undefined): string | undefined {
+    const id = String(intakeId || "").trim();
+    if (!id) return undefined;
+    const intake = new WabaCampaignIntakeRepository().getById(id);
+    try {
+      const iso = parseScheduledSendAt(intake?.scheduledSendAt);
+      return iso || undefined;
+    } catch {
+      return undefined;
+    }
   }
 }
 
