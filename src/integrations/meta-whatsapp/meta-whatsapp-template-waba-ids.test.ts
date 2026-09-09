@@ -522,6 +522,69 @@ describe("template waba ids", () => {
       );
     });
 
+    it("Andre Aguiar: Templates lista WABA02 e recusa Rio mesmo com owner do BM", async () => {
+      const rows = await discoverTemplateWabas({
+        token: "tok",
+        connection: {
+          wabaId: "2458602464640240",
+          metaBusinessId: "1759044748332124",
+        },
+        graph: async (input) => {
+          if (input.path === "1759044748332124") {
+            return graphOk({
+              id: "1759044748332124",
+              owned_whatsapp_business_accounts: {
+                data: [{ id: "2458602464640240", name: "André - WABA01" }],
+              },
+            });
+          }
+          if (input.path === "1759044748332124/client_whatsapp_business_accounts") {
+            return graphFail(403);
+          }
+          if (input.path === "debug_token") {
+            return graphOk({
+              data: {
+                granular_scopes: [
+                  {
+                    scope: "whatsapp_business_management",
+                    target_ids: [
+                      "2458602464640240",
+                      "1744257946809067",
+                      "1581808413746453",
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+          if (input.path === "1744257946809067") return graphFail(403);
+          if (input.path === "2458602464640240") {
+            return graphOk({
+              id: "2458602464640240",
+              name: "André - WABA01",
+              owner_business_info: { id: "1759044748332124" },
+            });
+          }
+          if (input.path === "1581808413746453") {
+            return graphOk({
+              id: "1581808413746453",
+              name: "Rio de Janeiro 01",
+              owner_business_info: { id: "1759044748332124" },
+              on_behalf_of_business_info: { id: "1759044748332124" },
+            });
+          }
+          return graphOk({ data: [] });
+        },
+      });
+      const ids = rows.map((row) => row.id).sort();
+      assert.deepEqual(ids, ["1744257946809067", "2458602464640240"]);
+      assert.equal(rows.find((row) => row.id === "1744257946809067")?.name, "André - WABA02");
+      assert.equal(
+        rows.some((row) => row.id === "1581808413746453"),
+        false,
+      );
+    });
+
     it("Andre Aguiar: GET 403 no debug_token não preserva WABA de outro BM", async () => {
       const ids = await discoverTemplateWabaIds({
         token: "tok",
