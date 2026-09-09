@@ -459,6 +459,7 @@ export function unionPortfolioNumbers(
         uiStatus,
         canActivate: canActivateMetaPhoneNumber(uiStatus, nameNeedsRegister),
         nameNeedsRegister,
+        wabaId: text(item.wabaId) || text(prev.wabaId) || null,
       });
     }
   }
@@ -606,6 +607,7 @@ export function mapMetaPhoneToPortfolioNumber(
     photoSyncStatus: null,
     profileSyncStatus: null,
     inboxEnabled: false,
+    wabaId: text(row._portfolio_waba_id) || text(row.waba_id) || null,
   };
 }
 
