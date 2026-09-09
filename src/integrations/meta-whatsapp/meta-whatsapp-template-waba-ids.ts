@@ -2,7 +2,11 @@ import { readMetaAppId, readMetaAppSecret } from "./meta-config";
 import { callMetaGraphJson, type MetaGraphJsonResult } from "./meta-whatsapp-graph.client";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { TemplateGraphCaller } from "./meta-whatsapp-template-graph.client";
-import { knownOwnedWabaIdsForBusiness } from "./meta-whatsapp-known-owned-wabas";
+import {
+  knownClientWabaIdsForBusiness,
+  knownOwnedWabaIdsForBusiness,
+  knownOwnedWabaRowsForBusiness,
+} from "./meta-whatsapp-known-owned-wabas";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -164,7 +168,7 @@ export async function filterWabaIdsOwnedByBusiness(input: {
     );
     for (const { id, res } of rows) {
       if (!res.ok) {
-        if (keepOnError.has(id)) out.push({ id, name: `WABA ${id}` });
+        if (keepOnError.has(id)) out.push({ id, name: "" });
         continue;
       }
       if (bm && !wabaIdentityMatchesBusiness(res.json, bm)) continue;
@@ -234,11 +238,15 @@ export async function discoverTemplateWabas(input: {
   const extraSet = new Set(
     [...(input.extraWabaIds || []), primary, ...knownOwnedWabaIdsForBusiness(bm)]
       .map((id) => String(id || "").trim())
-      .filter(Boolean),
+      .filter((id) => id && !knownClientWabaIdsForBusiness(bm).includes(id)),
   );
 
   if (primary) addDiscoveredWaba(byId, primary, "", bm);
+  for (const row of knownOwnedWabaRowsForBusiness(bm)) {
+    addDiscoveredWaba(byId, row.id, row.name, bm);
+  }
   for (const id of extraSet) addDiscoveredWaba(byId, id, "", bm);
+  for (const id of knownClientWabaIdsForBusiness(bm)) clientIds.add(id);
 
   if (bm) {
     const nested: MetaGraphJsonResult = await graph({
@@ -297,7 +305,11 @@ export async function discoverTemplateWabas(input: {
 
   // WABA client (ex.: Rio de Janeiro 01) não entra no picker deste BM, mesmo se GET owner bater.
   for (const id of [...byId.keys()]) {
-    if (clientIds.has(id) && !ownedIds.has(id) && !extraSet.has(id)) byId.delete(id);
+    if (knownClientWabaIdsForBusiness(bm).includes(id)) {
+      byId.delete(id);
+      continue;
+    }
+    if (clientIds.has(id) && !ownedIds.has(id)) byId.delete(id);
   }
 
   const candidateIds = [...byId.keys()];
@@ -313,6 +325,8 @@ export async function discoverTemplateWabas(input: {
     });
     const verified = new Map<string, string>();
     for (const row of owned) {
+      if (knownClientWabaIdsForBusiness(bm).includes(row.id)) continue;
+      if (clientIds.has(row.id) && !ownedIds.has(row.id)) continue;
       addDiscoveredWaba(verified, row.id, row.name || byId.get(row.id) || "", bm);
     }
     return [...verified.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
