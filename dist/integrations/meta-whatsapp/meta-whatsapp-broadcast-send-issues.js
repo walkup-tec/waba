@@ -10,7 +10,7 @@ const META_SEND_ERROR_HINT = {
     "131051": "A Meta recusou o tipo desta mensagem.",
     "131053": "A Meta não baixou a mídia do cabeçalho (erro 131053 / weblink 403). Use o arquivo local, não a URL de exemplo da Graph.",
     "130429": "Limite de envio da Meta atingido.",
-    "132001": "Template pausado ou recusado.",
+    "132001": "A Graph não encontrou este template neste idioma nesta WABA no POST (132001).",
     "133010": "Número ainda não está pronto na Meta.",
 };
 function maskCloudRecipient(waId) {
