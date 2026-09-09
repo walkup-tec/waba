@@ -110,6 +110,32 @@ export function parseTemplateAiWabaIds(input: Record<string, unknown> | undefine
   return parseIdList(body.wabaIds ?? body.waba_ids ?? body.wabaId ?? body.waba_id);
 }
 
+export type MetaTemplateAiWabaTarget = {
+  connectionId: string;
+  wabaId: string;
+};
+
+export function parseTemplateAiWabaTargets(
+  input: Record<string, unknown> | undefined,
+): MetaTemplateAiWabaTarget[] {
+  const body = asRecord(input);
+  const raw = body.wabaTargets ?? body.waba_targets ?? body.targets;
+  const list = Array.isArray(raw) ? raw : [];
+  const seen = new Set<string>();
+  const out: MetaTemplateAiWabaTarget[] = [];
+  for (const item of list) {
+    const row = asRecord(item);
+    const connectionId = String(row.connectionId || row.connection_id || "").trim();
+    const wabaId = String(row.wabaId || row.waba_id || "").trim();
+    if (!wabaId) continue;
+    const key = `${connectionId}:${wabaId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ connectionId, wabaId });
+  }
+  return out;
+}
+
 export function parseTemplateAiHeaderHandles(input: Record<string, unknown> | undefined): Record<string, string> {
   const body = asRecord(input);
   const raw = body.headerHandles ?? body.header_handles;
