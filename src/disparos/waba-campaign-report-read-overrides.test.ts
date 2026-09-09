@@ -112,6 +112,62 @@ describe("override pontual do relatório", () => {
     assert.equal(campaignReportHidesClicks("6 DE AGOSTO", augustStamp, stored), false);
   });
 
+  it("Opt in PTX recebe entregues/lidos/falhados na proporção do relatório-base", () => {
+    const baseSent = 1161;
+    const ptxSent = 1980;
+    const expectedDelivered = Math.round((1011 / baseSent) * ptxSent);
+    const expectedRead = Math.round((578 / baseSent) * ptxSent);
+    const expectedFailed = Math.round((136 / baseSent) * ptxSent);
+    assert.equal(expectedDelivered, 1724);
+    assert.equal(expectedRead, 986);
+    assert.equal(expectedFailed, 232);
+
+    const stored = report({
+      totalLeads: 2996,
+      sent: 1980,
+      delivered: 0,
+      read: 0,
+      failed: 0,
+      clicks: 203,
+    });
+    const got = applyCampaignReportReadOverride("Opt in PTX", "2026-09-09T01:34:51.000Z", stored);
+    assert.equal(got?.delivered, 1724);
+    assert.equal(got?.read, 986);
+    assert.equal(got?.failed, 232);
+    assert.equal(got?.sent, 1980);
+    assert.equal(got?.clicks, 203);
+    assert.equal(campaignReportHidesClicks("Opt in PTX", "2026-09-09T01:34:51.000Z", stored), false);
+
+    const metrics = computeCampaignPerformanceMetrics({
+      totalLeads: 2996,
+      sent: 1980,
+      delivered: 1724,
+      read: 986,
+      failed: 232,
+      clicks: 203,
+    });
+    assert.equal(metrics.deliveryRate, 87.07);
+    assert.equal(metrics.readRate, 57.19);
+    assert.equal(metrics.failureRate, 7.74);
+    assert.equal(metrics.clickRate, 11.77);
+    assert.equal(metrics.pendingSent, 24);
+    assert.equal(metrics.bonusShipments, 1016);
+  });
+
+  it("Opt in PTX com enviados diferentes não recebe a estimativa", () => {
+    const stored = report({
+      totalLeads: 2996,
+      sent: 1800,
+      delivered: 0,
+      read: 0,
+      failed: 0,
+    });
+    const got = applyCampaignReportReadOverride("Opt in PTX", "2026-09-09T01:34:51.000Z", stored);
+    assert.equal(got?.delivered, 0);
+    assert.equal(got?.read, 0);
+    assert.equal(got?.failed, 0);
+  });
+
   it("Campanha Jandira 2 fica Em andamento e não casa a Jandira antiga", () => {
     const created = "2026-09-03T14:11:00.000Z";
     assert.equal(campaignHoldsSubscriberInProgress("Campanha Jandira 2", created), true);
