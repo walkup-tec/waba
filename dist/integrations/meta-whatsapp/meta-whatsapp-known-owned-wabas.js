@@ -7,11 +7,14 @@
  * Rio de Janeiro 01 (client) não entra aqui.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KNOWN_OWNED_BUSINESS_WABAS = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.KNOWN_OWNED_BUSINESS_WABAS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
 exports.normalizeMetaBusinessKey = normalizeMetaBusinessKey;
 exports.metaBusinessIdsMatch = metaBusinessIdsMatch;
 exports.knownOwnedCatalogForBusiness = knownOwnedCatalogForBusiness;
 exports.knownOwnedWabaIdsForBusiness = knownOwnedWabaIdsForBusiness;
+exports.knownOwnedWabaRowsForBusiness = knownOwnedWabaRowsForBusiness;
+exports.knownClientWabaIdsForBusiness = knownClientWabaIdsForBusiness;
+exports.isKnownClientWabaForBusiness = isKnownClientWabaForBusiness;
 exports.knownPendingPhonesForBusiness = knownPendingPhonesForBusiness;
 exports.knownPendingPhoneGraphRow = knownPendingPhoneGraphRow;
 exports.ANDRE_AGUIAR_BUSINESS_IDS = [
@@ -22,10 +25,15 @@ exports.ANDRE_AGUIAR_BUSINESS_IDS = [
 exports.ANDRE_WABA01_ID = "2458602464640240";
 exports.ANDRE_WABA02_ID = "1744257946809067";
 exports.ANDRE_WABA02_PENDING_PHONE_ID = "1311179632078208";
+exports.RIO_DE_JANEIRO_01_WABA_ID = "1581808413746453";
 exports.KNOWN_OWNED_BUSINESS_WABAS = [
     {
         businessIds: [...exports.ANDRE_AGUIAR_BUSINESS_IDS],
-        wabaIds: [exports.ANDRE_WABA01_ID, exports.ANDRE_WABA02_ID],
+        wabas: [
+            { id: exports.ANDRE_WABA01_ID, name: "André - WABA01" },
+            { id: exports.ANDRE_WABA02_ID, name: "André - WABA02" },
+        ],
+        clientWabaIds: [exports.RIO_DE_JANEIRO_01_WABA_ID],
         pendingPhones: [
             {
                 phoneNumberId: exports.ANDRE_WABA02_PENDING_PHONE_ID,
@@ -59,7 +67,19 @@ function knownOwnedCatalogForBusiness(businessId) {
     return (exports.KNOWN_OWNED_BUSINESS_WABAS.find((row) => row.businessIds.some((id) => metaBusinessIdsMatch(id, wanted))) || null);
 }
 function knownOwnedWabaIdsForBusiness(businessId) {
-    return knownOwnedCatalogForBusiness(businessId)?.wabaIds.slice() || [];
+    return (knownOwnedCatalogForBusiness(businessId)?.wabas || []).map((row) => row.id);
+}
+function knownOwnedWabaRowsForBusiness(businessId) {
+    return knownOwnedCatalogForBusiness(businessId)?.wabas.slice() || [];
+}
+function knownClientWabaIdsForBusiness(businessId) {
+    return knownOwnedCatalogForBusiness(businessId)?.clientWabaIds.slice() || [];
+}
+function isKnownClientWabaForBusiness(businessId, wabaId) {
+    const id = String(wabaId || "").trim();
+    if (!id)
+        return false;
+    return knownClientWabaIdsForBusiness(businessId).includes(id);
 }
 function knownPendingPhonesForBusiness(businessId) {
     return knownOwnedCatalogForBusiness(businessId)?.pendingPhones.slice() || [];
