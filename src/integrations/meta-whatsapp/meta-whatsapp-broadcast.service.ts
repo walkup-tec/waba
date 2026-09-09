@@ -8,6 +8,15 @@ import { MetaWhatsappConnectionRepository } from "./meta-whatsapp-connection.rep
 import { MetaWhatsappConnectionService } from "./meta-whatsapp-connection.service";
 import { MetaWhatsappTemplateRepository } from "./meta-whatsapp-template.repository";
 import { isTemplateApprovedForSend } from "./meta-whatsapp-template.types";
+import type { MetaTemplateRecord } from "./meta-whatsapp-template.types";
+import {
+  findWabaMessageTemplatesByName,
+} from "./meta-whatsapp-template-graph.client";
+import {
+  GRAPH_TEMPLATE_MISSING_CODE,
+  pickApprovedGraphTemplate,
+  shouldAbortBroadcastOnRepeatedTemplateMissing,
+} from "./meta-whatsapp-broadcast-graph-template";
 import {
   BROADCAST_HEADER_MISSING_FILE_ERROR,
   classifyBroadcastHeaderMedia,
@@ -170,7 +179,47 @@ export class MetaWhatsappBroadcastService {
     if (!isTemplateApprovedForSend(template.status)) {
       throw new MetaWhatsappError("template_not_ready");
     }
-    return { connection, template, inspect: inspectMetaBroadcastTemplate(template.components) };
+    const live = await this.overlayApprovedTemplateFromGraph(connection, template);
+    return { connection, template: live, inspect: inspectMetaBroadcastTemplate(live.components) };
+  }
+
+  /** Laboratório local pode mostrar Aprovado; o POST usa o que a Graph tem nesta WABA. */
+  private async overlayApprovedTemplateFromGraph(
+    connection: { accessTokenEncrypted: string; wabaId: string },
+    template: MetaTemplateRecord,
+  ): Promise<MetaTemplateRecord> {
+    let token = "";
+    try {
+      token = this.decrypt(connection.accessTokenEncrypted);
+    } catch {
+      return template;
+    }
+    const listed = await findWabaMessageTemplatesByName({
+      token,
+      wabaId: connection.wabaId,
+      name: template.name,
+    });
+    if (!listed.ok) return template;
+    const wantName = String(template.name || "").trim().toLowerCase();
+    const named = listed.items.filter(
+      (row) => row && String(row.name || "").trim().toLowerCase() === wantName,
+    );
+    if (!named.length) return template;
+    const picked = pickApprovedGraphTemplate(listed.items, template.name, template.language);
+    if (!picked) {
+      const seen = named.map((row) => `${row!.language}:${row!.status || "?"}`).slice(0, 6);
+      fail(
+        "template_not_ready",
+        `A Graph não tem ${template.name} (${template.language}) APPROVED nesta WABA (${seen.join(", ")}).`,
+      );
+    }
+    return {
+      ...template,
+      language: picked.language,
+      status: picked.status || template.status,
+      components: picked.components ?? template.components,
+      metaTemplateId: picked.metaTemplateId || template.metaTemplateId,
+    };
   }
 
   async inspectFromAuth(
@@ -468,18 +517,11 @@ export class MetaWhatsappBroadcastService {
   }): WhatsAppTemplateComponent[] {
     const components: WhatsAppTemplateComponent[] = [];
     const kind = headerMediaType(input.inspect.headerFormat);
-    if (kind && input.header) {
-      const media = input.header.mediaId
-        ? { id: input.header.mediaId }
-        : input.header.link
-          ? { link: input.header.link }
-          : null;
-      if (media) {
-        components.push({
-          type: "header",
-          parameters: [{ type: kind, [kind]: media }],
-        });
-      }
+    if (kind && input.header?.mediaId) {
+      components.push({
+        type: "header",
+        parameters: [{ type: kind, [kind]: { id: input.header.mediaId } }],
+      });
     }
     if (input.inspect.bodyVariables.length) {
       components.push({
@@ -686,6 +728,7 @@ export class MetaWhatsappBroadcastService {
     row.status = "running";
     if (!row.sendStartedAt) row.sendStartedAt = new Date().toISOString();
     saveBroadcastCampaign(row);
+    let consecutiveTemplateMissing = 0;
     try {
       for (let index = 0; index < row.leads.length; index += 1) {
         const live = findBroadcastCampaign(tenantId, campaignId);
@@ -749,6 +792,7 @@ export class MetaWhatsappBroadcastService {
             language: ctx.language,
             connectionId: leadConnectionId || ctx.connectionId,
             phoneNumberId: leadPhoneNumberId || ctx.phoneNumberId,
+            preferConnectionToken: true,
             components: this.buildComponents({
               inspect: ctx.inspect,
               lead,
@@ -778,6 +822,23 @@ export class MetaWhatsappBroadcastService {
             ...(graphCode ? { errorCode: graphCode } : {}),
           });
           row.failed += 1;
+          if (graphCode === GRAPH_TEMPLATE_MISSING_CODE) {
+            consecutiveTemplateMissing += 1;
+          } else {
+            consecutiveTemplateMissing = 0;
+          }
+          if (shouldAbortBroadcastOnRepeatedTemplateMissing(graphCode, consecutiveTemplateMissing)) {
+            row.status = "failed";
+            row.sendFinishedAt = new Date().toISOString();
+            saveBroadcastCampaign(row);
+            logMetaWhatsappSafe("broadcast-aborted", {
+              tenantId,
+              campaignId,
+              sent: row.sent,
+              reason: "template_missing_132001",
+            });
+            return;
+          }
         }
         saveBroadcastCampaign(row);
         if (index < row.leads.length - 1 && this.delayMs > 0) {
