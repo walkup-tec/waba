@@ -5,6 +5,7 @@ import {
   JANDIRA2_RERUN_VOID_BROADCAST_ID,
   JANDIRA2_VOID_BROADCAST_ID,
   JANDIRA2_VOID_INTAKE_ID,
+  OPT_IN_PTX_RESUME_INTAKE_ID,
   isBroadcastAbandonedForRetry,
   isCloudBroadcastInactiveForRetry,
   shouldAbortBroadcastOnHeaderMediaFailure,
@@ -87,5 +88,20 @@ describe("cancelar Disparo Cloud sem entrega", () => {
     });
     assert.equal(isBroadcastAbandonedForRetry(queued), false);
     assert.equal(shouldVoidCloudBroadcast(queued), false);
+  });
+
+  it("não anula a Opt in PTX para poder retomar a fila", () => {
+    const optIn = base({
+      id: "opt-in-ptx-broadcast",
+      intakeCampaignId: OPT_IN_PTX_RESUME_INTAKE_ID,
+      status: "failed",
+      sent: 1980,
+      total: 2996,
+      leads: [
+        { waId: "5511999000001", status: "sent", metaStatus: "accepted" },
+        { waId: "5511999000002", status: "queued" },
+      ],
+    });
+    assert.equal(shouldVoidCloudBroadcast(optIn), false);
   });
 });
