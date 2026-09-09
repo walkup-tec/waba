@@ -349,22 +349,47 @@ class MetaWhatsappTemplateAiService {
         const tenant = requireTenant(auth);
         const connectionIds = (0, meta_whatsapp_template_ai_shell_1.parseTemplateAiConnectionIds)(input);
         const requestedWabaIds = (0, meta_whatsapp_template_ai_shell_1.parseTemplateAiWabaIds)(input);
+        const requestedTargets = (0, meta_whatsapp_template_ai_shell_1.parseTemplateAiWabaTargets)(input);
         const analysisId = String(input?.analysisId || input?.analysis_id || "").trim();
-        if (!connectionIds.length || !analysisId)
+        const portfolioIds = [
+            ...new Set([
+                ...connectionIds,
+                ...requestedTargets.map((item) => item.connectionId).filter(Boolean),
+            ]),
+        ];
+        if (!portfolioIds.length || !analysisId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
-        const portfolios = await this.resolveSubmitPortfolios(tenant.tenantId, connectionIds);
-        const submitTargets = requestedWabaIds.length
-            ? requestedWabaIds.map((wabaId) => ({
-                connection: portfolios[0],
-                wabaId,
-                portfolioName: String(portfolios[0].verifiedName || portfolios[0].displayPhoneNumber || "").trim() ||
-                    "Portfólio",
-            }))
-            : portfolios.map((connection) => ({
-                connection,
-                wabaId: String(connection.wabaId || ""),
-                portfolioName: String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio",
-            }));
+        const portfolios = await this.resolveSubmitPortfolios(tenant.tenantId, portfolioIds);
+        const byConnectionId = new Map(portfolios.map((row) => [row.id, row]));
+        const portfolioLabel = (connection) => String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio";
+        const submitTargets = requestedTargets.length
+            ? requestedTargets.flatMap((item) => {
+                const connection = (item.connectionId && byConnectionId.get(item.connectionId)) ||
+                    portfolios.find((row) => String(row.wabaId || "") === item.wabaId) ||
+                    (portfolios.length === 1 ? portfolios[0] : null);
+                if (!connection)
+                    return [];
+                return [
+                    {
+                        connection,
+                        wabaId: item.wabaId,
+                        portfolioName: portfolioLabel(connection),
+                    },
+                ];
+            })
+            : requestedWabaIds.length
+                ? requestedWabaIds.map((wabaId) => ({
+                    connection: portfolios.find((row) => String(row.wabaId || "") === wabaId) || portfolios[0],
+                    wabaId,
+                    portfolioName: portfolioLabel(portfolios.find((row) => String(row.wabaId || "") === wabaId) || portfolios[0]),
+                }))
+                : portfolios.map((connection) => ({
+                    connection,
+                    wabaId: String(connection.wabaId || ""),
+                    portfolioName: portfolioLabel(connection),
+                }));
+        if (!submitTargets.length)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         let analysis = await this.analyses.findForSubmission(tenant.tenantId, portfolios[0].id, analysisId);
         if (!analysis ||
             !analysis.eligibleForUtility ||
