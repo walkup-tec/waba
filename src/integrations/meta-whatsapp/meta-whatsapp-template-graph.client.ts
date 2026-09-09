@@ -15,7 +15,7 @@ export type TemplateGraphCaller = (input: {
   timeoutMs?: number;
 }) => Promise<MetaGraphJsonResult>;
 
-export function mapGraphTemplate(raw: MetaGraphTemplate): {
+export type MappedGraphTemplate = {
   metaTemplateId: string | null;
   name: string;
   language: string;
@@ -24,7 +24,9 @@ export function mapGraphTemplate(raw: MetaGraphTemplate): {
   qualityScore: string | null;
   rejectedReason: string | null;
   components: unknown;
-} | null {
+};
+
+export function mapGraphTemplate(raw: MetaGraphTemplate): MappedGraphTemplate | null {
   const name = String(raw.name || "").trim();
   const language = String(raw.language || "").trim();
   if (!name || !language) return null;
@@ -87,6 +89,41 @@ export async function listWabaMessageTemplates(input: {
   }
 
   return { ok: true, items, pages, complete };
+}
+
+export async function findWabaMessageTemplatesByName(input: {
+  token: string;
+  wabaId: string;
+  name: string;
+  graph?: TemplateGraphCaller;
+  maxAttempts?: number;
+  timeoutMs?: number;
+}): Promise<
+  | { ok: true; items: ReturnType<typeof mapGraphTemplate>[] }
+  | { ok: false; result: MetaGraphJsonResult }
+> {
+  const graph = input.graph || callMetaGraphJson;
+  const name = String(input.name || "").trim();
+  const wabaId = String(input.wabaId || "").trim();
+  if (!name || !wabaId) return { ok: true, items: [] };
+  const result = await graph({
+    token: input.token,
+    method: "GET",
+    path: `${wabaId}/message_templates`,
+    query: {
+      name,
+      fields: LIST_FIELDS,
+      limit: "30",
+    },
+    maxAttempts: input.maxAttempts ?? 1,
+    timeoutMs: input.timeoutMs ?? 8000,
+  });
+  if (!result.ok) return { ok: false, result };
+  const data = Array.isArray(result.json?.data) ? result.json.data : [];
+  return {
+    ok: true,
+    items: data.map((row: unknown) => mapGraphTemplate(row as MetaGraphTemplate)),
+  };
 }
 
 export async function deleteWabaMessageTemplate(input: {
