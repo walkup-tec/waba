@@ -2,4 +2,4 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WABA_DEPLOY_MARKER = void 0;
-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-09-181500-cloud-waba-owner-filter";
+exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-09-185200-whatsapp-display-name-photo";

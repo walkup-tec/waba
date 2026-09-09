@@ -42,7 +42,7 @@
     "test:meta-es-login": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-es-fb-login.test.ts",
     "test:pix-emv": "node --require ts-node/register --test src/billing/pix-emv.test.ts",
     "test:asaas-pix-paid": "node --require ts-node/register --test src/billing/waba-cleison-asaas-bonus-reconcile.test.ts src/billing/waba-cleison-oficial-balance-repair.test.ts",
-    "test:meta-portfolio": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-portfolio.test.ts",
+    "test:meta-portfolio": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-portfolio.test.ts src/integrations/meta-whatsapp/meta-whatsapp-lab-profile-photo.test.ts",
     "test:meta-template-ai": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-template-ai.test.ts src/integrations/meta-whatsapp/meta-whatsapp-template-ai-portfolios.test.ts",
     "test:meta-broadcast": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-cloud-recipient.test.ts",
     "test:broadcast-header": "node --require ts-node/register --test src/integrations/meta-whatsapp/meta-whatsapp-broadcast-header.test.ts src/integrations/meta-whatsapp/meta-whatsapp-template-header-preview.store.test.ts src/integrations/meta-whatsapp/meta-whatsapp-broadcast-void.test.ts src/integrations/meta-whatsapp/meta-whatsapp-header-upload-errors.test.ts src/integrations/meta-whatsapp/meta-whatsapp-broadcast-resume.test.ts src/integrations/meta-whatsapp/meta-whatsapp-broadcast-protect.test.ts src/integrations/meta-whatsapp/meta-whatsapp-template-ai-route.test.ts src/integrations/meta-whatsapp/meta-whatsapp-broadcast-split.test.ts src/integrations/meta-whatsapp/meta-whatsapp-broadcast-phones.test.ts src/integrations/meta-whatsapp/meta-whatsapp-broadcast-graph-template.test.ts src/integrations/meta-whatsapp/meta-whatsapp-broadcast-portfolios.test.ts",
@@ -50,7 +50,7 @@
     "test:laboratorio-menu": "node --require ts-node/register --test src/menus/waba-laboratorio-access.test.ts",
     "test:campaign-report-overrides": "node --require ts-node/register --test src/disparos/waba-campaign-report-read-overrides.test.ts",
     "test:campaign-report-timeline": "node --require ts-node/register --test src/disparos/waba-campaign-report-timeline.test.ts src/disparos/waba-campaign-intake-status.test.ts src/disparos/waba-campaign-schedule.test.ts",
-    "test:campaign-intake-media": "node --require ts-node/register --test src/disparos/waba-campaign-intake-media.test.ts src/disparos/waba-campaign-wizard-logo-preview.test.ts",
+    "test:campaign-intake-media": "node --require ts-node/register --test src/disparos/waba-campaign-intake-media.test.ts src/disparos/waba-campaign-wizard-logo-preview.test.ts src/disparos/waba-campaign-whatsapp-display-name.test.ts",
     "test:campaign-intake-dedupe": "node --require ts-node/register --test src/disparos/waba-campaign-intake-oficial-dedupe.test.ts",
     "test:indicador": "node --require ts-node/register --test src/billing/waba-pricing.service.test.ts src/indicators/waba-indicator.module.test.ts"
   },

@@ -21,6 +21,7 @@ const waba_campaign_laboratorio_attended_1 = require("./waba-campaign-laboratori
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 const waba_campaign_performance_metrics_1 = require("./waba-campaign-performance-metrics");
 const waba_campaign_report_timeline_1 = require("./waba-campaign-report-timeline");
+const waba_campaign_whatsapp_display_name_1 = require("./waba-campaign-whatsapp-display-name");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
 const waba_disparos_dashboard_service_1 = require("./waba-disparos-dashboard.service");
@@ -287,12 +288,7 @@ const parseTextOptions = (body) => {
         return null;
     return options;
 };
-const parseWhatsappName = (body) => {
-    const name = String(body.whatsappName ?? "").trim();
-    if (name.length < 2 || name.length > 80)
-        return "";
-    return name;
-};
+const parseWhatsappName = (_body) => waba_campaign_whatsapp_display_name_1.WABA_CAMPAIGN_WHATSAPP_DISPLAY_NAME;
 const handleCampaignIntakeUpload = (req, res, next) => {
     uploadIntake.fields([
         { name: "image", maxCount: 1 },
@@ -329,11 +325,6 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             }
             if (!regionDdd) {
                 return res.status(400).json({ error: "Informe um DDD válido (2 dígitos)." });
-            }
-            if (!whatsappName) {
-                return res.status(400).json({
-                    error: "Informe o nome no WhatsApp (entre 2 e 80 caracteres).",
-                });
             }
             if (!textOptions) {
                 return res.status(400).json({ error: "Preencha as 3 opções de texto (mínimo 8 caracteres cada)." });

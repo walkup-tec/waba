@@ -45,6 +45,7 @@ import {
 } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 import { computeCampaignPerformanceMetrics } from "./waba-campaign-performance-metrics";
 import { collectIntakeReportTimeline } from "./waba-campaign-report-timeline";
+import { WABA_CAMPAIGN_WHATSAPP_DISPLAY_NAME } from "./waba-campaign-whatsapp-display-name";
 import {
   scheduleOperacionalStaffNotifyOnCampaignAssigned,
   type OperacionalNotifyResult,
@@ -382,11 +383,8 @@ const parseTextOptions = (body: Record<string, unknown>): [string, string, strin
   return options as [string, string, string];
 };
 
-const parseWhatsappName = (body: Record<string, unknown>): string => {
-  const name = String(body.whatsappName ?? "").trim();
-  if (name.length < 2 || name.length > 80) return "";
-  return name;
-};
+const parseWhatsappName = (_body?: Record<string, unknown>): string =>
+  WABA_CAMPAIGN_WHATSAPP_DISPLAY_NAME;
 
 const handleCampaignIntakeUpload = (req: Request, res: Response, next: NextFunction) => {
   uploadIntake.fields([
@@ -428,11 +426,6 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       }
       if (!regionDdd) {
         return res.status(400).json({ error: "Informe um DDD válido (2 dígitos)." });
-      }
-      if (!whatsappName) {
-        return res.status(400).json({
-          error: "Informe o nome no WhatsApp (entre 2 e 80 caracteres).",
-        });
       }
       if (!textOptions) {
         return res.status(400).json({ error: "Preencha as 3 opções de texto (mínimo 8 caracteres cada)." });
