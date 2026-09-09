@@ -1,4 +1,5 @@
 import { WabaCampaignIntakeRepository } from "../disparos/waba-campaign-intake.repository";
+import { shouldCountCampaignIntakeCredits } from "../disparos/waba-campaign-intake-status";
 import {
   normalizeDispatchesApiKind,
   resolveIntakeApiKindFromIntake,
@@ -120,6 +121,24 @@ export class WabaDisparosBonusService {
     const normalized = normalizeEmail(email);
     if (!normalized) return [];
     this.syncPendingBonusFromCompletedCampaigns(normalized);
-    return this.repository.listGrantHistory(normalized, limit);
+    const intakesById = new Map(
+      this.intakeRepository.listByEmail(normalized).map((intake) => [intake.id, intake]),
+    );
+    return this.repository
+      .listGrantHistory(normalized, limit)
+      .filter((item) => {
+        const intake = intakesById.get(item.campaignId);
+        if (!intake) return item.shipments > 0;
+        if (!shouldCountCampaignIntakeCredits(intake.status)) return false;
+        return resolveCampaignBonusShipments(intake) > 0 || item.shipments > 0;
+      })
+      .map((item) => {
+        const intake = intakesById.get(item.campaignId);
+        const campaignName = String(intake?.campaignName ?? "").trim();
+        return {
+          ...item,
+          campaignName: campaignName || item.campaignId,
+        };
+      });
   }
 }

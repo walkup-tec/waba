@@ -137,9 +137,29 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 1016);
     assert.equal(summary.byApi.oficial.remainingShipments, 1849 + 5000 + 834 + 829);
+    assert.equal(summary.paidOrderCount, 2);
+    assert.equal(summary.contractedShipments, 1849 + 5000 + 834 + 829);
     const paid = orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000");
     assert.equal(paid?.bonusShipmentsApplied, 834 + 829);
     assert.equal(paid?.shipmentCount, 5000 + 834 + 829);
+
+    const credits = new WabaDisparosCreditsService(orders);
+    const purchases = credits.listPurchaseHistory(EMAIL);
+    assert.equal(purchases.length, 2);
+    assert.equal(purchases[0]?.id, "7c1e5000-0ff1-4c1a-9c1e-000000005000");
+    assert.equal(purchases[0]?.purchasedShipmentCount, 5000);
+    assert.equal(purchases[0]?.shipmentCount, 5000);
+    assert.equal(purchases[0]?.bonusShipmentsApplied, 1663);
+    assert.equal(purchases[1]?.purchasedShipmentCount, 1849);
+    assert.equal(purchases[1]?.bonusShipmentsApplied, 0);
+
+    const bonusHistory = credits.listBonusHistory(EMAIL);
+    assert.equal(bonusHistory.length, 3);
+    const byCampaign = Object.fromEntries(bonusHistory.map((item) => [item.campaignId, item]));
+    assert.equal(byCampaign["camp-jandira"]?.status, "applied");
+    assert.equal(byCampaign["camp-jandira-2"]?.status, "applied");
+    assert.equal(byCampaign["camp-ptx"]?.status, "pending");
+    assert.equal(byCampaign["camp-ptx"]?.shipments, 1016);
   });
 
   it("pedido que já liquidou só 829 ainda recebe o 834 anterior", async () => {
@@ -240,6 +260,48 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
     assert.equal(summary.byApi.oficial.consumedShipments, 0);
     assert.equal(summary.byApi.oficial.remainingShipments, 1849);
+  });
+
+  it("campanha com erro reportado não entra no histórico de bonificações", async () => {
+    resetStore();
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaCampaignIntakeRepository } = await import("../disparos/waba-campaign-intake.repository");
+    const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
+    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+
+    new WabaCampaignIntakeRepository().create(
+      completedIntake({
+        id: "camp-nesio-erro",
+        campaignName: "Campanha Nésio",
+        status: "error_reported",
+        plannedSendCount: 1002,
+        createdAt: "2026-09-04T12:00:00.000Z",
+        performanceReport: {
+          totalLeads: 1002,
+          sent: 0,
+          delivered: 0,
+          read: 0,
+          failed: 0,
+          filledAt: "2026-09-04T12:00:00.000Z",
+          filledByEmail: "op@test.com",
+        },
+      }),
+    );
+    new WabaDisparosBonusRepository().grantFromCampaign(EMAIL, "camp-nesio-erro", 1002, "oficial");
+
+    const orders = new WabaBillingOrderRepository();
+    orders.create(
+      baseOrder({
+        id: "11111111-1111-4111-8111-111111111111",
+        shipmentCount: 1849,
+        purchasedShipmentCount: 1849,
+        valueCents: 55500,
+        paidAt: "2026-08-01T15:00:00.000Z",
+      }),
+    );
+
+    const bonusHistory = new WabaDisparosCreditsService(orders).listBonusHistory(EMAIL);
+    assert.equal(bonusHistory.some((item) => item.campaignId === "camp-nesio-erro"), false);
   });
 
   it("restante 1849 não absorve bônus posterior à compra mesmo com paidAt recente", async () => {

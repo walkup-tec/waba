@@ -512,6 +512,11 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.remainingShipments, 1849 + 5000 + 834 + 829);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 1016);
+    assert.equal(summary.paidOrderCount, 2);
+    assert.equal(summary.contractedShipments, 8512);
+    assert.equal(summary.pendingBonusShipments, 1016);
+    assert.equal(summary.contractedValueCents, 55500 + 160000);
+    assert.equal(summary.lastPaidAt, "2026-09-05T19:26:22.000Z");
 
     assert.equal(orders.getById("00000000-0000-4000-8000-000000005000")?.grantActive, false);
     assert.equal(orders.getById("aaaaaaaa-1111-4111-8111-ffffffffffff")?.grantActive, false);
@@ -521,6 +526,27 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
     assert.equal(pix?.creditsValidUntil, null);
     assert.equal(pix?.bonusShipmentsApplied, 834 + 829);
     assert.equal(pix?.shipmentCount, 5000 + 834 + 829);
+
+    const credits = new WabaDisparosCreditsService(orders);
+    const purchases = credits.listPurchaseHistory(EMAIL);
+    assert.equal(purchases.length, 2);
+    assert.equal(purchases.some((item) => item.id === "aaaaaaaa-1111-4111-8111-ffffffffffff"), false);
+    assert.equal(purchases.some((item) => item.id === "00000000-0000-4000-8000-000000005000"), false);
+    const pixHistory = purchases.find((item) => item.id === "7c1e5000-0ff1-4c1a-9c1e-000000005000");
+    const leftoverHistory = purchases.find((item) => item.id === "11111111-1111-4111-8111-111111111111");
+    assert.equal(pixHistory?.purchasedShipmentCount, 5000);
+    assert.equal(pixHistory?.shipmentCount, 5000);
+    assert.equal(pixHistory?.bonusShipmentsApplied, 1663);
+    assert.equal(leftoverHistory?.purchasedShipmentCount, 1849);
+    assert.equal(leftoverHistory?.bonusShipmentsApplied, 0);
+
+    const bonusHistory = credits.listBonusHistory(EMAIL);
+    assert.equal(bonusHistory.length, 3);
+    const ptx = bonusHistory.find((item) => item.campaignId === "camp-ptx");
+    assert.equal(ptx?.status, "pending");
+    assert.equal(ptx?.shipments, 1016);
+    assert.equal(bonusHistory.find((item) => item.campaignId === "camp-jandira")?.status, "applied");
+    assert.equal(bonusHistory.find((item) => item.campaignId === "camp-jandira-2")?.status, "applied");
 
     const express = (await import("express")).default;
     const { registerWabaBillingRoutes } = await import("./waba-billing.routes");
@@ -534,13 +560,43 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
       const address = server.address();
       const port = typeof address === "object" && address ? address.port : 0;
       const token = createWabaSessionToken(EMAIL, "subscriber");
-      const response = await fetch(`http://127.0.0.1:${port}/billing/disparos/credits`, {
-        headers: { cookie: `waba_session=${token}` },
-      });
+      const headers = { cookie: `waba_session=${token}` };
+      const response = await fetch(`http://127.0.0.1:${port}/billing/disparos/credits`, { headers });
       assert.equal(response.status, 200);
       const body = await response.json();
       assert.equal(Number(body.byApi.oficial.remainingShipments), 8512);
       assert.equal(Number(body.byApi.oficial.pendingBonusShipments), 1016);
+      assert.equal(Number(body.paidOrderCount), 2);
+      assert.equal(Number(body.contractedShipments), 8512);
+
+      const purchasesRes = await fetch(`http://127.0.0.1:${port}/billing/disparos/purchases?limit=20`, {
+        headers,
+      });
+      assert.equal(purchasesRes.status, 200);
+      const purchasesBody = await purchasesRes.json();
+      const purchaseItems = Array.isArray(purchasesBody.items) ? purchasesBody.items : [];
+      assert.equal(purchaseItems.length, 2);
+      assert.equal(
+        purchaseItems.some((item: { id: string }) => item.id === "aaaaaaaa-1111-4111-8111-ffffffffffff"),
+        false,
+      );
+      const pixItem = purchaseItems.find(
+        (item: { id: string }) => item.id === "7c1e5000-0ff1-4c1a-9c1e-000000005000",
+      );
+      assert.equal(Number(pixItem?.purchasedShipmentCount), 5000);
+      assert.equal(Number(pixItem?.bonusShipmentsApplied), 1663);
+
+      const bonusRes = await fetch(`http://127.0.0.1:${port}/billing/disparos/bonus-history?limit=20`, {
+        headers,
+      });
+      assert.equal(bonusRes.status, 200);
+      const bonusBody = await bonusRes.json();
+      const bonusItems = Array.isArray(bonusBody.items) ? bonusBody.items : [];
+      assert.equal(bonusItems.length, 3);
+      assert.equal(
+        bonusItems.find((item: { campaignId: string }) => item.campaignId === "camp-ptx")?.status,
+        "pending",
+      );
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaDisparosBonusService = void 0;
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
+const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_disparos_bonus_repository_1 = require("./waba-disparos-bonus.repository");
 const normalizeEmail = (value) => value.trim().toLowerCase();
@@ -87,7 +88,25 @@ class WabaDisparosBonusService {
         if (!normalized)
             return [];
         this.syncPendingBonusFromCompletedCampaigns(normalized);
-        return this.repository.listGrantHistory(normalized, limit);
+        const intakesById = new Map(this.intakeRepository.listByEmail(normalized).map((intake) => [intake.id, intake]));
+        return this.repository
+            .listGrantHistory(normalized, limit)
+            .filter((item) => {
+            const intake = intakesById.get(item.campaignId);
+            if (!intake)
+                return item.shipments > 0;
+            if (!(0, waba_campaign_intake_status_1.shouldCountCampaignIntakeCredits)(intake.status))
+                return false;
+            return resolveCampaignBonusShipments(intake) > 0 || item.shipments > 0;
+        })
+            .map((item) => {
+            const intake = intakesById.get(item.campaignId);
+            const campaignName = String(intake?.campaignName ?? "").trim();
+            return {
+                ...item,
+                campaignName: campaignName || item.campaignId,
+            };
+        });
     }
 }
 exports.WabaDisparosBonusService = WabaDisparosBonusService;

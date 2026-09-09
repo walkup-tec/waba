@@ -17,20 +17,26 @@ import {
 import { WabaDisparosBonusSettlementService } from "./waba-disparos-bonus-settlement.service";
 import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
 import {
+  CLEISON_OFICIAL_FORCE_REF,
   WabaCleisonOficialBalanceRepair,
   applyCleisonOficialCreditsOverride,
   applyCleisonOficialSummaryOverride,
 } from "./waba-cleison-oficial-balance-repair";
 import { WabaDisparosCreditUsageRepository } from "./waba-disparos-credit-usage.repository";
 import {
+  isOrderCreditsActive,
   resolveActiveOrderShipmentCount,
-  resolveOrderShipmentCount,
+  resolvePurchasedShipmentCount,
 } from "./waba-disparos-order-shipments";
 import { shouldCountCampaignIntakeCredits } from "../disparos/waba-campaign-intake-status";
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
 const UNLIMITED_CREDITS_REMAINING = 9_999_999;
+
+const isOperationalBalanceRepairOrder = (order: WabaBillingOrder): boolean =>
+  String(order.asaasExternalReference ?? "").trim() === CLEISON_OFICIAL_FORCE_REF ||
+  order.grantCreatedByEmail === "system-balance-repair";
 
 export type DisparosCreditsSummary = {
   hasCredits: boolean;
@@ -72,6 +78,22 @@ export class WabaDisparosCreditsService {
           String(order.paidAt ?? "").trim().length > 0,
       )
       .sort((a, b) => new Date(b.paidAt || 0).getTime() - new Date(a.paidAt || 0).getTime());
+  }
+
+  private prepareCreditsLedger(email: string): string {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return "";
+    this.ensureUsageMigrated(normalized);
+    this.cleisonBalanceRepair.applyIfNeeded(normalized);
+    this.bonusSettlementService.settleAllUnsettledPaidOrdersForEmail(normalized);
+    return normalized;
+  }
+
+  private isVisiblePurchaseHistoryOrder(order: WabaBillingOrder): boolean {
+    if (order.grantSource === "admin-bonus-envios") return false;
+    if (isOperationalBalanceRepairOrder(order)) return false;
+    if (!isOrderCreditsActive(order)) return false;
+    return resolveActiveOrderShipmentCount(order) > 0;
   }
 
   private rebuildConsumedByApiFromIntakes(email: string): void {
@@ -174,12 +196,10 @@ export class WabaDisparosCreditsService {
   }
 
   getCreditsSummary(email: string): DisparosCreditsSummary {
-    const normalized = normalizeEmail(email);
+    const normalized = this.prepareCreditsLedger(email);
     const unlimitedCredits = this.masterPolicyService.hasUnlimitedCredits(normalized);
-    this.ensureUsageMigrated(normalized);
-    this.cleisonBalanceRepair.applyIfNeeded(normalized);
-    this.bonusSettlementService.settleAllUnsettledPaidOrdersForEmail(normalized);
     const paidOrders = this.listPaidOrdersForEmail(normalized);
+    const visiblePurchases = paidOrders.filter((order) => this.isVisiblePurchaseHistoryOrder(order));
 
     const byApi: DisparosCreditsByApi = {
       oficial: this.buildApiBucket(normalized, "oficial", paidOrders),
@@ -204,7 +224,7 @@ export class WabaDisparosCreditsService {
     const pendingBonusShipments =
       byApi.oficial.pendingBonusShipments + byApi.alternativa.pendingBonusShipments;
 
-    const contractedValueCents = paidOrders.reduce(
+    const contractedValueCents = visiblePurchases.reduce(
       (sum, order) => sum + Math.round(Number(order.valueCents ?? 0)),
       0,
     );
@@ -219,8 +239,8 @@ export class WabaDisparosCreditsService {
       consumedShipments,
       remainingShipments,
       contractedValueCents,
-      paidOrderCount: paidOrders.length,
-      lastPaidAt: paidOrders[0]?.paidAt ?? "",
+      paidOrderCount: visiblePurchases.length,
+      lastPaidAt: visiblePurchases[0]?.paidAt ?? "",
       pendingBonusShipments,
     };
     applyCleisonOficialSummaryOverride(normalized, summary);
@@ -277,22 +297,30 @@ export class WabaDisparosCreditsService {
   }
 
   listPurchaseHistory(email: string, limit = 20) {
+    const normalized = this.prepareCreditsLedger(email);
     const cap = Math.max(1, Math.min(50, Math.floor(limit)));
-    return this.listPaidOrdersForEmail(email)
+    return this.listPaidOrdersForEmail(normalized)
+      .filter((order) => this.isVisiblePurchaseHistoryOrder(order))
       .slice(0, cap)
-      .map((order) => ({
-        id: order.id,
-        apiKind: resolveOrderApiKind(order),
-        valueCents: Math.max(0, Math.round(Number(order.valueCents ?? 0))),
-        shipmentCount: resolveOrderShipmentCount(order),
-        bonusShipmentsApplied: Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0))),
-        paidAt: String(order.paidAt ?? ""),
-      }));
+      .map((order) => {
+        const purchasedShipments = resolvePurchasedShipmentCount(order);
+        const bonusShipmentsApplied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
+        return {
+          id: order.id,
+          apiKind: resolveOrderApiKind(order),
+          valueCents: Math.max(0, Math.round(Number(order.valueCents ?? 0))),
+          purchasedShipmentCount: purchasedShipments,
+          shipmentCount: purchasedShipments,
+          bonusShipmentsApplied,
+          paidAt: String(order.paidAt ?? ""),
+        };
+      });
   }
 
   listBonusHistory(email: string, limit = 20) {
+    const normalized = this.prepareCreditsLedger(email);
     const cap = Math.max(1, Math.min(50, Math.floor(limit)));
-    return this.bonusService.listBonusGrantHistory(email, cap);
+    return this.bonusService.listBonusGrantHistory(normalized, cap);
   }
 }
 

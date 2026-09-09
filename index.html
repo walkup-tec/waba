@@ -50370,12 +50370,14 @@
         const rows = items
           .map((item) => {
             const planKind = item?.apiKind === "alternativa" ? "alternativa" : "oficial";
-            const shipments = Number(item?.shipmentCount || 0);
             const bonus = Number(item?.bonusShipmentsApplied || 0);
+            const purchased = Number(
+              item?.purchasedShipmentCount ?? Math.max(0, Number(item?.shipmentCount || 0) - bonus)
+            );
             const shipmentsLabel =
               bonus > 0
-                ? `${shipments.toLocaleString("pt-BR")} (+${bonus.toLocaleString("pt-BR")} bônus)`
-                : shipments.toLocaleString("pt-BR");
+                ? `${purchased.toLocaleString("pt-BR")} (+${bonus.toLocaleString("pt-BR")} bônus)`
+                : purchased.toLocaleString("pt-BR");
             return `
               <tr>
                 <td>${escapeDisparosHtml(formatDisparosStatementDateTime(item?.paidAt))}</td>
@@ -50432,9 +50434,9 @@
         const rows = items
           .map((item) => {
             const planKind = item?.apiKind === "alternativa" ? "alternativa" : "oficial";
+            const campaignName = String(item?.campaignName || item?.campaignId || "").trim();
             const campaignId = String(item?.campaignId || "").trim();
-            const campaignLabel =
-              campaignId.length > 10 ? `${campaignId.slice(0, 8)}…` : campaignId || "—";
+            const campaignLabel = campaignName || (campaignId.length > 10 ? `${campaignId.slice(0, 8)}…` : campaignId || "—");
             const status = String(item?.status || "pending");
             return `
               <tr>
@@ -50443,7 +50445,7 @@
                 <td class="is-shipments">${escapeDisparosHtml(
                   Number(item?.shipments || 0).toLocaleString("pt-BR")
                 )}</td>
-                <td title="${escapeDisparosHtml(campaignId)}">${escapeDisparosHtml(campaignLabel)}</td>
+                <td title="${escapeDisparosHtml(campaignName || campaignId)}">${escapeDisparosHtml(campaignLabel)}</td>
                 <td class="is-value">${escapeDisparosHtml(formatDisparosBonusStatusLabel(status))}</td>
               </tr>
             `;
@@ -50484,6 +50486,7 @@
           bonusListEl.innerHTML = '<div class="disparos-statement-empty">Carregando bonificações…</div>';
         }
         try {
+          await loadDisparosCredits();
           const [purchases, bonusItems] = await Promise.all([
             fetchDisparosPurchaseHistoryItems().catch((error) => {
               if (purchasesListEl) {
