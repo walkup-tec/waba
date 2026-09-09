@@ -342,6 +342,10 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
     if (businessId) {
         const unknownWabas = new Set();
         for (const id of debugTargets.wabaIds) {
+            if ((0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaForBusiness)(businessId, id)) {
+                clientIds.add(id);
+                continue;
+            }
             if (id && !wabaIds.has(id) && !clientIds.has(id))
                 unknownWabas.add(id);
         }
