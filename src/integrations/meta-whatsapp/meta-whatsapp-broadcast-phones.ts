@@ -34,6 +34,7 @@ export function indexBroadcastPortfolioPhones(
       phoneNumberId?: string | null;
       uiStatus?: string | null;
       dispatchStatus?: string | null;
+      wabaId?: string | null;
     }>;
   }>,
 ): Map<string, MetaBroadcastPhoneCatalogItem> {
@@ -50,7 +51,7 @@ export function indexBroadcastPortfolioPhones(
         phoneNumberId,
         connectionId,
         portfolioName,
-        wabaId,
+        wabaId: String(number.wabaId || wabaId || "").trim() || null,
         uiStatus: String(number.uiStatus || "").trim(),
         dispatchStatus: String(number.dispatchStatus || "livre").trim(),
       });
@@ -158,17 +159,43 @@ export function templateMissingOnPortfolioMessage(input: {
   return `O template ${templateName} não está aprovado ${where}. Números desse portfólio só entram neste disparo se o mesmo template (nome e idioma) já estiver aprovado lá.`;
 }
 
+export function templateWabaMismatchMessage(input: {
+  templateName: string;
+  templateWabaId?: string | null;
+  phoneWabaId?: string | null;
+  portfolioName?: string | null;
+}): string {
+  const templateName = String(input.templateName || "selecionado").trim() || "selecionado";
+  const templateWaba = String(input.templateWabaId || "").trim();
+  const phoneWaba = String(input.phoneWabaId || "").trim();
+  const portfolio = String(input.portfolioName || "").trim();
+  const where = portfolio ? ` (${portfolio})` : "";
+  if (templateWaba && phoneWaba) {
+    return `O template ${templateName} está na WABA ${templateWaba}. O número${where} está na WABA ${phoneWaba}. A Meta só envia o modelo na mesma conta WhatsApp. No Gerenciador, abra a WABA do template e marque só os números dela.`;
+  }
+  return templateMissingOnPortfolioMessage({ templateName, portfolioName: input.portfolioName });
+}
+
+/** Chip e template precisam ser da mesma WABA. Mesmo BM / mesmo portfólio não basta. */
+export function bindingMatchesTemplateWaba(input: {
+  connectionId: string;
+  wabaId?: string | null;
+  templateConnectionId: string;
+  templateWabaId?: string | null;
+}): boolean {
+  const templateWaba = String(input.templateWabaId || "").trim();
+  const phoneWaba = String(input.wabaId || "").trim();
+  if (templateWaba && phoneWaba) return templateWaba === phoneWaba;
+  const connectionId = String(input.connectionId || "").trim();
+  const templateConnectionId = String(input.templateConnectionId || "").trim();
+  return Boolean(connectionId && templateConnectionId && connectionId === templateConnectionId);
+}
+
 export function connectionNeedsLocalTemplate(input: {
   connectionId: string;
   wabaId?: string | null;
   templateConnectionId: string;
   templateWabaId?: string | null;
 }): boolean {
-  const connectionId = String(input.connectionId || "").trim();
-  const templateConnectionId = String(input.templateConnectionId || "").trim();
-  if (connectionId && templateConnectionId && connectionId === templateConnectionId) return false;
-  const wabaId = String(input.wabaId || "").trim();
-  const templateWabaId = String(input.templateWabaId || "").trim();
-  if (wabaId && templateWabaId && wabaId === templateWabaId) return false;
-  return true;
+  return !bindingMatchesTemplateWaba(input);
 }
