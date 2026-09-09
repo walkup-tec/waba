@@ -50370,14 +50370,10 @@
         const rows = items
           .map((item) => {
             const planKind = item?.apiKind === "alternativa" ? "alternativa" : "oficial";
-            const bonus = Number(item?.bonusShipmentsApplied || 0);
             const purchased = Number(
-              item?.purchasedShipmentCount ?? Math.max(0, Number(item?.shipmentCount || 0) - bonus)
+              item?.purchasedShipmentCount ?? Number(item?.shipmentCount || 0)
             );
-            const shipmentsLabel =
-              bonus > 0
-                ? `${purchased.toLocaleString("pt-BR")} (+${bonus.toLocaleString("pt-BR")} bônus)`
-                : purchased.toLocaleString("pt-BR");
+            const shipmentsLabel = purchased.toLocaleString("pt-BR");
             return `
               <tr>
                 <td>${escapeDisparosHtml(formatDisparosStatementDateTime(item?.paidAt))}</td>

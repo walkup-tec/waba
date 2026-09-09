@@ -3,9 +3,13 @@ import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
 import {
   isOrderCreditsActive,
-  isPriorRemainderBalanceOrder,
   resolvePurchasedShipmentCount,
 } from "./waba-disparos-order-shipments";
+import {
+  isOperationalBalanceRepairOrder,
+  listRealPaidPurchases,
+  resolveRealPurchasedShipmentCount,
+} from "./waba-disparos-real-purchases";
 import { resolveOrderApiKind, type WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
@@ -63,16 +67,25 @@ export class WabaDisparosBonusSettlementService {
     email: string,
     apiKind: WabaDispatchesApiKind,
   ): WabaBillingOrder[] {
-    const active = this.listActivePaidPurchases(email, apiKind);
-    return active.filter((order) => !isPriorRemainderBalanceOrder(order, active));
+    return listRealPaidPurchases(this.orderRepository.list(), email)
+      .filter((order) => resolveOrderApiKind(order) === apiKind)
+      .sort(
+        (a, b) =>
+          new Date(a.paidAt || a.updatedAt).getTime() -
+          new Date(b.paidAt || b.updatedAt).getTime(),
+      );
   }
 
   private listRemainderBalanceOrders(
     email: string,
     apiKind: WabaDispatchesApiKind,
   ): WabaBillingOrder[] {
-    const active = this.listActivePaidPurchases(email, apiKind);
-    return active.filter((order) => isPriorRemainderBalanceOrder(order, active));
+    const realIds = new Set(this.listEligiblePurchases(email, apiKind).map((order) => order.id));
+    return this.listActivePaidPurchases(email, apiKind).filter((order) => {
+      if (realIds.has(order.id)) return false;
+      if (isOperationalBalanceRepairOrder(order)) return false;
+      return true;
+    });
   }
 
   /**
@@ -111,7 +124,8 @@ export class WabaDisparosBonusSettlementService {
     const apiKind = resolveOrderApiKind(order);
     const grants = this.bonusService.listGrantsForApi(order.ownerEmail, apiKind);
     const assigned = this.assignGrantsToPurchases(order.ownerEmail, apiKind).get(order.id) ?? 0;
-    const purchasedShipments = resolvePurchasedShipmentCount(order);
+    const purchasedShipments =
+      resolveRealPurchasedShipmentCount(order) || resolvePurchasedShipmentCount(order);
     const alreadyApplied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
     // Fonte da verdade: grants atribuídos a esta compra. Permite baixar se o
     // bônus posterior (ex.: PTX) entrou no disponível por engano. Sem grants

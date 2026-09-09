@@ -5,6 +5,7 @@ import os from "os";
 import path from "path";
 import { after, before, describe, it } from "node:test";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
+import type { WabaCampaignIntake } from "../disparos/waba-campaign-intake.repository";
 
 const EMAIL = "cleison.fel@gmail.com";
 const originalCwd = process.cwd();
@@ -60,6 +61,38 @@ function baseOrder(overrides: Partial<WabaBillingOrder>): WabaBillingOrder {
     asaasExternalReference: `waba:${overrides.id || "order-base"}`,
     createdAt: now,
     updatedAt: now,
+    ...overrides,
+  };
+}
+
+function completedIntake(overrides: Partial<WabaCampaignIntake> & { id: string }): WabaCampaignIntake {
+  const createdAt = String(overrides.createdAt ?? "2026-09-02T12:00:00.000Z");
+  const totalLeads = Math.round(Number(overrides.plannedSendCount ?? 1990));
+  const sent = Math.round(Number(overrides.performanceReport?.sent ?? 1156));
+  return {
+    regionDdd: "11",
+    campaignName: "Campanha teste",
+    textOptions: ["a", "b", "c"],
+    imageFileName: "a.png",
+    imageStoredPath: "/tmp/a.png",
+    spreadsheetFileName: "a.csv",
+    spreadsheetStoredPath: "/tmp/a.csv",
+    importedLineCount: totalLeads,
+    plannedSendCount: totalLeads,
+    apiKind: "oficial",
+    status: "completed",
+    createdAt,
+    updatedAt: createdAt,
+    ownerEmail: EMAIL,
+    performanceReport: {
+      totalLeads,
+      sent,
+      delivered: 0,
+      read: 0,
+      failed: 0,
+      filledAt: createdAt,
+      filledByEmail: "op@test.com",
+    },
     ...overrides,
   };
 }
@@ -130,7 +163,7 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
 
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
-    assert.equal(summary.byApi.oficial.remainingShipments, 2000 + 1016);
+    assert.equal(summary.byApi.oficial.remainingShipments, 2000);
 
     const force = orders.getById("aaaaaaaa-1111-4111-8111-ffffffffffff");
     assert.equal(force?.grantActive, false);
@@ -266,7 +299,7 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
       assert.equal(first.status, 200);
       const body = await first.json();
       assert.equal(Number(body.byApi.oficial.pendingBonusShipments), 0);
-      assert.equal(Number(body.byApi.oficial.remainingShipments), 3016);
+      assert.equal(Number(body.byApi.oficial.remainingShipments), 2000);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }
@@ -321,7 +354,7 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
 
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
-    assert.equal(summary.byApi.oficial.remainingShipments, 3016);
+    assert.equal(summary.byApi.oficial.remainingShipments, 2000);
   });
 
   it("desativa os três bônus master 1016 vitalícios duplicados do Cleison", async () => {
@@ -428,13 +461,14 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
     );
   });
 
-  it("não soma o pacote original de 5000 em cima do restante 1849 (14525 → 8512)", async () => {
+  it("histórico de compras reais: 13.000 contratados e sem 1016 triplicado", async () => {
     resetStore();
     delete process.env.WABA_ENABLE_CLEISON_BALANCE_REPAIR;
     delete process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR;
 
     const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
     const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
+    const { WabaCampaignIntakeRepository } = await import("../disparos/waba-campaign-intake.repository");
     const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
     const { CLEISON_OFICIAL_FORCE_REF } = await import("./waba-cleison-oficial-balance-repair");
 
@@ -443,7 +477,80 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
     bonus.grantFromCampaign(EMAIL, "camp-jandira-2", 829, "oficial", "2026-09-03T18:51:00.000Z");
     bonus.grantFromCampaign(EMAIL, "camp-ptx", 1016, "oficial", "2026-09-08T22:00:00.000Z");
 
+    const intakes = new WabaCampaignIntakeRepository();
+    intakes.create(
+      completedIntake({
+        id: "camp-jandira",
+        campaignName: "Campanha Jandira",
+        plannedSendCount: 1990,
+        createdAt: "2026-09-02T12:00:00.000Z",
+        performanceReport: {
+          totalLeads: 1990,
+          sent: 1156,
+          delivered: 0,
+          read: 0,
+          failed: 0,
+          filledAt: "2026-09-02T18:00:00.000Z",
+          filledByEmail: "op@test.com",
+        },
+      }),
+    );
+    intakes.create(
+      completedIntake({
+        id: "camp-jandira-2",
+        campaignName: "Campanha Jandira 2",
+        plannedSendCount: 1990,
+        createdAt: "2026-09-03T18:51:00.000Z",
+        performanceReport: {
+          totalLeads: 1990,
+          sent: 1161,
+          delivered: 0,
+          read: 0,
+          failed: 0,
+          filledAt: "2026-09-03T22:00:00.000Z",
+          filledByEmail: "op@test.com",
+        },
+      }),
+    );
+    intakes.create(
+      completedIntake({
+        id: "camp-ptx",
+        campaignName: "Opt in PTX",
+        plannedSendCount: 1990,
+        createdAt: "2026-09-08T22:00:00.000Z",
+        performanceReport: {
+          totalLeads: 1990,
+          sent: 1980,
+          delivered: 0,
+          read: 0,
+          failed: 0,
+          filledAt: "2026-09-09T02:00:00.000Z",
+          filledByEmail: "op@test.com",
+        },
+      }),
+    );
+    intakes.create(
+      completedIntake({
+        id: "camp-nesio-erro",
+        campaignName: "Campanha Nésio",
+        status: "error_reported",
+        plannedSendCount: 1002,
+        createdAt: "2026-09-04T12:00:00.000Z",
+        performanceReport: {
+          totalLeads: 1002,
+          sent: 0,
+          delivered: 0,
+          read: 0,
+          failed: 0,
+          filledAt: "2026-09-04T12:00:00.000Z",
+          filledByEmail: "op@test.com",
+        },
+      }),
+    );
+
+    const consumed = 1156 + 1161 + 1980;
     const orders = new WabaBillingOrderRepository();
+    const freezePaidAt = "2026-09-07T13:30:15.000Z";
     orders.create(
       baseOrder({
         id: "aaaaaaaa-1111-4111-8111-ffffffffffff",
@@ -451,7 +558,7 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
         shipmentCount: 5829,
         purchasedShipmentCount: 5829,
         status: "paid",
-        paidAt: "2026-09-07T13:30:15.000Z",
+        paidAt: freezePaidAt,
         asaasExternalReference: CLEISON_OFICIAL_FORCE_REF,
         grantSource: "admin-bonus-envios",
         grantCreatedByEmail: "system-balance-repair",
@@ -461,19 +568,67 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
         bonusShipmentsApplied: 1016,
       }),
     );
+    for (const [index, paidAt] of [
+      "2026-09-09T19:26:00.000Z",
+      "2026-09-09T14:21:00.000Z",
+      "2026-09-09T13:47:00.000Z",
+      "2026-09-09T13:47:30.000Z",
+    ].entries()) {
+      const id = `b1016001-000${index + 1}-4000-8000-00000000000${index + 1}`;
+      orders.create(
+        baseOrder({
+          id,
+          valueCents: 0,
+          shipmentCount: 1016,
+          purchasedShipmentCount: 1016,
+          status: "paid",
+          paidAt,
+          createdAt: paidAt,
+          asaasExternalReference: `waba:bonus-envios:${id}`,
+          grantSource: "admin-bonus-envios",
+          grantCreatedByEmail: "marcelo.mozart@icloud.com",
+          grantActive: true,
+          creditsValidUntil: null,
+          validityMode: "lifetime",
+        }),
+      );
+    }
+    for (const index of [1, 2, 3]) {
+      orders.create(
+        baseOrder({
+          id: `cccccccc-000${index}-4000-8000-000000003000`,
+          valueCents: 99000,
+          shipmentCount: 3000,
+          purchasedShipmentCount: 3000,
+          status: "paid",
+          paidAt: freezePaidAt,
+          createdAt: freezePaidAt,
+          grantActive: true,
+        }),
+      );
+    }
+    orders.create(
+      baseOrder({
+        id: "dddddddd-2834-4000-8000-000000002834",
+        shipmentCount: 2834,
+        purchasedShipmentCount: 2834,
+        valueCents: 0,
+        status: "paid",
+        paidAt: "2026-09-03T12:03:00.000Z",
+        createdAt: "2026-09-03T12:03:00.000Z",
+        bonusShipmentsApplied: 834,
+      }),
+    );
     orders.create(
       baseOrder({
         id: "11111111-1111-4111-8111-111111111111",
-        shipmentCount: 1849,
-        purchasedShipmentCount: 1849,
-        valueCents: 55500,
+        shipmentCount: 3000,
+        purchasedShipmentCount: 3000,
+        valueCents: 0,
         status: "paid",
-        paidAt: "2026-08-01T15:00:00.000Z",
-        createdAt: "2026-08-01T15:00:00.000Z",
+        paidAt: "2026-09-01T13:05:00.000Z",
+        createdAt: "2026-09-01T13:05:00.000Z",
         grantActive: true,
-        creditsValidUntil: PAST,
-        validityMode: "custom",
-        bonusShipmentsApplied: 1016,
       }),
     );
     orders.create(
@@ -494,57 +649,69 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
     orders.create(
       baseOrder({
         id: "7c1e5000-0ff1-4c1a-9c1e-000000005000",
-        shipmentCount: 5000 + 834 + 829 + 1016,
-        purchasedShipmentCount: 5000,
+        shipmentCount: 6663,
+        purchasedShipmentCount: 6663,
         valueCents: 160000,
         status: "paid",
         paidAt: "2026-09-05T19:26:22.000Z",
         createdAt: "2026-09-05T19:20:00.000Z",
-        asaasPaymentId: "pay_cleison_5000",
+        asaasPaymentId: "pay_cleison_5000_sep05",
         asaasPaymentStatus: "CONFIRMED",
         grantActive: true,
         creditsValidUntil: PAST,
         validityMode: "custom",
-        bonusShipmentsApplied: 834 + 829 + 1016,
+        bonusShipmentsApplied: 1663,
+      }),
+    );
+    orders.create(
+      baseOrder({
+        id: "9c1e5000-0ff1-4c1a-9c1e-000000005000",
+        shipmentCount: 7679,
+        purchasedShipmentCount: 7679,
+        valueCents: 160000,
+        status: "paid",
+        paidAt: "2026-09-09T13:20:00.000Z",
+        createdAt: "2026-09-09T13:15:00.000Z",
+        asaasPaymentId: "pay_cleison_5000_sep09",
+        asaasPaymentStatus: "CONFIRMED",
+        grantActive: true,
+        bonusShipmentsApplied: 2679,
       }),
     );
 
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
-    assert.equal(summary.byApi.oficial.remainingShipments, 1849 + 5000 + 834 + 829);
-    assert.equal(summary.byApi.oficial.pendingBonusShipments, 1016);
-    assert.equal(summary.paidOrderCount, 2);
-    assert.equal(summary.contractedShipments, 8512);
-    assert.equal(summary.pendingBonusShipments, 1016);
-    assert.equal(summary.contractedValueCents, 55500 + 160000);
-    assert.equal(summary.lastPaidAt, "2026-09-05T19:26:22.000Z");
+    assert.equal(summary.contractedShipments, 13000);
+    assert.equal(summary.consumedShipments, consumed);
+    assert.equal(summary.byApi.oficial.remainingShipments, 13000 - consumed);
+    assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
+    assert.equal(summary.paidOrderCount, 3);
+    assert.equal(summary.pendingBonusShipments, 0);
+    assert.equal(summary.contractedValueCents, 160000 + 160000);
+    assert.equal(summary.lastPaidAt, "2026-09-09T13:20:00.000Z");
 
-    assert.equal(orders.getById("00000000-0000-4000-8000-000000005000")?.grantActive, false);
     assert.equal(orders.getById("aaaaaaaa-1111-4111-8111-ffffffffffff")?.grantActive, false);
-    assert.equal(orders.getById("11111111-1111-4111-8111-111111111111")?.bonusShipmentsApplied, 0);
-    const pix = orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000");
-    assert.equal(pix?.grantActive, true);
-    assert.equal(pix?.creditsValidUntil, null);
-    assert.equal(pix?.bonusShipmentsApplied, 834 + 829);
-    assert.equal(pix?.shipmentCount, 5000 + 834 + 829);
+    assert.equal(orders.getById("b1016001-0001-4000-8000-000000000001")?.grantActive, false);
+    const pixSep05 = orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000");
+    const pixSep09 = orders.getById("9c1e5000-0ff1-4c1a-9c1e-000000005000");
+    assert.equal(pixSep05?.bonusShipmentsApplied, 834 + 829);
+    assert.equal(pixSep09?.bonusShipmentsApplied, 1016);
 
     const credits = new WabaDisparosCreditsService(orders);
     const purchases = credits.listPurchaseHistory(EMAIL);
-    assert.equal(purchases.length, 2);
+    assert.equal(purchases.length, 3);
+    assert.deepEqual(
+      purchases.map((item) => item.purchasedShipmentCount),
+      [5000, 5000, 3000],
+    );
+    assert.equal(purchases.every((item) => item.bonusShipmentsApplied === 0), true);
+    assert.equal(purchases.some((item) => item.purchasedShipmentCount === 1016), false);
     assert.equal(purchases.some((item) => item.id === "aaaaaaaa-1111-4111-8111-ffffffffffff"), false);
-    assert.equal(purchases.some((item) => item.id === "00000000-0000-4000-8000-000000005000"), false);
-    const pixHistory = purchases.find((item) => item.id === "7c1e5000-0ff1-4c1a-9c1e-000000005000");
-    const leftoverHistory = purchases.find((item) => item.id === "11111111-1111-4111-8111-111111111111");
-    assert.equal(pixHistory?.purchasedShipmentCount, 5000);
-    assert.equal(pixHistory?.shipmentCount, 5000);
-    assert.equal(pixHistory?.bonusShipmentsApplied, 1663);
-    assert.equal(leftoverHistory?.purchasedShipmentCount, 1849);
-    assert.equal(leftoverHistory?.bonusShipmentsApplied, 0);
+    assert.equal(purchases.some((item) => item.id === "dddddddd-2834-4000-8000-000000002834"), false);
+    assert.equal(purchases.some((item) => item.id.startsWith("cccccccc-")), false);
 
     const bonusHistory = credits.listBonusHistory(EMAIL);
     assert.equal(bonusHistory.length, 3);
-    const ptx = bonusHistory.find((item) => item.campaignId === "camp-ptx");
-    assert.equal(ptx?.status, "pending");
-    assert.equal(ptx?.shipments, 1016);
+    assert.equal(bonusHistory.find((item) => item.campaignId === "camp-ptx")?.status, "applied");
     assert.equal(bonusHistory.find((item) => item.campaignId === "camp-jandira")?.status, "applied");
     assert.equal(bonusHistory.find((item) => item.campaignId === "camp-jandira-2")?.status, "applied");
 
@@ -564,10 +731,11 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
       const response = await fetch(`http://127.0.0.1:${port}/billing/disparos/credits`, { headers });
       assert.equal(response.status, 200);
       const body = await response.json();
-      assert.equal(Number(body.byApi.oficial.remainingShipments), 8512);
-      assert.equal(Number(body.byApi.oficial.pendingBonusShipments), 1016);
-      assert.equal(Number(body.paidOrderCount), 2);
-      assert.equal(Number(body.contractedShipments), 8512);
+      assert.equal(Number(body.contractedShipments), 13000);
+      assert.equal(Number(body.consumedShipments), consumed);
+      assert.equal(Number(body.byApi.oficial.remainingShipments), 13000 - consumed);
+      assert.equal(Number(body.byApi.oficial.pendingBonusShipments), 0);
+      assert.equal(Number(body.paidOrderCount), 3);
 
       const purchasesRes = await fetch(`http://127.0.0.1:${port}/billing/disparos/purchases?limit=20`, {
         headers,
@@ -575,16 +743,15 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
       assert.equal(purchasesRes.status, 200);
       const purchasesBody = await purchasesRes.json();
       const purchaseItems = Array.isArray(purchasesBody.items) ? purchasesBody.items : [];
-      assert.equal(purchaseItems.length, 2);
+      assert.equal(purchaseItems.length, 3);
+      assert.deepEqual(
+        purchaseItems.map((item: { purchasedShipmentCount: number }) => Number(item.purchasedShipmentCount)),
+        [5000, 5000, 3000],
+      );
       assert.equal(
-        purchaseItems.some((item: { id: string }) => item.id === "aaaaaaaa-1111-4111-8111-ffffffffffff"),
+        purchaseItems.some((item: { purchasedShipmentCount: number }) => Number(item.purchasedShipmentCount) === 1016),
         false,
       );
-      const pixItem = purchaseItems.find(
-        (item: { id: string }) => item.id === "7c1e5000-0ff1-4c1a-9c1e-000000005000",
-      );
-      assert.equal(Number(pixItem?.purchasedShipmentCount), 5000);
-      assert.equal(Number(pixItem?.bonusShipmentsApplied), 1663);
 
       const bonusRes = await fetch(`http://127.0.0.1:${port}/billing/disparos/bonus-history?limit=20`, {
         headers,
@@ -595,7 +762,7 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
       assert.equal(bonusItems.length, 3);
       assert.equal(
         bonusItems.find((item: { campaignId: string }) => item.campaignId === "camp-ptx")?.status,
-        "pending",
+        "applied",
       );
     } finally {
       await new Promise((resolve) => server.close(resolve));

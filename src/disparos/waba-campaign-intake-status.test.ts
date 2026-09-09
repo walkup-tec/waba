@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   campaignIntakeDisplayOptionsFromBroadcast,
+  resolveCampaignRealizedShipments,
   toCampaignIntakeDisplayStatus,
 } from "./waba-campaign-intake-status";
 
@@ -80,6 +81,39 @@ describe("status visível da campanha", () => {
         }),
       ),
       "Agendado",
+    );
+  });
+
+  it("envios realizados: finalizada usa sent; erro/cancelada zera; em andamento usa planejado", () => {
+    assert.equal(
+      resolveCampaignRealizedShipments({
+        status: "completed",
+        plannedSendCount: 1990,
+        performanceReport: { sent: 1156 },
+      }),
+      1156,
+    );
+    assert.equal(
+      resolveCampaignRealizedShipments({
+        status: "error_reported",
+        plannedSendCount: 1002,
+        performanceReport: { sent: 0 },
+      }),
+      0,
+    );
+    assert.equal(
+      resolveCampaignRealizedShipments({
+        status: "cancelled",
+        plannedSendCount: 500,
+      }),
+      0,
+    );
+    assert.equal(
+      resolveCampaignRealizedShipments({
+        status: "in_progress",
+        plannedSendCount: 1990,
+      }),
+      1990,
     );
   });
 });

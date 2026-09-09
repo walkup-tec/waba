@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.shouldCountCampaignIntakeCredits = exports.toCampaignIntakeDisplayStatus = exports.isCampaignIntakeFinalized = exports.normalizeCampaignIntakeStatus = void 0;
+exports.resolveCampaignRealizedShipments = exports.shouldCountCampaignIntakeCredits = exports.toCampaignIntakeDisplayStatus = exports.isCampaignIntakeFinalized = exports.normalizeCampaignIntakeStatus = void 0;
 exports.campaignIntakeDisplayOptionsFromBroadcast = campaignIntakeDisplayOptionsFromBroadcast;
 const normalizeCampaignIntakeStatus = (status) => {
     const raw = String(status || "").trim().toLowerCase();
@@ -70,3 +70,15 @@ const shouldCountCampaignIntakeCredits = (status) => {
     return normalized !== "error_reported" && normalized !== "cancelled";
 };
 exports.shouldCountCampaignIntakeCredits = shouldCountCampaignIntakeCredits;
+/** Envios realizados da campanha (relatório). Sem relatório, usa o planejado. Erro/cancelada = 0. */
+const resolveCampaignRealizedShipments = (intake) => {
+    if (!(0, exports.shouldCountCampaignIntakeCredits)(String(intake.status ?? "")))
+        return 0;
+    const status = (0, exports.normalizeCampaignIntakeStatus)(String(intake.status ?? ""));
+    const sent = Math.round(Number(intake.performanceReport?.sent ?? Number.NaN));
+    if (status === "completed" && Number.isFinite(sent) && sent >= 0) {
+        return Math.max(0, sent);
+    }
+    return Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
+};
+exports.resolveCampaignRealizedShipments = resolveCampaignRealizedShipments;

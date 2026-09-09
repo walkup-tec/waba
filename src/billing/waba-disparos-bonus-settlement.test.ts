@@ -115,11 +115,11 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
     orders.create(
       baseOrder({
         id: "11111111-1111-4111-8111-111111111111",
-        shipmentCount: 1849,
-        purchasedShipmentCount: 1849,
-        valueCents: 55500,
-        paidAt: "2026-08-01T15:00:00.000Z",
-        createdAt: "2026-08-01T15:00:00.000Z",
+        shipmentCount: 3000,
+        purchasedShipmentCount: 3000,
+        valueCents: 99000,
+        paidAt: "2026-09-01T13:05:00.000Z",
+        createdAt: "2026-09-01T13:05:00.000Z",
         bonusShipmentsApplied: 0,
       }),
     );
@@ -136,9 +136,9 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
 
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 1016);
-    assert.equal(summary.byApi.oficial.remainingShipments, 1849 + 5000 + 834 + 829);
+    assert.equal(summary.byApi.oficial.remainingShipments, 8000);
     assert.equal(summary.paidOrderCount, 2);
-    assert.equal(summary.contractedShipments, 1849 + 5000 + 834 + 829);
+    assert.equal(summary.contractedShipments, 8000);
     const paid = orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000");
     assert.equal(paid?.bonusShipmentsApplied, 834 + 829);
     assert.equal(paid?.shipmentCount, 5000 + 834 + 829);
@@ -149,8 +149,8 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
     assert.equal(purchases[0]?.id, "7c1e5000-0ff1-4c1a-9c1e-000000005000");
     assert.equal(purchases[0]?.purchasedShipmentCount, 5000);
     assert.equal(purchases[0]?.shipmentCount, 5000);
-    assert.equal(purchases[0]?.bonusShipmentsApplied, 1663);
-    assert.equal(purchases[1]?.purchasedShipmentCount, 1849);
+    assert.equal(purchases[0]?.bonusShipmentsApplied, 0);
+    assert.equal(purchases[1]?.purchasedShipmentCount, 3000);
     assert.equal(purchases[1]?.bonusShipmentsApplied, 0);
 
     const bonusHistory = credits.listBonusHistory(EMAIL);
@@ -186,7 +186,7 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
 
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
-    assert.equal(summary.byApi.oficial.remainingShipments, 5000 + 834 + 829);
+    assert.equal(summary.byApi.oficial.remainingShipments, 5000);
     assert.equal(orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000")?.bonusShipmentsApplied, 1663);
   });
 
@@ -217,7 +217,7 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
 
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
-    assert.equal(summary.byApi.oficial.remainingShipments, 5000 + 834);
+    assert.equal(summary.byApi.oficial.remainingShipments, 5000);
   });
 
   it("campanha com erro reportado não gera bônus nem consome saldo", async () => {
@@ -249,9 +249,9 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
     orders.create(
       baseOrder({
         id: "11111111-1111-4111-8111-111111111111",
-        shipmentCount: 1849,
-        purchasedShipmentCount: 1849,
-        valueCents: 55500,
+        shipmentCount: 3000,
+        purchasedShipmentCount: 3000,
+        valueCents: 99000,
         paidAt: "2026-08-01T15:00:00.000Z",
       }),
     );
@@ -259,7 +259,7 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
     assert.equal(summary.byApi.oficial.consumedShipments, 0);
-    assert.equal(summary.byApi.oficial.remainingShipments, 1849);
+    assert.equal(summary.byApi.oficial.remainingShipments, 3000);
   });
 
   it("campanha com erro reportado não entra no histórico de bonificações", async () => {
@@ -340,7 +340,7 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
 
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 1016);
-    assert.equal(summary.byApi.oficial.remainingShipments, 1849 + 5000 + 834 + 829);
+    assert.equal(summary.byApi.oficial.remainingShipments, 5000);
     assert.equal(orders.getById("11111111-1111-4111-8111-111111111111")?.bonusShipmentsApplied, 0);
     assert.equal(orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000")?.bonusShipmentsApplied, 1663);
   });

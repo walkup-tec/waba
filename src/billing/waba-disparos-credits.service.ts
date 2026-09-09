@@ -17,26 +17,25 @@ import {
 import { WabaDisparosBonusSettlementService } from "./waba-disparos-bonus-settlement.service";
 import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
 import {
-  CLEISON_OFICIAL_FORCE_REF,
   WabaCleisonOficialBalanceRepair,
   applyCleisonOficialCreditsOverride,
   applyCleisonOficialSummaryOverride,
 } from "./waba-cleison-oficial-balance-repair";
 import { WabaDisparosCreditUsageRepository } from "./waba-disparos-credit-usage.repository";
 import {
-  isOrderCreditsActive,
   resolveActiveOrderShipmentCount,
-  resolvePurchasedShipmentCount,
 } from "./waba-disparos-order-shipments";
-import { shouldCountCampaignIntakeCredits } from "../disparos/waba-campaign-intake-status";
+import { shouldCountCampaignIntakeCredits, resolveCampaignRealizedShipments } from "../disparos/waba-campaign-intake-status";
+import {
+  listRealPaidPurchases,
+  sumPurchasedShipments,
+  resolveRealPurchasedShipmentCount,
+  isOperationalBalanceRepairOrder,
+} from "./waba-disparos-real-purchases";
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
 const UNLIMITED_CREDITS_REMAINING = 9_999_999;
-
-const isOperationalBalanceRepairOrder = (order: WabaBillingOrder): boolean =>
-  String(order.asaasExternalReference ?? "").trim() === CLEISON_OFICIAL_FORCE_REF ||
-  order.grantCreatedByEmail === "system-balance-repair";
 
 export type DisparosCreditsSummary = {
   hasCredits: boolean;
@@ -89,11 +88,17 @@ export class WabaDisparosCreditsService {
     return normalized;
   }
 
-  private isVisiblePurchaseHistoryOrder(order: WabaBillingOrder): boolean {
-    if (order.grantSource === "admin-bonus-envios") return false;
-    if (isOperationalBalanceRepairOrder(order)) return false;
-    if (!isOrderCreditsActive(order)) return false;
-    return resolveActiveOrderShipmentCount(order) > 0;
+  private listRealPurchasesForEmail(email: string): WabaBillingOrder[] {
+    return listRealPaidPurchases(this.orderRepository.list(), email);
+  }
+
+  private sumRealizedFromCampaigns(email: string, apiKind: WabaDispatchesApiKind): number {
+    let total = 0;
+    for (const intake of this.intakeRepository.listByEmail(email)) {
+      if (resolveIntakeApiKindFromIntake(intake) !== apiKind) continue;
+      total += resolveCampaignRealizedShipments(intake);
+    }
+    return total;
   }
 
   private rebuildConsumedByApiFromIntakes(email: string): void {
@@ -149,23 +154,20 @@ export class WabaDisparosCreditsService {
     email: string,
     apiKind: WabaDispatchesApiKind,
     paidOrders: WabaBillingOrder[],
+    realPurchases: WabaBillingOrder[],
   ): DisparosApiCreditsBucket {
-    const ordersForApi = paidOrders.filter((order) => resolveOrderApiKind(order) === apiKind);
-    const paidContracted = ordersForApi
-      .filter((order) => order.grantSource !== "admin-bonus-envios")
+    const purchasesForApi = realPurchases.filter((order) => resolveOrderApiKind(order) === apiKind);
+    const contractedShipments = sumPurchasedShipments(purchasesForApi);
+    const consumedShipments = this.sumRealizedFromCampaigns(email, apiKind);
+    const bonusContracted = paidOrders
+      .filter(
+        (order) =>
+          resolveOrderApiKind(order) === apiKind &&
+          order.grantSource === "admin-bonus-envios" &&
+          !isOperationalBalanceRepairOrder(order),
+      )
       .reduce((sum, order) => sum + resolveActiveOrderShipmentCount(order), 0);
-    const bonusContracted = ordersForApi
-      .filter((order) => order.grantSource === "admin-bonus-envios")
-      .reduce((sum, order) => sum + resolveActiveOrderShipmentCount(order), 0);
-    const contractedShipments = paidContracted + bonusContracted;
-
-    const consumedShipments = this.usageRepository.getConsumedShipments(email, apiKind);
-    const bonusConsumedShipments = this.usageRepository.getBonusConsumedShipments(email, apiKind);
-
-    // Dívida antiga NÃO reduz bônus admin. Disponível = remanescente pago + bônus ainda não usado.
-    const remainingPaid = Math.max(0, paidContracted - consumedShipments);
-    const remainingBonus = Math.max(0, bonusContracted - bonusConsumedShipments);
-    const remainingShipments = remainingPaid + remainingBonus;
+    const remainingShipments = Math.max(0, contractedShipments - consumedShipments) + bonusContracted;
     const pendingBonusShipments = this.bonusService.getPendingBonusShipments(email, apiKind);
 
     const bucket: DisparosApiCreditsBucket = {
@@ -179,16 +181,20 @@ export class WabaDisparosCreditsService {
   }
 
   private getPaidRemainingForApi(email: string, apiKind: WabaDispatchesApiKind): number {
-    const paidOrders = this.listPaidOrdersForEmail(email).filter(
-      (order) =>
-        resolveOrderApiKind(order) === apiKind && order.grantSource !== "admin-bonus-envios",
+    const purchases = this.listRealPurchasesForEmail(email).filter(
+      (order) => resolveOrderApiKind(order) === apiKind,
     );
-    const paidContracted = paidOrders.reduce(
-      (sum, order) => sum + resolveActiveOrderShipmentCount(order),
-      0,
-    );
-    const consumedShipments = this.usageRepository.getConsumedShipments(email, apiKind);
-    return Math.max(0, paidContracted - consumedShipments);
+    const contracted = sumPurchasedShipments(purchases);
+    const consumed = this.sumRealizedFromCampaigns(email, apiKind);
+    const bonusContracted = this.listPaidOrdersForEmail(email)
+      .filter(
+        (order) =>
+          resolveOrderApiKind(order) === apiKind &&
+          order.grantSource === "admin-bonus-envios" &&
+          !isOperationalBalanceRepairOrder(order),
+      )
+      .reduce((sum, order) => sum + resolveActiveOrderShipmentCount(order), 0);
+    return Math.max(0, contracted - consumed) + bonusContracted;
   }
 
   getRemainingShipmentsForApi(email: string, apiKind: WabaDispatchesApiKind): number {
@@ -199,11 +205,11 @@ export class WabaDisparosCreditsService {
     const normalized = this.prepareCreditsLedger(email);
     const unlimitedCredits = this.masterPolicyService.hasUnlimitedCredits(normalized);
     const paidOrders = this.listPaidOrdersForEmail(normalized);
-    const visiblePurchases = paidOrders.filter((order) => this.isVisiblePurchaseHistoryOrder(order));
+    const realPurchases = this.listRealPurchasesForEmail(normalized);
 
     const byApi: DisparosCreditsByApi = {
-      oficial: this.buildApiBucket(normalized, "oficial", paidOrders),
-      alternativa: this.buildApiBucket(normalized, "alternativa", paidOrders),
+      oficial: this.buildApiBucket(normalized, "oficial", paidOrders, realPurchases),
+      alternativa: this.buildApiBucket(normalized, "alternativa", paidOrders, realPurchases),
     };
 
     if (unlimitedCredits) {
@@ -224,7 +230,7 @@ export class WabaDisparosCreditsService {
     const pendingBonusShipments =
       byApi.oficial.pendingBonusShipments + byApi.alternativa.pendingBonusShipments;
 
-    const contractedValueCents = visiblePurchases.reduce(
+    const contractedValueCents = realPurchases.reduce(
       (sum, order) => sum + Math.round(Number(order.valueCents ?? 0)),
       0,
     );
@@ -239,8 +245,8 @@ export class WabaDisparosCreditsService {
       consumedShipments,
       remainingShipments,
       contractedValueCents,
-      paidOrderCount: visiblePurchases.length,
-      lastPaidAt: visiblePurchases[0]?.paidAt ?? "",
+      paidOrderCount: realPurchases.length,
+      lastPaidAt: realPurchases[0]?.paidAt ?? "",
       pendingBonusShipments,
     };
     applyCleisonOficialSummaryOverride(normalized, summary);
@@ -299,19 +305,17 @@ export class WabaDisparosCreditsService {
   listPurchaseHistory(email: string, limit = 20) {
     const normalized = this.prepareCreditsLedger(email);
     const cap = Math.max(1, Math.min(50, Math.floor(limit)));
-    return this.listPaidOrdersForEmail(normalized)
-      .filter((order) => this.isVisiblePurchaseHistoryOrder(order))
+    return this.listRealPurchasesForEmail(normalized)
       .slice(0, cap)
       .map((order) => {
-        const purchasedShipments = resolvePurchasedShipmentCount(order);
-        const bonusShipmentsApplied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
+        const purchasedShipments = resolveRealPurchasedShipmentCount(order);
         return {
           id: order.id,
           apiKind: resolveOrderApiKind(order),
           valueCents: Math.max(0, Math.round(Number(order.valueCents ?? 0))),
           purchasedShipmentCount: purchasedShipments,
           shipmentCount: purchasedShipments,
-          bonusShipmentsApplied,
+          bonusShipmentsApplied: 0,
           paidAt: String(order.paidAt ?? ""),
         };
       });

@@ -1,10 +1,7 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import type { DisparosApiCreditsBucket } from "./waba-disparos-api-credits";
 import { resolveOrderApiKind } from "../disparos/waba-dispatches-api-kind";
-import { resolveDataFile } from "../data-path";
 import {
   isOrderCreditsActive,
   resolvePurchasedShipmentCount,
@@ -79,16 +76,13 @@ export class WabaCleisonOficialBalanceRepair {
   }
 
   /**
-   * Uma vez: desativa os bônus master 1016 vitalícios duplicados do Cleison.
+   * Desativa os bônus master 1016 vitalícios duplicados do Cleison.
    * Não mexe na compra Asaas nem no bônus de campanha liquidado nela.
    */
   voidDuplicate1016AdminGrantsOnce(): void {
-    const markerPath = resolveDataFile(CLEISON_VOID_1016_ADMIN_GRANTS_MARKER);
-    if (existsSync(markerPath)) return;
-
     const now = new Date().toISOString();
     const orders = this.orderRepository.list();
-    const voidedIds: string[] = [];
+    let changed = false;
 
     for (const order of orders) {
       if (order.product !== "waba-disparos") continue;
@@ -100,27 +94,13 @@ export class WabaCleisonOficialBalanceRepair {
       if (Math.max(0, Math.round(Number(order.shipmentCount ?? 0))) !== DUPLICATE_1016_ADMIN_GRANT) {
         continue;
       }
-      const lifetime =
-        order.validityMode === "lifetime" || !String(order.creditsValidUntil ?? "").trim();
-      if (!lifetime) continue;
-      const createdMs = Date.parse(String(order.createdAt ?? ""));
-      if (!Number.isFinite(createdMs) || createdMs >= Date.parse("2026-09-09T15:00:00.000Z")) {
-        continue;
-      }
 
       order.grantActive = false;
       order.updatedAt = now;
-      voidedIds.push(order.id);
+      changed = true;
     }
 
-    if (!voidedIds.length) return;
-    this.orderRepository.replaceAll(orders);
-    mkdirSync(dirname(markerPath), { recursive: true });
-    writeFileSync(
-      markerPath,
-      JSON.stringify({ voidedAt: now, orderIds: voidedIds }, null, 2),
-      "utf-8",
-    );
+    if (changed) this.orderRepository.replaceAll(orders);
   }
 
   restoreOrdersDamagedByForceBalance(): void {
@@ -201,7 +181,11 @@ export class WabaCleisonOficialBalanceRepair {
     };
 
     const packs = purchases
-      .filter((order) => resolvePurchasedShipmentCount(order) >= CLEISON_OFICIAL_PACK_SIZE)
+      .filter((order) => {
+        if (String(order.asaasPaymentId ?? "").trim()) return false;
+        const purchased = resolvePurchasedShipmentCount(order);
+        return purchased >= CLEISON_OFICIAL_PACK_SIZE && purchased % 1000 !== 0;
+      })
       .sort((a, b) => paidMs(b) - paidMs(a));
     const latestPack = packs[0];
     const latestIsNewPurchase = Boolean(

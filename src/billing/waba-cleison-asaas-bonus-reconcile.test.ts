@@ -86,13 +86,14 @@ describe("Webhook Asaas PAYMENT_RECEIVED (fluxo existente)", () => {
     orders.create(
       baseOrder({
         id: "11111111-1111-4111-8111-111111111111",
-        shipmentCount: 1849,
-        valueCents: 55500,
+        shipmentCount: 3000,
+        purchasedShipmentCount: 3000,
+        valueCents: 99000,
         status: "paid",
-        paidAt: "2026-08-01T15:00:00.000Z",
-        createdAt: "2026-08-01T15:00:00.000Z",
+        paidAt: "2026-09-01T13:05:00.000Z",
+        createdAt: "2026-09-01T13:05:00.000Z",
         bonusShipmentsApplied: 0,
-        bonusSettlementAt: "2026-08-01T15:00:00.000Z",
+        bonusSettlementAt: "2026-09-01T13:05:00.000Z",
         asaasExternalReference: "waba:11111111-1111-4111-8111-111111111111",
       }),
     );
@@ -122,8 +123,9 @@ describe("Webhook Asaas PAYMENT_RECEIVED (fluxo existente)", () => {
     );
 
     const before = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
-    assert.equal(before.byApi.oficial.remainingShipments, 1849);
+    assert.equal(before.byApi.oficial.remainingShipments, 3000);
     assert.equal(before.byApi.oficial.pendingBonusShipments, 829);
+    assert.equal(before.contractedShipments, 3000);
 
     const result = await billing.handleAsaasWebhook("PAYMENT_RECEIVED", {
       id: "pay_cleison_5000",
@@ -136,7 +138,8 @@ describe("Webhook Asaas PAYMENT_RECEIVED (fluxo existente)", () => {
 
     const after = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(after.byApi.oficial.pendingBonusShipments, 0);
-    assert.equal(after.byApi.oficial.remainingShipments, 1849 + 5000 + 829);
+    assert.equal(after.byApi.oficial.remainingShipments, 8000);
+    assert.equal(after.contractedShipments, 8000);
 
     const paid = orders.getById(NEW_ORDER_ID);
     assert.equal(paid?.status, "paid");
@@ -173,7 +176,7 @@ describe("Webhook Asaas PAYMENT_RECEIVED (fluxo existente)", () => {
 
     const after = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
     assert.equal(after.byApi.oficial.pendingBonusShipments, 0);
-    assert.equal(after.byApi.oficial.remainingShipments, 5000 + 829);
+    assert.equal(after.byApi.oficial.remainingShipments, 5000);
     assert.equal(orders.getById(NEW_ORDER_ID)?.bonusShipmentsApplied, 829);
   });
 
@@ -194,10 +197,11 @@ describe("Webhook Asaas PAYMENT_RECEIVED (fluxo existente)", () => {
     orders.create(
       baseOrder({
         id: "11111111-1111-4111-8111-111111111111",
-        shipmentCount: 1849,
-        valueCents: 55500,
+        shipmentCount: 3000,
+        purchasedShipmentCount: 3000,
+        valueCents: 99000,
         status: "paid",
-        paidAt: "2026-08-01T15:00:00.000Z",
+        paidAt: "2026-09-01T13:05:00.000Z",
         bonusShipmentsApplied: 0,
         bonusSettlementAt: "2026-08-01T15:00:00.000Z",
       }),
@@ -218,7 +222,7 @@ describe("Webhook Asaas PAYMENT_RECEIVED (fluxo existente)", () => {
     );
 
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
-    assert.equal(summary.byApi.oficial.remainingShipments, 1849);
+    assert.equal(summary.byApi.oficial.remainingShipments, 3000);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 829);
   });
 });

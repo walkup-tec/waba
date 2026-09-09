@@ -72,3 +72,18 @@ export const shouldCountCampaignIntakeCredits = (status: string): boolean => {
   const normalized = normalizeCampaignIntakeStatus(status);
   return normalized !== "error_reported" && normalized !== "cancelled";
 };
+
+/** Envios realizados da campanha (relatório). Sem relatório, usa o planejado. Erro/cancelada = 0. */
+export const resolveCampaignRealizedShipments = (intake: {
+  status?: string;
+  plannedSendCount?: number;
+  performanceReport?: { sent?: number } | null;
+}): number => {
+  if (!shouldCountCampaignIntakeCredits(String(intake.status ?? ""))) return 0;
+  const status = normalizeCampaignIntakeStatus(String(intake.status ?? ""));
+  const sent = Math.round(Number(intake.performanceReport?.sent ?? Number.NaN));
+  if (status === "completed" && Number.isFinite(sent) && sent >= 0) {
+    return Math.max(0, sent);
+  }
+  return Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
+};

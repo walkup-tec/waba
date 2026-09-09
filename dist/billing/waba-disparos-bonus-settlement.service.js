@@ -4,6 +4,7 @@ exports.WabaDisparosBonusSettlementService = void 0;
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
 const waba_disparos_bonus_service_1 = require("./waba-disparos-bonus.service");
 const waba_disparos_order_shipments_1 = require("./waba-disparos-order-shipments");
+const waba_disparos_real_purchases_1 = require("./waba-disparos-real-purchases");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const parseTime = (value) => {
@@ -46,12 +47,20 @@ class WabaDisparosBonusSettlementService {
         });
     }
     listEligiblePurchases(email, apiKind) {
-        const active = this.listActivePaidPurchases(email, apiKind);
-        return active.filter((order) => !(0, waba_disparos_order_shipments_1.isPriorRemainderBalanceOrder)(order, active));
+        return (0, waba_disparos_real_purchases_1.listRealPaidPurchases)(this.orderRepository.list(), email)
+            .filter((order) => (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order) === apiKind)
+            .sort((a, b) => new Date(a.paidAt || a.updatedAt).getTime() -
+            new Date(b.paidAt || b.updatedAt).getTime());
     }
     listRemainderBalanceOrders(email, apiKind) {
-        const active = this.listActivePaidPurchases(email, apiKind);
-        return active.filter((order) => (0, waba_disparos_order_shipments_1.isPriorRemainderBalanceOrder)(order, active));
+        const realIds = new Set(this.listEligiblePurchases(email, apiKind).map((order) => order.id));
+        return this.listActivePaidPurchases(email, apiKind).filter((order) => {
+            if (realIds.has(order.id))
+                return false;
+            if ((0, waba_disparos_real_purchases_1.isOperationalBalanceRepairOrder)(order))
+                return false;
+            return true;
+        });
     }
     /**
      * Cada grant vai para a primeira compra paga (ativa, não-admin) cujo paidAt
@@ -88,7 +97,7 @@ class WabaDisparosBonusSettlementService {
         const apiKind = (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order);
         const grants = this.bonusService.listGrantsForApi(order.ownerEmail, apiKind);
         const assigned = this.assignGrantsToPurchases(order.ownerEmail, apiKind).get(order.id) ?? 0;
-        const purchasedShipments = (0, waba_disparos_order_shipments_1.resolvePurchasedShipmentCount)(order);
+        const purchasedShipments = (0, waba_disparos_real_purchases_1.resolveRealPurchasedShipmentCount)(order) || (0, waba_disparos_order_shipments_1.resolvePurchasedShipmentCount)(order);
         const alreadyApplied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
         // Fonte da verdade: grants atribuídos a esta compra. Permite baixar se o
         // bônus posterior (ex.: PTX) entrou no disponível por engano. Sem grants
