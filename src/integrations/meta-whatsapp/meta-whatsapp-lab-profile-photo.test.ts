@@ -18,3 +18,12 @@ describe("Laboratório Conexão: só altera a imagem do número", () => {
     assert.doesNotMatch(html, /wabaSaveMetaWhatsappNumberProfile/);
   });
 });
+
+describe("Laboratório Conexão: sem trilha de etapas", () => {
+  it("não mostra Conectar, Empresa, WABA, Número, Templates e Inbox", () => {
+    assert.match(html, /Conectar Portfólio/);
+    assert.doesNotMatch(html, /id="meta-onboard-steps"/);
+    assert.doesNotMatch(html, /Etapas de integração/);
+    assert.doesNotMatch(html, /Escolha o chip oficial/);
+  });
+});

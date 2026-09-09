@@ -22303,8 +22303,7 @@
           <div class="row g-3">
             <section class="panel col-12">
               <div class="meta-onboard">
-                <article class="meta-lab-card" aria-labelledby="meta-card-steps-title">
-                  <h3 id="meta-card-steps-title" class="meta-lab-card-title">Etapas de integração</h3>
+                <article class="meta-lab-card">
                   <div class="meta-onboard-hero">
                     <button id="meta-tp-connect-btn" type="button" class="meta-onboard-cta meta-onboard-cta-portfolio" aria-label="Conectar Portfólio" onclick="return window.wabaConnectMetaWhatsappOficial(event);">
                       <svg class="meta-connect-logo" viewBox="0 0 24 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -22313,14 +22312,6 @@
                       Conectar Portfólio
                     </button>
                   </div>
-                  <ol class="meta-onboard-steps" id="meta-onboard-steps">
-                    <li class="meta-onboard-step is-current" data-meta-step="1"><span class="meta-onboard-step-n" aria-hidden="true">1</span><strong>Conectar</strong><span class="meta-onboard-step-hint">Clique em Conectar Portfólio</span></li>
-                    <li class="meta-onboard-step" data-meta-step="2"><span class="meta-onboard-step-n" aria-hidden="true">2</span><strong>Empresa</strong><span class="meta-onboard-step-hint">Autorize na Meta</span></li>
-                    <li class="meta-onboard-step" data-meta-step="3"><span class="meta-onboard-step-n" aria-hidden="true">3</span><strong>WABA</strong><span class="meta-onboard-step-hint">Conta WhatsApp Business</span></li>
-                    <li class="meta-onboard-step" data-meta-step="4"><span class="meta-onboard-step-n" aria-hidden="true">4</span><strong>Número</strong><span class="meta-onboard-step-hint">Escolha o chip oficial</span></li>
-                    <li class="meta-onboard-step" data-meta-step="5"><span class="meta-onboard-step-n" aria-hidden="true">5</span><strong>Templates</strong><span class="meta-onboard-step-hint">Aprovados pela Meta</span></li>
-                    <li class="meta-onboard-step" data-meta-step="6"><span class="meta-onboard-step-n" aria-hidden="true">6</span><strong>Inbox</strong><span class="meta-onboard-step-hint">Teste e atendimento</span></li>
-                  </ol>
                   <div id="meta-tp-connected-card" class="meta-connected-card" aria-live="polite" hidden>
                     <div class="meta-connected-avatar" id="meta-tp-connected-initials">WA</div>
                     <div>
@@ -26388,12 +26379,8 @@
           if (btn) btn.click();
           return false;
         };
-        window.wabaMetaLabSetStep = function (current) {
-          document.querySelectorAll("#meta-onboard-steps [data-meta-step]").forEach(function (el) {
-            const n = Number(el.getAttribute("data-meta-step") || 0);
-            el.classList.toggle("is-done", n < current);
-            el.classList.toggle("is-current", n === current);
-          });
+        window.wabaMetaLabSetStep = function (_current) {
+          return false;
         };
         document.addEventListener("click", function (event) {
           const sideBtn = event.target && event.target.closest && event.target.closest("#meta-inbox-toggle-side");
