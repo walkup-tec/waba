@@ -16,6 +16,7 @@ exports.findBroadcastByIntakeCampaignId = findBroadcastByIntakeCampaignId;
 exports.listActiveCloudBroadcasts = listActiveCloudBroadcasts;
 exports.broadcastLeadIsPendingSend = broadcastLeadIsPendingSend;
 exports.listResumableOrphanedBroadcasts = listResumableOrphanedBroadcasts;
+exports.reopenOptInPtxBroadcastToContinue = reopenOptInPtxBroadcastToContinue;
 exports.listStaleRunningBroadcastsWithoutPending = listStaleRunningBroadcastsWithoutPending;
 exports.finalizeStaleRunningBroadcast = finalizeStaleRunningBroadcast;
 exports.voidBroadcastCampaignForRetry = voidBroadcastCampaignForRetry;
@@ -247,6 +248,31 @@ function listResumableOrphanedBroadcasts() {
     })
         .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
+/**
+ * Reabre o Disparo Cloud da Opt in PTX (failed/void com fila) para continuar só os leads queued.
+ * Não reenvia sent/failed/skipped.
+ */
+function reopenOptInPtxBroadcastToContinue() {
+    const store = readStore();
+    const rows = store.campaigns
+        .filter((item) => (0, meta_whatsapp_broadcast_void_1.isOptInPtxResumeIntake)(item.intakeCampaignId))
+        .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const row = rows[0];
+    if (!row)
+        return null;
+    if (!(row.leads || []).some(broadcastLeadIsPendingSend))
+        return null;
+    const alreadyOpen = (row.status === "running" || row.status === "queued") && !String(row.voidedAt || "").trim();
+    if (!alreadyOpen) {
+        const now = new Date().toISOString();
+        row.status = "running";
+        row.voidedAt = undefined;
+        row.sendFinishedAt = undefined;
+        row.updatedAt = now;
+        writeStore(store);
+    }
+    return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+}
 /** running sem leads pendentes (tudo sent/failed/skipped) — fechar no boot. */
 function listStaleRunningBroadcastsWithoutPending() {
     return readStore()
@@ -382,7 +408,10 @@ function applyMetaStatusToBroadcastByWamid(wamid, status, extras) {
     row.lastMetaStatusAt = new Date().toISOString();
     row.updatedAt = row.lastMetaStatusAt;
     writeStore(store);
-    if (errorCode === "131053" && (0, meta_whatsapp_broadcast_void_1.shouldAbortBroadcastOnHeaderMediaFailure)(row) && !row.voidedAt) {
+    if (errorCode === "131053" &&
+        !(0, meta_whatsapp_broadcast_void_1.isOptInPtxResumeIntake)(row.intakeCampaignId) &&
+        (0, meta_whatsapp_broadcast_void_1.shouldAbortBroadcastOnHeaderMediaFailure)(row) &&
+        !row.voidedAt) {
         return voidBroadcastCampaignForRetry(row.id) || row;
     }
     return { ...row, leads: row.leads.map((item) => ({ ...item })) };
