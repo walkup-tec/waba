@@ -82,9 +82,7 @@ function requireDestinationUrl(raw: string): string {
   return url;
 }
 
-export function parseTemplateAiConnectionIds(input: Record<string, unknown> | undefined): string[] {
-  const body = asRecord(input);
-  const raw = body.connectionIds ?? body.connection_ids ?? body.connectionId ?? body.connection_id;
+function parseIdList(raw: unknown): string[] {
   const list = Array.isArray(raw)
     ? raw
     : typeof raw === "string"
@@ -99,6 +97,17 @@ export function parseTemplateAiConnectionIds(input: Record<string, unknown> | un
     out.push(id);
   }
   return out;
+}
+
+export function parseTemplateAiConnectionIds(input: Record<string, unknown> | undefined): string[] {
+  const body = asRecord(input);
+  return parseIdList(body.connectionIds ?? body.connection_ids ?? body.connectionId ?? body.connection_id);
+}
+
+/** Contas WhatsApp (WABA) onde a Meta deve cadastrar o modelo. Sem isso o motor usa só o wabaId do portfólio. */
+export function parseTemplateAiWabaIds(input: Record<string, unknown> | undefined): string[] {
+  const body = asRecord(input);
+  return parseIdList(body.wabaIds ?? body.waba_ids ?? body.wabaId ?? body.waba_id);
 }
 
 export function parseTemplateAiHeaderHandles(input: Record<string, unknown> | undefined): Record<string, string> {
