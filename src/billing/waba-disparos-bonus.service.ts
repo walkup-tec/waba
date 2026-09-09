@@ -25,6 +25,30 @@ const resolveCampaignBonusShipments = (intake: {
   return Math.max(0, totalLeads - sent);
 };
 
+const firstValidIso = (...candidates: Array<string | undefined>): string => {
+  for (const candidate of candidates) {
+    const value = String(candidate ?? "").trim();
+    if (!value) continue;
+    const ms = Date.parse(value);
+    if (Number.isFinite(ms)) return new Date(ms).toISOString();
+  }
+  return new Date().toISOString();
+};
+
+/** Data da campanha, não a hora em que o JSON de bônus foi gravado. */
+const resolveCampaignBonusGrantedAt = (intake: {
+  createdAt?: string;
+  startedAt?: string;
+  updatedAt?: string;
+  performanceReport?: { filledAt?: string } | null;
+}): string =>
+  firstValidIso(
+    intake.createdAt,
+    intake.startedAt,
+    intake.performanceReport?.filledAt,
+    intake.updatedAt,
+  );
+
 export class WabaDisparosBonusService {
   constructor(
     private readonly repository = new WabaDisparosBonusRepository(),
@@ -36,10 +60,19 @@ export class WabaDisparosBonusService {
     if (!normalized) return;
 
     for (const intake of this.intakeRepository.listByEmail(normalized)) {
+      const grantedAt = resolveCampaignBonusGrantedAt(intake);
       const bonusShipments = resolveCampaignBonusShipments(intake);
       if (bonusShipments > 0) {
         const apiKind = resolveIntakeApiKindFromIntake(intake);
-        this.repository.grantFromCampaign(normalized, intake.id, bonusShipments, apiKind);
+        this.repository.grantFromCampaign(
+          normalized,
+          intake.id,
+          bonusShipments,
+          apiKind,
+          grantedAt,
+        );
+      } else {
+        this.repository.alignGrantGrantedAt(normalized, intake.id, grantedAt);
       }
     }
   }
@@ -64,10 +97,18 @@ export class WabaDisparosBonusService {
     campaignId: string,
     shipments: number,
     apiKind: WabaDispatchesApiKind,
+    grantedAt?: string,
   ): number {
     const normalized = normalizeEmail(email);
     const kind = normalizeDispatchesApiKind(apiKind) ?? "oficial";
-    return this.repository.grantFromCampaign(normalized, campaignId, shipments, kind);
+    return this.repository.grantFromCampaign(normalized, campaignId, shipments, kind, grantedAt);
+  }
+
+  listGrantsForApi(email: string, apiKind: WabaDispatchesApiKind) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return [];
+    this.syncPendingBonusFromCompletedCampaigns(normalized);
+    return this.repository.listGrants(normalized, apiKind);
   }
 
   consumePendingBonus(email: string, apiKind: WabaDispatchesApiKind): number {

@@ -26801,31 +26801,6 @@
       let aquecedorEntitlementLoading = false;
       const AQUECEDOR_ENTITLEMENT_CACHE_PREFIX = "waba.aquecedor.entitlement.v1.";
       let disparosCreditsCache = null;
-      const CLEISON_SALDOS_EMAIL = "cleison.fel@gmail.com";
-      const CLEISON_SALDOS_DISPONIVEIS = 5829;
-
-      function forceCleisonSaldosDisplay(credits) {
-        if (!credits || typeof credits !== "object") return credits;
-        const email = String(credits.email || wabaSessionEmail || "")
-          .trim()
-          .toLowerCase();
-        if (email !== CLEISON_SALDOS_EMAIL) return credits;
-        if (!credits.byApi || typeof credits.byApi !== "object") credits.byApi = {};
-        if (!credits.byApi.oficial || typeof credits.byApi.oficial !== "object") {
-          credits.byApi.oficial = {};
-        }
-        credits.byApi.oficial.remainingShipments = CLEISON_SALDOS_DISPONIVEIS;
-        credits.byApi.oficial.pendingBonusShipments = 0;
-        credits.remainingShipments =
-          CLEISON_SALDOS_DISPONIVEIS +
-          Math.max(0, Number(credits.byApi.alternativa?.remainingShipments || 0));
-        credits.pendingBonusShipments = Math.max(
-          0,
-          Number(credits.byApi.alternativa?.pendingBonusShipments || 0)
-        );
-        return credits;
-      }
-
       function aquecedorEntitlementCacheKey() {
         return `${AQUECEDOR_ENTITLEMENT_CACHE_PREFIX}${wabaSessionEmail || "guest"}`;
       }
@@ -51342,7 +51317,7 @@
                     return null;
                   }
                   if (!response.ok) return disparosCreditsCache;
-                  disparosCreditsCache = forceCleisonSaldosDisplay(await response.json());
+                  disparosCreditsCache = await response.json();
                   return disparosCreditsCache;
                 })
                 .catch(() => disparosCreditsCache)
@@ -51428,7 +51403,7 @@
           if (!response.ok) {
             throw new Error("Não foi possível carregar o saldo de créditos.");
           }
-          disparosCreditsCache = forceCleisonSaldosDisplay(await response.json());
+          disparosCreditsCache = await response.json();
           renderDisparosCreditsPanel(disparosCreditsCache);
           syncDisparosResumoSide();
           syncAquecedorSectionVisual();
@@ -52963,15 +52938,6 @@
 
       function resolveDisparosCreditsApiBucket(apiKind) {
         const kind = apiKind === "alternativa" ? "alternativa" : "oficial";
-        const email = String(wabaSessionEmail || disparosCreditsCache?.email || "")
-          .trim()
-          .toLowerCase();
-        if (kind === "oficial" && email === CLEISON_SALDOS_EMAIL) {
-          return {
-            remainingShipments: CLEISON_SALDOS_DISPONIVEIS,
-            pendingBonusShipments: 0,
-          };
-        }
         const bucket = disparosCreditsCache?.byApi?.[kind];
         if (bucket && typeof bucket === "object") {
           return {

@@ -1,14 +1,26 @@
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
-import { resolveOrderShipmentCount } from "./waba-disparos-order-shipments";
-import { resolveOrderApiKind } from "../disparos/waba-dispatches-api-kind";
+import {
+  isOrderCreditsActive,
+  resolvePurchasedShipmentCount,
+} from "./waba-disparos-order-shipments";
+import { resolveOrderApiKind, type WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
+
+const parseTime = (value: string): number => {
+  const ms = Date.parse(String(value || "").trim());
+  return Number.isFinite(ms) ? ms : Number.NaN;
+};
 
 /**
  * Na próxima compra paga de um plano, soma os créditos bonificados daquele plano
  * ao pedido e zera o saldo bonificado correspondente.
+ *
+ * Bônus de campanha concluída ANTES do pagamento entra nessa compra — mesmo que o
+ * pedido já tenha liquidado um lote parcial, ou o grant tenha sido gravado depois.
+ * Bônus posterior à última compra permanece pendente até a próxima.
  */
 export class WabaDisparosBonusSettlementService {
   constructor(
@@ -34,63 +46,73 @@ export class WabaDisparosBonusSettlementService {
       );
   }
 
-  private findBonusSettlementOrder(
+  private listEligiblePurchases(
     email: string,
-    apiKind: ReturnType<typeof resolveOrderApiKind>,
-  ): WabaBillingOrder | null {
-    const pending = this.bonusService.getPendingBonusShipments(email, apiKind);
-    if (pending <= 0) return null;
-
-    const earliestGrantAt = this.bonusService.getEarliestGrantAt(email, apiKind);
-    if (!earliestGrantAt) return null;
-
-    const grantTime = new Date(earliestGrantAt).getTime();
-    const eligible = this.listPaidDisparosOrdersForEmail(email).filter((order) => {
+    apiKind: WabaDispatchesApiKind,
+  ): WabaBillingOrder[] {
+    return this.listPaidDisparosOrdersForEmail(email).filter((order) => {
       if (resolveOrderApiKind(order) !== apiKind) return false;
       if (order.grantSource === "admin-bonus-envios") return false;
-      const applied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
-      if (applied > 0) return false;
-      const paidAt = String(order.paidAt ?? order.createdAt ?? "").trim();
-      if (!paidAt) return false;
-      return new Date(paidAt).getTime() >= grantTime;
+      if (!isOrderCreditsActive(order)) return false;
+      return Number.isFinite(parseTime(String(order.paidAt ?? order.createdAt ?? "")));
     });
-
-    return eligible[0] ?? null;
   }
 
-  private canApplyPendingBonusToOrder(order: WabaBillingOrder): boolean {
-    const apiKind = resolveOrderApiKind(order);
-    const target = this.findBonusSettlementOrder(order.ownerEmail, apiKind);
-    return target?.id === order.id;
+  /**
+   * Cada grant vai para a primeira compra paga (ativa, não-admin) cujo paidAt
+   * é posterior ou igual à data da campanha.
+   */
+  private assignGrantsToPurchases(
+    email: string,
+    apiKind: WabaDispatchesApiKind,
+  ): Map<string, number> {
+    const grants = this.bonusService.listGrantsForApi(email, apiKind);
+    const purchases = this.listEligiblePurchases(email, apiKind);
+    const assigned = new Map<string, number>();
+
+    for (const grant of grants) {
+      const amount = Math.max(0, Math.round(Number(grant.shipments ?? 0)));
+      if (amount <= 0) continue;
+      const grantMs = parseTime(grant.grantedAt);
+      const target = purchases.find((order) => {
+        const paidMs = parseTime(String(order.paidAt ?? order.createdAt ?? ""));
+        if (!Number.isFinite(paidMs)) return false;
+        if (!Number.isFinite(grantMs)) return true;
+        return paidMs >= grantMs;
+      });
+      if (!target) continue;
+      assigned.set(target.id, (assigned.get(target.id) ?? 0) + amount);
+    }
+
+    return assigned;
   }
 
   settlePaidOrder(order: WabaBillingOrder): WabaBillingOrder {
     if (order.product !== "waba-disparos" || order.status !== "paid") return order;
-
-    const alreadyApplied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
-    if (alreadyApplied > 0) return order;
+    if (order.grantSource === "admin-bonus-envios") return order;
 
     const apiKind = resolveOrderApiKind(order);
-    const totalShipments = resolveOrderShipmentCount(order);
-    const purchasedShipments = totalShipments - alreadyApplied;
+    const assigned = this.assignGrantsToPurchases(order.ownerEmail, apiKind).get(order.id) ?? 0;
+    const purchasedShipments = resolvePurchasedShipmentCount(order);
+    const alreadyApplied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
+    const nextApplied = Math.max(alreadyApplied, assigned);
+    const nextCount = purchasedShipments + nextApplied;
+    const hasPurchased = Math.round(Number(order.purchasedShipmentCount ?? 0)) > 0;
+
+    if (
+      nextApplied === alreadyApplied &&
+      Math.max(0, Math.round(Number(order.shipmentCount ?? 0))) === nextCount &&
+      hasPurchased
+    ) {
+      return order;
+    }
+
     const now = new Date().toISOString();
-
-    let bonusToApply = 0;
-    if (this.canApplyPendingBonusToOrder(order)) {
-      bonusToApply = this.bonusService.getPendingBonusShipments(order.ownerEmail, apiKind);
-    }
-
-    const hasSettlementMark = String(order.bonusSettlementAt ?? "").trim().length > 0;
-    if (bonusToApply <= 0) {
-      const pending = this.bonusService.getPendingBonusShipments(order.ownerEmail, apiKind);
-      if (pending > 0) return order;
-      if (hasSettlementMark) return order;
-    }
-
     return (
       this.orderRepository.update(order.id, {
-        shipmentCount: purchasedShipments + bonusToApply,
-        bonusShipmentsApplied: bonusToApply,
+        purchasedShipmentCount: purchasedShipments,
+        shipmentCount: nextCount,
+        bonusShipmentsApplied: nextApplied,
         bonusSettlementAt: now,
       }) ?? order
     );
@@ -100,9 +122,16 @@ export class WabaDisparosBonusSettlementService {
     const normalized = normalizeEmail(email);
     if (!normalized) return;
 
-    for (const order of this.listPaidDisparosOrdersForEmail(normalized)) {
-      const fresh = this.orderRepository.getById(order.id);
-      if (fresh) this.settlePaidOrder(fresh);
+    for (const kind of ["oficial", "alternativa"] as const) {
+      const assigned = this.assignGrantsToPurchases(normalized, kind);
+      const purchases = this.listEligiblePurchases(normalized, kind);
+      for (const order of purchases) {
+        if ((assigned.get(order.id) ?? 0) <= 0 && Math.round(Number(order.bonusShipmentsApplied ?? 0)) <= 0) {
+          continue;
+        }
+        const fresh = this.orderRepository.getById(order.id);
+        if (fresh) this.settlePaidOrder(fresh);
+      }
     }
   }
 }

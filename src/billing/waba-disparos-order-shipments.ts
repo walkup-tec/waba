@@ -28,3 +28,12 @@ export const resolveActiveOrderShipmentCount = (
   if (!isOrderCreditsActive(order, nowMs)) return 0;
   return resolveOrderShipmentCount(order);
 };
+
+/** Envios comprados, sem a bonificação já liquidada neste pedido. */
+export const resolvePurchasedShipmentCount = (order: WabaBillingOrder): number => {
+  const explicit = Math.round(Number(order.purchasedShipmentCount ?? 0));
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const total = resolveOrderShipmentCount(order);
+  const applied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
+  return Math.max(0, total - applied);
+};

@@ -109,7 +109,38 @@ class WabaDisparosBonusRepository {
             .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
         return grantDates[0] ?? "";
     }
-    grantFromCampaign(email, campaignId, shipments, apiKind) {
+    alignGrantGrantedAt(email, campaignId, grantedAt) {
+        const normalized = normalizeEmail(email);
+        const campaignKey = String(campaignId ?? "").trim();
+        const grantedStamp = String(grantedAt ?? "").trim();
+        const nextMs = Date.parse(grantedStamp);
+        if (!normalized || !campaignKey || !Number.isFinite(nextMs))
+            return;
+        const store = readStore();
+        const index = store.entries.findIndex((item) => item.email === normalized);
+        if (index < 0)
+            return;
+        const current = store.entries[index];
+        const grantIndex = current.grants.findIndex((grant) => grant.campaignId === campaignKey);
+        if (grantIndex < 0)
+            return;
+        const existing = current.grants[grantIndex];
+        const existingMs = Date.parse(String(existing.grantedAt ?? ""));
+        if (Number.isFinite(existingMs) && existingMs <= nextMs)
+            return;
+        const nextGrants = current.grants.slice();
+        nextGrants[grantIndex] = { ...existing, grantedAt: grantedStamp };
+        store.entries[index] = { ...current, grants: nextGrants, updatedAt: new Date().toISOString() };
+        writeStore(store);
+    }
+    listGrants(email, apiKind) {
+        const entry = this.getEntry(email);
+        if (!entry)
+            return [];
+        const grants = apiKind ? entry.grants.filter((grant) => grant.apiKind === apiKind) : entry.grants;
+        return [...grants].sort((a, b) => new Date(a.grantedAt).getTime() - new Date(b.grantedAt).getTime());
+    }
+    grantFromCampaign(email, campaignId, shipments, apiKind, grantedAt) {
         const normalized = normalizeEmail(email);
         const campaignKey = String(campaignId ?? "").trim();
         const amount = Math.max(0, Math.round(Number(shipments)));
@@ -118,18 +149,33 @@ class WabaDisparosBonusRepository {
         }
         const store = readStore();
         const now = new Date().toISOString();
+        const grantedStamp = String(grantedAt ?? "").trim() || now;
         const index = store.entries.findIndex((item) => item.email === normalized);
         const current = index >= 0
             ? store.entries[index]
             : { email: normalized, grants: [], updatedAt: now };
-        if (current.grants.some((grant) => grant.campaignId === campaignKey)) {
+        const existingIndex = current.grants.findIndex((grant) => grant.campaignId === campaignKey);
+        if (existingIndex >= 0) {
+            const existing = current.grants[existingIndex];
+            const existingMs = Date.parse(String(existing.grantedAt ?? ""));
+            const nextMs = Date.parse(grantedStamp);
+            const shouldRewind = Number.isFinite(nextMs) &&
+                (!Number.isFinite(existingMs) || nextMs < existingMs);
+            if (!shouldRewind) {
+                return this.getPendingShipments(normalized, apiKind);
+            }
+            const nextGrants = current.grants.slice();
+            nextGrants[existingIndex] = { ...existing, grantedAt: grantedStamp };
+            const rewound = { ...current, grants: nextGrants, updatedAt: now };
+            store.entries[index] = rewound;
+            writeStore(store);
             return this.getPendingShipments(normalized, apiKind);
         }
         const next = {
             ...current,
             grants: [
                 ...current.grants,
-                { campaignId: campaignKey, shipments: amount, grantedAt: now, apiKind },
+                { campaignId: campaignKey, shipments: amount, grantedAt: grantedStamp, apiKind },
             ],
             updatedAt: now,
         };

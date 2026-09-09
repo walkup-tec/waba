@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resolveActiveOrderShipmentCount = exports.isOrderCreditsActive = exports.resolveOrderShipmentCount = void 0;
+exports.resolvePurchasedShipmentCount = exports.resolveActiveOrderShipmentCount = exports.isOrderCreditsActive = exports.resolveOrderShipmentCount = void 0;
 const resolveOrderShipmentCount = (order) => {
     const explicit = Math.round(Number(order.shipmentCount ?? 0));
     if (Number.isFinite(explicit) && explicit > 0)
@@ -31,3 +31,13 @@ const resolveActiveOrderShipmentCount = (order, nowMs = Date.now()) => {
     return (0, exports.resolveOrderShipmentCount)(order);
 };
 exports.resolveActiveOrderShipmentCount = resolveActiveOrderShipmentCount;
+/** Envios comprados, sem a bonificação já liquidada neste pedido. */
+const resolvePurchasedShipmentCount = (order) => {
+    const explicit = Math.round(Number(order.purchasedShipmentCount ?? 0));
+    if (Number.isFinite(explicit) && explicit > 0)
+        return explicit;
+    const total = (0, exports.resolveOrderShipmentCount)(order);
+    const applied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
+    return Math.max(0, total - applied);
+};
+exports.resolvePurchasedShipmentCount = resolvePurchasedShipmentCount;
