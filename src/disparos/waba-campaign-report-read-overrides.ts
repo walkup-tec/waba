@@ -5,6 +5,7 @@ import { isCloudBroadcastInactiveForRetry } from "../integrations/meta-whatsapp/
 type CampaignReportFingerprint = {
   totalLeads: number;
   sent: number;
+  delivered?: number;
   failed?: number;
 };
 
@@ -16,6 +17,7 @@ type CampaignReportOverride = {
   fingerprint?: CampaignReportFingerprint;
   delivered?: number;
   read?: number;
+  failed?: number;
   hideClicks?: boolean;
   /** Assinante vê Em andamento; o fechamento automático do relatório Meta não roda. */
   holdSubscriberInProgress?: boolean;
@@ -50,6 +52,13 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
     timezone: "America/Sao_Paulo",
     holdSubscriberInProgress: true,
     intakeId: "368d053b-d59b-4eed-a235-fe9e9f32c68c",
+  },
+  {
+    name: "Opt in PTX",
+    fingerprint: { totalLeads: 2996, sent: 1980, delivered: 0, failed: 0 },
+    delivered: 1724,
+    read: 986,
+    failed: 232,
   },
 ];
 
@@ -102,6 +111,9 @@ const fingerprintMatches = (
 ): boolean => {
   if (roundMetric(report.totalLeads) !== fingerprint.totalLeads) return false;
   if (roundMetric(report.sent) !== fingerprint.sent) return false;
+  if (fingerprint.delivered != null && roundMetric(report.delivered) !== fingerprint.delivered) {
+    return false;
+  }
   if (fingerprint.failed != null && roundMetric(report.failed) !== fingerprint.failed) return false;
   return true;
 };
@@ -193,6 +205,13 @@ export const applyCampaignReportReadOverride = (
 
   const nextDelivered = rule.delivered != null ? rule.delivered : report.delivered;
   const nextRead = rule.read != null ? rule.read : report.read;
-  if (nextDelivered === report.delivered && nextRead === report.read) return report;
-  return { ...report, delivered: nextDelivered, read: nextRead };
+  const nextFailed = rule.failed != null ? rule.failed : report.failed;
+  if (
+    nextDelivered === report.delivered &&
+    nextRead === report.read &&
+    nextFailed === report.failed
+  ) {
+    return report;
+  }
+  return { ...report, delivered: nextDelivered, read: nextRead, failed: nextFailed };
 };
