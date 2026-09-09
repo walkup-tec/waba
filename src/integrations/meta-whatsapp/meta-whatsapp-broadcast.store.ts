@@ -308,11 +308,21 @@ export function listResumableOrphanedBroadcasts(): MetaBroadcastCampaign[] {
     .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
 
+/** Só o script SSH / env força a reabertura. Pausa (status=failed) permanece no watchdog. */
+export const OPT_IN_PTX_FORCE_RESUME_ENV = "WABA_FORCE_OPT_IN_PTX_RESUME";
+
+export function optInPtxForceResumeEnabled(): boolean {
+  return String(process.env[OPT_IN_PTX_FORCE_RESUME_ENV] || "").trim() === "1";
+}
+
 /**
  * Reabre o Disparo Cloud da Opt in PTX (paulo_teix_v2_2).
+ * Desligado por padrão: o watchdog não desfaz pausa do operacional.
+ * Ligar só com WABA_FORCE_OPT_IN_PTX_RESUME=1 (teste Graph 1 envio ok).
  * Falhas sem wamid voltam para a fila; sent/skipped e quem já tem wamid não reenviam.
  */
 export function reopenOptInPtxBroadcastToContinue(): MetaBroadcastCampaign | null {
+  if (!optInPtxForceResumeEnabled()) return null;
   const store = readStore();
   const rows = store.campaigns
     .filter((item) => isOptInPtxResumeCampaign(item))
