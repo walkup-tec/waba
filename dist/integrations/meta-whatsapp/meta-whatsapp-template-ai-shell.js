@@ -4,6 +4,7 @@ exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT = exports.META_TEMPLATE_AI_OPTION_BUT
 exports.sanitizeMetaTemplateName = sanitizeMetaTemplateName;
 exports.templateNameForOption = templateNameForOption;
 exports.parseTemplateAiConnectionIds = parseTemplateAiConnectionIds;
+exports.parseTemplateAiWabaIds = parseTemplateAiWabaIds;
 exports.parseTemplateAiHeaderHandles = parseTemplateAiHeaderHandles;
 exports.parseMetaTemplateAiShell = parseMetaTemplateAiShell;
 exports.stripTemplatePlaceholders = stripTemplatePlaceholders;
@@ -71,9 +72,7 @@ function requireDestinationUrl(raw) {
     }
     return url;
 }
-function parseTemplateAiConnectionIds(input) {
-    const body = asRecord(input);
-    const raw = body.connectionIds ?? body.connection_ids ?? body.connectionId ?? body.connection_id;
+function parseIdList(raw) {
     const list = Array.isArray(raw)
         ? raw
         : typeof raw === "string"
@@ -89,6 +88,15 @@ function parseTemplateAiConnectionIds(input) {
         out.push(id);
     }
     return out;
+}
+function parseTemplateAiConnectionIds(input) {
+    const body = asRecord(input);
+    return parseIdList(body.connectionIds ?? body.connection_ids ?? body.connectionId ?? body.connection_id);
+}
+/** Contas WhatsApp (WABA) onde a Meta deve cadastrar o modelo. Sem isso o motor usa só o wabaId do portfólio. */
+function parseTemplateAiWabaIds(input) {
+    const body = asRecord(input);
+    return parseIdList(body.wabaIds ?? body.waba_ids ?? body.wabaId ?? body.waba_id);
 }
 function parseTemplateAiHeaderHandles(input) {
     const body = asRecord(input);
