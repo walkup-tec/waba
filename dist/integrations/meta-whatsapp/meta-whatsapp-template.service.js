@@ -9,6 +9,7 @@ const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
 const meta_whatsapp_template_log_1 = require("./meta-whatsapp-template-log");
 const meta_whatsapp_template_approved_at_store_1 = require("./meta-whatsapp-template-approved-at.store");
 const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.repository");
+const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
 const meta_whatsapp_template_graph_client_1 = require("./meta-whatsapp-template-graph.client");
 const meta_whatsapp_template_waba_ids_1 = require("./meta-whatsapp-template-waba-ids");
 const meta_whatsapp_template_silent_block_button_1 = require("./meta-whatsapp-template-silent-block-button");
@@ -138,6 +139,69 @@ class MetaWhatsappTemplateService {
             return null;
         return row;
     }
+    async findByWabaNameLanguage(tenantId, wabaId, name, language) {
+        const row = await this.templates.findByWabaNameLanguage(tenantId, wabaId, name, language);
+        if (!row || row.tenantId !== tenantId)
+            return null;
+        return row;
+    }
+    async listWabasFromAuth(auth, connectionId) {
+        const tenant = requireTenant(auth);
+        const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
+        let token = "";
+        try {
+            token = this.decrypt(connection.accessTokenEncrypted);
+        }
+        catch {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
+        }
+        const graph = this.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
+        const ids = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
+            token,
+            connection,
+            graph,
+        });
+        const unique = [...new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))];
+        const wabas = [];
+        for (const id of unique) {
+            const result = await graph({
+                token,
+                method: "GET",
+                path: id,
+                query: { fields: "id,name" },
+                maxAttempts: 1,
+                timeoutMs: 6000,
+            });
+            const name = result.ok
+                ? String(result.json?.name || "").trim()
+                : "";
+            wabas.push({ id, name: name || `WABA ${id}` });
+        }
+        if (!wabas.length && connection.wabaId) {
+            wabas.push({
+                id: String(connection.wabaId),
+                name: publicPortfolioName(connection),
+            });
+        }
+        return { connectionId: connection.id, wabas };
+    }
+    async resolveCreateWabaId(connection, token, requestedRaw) {
+        const primary = String(connection.wabaId || "").trim();
+        const requested = String(requestedRaw || "").trim();
+        if (!requested || requested === primary)
+            return primary;
+        const allowed = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
+            token,
+            connection,
+            graph: this.graph,
+        });
+        if (allowed.includes(requested))
+            return requested;
+        const error = new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        error.message =
+            "Esta conta WABA não pertence ao portfólio selecionado. Escolha a WABA onde o template deve ser cadastrado.";
+        throw error;
+    }
     async listOpenConnections(tenantId) {
         const repo = this.connections;
         if (typeof repo.listOpenByTenant === "function") {
@@ -191,9 +255,10 @@ class MetaWhatsappTemplateService {
             allow_category_change: true,
             components,
         };
+        const wabaId = await this.resolveCreateWabaId(connection, token, String(body?.wabaId || body?.waba_id || ""));
         const result = await (0, meta_whatsapp_template_graph_client_1.createWabaMessageTemplate)({
             token,
-            wabaId: String(connection.wabaId),
+            wabaId,
             body: graphBody,
             graph: this.graph,
         });
@@ -204,7 +269,7 @@ class MetaWhatsappTemplateService {
         const row = await this.templates.upsertFromGraph({
             tenantId: tenant.tenantId,
             connectionId: connection.id,
-            wabaId: String(connection.wabaId),
+            wabaId,
             metaTemplateId: result.json?.id ? String(result.json.id) : null,
             name: validated.name,
             language: validated.language,
