@@ -2,6 +2,7 @@ import { readMetaAppId, readMetaAppSecret } from "./meta-config";
 import { callMetaGraphJson, type MetaGraphJsonResult } from "./meta-whatsapp-graph.client";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { TemplateGraphCaller } from "./meta-whatsapp-template-graph.client";
+import { knownOwnedWabaIdsForBusiness } from "./meta-whatsapp-known-owned-wabas";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -111,6 +112,9 @@ export function extraWabaIdsFromConnections(
     if (selfId && String(row.id || "").trim() === selfId) continue;
     if (bm && String(row.metaBusinessId || "").trim() !== bm) continue;
     const id = String(row.wabaId || "").trim();
+    if (id && id !== selfWaba) out.add(id);
+  }
+  for (const id of knownOwnedWabaIdsForBusiness(bm)) {
     if (id && id !== selfWaba) out.add(id);
   }
   return [...out];
@@ -228,7 +232,9 @@ export async function discoverTemplateWabas(input: {
   const ownedIds = new Set<string>();
   const clientIds = new Set<string>();
   const extraSet = new Set(
-    [...(input.extraWabaIds || []), primary].map((id) => String(id || "").trim()).filter(Boolean),
+    [...(input.extraWabaIds || []), primary, ...knownOwnedWabaIdsForBusiness(bm)]
+      .map((id) => String(id || "").trim())
+      .filter(Boolean),
   );
 
   if (primary) addDiscoveredWaba(byId, primary, "", bm);
