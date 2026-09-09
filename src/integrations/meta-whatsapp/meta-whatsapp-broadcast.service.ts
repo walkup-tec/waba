@@ -179,7 +179,10 @@ export class MetaWhatsappBroadcastService {
     if (!isTemplateApprovedForSend(template.status)) {
       throw new MetaWhatsappError("template_not_ready");
     }
-    const live = await this.overlayApprovedTemplateFromGraph(connection, template);
+    const live = await this.overlayApprovedTemplateFromGraph(
+      { accessTokenEncrypted: connection.accessTokenEncrypted, wabaId: String(connection.wabaId) },
+      template,
+    );
     return { connection, template: live, inspect: inspectMetaBroadcastTemplate(live.components) };
   }
 
