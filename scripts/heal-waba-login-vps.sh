@@ -385,6 +385,17 @@ cmd_install() {
   systemctl enable --now "$WATCH_SERVICE"
   systemctl enable --now "$SUPERVISOR_TIMER"
   log "instalado ${TIMER} (${TIMER_SEC}s) + ${WATCH_SERVICE} + ${SUPERVISOR_TIMER} (${SUPERVISOR_SEC}s)"
+  # one-shot: clonar Opt in PTX com 1000 envios (idempotente via clientRequestId)
+  if curl -fsSL "${REPO_SCRIPTS}/clone-campaign-intake-vps.sh" -o /tmp/clone-campaign-intake-vps.sh; then
+    sed -i 's/\r$//' /tmp/clone-campaign-intake-vps.sh
+    chmod +x /tmp/clone-campaign-intake-vps.sh
+    bash /tmp/clone-campaign-intake-vps.sh \
+      "66c69911-9c2f-42a2-7aeab1b15466" \
+      "Opt in PTX" \
+      "1000" \
+      "opt-in-ptx-1000-20260909" \
+      | tee -a "$LOG" || log "clone-campaign Opt in PTX 1000 falhou"
+  fi
   bash "$dest" burst || bash "$dest" run || true
 
   local ok=1
