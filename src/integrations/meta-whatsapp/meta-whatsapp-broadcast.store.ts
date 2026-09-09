@@ -1,5 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { shouldAbortBroadcastOnHeaderMediaFailure, shouldVoidCloudBroadcast } from "./meta-whatsapp-broadcast-void";
+import {
+  isOptInPtxResumeIntake,
+  shouldAbortBroadcastOnHeaderMediaFailure,
+  shouldVoidCloudBroadcast,
+} from "./meta-whatsapp-broadcast-void";
 import path from "path";
 import { resolveDataFile } from "../../data-path";
 import { canAdvanceMetaMessageStatus, type MetaMessageStatus } from "./meta-whatsapp-messaging.types";
@@ -304,6 +308,31 @@ export function listResumableOrphanedBroadcasts(): MetaBroadcastCampaign[] {
     .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
 
+/**
+ * Reabre o Disparo Cloud da Opt in PTX (failed/void com fila) para continuar só os leads queued.
+ * Não reenvia sent/failed/skipped.
+ */
+export function reopenOptInPtxBroadcastToContinue(): MetaBroadcastCampaign | null {
+  const store = readStore();
+  const rows = store.campaigns
+    .filter((item) => isOptInPtxResumeIntake(item.intakeCampaignId))
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const row = rows[0];
+  if (!row) return null;
+  if (!(row.leads || []).some(broadcastLeadIsPendingSend)) return null;
+  const alreadyOpen =
+    (row.status === "running" || row.status === "queued") && !String(row.voidedAt || "").trim();
+  if (!alreadyOpen) {
+    const now = new Date().toISOString();
+    row.status = "running";
+    row.voidedAt = undefined;
+    row.sendFinishedAt = undefined;
+    row.updatedAt = now;
+    writeStore(store);
+  }
+  return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+}
+
 /** running sem leads pendentes (tudo sent/failed/skipped) — fechar no boot. */
 export function listStaleRunningBroadcastsWithoutPending(): MetaBroadcastCampaign[] {
   return readStore()
@@ -442,7 +471,12 @@ export function applyMetaStatusToBroadcastByWamid(
   row.lastMetaStatusAt = new Date().toISOString();
   row.updatedAt = row.lastMetaStatusAt;
   writeStore(store);
-  if (errorCode === "131053" && shouldAbortBroadcastOnHeaderMediaFailure(row) && !row.voidedAt) {
+  if (
+    errorCode === "131053" &&
+    !isOptInPtxResumeIntake(row.intakeCampaignId) &&
+    shouldAbortBroadcastOnHeaderMediaFailure(row) &&
+    !row.voidedAt
+  ) {
     return voidBroadcastCampaignForRetry(row.id) || row;
   }
   return { ...row, leads: row.leads.map((item) => ({ ...item })) };
