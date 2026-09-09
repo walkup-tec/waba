@@ -311,25 +311,40 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     }
     pushPhones(nestedFromMe.phones);
     const debugTargets = await listDebugTokenWhatsappTargets(g, token);
-    pushPhones(await fetchPhoneNodes(g, token, debugTargets.phoneIds));
-    if (fromThisBm.size) {
+    const debugPhoneNodes = await fetchPhoneNodes(g, token, debugTargets.phoneIds);
+    pushPhones(debugPhoneNodes);
+    if (businessId) {
+        const unknownWabas = new Set();
         for (const id of debugTargets.wabaIds) {
-            if (fromThisBm.has(id))
-                wabaIds.add(id);
+            if (id && !wabaIds.has(id))
+                unknownWabas.add(id);
         }
-    }
-    else if (businessId) {
-        const owned = await (0, meta_whatsapp_template_waba_ids_1.filterWabaIdsOwnedByBusiness)({
-            token,
-            businessId,
-            ids: debugTargets.wabaIds,
-            graph: (input) => g({
-                ...input,
-                method: input.method === "DELETE" ? "GET" : input.method,
-            }),
-        });
-        for (const row of owned)
-            wabaIds.add(row.id);
+        for (const row of debugPhoneNodes) {
+            const rec = row && typeof row === "object" ? row : {};
+            const account = rec.whatsapp_business_account;
+            const accountId = account && typeof account === "object"
+                ? String(account.id || "").trim()
+                : "";
+            const stamped = String(rec._portfolio_waba_id || "").trim();
+            const wid = accountId || stamped;
+            if (wid && !wabaIds.has(wid))
+                unknownWabas.add(wid);
+        }
+        if (unknownWabas.size) {
+            const owned = await (0, meta_whatsapp_template_waba_ids_1.filterWabaIdsOwnedByBusiness)({
+                token,
+                businessId,
+                ids: [...unknownWabas],
+                graph: (input) => g({
+                    ...input,
+                    method: input.method === "DELETE" ? "GET" : input.method,
+                }),
+            });
+            for (const row of owned) {
+                fromThisBm.add(row.id);
+                wabaIds.add(row.id);
+            }
+        }
     }
     else {
         for (const id of debugTargets.wabaIds)
@@ -448,7 +463,7 @@ async function fetchPhoneNodes(graph, token, phoneIds, stampWabaId) {
             token,
             method: "GET",
             path: id,
-            query: { fields: `${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS},whatsapp_business_account` },
+            query: { fields: `${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS},whatsapp_business_account` },
         });
         if (!res.ok || !res.json || typeof res.json !== "object")
             continue;
@@ -498,8 +513,8 @@ async function collectNestedPhonesFromBusiness(graph, token, businessId) {
     const fields = [
         "id",
         "name",
-        `owned_whatsapp_business_accounts{id,name,phone_numbers{${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS}}}`,
-        `client_whatsapp_business_accounts{id,name,phone_numbers{${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS}}}`,
+        `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
+        `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
     ].join(",");
     const res = await graph({
         token,
@@ -515,8 +530,8 @@ async function collectNestedPhonesFromMeBusinesses(graph, token, onlyBusinessId)
     const fields = [
         "id",
         "name",
-        `owned_whatsapp_business_accounts{id,name,phone_numbers{${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS}}}`,
-        `client_whatsapp_business_accounts{id,name,phone_numbers{${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS}}}`,
+        `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
+        `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
     ].join(",");
     const res = await graph({
         token,
@@ -629,17 +644,34 @@ function stampPhoneRowsWithWabaId(rows, wabaId) {
         return { ...row, _portfolio_waba_id: wid };
     });
 }
-/** Lista todos os chips do WABA (paginação Graph). Sem isso, só a 1ª página aparecia. */
+function mergePhoneNumberRows(...lists) {
+    const byId = new Map();
+    for (const list of lists) {
+        for (const row of list) {
+            if (!row || typeof row !== "object")
+                continue;
+            const rec = row;
+            const id = String(rec.id || "").trim();
+            if (!id)
+                continue;
+            const prev = byId.get(id) || {};
+            byId.set(id, { ...prev, ...rec, id });
+        }
+    }
+    return [...byId.values()];
+}
+/** Lista todos os chips do WABA. Une listagem mínima (Pendente) com a que pede health/tier. */
 async function listWabaPhoneNumbersPaged(graph, token, wabaId) {
-    const withLimit = await listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT);
-    if (withLimit.ok && withLimit.json.data.length)
-        return withLimit;
-    const fallback = await listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS);
-    if (fallback.ok && fallback.json.data.length)
-        return fallback;
-    if (withLimit.ok)
-        return withLimit;
-    return fallback;
+    const [membership, withLimit] = await Promise.all([
+        listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS),
+        listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT),
+    ]);
+    const merged = mergePhoneNumberRows(membership.ok ? membership.json.data : [], withLimit.ok ? withLimit.json.data : []);
+    if (merged.length)
+        return { ok: true, json: { data: merged } };
+    if (membership.ok)
+        return membership;
+    return withLimit;
 }
 async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {
     const identity = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenantId, phoneNumberId);

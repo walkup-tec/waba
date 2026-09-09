@@ -8,6 +8,10 @@ import type {
 export const META_PHONE_NUMBER_LIST_FIELDS =
   "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,name_status,new_display_name,new_name_status,health_status";
 
+/** Sem health_status/tier: a Graph omite chip Pendente nesses campos. */
+export const META_PHONE_NUMBER_MEMBERSHIP_FIELDS =
+  "id,display_phone_number,verified_name,status,code_verification_status,name_status,new_display_name,new_name_status";
+
 export const META_PHONE_MESSAGING_LIMIT_FIELD = "messaging_limit_tier";
 
 export const META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT =

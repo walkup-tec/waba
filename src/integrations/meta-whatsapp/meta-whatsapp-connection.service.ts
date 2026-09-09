@@ -42,8 +42,8 @@ import {
   graphPhotoDownloadUrl,
   graphPhotoSourceKey,
   safePublicPhotoUrl,
-  META_PHONE_NUMBER_LIST_FIELDS,
   META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT,
+  META_PHONE_NUMBER_MEMBERSHIP_FIELDS,
   META_PHONE_NAME_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
 import { filterWabaIdsOwnedByBusiness } from "./meta-whatsapp-template-waba-ids";
@@ -419,23 +419,40 @@ async function hydrateOpenConnection(
   pushPhones(nestedFromMe.phones);
 
   const debugTargets = await listDebugTokenWhatsappTargets(g, token);
-  pushPhones(await fetchPhoneNodes(g, token, debugTargets.phoneIds));
-  if (fromThisBm.size) {
+  const debugPhoneNodes = await fetchPhoneNodes(g, token, debugTargets.phoneIds);
+  pushPhones(debugPhoneNodes);
+  if (businessId) {
+    const unknownWabas = new Set<string>();
     for (const id of debugTargets.wabaIds) {
-      if (fromThisBm.has(id)) wabaIds.add(id);
+      if (id && !wabaIds.has(id)) unknownWabas.add(id);
     }
-  } else if (businessId) {
-    const owned = await filterWabaIdsOwnedByBusiness({
-      token,
-      businessId,
-      ids: debugTargets.wabaIds,
-      graph: (input) =>
-        g({
-          ...input,
-          method: input.method === "DELETE" ? "GET" : input.method,
-        }),
-    });
-    for (const row of owned) wabaIds.add(row.id);
+    for (const row of debugPhoneNodes) {
+      const rec = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+      const account = rec.whatsapp_business_account;
+      const accountId =
+        account && typeof account === "object"
+          ? String((account as { id?: unknown }).id || "").trim()
+          : "";
+      const stamped = String(rec._portfolio_waba_id || "").trim();
+      const wid = accountId || stamped;
+      if (wid && !wabaIds.has(wid)) unknownWabas.add(wid);
+    }
+    if (unknownWabas.size) {
+      const owned = await filterWabaIdsOwnedByBusiness({
+        token,
+        businessId,
+        ids: [...unknownWabas],
+        graph: (input) =>
+          g({
+            ...input,
+            method: input.method === "DELETE" ? "GET" : input.method,
+          }),
+      });
+      for (const row of owned) {
+        fromThisBm.add(row.id);
+        wabaIds.add(row.id);
+      }
+    }
   } else {
     for (const id of debugTargets.wabaIds) wabaIds.add(id);
   }
@@ -561,7 +578,7 @@ async function fetchPhoneNodes(
       token,
       method: "GET",
       path: id,
-      query: { fields: `${META_PHONE_NUMBER_LIST_FIELDS},whatsapp_business_account` },
+      query: { fields: `${META_PHONE_NUMBER_MEMBERSHIP_FIELDS},whatsapp_business_account` },
     });
     if (!res.ok || !res.json || typeof res.json !== "object") continue;
     const display = String((res.json as { display_phone_number?: unknown }).display_phone_number || "").trim();
@@ -619,8 +636,8 @@ async function collectNestedPhonesFromBusiness(
   const fields = [
     "id",
     "name",
-    `owned_whatsapp_business_accounts{id,name,phone_numbers{${META_PHONE_NUMBER_LIST_FIELDS}}}`,
-    `client_whatsapp_business_accounts{id,name,phone_numbers{${META_PHONE_NUMBER_LIST_FIELDS}}}`,
+    `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
+    `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
   ].join(",");
   const res = await graph({
     token,
@@ -640,8 +657,8 @@ async function collectNestedPhonesFromMeBusinesses(
   const fields = [
     "id",
     "name",
-    `owned_whatsapp_business_accounts{id,name,phone_numbers{${META_PHONE_NUMBER_LIST_FIELDS}}}`,
-    `client_whatsapp_business_accounts{id,name,phone_numbers{${META_PHONE_NUMBER_LIST_FIELDS}}}`,
+    `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
+    `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
   ].join(",");
   const res = await graph({
     token,
@@ -754,28 +771,38 @@ function stampPhoneRowsWithWabaId(rows: unknown[], wabaId: string): unknown[] {
   });
 }
 
-/** Lista todos os chips do WABA (paginação Graph). Sem isso, só a 1ª página aparecia. */
+function mergePhoneNumberRows(...lists: unknown[][]): unknown[] {
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const list of lists) {
+    for (const row of list) {
+      if (!row || typeof row !== "object") continue;
+      const rec = row as Record<string, unknown>;
+      const id = String(rec.id || "").trim();
+      if (!id) continue;
+      const prev = byId.get(id) || {};
+      byId.set(id, { ...prev, ...rec, id });
+    }
+  }
+  return [...byId.values()];
+}
+
+/** Lista todos os chips do WABA. Une listagem mínima (Pendente) com a que pede health/tier. */
 async function listWabaPhoneNumbersPaged(
   graph: MetaConnectionGraphCaller,
   token: string,
   wabaId: string,
 ): Promise<{ ok: true; json: { data: unknown[] } } | { ok: false; status: number }> {
-  const withLimit = await listWabaPhoneNumbersPagedWithFields(
-    graph,
-    token,
-    wabaId,
-    META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT,
+  const [membership, withLimit] = await Promise.all([
+    listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, META_PHONE_NUMBER_MEMBERSHIP_FIELDS),
+    listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT),
+  ]);
+  const merged = mergePhoneNumberRows(
+    membership.ok ? membership.json.data : [],
+    withLimit.ok ? withLimit.json.data : [],
   );
-  if (withLimit.ok && withLimit.json.data.length) return withLimit;
-  const fallback = await listWabaPhoneNumbersPagedWithFields(
-    graph,
-    token,
-    wabaId,
-    META_PHONE_NUMBER_LIST_FIELDS,
-  );
-  if (fallback.ok && fallback.json.data.length) return fallback;
-  if (withLimit.ok) return withLimit;
-  return fallback;
+  if (merged.length) return { ok: true, json: { data: merged } };
+  if (membership.ok) return membership;
+  return withLimit;
 }
 
 async function cacheGraphPhonePhoto(
