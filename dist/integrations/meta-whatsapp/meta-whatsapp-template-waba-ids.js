@@ -13,6 +13,7 @@ exports.discoverTemplateWabas = discoverTemplateWabas;
 exports.discoverTemplateWabaIds = discoverTemplateWabaIds;
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
+const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
 function asRecord(value) {
     return value && typeof value === "object" && !Array.isArray(value)
         ? value
@@ -115,6 +116,10 @@ function extraWabaIdsFromConnections(rows, current) {
         if (id && id !== selfWaba)
             out.add(id);
     }
+    for (const id of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm)) {
+        if (id && id !== selfWaba)
+            out.add(id);
+    }
     return [...out];
 }
 function wabaIdentityMatchesBusiness(json, businessId) {
@@ -206,7 +211,9 @@ async function discoverTemplateWabas(input) {
     const byId = new Map();
     const ownedIds = new Set();
     const clientIds = new Set();
-    const extraSet = new Set([...(input.extraWabaIds || []), primary].map((id) => String(id || "").trim()).filter(Boolean));
+    const extraSet = new Set([...(input.extraWabaIds || []), primary, ...(0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm)]
+        .map((id) => String(id || "").trim())
+        .filter(Boolean));
     if (primary)
         addDiscoveredWaba(byId, primary, "", bm);
     for (const id of extraSet)
