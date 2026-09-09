@@ -5,6 +5,7 @@ exports.sanitizeMetaTemplateName = sanitizeMetaTemplateName;
 exports.templateNameForOption = templateNameForOption;
 exports.parseTemplateAiConnectionIds = parseTemplateAiConnectionIds;
 exports.parseTemplateAiWabaIds = parseTemplateAiWabaIds;
+exports.parseTemplateAiWabaTargets = parseTemplateAiWabaTargets;
 exports.parseTemplateAiHeaderHandles = parseTemplateAiHeaderHandles;
 exports.parseMetaTemplateAiShell = parseMetaTemplateAiShell;
 exports.stripTemplatePlaceholders = stripTemplatePlaceholders;
@@ -97,6 +98,26 @@ function parseTemplateAiConnectionIds(input) {
 function parseTemplateAiWabaIds(input) {
     const body = asRecord(input);
     return parseIdList(body.wabaIds ?? body.waba_ids ?? body.wabaId ?? body.waba_id);
+}
+function parseTemplateAiWabaTargets(input) {
+    const body = asRecord(input);
+    const raw = body.wabaTargets ?? body.waba_targets ?? body.targets;
+    const list = Array.isArray(raw) ? raw : [];
+    const seen = new Set();
+    const out = [];
+    for (const item of list) {
+        const row = asRecord(item);
+        const connectionId = String(row.connectionId || row.connection_id || "").trim();
+        const wabaId = String(row.wabaId || row.waba_id || "").trim();
+        if (!wabaId)
+            continue;
+        const key = `${connectionId}:${wabaId}`;
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        out.push({ connectionId, wabaId });
+    }
+    return out;
 }
 function parseTemplateAiHeaderHandles(input) {
     const body = asRecord(input);
