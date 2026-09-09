@@ -48,6 +48,11 @@ import {
 } from "./meta-whatsapp-portfolio.map";
 import { filterWabaIdsOwnedByBusiness, extraWabaIdsFromConnections } from "./meta-whatsapp-template-waba-ids";
 import {
+  knownOwnedWabaIdsForBusiness,
+  knownPendingPhoneGraphRow,
+  knownPendingPhonesForBusiness,
+} from "./meta-whatsapp-known-owned-wabas";
+import {
   fetchWabaOwner,
   fetchBusinessFromGraph,
   fetchAssignedBusinesses,
@@ -399,6 +404,10 @@ async function hydrateOpenConnection(
     const wid = String(id || "").trim();
     if (wid) wabaIds.add(wid);
   }
+  for (const id of knownOwnedWabaIdsForBusiness(businessId || storedBm)) {
+    const wid = String(id || "").trim();
+    if (wid) wabaIds.add(wid);
+  }
 
   const phoneRows: unknown[] = [];
   const pushPhones = (rows: unknown[]) => {
@@ -415,6 +424,10 @@ async function hydrateOpenConnection(
     for (const id of await listBusinessWabaIds(g, token, businessId, "client")) clientIds.add(id);
   }
   for (const id of extraWabaIds) {
+    const wid = String(id || "").trim();
+    if (wid) fromThisBm.add(wid);
+  }
+  for (const id of knownOwnedWabaIdsForBusiness(businessId || storedBm)) {
     const wid = String(id || "").trim();
     if (wid) fromThisBm.add(wid);
   }
@@ -500,7 +513,16 @@ async function hydrateOpenConnection(
       connectionId: open.id,
       wabaCount: wabaIds.size,
     });
-    return { card, directory };
+    const fallbackKnown = mapMetaPhoneListToPortfolioNumbers({
+      data: knownPendingPhonesForBusiness(businessId || storedBm).map(knownPendingPhoneGraphRow),
+    });
+    return {
+      card: {
+        ...card,
+        numbers: unionPortfolioNumbers(stored, fallbackKnown),
+      },
+      directory,
+    };
   }
 
   logMetaWhatsappSafe("portfolio-fanout", {
@@ -517,6 +539,23 @@ async function hydrateOpenConnection(
   if (claimedPhoneId && !merged.some((row) => String(row.phoneNumberId || "").trim() === claimedPhoneId)) {
     const extra = await fetchPhoneNodes(g, token, [claimedPhoneId], primaryWabaId);
     merged = unionPortfolioNumbers(merged, mapMetaPhoneListToPortfolioNumbers({ data: extra }));
+  }
+  const knownPending = knownPendingPhonesForBusiness(businessId || storedBm);
+  const missingKnownIds = knownPending
+    .map((row) => row.phoneNumberId)
+    .filter((id) => id && !merged.some((row) => String(row.phoneNumberId || "").trim() === id));
+  if (missingKnownIds.length) {
+    const extra = await fetchPhoneNodes(g, token, missingKnownIds);
+    merged = unionPortfolioNumbers(merged, mapMetaPhoneListToPortfolioNumbers({ data: extra }));
+  }
+  const stillMissing = knownPending.filter(
+    (row) => !merged.some((item) => String(item.phoneNumberId || "").trim() === row.phoneNumberId),
+  );
+  if (stillMissing.length) {
+    merged = unionPortfolioNumbers(
+      merged,
+      mapMetaPhoneListToPortfolioNumbers({ data: stillMissing.map(knownPendingPhoneGraphRow) }),
+    );
   }
   const pending = merged.filter((row) => row.uiStatus !== "ativo");
   const active = merged.filter((row) => row.uiStatus === "ativo");
