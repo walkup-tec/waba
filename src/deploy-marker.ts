@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-09-195200-lab-default-display-name";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-09-201200-lab-hide-onboard-steps-and-automation-menu";
