@@ -24,6 +24,7 @@ export type WabaBillingOrder = {
   status: WabaBillingOrderStatus;
   asaasCustomerId?: string;
   asaasPaymentId?: string;
+  asaasPaymentStatus?: string;
   asaasInvoiceNumber?: string;
   paymentUrl?: string;
   pixCopyPaste?: string;

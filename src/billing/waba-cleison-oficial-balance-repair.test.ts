@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import type { Server } from "node:http";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import os from "os";
+import path from "path";
 import { after, before, describe, it } from "node:test";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
 
 const EMAIL = "cleison.fel@gmail.com";
 const originalCwd = process.cwd();
-const dataRoot = mkdtempSync(path.join(os.tmpdir(), "waba-cleison-force-"));
+const dataRoot = mkdtempSync(path.join(os.tmpdir(), "waba-cleison-credits-"));
+const PAST = new Date(Date.now() - 120_000).toISOString();
 
-process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR = "";
+process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR = "1";
+delete process.env.WABA_ENABLE_CLEISON_BALANCE_REPAIR;
 
 function resetStore() {
   const dataDir = path.join(process.cwd(), "data");
@@ -31,6 +33,7 @@ function resetStore() {
   writeFileSync(path.join(dataDir, "waba-campaign-intakes.json"), emptyIntakes);
   writeFileSync(path.join(dataDir, "v01", "waba-campaign-intakes.json"), emptyIntakes);
   writeFileSync(path.join(dataDir, "v02", "waba-campaign-intakes.json"), emptyIntakes);
+  writeFileSync(path.join(dataDir, "waba-subscribers.json"), JSON.stringify({ version: 1, subscribers: [] }));
 }
 
 function baseOrder(overrides: Partial<WabaBillingOrder>): WabaBillingOrder {
@@ -54,7 +57,7 @@ function baseOrder(overrides: Partial<WabaBillingOrder>): WabaBillingOrder {
   };
 }
 
-describe("Força saldo Oficial Cleison 5829 / 0 bonificados", () => {
+describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
   before(() => {
     mkdirSync(path.join(dataRoot, "data"), { recursive: true });
     process.chdir(dataRoot);
@@ -66,74 +69,24 @@ describe("Força saldo Oficial Cleison 5829 / 0 bonificados", () => {
     rmSync(dataRoot, { recursive: true, force: true });
   });
 
-  it("substitui 1849 e PIX pendente por 5829 lifetime sem bonificados", async () => {
+  it("compra Asaas paga recebe os 1016 bonificados da Opt in PTX e o freeze 5829 sai", async () => {
     resetStore();
-    delete process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR;
+    delete process.env.WABA_ENABLE_CLEISON_BALANCE_REPAIR;
+    process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR = "1";
 
     const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
     const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
     const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+    const { CLEISON_OFICIAL_FORCE_REF } = await import("./waba-cleison-oficial-balance-repair");
 
-    const orders = new WabaBillingOrderRepository();
-    orders.create(
-      baseOrder({
-        id: "11111111-1111-4111-8111-111111111111",
-        shipmentCount: 1849,
-        status: "paid",
-        paidAt: "2026-08-01T15:00:00.000Z",
-        bonusShipmentsApplied: 0,
-      }),
-    );
-    orders.create(
-      baseOrder({
-        id: "7c1e5000-0ff1-4c1a-9c1e-000000005000",
-        shipmentCount: 5000,
-        status: "pending_payment",
-        asaasPaymentId: "pay_cleison_5000",
-      }),
-    );
     new WabaDisparosBonusRepository().grantFromCampaign(
       EMAIL,
-      "368d053b-d59b-4eed-a235-fe9e9f32c68c",
-      829,
+      "c213963a-209a-465e-b3b6-85fef1328caf",
+      1016,
       "oficial",
     );
 
-    const credits = new WabaDisparosCreditsService(orders);
-    const first = credits.getCreditsSummary(EMAIL);
-    assert.equal(first.byApi.oficial.remainingShipments, 5829);
-    assert.equal(first.byApi.oficial.pendingBonusShipments, 0);
-
-    const second = credits.getCreditsSummary(EMAIL);
-    assert.equal(second.byApi.oficial.remainingShipments, 5829);
-    assert.equal(second.byApi.oficial.pendingBonusShipments, 0);
-
-    const pendingPix = orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000");
-    assert.equal(pendingPix?.status, "paid");
-    assert.ok(String(pendingPix?.creditsValidUntil ?? "").length > 0);
-  });
-
-  it("corrige tela 847/834: restante 1849 ativo + Jandira 834 pendente + grant já criado", async () => {
-    resetStore();
-    delete process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR;
-
-    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
-    const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
-    const { WabaDisparosCreditUsageRepository } = await import(
-      "./waba-disparos-credit-usage.repository"
-    );
-    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
-
     const orders = new WabaBillingOrderRepository();
-    orders.create(
-      baseOrder({
-        id: "11111111-1111-4111-8111-111111111111",
-        shipmentCount: 1849,
-        status: "paid",
-        paidAt: "2026-08-01T15:00:00.000Z",
-        bonusShipmentsApplied: 0,
-      }),
-    );
     orders.create(
       baseOrder({
         id: "aaaaaaaa-1111-4111-8111-ffffffffffff",
@@ -141,157 +94,150 @@ describe("Força saldo Oficial Cleison 5829 / 0 bonificados", () => {
         shipmentCount: 5829,
         status: "paid",
         paidAt: "2026-09-07T13:30:15.000Z",
-        asaasExternalReference: "waba:force-balance:cleison-oficial-5829",
+        asaasExternalReference: CLEISON_OFICIAL_FORCE_REF,
         grantSource: "admin-bonus-envios",
+        grantCreatedByEmail: "system-balance-repair",
         grantActive: true,
         creditsValidUntil: null,
         validityMode: "lifetime",
-        bonusShipmentsApplied: 829,
+        bonusShipmentsApplied: 1016,
         bonusSettlementAt: "2026-09-07T13:30:15.000Z",
       }),
     );
-    const bonus = new WabaDisparosBonusRepository();
-    bonus.grantFromCampaign(EMAIL, "jandira-2", 829, "oficial");
-    bonus.grantFromCampaign(EMAIL, "jandira-1", 834, "oficial");
-    new WabaDisparosCreditUsageRepository().setConsumedByApi(EMAIL, {
-      oficial: 1002,
-      alternativa: 0,
-    });
-
-    const credits = new WabaDisparosCreditsService(orders);
-    const summary = credits.getCreditsSummary(EMAIL);
-    assert.equal(summary.byApi.oficial.remainingShipments, 5829);
-    assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
-
-    const leftover = orders.getById("11111111-1111-4111-8111-111111111111");
-    assert.ok(String(leftover?.creditsValidUntil ?? "").length > 0);
-    const force = orders.getById("aaaaaaaa-1111-4111-8111-ffffffffffff");
-    assert.equal(force?.grantSource, "admin-bonus-envios");
-    assert.equal(force?.grantActive, true);
-    assert.equal(force?.shipmentCount, 5829);
-    assert.ok(Number(force?.bonusShipmentsApplied ?? 0) >= 829 + 834);
-  });
-
-  it("não desconta consumo antigo: 1002+bônus ainda mostra 5829 / 0", async () => {
-    resetStore();
-    delete process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR;
-
-    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
-    const { WabaDisparosCreditUsageRepository } = await import(
-      "./waba-disparos-credit-usage.repository"
-    );
-    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
-
-    const orders = new WabaBillingOrderRepository();
     orders.create(
       baseOrder({
-        id: "11111111-1111-4111-8111-111111111111",
-        shipmentCount: 1849,
+        id: "7c1e5000-0ff1-4c1a-9c1e-000000005000",
+        shipmentCount: 2000,
+        valueCents: 60000,
         status: "paid",
-        paidAt: "2026-08-01T15:00:00.000Z",
+        paidAt: new Date(Date.now() + 2_000).toISOString(),
+        asaasPaymentId: "pay_cleison_hoje",
+        asaasPaymentStatus: "CONFIRMED",
+        grantActive: false,
+        creditsValidUntil: PAST,
+        validityMode: "custom",
+        bonusShipmentsApplied: 0,
+        bonusSettlementAt: new Date().toISOString(),
       }),
     );
-    const usage = new WabaDisparosCreditUsageRepository();
-    usage.setConsumedByApi(EMAIL, { oficial: 1002, alternativa: 0 });
-    usage.incrementBonusConsumedShipments(EMAIL, 4982, "oficial");
 
     const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
-    assert.equal(summary.byApi.oficial.remainingShipments, 5829);
     assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
+    assert.equal(summary.byApi.oficial.remainingShipments, 2000 + 1016);
+
+    const force = orders.getById("aaaaaaaa-1111-4111-8111-ffffffffffff");
+    assert.equal(force?.grantActive, false);
+    const paid = orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000");
+    assert.equal(paid?.grantActive, true);
+    assert.equal(paid?.creditsValidUntil, null);
+    assert.equal(paid?.bonusShipmentsApplied, 1016);
+    assert.equal(paid?.shipmentCount, 3016);
   });
 
-  it("GET /billing/disparos/credits (tela Saldos) devolve Disponíveis=5829 e Bonificados=0", async () => {
+  it("grant master de bônus permanece no Disponível depois do GET de créditos", async () => {
     resetStore();
-    delete process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR;
+    delete process.env.WABA_ENABLE_CLEISON_BALANCE_REPAIR;
+    process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR = "1";
 
     const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
-    const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
-    const { WabaDisparosCreditUsageRepository } = await import(
-      "./waba-disparos-credit-usage.repository"
-    );
+    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+    const { WabaAdminBonusEnviosService } = await import("../admin/waba-admin-bonus-envios.service");
+    const { WabaSubscriberRepository } = await import("../subscribers/waba-subscriber.repository");
 
     const orders = new WabaBillingOrderRepository();
     orders.create(
       baseOrder({
-        id: "11111111-1111-4111-8111-111111111111",
-        shipmentCount: 1849,
+        id: "7c1e5000-0ff1-4c1a-9c1e-000000005000",
+        shipmentCount: 2000,
+        valueCents: 60000,
         status: "paid",
-        paidAt: "2026-08-01T15:00:00.000Z",
+        paidAt: "2026-09-09T12:00:00.000Z",
+        asaasPaymentId: "pay_cleison_hoje",
+        asaasPaymentStatus: "CONFIRMED",
+        grantActive: false,
+        creditsValidUntil: PAST,
+        validityMode: "custom",
         bonusShipmentsApplied: 0,
       }),
     );
-    const bonus = new WabaDisparosBonusRepository();
-    bonus.grantFromCampaign(EMAIL, "jandira-2", 829, "oficial");
-    bonus.grantFromCampaign(EMAIL, "jandira-1", 834, "oficial");
-    new WabaDisparosCreditUsageRepository().setConsumedByApi(EMAIL, {
-      oficial: 1002,
-      alternativa: 0,
-    });
 
     const now = new Date().toISOString();
-    writeFileSync(
-      path.join(process.cwd(), "data", "waba-campaign-intakes.json"),
-      JSON.stringify(
-        {
-          version: 1,
-          intakes: [
-            {
-              id: "jandira-1",
-              ownerEmail: EMAIL,
-              campaignName: "Jandira",
-              regionDdd: "11",
-              textOptions: ["a", "b", "c"],
-              imageFileName: "x.png",
-              imageStoredPath: "x.png",
-              spreadsheetFileName: "x.xlsx",
-              spreadsheetStoredPath: "x.xlsx",
-              importedLineCount: 1990,
-              plannedSendCount: 1990,
-              apiKind: "oficial",
-              status: "completed",
-              performanceReport: {
-                totalLeads: 1990,
-                sent: 1156,
-                delivered: 0,
-                read: 0,
-                failed: 0,
-                filledAt: now,
-                filledByEmail: EMAIL,
-              },
-              createdAt: now,
-              updatedAt: now,
-            },
-            {
-              id: "jandira-2",
-              ownerEmail: EMAIL,
-              campaignName: "Jandira 2",
-              regionDdd: "11",
-              textOptions: ["a", "b", "c"],
-              imageFileName: "x.png",
-              imageStoredPath: "x.png",
-              spreadsheetFileName: "x.xlsx",
-              spreadsheetStoredPath: "x.xlsx",
-              importedLineCount: 1990,
-              plannedSendCount: 1990,
-              apiKind: "oficial",
-              status: "completed",
-              performanceReport: {
-                totalLeads: 1990,
-                sent: 1161,
-                delivered: 0,
-                read: 0,
-                failed: 0,
-                filledAt: now,
-                filledByEmail: EMAIL,
-              },
-              createdAt: now,
-              updatedAt: now,
-            },
-          ],
-        },
-        null,
-        2,
-      ),
+    new WabaSubscriberRepository().create({
+      id: "sub-cleison",
+      email: EMAIL,
+      passwordHash: "x",
+      fullName: "Cleison",
+      whatsapp: "11999999999",
+      phone: "11999999999",
+      cpfCnpj: "00000000191",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const granted = new WabaAdminBonusEnviosService(
+      new WabaSubscriberRepository(),
+      orders,
+      new WabaDisparosCreditsService(orders),
+    ).grant({
+      subscriberId: "sub-cleison",
+      shipmentCount: 400,
+      apiKind: "oficial",
+      validityMode: "lifetime",
+      createdByEmail: "marcelo.mozart@icloud.com",
+    });
+
+    assert.equal(granted.credits.remainingShipments, 2000 + 400);
+    const again = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
+    assert.equal(again.byApi.oficial.remainingShipments, 2000 + 400);
+    assert.equal(orders.getById(granted.order.id)?.grantActive, true);
+    assert.equal(orders.getById(granted.order.id)?.creditsValidUntil, null);
+  });
+
+  it("GET /billing/disparos/credits não devolve mais 5829/0 com compra paga e bônus PTX", async () => {
+    resetStore();
+    delete process.env.WABA_ENABLE_CLEISON_BALANCE_REPAIR;
+    process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR = "1";
+
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
+    const { CLEISON_OFICIAL_FORCE_REF } = await import("./waba-cleison-oficial-balance-repair");
+
+    new WabaDisparosBonusRepository().grantFromCampaign(
+      EMAIL,
+      "c213963a-209a-465e-b3b6-85fef1328caf",
+      1016,
+      "oficial",
+    );
+
+    const orders = new WabaBillingOrderRepository();
+    orders.create(
+      baseOrder({
+        id: "aaaaaaaa-1111-4111-8111-ffffffffffff",
+        valueCents: 0,
+        shipmentCount: 5829,
+        status: "paid",
+        paidAt: "2026-09-07T13:30:15.000Z",
+        asaasExternalReference: CLEISON_OFICIAL_FORCE_REF,
+        grantSource: "admin-bonus-envios",
+        grantCreatedByEmail: "system-balance-repair",
+        grantActive: true,
+        bonusShipmentsApplied: 1016,
+      }),
+    );
+    orders.create(
+      baseOrder({
+        id: "7c1e5000-0ff1-4c1a-9c1e-000000005000",
+        shipmentCount: 2000,
+        valueCents: 60000,
+        status: "paid",
+        paidAt: new Date(Date.now() + 2_000).toISOString(),
+        asaasPaymentId: "pay_cleison_hoje",
+        asaasPaymentStatus: "CONFIRMED",
+        grantActive: false,
+        creditsValidUntil: PAST,
+        validityMode: "custom",
+        bonusShipmentsApplied: 0,
+      }),
     );
 
     const express = (await import("express")).default;
@@ -312,21 +258,62 @@ describe("Força saldo Oficial Cleison 5829 / 0 bonificados", () => {
       });
       assert.equal(first.status, 200);
       const body = await first.json();
-      const disponiveis = Number(body.byApi.oficial.remainingShipments);
-      const bonificados = Number(body.byApi.oficial.pendingBonusShipments);
-      assert.equal(disponiveis, 5829);
-      assert.equal(bonificados, 0);
-      assert.equal(disponiveis.toLocaleString("pt-BR"), "5.829");
-      assert.equal(bonificados.toLocaleString("pt-BR"), "0");
-
-      const second = await fetch(`http://127.0.0.1:${port}/billing/disparos/credits`, {
-        headers: { cookie: `waba_session=${token}` },
-      });
-      const again = await second.json();
-      assert.equal(again.byApi.oficial.remainingShipments, 5829);
-      assert.equal(again.byApi.oficial.pendingBonusShipments, 0);
+      assert.equal(Number(body.byApi.oficial.pendingBonusShipments), 0);
+      assert.equal(Number(body.byApi.oficial.remainingShipments), 3016);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }
+  });
+
+  it("não recongela 5829/0 mesmo com WABA_ENABLE_CLEISON_BALANCE_REPAIR=1", async () => {
+    resetStore();
+    process.env.WABA_ENABLE_CLEISON_BALANCE_REPAIR = "1";
+    delete process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR;
+
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
+    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+    const { CLEISON_OFICIAL_FORCE_REF } = await import("./waba-cleison-oficial-balance-repair");
+
+    new WabaDisparosBonusRepository().grantFromCampaign(
+      EMAIL,
+      "c213963a-209a-465e-b3b6-85fef1328caf",
+      1016,
+      "oficial",
+    );
+    const orders = new WabaBillingOrderRepository();
+    orders.create(
+      baseOrder({
+        id: "aaaaaaaa-1111-4111-8111-ffffffffffff",
+        valueCents: 0,
+        shipmentCount: 5829,
+        status: "paid",
+        paidAt: "2026-09-07T13:30:15.000Z",
+        asaasExternalReference: CLEISON_OFICIAL_FORCE_REF,
+        grantSource: "admin-bonus-envios",
+        grantCreatedByEmail: "system-balance-repair",
+        grantActive: true,
+        bonusShipmentsApplied: 1016,
+      }),
+    );
+    orders.create(
+      baseOrder({
+        id: "7c1e5000-0ff1-4c1a-9c1e-000000005000",
+        shipmentCount: 2000,
+        valueCents: 60000,
+        status: "paid",
+        paidAt: new Date(Date.now() + 2_000).toISOString(),
+        asaasPaymentId: "pay_cleison_hoje",
+        asaasPaymentStatus: "CONFIRMED",
+        grantActive: false,
+        creditsValidUntil: PAST,
+        validityMode: "custom",
+        bonusShipmentsApplied: 0,
+      }),
+    );
+
+    const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
+    assert.equal(summary.byApi.oficial.pendingBonusShipments, 0);
+    assert.equal(summary.byApi.oficial.remainingShipments, 3016);
   });
 });
