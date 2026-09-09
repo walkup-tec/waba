@@ -40,6 +40,8 @@ export type MetaPortfolioNumberPublic = {
   photoSyncStatus: MetaProfileSyncStatus | null;
   profileSyncStatus: MetaProfileSyncStatus | null;
   inboxEnabled: boolean;
+  /** Conta WhatsApp (WABA) dona deste chip. Sem isso o Disparo Cloud mistura template de uma WABA com número de outra. */
+  wabaId?: string | null;
 };
 
 export type MetaPortfolioAssetsPublic = {
