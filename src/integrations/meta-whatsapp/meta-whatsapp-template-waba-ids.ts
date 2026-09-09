@@ -121,10 +121,8 @@ export function wabaIdentityMatchesBusiness(json: unknown, businessId: string): 
   if (!wanted) return true;
   const row = asRecord(json);
   const owner = String(asRecord(row.owner_business_info).id || "").trim();
-  const behalf = String(asRecord(row.on_behalf_of_business_info).id || "").trim();
-  // "Propriedade de" no Manager é owner_business_info. on_behalf só vale se a Graph não mandar dono.
-  if (owner) return owner === wanted;
-  return behalf === wanted;
+  // "Propriedade de" no Manager. on_behalf marca WABA compartilhada (client), não deste BM.
+  return Boolean(owner) && owner === wanted;
 }
 
 const DISCOVER_GRAPH = { maxAttempts: 1, timeoutMs: 8000 } as const;
@@ -297,7 +295,8 @@ export async function discoverTemplateWabas(input: {
   }
 
   const candidateIds = [...byId.keys()];
-  const keepOnErrorIds = candidateIds.filter((id) => ownedIds.has(id) || extraSet.has(id) || !clientIds.has(id));
+  // debug_token lista WABAs de outros BMs. Sem edge client, GET 403 não pode preservar esses IDs.
+  const keepOnErrorIds = candidateIds.filter((id) => ownedIds.has(id) || extraSet.has(id));
   if (bm && candidateIds.length) {
     const owned = await filterWabaIdsOwnedByBusiness({
       token: input.token,
