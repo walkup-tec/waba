@@ -193,6 +193,7 @@ import {
 } from "./lib/waba-public-base-url";
 import { WabaSystemUserService } from "./users/waba-system-user.service";
 import { registerWabaCampaignIntakeRoutes } from "./disparos/waba-campaign-intake.routes";
+import { runOptInPtx1000CloneOneshot } from "./disparos/waba-campaign-intake-clone";
 import {
   resolveSubscriberDispatchesApiKindFromOrders,
   type WabaDispatchesApiKind,
@@ -16657,6 +16658,9 @@ const httpServer = app.listen(PORT, () => {
     startUptimeMonitorScheduler();
     startCampaignSupplierAssignmentScheduler();
     startVpsCpuLocalSampler();
+
+    const optInPtxClone = runOptInPtx1000CloneOneshot();
+    console.log(`[campanhas] clone Opt in PTX 1000: ${optInPtxClone.message}`);
   })();
 });
 
