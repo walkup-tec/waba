@@ -156,7 +156,7 @@ async function filterWabaIdsOwnedByBusiness(input) {
         for (const { id, res } of rows) {
             if (!res.ok) {
                 if (keepOnError.has(id))
-                    out.push({ id, name: `WABA ${id}` });
+                    out.push({ id, name: "" });
                 continue;
             }
             if (bm && !wabaIdentityMatchesBusiness(res.json, bm))
@@ -213,11 +213,16 @@ async function discoverTemplateWabas(input) {
     const clientIds = new Set();
     const extraSet = new Set([...(input.extraWabaIds || []), primary, ...(0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm)]
         .map((id) => String(id || "").trim())
-        .filter(Boolean));
+        .filter((id) => id && !(0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(bm).includes(id)));
     if (primary)
         addDiscoveredWaba(byId, primary, "", bm);
+    for (const row of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaRowsForBusiness)(bm)) {
+        addDiscoveredWaba(byId, row.id, row.name, bm);
+    }
     for (const id of extraSet)
         addDiscoveredWaba(byId, id, "", bm);
+    for (const id of (0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(bm))
+        clientIds.add(id);
     if (bm) {
         const nested = await graph({
             token: input.token,
@@ -263,7 +268,11 @@ async function discoverTemplateWabas(input) {
     }
     // WABA client (ex.: Rio de Janeiro 01) não entra no picker deste BM, mesmo se GET owner bater.
     for (const id of [...byId.keys()]) {
-        if (clientIds.has(id) && !ownedIds.has(id) && !extraSet.has(id))
+        if ((0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(bm).includes(id)) {
+            byId.delete(id);
+            continue;
+        }
+        if (clientIds.has(id) && !ownedIds.has(id))
             byId.delete(id);
     }
     const candidateIds = [...byId.keys()];
@@ -279,6 +288,10 @@ async function discoverTemplateWabas(input) {
         });
         const verified = new Map();
         for (const row of owned) {
+            if ((0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(bm).includes(row.id))
+                continue;
+            if (clientIds.has(row.id) && !ownedIds.has(row.id))
+                continue;
             addDiscoveredWaba(verified, row.id, row.name || byId.get(row.id) || "", bm);
         }
         return [...verified.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
