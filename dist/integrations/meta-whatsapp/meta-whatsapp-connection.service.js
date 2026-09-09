@@ -14,6 +14,7 @@ const meta_whatsapp_tenant_1 = require("./meta-whatsapp-tenant");
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
 const meta_whatsapp_template_waba_ids_1 = require("./meta-whatsapp-template-waba-ids");
+const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
 const meta_whatsapp_portfolio_graph_1 = require("./meta-whatsapp-portfolio-graph");
 const meta_whatsapp_portfolio_identity_store_1 = require("./meta-whatsapp-portfolio-identity.store");
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
@@ -292,6 +293,11 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
         if (wid)
             wabaIds.add(wid);
     }
+    for (const id of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(businessId || storedBm)) {
+        const wid = String(id || "").trim();
+        if (wid)
+            wabaIds.add(wid);
+    }
     const phoneRows = [];
     const pushPhones = (rows) => {
         for (const row of rows)
@@ -310,6 +316,11 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
             clientIds.add(id);
     }
     for (const id of extraWabaIds) {
+        const wid = String(id || "").trim();
+        if (wid)
+            fromThisBm.add(wid);
+    }
+    for (const id of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(businessId || storedBm)) {
         const wid = String(id || "").trim();
         if (wid)
             fromThisBm.add(wid);
@@ -397,7 +408,16 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
             connectionId: open.id,
             wabaCount: wabaIds.size,
         });
-        return { card, directory };
+        const fallbackKnown = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({
+            data: (0, meta_whatsapp_known_owned_wabas_1.knownPendingPhonesForBusiness)(businessId || storedBm).map(meta_whatsapp_known_owned_wabas_1.knownPendingPhoneGraphRow),
+        });
+        return {
+            card: {
+                ...card,
+                numbers: (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(stored, fallbackKnown),
+            },
+            directory,
+        };
     }
     (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-fanout", {
         tenantId,
@@ -412,6 +432,18 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
     if (claimedPhoneId && !merged.some((row) => String(row.phoneNumberId || "").trim() === claimedPhoneId)) {
         const extra = await fetchPhoneNodes(g, token, [claimedPhoneId], primaryWabaId);
         merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: extra }));
+    }
+    const knownPending = (0, meta_whatsapp_known_owned_wabas_1.knownPendingPhonesForBusiness)(businessId || storedBm);
+    const missingKnownIds = knownPending
+        .map((row) => row.phoneNumberId)
+        .filter((id) => id && !merged.some((row) => String(row.phoneNumberId || "").trim() === id));
+    if (missingKnownIds.length) {
+        const extra = await fetchPhoneNodes(g, token, missingKnownIds);
+        merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: extra }));
+    }
+    const stillMissing = knownPending.filter((row) => !merged.some((item) => String(item.phoneNumberId || "").trim() === row.phoneNumberId));
+    if (stillMissing.length) {
+        merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: stillMissing.map(meta_whatsapp_known_owned_wabas_1.knownPendingPhoneGraphRow) }));
     }
     const pending = merged.filter((row) => row.uiStatus !== "ativo");
     const active = merged.filter((row) => row.uiStatus === "ativo");
