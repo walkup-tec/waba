@@ -23,6 +23,8 @@ export type WhatsAppSendTemplateInput = {
   components?: WhatsAppTemplateComponent[];
   connectionId?: string;
   phoneNumberId?: string;
+  /** Disparo Cloud: token do portfólio, não de outro ES do mesmo chip. */
+  preferConnectionToken?: boolean;
 };
 
 export type WhatsAppSendResult = {
