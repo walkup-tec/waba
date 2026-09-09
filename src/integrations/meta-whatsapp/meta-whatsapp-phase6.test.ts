@@ -359,6 +359,7 @@ describe("fase 6 MetaCloudProvider", () => {
     assert.equal(payload.type, "template");
     assert.equal(payload.template.name, "hello_world");
     assert.equal(payload.template.language.code, "pt_BR");
+    assert.equal(payload.template.language.policy, "deterministic");
   });
 
   it("recusa conexão que não está connected", async () => {
@@ -633,6 +634,46 @@ describe("fase 6 messaging service", () => {
     } finally {
       purgePhoneIdentities(tenantId);
     }
+  });
+
+  it("Disparo Cloud usa o token do connectionId mesmo se o chip existir em outro portfólio", async () => {
+    const connections = new FakeConnections();
+    const tokRight = encryptMetaToken("tok-right");
+    const tokWrong = encryptMetaToken("tok-wrong");
+    connections.rows.push(
+      connectedRow({
+        id: "conn-wrong",
+        phoneNumberId: "phone-shared",
+        accessTokenEncrypted: tokWrong,
+      }),
+      connectedRow({
+        id: "conn-right",
+        phoneNumberId: "phone-primary",
+        accessTokenEncrypted: tokRight,
+        wabaId: "waba-right",
+      }),
+    );
+    const calls: Array<{ phoneNumberId: string; token: string }> = [];
+    const provider = new MetaCloudProvider(
+      connections as any,
+      async (input: { phoneNumberId: string; token: string }) => {
+        calls.push({ phoneNumberId: input.phoneNumberId, token: input.token });
+        return graphOk("wamid.RIGHT");
+      },
+      (encrypted: string) => (encrypted === tokRight ? "tok-right" : "tok-wrong"),
+    );
+    const result = await provider.sendTemplate({
+      tenantId: TENANT_A,
+      to: "5551999887766",
+      templateName: "paulo_teix_v2_2",
+      language: "pt_BR",
+      connectionId: "conn-right",
+      phoneNumberId: "phone-shared",
+      preferConnectionToken: true,
+    });
+    assert.equal(result.messageId, "wamid.RIGHT");
+    assert.equal(calls[0]?.phoneNumberId, "phone-shared");
+    assert.equal(calls[0]?.token, "tok-right");
   });
 
   it("resposta do Inbox corrige conexão antiga pelo número receptor", async () => {
