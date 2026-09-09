@@ -348,10 +348,23 @@ class MetaWhatsappTemplateAiService {
     async submitAllFromAuth(auth, input, publicBaseHints) {
         const tenant = requireTenant(auth);
         const connectionIds = (0, meta_whatsapp_template_ai_shell_1.parseTemplateAiConnectionIds)(input);
+        const requestedWabaIds = (0, meta_whatsapp_template_ai_shell_1.parseTemplateAiWabaIds)(input);
         const analysisId = String(input?.analysisId || input?.analysis_id || "").trim();
         if (!connectionIds.length || !analysisId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         const portfolios = await this.resolveSubmitPortfolios(tenant.tenantId, connectionIds);
+        const submitTargets = requestedWabaIds.length
+            ? requestedWabaIds.map((wabaId) => ({
+                connection: portfolios[0],
+                wabaId,
+                portfolioName: String(portfolios[0].verifiedName || portfolios[0].displayPhoneNumber || "").trim() ||
+                    "Portfólio",
+            }))
+            : portfolios.map((connection) => ({
+                connection,
+                wabaId: String(connection.wabaId || ""),
+                portfolioName: String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio",
+            }));
         let analysis = await this.analyses.findForSubmission(tenant.tenantId, portfolios[0].id, analysisId);
         if (!analysis ||
             !analysis.eligibleForUtility ||
@@ -380,11 +393,24 @@ class MetaWhatsappTemplateAiService {
         });
         const results = [];
         const anyPending = [];
-        for (const connection of portfolios) {
-            const alreadySubmitted = await this.analyses.listSubmittedNames(tenant.tenantId, connection.id, analysisId);
+        const localFinder = this.templates;
+        const findLocal = async (wabaId, connectionId, name) => {
+            if (typeof localFinder.findByWabaNameLanguage === "function" && wabaId) {
+                const byWaba = await localFinder.findByWabaNameLanguage(tenant.tenantId, wabaId, name, analysis.language);
+                if (byWaba)
+                    return byWaba;
+            }
+            if (typeof localFinder.findByNameForConnection === "function") {
+                return localFinder.findByNameForConnection(tenant.tenantId, connectionId, name, analysis.language);
+            }
+            return null;
+        };
+        const alreadyOnThisWaba = (local, wabaId) => Boolean(local && (!wabaId || String(local.wabaId || "") === wabaId || !local.wabaId));
+        for (const target of submitTargets) {
             for (let index = 0; index < analysisResult.options.length; index += 1) {
                 const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
-                if (!alreadySubmitted.has(name))
+                const local = await findLocal(target.wabaId, target.connection.id, name);
+                if (!alreadyOnThisWaba(local, target.wabaId))
                     anyPending.push(index);
             }
         }
@@ -408,39 +434,33 @@ class MetaWhatsappTemplateAiService {
         };
         if (anyPending.length)
             await ensureMetaButtonUrl();
-        for (const connection of portfolios) {
-            const portfolioName = String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio";
-            const wabaId = String(connection.wabaId || "");
+        for (const target of submitTargets) {
+            const { connection, wabaId, portfolioName } = target;
             const handle = headerHandles[connection.id] || firstHandle;
-            const alreadySubmitted = await this.analyses.listSubmittedNames(tenant.tenantId, connection.id, analysisId);
             for (let index = 0; index < analysisResult.options.length; index += 1) {
                 const option = analysisResult.options[index];
                 const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
-                if (alreadySubmitted.has(name)) {
-                    const localFinder = this.templates;
-                    const local = typeof localFinder.findByNameForConnection === "function"
-                        ? await localFinder.findByNameForConnection(tenant.tenantId, connection.id, name, analysis.language)
-                        : null;
-                    if (local) {
-                        results.push({
-                            index,
-                            name,
-                            ok: true,
-                            alreadySubmitted: true,
-                            status: local.status || "ALREADY_SUBMITTED",
-                            templateId: local.id,
-                            error: null,
-                            connectionId: connection.id,
-                            portfolioName,
-                            wabaId,
-                        });
-                        continue;
-                    }
+                const local = await findLocal(wabaId, connection.id, name);
+                if (alreadyOnThisWaba(local, wabaId) && local) {
+                    results.push({
+                        index,
+                        name,
+                        ok: true,
+                        alreadySubmitted: true,
+                        status: local.status || "ALREADY_SUBMITTED",
+                        templateId: local.id,
+                        error: null,
+                        connectionId: connection.id,
+                        portfolioName,
+                        wabaId,
+                    });
+                    continue;
                 }
                 try {
                     const buttonUrl = await ensureMetaButtonUrl();
                     const template = await this.templates.createFromAuth(auth, {
                         connectionId: connection.id,
+                        wabaId,
                         aiAnalysisId: analysisId,
                         aiOptionIndex: index,
                         name,
@@ -487,16 +507,19 @@ class MetaWhatsappTemplateAiService {
             const byPortfolio = a.connectionId.localeCompare(b.connectionId);
             if (byPortfolio)
                 return byPortfolio;
+            const byWaba = String(a.wabaId || "").localeCompare(String(b.wabaId || ""));
+            if (byWaba)
+                return byWaba;
             return a.index - b.index;
         });
         const submitted = results.filter((item) => item.ok && !item.alreadySubmitted).length;
         const failed = results.filter((item) => !item.ok).length;
-        const portfolioSummaries = portfolios.map((connection) => {
-            const rows = results.filter((item) => item.connectionId === connection.id);
+        const portfolioSummaries = submitTargets.map((target) => {
+            const rows = results.filter((item) => item.connectionId === target.connection.id && item.wabaId === target.wabaId);
             return {
-                connectionId: connection.id,
-                portfolioName: String(connection.verifiedName || connection.displayPhoneNumber || "").trim() || "Portfólio",
-                wabaId: String(connection.wabaId || ""),
+                connectionId: target.connection.id,
+                portfolioName: target.portfolioName,
+                wabaId: target.wabaId,
                 submitted: rows.filter((item) => item.ok && !item.alreadySubmitted).length,
                 failed: rows.filter((item) => !item.ok).length,
             };
@@ -507,7 +530,7 @@ class MetaWhatsappTemplateAiService {
             batchSubmit: true,
             submitted,
             failed,
-            portfolios: portfolios.length,
+            portfolios: submitTargets.length,
             skippedLive: results.filter((item) => item.alreadySubmitted).length,
         });
         return {
