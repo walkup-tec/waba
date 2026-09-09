@@ -500,15 +500,6 @@ describe("meta portfolio mapper", () => {
     assert.equal(banned?.uiStatus, "restrito");
     assert.equal(banned?.canActivate, false);
 
-    const disconnected = mapMetaPhoneToPortfolioNumber({
-      id: "phone-disc",
-      display_phone_number: "+55 21 92368-3286",
-      status: "DISCONNECTED",
-      code_verification_status: "VERIFIED",
-    });
-    assert.equal(disconnected?.uiStatus, "restrito");
-    assert.equal(disconnected?.canActivate, false);
-
     const blockedHealth = mapMetaPhoneToPortfolioNumber({
       id: "phone-blocked",
       display_phone_number: "+55 11 90000-0000",
@@ -526,12 +517,13 @@ describe("meta portfolio mapper", () => {
     assert.equal(blockedHealth?.healthCanSend, "BLOCKED");
   });
 
-  it("DISCONNECTED sem verificação continua pendente de PIN", () => {
+  it("DISCONNECTED verificado pela Meta continua pendente de PIN", () => {
     const row = mapMetaPhoneToPortfolioNumber({
       id: "phone-new",
-      display_phone_number: "+55 11 90000-1111",
+      display_phone_number: "+55 11 95213-6942",
+      verified_name: "Relacionamento e Atendimento",
       status: "DISCONNECTED",
-      code_verification_status: "UNVERIFIED",
+      code_verification_status: "VERIFIED",
     });
     assert.equal(row?.uiStatus, "pendente");
     assert.equal(row?.canActivate, true);
@@ -2198,6 +2190,170 @@ describe("meta portfolio service", () => {
     const assets = await service.listPortfolioAssets(auth);
     const numbers = (assets.portfolios || []).flatMap((item) => item.numbers || []);
     const pending = numbers.find((item) => String(item.displayPhoneNumber || "").includes("92368-3607"));
+    assert.ok(pending);
+    assert.equal(pending?.uiStatus, "pendente");
+    assert.equal(pending?.canActivate, true);
+  });
+
+  it("número recém-adicionado no BM aparece com PIN mesmo se a lista Graph atrasar", async () => {
+    const andre = {
+      ...connectedRow(),
+      id: "conn-andre",
+      metaBusinessId: "60843286",
+      wabaId: "waba-andre",
+      phoneNumberId: "1311179632078208",
+      displayPhoneNumber: "+55 11 95213-6942",
+      verifiedName: "Relacionamento e Atendimento",
+      status: "connected" as const,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [andre];
+      },
+      async findOpenByTenant() {
+        return andre;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "60843286") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "60843286",
+            name: "Andre Aguiar de Sousa",
+            owned_whatsapp_business_accounts: {
+              data: [
+                {
+                  id: "waba-andre",
+                  name: "Andre Aguiar de Sousa",
+                  phone_numbers: {
+                    data: [
+                      {
+                        id: "phone-old-andre",
+                        display_phone_number: "+55 11 90000-1111",
+                        verified_name: "Andre Aguiar de Sousa",
+                        status: "CONNECTED",
+                        code_verification_status: "VERIFIED",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            client_whatsapp_business_accounts: { data: [] },
+          },
+        };
+      }
+      if (input.path === "waba-andre") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "waba-andre",
+            name: "Andre Aguiar de Sousa",
+            owner_business_info: { id: "60843286", name: "Andre Aguiar de Sousa" },
+          },
+        };
+      }
+      if (input.path === "waba-andre/phone_numbers") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-old-andre",
+                display_phone_number: "+55 11 90000-1111",
+                verified_name: "Andre Aguiar de Sousa",
+                status: "CONNECTED",
+                code_verification_status: "VERIFIED",
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "1311179632078208") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1311179632078208",
+            display_phone_number: "+55 11 95213-6942",
+            verified_name: "Relacionamento e Atendimento",
+            status: "DISCONNECTED",
+            code_verification_status: "VERIFIED",
+            whatsapp_business_account: { id: "waba-andre" },
+          },
+        };
+      }
+      if (input.path === "60843286/owned_whatsapp_business_accounts") {
+        return { ok: true, status: 200, json: { data: [{ id: "waba-andre" }] } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const card = (assets.portfolios || []).find((item) => item.id === "60843286") || assets.portfolios?.[0];
+    const numbers = card?.numbers || [];
+    const pending = numbers.find((item) => String(item.phoneNumberId || "") === "1311179632078208");
+    assert.ok(pending);
+    assert.equal(pending?.uiStatus, "pendente");
+    assert.equal(pending?.canActivate, true);
+    assert.match(String(pending?.displayPhoneNumber || ""), /95213-6942/);
+  });
+
+  it("DISCONNECTED verificado na Graph do portfólio pede PIN, não Restrito", async () => {
+    const andre = {
+      ...connectedRow(),
+      id: "conn-andre-graph",
+      metaBusinessId: "60843286",
+      wabaId: "waba-andre",
+      phoneNumberId: "1311179632078208",
+      displayPhoneNumber: "+55 11 95213-6942",
+      verifiedName: "Relacionamento e Atendimento",
+      status: "connected" as const,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [andre];
+      },
+      async findOpenByTenant() {
+        return andre;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "waba-andre/phone_numbers") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "1311179632078208",
+                display_phone_number: "+55 11 95213-6942",
+                verified_name: "Relacionamento e Atendimento",
+                status: "DISCONNECTED",
+                code_verification_status: "VERIFIED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const numbers = (assets.portfolios || []).flatMap((item) => item.numbers || []);
+    const pending = numbers.find((item) => String(item.phoneNumberId || "") === "1311179632078208");
     assert.ok(pending);
     assert.equal(pending?.uiStatus, "pendente");
     assert.equal(pending?.canActivate, true);

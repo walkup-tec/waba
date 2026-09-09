@@ -144,19 +144,16 @@ function parseMetaHealthCanSend(json) {
 }
 /**
  * status da Graph (CONNECTED/RESTRICTED/BANNED/…) + health_status.
- * Número já verificado e desconectado entra como restrição, não como PIN.
+ * DISCONNECTED mesmo com SMS verificado ainda precisa do PIN de registro Cloud.
+ * Só restrição/banimento da Meta esconde o PIN.
  */
 function resolveMetaPhoneUiStatus(input) {
     const status = String(input.metaStatus || "").trim().toUpperCase();
-    const verified = String(input.codeVerificationStatus || "").trim().toUpperCase();
     const health = String(input.healthCanSend || "").trim().toUpperCase();
     if (META_PHONE_RESTRICTED_STATUSES.has(status))
         return "restrito";
     if (status === "CONNECTED") {
         return health === "BLOCKED" ? "restrito" : "ativo";
-    }
-    if (status === "DISCONNECTED" && (verified === "VERIFIED" || verified === "EXPIRED")) {
-        return "restrito";
     }
     return "pendente";
 }

@@ -134,6 +134,7 @@ function storedNumbersFromConnection(open) {
             photoSyncStatus: null,
             profileSyncStatus: null,
             inboxEnabled: false,
+            wabaId: String(open.wabaId || "").trim() || null,
         },
     ];
 }
@@ -375,7 +376,12 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
         phoneRowCount: phoneRows.length,
     });
     const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: phoneRows });
-    const merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(mapped, stored);
+    let merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(mapped, stored);
+    const claimedPhoneId = String(open.phoneNumberId || "").trim();
+    if (claimedPhoneId && !merged.some((row) => String(row.phoneNumberId || "").trim() === claimedPhoneId)) {
+        const extra = await fetchPhoneNodes(g, token, [claimedPhoneId], primaryWabaId);
+        merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: extra }));
+    }
     const pending = merged.filter((row) => row.uiStatus !== "ativo");
     const active = merged.filter((row) => row.uiStatus === "ativo");
     const withProfiles = active.length
@@ -384,6 +390,9 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     let numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(withProfiles, pending);
     if (fromThisBm.size) {
         numbers = numbers.filter((row) => {
+            const id = String(row.phoneNumberId || "").trim();
+            if (claimedPhoneId && id === claimedPhoneId)
+                return true;
             const wid = String(row.wabaId || "").trim();
             return wid ? wabaIds.has(wid) : false;
         });
@@ -431,21 +440,29 @@ async function listDebugTokenWhatsappTargets(graph, userToken) {
     }
     return { wabaIds: [...wabaIds], phoneIds: [...phoneIds] };
 }
-async function fetchPhoneNodes(graph, token, phoneIds) {
+async function fetchPhoneNodes(graph, token, phoneIds, stampWabaId) {
     const out = [];
+    const fallbackWaba = String(stampWabaId || "").trim();
     for (const id of phoneIds) {
         const res = await graph({
             token,
             method: "GET",
             path: id,
-            query: { fields: meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS },
+            query: { fields: `${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS},whatsapp_business_account` },
         });
         if (!res.ok || !res.json || typeof res.json !== "object")
             continue;
         const display = String(res.json.display_phone_number || "").trim();
         if (!display)
             continue;
-        out.push(res.json);
+        const row = res.json;
+        const account = row.whatsapp_business_account;
+        const accountId = account && typeof account === "object"
+            ? String(account.id || "").trim()
+            : "";
+        out.push(fallbackWaba || accountId
+            ? { ...row, _portfolio_waba_id: accountId || fallbackWaba }
+            : row);
     }
     return out;
 }

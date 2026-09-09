@@ -217,6 +217,7 @@ function storedNumbersFromConnection(open: MetaWhatsappConnectionRecord): MetaPo
       photoSyncStatus: null,
       profileSyncStatus: null,
       inboxEnabled: false,
+      wabaId: String(open.wabaId || "").trim() || null,
     },
   ];
 }
@@ -482,7 +483,12 @@ async function hydrateOpenConnection(
   });
 
   const mapped = mapMetaPhoneListToPortfolioNumbers({ data: phoneRows });
-  const merged = unionPortfolioNumbers(mapped, stored);
+  let merged = unionPortfolioNumbers(mapped, stored);
+  const claimedPhoneId = String(open.phoneNumberId || "").trim();
+  if (claimedPhoneId && !merged.some((row) => String(row.phoneNumberId || "").trim() === claimedPhoneId)) {
+    const extra = await fetchPhoneNodes(g, token, [claimedPhoneId], primaryWabaId);
+    merged = unionPortfolioNumbers(merged, mapMetaPhoneListToPortfolioNumbers({ data: extra }));
+  }
   const pending = merged.filter((row) => row.uiStatus !== "ativo");
   const active = merged.filter((row) => row.uiStatus === "ativo");
   const withProfiles = active.length
@@ -491,6 +497,8 @@ async function hydrateOpenConnection(
   let numbers = unionPortfolioNumbers(withProfiles, pending);
   if (fromThisBm.size) {
     numbers = numbers.filter((row) => {
+      const id = String(row.phoneNumberId || "").trim();
+      if (claimedPhoneId && id === claimedPhoneId) return true;
       const wid = String(row.wabaId || "").trim();
       return wid ? wabaIds.has(wid) : false;
     });
@@ -544,19 +552,31 @@ async function fetchPhoneNodes(
   graph: MetaConnectionGraphCaller,
   token: string,
   phoneIds: string[],
+  stampWabaId?: string,
 ): Promise<unknown[]> {
   const out: unknown[] = [];
+  const fallbackWaba = String(stampWabaId || "").trim();
   for (const id of phoneIds) {
     const res = await graph({
       token,
       method: "GET",
       path: id,
-      query: { fields: META_PHONE_NUMBER_LIST_FIELDS },
+      query: { fields: `${META_PHONE_NUMBER_LIST_FIELDS},whatsapp_business_account` },
     });
     if (!res.ok || !res.json || typeof res.json !== "object") continue;
     const display = String((res.json as { display_phone_number?: unknown }).display_phone_number || "").trim();
     if (!display) continue;
-    out.push(res.json);
+    const row = res.json as Record<string, unknown>;
+    const account = row.whatsapp_business_account;
+    const accountId =
+      account && typeof account === "object"
+        ? String((account as { id?: unknown }).id || "").trim()
+        : "";
+    out.push(
+      fallbackWaba || accountId
+        ? { ...row, _portfolio_waba_id: accountId || fallbackWaba }
+        : row,
+    );
   }
   return out;
 }
