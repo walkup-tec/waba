@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import {
-  isOptInPtxResumeIntake,
+  isOptInPtxResumeCampaign,
   shouldAbortBroadcastOnHeaderMediaFailure,
   shouldVoidCloudBroadcast,
 } from "./meta-whatsapp-broadcast-void";
@@ -309,19 +309,36 @@ export function listResumableOrphanedBroadcasts(): MetaBroadcastCampaign[] {
 }
 
 /**
- * Reabre o Disparo Cloud da Opt in PTX (failed/void com fila) para continuar só os leads queued.
- * Não reenvia sent/failed/skipped.
+ * Reabre o Disparo Cloud da Opt in PTX (paulo_teix_v2_2).
+ * Falhas sem wamid voltam para a fila; sent/skipped e quem já tem wamid não reenviam.
  */
 export function reopenOptInPtxBroadcastToContinue(): MetaBroadcastCampaign | null {
   const store = readStore();
   const rows = store.campaigns
-    .filter((item) => isOptInPtxResumeIntake(item.intakeCampaignId))
+    .filter((item) => isOptInPtxResumeCampaign(item))
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   const row = rows[0];
   if (!row) return null;
+  let queuedReset = 0;
+  for (const lead of row.leads || []) {
+    const status = String(lead.status || "").trim();
+    if (status === "sent" || status === "skipped") continue;
+    if (String(lead.wamid || "").trim()) continue;
+      if (status === "failed" || !status) {
+      lead.status = "queued";
+      delete lead.metaStatus;
+      delete lead.error;
+      delete lead.errorCode;
+      queuedReset += 1;
+    }
+  }
+  row.sent = (row.leads || []).filter((lead) => String(lead.status || "") === "sent").length;
+  row.failed = (row.leads || []).filter((lead) => String(lead.status || "") === "failed").length;
   if (!(row.leads || []).some(broadcastLeadIsPendingSend)) return null;
   const alreadyOpen =
-    (row.status === "running" || row.status === "queued") && !String(row.voidedAt || "").trim();
+    (row.status === "running" || row.status === "queued") &&
+    !String(row.voidedAt || "").trim() &&
+    queuedReset === 0;
   if (!alreadyOpen) {
     const now = new Date().toISOString();
     row.status = "running";
@@ -473,7 +490,7 @@ export function applyMetaStatusToBroadcastByWamid(
   writeStore(store);
   if (
     errorCode === "131053" &&
-    !isOptInPtxResumeIntake(row.intakeCampaignId) &&
+    !isOptInPtxResumeCampaign(row) &&
     shouldAbortBroadcastOnHeaderMediaFailure(row) &&
     !row.voidedAt
   ) {
