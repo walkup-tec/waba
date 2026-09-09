@@ -13,9 +13,15 @@ export type KnownOwnedPendingPhone = {
   wabaId: string;
 };
 
+export type KnownOwnedWabaRow = {
+  id: string;
+  name: string;
+};
+
 export type KnownOwnedBusinessWabas = {
   businessIds: string[];
-  wabaIds: string[];
+  wabas: KnownOwnedWabaRow[];
+  clientWabaIds: string[];
   pendingPhones: KnownOwnedPendingPhone[];
 };
 
@@ -28,11 +34,16 @@ export const ANDRE_AGUIAR_BUSINESS_IDS = [
 export const ANDRE_WABA01_ID = "2458602464640240";
 export const ANDRE_WABA02_ID = "1744257946809067";
 export const ANDRE_WABA02_PENDING_PHONE_ID = "1311179632078208";
+export const RIO_DE_JANEIRO_01_WABA_ID = "1581808413746453";
 
 export const KNOWN_OWNED_BUSINESS_WABAS: KnownOwnedBusinessWabas[] = [
   {
     businessIds: [...ANDRE_AGUIAR_BUSINESS_IDS],
-    wabaIds: [ANDRE_WABA01_ID, ANDRE_WABA02_ID],
+    wabas: [
+      { id: ANDRE_WABA01_ID, name: "André - WABA01" },
+      { id: ANDRE_WABA02_ID, name: "André - WABA02" },
+    ],
+    clientWabaIds: [RIO_DE_JANEIRO_01_WABA_ID],
     pendingPhones: [
       {
         phoneNumberId: ANDRE_WABA02_PENDING_PHONE_ID,
@@ -69,7 +80,21 @@ export function knownOwnedCatalogForBusiness(businessId: string): KnownOwnedBusi
 }
 
 export function knownOwnedWabaIdsForBusiness(businessId: string): string[] {
-  return knownOwnedCatalogForBusiness(businessId)?.wabaIds.slice() || [];
+  return (knownOwnedCatalogForBusiness(businessId)?.wabas || []).map((row) => row.id);
+}
+
+export function knownOwnedWabaRowsForBusiness(businessId: string): KnownOwnedWabaRow[] {
+  return knownOwnedCatalogForBusiness(businessId)?.wabas.slice() || [];
+}
+
+export function knownClientWabaIdsForBusiness(businessId: string): string[] {
+  return knownOwnedCatalogForBusiness(businessId)?.clientWabaIds.slice() || [];
+}
+
+export function isKnownClientWabaForBusiness(businessId: string, wabaId: string): boolean {
+  const id = String(wabaId || "").trim();
+  if (!id) return false;
+  return knownClientWabaIdsForBusiness(businessId).includes(id);
 }
 
 export function knownPendingPhonesForBusiness(businessId: string): KnownOwnedPendingPhone[] {
