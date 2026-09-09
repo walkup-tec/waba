@@ -11,6 +11,7 @@ import {
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
 import { rememberTemplateApprovedAt } from "./meta-whatsapp-template-approved-at.store";
 import { MetaWhatsappTemplateRepository } from "./meta-whatsapp-template.repository";
+import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import {
   createWabaMessageTemplate,
   deleteWabaMessageTemplate,
@@ -189,6 +190,80 @@ export class MetaWhatsappTemplateService {
     return row;
   }
 
+  async findByWabaNameLanguage(
+    tenantId: string,
+    wabaId: string,
+    name: string,
+    language: string,
+  ): Promise<MetaTemplateRecord | null> {
+    const row = await this.templates.findByWabaNameLanguage(tenantId, wabaId, name, language);
+    if (!row || row.tenantId !== tenantId) return null;
+    return row;
+  }
+
+  async listWabasFromAuth(
+    auth: WabaRequestAuth,
+    connectionId?: string,
+  ): Promise<{ connectionId: string; wabas: Array<{ id: string; name: string }> }> {
+    const tenant = requireTenant(auth);
+    const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
+    let token = "";
+    try {
+      token = this.decrypt(connection.accessTokenEncrypted);
+    } catch {
+      throw new MetaWhatsappError("invalid_token");
+    }
+    const graph = this.graph || callMetaGraphJson;
+    const ids = await discoverTemplateWabaIds({
+      token,
+      connection,
+      graph,
+    });
+    const unique = [...new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))];
+    const wabas: Array<{ id: string; name: string }> = [];
+    for (const id of unique) {
+      const result = await graph({
+        token,
+        method: "GET",
+        path: id,
+        query: { fields: "id,name" },
+        maxAttempts: 1,
+        timeoutMs: 6000,
+      });
+      const name = result.ok
+        ? String((result.json as { name?: unknown } | undefined)?.name || "").trim()
+        : "";
+      wabas.push({ id, name: name || `WABA ${id}` });
+    }
+    if (!wabas.length && connection.wabaId) {
+      wabas.push({
+        id: String(connection.wabaId),
+        name: publicPortfolioName(connection),
+      });
+    }
+    return { connectionId: connection.id, wabas };
+  }
+
+  private async resolveCreateWabaId(
+    connection: MetaWhatsappConnectionRecord,
+    token: string,
+    requestedRaw: string,
+  ): Promise<string> {
+    const primary = String(connection.wabaId || "").trim();
+    const requested = String(requestedRaw || "").trim();
+    if (!requested || requested === primary) return primary;
+    const allowed = await discoverTemplateWabaIds({
+      token,
+      connection,
+      graph: this.graph,
+    });
+    if (allowed.includes(requested)) return requested;
+    const error = new MetaWhatsappError("invalid_payload");
+    error.message =
+      "Esta conta WABA não pertence ao portfólio selecionado. Escolha a WABA onde o template deve ser cadastrado.";
+    throw error;
+  }
+
   private async listOpenConnections(tenantId: string): Promise<MetaWhatsappConnectionRecord[]> {
     const repo = this.connections as {
       listOpenByTenant?: (id: string) => Promise<MetaWhatsappConnectionRecord[]>;
@@ -251,9 +326,14 @@ export class MetaWhatsappTemplateService {
       allow_category_change: true,
       components,
     };
+    const wabaId = await this.resolveCreateWabaId(
+      connection,
+      token,
+      String(body?.wabaId || body?.waba_id || ""),
+    );
     const result = await createWabaMessageTemplate({
       token,
-      wabaId: String(connection.wabaId),
+      wabaId,
       body: graphBody,
       graph: this.graph,
     });
@@ -264,7 +344,7 @@ export class MetaWhatsappTemplateService {
     const row = await this.templates.upsertFromGraph({
       tenantId: tenant.tenantId,
       connectionId: connection.id,
-      wabaId: String(connection.wabaId),
+      wabaId,
       metaTemplateId: result.json?.id ? String(result.json.id) : null,
       name: validated.name,
       language: validated.language,
