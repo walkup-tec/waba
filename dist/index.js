@@ -390,6 +390,9 @@ function shouldSkipBodyParserForMultipart(req) {
         return true;
     if (p === "/integrations/meta/whatsapp/broadcast/start")
         return true;
+    if (p === "/integrations/meta/whatsapp/phone-numbers/profile") {
+        return String(req.headers["content-type"] || "").includes("multipart/form-data");
+    }
     if (/^\/device-cloud\/device\/[^/]+\/push-media$/.test(p))
         return true;
     const ct = String(req.headers["content-type"] || "");

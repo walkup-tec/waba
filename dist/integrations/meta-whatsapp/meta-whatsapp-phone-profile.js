@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_WHATSAPP_VERTICALS = void 0;
 exports.parseDisplayName = parseDisplayName;
+exports.parseProfilePhotoFromBytes = parseProfilePhotoFromBytes;
 exports.parseProfilePhoto = parseProfilePhoto;
 exports.parseDescription = parseDescription;
 exports.parseAddress = parseAddress;
@@ -70,6 +71,19 @@ function normalizePhotoMime(mime) {
         return "image/png";
     return raw;
 }
+function parseProfilePhotoFromBytes(bytesInput, photoMime) {
+    if (!Buffer.isBuffer(bytesInput) || !bytesInput.length || bytesInput.length > MAX_PHOTO_BYTES) {
+        return null;
+    }
+    const sniffed = sniffProfilePhotoMime(bytesInput);
+    const declared = normalizePhotoMime(String(photoMime || ""));
+    const mime = sniffed || (ALLOWED_MIME.has(declared) ? declared : "");
+    if (!mime || !ALLOWED_MIME.has(mime))
+        return null;
+    const normalizedMime = mime === "image/jpg" ? "image/jpeg" : mime;
+    const fileName = normalizedMime.includes("png") ? "profile.png" : "profile.jpg";
+    return { mime: normalizedMime, bytes: bytesInput, fileName };
+}
 function parseProfilePhoto(input) {
     const raw = String(input.photoBase64 || "").trim();
     if (!raw)
@@ -84,16 +98,7 @@ function parseProfilePhoto(input) {
     catch {
         return null;
     }
-    if (!bytes.length || bytes.length > MAX_PHOTO_BYTES)
-        return null;
-    const sniffed = sniffProfilePhotoMime(bytes);
-    const declared = normalizePhotoMime(String(input.photoMime || mimeFromUrl || ""));
-    const mime = sniffed || (ALLOWED_MIME.has(declared) ? declared : "");
-    if (!mime || !ALLOWED_MIME.has(mime))
-        return null;
-    const normalizedMime = mime === "image/jpg" ? "image/jpeg" : mime;
-    const fileName = normalizedMime.includes("png") ? "profile.png" : "profile.jpg";
-    return { mime: normalizedMime, bytes, fileName };
+    return parseProfilePhotoFromBytes(bytes, input.photoMime || mimeFromUrl);
 }
 function parseDescription(value) {
     if (value === undefined || value === null)

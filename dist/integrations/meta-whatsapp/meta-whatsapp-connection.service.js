@@ -1096,7 +1096,10 @@ class MetaWhatsappConnectionService {
         const tenant = requireTenant(auth);
         const phoneNumberId = String(input.phoneNumberId || "").trim();
         const displayName = (0, meta_whatsapp_phone_profile_1.parseDisplayName)(input.displayName);
-        const photo = (0, meta_whatsapp_phone_profile_1.parseProfilePhoto)({ photoBase64: input.photoBase64, photoMime: input.photoMime });
+        const sentPhoto = Boolean((input.photoBytes && input.photoBytes.length) || String(input.photoBase64 || "").trim());
+        const photo = input.photoBytes?.length
+            ? (0, meta_whatsapp_phone_profile_1.parseProfilePhotoFromBytes)(input.photoBytes, input.photoMime)
+            : (0, meta_whatsapp_phone_profile_1.parseProfilePhoto)({ photoBase64: input.photoBase64, photoMime: input.photoMime });
         const vertical = (0, meta_whatsapp_phone_profile_1.parseVertical)(input.vertical);
         const description = (0, meta_whatsapp_phone_profile_1.parseDescription)(input.description);
         const address = (0, meta_whatsapp_phone_profile_1.parseAddress)(input.address);
@@ -1106,6 +1109,9 @@ class MetaWhatsappConnectionService {
         }
         // "" do front = campo omitido/sem mudança; não dispara POST de perfil sozinho.
         const hasBiz = Boolean(vertical || description || address || email);
+        if (sentPhoto && !photo) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("profile_photo_update_failed");
+        }
         if (!phoneNumberId || (!displayName && !photo && !hasBiz)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         }

@@ -25,7 +25,7 @@ import { encryptMetaToken, decryptMetaToken } from "./meta-token-crypto";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
-import { parseDisplayName, parseProfilePhoto, parseVertical, parseDescription, parseEmail, mapWhatsappBusinessProfile, fetchHttpsProfileImage } from "./meta-whatsapp-phone-profile";
+import { parseDisplayName, parseProfilePhoto, parseProfilePhotoFromBytes, parseVertical, parseDescription, parseEmail, mapWhatsappBusinessProfile, fetchHttpsProfileImage } from "./meta-whatsapp-phone-profile";
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity, writePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 import { applyLocalPhoneIdentities, listPhoneInboxChannels, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
@@ -614,6 +614,9 @@ describe("meta portfolio mapper", () => {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
     assert.equal(parseProfilePhoto({ photoBase64: png, photoMime: "image/png" })?.mime, "image/png");
     assert.equal(parseProfilePhoto({ photoBase64: png, photoMime: "application/octet-stream" })?.mime, "image/png");
+    const pngBytes = Buffer.from(png, "base64");
+    assert.equal(parseProfilePhotoFromBytes(pngBytes, "application/octet-stream")?.mime, "image/png");
+    assert.equal(parseProfilePhotoFromBytes(Buffer.from("gif"), "image/gif"), null);
     assert.equal(parseVertical("OTHER"), "OTHER");
     assert.equal(parseVertical("nope"), null);
     assert.equal(parseDescription("a".repeat(513)), null);
@@ -1139,6 +1142,43 @@ describe("meta portfolio service", () => {
     assert.equal(profilePost?.body?.messaging_product, "whatsapp");
     assert.equal(profilePost?.body?.profile_picture_handle, "HANDLE_PIC");
     assert.equal(updated.photoUpdated, true);
+    const fromBytes = await service.updatePhoneProfileFromAuth(auth, {
+      phoneNumberId: "phone-1",
+      photoBytes: Buffer.from(png, "base64"),
+      photoMime: "image/png",
+    });
+    assert.equal(fromBytes.photoUpdated, true);
+  });
+
+  it("recusa foto inválida com erro de foto, não payload genérico", async () => {
+    const graph = async () => ({ ok: true, status: 200, json: { data: [] } });
+    const row = {
+      ...connectedRow(),
+      status: "connected" as const,
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async findOpenByTenant() {
+          return row;
+        },
+        async listOpenByTenant() {
+          return [row];
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    await assert.rejects(
+      () =>
+        service.updatePhoneProfileFromAuth(auth, {
+          phoneNumberId: "phone-1",
+          photoBase64: "not-an-image",
+          photoMime: "image/gif",
+        }),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "profile_photo_update_failed",
+    );
   });
 
   it("aplica a foto mesmo se a Meta recusar o novo nome de exibição", async () => {

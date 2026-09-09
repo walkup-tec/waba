@@ -78,6 +78,7 @@ import {
   fetchHttpsProfileImage,
   parseDisplayName,
   parseProfilePhoto,
+  parseProfilePhotoFromBytes,
   parseVertical,
   parseDescription,
   parseAddress,
@@ -1301,6 +1302,7 @@ export class MetaWhatsappConnectionService {
       displayName?: string;
       photoBase64?: string;
       photoMime?: string;
+      photoBytes?: Buffer;
       vertical?: string;
       description?: string;
       address?: string;
@@ -1320,7 +1322,12 @@ export class MetaWhatsappConnectionService {
     const tenant = requireTenant(auth);
     const phoneNumberId = String(input.phoneNumberId || "").trim();
     const displayName = parseDisplayName(input.displayName);
-    const photo = parseProfilePhoto({ photoBase64: input.photoBase64, photoMime: input.photoMime });
+    const sentPhoto = Boolean(
+      (input.photoBytes && input.photoBytes.length) || String(input.photoBase64 || "").trim(),
+    );
+    const photo = input.photoBytes?.length
+      ? parseProfilePhotoFromBytes(input.photoBytes, input.photoMime)
+      : parseProfilePhoto({ photoBase64: input.photoBase64, photoMime: input.photoMime });
     const vertical = parseVertical(input.vertical);
     const description = parseDescription(input.description);
     const address = parseAddress(input.address);
@@ -1330,6 +1337,9 @@ export class MetaWhatsappConnectionService {
     }
     // "" do front = campo omitido/sem mudança; não dispara POST de perfil sozinho.
     const hasBiz = Boolean(vertical || description || address || email);
+    if (sentPhoto && !photo) {
+      throw new MetaWhatsappError("profile_photo_update_failed");
+    }
     if (!phoneNumberId || (!displayName && !photo && !hasBiz)) {
       throw new MetaWhatsappError("invalid_payload");
     }

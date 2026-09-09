@@ -70,6 +70,22 @@ function normalizePhotoMime(mime: string): string {
   return raw;
 }
 
+export function parseProfilePhotoFromBytes(
+  bytesInput: unknown,
+  photoMime?: unknown,
+): { mime: string; bytes: Buffer; fileName: string } | null {
+  if (!Buffer.isBuffer(bytesInput) || !bytesInput.length || bytesInput.length > MAX_PHOTO_BYTES) {
+    return null;
+  }
+  const sniffed = sniffProfilePhotoMime(bytesInput);
+  const declared = normalizePhotoMime(String(photoMime || ""));
+  const mime = sniffed || (ALLOWED_MIME.has(declared) ? declared : "");
+  if (!mime || !ALLOWED_MIME.has(mime)) return null;
+  const normalizedMime = mime === "image/jpg" ? "image/jpeg" : mime;
+  const fileName = normalizedMime.includes("png") ? "profile.png" : "profile.jpg";
+  return { mime: normalizedMime, bytes: bytesInput, fileName };
+}
+
 export function parseProfilePhoto(input: {
   photoBase64?: unknown;
   photoMime?: unknown;
@@ -85,14 +101,7 @@ export function parseProfilePhoto(input: {
   } catch {
     return null;
   }
-  if (!bytes.length || bytes.length > MAX_PHOTO_BYTES) return null;
-  const sniffed = sniffProfilePhotoMime(bytes);
-  const declared = normalizePhotoMime(String(input.photoMime || mimeFromUrl || ""));
-  const mime = sniffed || (ALLOWED_MIME.has(declared) ? declared : "");
-  if (!mime || !ALLOWED_MIME.has(mime)) return null;
-  const normalizedMime = mime === "image/jpg" ? "image/jpeg" : mime;
-  const fileName = normalizedMime.includes("png") ? "profile.png" : "profile.jpg";
-  return { mime: normalizedMime, bytes, fileName };
+  return parseProfilePhotoFromBytes(bytes, input.photoMime || mimeFromUrl);
 }
 
 export function parseDescription(value: unknown): string | undefined | null {

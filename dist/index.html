@@ -3776,6 +3776,30 @@
           padding: 6px 12px;
           font-size: 12px;
         }
+        label.meta-number-edit {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0;
+          box-sizing: border-box;
+        }
+        #meta-tp-edit-photo.meta-tp-photo-input {
+          position: fixed;
+          left: 0;
+          top: 0;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: 0;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          white-space: nowrap;
+          border: 0;
+          opacity: 0;
+        }
+        #meta-tp-photo-status {
+          margin: 0 0 10px;
+        }
         .meta-edit-modal {
           position: fixed;
           inset: 0;
@@ -22307,6 +22331,7 @@
                       Atualizar
                     </button>
                   </div>
+                  <p id="meta-tp-photo-status" class="muted" role="status" aria-live="polite" hidden></p>
                   <div id="meta-tp-portfolio-list" class="meta-portfolio-shell"></div>
                   <div class="meta-portfolio-toolbar">
                     <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" id="meta-tp-reset-lab" data-meta-reset-portfolio="1">Excluir e recomeçar</button>
@@ -22314,7 +22339,7 @@
                   <div id="meta-tp-numbers" class="meta-number-list" hidden></div>
                   <p id="meta-tp-numbers-empty" class="muted" hidden>Nenhum número neste portfólio ainda.</p>
                 </article>
-                <input id="meta-tp-edit-photo" type="file" accept="image/png,image/jpeg" hidden />
+                <input id="meta-tp-edit-photo" class="meta-tp-photo-input" type="file" accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp" />
                 <p id="meta-tp-connect-status" class="muted" style="margin:0 0 10px;" role="status" aria-live="polite" hidden></p>
                 <div class="meta-onboard-next">
                   <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaOpenLabTab('whatsapp-templates');">Ir para Templates</button>
@@ -37422,7 +37447,7 @@
           if (!el) return false;
           if (
             el.closest(
-              "[data-meta-inbox-filter], [data-meta-inbox-channel], [data-meta-inbox-open], [data-waba-tab], .waba-tab, .menu-item, .drawer-nav, #admin-campanhas-tbody",
+              "[data-meta-inbox-filter], [data-meta-inbox-channel], [data-meta-inbox-open], [data-waba-tab], .waba-tab, .menu-item, .drawer-nav, #admin-campanhas-tbody, [data-meta-edit]",
             )
           ) {
             return false;
@@ -37524,11 +37549,13 @@
       }
 
       function metaTpSetStatus(text) {
-        const el = document.getElementById("meta-tp-connect-status");
-        if (!el) return;
         const value = String(text || "").trim();
-        el.textContent = value;
-        el.hidden = !value;
+        ["meta-tp-connect-status", "meta-tp-photo-status"].forEach(function (id) {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.textContent = value;
+          el.hidden = !value;
+        });
       }
 
       function metaTpLog(step) {
@@ -37572,15 +37599,97 @@
         metaTpEditState.phoneNumberId = id;
         metaTpEditState.connectionId = String(connectionId || "").trim();
         const file = document.getElementById("meta-tp-edit-photo");
-        if (file) {
-          file.value = "";
-          file.click();
+        if (!file) {
+          metaTpSetStatus("Não foi possível abrir o seletor de imagem.");
+          return;
         }
+        file.value = "";
+        try {
+          if (typeof file.showPicker === "function") {
+            file.showPicker();
+            return;
+          }
+        } catch (_err) {}
+        file.click();
       }
 
-      async function metaTpUploadNumberPhoto(photoBase64, photoMime) {
+      function metaTpPreviewNumberPhoto(phoneNumberId, previewUrl) {
+        const id = String(phoneNumberId || "").trim();
+        const src = String(previewUrl || "").trim();
+        if (!id || !src) return;
+        const logos = document.querySelectorAll('.meta-number-logo[data-meta-edit="' + id + '"]');
+        Array.prototype.forEach.call(logos, function (logo) {
+          logo.innerHTML = '<img class="meta-number-photo" alt="" src="' + metaTpEsc(src) + '" />';
+        });
+      }
+
+      function metaTpNormalizeProfilePhoto(file) {
+        return new Promise(function (resolve, reject) {
+          const url = URL.createObjectURL(file);
+          const img = new Image();
+          img.onload = function () {
+            URL.revokeObjectURL(url);
+            const w = img.naturalWidth || img.width;
+            const h = img.naturalHeight || img.height;
+            if (!w || !h) {
+              reject(new Error("Não foi possível ler a imagem selecionada."));
+              return;
+            }
+            const out = Math.max(192, Math.min(640, Math.max(w, h)));
+            const canvas = document.createElement("canvas");
+            canvas.width = out;
+            canvas.height = out;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              reject(new Error("Não foi possível preparar a imagem."));
+              return;
+            }
+            const scale = Math.max(out / w, out / h);
+            const dw = w * scale;
+            const dh = h * scale;
+            ctx.fillStyle = "#111111";
+            ctx.fillRect(0, 0, out, out);
+            ctx.drawImage(img, (out - dw) / 2, (out - dh) / 2, dw, dh);
+            canvas.toBlob(
+              function (blob) {
+                if (!blob) {
+                  reject(new Error("Não foi possível preparar a imagem."));
+                  return;
+                }
+                resolve({
+                  blob: blob,
+                  mime: "image/jpeg",
+                  previewUrl: canvas.toDataURL("image/jpeg", 0.9),
+                });
+              },
+              "image/jpeg",
+              0.9,
+            );
+          };
+          img.onerror = function () {
+            URL.revokeObjectURL(url);
+            reject(new Error("Use uma foto JPEG ou PNG de até 5 MB."));
+          };
+          img.src = url;
+        });
+      }
+
+      async function metaTpFetchForm(path, form) {
+        const response = await fetch(resolveWabaPublicPath(path), {
+          credentials: "same-origin",
+          method: "POST",
+          body: form,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (metaTpHasSecret(payload)) {
+          throw new Error("Resposta bloqueada por segurança.");
+        }
+        return { response: response, payload: payload };
+      }
+
+      async function metaTpUploadNumberPhoto(photoBlob, photoMime) {
         const phoneNumberId = metaTpEditState.phoneNumberId;
-        if (!phoneNumberId || !photoBase64) return false;
+        if (!phoneNumberId || !photoBlob) return false;
         const current = (metaTpSession.numbers || []).find(function (item) {
           return String(item.phoneNumberId) === phoneNumberId;
         });
@@ -37589,29 +37698,62 @@
           return false;
         }
         metaTpSetStatus("Enviando imagem para a Meta…");
-        const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/phone-numbers/profile", {
-          method: "POST",
-          body: JSON.stringify({
-            phoneNumberId: phoneNumberId,
-            connectionId: metaTpEditState.connectionId,
-            photoBase64: photoBase64,
-            photoMime: photoMime,
-          }),
-        });
-        const file = document.getElementById("meta-tp-edit-photo");
-        if (file) file.value = "";
-        if (!response.ok || payload.ok === false) {
-          metaTpSetStatus(String(payload.error || "Não foi possível enviar a imagem para a Meta."));
+        const form = new FormData();
+        form.append("phoneNumberId", phoneNumberId);
+        form.append("connectionId", metaTpEditState.connectionId || "");
+        form.append("photoMime", photoMime || "image/jpeg");
+        form.append("photo", photoBlob, photoMime && String(photoMime).indexOf("png") >= 0 ? "profile.png" : "profile.jpg");
+        try {
+          const { response, payload } = await metaTpFetchForm(
+            "/integrations/meta/whatsapp/phone-numbers/profile",
+            form,
+          );
+          const file = document.getElementById("meta-tp-edit-photo");
+          if (file) file.value = "";
+          if (!response.ok || payload.ok === false) {
+            metaTpSetStatus(String(payload.error || "Não foi possível enviar a imagem para a Meta."));
+            return false;
+          }
+          metaTpSetStatus(
+            payload.photoUpdated
+              ? "Imagem enviada à Meta. O cliente passa a vê-la no perfil do WhatsApp."
+              : "Imagem enviada à Meta.",
+          );
+          metaTpRenderPortfolio(payload);
+          if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
+          return true;
+        } catch (err) {
+          metaTpSetStatus(String((err && err.message) || "Não foi possível enviar a imagem para a Meta."));
           return false;
         }
-        metaTpSetStatus(
-          payload.photoUpdated
-            ? "Imagem enviada à Meta. O cliente passa a vê-la no perfil do WhatsApp."
-            : "Imagem enviada à Meta.",
-        );
-        metaTpRenderPortfolio(payload);
-        if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
-        return true;
+      }
+
+      function metaTpOnPhotoFileChosen(file) {
+        if (!file) return;
+        const named = String(file.name || "").toLowerCase();
+        const typed = String(file.type || "").toLowerCase();
+        const looksImage =
+          /^image\/(jpeg|jpg|png|webp)$/i.test(typed) ||
+          /\.(png|jpe?g|webp)$/i.test(named) ||
+          typed === "" ||
+          typed === "application/octet-stream";
+        if (!looksImage) {
+          metaTpSetStatus("Use uma foto JPEG ou PNG de até 5 MB.");
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          metaTpSetStatus("A foto deve ter no máximo 5 MB.");
+          return;
+        }
+        const phoneNumberId = metaTpEditState.phoneNumberId;
+        void metaTpNormalizeProfilePhoto(file)
+          .then(function (prepared) {
+            metaTpPreviewNumberPhoto(phoneNumberId, prepared.previewUrl);
+            return metaTpUploadNumberPhoto(prepared.blob, prepared.mime);
+          })
+          .catch(function (err) {
+            metaTpSetStatus(String((err && err.message) || "Não foi possível ler a imagem selecionada."));
+          });
       }
 
       async function metaTpResetOfficialLab() {
@@ -37891,9 +38033,9 @@
                 "</button></div>"
               : "";
             const editBtn = ativo
-              ? '<button type="button" class="instance-action-btn btn-refresh enabled meta-number-edit"' +
+              ? '<label class="instance-action-btn btn-refresh enabled meta-number-edit"' +
                 editAttrs +
-                ">Imagem</button>"
+                ' for="meta-tp-edit-photo">Imagem</label>'
               : "";
             if (!ativo) {
               const region = metaTpPhoneRegion(item.displayPhoneNumber);
@@ -38567,15 +38709,21 @@
         }
         const editBtn = target.closest("[data-meta-edit]");
         if (editBtn && portfolioRoot && portfolioRoot.contains(editBtn)) {
-          event.preventDefault();
           const phoneNumberId = String(editBtn.getAttribute("data-meta-edit") || "").trim();
           const row = (metaTpSession.numbers || []).find(function (item) {
             return String(item.phoneNumberId) === phoneNumberId;
           });
           if (!row || String(row.uiStatus || "") !== "ativo") {
+            event.preventDefault();
             metaTpSetStatus("Ative o número com o PIN de 6 dígitos antes de alterar a imagem.");
             return;
           }
+          metaTpEditState.phoneNumberId = phoneNumberId;
+          metaTpEditState.connectionId = String(editBtn.getAttribute("data-meta-edit-connection") || "").trim();
+          if (String(editBtn.tagName || "").toUpperCase() === "LABEL") {
+            return;
+          }
+          event.preventDefault();
           metaTpPickNumberPhoto(phoneNumberId, editBtn.getAttribute("data-meta-edit-connection"));
           return;
         }
@@ -38609,36 +38757,16 @@
         }
       });
 
-      window.addEventListener("change", function (event) {
-        const input = event.target;
-        if (!input || input.id !== "meta-tp-edit-photo" || !input.files || !input.files[0]) return;
-        const file = input.files[0];
-        const named = String(file.name || "").toLowerCase();
-        const typed = String(file.type || "").toLowerCase();
-        const looksImage =
-          /^image\/(jpeg|jpg|png)$/i.test(typed) ||
-          /\.(png|jpe?g)$/i.test(named) ||
-          typed === "" ||
-          typed === "application/octet-stream";
-        if (!looksImage) {
-          metaTpSetStatus("Use uma foto JPEG ou PNG de até 5 MB.");
-          return;
-        }
-        if (file.size > 5 * 1024 * 1024) {
-          metaTpSetStatus("A foto deve ter no máximo 5 MB.");
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = function () {
-          const dataUrl = String(reader.result || "");
-          const photoMime = typed || (named.endsWith(".png") ? "image/png" : "image/jpeg");
-          void metaTpUploadNumberPhoto(dataUrl, photoMime);
-        };
-        reader.onerror = function () {
-          metaTpSetStatus("Não foi possível ler a imagem selecionada.");
-        };
-        reader.readAsDataURL(file);
-      });
+      function metaTpBindPhotoInput() {
+        const input = document.getElementById("meta-tp-edit-photo");
+        if (!input || input.dataset.metaTpPhotoBound === "1") return;
+        input.dataset.metaTpPhotoBound = "1";
+        input.addEventListener("change", function () {
+          const file = input.files && input.files[0] ? input.files[0] : null;
+          metaTpOnPhotoFileChosen(file);
+        });
+      }
+      metaTpBindPhotoInput();
 
       window.addEventListener("keydown", function (event) {
         if (event.key !== "Enter" && event.key !== " ") return;

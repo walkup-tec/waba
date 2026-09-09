@@ -4,18 +4,24 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 const html = readFileSync(path.join(__dirname, "../../../index.html"), "utf8");
+const indexSrc = readFileSync(path.join(__dirname, "../../index.ts"), "utf8");
 
 describe("Laboratório Conexão: só altera a imagem do número", () => {
   it("o botão Imagem abre o seletor de arquivo e envia a foto, sem modal de perfil", () => {
-    assert.match(html, /">Imagem<\/button>"/);
+    assert.match(html, /for="meta-tp-edit-photo">Imagem<\/label>/);
     assert.match(html, /function metaTpPickNumberPhoto/);
     assert.match(html, /function metaTpUploadNumberPhoto/);
+    assert.match(html, /function metaTpNormalizeProfilePhoto/);
+    assert.match(html, /new FormData\(\)/);
     assert.match(html, /id="meta-tp-edit-photo"/);
+    assert.match(html, /class="meta-tp-photo-input"/);
+    assert.doesNotMatch(html, /id="meta-tp-edit-photo"[^>]*\shidden/);
     assert.match(html, /phone-numbers\/profile/);
     assert.doesNotMatch(html, />Editar perfil</);
     assert.doesNotMatch(html, /id="meta-tp-edit-modal"/);
     assert.doesNotMatch(html, /id="meta-tp-edit-name"/);
     assert.doesNotMatch(html, /wabaSaveMetaWhatsappNumberProfile/);
+    assert.match(indexSrc, /phone-numbers\/profile[\s\S]{0,180}multipart\/form-data/);
   });
 });
 
