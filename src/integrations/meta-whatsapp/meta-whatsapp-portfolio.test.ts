@@ -2444,7 +2444,12 @@ describe("meta portfolio service", () => {
       }
       if (input.path === "2458602464640240/phone_numbers") {
         const fields = String(input.query?.fields || "");
-        if (fields.includes("health_status") || fields.includes("messaging_limit_tier")) {
+        if (
+          fields.includes("health_status") ||
+          fields.includes("messaging_limit_tier") ||
+          fields.includes("name_status") ||
+          fields.includes("new_name_status")
+        ) {
           return { ok: true, status: 200, json: { data: connected } };
         }
         return { ok: true, status: 200, json: { data: [...connected, pendingRow] } };

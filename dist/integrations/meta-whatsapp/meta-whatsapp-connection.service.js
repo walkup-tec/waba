@@ -463,7 +463,7 @@ async function fetchPhoneNodes(graph, token, phoneIds, stampWabaId) {
             token,
             method: "GET",
             path: id,
-            query: { fields: `${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS},whatsapp_business_account` },
+            query: { fields: `${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS},whatsapp_business_account` },
         });
         if (!res.ok || !res.json || typeof res.json !== "object")
             continue;
@@ -513,8 +513,8 @@ async function collectNestedPhonesFromBusiness(graph, token, businessId) {
     const fields = [
         "id",
         "name",
-        `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
-        `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
+        `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}}`,
+        `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}}`,
     ].join(",");
     const res = await graph({
         token,
@@ -530,8 +530,8 @@ async function collectNestedPhonesFromMeBusinesses(graph, token, onlyBusinessId)
     const fields = [
         "id",
         "name",
-        `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
-        `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS}}}`,
+        `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}}`,
+        `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}}`,
     ].join(",");
     const res = await graph({
         token,
@@ -606,9 +606,10 @@ async function listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, fields)
     let after = "";
     for (let page = 0; page < 20; page += 1) {
         const query = {
-            fields,
             limit: "100",
         };
+        if (fields)
+            query.fields = fields;
         if (after)
             query.after = after;
         const phones = await graph({
@@ -660,17 +661,20 @@ function mergePhoneNumberRows(...lists) {
     }
     return [...byId.values()];
 }
-/** Lista todos os chips do WABA. Une listagem mínima (Pendente) com a que pede health/tier. */
+/** Lista todos os chips do WABA. Une catálogo (Pendente) com health/tier/nome dos Ativos. */
 async function listWabaPhoneNumbersPaged(graph, token, wabaId) {
-    const [membership, withLimit] = await Promise.all([
-        listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_MEMBERSHIP_FIELDS),
+    const [defaults, catalog, withLimit] = await Promise.all([
+        listWabaPhoneNumbersPagedWithFields(graph, token, wabaId),
+        listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS),
         listWabaPhoneNumbersPagedWithFields(graph, token, wabaId, meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT),
     ]);
-    const merged = mergePhoneNumberRows(membership.ok ? membership.json.data : [], withLimit.ok ? withLimit.json.data : []);
+    const merged = mergePhoneNumberRows(defaults.ok ? defaults.json.data : [], catalog.ok ? catalog.json.data : [], withLimit.ok ? withLimit.json.data : []);
     if (merged.length)
         return { ok: true, json: { data: merged } };
-    if (membership.ok)
-        return membership;
+    if (catalog.ok)
+        return catalog;
+    if (defaults.ok)
+        return defaults;
     return withLimit;
 }
 async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {

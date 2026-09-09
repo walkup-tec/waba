@@ -8,7 +8,14 @@ import type {
 export const META_PHONE_NUMBER_LIST_FIELDS =
   "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,name_status,new_display_name,new_name_status,health_status";
 
-/** Sem health_status/tier: a Graph omite chip Pendente nesses campos. */
+/**
+ * Catálogo do WABA sem campos que a Graph usa para filtrar chip Pendente:
+ * health_status, messaging_limit_tier, name_status (beta / certificado).
+ */
+export const META_PHONE_NUMBER_CATALOG_FIELDS =
+  "id,display_phone_number,verified_name,status,code_verification_status";
+
+/** Nome do chip (Ativo). Não usar na listagem do WABA — omite Pendente. */
 export const META_PHONE_NUMBER_MEMBERSHIP_FIELDS =
   "id,display_phone_number,verified_name,status,code_verification_status,name_status,new_display_name,new_name_status";
 
