@@ -725,6 +725,17 @@ class MetaWhatsappBroadcastService {
         }
     }
     async resumeOrphanedCloudBroadcastsOnBoot() {
+        const reopened = (0, meta_whatsapp_broadcast_store_1.reopenOptInPtxBroadcastToContinue)();
+        if (reopened) {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-reopen-opt-in-ptx", {
+                campaignId: reopened.id,
+                status: reopened.status,
+                sent: reopened.sent,
+                failed: reopened.failed,
+                pending: (reopened.leads || []).filter((lead) => !lead.status || lead.status === "queued").length,
+                total: reopened.total,
+            });
+        }
         let closed = 0;
         for (const stale of (0, meta_whatsapp_broadcast_store_1.listStaleRunningBroadcastsWithoutPending)()) {
             const done = (0, meta_whatsapp_broadcast_store_1.finalizeStaleRunningBroadcast)(stale.id);
