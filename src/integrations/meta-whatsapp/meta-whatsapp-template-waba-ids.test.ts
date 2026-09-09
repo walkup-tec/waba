@@ -3,6 +3,7 @@ import { after, before, describe, it } from "node:test";
 import type { MetaGraphJsonResult } from "./meta-whatsapp-graph.client";
 import {
   discoverTemplateWabaIds,
+  discoverTemplateWabas,
   isProbablyMessageTemplateRow,
   wabaIdentityMatchesBusiness,
   wabaIdsFromBusinessEdgeJson,
@@ -94,6 +95,17 @@ describe("template waba ids", () => {
       ),
       true,
     );
+    assert.equal(
+      wabaIdentityMatchesBusiness(
+        {
+          id: "1581808413746453",
+          owner_business_info: { id: "bm-rio" },
+          on_behalf_of_business_info: { id: "1759044748332124" },
+        },
+        "1759044748332124",
+      ),
+      false,
+    );
   });
 
   describe("discoverTemplateWabaIds", () => {
@@ -181,6 +193,20 @@ describe("template waba ids", () => {
               },
             });
           }
+          const owners: Record<string, { name: string; bm: string }> = {
+            "1603712454491063": { name: "Conta WABA 01", bm: "bm-drax-2000" },
+            "2283911612192961": { name: "Conta WABA 02", bm: "bm-drax-2000" },
+            "waba-jailton": { name: "52.685.982 Jailton Lucas Ferreira dos Reis", bm: "bm-drax-2000" },
+            "4653699361527400": { name: "Drax Sistemas 01", bm: "bm-drax-01" },
+          };
+          const row = owners[input.path];
+          if (row) {
+            return graphOk({
+              id: input.path,
+              name: row.name,
+              owner_business_info: { id: row.bm },
+            });
+          }
           return graphOk({ data: [] });
         },
       });
@@ -249,6 +275,75 @@ describe("template waba ids", () => {
       assert.equal(ids.includes("4653699361527400"), false);
       assert.equal(ids.includes("1566864861033771"), false);
       assert.equal(ids.includes("1085817753933768"), false);
+    });
+
+    it("Andre Aguiar: só WABA01 e WABA02; descarta Rio de Janeiro 01 de outro BM", async () => {
+      const rows = await discoverTemplateWabas({
+        token: "tok",
+        connection: {
+          wabaId: "2458602464640240",
+          metaBusinessId: "1759044748332124",
+        },
+        graph: async (input) => {
+          if (input.path === "1759044748332124") {
+            return graphOk({
+              id: "1759044748332124",
+              owned_whatsapp_business_accounts: {
+                data: [{ id: "2458602464640240", name: "André - WABA01" }],
+              },
+              client_whatsapp_business_accounts: {
+                data: [{ id: "1581808413746453", name: "Rio de Janeiro 01" }],
+              },
+            });
+          }
+          if (input.path === "debug_token") {
+            return graphOk({
+              data: {
+                granular_scopes: [
+                  {
+                    scope: "whatsapp_business_management",
+                    target_ids: [
+                      "2458602464640240",
+                      "1744257946809067",
+                      "1581808413746453",
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+          const owners: Record<string, { name: string; bm: string }> = {
+            "2458602464640240": { name: "André - WABA01", bm: "1759044748332124" },
+            "1744257946809067": { name: "André - WABA02", bm: "1759044748332124" },
+            "1581808413746453": { name: "Rio de Janeiro 01", bm: "bm-rio-de-janeiro" },
+          };
+          const row = owners[input.path];
+          if (row) {
+            return graphOk({
+              id: input.path,
+              name: row.name,
+              owner_business_info: { id: row.bm },
+              on_behalf_of_business_info:
+                input.path === "1581808413746453" ? { id: "1759044748332124" } : undefined,
+            });
+          }
+          return graphOk({ data: [] });
+        },
+      });
+      const ids = rows.map((row) => row.id).sort();
+      assert.deepEqual(ids, ["1744257946809067", "2458602464640240"]);
+      assert.equal(
+        rows.find((row) => row.id === "1744257946809067")?.name,
+        "André - WABA02",
+      );
+      assert.equal(
+        rows.find((row) => row.id === "2458602464640240")?.name,
+        "André - WABA01",
+      );
+      assert.equal(
+        rows.some((row) => row.id === "1581808413746453"),
+        false,
+      );
     });
   });
 });

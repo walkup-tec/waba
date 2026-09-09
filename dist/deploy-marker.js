@@ -2,4 +2,4 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WABA_DEPLOY_MARKER = void 0;
-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-09-210200-lab-pending-phone-catalog-fields";
+exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-09-211000-template-waba-owner-filter";

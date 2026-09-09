@@ -90,7 +90,10 @@ function wabaIdentityMatchesBusiness(json, businessId) {
     const row = asRecord(json);
     const owner = String(asRecord(row.owner_business_info).id || "").trim();
     const behalf = String(asRecord(row.on_behalf_of_business_info).id || "").trim();
-    return owner === wanted || behalf === wanted;
+    // "Propriedade de" no Manager é owner_business_info. on_behalf só vale se a Graph não mandar dono.
+    if (owner)
+        return owner === wanted;
+    return behalf === wanted;
 }
 const DISCOVER_GRAPH = { maxAttempts: 1, timeoutMs: 8000 };
 async function filterWabaIdsOwnedByBusiness(input) {
@@ -132,11 +135,42 @@ function addDiscoveredWaba(byId, id, name, bm) {
     const prev = byId.get(wid) || "";
     byId.set(wid, next || prev);
 }
+async function listBusinessWabaEdgeRows(graph, token, businessId, edge) {
+    const out = [];
+    const seenCursors = new Set();
+    let after = "";
+    for (let page = 0; page < 20; page += 1) {
+        const query = { fields: "id,name", limit: "100" };
+        if (after)
+            query.after = after;
+        const res = await graph({
+            token,
+            method: "GET",
+            path: `${businessId}/${edge}`,
+            query,
+            ...DISCOVER_GRAPH,
+        });
+        if (!res.ok)
+            break;
+        const batch = wabasFromBusinessEdgeJson(res.json);
+        for (const row of batch)
+            out.push(row);
+        const paging = asRecord(asRecord(res.json).paging);
+        const nextAfter = String(asRecord(paging.cursors).after || "").trim();
+        if (!nextAfter || nextAfter === after || seenCursors.has(nextAfter) || !batch.length)
+            break;
+        seenCursors.add(nextAfter);
+        after = nextAfter;
+    }
+    return out;
+}
 async function discoverTemplateWabas(input) {
     const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
     const primary = String(input.connection.wabaId || "").trim();
     const bm = String(input.connection.metaBusinessId || "").trim();
     const byId = new Map();
+    if (primary)
+        addDiscoveredWaba(byId, primary, "", bm);
     if (bm) {
         const nested = await graph({
             token: input.token,
@@ -153,28 +187,13 @@ async function discoverTemplateWabas(input) {
             }
         }
         for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"]) {
-            const res = await graph({
-                token: input.token,
-                method: "GET",
-                path: `${bm}/${edge}`,
-                query: { fields: "id,name", limit: "100" },
-                ...DISCOVER_GRAPH,
-            });
-            if (!res.ok)
-                continue;
-            for (const row of wabasFromBusinessEdgeJson(res.json)) {
+            for (const row of await listBusinessWabaEdgeRows(graph, input.token, bm, edge)) {
                 addDiscoveredWaba(byId, row.id, row.name, bm);
             }
         }
     }
-    if (byId.size) {
-        return [...byId.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
-    }
-    if (primary)
-        addDiscoveredWaba(byId, primary, "", bm);
     const appId = (0, meta_config_1.readMetaAppId)();
     const appSecret = (0, meta_config_1.readMetaAppSecret)();
-    const debugIds = [];
     if (appId && appSecret && input.token) {
         const debug = await graph({
             token: `${appId}|${appSecret}`,
@@ -183,22 +202,25 @@ async function discoverTemplateWabas(input) {
             query: { input_token: input.token },
             ...DISCOVER_GRAPH,
         });
-        if (debug.ok)
-            debugIds.push(...wabaIdsFromDebugTokenJson(debug.json));
+        if (debug.ok) {
+            for (const id of wabaIdsFromDebugTokenJson(debug.json)) {
+                addDiscoveredWaba(byId, id, "", bm);
+            }
+        }
     }
-    if (bm) {
+    const candidateIds = [...byId.keys()];
+    if (bm && candidateIds.length) {
         const owned = await filterWabaIdsOwnedByBusiness({
             token: input.token,
             businessId: bm,
-            ids: debugIds,
+            ids: candidateIds,
             graph,
         });
-        for (const row of owned)
-            addDiscoveredWaba(byId, row.id, row.name, bm);
-    }
-    else {
-        for (const id of debugIds)
-            addDiscoveredWaba(byId, id, "", bm);
+        const verified = new Map();
+        for (const row of owned) {
+            addDiscoveredWaba(verified, row.id, row.name || byId.get(row.id) || "", bm);
+        }
+        return [...verified.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
     }
     return [...byId.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
 }
