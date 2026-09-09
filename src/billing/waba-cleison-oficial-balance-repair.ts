@@ -5,9 +5,14 @@ import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import type { DisparosApiCreditsBucket } from "./waba-disparos-api-credits";
 import { resolveOrderApiKind } from "../disparos/waba-dispatches-api-kind";
 import { resolveDataFile } from "../data-path";
+import {
+  isOrderCreditsActive,
+  resolvePurchasedShipmentCount,
+} from "./waba-disparos-order-shipments";
 
 export const CLEISON_OFICIAL_TARGET_EMAIL = "cleison.fel@gmail.com";
 export const CLEISON_OFICIAL_FORCED_REMAINING = 5829;
+export const CLEISON_OFICIAL_PACK_SIZE = 5000;
 export const CLEISON_OFICIAL_FORCE_REF = "waba:force-balance:cleison-oficial-5829";
 export const CLEISON_VOID_1016_ADMIN_GRANTS_MARKER = "waba-cleison-void-1016-admin-grants.json";
 const DUPLICATE_1016_ADMIN_GRANT = 1016;
@@ -122,6 +127,7 @@ export class WabaCleisonOficialBalanceRepair {
     const now = new Date().toISOString();
     const expiredUntil = new Date(Date.now() - 60_000).toISOString();
     const orders = this.orderRepository.list();
+    const supersededIds = this.collectSupersededOriginalPackIds(orders);
     let changed = false;
 
     for (const order of orders) {
@@ -144,6 +150,11 @@ export class WabaCleisonOficialBalanceRepair {
 
       if (order.status !== "paid") continue;
 
+      if (supersededIds.has(order.id)) {
+        if (this.expireSupersededPack(order, now, expiredUntil)) changed = true;
+        continue;
+      }
+
       const untilPast = creditsUntilIsPast(order);
       const grantKilled =
         order.grantSource === "admin-bonus-envios" && order.grantActive === false && untilPast;
@@ -159,5 +170,61 @@ export class WabaCleisonOficialBalanceRepair {
     }
 
     if (changed) this.orderRepository.replaceAll(orders);
+  }
+
+  /**
+   * Pacote original (5.000) já representado pelo restante (1.849): não reativa.
+   * Mantém só o PIX mais recente quando ele é posterior ao restante.
+   */
+  private collectSupersededOriginalPackIds(orders: WabaBillingOrder[]): Set<string> {
+    const purchases = orders.filter((order) => {
+      if (order.product !== "waba-disparos") return false;
+      if (resolveOrderApiKind(order) !== "oficial") return false;
+      if (normalizeEmail(order.ownerEmail) !== CLEISON_OFICIAL_TARGET_EMAIL) return false;
+      if (order.status !== "paid") return false;
+      if (order.grantSource === "admin-bonus-envios") return false;
+      if (isForceBalanceOrder(order) || order.grantCreatedByEmail === "system-balance-repair") {
+        return false;
+      }
+      return String(order.paidAt ?? "").trim().length > 0;
+    });
+
+    const remainders = purchases.filter((order) => {
+      const purchased = resolvePurchasedShipmentCount(order);
+      return purchased > 0 && purchased < CLEISON_OFICIAL_PACK_SIZE;
+    });
+    if (!remainders.length) return new Set();
+
+    const paidMs = (order: WabaBillingOrder): number => {
+      const ms = Date.parse(String(order.paidAt ?? order.createdAt ?? ""));
+      return Number.isFinite(ms) ? ms : 0;
+    };
+
+    const packs = purchases
+      .filter((order) => resolvePurchasedShipmentCount(order) >= CLEISON_OFICIAL_PACK_SIZE)
+      .sort((a, b) => paidMs(b) - paidMs(a));
+    const latestPack = packs[0];
+    const latestIsNewPurchase = Boolean(
+      latestPack && remainders.every((remainder) => paidMs(remainder) < paidMs(latestPack)),
+    );
+    const keepId = latestIsNewPurchase && latestPack ? latestPack.id : "";
+
+    return new Set(packs.filter((order) => order.id !== keepId).map((order) => order.id));
+  }
+
+  private expireSupersededPack(
+    order: WabaBillingOrder,
+    now: string,
+    expiredUntil: string,
+  ): boolean {
+    if (!isOrderCreditsActive(order) && order.grantActive === false && creditsUntilIsPast(order)) {
+      return false;
+    }
+    order.grantActive = false;
+    order.creditsValidUntil = expiredUntil;
+    order.validityMode = "custom";
+    order.bonusShipmentsApplied = 0;
+    order.updatedAt = now;
+    return true;
   }
 }

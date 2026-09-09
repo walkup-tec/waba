@@ -34,7 +34,7 @@ class WabaDisparosBonusSettlementService {
             .sort((a, b) => new Date(a.paidAt || a.updatedAt).getTime() -
             new Date(b.paidAt || b.updatedAt).getTime());
     }
-    listEligiblePurchases(email, apiKind) {
+    listActivePaidPurchases(email, apiKind) {
         return this.listPaidDisparosOrdersForEmail(email).filter((order) => {
             if ((0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order) !== apiKind)
                 return false;
@@ -44,6 +44,14 @@ class WabaDisparosBonusSettlementService {
                 return false;
             return Number.isFinite(parseTime(String(order.paidAt ?? order.createdAt ?? "")));
         });
+    }
+    listEligiblePurchases(email, apiKind) {
+        const active = this.listActivePaidPurchases(email, apiKind);
+        return active.filter((order) => !(0, waba_disparos_order_shipments_1.isPriorRemainderBalanceOrder)(order, active));
+    }
+    listRemainderBalanceOrders(email, apiKind) {
+        const active = this.listActivePaidPurchases(email, apiKind);
+        return active.filter((order) => (0, waba_disparos_order_shipments_1.isPriorRemainderBalanceOrder)(order, active));
     }
     /**
      * Cada grant vai para a primeira compra paga (ativa, não-admin) cujo paidAt
@@ -78,10 +86,14 @@ class WabaDisparosBonusSettlementService {
         if (order.grantSource === "admin-bonus-envios")
             return order;
         const apiKind = (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order);
+        const grants = this.bonusService.listGrantsForApi(order.ownerEmail, apiKind);
         const assigned = this.assignGrantsToPurchases(order.ownerEmail, apiKind).get(order.id) ?? 0;
         const purchasedShipments = (0, waba_disparos_order_shipments_1.resolvePurchasedShipmentCount)(order);
         const alreadyApplied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
-        const nextApplied = Math.max(alreadyApplied, assigned);
+        // Fonte da verdade: grants atribuídos a esta compra. Permite baixar se o
+        // bônus posterior (ex.: PTX) entrou no disponível por engano. Sem grants
+        // no store, não zera liquidação já gravada.
+        const nextApplied = grants.length === 0 ? alreadyApplied : assigned;
         const nextCount = purchasedShipments + nextApplied;
         const hasPurchased = Math.round(Number(order.purchasedShipmentCount ?? 0)) > 0;
         if (nextApplied === alreadyApplied &&
@@ -97,11 +109,28 @@ class WabaDisparosBonusSettlementService {
             bonusSettlementAt: now,
         }) ?? order);
     }
+    clearBonusFromRemainderOrders(email, apiKind) {
+        const now = new Date().toISOString();
+        for (const order of this.listRemainderBalanceOrders(email, apiKind)) {
+            const applied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
+            const purchased = (0, waba_disparos_order_shipments_1.resolvePurchasedShipmentCount)(order);
+            if (applied <= 0 && Math.max(0, Math.round(Number(order.shipmentCount ?? 0))) === purchased) {
+                continue;
+            }
+            this.orderRepository.update(order.id, {
+                purchasedShipmentCount: purchased,
+                shipmentCount: purchased,
+                bonusShipmentsApplied: 0,
+                bonusSettlementAt: now,
+            });
+        }
+    }
     settleAllUnsettledPaidOrdersForEmail(email) {
         const normalized = normalizeEmail(email);
         if (!normalized)
             return;
         for (const kind of ["oficial", "alternativa"]) {
+            this.clearBonusFromRemainderOrders(normalized, kind);
             const assigned = this.assignGrantsToPurchases(normalized, kind);
             const purchases = this.listEligiblePurchases(normalized, kind);
             for (const order of purchases) {

@@ -37,3 +37,20 @@ export const resolvePurchasedShipmentCount = (order: WabaBillingOrder): number =
   const applied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
   return Math.max(0, total - applied);
 };
+
+/**
+ * Restante de um pacote antigo: compra menor ao lado de outra compra paga maior
+ * do mesmo plano. Não é PIX novo — bônus de campanha não liquida nesse pedido.
+ */
+export const isPriorRemainderBalanceOrder = (
+  order: WabaBillingOrder,
+  purchases: WabaBillingOrder[],
+): boolean => {
+  const purchased = resolvePurchasedShipmentCount(order);
+  if (purchased <= 0) return false;
+  return purchases.some((other) => {
+    if (other.id === order.id) return false;
+    if (other.grantSource === "admin-bonus-envios") return false;
+    return resolvePurchasedShipmentCount(other) > purchased;
+  });
+};

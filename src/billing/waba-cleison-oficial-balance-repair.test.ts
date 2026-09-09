@@ -427,4 +427,122 @@ describe("Créditos Oficial Cleison após compra Asaas e grant master", () => {
       1,
     );
   });
+
+  it("não soma o pacote original de 5000 em cima do restante 1849 (14525 → 8512)", async () => {
+    resetStore();
+    delete process.env.WABA_ENABLE_CLEISON_BALANCE_REPAIR;
+    delete process.env.WABA_SKIP_CLEISON_BALANCE_REPAIR;
+
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
+    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+    const { CLEISON_OFICIAL_FORCE_REF } = await import("./waba-cleison-oficial-balance-repair");
+
+    const bonus = new WabaDisparosBonusRepository();
+    bonus.grantFromCampaign(EMAIL, "camp-jandira", 834, "oficial", "2026-09-02T12:00:00.000Z");
+    bonus.grantFromCampaign(EMAIL, "camp-jandira-2", 829, "oficial", "2026-09-03T18:51:00.000Z");
+    bonus.grantFromCampaign(EMAIL, "camp-ptx", 1016, "oficial", "2026-09-08T22:00:00.000Z");
+
+    const orders = new WabaBillingOrderRepository();
+    orders.create(
+      baseOrder({
+        id: "aaaaaaaa-1111-4111-8111-ffffffffffff",
+        valueCents: 0,
+        shipmentCount: 5829,
+        purchasedShipmentCount: 5829,
+        status: "paid",
+        paidAt: "2026-09-07T13:30:15.000Z",
+        asaasExternalReference: CLEISON_OFICIAL_FORCE_REF,
+        grantSource: "admin-bonus-envios",
+        grantCreatedByEmail: "system-balance-repair",
+        grantActive: true,
+        creditsValidUntil: null,
+        validityMode: "lifetime",
+        bonusShipmentsApplied: 1016,
+      }),
+    );
+    orders.create(
+      baseOrder({
+        id: "11111111-1111-4111-8111-111111111111",
+        shipmentCount: 1849,
+        purchasedShipmentCount: 1849,
+        valueCents: 55500,
+        status: "paid",
+        paidAt: "2026-08-01T15:00:00.000Z",
+        createdAt: "2026-08-01T15:00:00.000Z",
+        grantActive: true,
+        creditsValidUntil: PAST,
+        validityMode: "custom",
+        bonusShipmentsApplied: 1016,
+      }),
+    );
+    orders.create(
+      baseOrder({
+        id: "00000000-0000-4000-8000-000000005000",
+        shipmentCount: 5000,
+        purchasedShipmentCount: 5000,
+        valueCents: 160000,
+        status: "paid",
+        paidAt: "2026-08-01T15:00:00.000Z",
+        createdAt: "2026-07-15T12:00:00.000Z",
+        grantActive: true,
+        creditsValidUntil: PAST,
+        validityMode: "custom",
+        bonusShipmentsApplied: 0,
+      }),
+    );
+    orders.create(
+      baseOrder({
+        id: "7c1e5000-0ff1-4c1a-9c1e-000000005000",
+        shipmentCount: 5000 + 834 + 829 + 1016,
+        purchasedShipmentCount: 5000,
+        valueCents: 160000,
+        status: "paid",
+        paidAt: "2026-09-05T19:26:22.000Z",
+        createdAt: "2026-09-05T19:20:00.000Z",
+        asaasPaymentId: "pay_cleison_5000",
+        asaasPaymentStatus: "CONFIRMED",
+        grantActive: true,
+        creditsValidUntil: PAST,
+        validityMode: "custom",
+        bonusShipmentsApplied: 834 + 829 + 1016,
+      }),
+    );
+
+    const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
+    assert.equal(summary.byApi.oficial.remainingShipments, 1849 + 5000 + 834 + 829);
+    assert.equal(summary.byApi.oficial.pendingBonusShipments, 1016);
+
+    assert.equal(orders.getById("00000000-0000-4000-8000-000000005000")?.grantActive, false);
+    assert.equal(orders.getById("aaaaaaaa-1111-4111-8111-ffffffffffff")?.grantActive, false);
+    assert.equal(orders.getById("11111111-1111-4111-8111-111111111111")?.bonusShipmentsApplied, 0);
+    const pix = orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000");
+    assert.equal(pix?.grantActive, true);
+    assert.equal(pix?.creditsValidUntil, null);
+    assert.equal(pix?.bonusShipmentsApplied, 834 + 829);
+    assert.equal(pix?.shipmentCount, 5000 + 834 + 829);
+
+    const express = (await import("express")).default;
+    const { registerWabaBillingRoutes } = await import("./waba-billing.routes");
+    const { createWabaSessionToken } = await import("../auth/waba-auth.service");
+    const app = express();
+    registerWabaBillingRoutes(app);
+    const server: Server = await new Promise<Server>((resolve) => {
+      const started = app.listen(0, "127.0.0.1", () => resolve(started));
+    });
+    try {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const token = createWabaSessionToken(EMAIL, "subscriber");
+      const response = await fetch(`http://127.0.0.1:${port}/billing/disparos/credits`, {
+        headers: { cookie: `waba_session=${token}` },
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(Number(body.byApi.oficial.remainingShipments), 8512);
+      assert.equal(Number(body.byApi.oficial.pendingBonusShipments), 1016);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
 });

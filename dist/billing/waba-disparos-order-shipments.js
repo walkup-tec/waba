@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resolvePurchasedShipmentCount = exports.resolveActiveOrderShipmentCount = exports.isOrderCreditsActive = exports.resolveOrderShipmentCount = void 0;
+exports.isPriorRemainderBalanceOrder = exports.resolvePurchasedShipmentCount = exports.resolveActiveOrderShipmentCount = exports.isOrderCreditsActive = exports.resolveOrderShipmentCount = void 0;
 const resolveOrderShipmentCount = (order) => {
     const explicit = Math.round(Number(order.shipmentCount ?? 0));
     if (Number.isFinite(explicit) && explicit > 0)
@@ -41,3 +41,20 @@ const resolvePurchasedShipmentCount = (order) => {
     return Math.max(0, total - applied);
 };
 exports.resolvePurchasedShipmentCount = resolvePurchasedShipmentCount;
+/**
+ * Restante de um pacote antigo: compra menor ao lado de outra compra paga maior
+ * do mesmo plano. Não é PIX novo — bônus de campanha não liquida nesse pedido.
+ */
+const isPriorRemainderBalanceOrder = (order, purchases) => {
+    const purchased = (0, exports.resolvePurchasedShipmentCount)(order);
+    if (purchased <= 0)
+        return false;
+    return purchases.some((other) => {
+        if (other.id === order.id)
+            return false;
+        if (other.grantSource === "admin-bonus-envios")
+            return false;
+        return (0, exports.resolvePurchasedShipmentCount)(other) > purchased;
+    });
+};
+exports.isPriorRemainderBalanceOrder = isPriorRemainderBalanceOrder;

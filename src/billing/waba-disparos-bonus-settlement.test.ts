@@ -241,4 +241,45 @@ describe("Bonificação de campanha entra na compra paga posterior", () => {
     assert.equal(summary.byApi.oficial.consumedShipments, 0);
     assert.equal(summary.byApi.oficial.remainingShipments, 1849);
   });
+
+  it("restante 1849 não absorve bônus posterior à compra mesmo com paidAt recente", async () => {
+    resetStore();
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaDisparosBonusRepository } = await import("./waba-disparos-bonus.repository");
+    const { WabaDisparosCreditsService } = await import("./waba-disparos-credits.service");
+
+    const bonus = new WabaDisparosBonusRepository();
+    bonus.grantFromCampaign(EMAIL, "camp-jandira", 834, "oficial", "2026-09-02T12:00:00.000Z");
+    bonus.grantFromCampaign(EMAIL, "camp-jandira-2", 829, "oficial", "2026-09-03T18:51:00.000Z");
+    bonus.grantFromCampaign(EMAIL, "camp-ptx", 1016, "oficial", "2026-09-08T22:00:00.000Z");
+
+    const orders = new WabaBillingOrderRepository();
+    orders.create(
+      baseOrder({
+        id: "11111111-1111-4111-8111-111111111111",
+        shipmentCount: 1849 + 1016,
+        purchasedShipmentCount: 1849,
+        valueCents: 55500,
+        paidAt: "2026-09-09T22:00:00.000Z",
+        createdAt: "2026-08-01T15:00:00.000Z",
+        bonusShipmentsApplied: 1016,
+      }),
+    );
+    orders.create(
+      baseOrder({
+        id: "7c1e5000-0ff1-4c1a-9c1e-000000005000",
+        shipmentCount: 5000 + 834 + 829 + 1016,
+        purchasedShipmentCount: 5000,
+        paidAt: "2026-09-05T19:26:22.000Z",
+        createdAt: "2026-09-05T19:20:00.000Z",
+        bonusShipmentsApplied: 834 + 829 + 1016,
+      }),
+    );
+
+    const summary = new WabaDisparosCreditsService(orders).getCreditsSummary(EMAIL);
+    assert.equal(summary.byApi.oficial.pendingBonusShipments, 1016);
+    assert.equal(summary.byApi.oficial.remainingShipments, 1849 + 5000 + 834 + 829);
+    assert.equal(orders.getById("11111111-1111-4111-8111-111111111111")?.bonusShipmentsApplied, 0);
+    assert.equal(orders.getById("7c1e5000-0ff1-4c1a-9c1e-000000005000")?.bonusShipmentsApplied, 1663);
+  });
 });

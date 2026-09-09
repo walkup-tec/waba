@@ -3,6 +3,7 @@ import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
 import {
   isOrderCreditsActive,
+  isPriorRemainderBalanceOrder,
   resolvePurchasedShipmentCount,
 } from "./waba-disparos-order-shipments";
 import { resolveOrderApiKind, type WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
@@ -46,7 +47,7 @@ export class WabaDisparosBonusSettlementService {
       );
   }
 
-  private listEligiblePurchases(
+  private listActivePaidPurchases(
     email: string,
     apiKind: WabaDispatchesApiKind,
   ): WabaBillingOrder[] {
@@ -56,6 +57,22 @@ export class WabaDisparosBonusSettlementService {
       if (!isOrderCreditsActive(order)) return false;
       return Number.isFinite(parseTime(String(order.paidAt ?? order.createdAt ?? "")));
     });
+  }
+
+  private listEligiblePurchases(
+    email: string,
+    apiKind: WabaDispatchesApiKind,
+  ): WabaBillingOrder[] {
+    const active = this.listActivePaidPurchases(email, apiKind);
+    return active.filter((order) => !isPriorRemainderBalanceOrder(order, active));
+  }
+
+  private listRemainderBalanceOrders(
+    email: string,
+    apiKind: WabaDispatchesApiKind,
+  ): WabaBillingOrder[] {
+    const active = this.listActivePaidPurchases(email, apiKind);
+    return active.filter((order) => isPriorRemainderBalanceOrder(order, active));
   }
 
   /**
@@ -92,10 +109,14 @@ export class WabaDisparosBonusSettlementService {
     if (order.grantSource === "admin-bonus-envios") return order;
 
     const apiKind = resolveOrderApiKind(order);
+    const grants = this.bonusService.listGrantsForApi(order.ownerEmail, apiKind);
     const assigned = this.assignGrantsToPurchases(order.ownerEmail, apiKind).get(order.id) ?? 0;
     const purchasedShipments = resolvePurchasedShipmentCount(order);
     const alreadyApplied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
-    const nextApplied = Math.max(alreadyApplied, assigned);
+    // Fonte da verdade: grants atribuídos a esta compra. Permite baixar se o
+    // bônus posterior (ex.: PTX) entrou no disponível por engano. Sem grants
+    // no store, não zera liquidação já gravada.
+    const nextApplied = grants.length === 0 ? alreadyApplied : assigned;
     const nextCount = purchasedShipments + nextApplied;
     const hasPurchased = Math.round(Number(order.purchasedShipmentCount ?? 0)) > 0;
 
@@ -118,11 +139,29 @@ export class WabaDisparosBonusSettlementService {
     );
   }
 
+  private clearBonusFromRemainderOrders(email: string, apiKind: WabaDispatchesApiKind): void {
+    const now = new Date().toISOString();
+    for (const order of this.listRemainderBalanceOrders(email, apiKind)) {
+      const applied = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
+      const purchased = resolvePurchasedShipmentCount(order);
+      if (applied <= 0 && Math.max(0, Math.round(Number(order.shipmentCount ?? 0))) === purchased) {
+        continue;
+      }
+      this.orderRepository.update(order.id, {
+        purchasedShipmentCount: purchased,
+        shipmentCount: purchased,
+        bonusShipmentsApplied: 0,
+        bonusSettlementAt: now,
+      });
+    }
+  }
+
   settleAllUnsettledPaidOrdersForEmail(email: string): void {
     const normalized = normalizeEmail(email);
     if (!normalized) return;
 
     for (const kind of ["oficial", "alternativa"] as const) {
+      this.clearBonusFromRemainderOrders(normalized, kind);
       const assigned = this.assignGrantsToPurchases(normalized, kind);
       const purchases = this.listEligiblePurchases(normalized, kind);
       for (const order of purchases) {
