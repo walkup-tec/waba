@@ -22472,7 +22472,7 @@
                       <th style="text-align:left; padding:8px;">Idioma</th>
                       <th style="text-align:left; padding:8px;">Categoria</th>
                       <th style="text-align:left; padding:8px;">Status</th>
-                      <th style="text-align:left; padding:8px;">Qualidade</th>
+                      <th style="text-align:left; padding:8px;">WABA</th>
                       <th style="text-align:left; padding:8px;">Última sincronização</th>
                       <th style="text-align:left; padding:8px;">Ações</th>
                     </tr>
@@ -38736,6 +38736,8 @@
       }
 
       let metaTplLabCache = [];
+      const metaTplLabWabaNameById = {};
+      let metaTplLabHydrateWabasInFlight = false;
       let metaTplLabSelected = null;
       let metaTplLabAiResult = null;
       let metaTplLabAiAnalysisId = "";
@@ -38868,6 +38870,7 @@
             const id = String((row && row.id) || "").trim();
             if (!id) return null;
             const name = String((row && row.name) || "").trim();
+            metaTplLabRememberWabaName(id, name);
             return { id: id, label: name && name !== id ? name + " · " + id : name || "WABA " + id };
           })
           .filter(Boolean);
@@ -39917,6 +39920,8 @@
             category: "UTILITY",
             status: "APPROVED",
             qualityScore: "GREEN",
+            wabaId: "demo-waba",
+            wabaName: "Drax Oficial",
             lastSyncedAt: "2026-09-02T15:40:00.000Z",
             mapping: { nome: true, numero: false },
           },
@@ -39929,6 +39934,8 @@
             category: "UTILITY",
             status: "APPROVED",
             qualityScore: "GREEN",
+            wabaId: "demo-waba",
+            wabaName: "Drax Oficial",
             lastSyncedAt: "2026-09-02T15:40:00.000Z",
             mapping: { nome: true, numero: false },
           },
@@ -39941,6 +39948,8 @@
             category: "UTILITY",
             status: "APPROVED",
             qualityScore: "YELLOW",
+            wabaId: "demo-waba",
+            wabaName: "Drax Oficial",
             lastSyncedAt: "2026-09-02T14:10:00.000Z",
             mapping: { nome: false, numero: false },
           },
@@ -39953,6 +39962,8 @@
             category: "MARKETING",
             status: "APPROVED",
             qualityScore: "GREEN",
+            wabaId: "demo-waba",
+            wabaName: "Drax Oficial",
             lastSyncedAt: "2026-09-02T16:40:00.000Z",
             mapping: { nome: true, numero: false },
           },
@@ -40486,6 +40497,64 @@
         return date.toLocaleString("pt-BR");
       }
 
+      function metaTplLabRememberWabaName(id, name) {
+        const wabaId = String(id || "").trim();
+        const raw = String(name || "").trim();
+        if (!wabaId || !raw || raw === wabaId || raw === "WABA " + wabaId) return false;
+        if (metaTplLabWabaNameById[wabaId] === raw) return false;
+        metaTplLabWabaNameById[wabaId] = raw;
+        return true;
+      }
+
+      function metaTplLabWabaLabel(item) {
+        const wabaId = String((item && item.wabaId) || "").trim();
+        if (!wabaId) return "—";
+        const named = String((item && item.wabaName) || metaTplLabWabaNameById[wabaId] || "").trim();
+        if (named && named !== wabaId && named !== "WABA " + wabaId) return named;
+        return wabaId;
+      }
+
+      async function metaTplLabHydrateWabaNames() {
+        if (metaTplLabHydrateWabasInFlight) return;
+        if (typeof isMetaTemplateAiUiPreview === "function" && isMetaTemplateAiUiPreview()) return;
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) return;
+        const rows = Array.isArray(metaTplLabCache) ? metaTplLabCache : [];
+        const needsName = rows.some(function (item) {
+          const id = String((item && item.wabaId) || "").trim();
+          if (!id) return false;
+          const named = String((item && item.wabaName) || metaTplLabWabaNameById[id] || "").trim();
+          return !named || named === id || named === "WABA " + id;
+        });
+        if (!needsName) return;
+        const connectionIds = [];
+        const seen = {};
+        rows.forEach(function (item) {
+          const id = String((item && item.connectionId) || "").trim();
+          if (!id || seen[id]) return;
+          seen[id] = true;
+          connectionIds.push(id);
+        });
+        if (!connectionIds.length) return;
+        metaTplLabHydrateWabasInFlight = true;
+        try {
+          let changed = false;
+          for (let i = 0; i < connectionIds.length; i += 1) {
+            try {
+              const payload = await metaTplLabFetchJson(
+                "/integrations/meta/whatsapp/templates/wabas?connectionId=" + encodeURIComponent(connectionIds[i]),
+              );
+              const mapped = metaTplMapGraphWabaItems(payload);
+              if (mapped.length) changed = true;
+            } catch (_error) {
+              /* mantém o wabaId na tabela se a Meta não devolver o nome */
+            }
+          }
+          if (changed) metaTplLabRenderTable();
+        } finally {
+          metaTplLabHydrateWabasInFlight = false;
+        }
+      }
+
       function metaTplLabPortfolioLabel(item) {
         const connectionId = String((item && item.connectionId) || "").trim();
         const fromSelect = metaTplLabPortfolioOptions().find((option) => option.connectionId === connectionId);
@@ -40511,15 +40580,6 @@
         if (key === "UTILITY") return "Utilidade";
         if (key === "MARKETING") return "Marketing";
         if (key === "AUTHENTICATION") return "Autenticação";
-        return key || "—";
-      }
-
-      function metaTplLabQualityLabel(value) {
-        const key = String(value || "").trim().toUpperCase();
-        if (key === "GREEN") return "Verde";
-        if (key === "YELLOW") return "Amarela";
-        if (key === "RED") return "Vermelha";
-        if (key === "UNKNOWN") return "—";
         return key || "—";
       }
 
@@ -40550,6 +40610,9 @@
         if (!tbody) return;
         if (Array.isArray(templates)) metaTplLabCache = templates;
         const allRows = Array.isArray(metaTplLabCache) ? metaTplLabCache : [];
+        allRows.forEach(function (item) {
+          metaTplLabRememberWabaName(item && item.wabaId, item && item.wabaName);
+        });
         const statusFilter = String((document.getElementById("meta-tpl-lab-status-filter") || {}).value || "ALL");
         const categoryFilter = String((document.getElementById("meta-tpl-lab-category-filter") || {}).value || "ALL")
           .trim()
@@ -40582,7 +40645,7 @@
             const name = escapeAdminHtml(String(item?.name || ""));
             const language = escapeAdminHtml(metaTplLabLanguageLabel(item?.language));
             const category = escapeAdminHtml(metaTplLabCategoryLabel(item?.category));
-            const quality = escapeAdminHtml(metaTplLabQualityLabel(item?.qualityScore));
+            const waba = escapeAdminHtml(metaTplLabWabaLabel(item));
             const synced = escapeAdminHtml(metaTplLabFormatSync(item?.lastSyncedAt));
             const portfolio = escapeAdminHtml(metaTplLabPortfolioLabel(item));
             return (
@@ -40592,7 +40655,7 @@
               `<td style="padding:8px;">${language}</td>` +
               `<td style="padding:8px;">${category}</td>` +
               `<td style="padding:8px;">${metaTplLabStatusTagHtml(item?.status)}</td>` +
-              `<td style="padding:8px;">${quality}</td>` +
+              `<td style="padding:8px;">${waba}</td>` +
               `<td style="padding:8px;">${synced}</td>` +
               `<td style="padding:8px; white-space:nowrap;">` +
               `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-view="${index}">Visualizar</button> ` +
@@ -41992,6 +42055,7 @@
         try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
           metaTplLabRenderTable(payload.templates);
+          void metaTplLabHydrateWabaNames();
           metaTplLabSetStatus(payload.templates && payload.templates.length ? "" : "Lista local vazia.");
           metaTplBroadcastFillPortfolio();
           void metaTplBroadcastLoadHistory();
@@ -42056,6 +42120,7 @@
           }
           const listed = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
           metaTplLabRenderTable(listed.templates);
+          void metaTplLabHydrateWabaNames();
           if (rateLimited) {
             metaTplLabSetStatus(rateLimitMessage);
           } else {
@@ -42070,6 +42135,7 @@
           try {
             const listed = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
             metaTplLabRenderTable(listed.templates);
+            void metaTplLabHydrateWabaNames();
           } catch {
             /* mantém a tabela que já estava na tela */
           }
