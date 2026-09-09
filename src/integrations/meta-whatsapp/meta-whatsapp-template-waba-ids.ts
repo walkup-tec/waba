@@ -54,23 +54,66 @@ export function wabasFromBusinessEdgeJson(json: unknown): Array<{ id: string; na
   return out;
 }
 
-/** Contas WhatsApp do BM (owned + client), o mesmo recorte do WhatsApp Manager. */
-export function wabasFromBusinessNodeJson(json: unknown): Array<{ id: string; name: string }> {
-  const row = asRecord(json);
+function wabasFromNamedBusinessEdge(
+  json: unknown,
+  edge: "owned_whatsapp_business_accounts" | "client_whatsapp_business_accounts",
+): Array<{ id: string; name: string }> {
+  const data = asRecord(asRecord(json)[edge]).data;
+  const list = Array.isArray(data) ? data : [];
   const seen = new Map<string, string>();
-  for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"] as const) {
-    const data = asRecord(row[edge]).data;
-    const list = Array.isArray(data) ? data : [];
-    for (const item of list) {
-      if (isProbablyMessageTemplateRow(item)) continue;
-      const rec = asRecord(item);
-      const id = String(rec.id || "").trim();
-      if (!id) continue;
-      const name = String(rec.name || "").trim();
-      if (!seen.has(id)) seen.set(id, name);
-    }
+  for (const item of list) {
+    if (isProbablyMessageTemplateRow(item)) continue;
+    const rec = asRecord(item);
+    const id = String(rec.id || "").trim();
+    if (!id) continue;
+    const name = String(rec.name || "").trim();
+    if (!seen.has(id)) seen.set(id, name);
   }
   return [...seen.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
+}
+
+export function splitWabasFromBusinessNodeJson(json: unknown): {
+  owned: Array<{ id: string; name: string }>;
+  client: Array<{ id: string; name: string }>;
+} {
+  return {
+    owned: wabasFromNamedBusinessEdge(json, "owned_whatsapp_business_accounts"),
+    client: wabasFromNamedBusinessEdge(json, "client_whatsapp_business_accounts"),
+  };
+}
+
+/** Contas WhatsApp do BM. Padrão: só owned ("Propriedade de" no Manager). */
+export function wabasFromBusinessNodeJson(
+  json: unknown,
+  opts?: { includeClient?: boolean },
+): Array<{ id: string; name: string }> {
+  const split = splitWabasFromBusinessNodeJson(json);
+  if (opts?.includeClient) {
+    const seen = new Map<string, string>();
+    for (const row of [...split.owned, ...split.client]) {
+      if (!seen.has(row.id)) seen.set(row.id, row.name);
+    }
+    return [...seen.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
+  }
+  return split.owned;
+}
+
+/** Outras conexões abertas do mesmo BM — WABA02 pode não vir no owned do token ES. */
+export function extraWabaIdsFromConnections(
+  rows: Array<Pick<MetaWhatsappConnectionRecord, "id" | "wabaId" | "metaBusinessId">>,
+  current: Pick<MetaWhatsappConnectionRecord, "id" | "wabaId" | "metaBusinessId">,
+): string[] {
+  const bm = String(current.metaBusinessId || "").trim();
+  const selfWaba = String(current.wabaId || "").trim();
+  const selfId = String(current.id || "").trim();
+  const out = new Set<string>();
+  for (const row of rows) {
+    if (selfId && String(row.id || "").trim() === selfId) continue;
+    if (bm && String(row.metaBusinessId || "").trim() !== bm) continue;
+    const id = String(row.wabaId || "").trim();
+    if (id && id !== selfWaba) out.add(id);
+  }
+  return [...out];
 }
 
 export function wabaIdentityMatchesBusiness(json: unknown, businessId: string): boolean {
@@ -90,11 +133,15 @@ export async function filterWabaIdsOwnedByBusiness(input: {
   token: string;
   businessId: string;
   ids: string[];
+  keepOnErrorIds?: string[];
   graph?: TemplateGraphCaller;
 }): Promise<Array<{ id: string; name: string }>> {
   const graph = input.graph || callMetaGraphJson;
   const bm = String(input.businessId || "").trim();
   const unique = [...new Set((input.ids || []).map((id) => String(id || "").trim()).filter(Boolean))];
+  const keepOnError = new Set(
+    (input.keepOnErrorIds || []).map((id) => String(id || "").trim()).filter(Boolean),
+  );
   const out: Array<{ id: string; name: string }> = [];
   const chunkSize = 8;
   for (let i = 0; i < unique.length; i += chunkSize) {
@@ -114,7 +161,10 @@ export async function filterWabaIdsOwnedByBusiness(input: {
       }),
     );
     for (const { id, res } of rows) {
-      if (!res.ok) continue;
+      if (!res.ok) {
+        if (keepOnError.has(id)) out.push({ id, name: `WABA ${id}` });
+        continue;
+      }
       if (bm && !wabaIdentityMatchesBusiness(res.json, bm)) continue;
       const name = String((res.json as { name?: unknown } | undefined)?.name || "").trim();
       out.push({ id, name: name || `WABA ${id}` });
@@ -170,14 +220,21 @@ async function listBusinessWabaEdgeRows(
 export async function discoverTemplateWabas(input: {
   token: string;
   connection: Pick<MetaWhatsappConnectionRecord, "wabaId" | "metaBusinessId">;
+  extraWabaIds?: string[];
   graph?: TemplateGraphCaller;
 }): Promise<Array<{ id: string; name: string }>> {
   const graph = input.graph || callMetaGraphJson;
   const primary = String(input.connection.wabaId || "").trim();
   const bm = String(input.connection.metaBusinessId || "").trim();
   const byId = new Map<string, string>();
+  const ownedIds = new Set<string>();
+  const clientIds = new Set<string>();
+  const extraSet = new Set(
+    [...(input.extraWabaIds || []), primary].map((id) => String(id || "").trim()).filter(Boolean),
+  );
 
   if (primary) addDiscoveredWaba(byId, primary, "", bm);
+  for (const id of extraSet) addDiscoveredWaba(byId, id, "", bm);
 
   if (bm) {
     const nested: MetaGraphJsonResult = await graph({
@@ -191,14 +248,29 @@ export async function discoverTemplateWabas(input: {
       ...DISCOVER_GRAPH,
     });
     if (nested.ok) {
-      for (const row of wabasFromBusinessNodeJson(nested.json)) {
+      const split = splitWabasFromBusinessNodeJson(nested.json);
+      for (const row of split.owned) {
+        ownedIds.add(row.id);
         addDiscoveredWaba(byId, row.id, row.name, bm);
       }
+      for (const row of split.client) clientIds.add(row.id);
     }
-    for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"] as const) {
-      for (const row of await listBusinessWabaEdgeRows(graph, input.token, bm, edge)) {
-        addDiscoveredWaba(byId, row.id, row.name, bm);
-      }
+    for (const row of await listBusinessWabaEdgeRows(
+      graph,
+      input.token,
+      bm,
+      "owned_whatsapp_business_accounts",
+    )) {
+      ownedIds.add(row.id);
+      addDiscoveredWaba(byId, row.id, row.name, bm);
+    }
+    for (const row of await listBusinessWabaEdgeRows(
+      graph,
+      input.token,
+      bm,
+      "client_whatsapp_business_accounts",
+    )) {
+      clientIds.add(row.id);
     }
   }
 
@@ -219,12 +291,19 @@ export async function discoverTemplateWabas(input: {
     }
   }
 
+  // WABA client (ex.: Rio de Janeiro 01) não entra no picker deste BM, mesmo se GET owner bater.
+  for (const id of [...byId.keys()]) {
+    if (clientIds.has(id) && !ownedIds.has(id) && !extraSet.has(id)) byId.delete(id);
+  }
+
   const candidateIds = [...byId.keys()];
+  const keepOnErrorIds = candidateIds.filter((id) => ownedIds.has(id) || extraSet.has(id) || !clientIds.has(id));
   if (bm && candidateIds.length) {
     const owned = await filterWabaIdsOwnedByBusiness({
       token: input.token,
       businessId: bm,
       ids: candidateIds,
+      keepOnErrorIds,
       graph,
     });
     const verified = new Map<string, string>();
@@ -240,6 +319,7 @@ export async function discoverTemplateWabas(input: {
 export async function discoverTemplateWabaIds(input: {
   token: string;
   connection: Pick<MetaWhatsappConnectionRecord, "wabaId" | "metaBusinessId">;
+  extraWabaIds?: string[];
   graph?: TemplateGraphCaller;
 }): Promise<string[]> {
   return (await discoverTemplateWabas(input)).map((row) => row.id);

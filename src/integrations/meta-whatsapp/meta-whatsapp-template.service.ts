@@ -18,7 +18,11 @@ import {
   listWabaMessageTemplates,
   type TemplateGraphCaller,
 } from "./meta-whatsapp-template-graph.client";
-import { discoverTemplateWabaIds, discoverTemplateWabas } from "./meta-whatsapp-template-waba-ids";
+import {
+  discoverTemplateWabaIds,
+  discoverTemplateWabas,
+  extraWabaIdsFromConnections,
+} from "./meta-whatsapp-template-waba-ids";
 import { appendSilentBlockButton } from "./meta-whatsapp-template-silent-block-button";
 import { validateTemplateCreate } from "./meta-whatsapp-template-validate";
 import {
@@ -214,9 +218,14 @@ export class MetaWhatsappTemplateService {
       throw new MetaWhatsappError("invalid_token");
     }
     const graph = this.graph || callMetaGraphJson;
+    const extraWabaIds = extraWabaIdsFromConnections(
+      await this.listOpenConnections(tenant.tenantId),
+      connection,
+    );
     const discovered = await discoverTemplateWabas({
       token,
       connection,
+      extraWabaIds,
       graph,
     });
     const unique = new Map<string, string>();
@@ -263,6 +272,10 @@ export class MetaWhatsappTemplateService {
     const allowed = await discoverTemplateWabaIds({
       token,
       connection,
+      extraWabaIds: extraWabaIdsFromConnections(
+        await this.listOpenConnections(connection.tenantId),
+        connection,
+      ),
       graph: this.graph,
     });
     if (allowed.includes(requested)) return requested;
@@ -437,6 +450,10 @@ export class MetaWhatsappTemplateService {
     const wabaIds = await discoverTemplateWabaIds({
       token,
       connection,
+      extraWabaIds: extraWabaIdsFromConnections(
+        await this.listOpenConnections(tenant.tenantId),
+        connection,
+      ),
       graph: this.graph,
     });
     const targets = wabaIds.length ? wabaIds : [primaryWabaId];

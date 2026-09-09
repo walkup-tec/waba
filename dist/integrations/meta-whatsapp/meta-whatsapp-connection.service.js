@@ -188,7 +188,7 @@ function withHydrateLimits(graph) {
         timeoutMs: input.timeoutMs ?? HYDRATE_GRAPH.timeoutMs,
     });
 }
-async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
+async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaIds = []) {
     const stored = storedNumbersFromConnection(open);
     const fallback = { ...cardFromConnection(open), numbers: stored };
     let token = "";
@@ -278,16 +278,20 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     const primaryWabaId = resolvedWaba || storedWaba;
     const businessId = String(card.id || resolvedBm || "").trim();
     /**
-     * Um BM (ex.: Quantum Smart Labs) pode ter várias WABAs / vários chips no Manager.
-     * Lista só as contas desse BM (owned + client), igual ao WhatsApp Manager.
-     * debug_token só entra como fallback quando o BM não devolveu WABAs (token ES 403).
-     * Docs:
-     * https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-accounts/
-     * https://developers.facebook.com/docs/marketing-api/reference/business/owned_whatsapp_business_accounts/
+     * Contas do WhatsApp deste BM = owned ("Propriedade de"). Client (ex.: Rio de Janeiro 01)
+     * não entra no card, mesmo se GET owner/on_behalf parecer o BM marcado.
+     * WABA irmã (outra conexão do mesmo BM) e debug_token fora do client completam o fan-out
+     * quando o token ES 403 no GET da WABA02.
      */
     const wabaIds = new Set();
+    const clientIds = new Set();
     if (primaryWabaId)
         wabaIds.add(primaryWabaId);
+    for (const id of extraWabaIds) {
+        const wid = String(id || "").trim();
+        if (wid)
+            wabaIds.add(wid);
+    }
     const phoneRows = [];
     const pushPhones = (rows) => {
         for (const row of rows)
@@ -295,11 +299,20 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     };
     const nestedFromCustomer = businessId
         ? await collectNestedPhonesFromBusiness(g, token, businessId)
-        : { wabaIds: [], phones: [] };
+        : { wabaIds: [], clientWabaIds: [], phones: [] };
     const fromThisBm = new Set(nestedFromCustomer.wabaIds);
+    for (const id of nestedFromCustomer.clientWabaIds)
+        clientIds.add(id);
     if (businessId) {
-        for (const id of await listBusinessWabaIds(g, token, businessId))
+        for (const id of await listBusinessWabaIds(g, token, businessId, "owned"))
             fromThisBm.add(id);
+        for (const id of await listBusinessWabaIds(g, token, businessId, "client"))
+            clientIds.add(id);
+    }
+    for (const id of extraWabaIds) {
+        const wid = String(id || "").trim();
+        if (wid)
+            fromThisBm.add(wid);
     }
     for (const id of fromThisBm)
         wabaIds.add(id);
@@ -309,6 +322,8 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
         fromThisBm.add(id);
         wabaIds.add(id);
     }
+    for (const id of nestedFromMe.clientWabaIds)
+        clientIds.add(id);
     pushPhones(nestedFromMe.phones);
     const debugTargets = await listDebugTokenWhatsappTargets(g, token);
     const debugPhoneNodes = await fetchPhoneNodes(g, token, debugTargets.phoneIds);
@@ -316,7 +331,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
     if (businessId) {
         const unknownWabas = new Set();
         for (const id of debugTargets.wabaIds) {
-            if (id && !wabaIds.has(id))
+            if (id && !wabaIds.has(id) && !clientIds.has(id))
                 unknownWabas.add(id);
         }
         for (const row of debugPhoneNodes) {
@@ -327,7 +342,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
                 : "";
             const stamped = String(rec._portfolio_waba_id || "").trim();
             const wid = accountId || stamped;
-            if (wid && !wabaIds.has(wid))
+            if (wid && !wabaIds.has(wid) && !clientIds.has(wid))
                 unknownWabas.add(wid);
         }
         if (unknownWabas.size) {
@@ -335,6 +350,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open) {
                 token,
                 businessId,
                 ids: [...unknownWabas],
+                keepOnErrorIds: [...unknownWabas],
                 graph: (input) => g({
                     ...input,
                     method: input.method === "DELETE" ? "GET" : input.method,
@@ -483,9 +499,10 @@ async function fetchPhoneNodes(graph, token, phoneIds, stampWabaId) {
 }
 function extractWabasAndPhonesFromBusinessNode(node) {
     const row = node && typeof node === "object" ? node : {};
-    const wabaIds = new Set();
+    const ownedIds = new Set();
+    const clientIds = new Set();
     const phones = [];
-    for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"]) {
+    const takeEdge = (edge, into, takePhones) => {
         const bucket = row[edge];
         const data = bucket && typeof bucket === "object" ? bucket.data : null;
         const list = Array.isArray(data) ? data : [];
@@ -493,7 +510,9 @@ function extractWabasAndPhonesFromBusinessNode(node) {
             const wabaRow = waba && typeof waba === "object" ? waba : {};
             const wid = String(wabaRow.id || "").trim();
             if (wid)
-                wabaIds.add(wid);
+                into.add(wid);
+            if (!takePhones)
+                continue;
             const phoneBucket = wabaRow.phone_numbers;
             const phoneData = phoneBucket && typeof phoneBucket === "object"
                 ? phoneBucket.data
@@ -503,18 +522,20 @@ function extractWabasAndPhonesFromBusinessNode(node) {
                     phones.push(phone);
             }
         }
-    }
-    return { wabaIds: [...wabaIds], phones };
+    };
+    takeEdge("owned_whatsapp_business_accounts", ownedIds, true);
+    takeEdge("client_whatsapp_business_accounts", clientIds, false);
+    return { wabaIds: [...ownedIds], clientWabaIds: [...clientIds], phones };
 }
 async function collectNestedPhonesFromBusiness(graph, token, businessId) {
     const bm = String(businessId || "").trim();
     if (!bm)
-        return { wabaIds: [], phones: [] };
+        return { wabaIds: [], clientWabaIds: [], phones: [] };
     const fields = [
         "id",
         "name",
         `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}}`,
-        `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}}`,
+        `client_whatsapp_business_accounts{id,name}`,
     ].join(",");
     const res = await graph({
         token,
@@ -523,7 +544,7 @@ async function collectNestedPhonesFromBusiness(graph, token, businessId) {
         query: { fields },
     });
     if (!res.ok)
-        return { wabaIds: [], phones: [] };
+        return { wabaIds: [], clientWabaIds: [], phones: [] };
     return extractWabasAndPhonesFromBusinessNode(res.json);
 }
 async function collectNestedPhonesFromMeBusinesses(graph, token, onlyBusinessId) {
@@ -531,7 +552,7 @@ async function collectNestedPhonesFromMeBusinesses(graph, token, onlyBusinessId)
         "id",
         "name",
         `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}}`,
-        `client_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}}`,
+        `client_whatsapp_business_accounts{id,name}`,
     ].join(",");
     const res = await graph({
         token,
@@ -540,10 +561,11 @@ async function collectNestedPhonesFromMeBusinesses(graph, token, onlyBusinessId)
         query: { fields, limit: "50" },
     });
     if (!res.ok)
-        return { wabaIds: [], phones: [] };
+        return { wabaIds: [], clientWabaIds: [], phones: [] };
     const data = Array.isArray(res.json?.data) ? res.json.data : [];
     const only = String(onlyBusinessId || "").trim();
     const wabaIds = new Set();
+    const clientWabaIds = new Set();
     const phones = [];
     for (const node of data) {
         const nodeId = String((node && typeof node === "object" ? node.id : "") || "").trim();
@@ -552,51 +574,52 @@ async function collectNestedPhonesFromMeBusinesses(graph, token, onlyBusinessId)
         const extracted = extractWabasAndPhonesFromBusinessNode(node);
         for (const id of extracted.wabaIds)
             wabaIds.add(id);
+        for (const id of extracted.clientWabaIds)
+            clientWabaIds.add(id);
         for (const phone of extracted.phones)
             phones.push(phone);
     }
-    return { wabaIds: [...wabaIds], phones };
+    return { wabaIds: [...wabaIds], clientWabaIds: [...clientWabaIds], phones };
 }
 /**
- * Lista WABA IDs de um Business Manager (owned + client).
+ * Lista WABA IDs de um Business Manager (owned = Propriedade de; client = compartilhada).
  * @see https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-accounts/
  * @see https://developers.facebook.com/docs/marketing-api/reference/business/
  */
-async function listBusinessWabaIds(graph, token, businessId) {
+async function listBusinessWabaIds(graph, token, businessId, edge = "owned") {
     const bm = String(businessId || "").trim();
     if (!bm)
         return [];
+    const pathEdge = edge === "client" ? "client_whatsapp_business_accounts" : "owned_whatsapp_business_accounts";
     const ids = new Set();
-    for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"]) {
-        const seen = new Set();
-        let after = "";
-        for (let page = 0; page < 20; page += 1) {
-            const query = {
-                fields: "id,name",
-                limit: "100",
-            };
-            if (after)
-                query.after = after;
-            const res = await graph({
-                token,
-                method: "GET",
-                path: `${bm}/${edge}`,
-                query,
-            });
-            if (!res.ok)
-                break;
-            const batch = Array.isArray(res.json?.data) ? res.json.data : [];
-            for (const row of batch) {
-                const id = String(row?.id || "").trim();
-                if (id)
-                    ids.add(id);
-            }
-            const nextAfter = String(res.json?.paging?.cursors?.after || "").trim();
-            if (!nextAfter || nextAfter === after || seen.has(nextAfter) || !batch.length)
-                break;
-            seen.add(nextAfter);
-            after = nextAfter;
+    const seen = new Set();
+    let after = "";
+    for (let page = 0; page < 20; page += 1) {
+        const query = {
+            fields: "id,name",
+            limit: "100",
+        };
+        if (after)
+            query.after = after;
+        const res = await graph({
+            token,
+            method: "GET",
+            path: `${bm}/${pathEdge}`,
+            query,
+        });
+        if (!res.ok)
+            break;
+        const batch = Array.isArray(res.json?.data) ? res.json.data : [];
+        for (const row of batch) {
+            const id = String(row?.id || "").trim();
+            if (id)
+                ids.add(id);
         }
+        const nextAfter = String(res.json?.paging?.cursors?.after || "").trim();
+        if (!nextAfter || nextAfter === after || seen.has(nextAfter) || !batch.length)
+            break;
+        seen.add(nextAfter);
+        after = nextAfter;
     }
     return [...ids];
 }
@@ -1107,7 +1130,7 @@ class MetaWhatsappConnectionService {
             });
         }
         const requested = String(opts?.connectionId || "").trim();
-        const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row)));
+        const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenant.tenantId, row, (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(rows, row))));
         const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(hydrated.map((item) => item.card)).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
         const selected = cards.find((item) => item.connectionId === requested) ||
             cards.find((item) => item.id && item.id === String(opts?.connectionId || "").trim()) ||

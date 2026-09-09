@@ -4,6 +4,7 @@ import type { MetaGraphJsonResult } from "./meta-whatsapp-graph.client";
 import {
   discoverTemplateWabaIds,
   discoverTemplateWabas,
+  extraWabaIdsFromConnections,
   isProbablyMessageTemplateRow,
   wabaIdentityMatchesBusiness,
   wabaIdsFromBusinessEdgeJson,
@@ -15,6 +16,19 @@ function graphOk(json: unknown): MetaGraphJsonResult {
     ok: true,
     status: 200,
     json,
+    body: "{}",
+    timeout: false,
+    kind: "permanent",
+    graphCode: null,
+    attempts: 1,
+  };
+}
+
+function graphFail(status = 403): MetaGraphJsonResult {
+  return {
+    ok: false,
+    status,
+    json: { error: { message: "permissions" } },
     body: "{}",
     timeout: false,
     kind: "permanent",
@@ -345,5 +359,120 @@ describe("template waba ids", () => {
         false,
       );
     });
+
+    it("Andre Aguiar: WABA client some mesmo se GET owner bater; WABA02 permanece com GET 403", async () => {
+      const rows = await discoverTemplateWabas({
+        token: "tok",
+        connection: {
+          wabaId: "2458602464640240",
+          metaBusinessId: "1759044748332124",
+        },
+        graph: async (input) => {
+          if (input.path === "1759044748332124") {
+            return graphOk({
+              id: "1759044748332124",
+              owned_whatsapp_business_accounts: {
+                data: [{ id: "2458602464640240", name: "André - WABA01" }],
+              },
+              client_whatsapp_business_accounts: {
+                data: [{ id: "1581808413746453", name: "Rio de Janeiro 01" }],
+              },
+            });
+          }
+          if (input.path === "debug_token") {
+            return graphOk({
+              data: {
+                granular_scopes: [
+                  {
+                    scope: "whatsapp_business_management",
+                    target_ids: [
+                      "2458602464640240",
+                      "1744257946809067",
+                      "1581808413746453",
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+          if (input.path === "1744257946809067") return graphFail(403);
+          if (input.path === "2458602464640240") {
+            return graphOk({
+              id: "2458602464640240",
+              name: "André - WABA01",
+              owner_business_info: { id: "1759044748332124" },
+            });
+          }
+          if (input.path === "1581808413746453") {
+            return graphOk({
+              id: "1581808413746453",
+              name: "Rio de Janeiro 01",
+              owner_business_info: { id: "1759044748332124" },
+              on_behalf_of_business_info: { id: "1759044748332124" },
+            });
+          }
+          return graphOk({ data: [] });
+        },
+      });
+      const ids = rows.map((row) => row.id).sort();
+      assert.deepEqual(ids, ["1744257946809067", "2458602464640240"]);
+      assert.equal(
+        rows.some((row) => row.id === "1581808413746453"),
+        false,
+      );
+    });
+
+    it("Andre Aguiar: WABA02 irmã da mesma BM entra mesmo com GET 403 e sem debug_token", async () => {
+      const ids = await discoverTemplateWabaIds({
+        token: "tok",
+        connection: {
+          wabaId: "2458602464640240",
+          metaBusinessId: "1759044748332124",
+        },
+        extraWabaIds: ["1744257946809067"],
+        graph: async (input) => {
+          if (input.path === "1759044748332124") {
+            return graphOk({
+              id: "1759044748332124",
+              owned_whatsapp_business_accounts: {
+                data: [{ id: "2458602464640240", name: "André - WABA01" }],
+              },
+              client_whatsapp_business_accounts: {
+                data: [{ id: "1581808413746453", name: "Rio de Janeiro 01" }],
+              },
+            });
+          }
+          if (input.path === "debug_token") {
+            return graphOk({ data: { granular_scopes: [] } });
+          }
+          if (input.path === "1744257946809067") return graphFail(403);
+          if (input.path === "2458602464640240") {
+            return graphOk({
+              id: "2458602464640240",
+              name: "André - WABA01",
+              owner_business_info: { id: "1759044748332124" },
+            });
+          }
+          return graphOk({ data: [] });
+        },
+      });
+      assert.deepEqual(ids.sort(), ["1744257946809067", "2458602464640240"]);
+    });
+  });
+});
+
+describe("extraWabaIdsFromConnections", () => {
+  it("só junta WABAs irmãs do mesmo BM", () => {
+    assert.deepEqual(
+      extraWabaIdsFromConnections(
+        [
+          { id: "c1", wabaId: "2458602464640240", metaBusinessId: "1759044748332124" },
+          { id: "c2", wabaId: "1744257946809067", metaBusinessId: "1759044748332124" },
+          { id: "c3", wabaId: "waba-outro-bm", metaBusinessId: "bm-drax-2000" },
+        ],
+        { id: "c1", wabaId: "2458602464640240", metaBusinessId: "1759044748332124" },
+      ),
+      ["1744257946809067"],
+    );
   });
 });

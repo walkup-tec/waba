@@ -156,9 +156,11 @@ class MetaWhatsappTemplateService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
         }
         const graph = this.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
+        const extraWabaIds = (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(await this.listOpenConnections(tenant.tenantId), connection);
         const discovered = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabas)({
             token,
             connection,
+            extraWabaIds,
             graph,
         });
         const unique = new Map();
@@ -202,6 +204,7 @@ class MetaWhatsappTemplateService {
         const allowed = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
             token,
             connection,
+            extraWabaIds: (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(await this.listOpenConnections(connection.tenantId), connection),
             graph: this.graph,
         });
         if (allowed.includes(requested))
@@ -347,6 +350,7 @@ class MetaWhatsappTemplateService {
         const wabaIds = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
             token,
             connection,
+            extraWabaIds: (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(await this.listOpenConnections(tenant.tenantId), connection),
             graph: this.graph,
         });
         const targets = wabaIds.length ? wabaIds : [primaryWabaId];

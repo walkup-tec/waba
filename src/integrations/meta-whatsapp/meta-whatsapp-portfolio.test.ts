@@ -2476,6 +2476,202 @@ describe("meta portfolio service", () => {
     assert.match(String(pending?.displayPhoneNumber || ""), /95213-6942/);
   });
 
+  it("Andre Aguiar: PIN da WABA02 aparece; WABA client Rio não mistura números", async () => {
+    const previousAppId = process.env.META_APP_ID;
+    const previousAppSecret = process.env.META_APP_SECRET;
+    process.env.META_APP_ID = "app-test";
+    process.env.META_APP_SECRET = "secret-test";
+    const andre = {
+      ...connectedRow(),
+      id: "conn-andre-waba01",
+      metaBusinessId: "1759044748332124",
+      wabaId: "2458602464640240",
+      phoneNumberId: "phone-3626",
+      displayPhoneNumber: "+55 21 92368-3626",
+      verifiedName: "Relacionamento e Atendimento",
+      status: "connected" as const,
+    };
+    const connected = [
+      {
+        id: "phone-3626",
+        display_phone_number: "+55 21 92368-3626",
+        verified_name: "Relacionamento e Atendimento",
+        status: "CONNECTED",
+        code_verification_status: "VERIFIED",
+      },
+      {
+        id: "phone-6133",
+        display_phone_number: "+55 21 92367-6133",
+        verified_name: "Relacionamento Jandira",
+        status: "CONNECTED",
+        code_verification_status: "VERIFIED",
+      },
+      {
+        id: "phone-3630",
+        display_phone_number: "+55 21 92368-3630",
+        verified_name: "Relacionamento e Atendimento",
+        status: "CONNECTED",
+        code_verification_status: "VERIFIED",
+      },
+    ];
+    const pendingRow = {
+      id: "1311179632078208",
+      display_phone_number: "+55 11 95213-6942",
+      verified_name: "Relacionamento e Atendimento",
+      status: "PENDING",
+      code_verification_status: "VERIFIED",
+    };
+    const rioPhone = {
+      id: "phone-rio",
+      display_phone_number: "+55 21 90000-0001",
+      verified_name: "Rio de Janeiro 01",
+      status: "CONNECTED",
+      code_verification_status: "VERIFIED",
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [andre];
+      },
+      async findOpenByTenant() {
+        return andre;
+      },
+    };
+    try {
+      const graph = async (input: { path: string; query?: Record<string, string> }) => {
+        const fields = String(input.query?.fields || "");
+        if (input.path === "debug_token") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              data: {
+                granular_scopes: [
+                  {
+                    scope: "whatsapp_business_management",
+                    target_ids: ["2458602464640240", "1744257946809067", "1581808413746453"],
+                  },
+                  { scope: "whatsapp_business_messaging", target_ids: ["1311179632078208"] },
+                ],
+              },
+            },
+          };
+        }
+        if (input.path === "2458602464640240") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              id: "2458602464640240",
+              name: "André - WABA01",
+              owner_business_info: { id: "1759044748332124", name: "60.843.286 Andre Aguiar de Sousa" },
+            },
+          };
+        }
+        if (input.path === "1744257946809067") {
+          return { ok: false, status: 403, json: { error: { message: "permissions" } } };
+        }
+        if (input.path === "1581808413746453") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              id: "1581808413746453",
+              name: "Rio de Janeiro 01",
+              owner_business_info: { id: "1759044748332124" },
+              on_behalf_of_business_info: { id: "1759044748332124" },
+            },
+          };
+        }
+        if (input.path === "1759044748332124") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              id: "1759044748332124",
+              name: "60.843.286 Andre Aguiar de Sousa",
+              owned_whatsapp_business_accounts: {
+                data: [
+                  {
+                    id: "2458602464640240",
+                    name: "André - WABA01",
+                    phone_numbers: { data: connected },
+                  },
+                ],
+              },
+              client_whatsapp_business_accounts: {
+                data: [
+                  {
+                    id: "1581808413746453",
+                    name: "Rio de Janeiro 01",
+                    phone_numbers: { data: [rioPhone] },
+                  },
+                ],
+              },
+            },
+          };
+        }
+        if (input.path === "1759044748332124/owned_whatsapp_business_accounts") {
+          return { ok: true, status: 200, json: { data: [{ id: "2458602464640240", name: "André - WABA01" }] } };
+        }
+        if (input.path === "1759044748332124/client_whatsapp_business_accounts") {
+          return { ok: true, status: 200, json: { data: [{ id: "1581808413746453", name: "Rio de Janeiro 01" }] } };
+        }
+        if (input.path === "2458602464640240/phone_numbers") {
+          return { ok: true, status: 200, json: { data: connected } };
+        }
+        if (input.path === "1744257946809067/phone_numbers") {
+          if (
+            fields.includes("health_status") ||
+            fields.includes("messaging_limit_tier") ||
+            fields.includes("name_status") ||
+            fields.includes("new_name_status")
+          ) {
+            return { ok: true, status: 200, json: { data: [] } };
+          }
+          return { ok: true, status: 200, json: { data: [pendingRow] } };
+        }
+        if (input.path === "1581808413746453/phone_numbers") {
+          return { ok: true, status: 200, json: { data: [rioPhone] } };
+        }
+        if (input.path === "1311179632078208") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              ...pendingRow,
+              whatsapp_business_account: { id: "1744257946809067" },
+            },
+          };
+        }
+        return { ok: true, status: 200, json: { data: [] } };
+      };
+      const service = new MetaWhatsappConnectionService(
+        repo as any,
+        { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+        graph as any,
+      );
+      const assets = await service.listPortfolioAssets(auth);
+      const card =
+        (assets.portfolios || []).find((item) => item.id === "1759044748332124") || assets.portfolios?.[0];
+      const numbers = card?.numbers || [];
+      assert.equal(numbers.length, 4);
+      const pending = numbers.find((item) => String(item.phoneNumberId || "") === "1311179632078208");
+      assert.ok(pending);
+      assert.equal(pending?.uiStatus, "pendente");
+      assert.equal(pending?.canActivate, true);
+      assert.match(String(pending?.displayPhoneNumber || ""), /95213-6942/);
+      assert.equal(
+        numbers.some((item) => String(item.phoneNumberId || "") === "phone-rio"),
+        false,
+      );
+    } finally {
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+      if (previousAppSecret === undefined) delete process.env.META_APP_SECRET;
+      else process.env.META_APP_SECRET = previousAppSecret;
+    }
+  });
+
   it("inclui chip do debug_token messaging sem tratar phone_number_id como WABA", async () => {
     const previousAppId = process.env.META_APP_ID;
     const previousAppSecret = process.env.META_APP_SECRET;
