@@ -32,6 +32,13 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         holdSubscriberInProgress: true,
         intakeId: "368d053b-d59b-4eed-a235-fe9e9f32c68c",
     },
+    {
+        name: "Opt in PTX",
+        fingerprint: { totalLeads: 2996, sent: 1980, delivered: 0, failed: 0 },
+        delivered: 1724,
+        read: 986,
+        failed: 232,
+    },
 ];
 const normalizeCampaignName = (value) => String(value || "")
     .normalize("NFD")
@@ -78,6 +85,9 @@ const fingerprintMatches = (report, fingerprint) => {
         return false;
     if (roundMetric(report.sent) !== fingerprint.sent)
         return false;
+    if (fingerprint.delivered != null && roundMetric(report.delivered) !== fingerprint.delivered) {
+        return false;
+    }
     if (fingerprint.failed != null && roundMetric(report.failed) !== fingerprint.failed)
         return false;
     return true;
@@ -150,8 +160,12 @@ const applyCampaignReportReadOverride = (campaignName, createdAt, report) => {
         return report;
     const nextDelivered = rule.delivered != null ? rule.delivered : report.delivered;
     const nextRead = rule.read != null ? rule.read : report.read;
-    if (nextDelivered === report.delivered && nextRead === report.read)
+    const nextFailed = rule.failed != null ? rule.failed : report.failed;
+    if (nextDelivered === report.delivered &&
+        nextRead === report.read &&
+        nextFailed === report.failed) {
         return report;
-    return { ...report, delivered: nextDelivered, read: nextRead };
+    }
+    return { ...report, delivered: nextDelivered, read: nextRead, failed: nextFailed };
 };
 exports.applyCampaignReportReadOverride = applyCampaignReportReadOverride;
