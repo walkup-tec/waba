@@ -360,7 +360,7 @@ describe("template waba ids", () => {
       );
     });
 
-    it("Andre Aguiar: WABA client some mesmo se GET owner bater; WABA02 em 403 sem irmã some", async () => {
+    it("Andre Aguiar: WABA client some; WABA02 owned permanece em 403", async () => {
       const rows = await discoverTemplateWabas({
         token: "tok",
         connection: {
@@ -415,13 +415,9 @@ describe("template waba ids", () => {
         },
       });
       const ids = rows.map((row) => row.id).sort();
-      assert.deepEqual(ids, ["2458602464640240"]);
+      assert.deepEqual(ids, ["1744257946809067", "2458602464640240"]);
       assert.equal(
         rows.some((row) => row.id === "1581808413746453"),
-        false,
-      );
-      assert.equal(
-        rows.some((row) => row.id === "1744257946809067"),
         false,
       );
     });
@@ -579,6 +575,16 @@ describe("extraWabaIdsFromConnections", () => {
           { id: "c2", wabaId: "1744257946809067", metaBusinessId: "1759044748332124" },
           { id: "c3", wabaId: "waba-outro-bm", metaBusinessId: "bm-drax-2000" },
         ],
+        { id: "c1", wabaId: "2458602464640240", metaBusinessId: "1759044748332124" },
+      ),
+      ["1744257946809067"],
+    );
+  });
+
+  it("Andre Aguiar: WABA02 entra mesmo sem segunda conexão Embedded Signup", () => {
+    assert.deepEqual(
+      extraWabaIdsFromConnections(
+        [{ id: "c1", wabaId: "2458602464640240", metaBusinessId: "1759044748332124" }],
         { id: "c1", wabaId: "2458602464640240", metaBusinessId: "1759044748332124" },
       ),
       ["1744257946809067"],
