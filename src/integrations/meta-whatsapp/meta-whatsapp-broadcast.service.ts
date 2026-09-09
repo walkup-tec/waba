@@ -689,9 +689,21 @@ export class MetaWhatsappBroadcastService {
     try {
       for (let index = 0; index < row.leads.length; index += 1) {
         const live = findBroadcastCampaign(tenantId, campaignId);
-        if (!live || isBroadcastVoided(live) || live.status === "failed") {
+        if (!live) {
           row.status = "failed";
-          row.voidedAt = row.voidedAt || live?.voidedAt || new Date().toISOString();
+          row.sendFinishedAt = new Date().toISOString();
+          saveBroadcastCampaign(row);
+          logMetaWhatsappSafe("broadcast-aborted", {
+            tenantId,
+            campaignId,
+            sent: row.sent,
+            reason: "missing",
+          });
+          return;
+        }
+        if (isBroadcastVoided(live)) {
+          row.status = "failed";
+          row.voidedAt = live.voidedAt;
           row.sendFinishedAt = new Date().toISOString();
           saveBroadcastCampaign(row);
           logMetaWhatsappSafe("broadcast-aborted", {
@@ -699,6 +711,18 @@ export class MetaWhatsappBroadcastService {
             campaignId,
             sent: row.sent,
             reason: "header_media_or_void",
+          });
+          return;
+        }
+        if (live.status === "failed") {
+          row.status = "failed";
+          row.sendFinishedAt = new Date().toISOString();
+          saveBroadcastCampaign(row);
+          logMetaWhatsappSafe("broadcast-aborted", {
+            tenantId,
+            campaignId,
+            sent: row.sent,
+            reason: "paused_or_failed",
           });
           return;
         }
