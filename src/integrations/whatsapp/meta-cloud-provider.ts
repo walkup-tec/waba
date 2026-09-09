@@ -78,10 +78,11 @@ export class MetaCloudProvider implements WhatsAppProvider {
       input.tenantId,
       input.connectionId,
       input.phoneNumberId,
+      { preferConnectionToken: Boolean(input.preferConnectionToken) },
     );
     const template: Record<string, unknown> = {
       name,
-      language: { code: language },
+      language: { policy: "deterministic", code: language },
     };
     const components = sanitizeTemplateComponents(input.components);
     if (components.length) template.components = components;
@@ -97,9 +98,22 @@ export class MetaCloudProvider implements WhatsAppProvider {
     tenantId: string,
     connectionId?: string,
     phoneNumberId?: string,
+    options?: { preferConnectionToken?: boolean },
   ): Promise<MetaWhatsappConnectionRecord> {
     let row: MetaWhatsappConnectionRecord | null = null;
+    const connId = String(connectionId || "").trim();
     const phone = String(phoneNumberId || "").trim();
+    if (options?.preferConnectionToken && connId) {
+      row = await this.connections.findByIdForTenant(tenantId, connId);
+      const usable =
+        Boolean(row) &&
+        row!.tenantId === tenantId &&
+        !row!.disconnectedAt &&
+        Boolean(row!.phoneNumberId) &&
+        (row!.status === "connected" || row!.status === "pending_confirmation");
+      if (!usable || !row) throw new MetaWhatsappError("not_connected");
+      return row;
+    }
     if (phone) {
       row = await this.connections.findConnectedByPhoneNumberId(phone);
       const usableByPhone =
@@ -110,8 +124,8 @@ export class MetaCloudProvider implements WhatsAppProvider {
       if (usableByPhone && row) return row;
       row = null;
     }
-    if (connectionId) {
-      row = await this.connections.findByIdForTenant(tenantId, connectionId);
+    if (connId) {
+      row = await this.connections.findByIdForTenant(tenantId, connId);
       const usable =
         Boolean(row) &&
         row!.tenantId === tenantId &&
