@@ -1,6 +1,6 @@
 #!/bin/bash
-# Só use DEPOIS de 1 envio Graph ok (template aprovado no chip).
-# Pausa do operacional (status=failed) permanece: o watchdog não reabre sozinho.
+# Depois do Redeploy EasyPanel do waba_disparador, o boot reabre o lote sozinho.
+# Só cole este script se o /health ainda mostrar o lote failed após o marker novo.
 set -euo pipefail
 
 INTAKE="66c63991-9c2f-42a2-b024-7aeab1b71546"
