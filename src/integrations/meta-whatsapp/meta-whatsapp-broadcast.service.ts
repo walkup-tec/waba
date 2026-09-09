@@ -43,6 +43,7 @@ import {
   listResumableOrphanedBroadcasts,
   listStaleRunningBroadcastsWithoutPending,
   publicBroadcastCampaign,
+  reopenOptInPtxBroadcastToContinue,
   saveBroadcastCampaign,
   voidBroadcastCampaignForRetry,
   type MetaBroadcastCampaign,
@@ -914,6 +915,17 @@ export class MetaWhatsappBroadcastService {
   }
 
   async resumeOrphanedCloudBroadcastsOnBoot(): Promise<number> {
+    const reopened = reopenOptInPtxBroadcastToContinue();
+    if (reopened) {
+      logMetaWhatsappSafe("broadcast-reopen-opt-in-ptx", {
+        campaignId: reopened.id,
+        status: reopened.status,
+        sent: reopened.sent,
+        failed: reopened.failed,
+        pending: (reopened.leads || []).filter((lead) => !lead.status || lead.status === "queued").length,
+        total: reopened.total,
+      });
+    }
     let closed = 0;
     for (const stale of listStaleRunningBroadcastsWithoutPending()) {
       const done = finalizeStaleRunningBroadcast(stale.id);
