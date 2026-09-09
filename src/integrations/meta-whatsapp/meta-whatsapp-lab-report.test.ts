@@ -183,6 +183,20 @@ describe("fechamento automático do relatório Meta", () => {
     assert.equal(shouldFinalizeMetaLabReport(campaign, lastEvent + META_LAB_REPORT_QUIET_MS + 1_000), false);
     assert.equal(
       shouldFinalizeMetaLabReport(campaign, Date.parse(campaign.sendFinishedAt || "") + META_LAB_REPORT_MAX_WAIT_MS),
+      false,
+    );
+  });
+
+  it("no teto de 3 h só fecha se a Meta já mandou entregue, lido ou falhou", () => {
+    const withDelivery = base({
+      lastMetaStatusAt: "2026-09-02T10:06:00.000Z",
+      leads: [{ waId: "5551999887766", status: "sent", metaStatus: "delivered" }],
+    });
+    assert.equal(
+      shouldFinalizeMetaLabReport(
+        withDelivery,
+        Date.parse(withDelivery.sendFinishedAt || "") + META_LAB_REPORT_MAX_WAIT_MS,
+      ),
       true,
     );
   });

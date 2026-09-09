@@ -17,8 +17,8 @@ const waba_campaign_report_finalize_service_1 = require("../../disparos/waba-cam
 const waba_campaign_report_read_overrides_1 = require("../../disparos/waba-campaign-report-read-overrides");
 /** Sem webhook novo após o envio, fecha o relatório. */
 exports.META_LAB_REPORT_QUIET_MS = 15 * 60 * 1000;
-/** Teto: não espera leitura eterna. */
-exports.META_LAB_REPORT_MAX_WAIT_MS = 2 * 60 * 60 * 1000;
+/** Teto alinhado ao aviso do relatório: a Meta pode levar até 3 horas. */
+exports.META_LAB_REPORT_MAX_WAIT_MS = 3 * 60 * 60 * 1000;
 const finalizeTimers = new Map();
 function leadCountsAsSent(lead) {
     if (lead.status === "sent")
@@ -50,6 +50,15 @@ function computeMetaLabCampaignMetrics(campaign, totalLeads) {
 function campaignHasDeliverySignal(campaign) {
     return (campaign.leads || []).some((lead) => leadCountsAsDelivered(lead) || leadCountsAsRead(lead));
 }
+function leadHasTerminalMeta(lead) {
+    return leadCountsAsDelivered(lead) || leadCountsAsRead(lead) || leadCountsAsFailed(lead);
+}
+function sentLeadsHaveTerminalMeta(campaign) {
+    const sent = (campaign.leads || []).filter((lead) => lead.status === "sent" || leadCountsAsSent(lead));
+    if (!sent.length)
+        return false;
+    return sent.every(leadHasTerminalMeta);
+}
 function shouldFinalizeMetaLabReport(campaign, nowMs = Date.now()) {
     if (campaign.reportFinalizedAt)
         return false;
@@ -61,11 +70,15 @@ function shouldFinalizeMetaLabReport(campaign, nowMs = Date.now()) {
     if (!doneAt)
         return false;
     const lastMeta = Date.parse(String(campaign.lastMetaStatusAt || "")) || 0;
-    if (nowMs - doneAt >= exports.META_LAB_REPORT_MAX_WAIT_MS)
+    const quietReady = Boolean(lastMeta && nowMs - lastMeta >= exports.META_LAB_REPORT_QUIET_MS);
+    const metaStarted = campaignHasDeliverySignal(campaign) || sentLeadsHaveTerminalMeta(campaign);
+    if (campaignHasDeliverySignal(campaign) && quietReady)
         return true;
-    if (campaignHasDeliverySignal(campaign) && lastMeta && nowMs - lastMeta >= exports.META_LAB_REPORT_QUIET_MS) {
+    if (sentLeadsHaveTerminalMeta(campaign) && quietReady)
         return true;
-    }
+    // Sem entregue/lido/falhou da Meta o JSON continua coletando. O teto de 3 h não fecha vazio.
+    if (metaStarted && nowMs - doneAt >= exports.META_LAB_REPORT_MAX_WAIT_MS)
+        return true;
     return false;
 }
 function performanceChanged(previous, metrics) {
