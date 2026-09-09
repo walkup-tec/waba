@@ -5,14 +5,14 @@ import { describe, it } from "node:test";
 
 const html = readFileSync(path.join(__dirname, "../../../index.html"), "utf8");
 
-describe("criação de template: portfólio e depois WABA", () => {
-  it("o passo 1 escolhe um portfólio e o passo 2 a conta WABA", () => {
-    assert.match(html, /id="meta-tpl-lab-portfolio"/);
+describe("criação de template: portfólios e depois WABAs", () => {
+  it("o passo 1 marca vários portfólios e o passo 2 as contas WABA", () => {
+    assert.match(html, /id="meta-tpl-lab-portfolios"/);
     assert.match(html, /id="meta-tpl-lab-wabas"/);
-    assert.match(html, /Selecione um portfólio/);
-    assert.match(html, /Selecione a conta WABA/);
+    assert.match(html, /Marque os portfólios para ver as contas WABA/);
+    assert.match(html, /function metaTplLabSelectedWabaTargets/);
+    assert.match(html, /wabaTargets,/);
+    assert.doesNotMatch(html, /id="meta-tpl-lab-portfolio"/);
     assert.doesNotMatch(html, /cadastra o template em cada WABA/);
-    assert.match(html, /function metaTplLabSelectedWabaIds/);
-    assert.match(html, /wabaIds,/);
   });
 });
