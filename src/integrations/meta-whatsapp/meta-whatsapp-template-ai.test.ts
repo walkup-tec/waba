@@ -24,6 +24,7 @@ import {
   parseMetaTemplateAiShell,
   parseTemplateAiConnectionIds,
   parseTemplateAiWabaIds,
+  parseTemplateAiWabaTargets,
   templateNameForOption,
 } from "./meta-whatsapp-template-ai-shell";
 import { shapeMetaUtilityOptionBody } from "./meta-whatsapp-template-ai-utility-shape";
@@ -352,6 +353,19 @@ describe("Assistente IA de templates Utility", () => {
     assert.deepEqual(parseTemplateAiConnectionIds({ connectionIds: ["b", " a ", "b"] }), ["b", "a"]);
     assert.deepEqual(parseTemplateAiWabaIds({ wabaId: "waba-1" }), ["waba-1"]);
     assert.deepEqual(parseTemplateAiWabaIds({ wabaIds: ["x", " x ", "y"] }), ["x", "y"]);
+    assert.deepEqual(
+      parseTemplateAiWabaTargets({
+        wabaTargets: [
+          { connectionId: "conn-a", wabaId: "waba-1" },
+          { connection_id: "conn-a", waba_id: "waba-1" },
+          { connectionId: "conn-b", wabaId: "waba-2" },
+        ],
+      }),
+      [
+        { connectionId: "conn-a", wabaId: "waba-1" },
+        { connectionId: "conn-b", wabaId: "waba-2" },
+      ],
+    );
   });
 
   it("envia o mesmo lote Graph para cada WABA selecionado", async () => {
@@ -494,6 +508,91 @@ describe("Assistente IA de templates Utility", () => {
       ["waba-1", "waba-rj3"],
     );
     assert.equal(result.portfolios.length, 2);
+  });
+
+  it("cadastra nas WABAs marcadas de vários portfólios", async () => {
+    const email = "ai-multi-portfolio-waba@example.com";
+    const rowA = connection(email);
+    const rowB = connection(email, { id: "conn-b", wabaId: "waba-b", verifiedName: "Quantum" });
+    const calls: Array<Record<string, unknown>> = [];
+    let savedResult: MetaTemplateAiModelOutput | null = null;
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          if (tenantId !== rowA.tenantId) return null;
+          if (id === rowA.id) return rowA;
+          if (id === rowB.id) return rowB;
+          return null;
+        },
+      } as any,
+      {
+        async create(input: Record<string, unknown>) {
+          savedResult = input.result as MetaTemplateAiModelOutput;
+          return "analysis-1";
+        },
+        async findForSubmission(tenantId: string, _connectionId: string, analysisId: string) {
+          if (tenantId !== rowA.tenantId || analysisId !== "analysis-1" || !savedResult) return null;
+          return {
+            id: analysisId,
+            language: "pt_BR",
+            eligibleForUtility: savedResult.eligibleForUtility,
+            result: savedResult,
+          };
+        },
+        async updateResult() {},
+        async listSubmittedNames() {
+          return new Set<string>();
+        },
+      } as any,
+      async () => ({
+        value: utilityOutput(),
+        model: "gpt-test",
+        responseId: "resp-1",
+        latencyMs: 12,
+      }),
+      {
+        async findByNameForConnection() {
+          return null;
+        },
+        async findByWabaNameLanguage() {
+          return null;
+        },
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(input);
+          return { id: `local-${String(input.connectionId)}-${String(input.wabaId)}-${String(input.name)}`, status: "PENDING" };
+        },
+      } as any,
+      undefined,
+      undefined,
+      async () => "https://waba.draxsistemas.com.br/s/tpltest1",
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada." },
+    );
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      submitShell({
+        connectionIds: ["conn-utility", "conn-b"],
+        wabaTargets: [
+          { connectionId: "conn-utility", wabaId: "waba-rj3" },
+          { connectionId: "conn-b", wabaId: "waba-b" },
+        ],
+      }),
+    );
+    assert.equal(calls.length, 6);
+    assert.equal(result.submitted, 6);
+    assert.deepEqual(
+      calls.map((row) => `${String(row.connectionId)}:${String(row.wabaId)}`).sort(),
+      [
+        "conn-b:waba-b",
+        "conn-b:waba-b",
+        "conn-b:waba-b",
+        "conn-utility:waba-rj3",
+        "conn-utility:waba-rj3",
+        "conn-utility:waba-rj3",
+      ],
+    );
   });
 
   it("não posta duas vezes no mesmo WABA", async () => {
