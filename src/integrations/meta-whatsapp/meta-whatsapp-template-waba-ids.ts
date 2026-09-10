@@ -6,6 +6,7 @@ import {
   knownClientWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
   knownOwnedWabaRowsForBusiness,
+  metaBusinessIdsMatch,
 } from "./meta-whatsapp-known-owned-wabas";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -342,4 +343,37 @@ export async function discoverTemplateWabaIds(input: {
   graph?: TemplateGraphCaller;
 }): Promise<string[]> {
   return (await discoverTemplateWabas(input)).map((row) => row.id);
+}
+
+function isOpenTemplateConnection(
+  row: Pick<MetaWhatsappConnectionRecord, "status" | "disconnectedAt">,
+): boolean {
+  if (row.disconnectedAt) return false;
+  return row.status === "connected" || row.status === "pending_confirmation";
+}
+
+/** Token da WABA01 não posta na WABA02 irmã; prefere a conexão cujo wabaId é o destino. */
+export function pickTemplateWriteConnections<T extends MetaWhatsappConnectionRecord>(
+  rows: T[],
+  preferred: T,
+  targetWabaId: string,
+): T[] {
+  const target = String(targetWabaId || "").trim();
+  const preferredBm = String(preferred.metaBusinessId || "").trim();
+  const pool = rows.filter((row) => {
+    if (!isOpenTemplateConnection(row)) return false;
+    if (row.id === preferred.id) return true;
+    if (target && String(row.wabaId || "").trim() === target) return true;
+    if (preferredBm && metaBusinessIdsMatch(String(row.metaBusinessId || ""), preferredBm)) return true;
+    return false;
+  });
+  const list = pool.length ? pool : [preferred];
+  return [...list].sort((left, right) => {
+    const leftMatch = target && String(left.wabaId || "").trim() === target ? 0 : 1;
+    const rightMatch = target && String(right.wabaId || "").trim() === target ? 0 : 1;
+    if (leftMatch !== rightMatch) return leftMatch - rightMatch;
+    if (left.id === preferred.id) return -1;
+    if (right.id === preferred.id) return 1;
+    return 0;
+  });
 }
