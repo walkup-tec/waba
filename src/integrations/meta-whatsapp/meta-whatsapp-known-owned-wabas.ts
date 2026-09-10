@@ -69,6 +69,14 @@ export function metaBusinessIdsMatch(left: string, right: string): boolean {
   return false;
 }
 
+/** CNPJ do card (60.843.286) e o id Graph do BM do André são o mesmo portfólio. */
+export function knownOwnedBusinessesMatch(left: string, right: string): boolean {
+  if (metaBusinessIdsMatch(left, right)) return true;
+  const a = knownOwnedCatalogForBusiness(left);
+  const b = knownOwnedCatalogForBusiness(right);
+  return Boolean(a && b && a === b);
+}
+
 export function knownOwnedCatalogForBusiness(businessId: string): KnownOwnedBusinessWabas | null {
   const wanted = String(businessId || "").trim();
   if (!wanted) return null;
