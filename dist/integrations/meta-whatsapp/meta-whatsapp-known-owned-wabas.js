@@ -10,6 +10,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.KNOWN_OWNED_BUSINESS_WABAS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
 exports.normalizeMetaBusinessKey = normalizeMetaBusinessKey;
 exports.metaBusinessIdsMatch = metaBusinessIdsMatch;
+exports.knownOwnedBusinessesMatch = knownOwnedBusinessesMatch;
 exports.knownOwnedCatalogForBusiness = knownOwnedCatalogForBusiness;
 exports.knownOwnedWabaIdsForBusiness = knownOwnedWabaIdsForBusiness;
 exports.knownOwnedWabaRowsForBusiness = knownOwnedWabaRowsForBusiness;
@@ -61,6 +62,14 @@ function metaBusinessIdsMatch(left, right) {
     if (b.length === a.length + 1 && b.startsWith("1") && b.slice(1) === a)
         return true;
     return false;
+}
+/** CNPJ do card (60.843.286) e o id Graph do BM do André são o mesmo portfólio. */
+function knownOwnedBusinessesMatch(left, right) {
+    if (metaBusinessIdsMatch(left, right))
+        return true;
+    const a = knownOwnedCatalogForBusiness(left);
+    const b = knownOwnedCatalogForBusiness(right);
+    return Boolean(a && b && a === b);
 }
 function knownOwnedCatalogForBusiness(businessId) {
     const wanted = String(businessId || "").trim();
