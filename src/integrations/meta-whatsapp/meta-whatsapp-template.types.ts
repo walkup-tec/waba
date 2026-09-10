@@ -17,6 +17,7 @@ export type MetaTemplatePublic = {
   wabaId: string | null;
   headerPreviewUrl: string | null;
   headerReady: boolean;
+  createdAt: string | null;
 };
 
 export type MetaTemplateRecord = Omit<MetaTemplatePublic, "portfolioName" | "headerPreviewUrl" | "headerReady"> & {
@@ -76,6 +77,7 @@ export function toPublicTemplate(
     wabaId: String(row.wabaId || "").trim() || null,
     headerPreviewUrl,
     headerReady: Boolean(headerPreviewUrl),
+    createdAt: String(row.createdAt || "").trim() || null,
   };
 }
 
