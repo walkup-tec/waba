@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   isMetaGraphRateLimitCode,
   isMetaGraphRateLimitPayload,
+  isMetaGraphWabaWriteDenied,
   publicMetaGraphRegisterMessage,
   publicMetaGraphTemplateMessage,
 } from "./meta-whatsapp-graph-errors";
@@ -31,6 +32,20 @@ describe("erros Graph de cota", () => {
     assert.match(message, /limitou temporariamente/i);
     assert.doesNotMatch(message, /recusou o template/i);
     assert.doesNotMatch(message, /too many calls/i);
+  });
+
+  it("Unsupported post / missing permissions vira recusa de WABA, não o inglês da Graph", () => {
+    const json = {
+      error: {
+        message:
+          "Unsupported post request. Object with ID '1744257946809067' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+        code: 100,
+      },
+    };
+    assert.equal(isMetaGraphWabaWriteDenied(json, 400), true);
+    const message = publicMetaGraphTemplateMessage("permanent", 400, json);
+    assert.match(message, /não gerencia essa conta|conecte essa WABA/i);
+    assert.doesNotMatch(message, /Unsupported post request/i);
   });
 });
 
