@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.localCalendarDateKey = localCalendarDateKey;
 exports.shiftedLocalDateKey = shiftedLocalDateKey;
+exports.templateCreatedAtIso = templateCreatedAtIso;
 exports.templateMatchesCreatedDay = templateMatchesCreatedDay;
 /** Chave de calendário local (YYYY-MM-DD) para o filtro Hoje/Ontem da lista. */
 function localCalendarDateKey(input) {
@@ -18,6 +19,9 @@ function shiftedLocalDateKey(daysFromToday, now = new Date()) {
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() + daysFromToday);
     return localCalendarDateKey(date);
+}
+function templateCreatedAtIso(row) {
+    return String((row && (row.createdAt || row.created_at)) || "").trim();
 }
 function templateMatchesCreatedDay(createdAt, dayKey) {
     const key = String(dayKey || "").trim();
