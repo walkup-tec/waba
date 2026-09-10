@@ -1358,10 +1358,13 @@ describe("Assistente IA de templates Utility", () => {
         throw new Error(rateLimitText);
       },
     );
-    const tinyPng = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-      "base64",
-    );
+    const tinyPng = Buffer.concat([
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+      Buffer.from(`rate-limit-${Date.now()}-${Math.random()}`),
+    ]);
     try {
       await service.uploadHeaderMediaFromAuth(
         { email, role: "subscriber" },
@@ -1389,6 +1392,51 @@ describe("Assistente IA de templates Utility", () => {
     }
   });
 
+  it("não chama a Meta se um template local já tem a mesma foto com handle 4::", async () => {
+    const email = "header-reuse@example.com";
+    const row = connection(email);
+    const previousAppId = process.env.META_APP_ID;
+    process.env.META_APP_ID = "app-test-header-reuse";
+    let uploads = 0;
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          return tenantId === row.tenantId && id === row.id ? row : null;
+        },
+        async listOpenByTenant() {
+          return [row];
+        },
+      } as any,
+      {} as any,
+      async () => ({ value: utilityOutput(), model: "gpt-test", responseId: "r", latencyMs: 1 }),
+      {
+        async findReusableHeaderHandleForBytes() {
+          return { resumable: "4::from-old-jandira", any: "4::from-old-jandira" };
+        },
+      } as any,
+      () => "token-unused",
+      async () => {
+        uploads += 1;
+        throw new Error("não deveria subir");
+      },
+    );
+    const tinyPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    try {
+      const uploaded = await service.uploadHeaderMediaFromAuth(
+        { email, role: "subscriber" },
+        { connectionId: row.id, mediaFormat: "IMAGE", fileName: "logo.png", mime: "image/png", bytes: tinyPng },
+      );
+      assert.equal(uploaded.handle, "4::from-old-jandira");
+      assert.equal(uploads, 0);
+    } finally {
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+    }
+  });
+
   it("reusa o handle da mesma foto sem chamar a Meta de novo", async () => {
     const email = "header-cache@example.com";
     const row = connection(email);
@@ -1408,17 +1456,24 @@ describe("Assistente IA de templates Utility", () => {
       } as any,
       {} as any,
       async () => ({ value: utilityOutput(), model: "gpt-test", responseId: "r", latencyMs: 1 }),
-      {} as any,
+      {
+        async findReusableHeaderHandleForBytes() {
+          return { resumable: "", any: "" };
+        },
+      } as any,
       () => "token-cache",
       async () => {
         uploads += 1;
         return { handle: "4::cached-once" };
       },
     );
-    const tinyPng = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-      "base64",
-    );
+    const tinyPng = Buffer.concat([
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+      Buffer.from(`cache-once-${Date.now()}-${Math.random()}`),
+    ]);
     try {
       const first = await service.uploadHeaderMediaFromAuth(
         { email, role: "subscriber" },
@@ -1438,7 +1493,7 @@ describe("Assistente IA de templates Utility", () => {
     }
   });
 
-  it("se o token da primeira conexão toma código 4, tenta o token da outra", async () => {
+  it("se o token da primeira conexão toma código 4, não queima o segundo token do mesmo app", async () => {
     const email = "header-failover@example.com";
     const andre = connection(email, {
       id: "conn-andre",
@@ -1453,6 +1508,7 @@ describe("Assistente IA de templates Utility", () => {
     const previousAppId = process.env.META_APP_ID;
     process.env.META_APP_ID = "app-test-header-failover";
     const { clearHeaderHandleCacheForTests } = await import("./meta-whatsapp-header-handle-cache");
+    const { toPublicMetaError } = await import("./meta-whatsapp-errors");
     clearHeaderHandleCacheForTests();
     const rateLimitText = publicMetaGraphMediaUploadMessage(
       { error: { message: "(#4) Application request limit reached", code: 4 } },
@@ -1473,7 +1529,11 @@ describe("Assistente IA de templates Utility", () => {
       } as any,
       {} as any,
       async () => ({ value: utilityOutput(), model: "gpt-test", responseId: "r", latencyMs: 1 }),
-      {} as any,
+      {
+        async findReusableHeaderHandleForBytes() {
+          return { resumable: "", any: "" };
+        },
+      } as any,
       (encrypted: string) => (encrypted === "enc-andre" ? "token-andre" : "token-drax"),
       async (input: { token?: string }) => {
         tokens.push(String(input.token || ""));
@@ -1481,10 +1541,81 @@ describe("Assistente IA de templates Utility", () => {
         return { handle: "4::drax-ok" };
       },
     );
-    const tinyPng = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-      "base64",
+    const tinyPng = Buffer.concat([
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+      Buffer.from(`failover-${Date.now()}-${Math.random()}`),
+    ]);
+    try {
+      await service.uploadHeaderMediaFromAuth(
+        { email, role: "subscriber" },
+        { connectionId: andre.id, mediaFormat: "IMAGE", fileName: "logo.png", mime: "image/png", bytes: tinyPng },
+      );
+      assert.fail("deveria ter falhado com código 4 sem tentar o outro token");
+    } catch (error) {
+      const publicError = toPublicMetaError(error);
+      assert.equal(publicError.code, "template_upload_failed");
+      assert.match(publicError.error, /código 4|bloqueou o upload/i);
+      assert.deepEqual(tokens, ["token-andre"]);
+    } finally {
+      clearHeaderHandleCacheForTests();
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+    }
+  });
+
+  it("se o token da primeira conexão falha sem ser código 4, tenta o token da outra", async () => {
+    const email = "header-failover-token@example.com";
+    const andre = connection(email, {
+      id: "conn-andre-token",
+      wabaId: "2458602464640240",
+      accessTokenEncrypted: "enc-andre",
+    });
+    const drax = connection(email, {
+      id: "conn-drax-token",
+      wabaId: "2283911612192961",
+      accessTokenEncrypted: "enc-drax",
+    });
+    const previousAppId = process.env.META_APP_ID;
+    process.env.META_APP_ID = "app-test-header-failover-token";
+    const { clearHeaderHandleCacheForTests } = await import("./meta-whatsapp-header-handle-cache");
+    clearHeaderHandleCacheForTests();
+    const tokens: string[] = [];
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          if (tenantId !== andre.tenantId) return null;
+          if (id === andre.id) return andre;
+          if (id === drax.id) return drax;
+          return null;
+        },
+        async listOpenByTenant() {
+          return [andre, drax];
+        },
+      } as any,
+      {} as any,
+      async () => ({ value: utilityOutput(), model: "gpt-test", responseId: "r", latencyMs: 1 }),
+      {
+        async findReusableHeaderHandleForBytes() {
+          return { resumable: "", any: "" };
+        },
+      } as any,
+      (encrypted: string) => (encrypted === "enc-andre" ? "token-andre" : "token-drax"),
+      async (input: { token?: string }) => {
+        tokens.push(String(input.token || ""));
+        if (input.token === "token-andre") throw new Error("A Meta recusou o arquivo. Token inválido.");
+        return { handle: "4::drax-ok" };
+      },
     );
+    const tinyPng = Buffer.concat([
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+      Buffer.from(`failover-token-${Date.now()}-${Math.random()}`),
+    ]);
     try {
       const uploaded = await service.uploadHeaderMediaFromAuth(
         { email, role: "subscriber" },
