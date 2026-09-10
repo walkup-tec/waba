@@ -22,6 +22,7 @@ const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const data_path_1 = require("../../data-path");
+const meta_whatsapp_phone_profile_1 = require("./meta-whatsapp-phone-profile");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
@@ -306,7 +307,7 @@ function resolveInboxSendPhoneNumberId(input) {
         return enabled[0] || null;
     return connection || null;
 }
-function applyLocalPhoneIdentities(tenantId, numbers) {
+function applyLocalPhoneIdentities(tenantId, numbers, placeholderName) {
     return numbers.map((row) => {
         const identity = readPhoneIdentity(tenantId, row.phoneNumberId);
         const nameSync = (0, meta_whatsapp_portfolio_map_1.resolvePhoneNameSync)({
@@ -315,7 +316,19 @@ function applyLocalPhoneIdentities(tenantId, numbers) {
             newDisplayName: row.newDisplayName,
             newNameStatus: row.newNameStatus,
             localName: identity?.name || null,
+            placeholderName,
         });
+        if (nameSync.nameSyncStatus === "applied" &&
+            (0, meta_whatsapp_portfolio_map_1.namesEqual)(identity?.name, meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME) &&
+            row.verifiedName &&
+            !(0, meta_whatsapp_portfolio_map_1.namesEqual)(row.verifiedName, meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME)) {
+            try {
+                writePhoneIdentity(tenantId, row.phoneNumberId, { name: row.verifiedName });
+            }
+            catch {
+                // Identidade local não pode abortar a listagem.
+            }
+        }
         const uiStatus = (0, meta_whatsapp_portfolio_map_1.resolveMetaPhoneUiStatus)({
             metaStatus: row.metaStatus,
             codeVerificationStatus: row.codeVerificationStatus,
