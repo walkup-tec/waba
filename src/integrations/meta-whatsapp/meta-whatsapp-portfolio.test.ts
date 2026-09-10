@@ -482,17 +482,7 @@ describe("meta portfolio mapper", () => {
     assert.equal(row?.canActivate, true);
   });
 
-  it("RESTRICTED/BANNED e health BLOCKED aparecem como Restrito/Banido sem PIN", () => {
-    const restricted = mapMetaPhoneToPortfolioNumber({
-      id: "phone-restricted",
-      display_phone_number: "+55 27 92836-1199",
-      verified_name: "Quantum Smart Labs",
-      status: "RESTRICTED",
-      code_verification_status: "VERIFIED",
-    });
-    assert.equal(restricted?.uiStatus, "restrito");
-    assert.equal(restricted?.canActivate, false);
-
+  it("BANNED/DISABLED aparecem como Restrito/Banido sem PIN", () => {
     const banned = mapMetaPhoneToPortfolioNumber({
       id: "phone-banned",
       display_phone_number: "+55 11 95213-1900",
@@ -502,20 +492,59 @@ describe("meta portfolio mapper", () => {
     assert.equal(banned?.uiStatus, "restrito");
     assert.equal(banned?.canActivate, false);
 
+    const disabled = mapMetaPhoneToPortfolioNumber({
+      id: "phone-disabled",
+      display_phone_number: "+55 11 95213-1901",
+      status: "DISABLED",
+      code_verification_status: "VERIFIED",
+    });
+    assert.equal(disabled?.uiStatus, "restrito");
+    assert.equal(disabled?.canActivate, false);
+  });
+
+  it("limite, qualidade e health BLOCKED não marcam o chip como banido", () => {
+    const draxLimit = mapMetaPhoneToPortfolioNumber({
+      id: "drax-92636",
+      display_phone_number: "+55 51 92636-1676",
+      verified_name: "Drax Sistemas",
+      status: "RESTRICTED",
+      code_verification_status: "VERIFIED",
+    });
+    assert.equal(draxLimit?.uiStatus, "ativo");
+    assert.equal(draxLimit?.canActivate, false);
+
+    const flagged = mapMetaPhoneToPortfolioNumber({
+      id: "phone-flagged",
+      display_phone_number: "+55 27 92836-1199",
+      verified_name: "Quantum Smart Labs",
+      status: "FLAGGED",
+      code_verification_status: "VERIFIED",
+    });
+    assert.equal(flagged?.uiStatus, "ativo");
+
+    const rateLimited = mapMetaPhoneToPortfolioNumber({
+      id: "phone-rate",
+      display_phone_number: "+55 11 90000-0001",
+      status: "RATE_LIMITED",
+      code_verification_status: "VERIFIED",
+    });
+    assert.equal(rateLimited?.uiStatus, "ativo");
+
     const blockedHealth = mapMetaPhoneToPortfolioNumber({
       id: "phone-blocked",
-      display_phone_number: "+55 11 90000-0000",
+      display_phone_number: "+55 51 92636-1676",
+      verified_name: "Drax Sistemas",
       status: "CONNECTED",
       code_verification_status: "VERIFIED",
       health_status: {
         can_send_message: "BLOCKED",
         entities: [
-          { entity_type: "PHONE_NUMBER", id: "phone-blocked", can_send_message: "BLOCKED" },
+          { entity_type: "BUSINESS", id: "bm-drax", can_send_message: "BLOCKED" },
+          { entity_type: "PHONE_NUMBER", id: "phone-blocked", can_send_message: "AVAILABLE" },
         ],
       },
     });
-    assert.equal(blockedHealth?.uiStatus, "restrito");
-    assert.equal(blockedHealth?.canActivate, false);
+    assert.equal(blockedHealth?.uiStatus, "ativo");
     assert.equal(blockedHealth?.healthCanSend, "BLOCKED");
   });
 
