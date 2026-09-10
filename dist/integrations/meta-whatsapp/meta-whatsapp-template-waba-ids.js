@@ -248,7 +248,6 @@ async function discoverTemplateWabas(input) {
             .map((id) => String(id || "").trim())
             .filter((id) => id && !(0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(bm).includes(id))),
     ];
-    const pinnedIds = new Set([primary, ...knownOwnedIds].filter(Boolean));
     const noteOwned = (row) => {
         ownedIds.add(row.id);
         if (row.phoneCount === 0)
@@ -288,11 +287,18 @@ async function discoverTemplateWabas(input) {
         for (const row of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaRowsForBusiness)(bm)) {
             addDiscoveredWaba(byId, row.id, row.name, bm);
         }
-        // WABA owned sem chip não existe no card do portfólio. Mantém a da
-        // conexão e irmã knownOwned (André WABA02). Extra/stale vazio sai.
+        // Card do portfólio = WABA da conexão. Se ela já está no owned do BM,
+        // outras owned do token (mesmo com número) não entram no criar template.
+        // André WABA02 continua via knownOwned. Se a conexão aponta WABA antiga
+        // fora do owned (Walkup stale), mantém as owned atuais e só tira vazio.
+        const primaryInOwned = Boolean(primary && ownedIds.has(primary));
         for (const id of [...byId.keys()]) {
-            if (pinnedIds.has(id))
+            if (knownOwnedIds.has(id) || id === primary)
                 continue;
+            if (primaryInOwned) {
+                byId.delete(id);
+                continue;
+            }
             if (ownedEmptyIds.has(id))
                 byId.delete(id);
         }
