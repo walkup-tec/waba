@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_OWNED_PAGES_FIELDS = exports.META_BUSINESS_IDENTITY_FIELDS_MINIMAL = exports.META_BUSINESS_IDENTITY_FIELDS = exports.META_WABA_IDENTITY_FIELDS_MINIMAL = exports.META_WABA_IDENTITY_FIELDS = exports.META_PHONE_NAME_FIELDS = exports.META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT = exports.META_PHONE_MESSAGING_LIMIT_FIELD = exports.META_PHONE_NUMBER_MEMBERSHIP_FIELDS = exports.META_PHONE_NUMBER_CATALOG_FIELDS = exports.META_PHONE_NUMBER_LIST_FIELDS = void 0;
 exports.isGenericMetaBusinessName = isGenericMetaBusinessName;
 exports.graphPhotoDownloadUrl = graphPhotoDownloadUrl;
+exports.shouldRefreshCachedPhonePhoto = shouldRefreshCachedPhonePhoto;
 exports.graphPhotoSourceKey = graphPhotoSourceKey;
 exports.safePublicPhotoUrl = safePublicPhotoUrl;
 exports.isMetaPhoneConnected = isMetaPhoneConnected;
@@ -11,6 +12,7 @@ exports.resolveMetaPhoneUiStatus = resolveMetaPhoneUiStatus;
 exports.canActivateMetaPhoneNumber = canActivateMetaPhoneNumber;
 exports.namesEqual = namesEqual;
 exports.mapPhoneNameFields = mapPhoneNameFields;
+exports.isStaleDefaultDisplayNameRequest = isStaleDefaultDisplayNameRequest;
 exports.resolvePhoneNameSync = resolvePhoneNameSync;
 exports.phoneNumberCardName = phoneNumberCardName;
 exports.businessIdNotWaba = businessIdNotWaba;
@@ -27,6 +29,7 @@ exports.dedupePortfolioCards = dedupePortfolioCards;
 exports.firstOwnedPageId = firstOwnedPageId;
 exports.mapMetaPhoneToPortfolioNumber = mapMetaPhoneToPortfolioNumber;
 exports.mapMetaPhoneListToPortfolioNumbers = mapMetaPhoneListToPortfolioNumbers;
+const meta_whatsapp_phone_profile_1 = require("./meta-whatsapp-phone-profile");
 exports.META_PHONE_NUMBER_LIST_FIELDS = "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,name_status,new_display_name,new_name_status,health_status";
 /**
  * Catálogo do WABA sem campos que a Graph usa para filtrar chip Pendente:
@@ -100,6 +103,17 @@ function graphPhotoDownloadUrl(json) {
         httpsUrl(row.url, true));
 }
 /** Path estável da CDN da Meta — query string muda o tempo todo na mesma foto. */
+function shouldRefreshCachedPhonePhoto(identity, graphUrl) {
+    const url = String(graphUrl || "").trim();
+    if (!/^https:\/\//i.test(url))
+        return false;
+    const nextKey = graphPhotoSourceKey(url);
+    if (!nextKey)
+        return false;
+    if (identity?.photoExt && identity.photoSource && identity.photoSource === nextKey)
+        return false;
+    return true;
+}
 function graphPhotoSourceKey(url) {
     const raw = String(url || "").trim();
     if (!raw)
@@ -208,9 +222,38 @@ function mapPhoneNameFields(json) {
         newNameStatus: text(row.new_name_status),
     };
 }
+function namesLooselyRelated(left, right) {
+    if (namesEqual(left, right))
+        return true;
+    const a = String(left || "").trim().toLowerCase();
+    const b = String(right || "").trim().toLowerCase();
+    if (!a || !b || a.length < 4 || b.length < 4)
+        return false;
+    return a.includes(b) || b.includes(a);
+}
+function isStaleDefaultDisplayNameRequest(input) {
+    const verified = text(input.verifiedName);
+    const incoming = text(input.incomingName);
+    if (!verified || !incoming)
+        return false;
+    if (!namesEqual(incoming, meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME))
+        return false;
+    if (namesEqual(verified, meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME))
+        return false;
+    if (namesLooselyRelated(verified, input.placeholderName))
+        return false;
+    return true;
+}
 function resolvePhoneNameSync(input) {
     const verified = text(input.verifiedName);
-    const incoming = text(input.newDisplayName) || text(input.localName);
+    const rawIncoming = text(input.newDisplayName) || text(input.localName);
+    const incoming = isStaleDefaultDisplayNameRequest({
+        verifiedName: verified,
+        incomingName: rawIncoming,
+        placeholderName: input.placeholderName,
+    })
+        ? null
+        : rawIncoming;
     const newStatus = String(input.newNameStatus || "").trim().toUpperCase();
     if (!incoming && !verified) {
         return { requestedName: null, nameSyncStatus: null, nameNeedsRegister: false };
