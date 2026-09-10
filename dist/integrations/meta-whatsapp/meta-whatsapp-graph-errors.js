@@ -163,7 +163,10 @@ function publicMetaGraphRegisterMessage(input) {
     if (status === 401 || graphCode === "190") {
         return "A autorização da Meta expirou. Reconecte o portfólio no Laboratório e tente ativar de novo.";
     }
-    if (status === 403 || graphCode === "10" || graphCode === "200") {
+    if (status === 403 ||
+        graphCode === "10" ||
+        graphCode === "200" ||
+        isMetaGraphWabaWriteDenied(input.json, status)) {
         return wabaLabel
             ? `A Meta recusou a ativação: o token desta conexão não gerencia ${wabaLabel}. Clique em + no portfólio, conecte essa WABA e ative o número de novo.`
             : "A Meta recusou a ativação: o token desta conexão não tem permissão neste número. Conecte a WABA dona do chip pelo + do portfólio e tente de novo.";
