@@ -7,6 +7,7 @@ exports.wabasFromBusinessEdgeJson = wabasFromBusinessEdgeJson;
 exports.splitWabasFromBusinessNodeJson = splitWabasFromBusinessNodeJson;
 exports.wabasFromBusinessNodeJson = wabasFromBusinessNodeJson;
 exports.extraWabaIdsFromConnections = extraWabaIdsFromConnections;
+exports.templatePickerWabaIds = templatePickerWabaIds;
 exports.wabaIdentityMatchesBusiness = wabaIdentityMatchesBusiness;
 exports.filterWabaIdsOwnedByBusiness = filterWabaIdsOwnedByBusiness;
 exports.discoverTemplateWabas = discoverTemplateWabas;
@@ -129,6 +130,12 @@ function extraWabaIdsFromConnections(rows, current) {
             out.add(id);
     }
     return [...out];
+}
+/** Criar template / picker: só a WABA do card e irmãs knownOwned (André WABA02). */
+function templatePickerWabaIds(connection) {
+    const primary = String(connection.wabaId || "").trim();
+    const bm = String(connection.metaBusinessId || "").trim();
+    return [...new Set([primary, ...(0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm)].filter(Boolean))];
 }
 function wabaIdentityMatchesBusiness(json, businessId) {
     const wanted = String(businessId || "").trim();
