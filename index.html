@@ -39848,10 +39848,10 @@
           if (needsMedia) metaTplAiSetStepState("media", "current");
           const headerHandles = {};
           let headerHandle = "";
+          const uploaded = await metaTplAiUploadHeaderIfNeeded(connectionId, shell.mediaFormat);
+          headerHandle = uploaded || "";
           for (let i = 0; i < connectionIds.length; i += 1) {
-            const uploaded = await metaTplAiUploadHeaderIfNeeded(connectionIds[i], shell.mediaFormat);
-            if (uploaded) headerHandles[connectionIds[i]] = uploaded;
-            if (uploaded && !headerHandle) headerHandle = uploaded;
+            if (headerHandle) headerHandles[connectionIds[i]] = headerHandle;
           }
           if (needsMedia) await markStepDone("media");
           metaTplAiStartBusyCycle();
