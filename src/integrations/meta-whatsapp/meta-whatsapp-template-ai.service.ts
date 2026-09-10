@@ -22,6 +22,11 @@ import {
   writeCachedHeaderHandle,
 } from "./meta-whatsapp-header-handle-cache";
 import {
+  isMetaGraphUploadCooldown,
+  markMetaGraphUploadCooldown,
+  metaGraphUploadCooldownMessage,
+} from "./meta-whatsapp-graph-cooldown";
+import {
   META_TEMPLATE_AI_OUTPUT_SCHEMA,
   META_TEMPLATE_AI_SCHEMA_NAME,
   validateMetaTemplateAiOutput,
@@ -775,6 +780,11 @@ export class MetaWhatsappTemplateAiService {
       });
       return { handle: cachedHandle, mediaFormat };
     }
+    if (isMetaGraphUploadCooldown()) {
+      const failed = new MetaWhatsappError("template_upload_failed");
+      failed.message = metaGraphUploadCooldownMessage();
+      throw failed;
+    }
 
     const repo = this.connections as MetaWhatsappConnectionRepository;
     const openRows =
@@ -838,13 +848,17 @@ export class MetaWhatsappTemplateAiService {
           reason: msg.slice(0, 160),
         });
         // Código 4 é cota do aplicativo: outro token no mesmo app só queima mais cota.
-        if (isHeaderUploadAppRateLimit(error)) break;
+        if (isHeaderUploadAppRateLimit(error)) {
+          markMetaGraphUploadCooldown();
+          break;
+        }
       }
     }
     const failed = wrapMetaHeaderUploadError(lastError || new MetaWhatsappError("template_upload_failed"));
     if (/código 4|limitou temporariamente/i.test(failed.message)) {
+      markMetaGraphUploadCooldown();
       failed.message =
-        "A Meta bloqueou o upload de mídia deste aplicativo (código 4) em todas as conexões. Não é o tamanho da imagem. Feche a aba Conexão, não clique em Atualizar da Meta, e envie de novo mais tarde.";
+        "A Meta bloqueou o upload de mídia deste aplicativo (código 4). Não é o tamanho da imagem. Feche Conexão, não clique em Atualizar da Meta e não tente de novo agora — cada clique atrasa a cota.";
     }
     throw failed;
   }
