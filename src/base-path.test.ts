@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { patchMetaTplHeaderUploadOnce } from "./base-path";
+import { patchMetaTplGraphQuotaHtml, patchMetaTplHeaderUploadOnce } from "./base-path";
 
 describe("patch do upload único de cabeçalho", () => {
   it("troca o loop por conexão pelo upload único", () => {
@@ -21,5 +21,10 @@ describe("patch do upload único de cabeçalho", () => {
     const html =
       'const uploaded = await metaTplAiUploadHeaderIfNeeded(connectionId, shell.mediaFormat);';
     assert.equal(patchMetaTplHeaderUploadOnce(html), html);
+  });
+
+  it("alonga o poll da Conexão para não queimar cota", () => {
+    const patched = patchMetaTplGraphQuotaHtml("const META_TP_LIVE_MS = 2500;");
+    assert.match(patched, /META_TP_LIVE_MS = 180000/);
   });
 });
