@@ -126,6 +126,47 @@ export function publicMetaGraphTemplateMessage(
   return detail || "Não foi possível gerenciar o template na Meta.";
 }
 
+export function publicMetaGraphRegisterMessage(input: {
+  status: number;
+  json?: unknown;
+  graphCode?: string | null;
+  phoneWabaId?: string;
+  phoneWabaName?: string;
+}): string {
+  const status = Number(input.status || 0);
+  const { code } = extractPublicGraphErrorCodes(input.json);
+  const graphCode = String(input.graphCode || code || "").trim();
+  const detail = safePublicGraphTemplateDetail(input.json);
+  const wabaName = String(input.phoneWabaName || "").trim();
+  const wabaId = String(input.phoneWabaId || "").trim();
+  const wabaLabel = wabaName && wabaId ? `${wabaName} (${wabaId})` : wabaName || wabaId;
+
+  if (graphCode === "133005") {
+    return "A Meta recusou o PIN de duas etapas deste número. Use o PIN cadastrado no WhatsApp Manager e tente de novo.";
+  }
+  if (graphCode === "133006") {
+    return "A Meta ainda exige a verificação por SMS deste número. Conclua o código no WhatsApp Manager e depois informe o PIN de 6 dígitos.";
+  }
+  if (graphCode === "133008" || graphCode === "133009") {
+    return "A Meta bloqueou temporariamente novas tentativas de PIN neste número. Aguarde alguns minutos e tente uma vez só.";
+  }
+  if (status === 401 || graphCode === "190") {
+    return "A autorização da Meta expirou. Reconecte o portfólio no Laboratório e tente ativar de novo.";
+  }
+  if (status === 403 || graphCode === "10" || graphCode === "200") {
+    return wabaLabel
+      ? `A Meta recusou a ativação: o token desta conexão não gerencia ${wabaLabel}. Clique em + no portfólio, conecte essa WABA e ative o número de novo.`
+      : "A Meta recusou a ativação: o token desta conexão não tem permissão neste número. Conecte a WABA dona do chip pelo + do portfólio e tente de novo.";
+  }
+  if (detail) {
+    return `A Meta recusou a ativação. ${detail}`;
+  }
+  if (graphCode) {
+    return `A Meta recusou a ativação do número (código ${graphCode}). Confira o PIN e a WABA dona do chip.`;
+  }
+  return "Não foi possível ativar o número na Meta. Confira o PIN e tente de novo.";
+}
+
 export function extractPublicGraphErrorCodes(json: unknown): { code: string; subcode: string } {
   const err = asErrorRecord((json as { error?: unknown } | null)?.error);
   return {
