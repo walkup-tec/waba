@@ -14,7 +14,14 @@ import {
 } from "./meta-whatsapp-template-ai.prompt";
 import { MetaWhatsappTemplateAiRepository } from "./meta-whatsapp-template-ai.repository";
 import { saveTemplateHeaderPreview } from "./meta-whatsapp-template-header-preview.store";
-import { headerFileSha256, readCachedHeaderHandle, writeCachedHeaderHandle } from "./meta-whatsapp-header-handle-cache";
+import {
+  headerFileSha256,
+  isHeaderUploadAppRateLimit,
+  isResumableUploadHandle,
+  readCachedHeaderHandle,
+  readPersistedHeaderHandle,
+  writeCachedHeaderHandle,
+} from "./meta-whatsapp-header-handle-cache";
 import {
   META_TEMPLATE_AI_OUTPUT_SCHEMA,
   META_TEMPLATE_AI_SCHEMA_NAME,
@@ -740,8 +747,19 @@ export class MetaWhatsappTemplateAiService {
     const appId = readMetaAppId();
     if (!appId) throw new MetaWhatsappError("config_invalid");
     const fileSha = headerFileSha256(bytes);
-    const cachedHandle = readCachedHeaderHandle(tenant.tenantId, fileSha);
-    if (cachedHandle) {
+    const finder = this.templates as {
+      findReusableHeaderHandleForBytes?: (
+        tenantId: string,
+        file: Buffer,
+      ) => Promise<{ resumable: string; any: string }>;
+    };
+    const reused =
+      typeof finder.findReusableHeaderHandleForBytes === "function"
+        ? await finder.findReusableHeaderHandleForBytes(tenant.tenantId, bytes)
+        : { resumable: "", any: "" };
+    const cachedHandle =
+      readCachedHeaderHandle(tenant.tenantId, fileSha) || reused.resumable;
+    if (cachedHandle && isResumableUploadHandle(cachedHandle)) {
       saveTemplateHeaderPreview({
         tenantId: tenant.tenantId,
         handle: cachedHandle,
@@ -821,9 +839,35 @@ export class MetaWhatsappTemplateAiService {
           bytes: bytes.length,
           reason: msg.slice(0, 160),
         });
+        // Código 4 é cota do aplicativo: outro token no mesmo app só queima mais cota.
+        if (isHeaderUploadAppRateLimit(error)) break;
       }
     }
-    if (lastError instanceof MetaWhatsappError) throw lastError;
-    throw wrapMetaHeaderUploadError(lastError || new MetaWhatsappError("template_upload_failed"));
+    const persisted = readPersistedHeaderHandle(tenant.tenantId, fileSha);
+    const fallbackHandle = (isResumableUploadHandle(persisted) ? persisted : "") || reused.any;
+    if (fallbackHandle) {
+      saveTemplateHeaderPreview({
+        tenantId: tenant.tenantId,
+        handle: fallbackHandle,
+        mime,
+        fileName,
+        bytes,
+      });
+      logMetaTemplate("AI", {
+        tenantId: tenant.tenantId,
+        connectionId,
+        headerUpload: mediaFormat,
+        headerReused: true,
+        bytes: bytes.length,
+        mime,
+      });
+      return { handle: fallbackHandle, mediaFormat };
+    }
+    const failed = wrapMetaHeaderUploadError(lastError || new MetaWhatsappError("template_upload_failed"));
+    if (/código 4|limitou temporariamente/i.test(failed.message)) {
+      failed.message =
+        "A Meta bloqueou o upload de mídia deste aplicativo (código 4) em todas as conexões. Não é o tamanho da imagem. Feche a aba Conexão, não clique em Atualizar da Meta, e envie de novo mais tarde.";
+    }
+    throw failed;
   }
 }
