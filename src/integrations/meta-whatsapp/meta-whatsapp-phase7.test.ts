@@ -799,6 +799,102 @@ describe("fase 7 criação e erros Graph", () => {
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "send_failed" && error.status === 503,
     );
   });
+
+  it("WABA01 400 Unsupported post: tenta o token da WABA02 irmã", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "conn-waba01",
+        wabaId: "2458602464640240",
+        metaBusinessId: "1759044748332124",
+        accessTokenEncrypted: "v1:enc-waba01",
+      }),
+      connectedRow({
+        id: "conn-waba02",
+        wabaId: "1744257946809067",
+        metaBusinessId: "1759044748332124",
+        accessTokenEncrypted: "v1:enc-waba02",
+        status: "pending_confirmation",
+      }),
+    );
+    const postTokens: string[] = [];
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      new FakeTemplates() as any,
+      async (input) => {
+        if (input.method !== "POST") return graphErr(403);
+        postTokens.push(String(input.token || ""));
+        assert.equal(input.path, "1744257946809067/message_templates");
+        if (input.token === "token-waba02") {
+          return graphJson({ id: "tpl-waba02", status: "PENDING", category: "MARKETING" });
+        }
+        return graphErr(400, {
+          json: {
+            error: {
+              code: 100,
+              message:
+                "Unsupported post request. Object with ID '1744257946809067' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+            },
+          },
+        });
+      },
+      (encrypted) => (String(encrypted).includes("waba02") ? "token-waba02" : "token-waba01"),
+    );
+    const created = await service.createFromAuth(auth(EMAIL_A), {
+      ...VALID_CREATE,
+      connectionId: "conn-waba01",
+      wabaId: "1744257946809067",
+    });
+    assert.equal(created.metaTemplateId, "tpl-waba02");
+    assert.equal(created.status, "PENDING");
+    assert.equal(created.wabaId, "1744257946809067");
+    assert.deepEqual(postTokens, ["token-waba02"]);
+  });
+
+  it("WABA01 sem token da irmã: Unsupported post vira recusa em português", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "conn-waba01",
+        wabaId: "2458602464640240",
+        metaBusinessId: "1759044748332124",
+        accessTokenEncrypted: "v1:enc-waba01",
+      }),
+    );
+    let posts = 0;
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      new FakeTemplates() as any,
+      async (input) => {
+        if (input.method !== "POST") return graphErr(403);
+        posts += 1;
+        return graphErr(400, {
+          json: {
+            error: {
+              code: 100,
+              message:
+                "Unsupported post request. Object with ID '1744257946809067' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+            },
+          },
+        });
+      },
+      () => "token-waba01",
+    );
+    await assert.rejects(
+      () =>
+        service.createFromAuth(auth(EMAIL_A), {
+          ...VALID_CREATE,
+          connectionId: "conn-waba01",
+          wabaId: "1744257946809067",
+        }),
+      (error: unknown) =>
+        error instanceof MetaWhatsappError &&
+        error.code === "template_invalid" &&
+        /WABA02|não gerencia essa WABA|conecte essa conta/i.test(error.message) &&
+        !/Unsupported post request/i.test(error.message),
+    );
+    assert.equal(posts, 1);
+  });
 });
 
 describe("fase 7 exclusão Graph", () => {
