@@ -15,6 +15,15 @@ export function shiftedLocalDateKey(daysFromToday: number, now = new Date()): st
   return localCalendarDateKey(date);
 }
 
+export function templateCreatedAtIso(row: {
+  createdAt?: string | null;
+  created_at?: string | null;
+  lastSyncedAt?: string | null;
+  last_synced_at?: string | null;
+} | null | undefined): string {
+  return String((row && (row.createdAt || row.created_at)) || "").trim();
+}
+
 export function templateMatchesCreatedDay(
   createdAt: string | null | undefined,
   dayKey: string,
