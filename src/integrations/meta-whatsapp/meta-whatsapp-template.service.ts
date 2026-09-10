@@ -5,6 +5,7 @@ import { MetaWhatsappConnectionRepository } from "./meta-whatsapp-connection.rep
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
 import {
   isMetaGraphRateLimitPayload,
+  isMetaGraphWabaWriteDenied,
   publicMetaGraphTemplateMessage,
   safePublicGraphTemplateDetail,
 } from "./meta-whatsapp-graph-errors";
@@ -22,6 +23,7 @@ import {
   discoverTemplateWabaIds,
   discoverTemplateWabas,
   extraWabaIdsFromConnections,
+  pickTemplateWriteConnections,
 } from "./meta-whatsapp-template-waba-ids";
 import { appendSilentBlockButton } from "./meta-whatsapp-template-silent-block-button";
 import { validateTemplateCreate } from "./meta-whatsapp-template-validate";
@@ -45,6 +47,7 @@ import {
   templateHeaderPreviewKeys,
 } from "./meta-whatsapp-template-header-preview.store";
 import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template";
+import { knownWabaNameForId } from "./meta-whatsapp-known-owned-wabas";
 import { pickReusableHeaderHandle } from "./meta-whatsapp-header-handle-cache";
 import {
   isMetaGraphUploadCooldown,
@@ -380,14 +383,39 @@ export class MetaWhatsappTemplateService {
       token,
       String(body?.wabaId || body?.waba_id || ""),
     );
-    const result = await createWabaMessageTemplate({
-      token,
+    const writers = pickTemplateWriteConnections(
+      await this.listOpenConnections(tenant.tenantId),
+      connection,
       wabaId,
-      body: graphBody,
-      graph: this.graph,
-    });
-    if (!result.ok) {
-      throwFromGraph(result);
+    );
+    let result: Awaited<ReturnType<typeof createWabaMessageTemplate>> | null = null;
+    for (const writer of writers) {
+      try {
+        token = this.decrypt(writer.accessTokenEncrypted);
+      } catch {
+        continue;
+      }
+      if (!token) continue;
+      result = await createWabaMessageTemplate({
+        token,
+        wabaId,
+        body: graphBody,
+        graph: this.graph,
+      });
+      if (result.ok) break;
+      if (!isMetaGraphWabaWriteDenied(result.json, result.status)) break;
+    }
+    if (!result || !result.ok) {
+      if (result && isMetaGraphWabaWriteDenied(result.json, result.status)) {
+        const wabaLabel = knownWabaNameForId(wabaId) || wabaId;
+        const error = new MetaWhatsappError("template_invalid");
+        error.message =
+          `A Meta recusou o cadastro na ${wabaLabel}. O token desta conexão não gerencia essa WABA. ` +
+          "Clique em + no portfólio, conecte essa conta e envie de novo só nela. " +
+          "Os templates já aceitos nas outras WABAs não precisam ser reenviados.";
+        throw error;
+      }
+      throwFromGraph(result || { status: 424, kind: "permanent", json: null, graphCode: null });
     }
     const now = new Date().toISOString();
     const row = await this.templates.upsertFromGraph({
