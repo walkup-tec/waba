@@ -6,6 +6,7 @@ import {
   discoverTemplateWabas,
   extraWabaIdsFromConnections,
   isProbablyMessageTemplateRow,
+  pickTemplateWriteConnections,
   wabaIdentityMatchesBusiness,
   wabaIdsFromBusinessEdgeJson,
   wabaIdsFromDebugTokenJson,
@@ -651,6 +652,49 @@ describe("extraWabaIdsFromConnections", () => {
         { id: "c1", wabaId: "2458602464640240", metaBusinessId: "1759044748332124" },
       ),
       ["1744257946809067"],
+    );
+  });
+});
+
+describe("pickTemplateWriteConnections", () => {
+  const waba01 = {
+    id: "conn-waba01",
+    wabaId: "2458602464640240",
+    metaBusinessId: "1759044748332124",
+    status: "connected" as const,
+    disconnectedAt: null,
+  };
+  const waba02 = {
+    id: "conn-waba02",
+    wabaId: "1744257946809067",
+    metaBusinessId: "1759044748332124",
+    status: "pending_confirmation" as const,
+    disconnectedAt: null,
+  };
+  const drax = {
+    id: "conn-drax",
+    wabaId: "2283911612192961",
+    metaBusinessId: "bm-drax-2000",
+    status: "connected" as const,
+    disconnectedAt: null,
+  };
+
+  it("posta na WABA02 com o token da conexão dessa WABA, não o da WABA01", () => {
+    const picked = pickTemplateWriteConnections(
+      [waba01, waba02, drax] as any,
+      waba01 as any,
+      "1744257946809067",
+    );
+    assert.equal(picked[0].id, "conn-waba02");
+    assert.equal(picked.some((row) => row.id === "conn-drax"), false);
+    assert.equal(picked.some((row) => row.id === "conn-waba01"), true);
+  });
+
+  it("sem conexão da WABA02 fica só o token da conexão selecionada", () => {
+    const picked = pickTemplateWriteConnections([waba01, drax] as any, waba01 as any, "1744257946809067");
+    assert.deepEqual(
+      picked.map((row) => row.id),
+      ["conn-waba01"],
     );
   });
 });
