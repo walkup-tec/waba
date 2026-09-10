@@ -51,6 +51,7 @@ import {
   clearPortfolioGraphInflight,
   invalidateCachedPortfolioGraph,
   readCachedPortfolioGraph,
+  readStaleCachedPortfolioGraph,
   readPortfolioGraphInflight,
   setPortfolioGraphInflight,
   shouldUsePortfolioGraphCache,
@@ -65,6 +66,7 @@ import {
   knownWabaNameForId,
 } from "./meta-whatsapp-known-owned-wabas";
 import { publicMetaGraphRegisterMessage } from "./meta-whatsapp-graph-errors";
+import { isMetaGraphUploadCooldown } from "./meta-whatsapp-graph-cooldown";
 import {
   fetchWabaOwner,
   fetchBusinessFromGraph,
@@ -1390,6 +1392,13 @@ export class MetaWhatsappConnectionService {
   ): Promise<MetaPortfolioAssetsPublic> {
     const tenant = requireTenant(auth);
     const requested = String(opts?.connectionId || "").trim();
+    if (isMetaGraphUploadCooldown()) {
+      const stale = readStaleCachedPortfolioGraph(tenant.tenantId);
+      if (stale?.portfolios?.length) {
+        return withLocalIdentities(tenant.tenantId, assetsFromPortfolioCards(stale.portfolios, requested));
+      }
+      return withLocalIdentities(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
+    }
     const useCache = shouldUsePortfolioGraphCache() && !opts?.fresh;
     if (useCache) {
       const cached = readCachedPortfolioGraph(tenant.tenantId);
@@ -1411,6 +1420,23 @@ export class MetaWhatsappConnectionService {
     } finally {
       clearPortfolioGraphInflight(tenant.tenantId);
     }
+  }
+
+  private async loadStoredPortfolioAssets(
+    tenantId: string,
+    requested: string,
+  ): Promise<MetaPortfolioAssetsPublic> {
+    const repo = this.repository as MetaWhatsappConnectionRepository;
+    const rows =
+      typeof repo.listOpenByTenant === "function"
+        ? await repo.listOpenByTenant(tenantId)
+        : [await this.repository.findOpenByTenant(tenantId)].filter(
+            (item): item is MetaWhatsappConnectionRecord => Boolean(item),
+          );
+    const cards = dedupePortfolioCards(
+      rows.map((row) => ({ ...cardFromConnection(row), numbers: storedNumbersFromConnection(row) })),
+    ).filter(isRenderablePortfolioCard);
+    return assetsFromPortfolioCards(cards, requested);
   }
 
   private async loadPortfolioGraphAssets(
