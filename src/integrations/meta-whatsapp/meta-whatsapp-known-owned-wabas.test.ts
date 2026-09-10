@@ -38,8 +38,12 @@ describe("known owned WABAs", () => {
   });
 
   it("não inventa WABA para outro BM", () => {
-    assert.deepEqual(knownOwnedWabaIdsForBusiness("4141369862822598"), []);
+    assert.deepEqual(knownOwnedWabaIdsForBusiness("bm-drax-2000"), []);
     assert.deepEqual(knownPendingPhonesForBusiness("bm-drax-2000"), []);
+  });
+
+  it("Walkup: WABA 01 do Manager, sem a conta fantasma", () => {
+    assert.deepEqual(knownOwnedWabaIdsForBusiness("4141369862822598"), ["1014470201624992"]);
   });
 
   it("Drax Sistemas: só a WABA do Manager, não a conexão stale", () => {
