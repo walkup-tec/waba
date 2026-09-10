@@ -61,7 +61,6 @@ import {
   isKnownClientWabaForBusiness,
   knownOwnedBusinessesMatch,
   knownOwnedWabaIdsForBusiness,
-  knownPendingPhoneGraphRow,
   knownPendingPhonesForBusiness,
   knownWabaIdForPendingPhone,
   knownWabaNameForId,
@@ -532,6 +531,7 @@ async function hydrateOpenConnection(
 
   let anyPhonesOk = phoneRows.length > 0;
   let lastPhoneStatus = 0;
+  const listedOkWabaIds = new Set<string>();
   const extraWabas = [...wabaIds].filter((id) => id && id !== primaryWabaId);
   const orderedWabas = [primaryWabaId, ...extraWabas].filter(Boolean);
   const startedAt = Date.now();
@@ -551,6 +551,7 @@ async function hydrateOpenConnection(
       continue;
     }
     anyPhonesOk = true;
+    listedOkWabaIds.add(wid);
     pushPhones(stampPhoneRowsWithWabaId(phones.json.data, wid));
   }
   if (!anyPhonesOk) {
@@ -561,13 +562,10 @@ async function hydrateOpenConnection(
       connectionId: open.id,
       wabaCount: wabaIds.size,
     });
-    const fallbackKnown = mapMetaPhoneListToPortfolioNumbers({
-      data: knownPendingPhonesForBusiness(businessId || storedBm).map(knownPendingPhoneGraphRow),
-    });
     return {
       card: {
         ...card,
-        numbers: unionPortfolioNumbers(stored, fallbackKnown),
+        numbers: stored,
       },
       directory,
     };
@@ -591,19 +589,16 @@ async function hydrateOpenConnection(
   const knownPending = knownPendingPhonesForBusiness(businessId || storedBm);
   const missingKnownIds = knownPending
     .map((row) => row.phoneNumberId)
-    .filter((id) => id && !merged.some((row) => String(row.phoneNumberId || "").trim() === id));
+    .filter((id) => {
+      if (!id) return false;
+      if (merged.some((row) => String(row.phoneNumberId || "").trim() === id)) return false;
+      const wabaId = knownWabaIdForPendingPhone(id);
+      if (wabaId && listedOkWabaIds.has(wabaId)) return false;
+      return true;
+    });
   if (missingKnownIds.length) {
     const extra = await fetchPhoneNodes(g, token, missingKnownIds);
     merged = unionPortfolioNumbers(merged, mapMetaPhoneListToPortfolioNumbers({ data: extra }));
-  }
-  const stillMissing = knownPending.filter(
-    (row) => !merged.some((item) => String(item.phoneNumberId || "").trim() === row.phoneNumberId),
-  );
-  if (stillMissing.length) {
-    merged = unionPortfolioNumbers(
-      merged,
-      mapMetaPhoneListToPortfolioNumbers({ data: stillMissing.map(knownPendingPhoneGraphRow) }),
-    );
   }
   const pending = merged.filter((row) => row.uiStatus !== "ativo");
   const active = merged.filter((row) => row.uiStatus === "ativo");
