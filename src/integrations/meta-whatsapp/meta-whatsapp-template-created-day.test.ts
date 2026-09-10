@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   localCalendarDateKey,
   shiftedLocalDateKey,
+  templateCreatedAtIso,
   templateMatchesCreatedDay,
 } from "./meta-whatsapp-template-created-day";
 
@@ -26,5 +27,29 @@ describe("filtro de cadastro Hoje/Ontem", () => {
 
   it("converte ISO inválido em chave vazia", () => {
     assert.equal(localCalendarDateKey("nao-e-data"), "");
+  });
+
+  it("não usa a data de sincronização como criação", () => {
+    assert.equal(
+      templateCreatedAtIso({
+        createdAt: "2026-09-08T12:00:00.000Z",
+        lastSyncedAt: "2026-09-10T12:00:00.000Z",
+      }),
+      "2026-09-08T12:00:00.000Z",
+    );
+    assert.equal(
+      templateCreatedAtIso({
+        createdAt: null,
+        lastSyncedAt: "2026-09-10T12:00:00.000Z",
+      }),
+      "",
+    );
+    assert.equal(
+      templateMatchesCreatedDay(
+        templateCreatedAtIso({ createdAt: null, lastSyncedAt: "2026-09-10T12:00:00.000Z" }),
+        "2026-09-10",
+      ),
+      false,
+    );
   });
 });
