@@ -42,6 +42,7 @@ function toPublicTemplate(row, portfolioName) {
         wabaId: String(row.wabaId || "").trim() || null,
         headerPreviewUrl,
         headerReady: Boolean(headerPreviewUrl),
+        createdAt: String(row.createdAt || "").trim() || null,
     };
 }
 function isTemplateApprovedForSend(status) {
