@@ -459,6 +459,7 @@ describe("fase 7 listagem e tenant", () => {
     const listed = await service.listFromAuth(auth(EMAIL_A));
     assert.equal(listed[0].headerPreviewUrl, null);
     assert.equal(listed[0].headerReady, false);
+    assert.equal(listed[0].createdAt, "2026-08-25T12:00:00.000Z");
   });
 
   it("sem WABA connected devolve lista vazia, não erro", async () => {
