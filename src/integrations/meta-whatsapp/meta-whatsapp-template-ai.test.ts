@@ -1392,12 +1392,18 @@ describe("Assistente IA de templates Utility", () => {
     }
   });
 
-  it("não chama a Meta se um template local já tem a mesma foto com handle 4::", async () => {
-    const email = "header-reuse@example.com";
+  it("não devolve lookaside quando o upload toma código 4", async () => {
+    const email = "header-no-lookaside@example.com";
     const row = connection(email);
     const previousAppId = process.env.META_APP_ID;
-    process.env.META_APP_ID = "app-test-header-reuse";
-    let uploads = 0;
+    process.env.META_APP_ID = "app-test-header-no-lookaside";
+    const { clearHeaderHandleCacheForTests } = await import("./meta-whatsapp-header-handle-cache");
+    const { toPublicMetaError } = await import("./meta-whatsapp-errors");
+    clearHeaderHandleCacheForTests();
+    const rateLimitText = publicMetaGraphMediaUploadMessage(
+      { error: { message: "(#4) Application request limit reached", code: 4 } },
+      { fileBytes: 14_513 },
+    );
     const service = new MetaWhatsappTemplateAiService(
       {
         async findByIdForTenant(tenantId: string, id: string) {
@@ -1411,27 +1417,37 @@ describe("Assistente IA de templates Utility", () => {
       async () => ({ value: utilityOutput(), model: "gpt-test", responseId: "r", latencyMs: 1 }),
       {
         async findReusableHeaderHandleForBytes() {
-          return { resumable: "4::from-old-jandira", any: "4::from-old-jandira" };
+          return {
+            resumable: "",
+            any: "https://lookaside.fbsbx.com/whatsapp/sample.png",
+          };
         },
       } as any,
-      () => "token-unused",
+      () => "token-test",
       async () => {
-        uploads += 1;
-        throw new Error("não deveria subir");
+        throw new Error(rateLimitText);
       },
     );
-    const tinyPng = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-      "base64",
-    );
+    const tinyPng = Buffer.concat([
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+      Buffer.from(`no-lookaside-${Date.now()}-${Math.random()}`),
+    ]);
     try {
-      const uploaded = await service.uploadHeaderMediaFromAuth(
+      await service.uploadHeaderMediaFromAuth(
         { email, role: "subscriber" },
         { connectionId: row.id, mediaFormat: "IMAGE", fileName: "logo.png", mime: "image/png", bytes: tinyPng },
       );
-      assert.equal(uploaded.handle, "4::from-old-jandira");
-      assert.equal(uploads, 0);
+      assert.fail("não deveria aceitar lookaside como handle");
+    } catch (error) {
+      const publicError = toPublicMetaError(error);
+      assert.equal(publicError.code, "template_upload_failed");
+      assert.doesNotMatch(publicError.error, /lookaside/i);
+      assert.match(publicError.error, /código 4|bloqueou o upload/i);
     } finally {
+      clearHeaderHandleCacheForTests();
       if (previousAppId === undefined) delete process.env.META_APP_ID;
       else process.env.META_APP_ID = previousAppId;
     }
