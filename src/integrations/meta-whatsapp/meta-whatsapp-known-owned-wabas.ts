@@ -38,6 +38,9 @@ export const ANDRE_WABA02_ID = "1744257946809067";
 export const ANDRE_WABA02_PENDING_PHONE_ID = "1311179632078208";
 export const RIO_DE_JANEIRO_01_WABA_ID = "1581808413746453";
 
+export const DRAX_SISTEMAS_BUSINESS_IDS = ["1041827648719609"] as const;
+export const DRAX_SISTEMAS_WABA_ID = "1636793994538054";
+
 export const KNOWN_OWNED_BUSINESS_WABAS: KnownOwnedBusinessWabas[] = [
   {
     businessIds: [...ANDRE_AGUIAR_BUSINESS_IDS],
@@ -46,6 +49,12 @@ export const KNOWN_OWNED_BUSINESS_WABAS: KnownOwnedBusinessWabas[] = [
       { id: ANDRE_WABA02_ID, name: "André - WABA02" },
     ],
     clientWabaIds: [RIO_DE_JANEIRO_01_WABA_ID],
+    pendingPhones: [],
+  },
+  {
+    businessIds: [...DRAX_SISTEMAS_BUSINESS_IDS],
+    wabas: [{ id: DRAX_SISTEMAS_WABA_ID, name: "Drax Sistemas" }],
+    clientWabaIds: [],
     pendingPhones: [],
   },
 ];
