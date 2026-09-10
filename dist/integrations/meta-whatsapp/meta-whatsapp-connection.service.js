@@ -1263,15 +1263,20 @@ class MetaWhatsappConnectionService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         if (!/^\d{6}$/.test(pin))
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_pin");
-        const sameBm = rows.filter((row) => {
-            const bm = String(row.metaBusinessId || "").trim();
-            const selectedBm = String(open.metaBusinessId || "").trim();
-            if (selectedBm && bm && bm !== selectedBm)
-                return false;
-            return true;
-        });
         const phoneWabaId = (0, meta_whatsapp_known_owned_wabas_1.knownWabaIdForPendingPhone)(phoneNumberId) ||
-            String(sameBm.find((row) => String(row.phoneNumberId || "").trim() === phoneNumberId)?.wabaId || "").trim();
+            String(rows.find((row) => String(row.phoneNumberId || "").trim() === phoneNumberId)?.wabaId || "").trim();
+        const selectedBm = String(open.metaBusinessId || "").trim();
+        const sameBm = rows.filter((row) => {
+            if (row.id === open.id)
+                return true;
+            const rowWaba = String(row.wabaId || "").trim();
+            if (phoneWabaId && rowWaba === phoneWabaId)
+                return true;
+            const bm = String(row.metaBusinessId || "").trim();
+            if (!selectedBm || !bm)
+                return true;
+            return (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(bm, selectedBm) || (0, meta_whatsapp_known_owned_wabas_1.knownOwnedBusinessesMatch)(bm, selectedBm);
+        });
         const candidates = [...sameBm].sort((left, right) => {
             const leftWaba = String(left.wabaId || "").trim();
             const rightWaba = String(right.wabaId || "").trim();
