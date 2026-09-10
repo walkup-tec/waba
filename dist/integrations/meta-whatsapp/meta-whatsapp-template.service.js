@@ -159,34 +159,11 @@ class MetaWhatsappTemplateService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
         }
         const graph = this.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
-        const extraWabaIds = (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(await this.listOpenConnections(tenant.tenantId), connection);
-        if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
-            const ids = [
-                String(connection.wabaId || "").trim(),
-                ...(0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(String(connection.metaBusinessId || "")),
-            ].filter(Boolean);
-            return {
-                connectionId: connection.id,
-                wabas: [...new Set(ids)].map((id) => ({ id, name: `WABA ${id}` })),
-            };
-        }
-        const discovered = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabas)({
-            token,
-            connection,
-            extraWabaIds,
-            graph,
-        });
-        const unique = new Map();
-        for (const row of discovered) {
-            const id = String((row && row.id) || "").trim();
-            if (!id)
-                continue;
-            unique.set(id, String((row && row.name) || "").trim());
-        }
+        const ids = (0, meta_whatsapp_template_waba_ids_1.templatePickerWabaIds)(connection);
         const wabas = [];
-        for (const [id, listedName] of unique) {
-            let name = listedName && listedName !== `WABA ${id}` ? listedName : "";
-            if (!name) {
+        for (const id of ids) {
+            let name = (0, meta_whatsapp_known_owned_wabas_1.knownWabaNameForId)(id);
+            if (!name && !(0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
                 const result = await graph({
                     token,
                     method: "GET",
@@ -209,17 +186,12 @@ class MetaWhatsappTemplateService {
         }
         return { connectionId: connection.id, wabas };
     }
-    async resolveCreateWabaId(connection, token, requestedRaw) {
+    async resolveCreateWabaId(connection, _token, requestedRaw) {
         const primary = String(connection.wabaId || "").trim();
         const requested = String(requestedRaw || "").trim();
         if (!requested || requested === primary)
             return primary;
-        const allowed = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
-            token,
-            connection,
-            extraWabaIds: (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(await this.listOpenConnections(connection.tenantId), connection),
-            graph: this.graph,
-        });
+        const allowed = (0, meta_whatsapp_template_waba_ids_1.templatePickerWabaIds)(connection);
         if (allowed.includes(requested))
             return requested;
         const error = new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
