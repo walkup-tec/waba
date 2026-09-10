@@ -59,11 +59,13 @@ import {
 } from "./meta-whatsapp-portfolio-graph-cache";
 import {
   isKnownClientWabaForBusiness,
+  knownOwnedBusinessesMatch,
   knownOwnedWabaIdsForBusiness,
   knownPendingPhoneGraphRow,
   knownPendingPhonesForBusiness,
   knownWabaIdForPendingPhone,
   knownWabaNameForId,
+  metaBusinessIdsMatch,
 } from "./meta-whatsapp-known-owned-wabas";
 import { publicMetaGraphRegisterMessage } from "./meta-whatsapp-graph-errors";
 import { isMetaGraphUploadCooldown } from "./meta-whatsapp-graph-cooldown";
@@ -1505,17 +1507,20 @@ export class MetaWhatsappConnectionService {
     if (!phoneNumberId) throw new MetaWhatsappError("invalid_payload");
     if (!/^\d{6}$/.test(pin)) throw new MetaWhatsappError("invalid_pin");
 
-    const sameBm = rows.filter((row) => {
-      const bm = String(row.metaBusinessId || "").trim();
-      const selectedBm = String(open.metaBusinessId || "").trim();
-      if (selectedBm && bm && bm !== selectedBm) return false;
-      return true;
-    });
     const phoneWabaId =
       knownWabaIdForPendingPhone(phoneNumberId) ||
       String(
-        sameBm.find((row) => String(row.phoneNumberId || "").trim() === phoneNumberId)?.wabaId || "",
+        rows.find((row) => String(row.phoneNumberId || "").trim() === phoneNumberId)?.wabaId || "",
       ).trim();
+    const selectedBm = String(open.metaBusinessId || "").trim();
+    const sameBm = rows.filter((row) => {
+      if (row.id === open.id) return true;
+      const rowWaba = String(row.wabaId || "").trim();
+      if (phoneWabaId && rowWaba === phoneWabaId) return true;
+      const bm = String(row.metaBusinessId || "").trim();
+      if (!selectedBm || !bm) return true;
+      return metaBusinessIdsMatch(bm, selectedBm) || knownOwnedBusinessesMatch(bm, selectedBm);
+    });
     const candidates = [...sameBm].sort((left, right) => {
       const leftWaba = String(left.wabaId || "").trim();
       const rightWaba = String(right.wabaId || "").trim();
