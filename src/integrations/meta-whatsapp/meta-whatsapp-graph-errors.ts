@@ -60,6 +60,14 @@ export function isMetaGraphRateLimitCode(code: string | number | null | undefine
   return RATE_LIMIT_META_CODES.has(String(code ?? "").trim());
 }
 
+export function isMetaGraphWabaWriteDenied(json?: unknown, status?: number): boolean {
+  if (status === 403) return true;
+  const detail = safePublicGraphTemplateDetail(json);
+  const err = (json as { error?: { message?: unknown; error_user_msg?: unknown } } | null)?.error;
+  const text = `${detail} ${String(err?.message || "")} ${String(err?.error_user_msg || "")}`;
+  return /unsupported post request|does not exist, cannot be loaded|missing permissions/i.test(text);
+}
+
 export function isMetaGraphRateLimitPayload(
   json?: unknown,
   graphCode?: string | number | null,
@@ -116,6 +124,12 @@ export function publicMetaGraphTemplateMessage(
   if (status === 404) return "WABA ou template não encontrado na Meta.";
   const detail = safePublicGraphTemplateDetail(json);
   if (status === 400) {
+    if (isMetaGraphWabaWriteDenied(json, status)) {
+      return (
+        "A Meta recusou o cadastro nesta WABA: o token desta conexão não gerencia essa conta. " +
+        "Clique em + no portfólio, conecte essa WABA e envie de novo. Os templates já aceitos nas outras WABAs não precisam ser reenviados."
+      );
+    }
     if (/wa\.me|whatsapp\.com|whatsapp\.net/i.test(detail)) {
       return "A Meta não aceita wa.me, whatsapp.com nem whatsapp.net no botão URL. Use o site https do seu atendimento ou retorno.";
     }
