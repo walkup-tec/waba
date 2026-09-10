@@ -136,6 +136,15 @@ export function extraWabaIdsFromConnections(
   return [...out];
 }
 
+/** Criar template / picker: só a WABA do card e irmãs knownOwned (André WABA02). */
+export function templatePickerWabaIds(
+  connection: Pick<MetaWhatsappConnectionRecord, "wabaId" | "metaBusinessId">,
+): string[] {
+  const primary = String(connection.wabaId || "").trim();
+  const bm = String(connection.metaBusinessId || "").trim();
+  return [...new Set([primary, ...knownOwnedWabaIdsForBusiness(bm)].filter(Boolean))];
+}
+
 export function wabaIdentityMatchesBusiness(json: unknown, businessId: string): boolean {
   const wanted = String(businessId || "").trim();
   if (!wanted) return true;
