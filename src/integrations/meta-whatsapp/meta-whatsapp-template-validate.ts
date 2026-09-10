@@ -124,6 +124,12 @@ function sanitizeComponent(raw: unknown): Record<string, unknown> {
       const handles = Array.isArray(example.header_handle) ? example.header_handle : [];
       const handle = String(handles[0] || "").trim();
       if (!handle) throw new MetaWhatsappError("template_invalid");
+      if (/^https?:\/\//i.test(handle) || /lookaside\.|fbcdn\.net/i.test(handle)) {
+        const failed = new MetaWhatsappError("template_upload_failed");
+        failed.message =
+          "A Meta exige o handle do upload da imagem (4::), não o link lookaside do template antigo. Envie a foto de novo no Enviar.";
+        throw failed;
+      }
       return { type, format, example: { header_handle: [handle] } };
     }
     const text = String(row.text || "").trim();
