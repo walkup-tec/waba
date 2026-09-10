@@ -4491,6 +4491,29 @@
           border-color: rgba(110, 255, 200, 0.6);
           color: #f8fafc;
         }
+        #meta-tpl-lab-list-panel .meta-tpl-lab-table-wrap {
+          margin-top: 0;
+          max-height: calc(37px + (10 * 41px));
+          overflow: auto;
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          border-radius: 10px;
+          background: rgba(2, 6, 23, 0.35);
+        }
+        #meta-tpl-lab-list-panel .meta-tpl-lab-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+        }
+        #meta-tpl-lab-list-panel .meta-tpl-lab-table thead th {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          background: #0f172a;
+          box-shadow: 0 1px 0 rgba(148, 163, 184, 0.22);
+        }
+        #meta-tpl-lab-list-panel .meta-tpl-lab-table tbody tr {
+          height: 41px;
+        }
         .meta-tpl-name-filter:focus { outline:2px solid rgba(34,211,238,.35); outline-offset:1px; }
         .meta-tpl-status-tag {
           display:inline-flex;
@@ -22607,7 +22630,7 @@
                   type="button"
                   class="instance-action-btn btn-refresh enabled meta-tpl-day-filter"
                   aria-pressed="false"
-                  aria-label="Filtrar templates cadastrados hoje"
+                  aria-label="Filtrar pela data de criação do template: hoje"
                 >
                   Hoje
                 </button>
@@ -22616,13 +22639,21 @@
                   type="button"
                   class="instance-action-btn btn-refresh enabled meta-tpl-day-filter"
                   aria-pressed="false"
-                  aria-label="Filtrar templates cadastrados ontem"
+                  aria-label="Filtrar pela data de criação do template: ontem"
                 >
                   Ontem
                 </button>
+                <button
+                  id="meta-tpl-lab-clear-filters"
+                  type="button"
+                  class="instance-action-btn enabled"
+                  aria-label="Limpar todos os filtros da lista de templates"
+                >
+                  Limpar filtros
+                </button>
               </div>
-              <div class="aquecedor-command-log" style="margin-top: 0; overflow-x: auto;">
-                <table class="meta-tpl-lab-table" style="width:100%; border-collapse:collapse; font-size:13px;">
+              <div class="meta-tpl-lab-table-wrap" aria-label="Lista de templates com rolagem">
+                <table class="meta-tpl-lab-table">
                   <thead>
                     <tr>
                       <th style="text-align:left; padding:8px;">Portfólio</th>
@@ -22631,7 +22662,7 @@
                       <th style="text-align:left; padding:8px;">Categoria</th>
                       <th style="text-align:left; padding:8px;">Status</th>
                       <th style="text-align:left; padding:8px;">WABA</th>
-                      <th style="text-align:left; padding:8px;">Última sincronização</th>
+                      <th style="text-align:left; padding:8px;">Criado em</th>
                       <th style="text-align:left; padding:8px;">Ações</th>
                     </tr>
                   </thead>
@@ -41013,11 +41044,29 @@
         return "";
       }
 
+      function metaTplLabTemplateCreatedAt(item) {
+        return String((item && (item.createdAt || item.created_at)) || "").trim();
+      }
+
       function metaTplLabMatchesCreatedDay(item, dayKey) {
         if (!dayKey) return true;
-        const raw = String((item && (item.createdAt || item.created_at)) || "").trim();
+        const raw = metaTplLabTemplateCreatedAt(item);
         if (!raw) return false;
         return metaTplLabLocalDateKey(raw) === dayKey;
+      }
+
+      function metaTplLabClearFilters() {
+        const category = document.getElementById("meta-tpl-lab-category-filter");
+        const portfolio = document.getElementById("meta-tpl-lab-portfolio-filter");
+        const name = document.getElementById("meta-tpl-lab-name-filter");
+        const status = document.getElementById("meta-tpl-lab-status-filter");
+        if (category) category.value = "ALL";
+        if (portfolio) portfolio.value = "";
+        if (name) name.value = "";
+        if (status) status.value = "ALL";
+        metaTplLabCreatedDayFilter = "";
+        metaTplLabSyncCreatedDayButtons();
+        metaTplLabRenderTable();
       }
 
       function metaTplLabSyncCreatedDayButtons() {
@@ -41071,6 +41120,9 @@
             if (nameFilter && String(entry.item?.name || "").toLowerCase().indexOf(nameFilter) === -1) return false;
             if (!metaTplLabMatchesCreatedDay(entry.item, createdDayKey)) return false;
             return true;
+          })
+          .sort(function (a, b) {
+            return metaTplLabTemplateCreatedAt(b.item).localeCompare(metaTplLabTemplateCreatedAt(a.item));
           });
         if (!rows.length) {
           const empty =
@@ -41090,7 +41142,7 @@
             const language = escapeAdminHtml(metaTplLabLanguageLabel(item?.language));
             const category = escapeAdminHtml(metaTplLabCategoryLabel(item?.category));
             const waba = escapeAdminHtml(metaTplLabWabaLabel(item));
-            const synced = escapeAdminHtml(metaTplLabFormatSync(item?.lastSyncedAt));
+            const created = escapeAdminHtml(metaTplLabFormatSync(metaTplLabTemplateCreatedAt(item)));
             const portfolio = escapeAdminHtml(metaTplLabPortfolioLabel(item));
             return (
               "<tr>" +
@@ -41100,7 +41152,7 @@
               `<td style="padding:8px;">${category}</td>` +
               `<td style="padding:8px;">${metaTplLabStatusTagHtml(item?.status)}</td>` +
               `<td style="padding:8px;">${waba}</td>` +
-              `<td style="padding:8px;">${synced}</td>` +
+              `<td style="padding:8px;">${created}</td>` +
               `<td style="padding:8px; white-space:nowrap;">` +
               `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-view="${index}">Visualizar</button> ` +
               `<button type="button" class="instance-action-btn btn-delete enabled" data-meta-tpl-hide="${index}" title="Exclui na biblioteca da Meta e nesta lista.">Excluir</button>` +
@@ -43027,6 +43079,9 @@
       });
       document.getElementById("meta-tpl-lab-day-yesterday")?.addEventListener("click", function () {
         metaTplLabSetCreatedDayFilter("yesterday");
+      });
+      document.getElementById("meta-tpl-lab-clear-filters")?.addEventListener("click", function () {
+        metaTplLabClearFilters();
       });
       document.getElementById("meta-tpl-ai-media-format")?.addEventListener("change", metaTplAiSyncMediaFields);
       document.getElementById("meta-tpl-ai-media-file-btn")?.addEventListener("click", function () {
