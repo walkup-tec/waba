@@ -4,6 +4,7 @@ exports.classifyMetaGraphHttpStatus = classifyMetaGraphHttpStatus;
 exports.classifyMetaGraphError = classifyMetaGraphError;
 exports.publicMetaGraphSendMessage = publicMetaGraphSendMessage;
 exports.isMetaGraphRateLimitCode = isMetaGraphRateLimitCode;
+exports.isMetaGraphWabaWriteDenied = isMetaGraphWabaWriteDenied;
 exports.isMetaGraphRateLimitPayload = isMetaGraphRateLimitPayload;
 exports.publicMetaGraphRateLimitMessage = publicMetaGraphRateLimitMessage;
 exports.safePublicGraphTemplateDetail = safePublicGraphTemplateDetail;
@@ -67,6 +68,14 @@ const RATE_LIMIT_META_CODES = new Set(["4", "17", "32", "613", "341", "80007", "
 function isMetaGraphRateLimitCode(code) {
     return RATE_LIMIT_META_CODES.has(String(code ?? "").trim());
 }
+function isMetaGraphWabaWriteDenied(json, status) {
+    if (status === 403)
+        return true;
+    const detail = safePublicGraphTemplateDetail(json);
+    const err = json?.error;
+    const text = `${detail} ${String(err?.message || "")} ${String(err?.error_user_msg || "")}`;
+    return /unsupported post request|does not exist, cannot be loaded|missing permissions/i.test(text);
+}
 function isMetaGraphRateLimitPayload(json, graphCode) {
     const extracted = extractPublicGraphErrorCodes(json);
     const resolved = String(graphCode || extracted.code || "").trim();
@@ -121,6 +130,10 @@ function publicMetaGraphTemplateMessage(kind, status, json) {
         return "WABA ou template não encontrado na Meta.";
     const detail = safePublicGraphTemplateDetail(json);
     if (status === 400) {
+        if (isMetaGraphWabaWriteDenied(json, status)) {
+            return ("A Meta recusou o cadastro nesta WABA: o token desta conexão não gerencia essa conta. " +
+                "Clique em + no portfólio, conecte essa WABA e envie de novo. Os templates já aceitos nas outras WABAs não precisam ser reenviados.");
+        }
         if (/wa\.me|whatsapp\.com|whatsapp\.net/i.test(detail)) {
             return "A Meta não aceita wa.me, whatsapp.com nem whatsapp.net no botão URL. Use o site https do seu atendimento ou retorno.";
         }
