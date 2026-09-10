@@ -408,6 +408,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
     }
     let anyPhonesOk = phoneRows.length > 0;
     let lastPhoneStatus = 0;
+    const listedOkWabaIds = new Set();
     const extraWabas = [...wabaIds].filter((id) => id && id !== primaryWabaId);
     const orderedWabas = [primaryWabaId, ...extraWabas].filter(Boolean);
     const startedAt = Date.now();
@@ -427,6 +428,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
             continue;
         }
         anyPhonesOk = true;
+        listedOkWabaIds.add(wid);
         pushPhones(stampPhoneRowsWithWabaId(phones.json.data, wid));
     }
     if (!anyPhonesOk) {
@@ -437,13 +439,10 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
             connectionId: open.id,
             wabaCount: wabaIds.size,
         });
-        const fallbackKnown = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({
-            data: (0, meta_whatsapp_known_owned_wabas_1.knownPendingPhonesForBusiness)(businessId || storedBm).map(meta_whatsapp_known_owned_wabas_1.knownPendingPhoneGraphRow),
-        });
         return {
             card: {
                 ...card,
-                numbers: (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(stored, fallbackKnown),
+                numbers: stored,
             },
             directory,
         };
@@ -465,14 +464,19 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
     const knownPending = (0, meta_whatsapp_known_owned_wabas_1.knownPendingPhonesForBusiness)(businessId || storedBm);
     const missingKnownIds = knownPending
         .map((row) => row.phoneNumberId)
-        .filter((id) => id && !merged.some((row) => String(row.phoneNumberId || "").trim() === id));
+        .filter((id) => {
+        if (!id)
+            return false;
+        if (merged.some((row) => String(row.phoneNumberId || "").trim() === id))
+            return false;
+        const wabaId = (0, meta_whatsapp_known_owned_wabas_1.knownWabaIdForPendingPhone)(id);
+        if (wabaId && listedOkWabaIds.has(wabaId))
+            return false;
+        return true;
+    });
     if (missingKnownIds.length) {
         const extra = await fetchPhoneNodes(g, token, missingKnownIds);
         merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: extra }));
-    }
-    const stillMissing = knownPending.filter((row) => !merged.some((item) => String(item.phoneNumberId || "").trim() === row.phoneNumberId));
-    if (stillMissing.length) {
-        merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: stillMissing.map(meta_whatsapp_known_owned_wabas_1.knownPendingPhoneGraphRow) }));
     }
     const pending = merged.filter((row) => row.uiStatus !== "ativo");
     const active = merged.filter((row) => row.uiStatus === "ativo");
