@@ -8,6 +8,7 @@ exports.splitWabasFromBusinessNodeJson = splitWabasFromBusinessNodeJson;
 exports.wabasFromBusinessNodeJson = wabasFromBusinessNodeJson;
 exports.extraWabaIdsFromConnections = extraWabaIdsFromConnections;
 exports.templatePickerWabaIds = templatePickerWabaIds;
+exports.listTemplatePickerWabas = listTemplatePickerWabas;
 exports.wabaIdentityMatchesBusiness = wabaIdentityMatchesBusiness;
 exports.filterWabaIdsOwnedByBusiness = filterWabaIdsOwnedByBusiness;
 exports.discoverTemplateWabas = discoverTemplateWabas;
@@ -131,11 +132,57 @@ function extraWabaIdsFromConnections(rows, current) {
     }
     return [...out];
 }
-/** Criar template / picker: só a WABA do card e irmãs knownOwned (André WABA02). */
+/** Criar template: catálogo do Manager (Drax/André). Sem catálogo, a WABA da conexão. */
 function templatePickerWabaIds(connection) {
     const primary = String(connection.wabaId || "").trim();
     const bm = String(connection.metaBusinessId || "").trim();
-    return [...new Set([primary, ...(0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm)].filter(Boolean))];
+    const known = (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm);
+    if (known.length)
+        return [...new Set(known)];
+    return primary ? [primary] : [];
+}
+async function listOwnedWabaRowsForBusiness(graph, token, businessId) {
+    const byId = new Map();
+    const nested = await graph({
+        token,
+        method: "GET",
+        path: businessId,
+        query: {
+            fields: "owned_whatsapp_business_accounts{id,name}",
+        },
+        ...DISCOVER_GRAPH,
+    });
+    if (nested.ok) {
+        for (const row of splitWabasFromBusinessNodeJson(nested.json).owned) {
+            addDiscoveredWaba(byId, row.id, row.name, businessId);
+        }
+    }
+    for (const row of await listBusinessWabaEdgeRows(graph, token, businessId, "owned_whatsapp_business_accounts")) {
+        addDiscoveredWaba(byId, row.id, row.name, businessId);
+    }
+    return [...byId.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
+}
+/** Picker do criar template = Contas do WhatsApp do Manager, não a WABA stale da conexão. */
+async function listTemplatePickerWabas(input) {
+    const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
+    const primary = String(input.connection.wabaId || "").trim();
+    const bm = String(input.connection.metaBusinessId || "").trim();
+    const knownRows = (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaRowsForBusiness)(bm);
+    const ownedRows = bm ? await listOwnedWabaRowsForBusiness(graph, input.token, bm) : [];
+    if (knownRows.length) {
+        const byId = new Map(knownRows.map((row) => [row.id, row.name]));
+        for (const row of ownedRows) {
+            if (byId.has(row.id) && row.name)
+                byId.set(row.id, row.name);
+        }
+        return [...byId.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
+    }
+    if (ownedRows.length) {
+        return ownedRows.map((row) => ({ id: row.id, name: row.name || `WABA ${row.id}` }));
+    }
+    if (primary)
+        return [{ id: primary, name: `WABA ${primary}` }];
+    return [];
 }
 function wabaIdentityMatchesBusiness(json, businessId) {
     const wanted = String(businessId || "").trim();
