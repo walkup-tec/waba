@@ -9,7 +9,7 @@
  * não inventa pendente já excluído do Business Manager.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KNOWN_OWNED_BUSINESS_WABAS = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.KNOWN_OWNED_BUSINESS_WABAS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
 exports.normalizeMetaBusinessKey = normalizeMetaBusinessKey;
 exports.metaBusinessIdsMatch = metaBusinessIdsMatch;
 exports.knownOwnedBusinessesMatch = knownOwnedBusinessesMatch;
@@ -33,6 +33,8 @@ exports.ANDRE_WABA02_PENDING_PHONE_ID = "1311179632078208";
 exports.RIO_DE_JANEIRO_01_WABA_ID = "1581808413746453";
 exports.DRAX_SISTEMAS_BUSINESS_IDS = ["1041827648719609"];
 exports.DRAX_SISTEMAS_WABA_ID = "1636793994538054";
+exports.WALKUP_BUSINESS_IDS = ["4141369862822598"];
+exports.WALKUP_WABA01_ID = "1014470201624992";
 exports.KNOWN_OWNED_BUSINESS_WABAS = [
     {
         businessIds: [...exports.ANDRE_AGUIAR_BUSINESS_IDS],
@@ -46,6 +48,12 @@ exports.KNOWN_OWNED_BUSINESS_WABAS = [
     {
         businessIds: [...exports.DRAX_SISTEMAS_BUSINESS_IDS],
         wabas: [{ id: exports.DRAX_SISTEMAS_WABA_ID, name: "Drax Sistemas" }],
+        clientWabaIds: [],
+        pendingPhones: [],
+    },
+    {
+        businessIds: [...exports.WALKUP_BUSINESS_IDS],
+        wabas: [{ id: exports.WALKUP_WABA01_ID, name: "WABA 01" }],
         clientWabaIds: [],
         pendingPhones: [],
     },
