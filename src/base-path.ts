@@ -114,7 +114,17 @@ export function injectRuntimeIntoIndexHtml(
       .replace(/href="\//g, `href="${opts.basePath}/`)
       .replace(/src="\//g, `src="${opts.basePath}/`);
   }
-  return out;
+  return patchMetaTplHeaderUploadOnce(out);
+}
+
+/** HTML grande não sobe no Contents API; o front antigo ainda faz upload por conexão. */
+export function patchMetaTplHeaderUploadOnce(html: string): string {
+  const from =
+    "for (let i = 0; i < connectionIds.length; i += 1) {\n            const uploaded = await metaTplAiUploadHeaderIfNeeded(connectionIds[i], shell.mediaFormat);\n            if (uploaded) headerHandles[connectionIds[i]] = uploaded;\n            if (uploaded && !headerHandle) headerHandle = uploaded;\n          }";
+  if (!html.includes(from)) return html;
+  const to =
+    'const uploaded = await metaTplAiUploadHeaderIfNeeded(connectionId, shell.mediaFormat);\n          headerHandle = uploaded || "";\n          for (let i = 0; i < connectionIds.length; i += 1) {\n            if (headerHandle) headerHandles[connectionIds[i]] = headerHandle;\n          }';
+  return html.replace(from, to);
 }
 
 /** @deprecated use injectRuntimeIntoIndexHtml */
