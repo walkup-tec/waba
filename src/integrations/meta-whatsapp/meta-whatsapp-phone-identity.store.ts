@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, w
 import path from "node:path";
 import { resolveDataDir } from "../../data-path";
 import type { MetaPortfolioNumberPublic, MetaProfileSyncStatus } from "./meta-whatsapp-portfolio.types";
-import { resolvePhoneNameSync, resolveMetaPhoneUiStatus, canActivateMetaPhoneNumber } from "./meta-whatsapp-portfolio.map";
+import { META_WHATSAPP_DEFAULT_DISPLAY_NAME } from "./meta-whatsapp-phone-profile";
+import { namesEqual, resolvePhoneNameSync, resolveMetaPhoneUiStatus, canActivateMetaPhoneNumber } from "./meta-whatsapp-portfolio.map";
 
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
@@ -373,6 +374,7 @@ export function resolveInboxSendPhoneNumberId(input: {
 export function applyLocalPhoneIdentities(
   tenantId: string,
   numbers: MetaPortfolioNumberPublic[],
+  placeholderName?: string | null,
 ): MetaPortfolioNumberPublic[] {
   return numbers.map((row) => {
     const identity = readPhoneIdentity(tenantId, row.phoneNumberId);
@@ -382,7 +384,20 @@ export function applyLocalPhoneIdentities(
       newDisplayName: row.newDisplayName,
       newNameStatus: row.newNameStatus,
       localName: identity?.name || null,
+      placeholderName,
     });
+    if (
+      nameSync.nameSyncStatus === "applied" &&
+      namesEqual(identity?.name, META_WHATSAPP_DEFAULT_DISPLAY_NAME) &&
+      row.verifiedName &&
+      !namesEqual(row.verifiedName, META_WHATSAPP_DEFAULT_DISPLAY_NAME)
+    ) {
+      try {
+        writePhoneIdentity(tenantId, row.phoneNumberId, { name: row.verifiedName });
+      } catch {
+        // Identidade local não pode abortar a listagem.
+      }
+    }
     const uiStatus = resolveMetaPhoneUiStatus({
       metaStatus: row.metaStatus,
       codeVerificationStatus: row.codeVerificationStatus,
