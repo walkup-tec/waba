@@ -63,6 +63,26 @@ describe("erros Graph de ativação (PIN)", () => {
     assert.doesNotMatch(message, /Confira o PIN e tente de novo/);
   });
 
+  it("400 Unsupported post no chip da WABA02 não vaza o inglês da Graph", () => {
+    const message = publicMetaGraphRegisterMessage({
+      status: 400,
+      graphCode: "100",
+      json: {
+        error: {
+          code: 100,
+          message:
+            "Unsupported post request. Object with ID '1311179632078208' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+        },
+      },
+      phoneWabaId: "1744257946809067",
+      phoneWabaName: "André - WABA02",
+    });
+    assert.match(message, /WABA02/);
+    assert.match(message, /conecte essa WABA/i);
+    assert.doesNotMatch(message, /Unsupported post request/i);
+    assert.doesNotMatch(message, /Confira o PIN e tente de novo/);
+  });
+
   it("133005 aponta para o PIN do WhatsApp Manager", () => {
     const message = publicMetaGraphRegisterMessage({
       status: 400,
