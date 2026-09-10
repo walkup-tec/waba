@@ -8,6 +8,7 @@ exports.resolveDeployResilienceForClient = resolveDeployResilienceForClient;
 exports.resolveShellCacheKey = resolveShellCacheKey;
 exports.injectRuntimeIntoIndexHtml = injectRuntimeIntoIndexHtml;
 exports.patchMetaTplHeaderUploadOnce = patchMetaTplHeaderUploadOnce;
+exports.patchMetaTplGraphQuotaHtml = patchMetaTplGraphQuotaHtml;
 exports.injectBasePathIntoIndexHtml = injectBasePathIntoIndexHtml;
 const waba_container_service_1 = require("./waba-container-service");
 /** Prefixo público (ex.: /version-01). Vazio = raiz (produção). */
@@ -94,7 +95,7 @@ function injectRuntimeIntoIndexHtml(html, opts) {
             .replace(/href="\//g, `href="${opts.basePath}/`)
             .replace(/src="\//g, `src="${opts.basePath}/`);
     }
-    return patchMetaTplHeaderUploadOnce(out);
+    return patchMetaTplGraphQuotaHtml(patchMetaTplHeaderUploadOnce(out));
 }
 /** HTML grande não sobe no Contents API; o front antigo ainda faz upload por conexão. */
 function patchMetaTplHeaderUploadOnce(html) {
@@ -103,6 +104,19 @@ function patchMetaTplHeaderUploadOnce(html) {
         return html;
     const to = 'const uploaded = await metaTplAiUploadHeaderIfNeeded(connectionId, shell.mediaFormat);\n          headerHandle = uploaded || "";\n          for (let i = 0; i < connectionIds.length; i += 1) {\n            if (headerHandle) headerHandles[connectionIds[i]] = headerHandle;\n          }';
     return html.replace(from, to);
+}
+/** Reduz chamadas Graph enquanto a cota do app está fechada (código 4). */
+function patchMetaTplGraphQuotaHtml(html) {
+    let out = html.replace("const META_TP_LIVE_MS = 2500;", "const META_TP_LIVE_MS = 180000;");
+    const bootFrom = "if (document.getElementById(\"tab-whatsapp-oficial\")) {\n        metaTpShowPortfolioLoading();\n        metaTpStartLiveSync();\n        if (typeof window.wabaRefreshMetaWhatsappStatus === \"function\") {\n          window.wabaRefreshMetaWhatsappStatus();\n        }\n      }";
+    const bootTo = "if (document.getElementById(\"tab-whatsapp-oficial\")) {\n        metaTpStartLiveSync();\n        if (metaTpLabTabVisible()) {\n          metaTpShowPortfolioLoading();\n          if (typeof window.wabaRefreshMetaWhatsappStatus === \"function\") {\n            window.wabaRefreshMetaWhatsappStatus();\n          }\n        }\n      }";
+    if (out.includes(bootFrom))
+        out = out.replace(bootFrom, bootTo);
+    const loadFrom = "if (typeof metaTpLoadPortfolio === \"function\") {\n          await metaTpLoadPortfolio({ silent: true }).catch(() => null);";
+    const loadTo = "if (\n          typeof metaTpLoadPortfolio === \"function\" &&\n          !(metaTpSession.portfolios && metaTpSession.portfolios.length)\n        ) {\n          await metaTpLoadPortfolio({ silent: true }).catch(() => null);";
+    if (out.includes(loadFrom))
+        out = out.replace(loadFrom, loadTo);
+    return out;
 }
 /** @deprecated use injectRuntimeIntoIndexHtml */
 function injectBasePathIntoIndexHtml(html, basePath) {
