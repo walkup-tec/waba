@@ -39309,32 +39309,12 @@
         return [];
       }
 
-      function metaTplLabMergeCardAndGraphWabas(localItems, mapped, portfolio) {
+      function metaTplLabMergeCardAndGraphWabas(localItems, mapped, _portfolio) {
         const local = Array.isArray(localItems) ? localItems : [];
         const graph = Array.isArray(mapped) ? mapped : [];
-        const allow = new Set();
-        local.forEach(function (item) {
-          const id = String((item && item.id) || "").trim();
-          if (id) allow.add(id);
-        });
-        metaTplLabKnownSisterWabaIds(portfolio).forEach(function (id) {
-          if (id) allow.add(id);
-        });
-        const byId = new Map();
-        local.forEach(function (item) {
-          const id = String((item && item.id) || "").trim();
-          if (id) byId.set(id, item);
-        });
-        graph.forEach(function (item) {
-          const id = String((item && item.id) || "").trim();
-          if (!id || !allow.has(id)) return;
-          byId.set(id, item);
-        });
-        const out = [];
-        byId.forEach(function (item) {
-          out.push(item);
-        });
-        return out.length ? out : local;
+        // A WABA do card pode estar stale (Drax gravou 1988957871663919).
+        // A API do picker devolve a conta do Manager; não misturar com o ID antigo.
+        return graph.length ? graph : local;
       }
 
       function metaTplLabWabaGroupsFromLocal(connectionIds) {
