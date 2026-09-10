@@ -88,6 +88,9 @@ export type AttachClaimedAssetsInput = {
   metaBusinessId?: string | null;
   displayPhoneNumber?: string | null;
   verifiedName?: string | null;
+  accessTokenEncrypted?: string | null;
+  tokenType?: string | null;
+  tokenExpiresAt?: string | null;
   actorEmail: string;
 };
 
@@ -238,18 +241,30 @@ export class MetaWhatsappConnectionRepository {
     connectionId: string,
     input: AttachClaimedAssetsInput,
   ): Promise<MetaWhatsappConnectionRecord> {
+    const current = await this.findByIdForTenant(tenantId, connectionId);
+    if (!current || current.disconnectedAt) {
+      throw new Error("Conexão não encontrada.");
+    }
+    const keepConnected = current.status === "connected";
+    const wabaId = String(input.wabaId || current.wabaId || "").trim() || null;
+    const patch: Record<string, string | null> = {
+      waba_id: wabaId,
+      phone_number_id: String(input.phoneNumberId || current.phoneNumberId || "").trim() || null,
+      meta_business_id: String(input.metaBusinessId || current.metaBusinessId || "").trim() || null,
+      display_phone_number: String(input.displayPhoneNumber || current.displayPhoneNumber || "").trim() || null,
+      verified_name: String(input.verifiedName || current.verifiedName || "").trim() || null,
+      status: keepConnected ? "connected" : wabaId ? "pending_confirmation" : "pending_token",
+      updated_by: input.actorEmail,
+      last_error: null,
+    };
+    if (input.accessTokenEncrypted) {
+      patch.access_token_encrypted = input.accessTokenEncrypted;
+      if (input.tokenType) patch.token_type = input.tokenType;
+      if (input.tokenExpiresAt !== undefined) patch.token_expires_at = input.tokenExpiresAt || null;
+    }
     const { data, error } = await this.client()
       .from(TABLE)
-      .update({
-        waba_id: input.wabaId || null,
-        phone_number_id: input.phoneNumberId || null,
-        meta_business_id: input.metaBusinessId || null,
-        display_phone_number: input.displayPhoneNumber || null,
-        verified_name: input.verifiedName || null,
-        status: input.wabaId ? "pending_confirmation" : "pending_token",
-        updated_by: input.actorEmail,
-        last_error: null,
-      })
+      .update(patch)
       .eq("id", connectionId)
       .eq("tenant_id", tenantId)
       .is("disconnected_at", null)
