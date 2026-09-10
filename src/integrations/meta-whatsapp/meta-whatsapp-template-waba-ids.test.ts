@@ -7,6 +7,7 @@ import {
   extraWabaIdsFromConnections,
   isProbablyMessageTemplateRow,
   pickTemplateWriteConnections,
+  templatePickerWabaIds,
   wabaIdentityMatchesBusiness,
   wabaIdsFromBusinessEdgeJson,
   wabaIdsFromDebugTokenJson,
@@ -807,6 +808,28 @@ describe("template waba ids", () => {
       });
       assert.deepEqual(ids, ["2458602464640240"]);
     });
+  });
+});
+
+describe("templatePickerWabaIds", () => {
+  it("Drax Sistemas: picker só com a WABA do card", () => {
+    assert.deepEqual(
+      templatePickerWabaIds({
+        wabaId: "1636379994385054",
+        metaBusinessId: "1041827648719609",
+      }),
+      ["1636379994385054"],
+    );
+  });
+
+  it("Andre Aguiar: card WABA01 mais a irmã WABA02", () => {
+    assert.deepEqual(
+      templatePickerWabaIds({
+        wabaId: "2458602464640240",
+        metaBusinessId: "1759044748332124",
+      }),
+      ["2458602464640240", "1744257946809067"],
+    );
   });
 });
 
