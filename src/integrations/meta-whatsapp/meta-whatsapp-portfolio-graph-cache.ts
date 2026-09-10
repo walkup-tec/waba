@@ -1,6 +1,6 @@
 import type { MetaPortfolioAssetsPublic } from "./meta-whatsapp-portfolio.types";
 
-export const PORTFOLIO_GRAPH_CACHE_TTL_MS = 45_000;
+export const PORTFOLIO_GRAPH_CACHE_TTL_MS = 10 * 60 * 1000;
 
 type CachedPortfolioGraph = {
   at: number;
@@ -27,6 +27,12 @@ export function readCachedPortfolioGraph(
     return null;
   }
   return row.assets;
+}
+
+export function readStaleCachedPortfolioGraph(tenantId: string): MetaPortfolioAssetsPublic | null {
+  const id = String(tenantId || "").trim();
+  if (!id) return null;
+  return memory.get(id)?.assets || null;
 }
 
 export function writeCachedPortfolioGraph(
