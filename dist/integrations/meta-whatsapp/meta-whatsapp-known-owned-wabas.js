@@ -15,6 +15,8 @@ exports.knownOwnedWabaIdsForBusiness = knownOwnedWabaIdsForBusiness;
 exports.knownOwnedWabaRowsForBusiness = knownOwnedWabaRowsForBusiness;
 exports.knownClientWabaIdsForBusiness = knownClientWabaIdsForBusiness;
 exports.isKnownClientWabaForBusiness = isKnownClientWabaForBusiness;
+exports.knownWabaIdForPendingPhone = knownWabaIdForPendingPhone;
+exports.knownWabaNameForId = knownWabaNameForId;
 exports.knownPendingPhonesForBusiness = knownPendingPhonesForBusiness;
 exports.knownPendingPhoneGraphRow = knownPendingPhoneGraphRow;
 exports.ANDRE_AGUIAR_BUSINESS_IDS = [
@@ -80,6 +82,28 @@ function isKnownClientWabaForBusiness(businessId, wabaId) {
     if (!id)
         return false;
     return knownClientWabaIdsForBusiness(businessId).includes(id);
+}
+function knownWabaIdForPendingPhone(phoneNumberId) {
+    const id = String(phoneNumberId || "").trim();
+    if (!id)
+        return "";
+    for (const catalog of exports.KNOWN_OWNED_BUSINESS_WABAS) {
+        const phone = catalog.pendingPhones.find((row) => row.phoneNumberId === id);
+        if (phone)
+            return phone.wabaId;
+    }
+    return "";
+}
+function knownWabaNameForId(wabaId) {
+    const id = String(wabaId || "").trim();
+    if (!id)
+        return "";
+    for (const catalog of exports.KNOWN_OWNED_BUSINESS_WABAS) {
+        const row = catalog.wabas.find((item) => item.id === id);
+        if (row)
+            return row.name;
+    }
+    return "";
 }
 function knownPendingPhonesForBusiness(businessId) {
     return knownOwnedCatalogForBusiness(businessId)?.pendingPhones.slice() || [];
