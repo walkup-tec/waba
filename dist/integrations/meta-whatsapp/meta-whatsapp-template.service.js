@@ -20,6 +20,7 @@ const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template
 const meta_whatsapp_template_header_preview_store_1 = require("./meta-whatsapp-template-header-preview.store");
 const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-template");
 const meta_whatsapp_header_handle_cache_1 = require("./meta-whatsapp-header-handle-cache");
+const meta_whatsapp_graph_cooldown_1 = require("./meta-whatsapp-graph-cooldown");
 /** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. */
 const META_TEMPLATE_SYNC_BUDGET_MS = 20000;
 function requireTenant(auth) {
@@ -158,6 +159,13 @@ class MetaWhatsappTemplateService {
         }
         const graph = this.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
         const extraWabaIds = (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(await this.listOpenConnections(tenant.tenantId), connection);
+        if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
+            const ids = [String(connection.wabaId || "").trim(), ...extraWabaIds].filter(Boolean);
+            return {
+                connectionId: connection.id,
+                wabas: [...new Set(ids)].map((id) => ({ id, name: `WABA ${id}` })),
+            };
+        }
         const discovered = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabas)({
             token,
             connection,
@@ -350,6 +358,11 @@ class MetaWhatsappTemplateService {
     async syncFromAuth(auth, connectionId) {
         const tenant = requireTenant(auth);
         const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
+        if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
+            const limited = new meta_whatsapp_errors_1.MetaWhatsappError("graph_rate_limited");
+            limited.message = (0, meta_whatsapp_graph_cooldown_1.metaGraphUploadCooldownMessage)();
+            throw limited;
+        }
         let token = "";
         try {
             token = this.decrypt(connection.accessTokenEncrypted);
