@@ -22,6 +22,21 @@ describe("tabela de templates: coluna WABA no lugar de Qualidade", () => {
     assert.match(html, />\s*Ontem\s*</);
     assert.match(html, /function metaTplLabSetCreatedDayFilter/);
     assert.match(html, /function metaTplLabMatchesCreatedDay/);
+    assert.match(html, /function metaTplLabTemplateCreatedAt/);
     assert.match(html, /metaTplLabMatchesCreatedDay\(entry\.item, createdDayKey\)/);
+    assert.match(html, /<th style="text-align:left; padding:8px;">Criado em<\/th>/);
+    assert.doesNotMatch(
+      html,
+      /<th style="text-align:left; padding:8px;">Última sincronização<\/th>/,
+    );
+    assert.doesNotMatch(html, /metaTplLabTemplateCreatedAt\(item\) \|\| .*\.lastSyncedAt/);
+  });
+
+  it("limpa todos os filtros e limita a tabela a 10 linhas com rolagem", () => {
+    assert.match(html, /id="meta-tpl-lab-clear-filters"/);
+    assert.match(html, />\s*Limpar filtros\s*</);
+    assert.match(html, /function metaTplLabClearFilters/);
+    assert.match(html, /class="meta-tpl-lab-table-wrap"/);
+    assert.match(html, /max-height: calc\(37px \+ \(10 \* 41px\)\)/);
   });
 });
