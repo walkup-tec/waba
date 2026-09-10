@@ -6,6 +6,7 @@ import {
   discoverTemplateWabas,
   extraWabaIdsFromConnections,
   isProbablyMessageTemplateRow,
+  listTemplatePickerWabas,
   pickTemplateWriteConnections,
   templatePickerWabaIds,
   wabaIdentityMatchesBusiness,
@@ -593,7 +594,7 @@ describe("template waba ids", () => {
       const rows = await discoverTemplateWabas({
         token: "tok",
         connection: {
-          wabaId: "1636379994385054",
+          wabaId: "1636793994538054",
           metaBusinessId: "1041827648719609",
         },
         extraWabaIds: ["1988957871663919", "1051060507541515"],
@@ -604,7 +605,7 @@ describe("template waba ids", () => {
               owned_whatsapp_business_accounts: {
                 data: [
                   {
-                    id: "1636379994385054",
+                    id: "1636793994538054",
                     name: "Drax Sistemas",
                     phone_numbers: { data: [{ id: "phone-drax" }] },
                   },
@@ -627,7 +628,7 @@ describe("template waba ids", () => {
             return graphOk({
               data: [
                 {
-                  id: "1636379994385054",
+                  id: "1636793994538054",
                   name: "Drax Sistemas",
                   phone_numbers: { data: [{ id: "phone-drax" }] },
                 },
@@ -644,9 +645,9 @@ describe("template waba ids", () => {
               ],
             });
           }
-          if (input.path === "1636379994385054") {
+          if (input.path === "1636793994538054") {
             return graphOk({
-              id: "1636379994385054",
+              id: "1636793994538054",
               name: "Drax Sistemas",
               owner_business_info: { id: "1041827648719609" },
             });
@@ -663,7 +664,7 @@ describe("template waba ids", () => {
       });
       assert.deepEqual(
         rows.map((row) => row.id),
-        ["1636379994385054"],
+        ["1636793994538054"],
       );
       assert.equal(rows[0]?.name, "Drax Sistemas");
       assert.equal(
@@ -812,13 +813,13 @@ describe("template waba ids", () => {
 });
 
 describe("templatePickerWabaIds", () => {
-  it("Drax Sistemas: picker só com a WABA do card", () => {
+  it("Drax Sistemas: ignora WABA stale da conexão e usa a do Manager", () => {
     assert.deepEqual(
       templatePickerWabaIds({
-        wabaId: "1636379994385054",
+        wabaId: "1988957871663919",
         metaBusinessId: "1041827648719609",
       }),
-      ["1636379994385054"],
+      ["1636793994538054"],
     );
   });
 
@@ -830,6 +831,34 @@ describe("templatePickerWabaIds", () => {
       }),
       ["2458602464640240", "1744257946809067"],
     );
+  });
+});
+
+describe("listTemplatePickerWabas", () => {
+  it("Drax Sistemas: conexão stale não aparece; só Drax Sistemas do Manager", async () => {
+    const rows = await listTemplatePickerWabas({
+      token: "tok",
+      connection: {
+        wabaId: "1988957871663919",
+        metaBusinessId: "1041827648719609",
+      },
+      graph: async (input) => {
+        if (input.path === "1041827648719609") {
+          return graphOk({
+            id: "1041827648719609",
+            owned_whatsapp_business_accounts: {
+              data: [
+                { id: "1988957871663919", name: "WABA 1988957871663919" },
+                { id: "1636793994538054", name: "Drax Sistemas" },
+                { id: "1051060507541515", name: "Mms Marketing E Sistemas Digitais Ltda" },
+              ],
+            },
+          });
+        }
+        return graphOk({ data: [] });
+      },
+    });
+    assert.deepEqual(rows, [{ id: "1636793994538054", name: "Drax Sistemas" }]);
   });
 });
 
