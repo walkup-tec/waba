@@ -161,7 +161,10 @@ class MetaWhatsappTemplateService {
         const graph = this.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
         const extraWabaIds = (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(await this.listOpenConnections(tenant.tenantId), connection);
         if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
-            const ids = [String(connection.wabaId || "").trim(), ...extraWabaIds].filter(Boolean);
+            const ids = [
+                String(connection.wabaId || "").trim(),
+                ...(0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(String(connection.metaBusinessId || "")),
+            ].filter(Boolean);
             return {
                 connectionId: connection.id,
                 wabas: [...new Set(ids)].map((id) => ({ id, name: `WABA ${id}` })),
