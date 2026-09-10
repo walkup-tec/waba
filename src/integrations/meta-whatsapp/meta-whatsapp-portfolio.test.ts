@@ -1489,6 +1489,97 @@ describe("meta portfolio service", () => {
     assert.equal(graphCalls, 0);
   });
 
+  it("explica 403 do token da WABA01 ao ativar chip da WABA02", async () => {
+    const andre = {
+      ...connectedRow(),
+      id: "conn-andre-waba01",
+      metaBusinessId: "1759044748332124",
+      wabaId: "2458602464640240",
+      phoneNumberId: "phone-3626",
+      accessTokenEncrypted: encryptMetaToken("token-waba01"),
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [andre];
+        },
+        async findOpenByTenant() {
+          return andre;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      (async () => ({
+        ok: false,
+        status: 403,
+        graphCode: "10",
+        json: { error: { code: 10, message: "Permission denied", error_user_msg: "Missing permission" } },
+      })) as any,
+    );
+    await assert.rejects(
+      () =>
+        service.registerPhoneFromAuth(auth, {
+          phoneNumberId: "1311179632078208",
+          pin: "123456",
+          connectionId: "conn-andre-waba01",
+        }),
+      (error: unknown) =>
+        error instanceof MetaWhatsappError &&
+        error.code === "register_failed" &&
+        /WABA02/.test(error.message) &&
+        !/Confira o PIN e tente de novo/.test(error.message),
+    );
+  });
+
+  it("tenta o token da WABA02 depois do 403 da WABA01", async () => {
+    const waba01 = {
+      ...connectedRow(),
+      id: "conn-andre-waba01",
+      metaBusinessId: "1759044748332124",
+      wabaId: "2458602464640240",
+      phoneNumberId: "phone-3626",
+      accessTokenEncrypted: encryptMetaToken("token-waba01"),
+    };
+    const waba02 = {
+      ...connectedRow(),
+      id: "conn-andre-waba02",
+      metaBusinessId: "1759044748332124",
+      wabaId: "1744257946809067",
+      phoneNumberId: "1311179632078208",
+      accessTokenEncrypted: encryptMetaToken("token-waba02"),
+    };
+    const posts: string[] = [];
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [waba01, waba02];
+        },
+        async findOpenByTenant() {
+          return waba01;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      (async (input: { token?: string; method?: string; path?: string }) => {
+        if (input.method === "POST" && String(input.path || "").endsWith("/register")) {
+          posts.push(String(input.token || ""));
+          if (input.token === "token-waba02") return { ok: true, status: 200, json: { success: true } };
+          return {
+            ok: false,
+            status: 403,
+            graphCode: "10",
+            json: { error: { code: 10, message: "Permission denied" } },
+          };
+        }
+        return { ok: true, status: 200, json: { data: [] } };
+      }) as any,
+    );
+    await service.registerPhoneFromAuth(auth, {
+      phoneNumberId: "1311179632078208",
+      pin: "482917",
+      connectionId: "conn-andre-waba01",
+    });
+    assert.deepEqual(posts, ["token-waba02"]);
+  });
+
   it("liga o Inbox sem consultar a Graph", async () => {
     let graphCalls = 0;
     const service = new MetaWhatsappConnectionService(
