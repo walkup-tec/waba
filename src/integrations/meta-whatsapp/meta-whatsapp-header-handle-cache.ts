@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveDataDir } from "../../data-path";
+import { headerHandleFromComponents, readTemplateHeaderPreviewForSend } from "./meta-whatsapp-template-header-preview.store";
 
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
-export const HEADER_HANDLE_CACHE_TTL_MS = 45 * 60 * 1000;
+/** Handle 4:: da Graph costuma valer horas/dias; 45 min forçava upload de novo e queimava cota. */
+export const HEADER_HANDLE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type CachedHeaderHandle = {
   handle: string;
@@ -72,6 +74,68 @@ export function writeCachedHeaderHandle(tenantId: string, sha: string, handle: s
   writeFileSync(handlePath(tenantId, hash), JSON.stringify(row));
 }
 
+/** Lê handle gravado mesmo depois do TTL — último recurso quando POST /uploads está em código 4. */
+export function readPersistedHeaderHandle(tenantId: string, sha: string): string {
+  const id = safeTenantId(tenantId);
+  const hash = String(sha || "").trim().toLowerCase();
+  if (!id || !/^[a-f0-9]{64}$/.test(hash)) return "";
+  const mem = memory.get(memoryKey(tenantId, hash));
+  if (mem?.handle) return mem.handle;
+  const file = handlePath(tenantId, hash);
+  if (!existsSync(file)) return "";
+  try {
+    const row = JSON.parse(readFileSync(file, "utf8")) as { handle?: unknown };
+    return String(row.handle || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 export function clearHeaderHandleCacheForTests(): void {
   memory.clear();
+}
+
+export function isHeaderUploadAppRateLimit(error: unknown): boolean {
+  const msg = String((error as { message?: string })?.message || "").replace(/\s+/g, " ");
+  return /código\s*4\b|limitou temporariamente|application request limit|#\s*4\)/i.test(msg);
+}
+
+export function isResumableUploadHandle(handle: string): boolean {
+  return /^4[:;]/.test(String(handle || "").trim());
+}
+
+export function pickReusableHeaderHandle(input: {
+  tenantId: string;
+  bytes: Buffer;
+  rows: Array<{
+    components?: unknown;
+    id?: string;
+    metaTemplateId?: string | null;
+    name?: string | null;
+    language?: string | null;
+  }>;
+}): { resumable: string; any: string } {
+  const sha = headerFileSha256(input.bytes);
+  if (!sha || !input.bytes?.length) return { resumable: "", any: "" };
+  let any = "";
+  for (const row of input.rows) {
+    const handle = headerHandleFromComponents(row.components);
+    if (!handle) continue;
+    const preview = readTemplateHeaderPreviewForSend({
+      tenantId: input.tenantId,
+      handle,
+      templateId: row.id,
+      metaTemplateId: row.metaTemplateId,
+      name: row.name,
+      language: row.language,
+    });
+    if (!preview?.bytes?.length) continue;
+    if (headerFileSha256(preview.bytes) !== sha) continue;
+    if (!any) any = handle;
+    if (isResumableUploadHandle(handle)) {
+      writeCachedHeaderHandle(input.tenantId, sha, handle);
+      return { resumable: handle, any: handle };
+    }
+  }
+  return { resumable: "", any };
 }
