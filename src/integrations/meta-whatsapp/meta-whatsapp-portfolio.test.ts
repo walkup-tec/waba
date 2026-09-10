@@ -1683,6 +1683,65 @@ describe("meta portfolio service", () => {
     );
   });
 
+  it("número novo pendente na WABA02 aparece para PIN com o token da irmã", async () => {
+    const waba01 = {
+      ...connectedRow(),
+      id: "conn-andre-waba01",
+      metaBusinessId: "1759044748332124",
+      wabaId: "2458602464640240",
+      phoneNumberId: "phone-3626",
+      displayPhoneNumber: "+55 21 92368-3626",
+      accessTokenEncrypted: encryptMetaToken("token-waba01"),
+    };
+    const waba02 = {
+      ...connectedRow(),
+      id: "conn-andre-waba02",
+      metaBusinessId: "1759044748332124",
+      wabaId: "1744257946809067",
+      phoneNumberId: "phone-6920",
+      displayPhoneNumber: "+55 11 95213-6920",
+      verifiedName: "André - WABA02",
+      accessTokenEncrypted: encryptMetaToken("token-waba02"),
+    };
+    const pendingNew = {
+      id: "phone-7697",
+      display_phone_number: "+55 77 92169-7697",
+      verified_name: "Relacionamento e Atendimento",
+      status: "PENDING",
+      code_verification_status: "VERIFIED",
+    };
+    const graph = async (input: { token?: string; path: string }) => {
+      if (input.path === "1744257946809067/phone_numbers") {
+        if (input.token === "token-waba02") {
+          return { ok: true, status: 200, json: { data: [pendingNew] } };
+        }
+        return { ok: false, status: 403, json: { error: { message: "permissions" } } };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return { ok: true, status: 200, json: { data: [] } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [waba01, waba02];
+        },
+        async findOpenByTenant() {
+          return waba01;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const numbers = (assets.portfolios || []).flatMap((item) => item.numbers || []);
+    const pending = numbers.find((item) => String(item.displayPhoneNumber || "").includes("92169-7697"));
+    assert.ok(pending);
+    assert.equal(pending?.uiStatus, "pendente");
+    assert.equal(pending?.canActivate, true);
+  });
+
   it("liga o Inbox sem consultar a Graph", async () => {
     let graphCalls = 0;
     const service = new MetaWhatsappConnectionService(
