@@ -337,6 +337,7 @@ class MetaWhatsappTemplateService {
             status: result.json?.status ? String(result.json.status) : "PENDING",
             components,
             lastSyncedAt: now,
+            createdAt: now,
         });
         (0, meta_whatsapp_template_header_preview_store_1.bindTemplateHeaderPreview)({
             tenantId: tenant.tenantId,
