@@ -15,8 +15,10 @@ import {
   isRenderablePortfolioCard,
   graphPhotoDownloadUrl,
   graphPhotoSourceKey,
+  shouldRefreshCachedPhonePhoto,
   META_BUSINESS_IDENTITY_FIELDS,
   resolvePhoneNameSync,
+  isStaleDefaultDisplayNameRequest,
   phoneNumberCardName,
   META_PHONE_NUMBER_LIST_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
@@ -728,6 +730,120 @@ describe("meta portfolio mapper", () => {
       "Walkup Oficial",
     );
     purgePhoneIdentities(tenantId);
+  });
+
+  it("nome e foto da Meta vencem o pedido padrão Relacionamento e Atendimento", () => {
+    assert.equal(
+      isStaleDefaultDisplayNameRequest({
+        verifiedName: "Soma Promotora",
+        incomingName: "Relacionamento e Atendimento",
+        placeholderName: "Grupo Walkup",
+      }),
+      true,
+    );
+    assert.equal(
+      isStaleDefaultDisplayNameRequest({
+        verifiedName: "Grupo Walkup",
+        incomingName: "Relacionamento e Atendimento",
+        placeholderName: "Grupo Walkup",
+      }),
+      false,
+    );
+    const live = resolvePhoneNameSync({
+      verifiedName: "Soma Promotora",
+      newDisplayName: "Relacionamento e Atendimento",
+      newNameStatus: "APPROVED",
+      localName: "Relacionamento e Atendimento",
+      placeholderName: "Grupo Walkup",
+    });
+    assert.equal(live.requestedName, null);
+    assert.equal(live.nameSyncStatus, "applied");
+    assert.equal(
+      phoneNumberCardName({
+        verifiedName: "Soma Promotora",
+        requestedName: live.requestedName,
+        nameSyncStatus: live.nameSyncStatus,
+      }),
+      "Soma Promotora",
+    );
+    const firstAdd = resolvePhoneNameSync({
+      verifiedName: "Grupo Walkup",
+      newDisplayName: "Relacionamento e Atendimento",
+      newNameStatus: "APPROVED",
+      placeholderName: "Grupo Walkup",
+    });
+    assert.equal(firstAdd.requestedName, "Relacionamento e Atendimento");
+    assert.equal(firstAdd.nameNeedsRegister, true);
+    const tenantId = deriveStableMetaTenantId("soma-card@exemplo.com");
+    purgePhoneIdentities(tenantId);
+    writePhoneIdentity(tenantId, "13265535505426855", {
+      name: "Relacionamento e Atendimento",
+    });
+    const rows = applyLocalPhoneIdentities(
+      tenantId,
+      [
+        {
+          phoneNumberId: "13265535505426855",
+          displayPhoneNumber: "+55 11 95213-7761",
+          verifiedName: "Soma Promotora",
+          qualityRating: null,
+          metaStatus: "CONNECTED",
+          codeVerificationStatus: "VERIFIED",
+          healthCanSend: null,
+          uiStatus: "ativo",
+          dispatchStatus: "livre",
+          canActivate: false,
+          nameNeedsRegister: true,
+          nameStatus: "APPROVED",
+          newDisplayName: "Relacionamento e Atendimento",
+          newNameStatus: "APPROVED",
+          profilePictureUrl: "https://pps.whatsapp.net/v/soma.jpg",
+          vertical: null,
+          description: null,
+          address: null,
+          email: null,
+          requestedName: "Relacionamento e Atendimento",
+          nameSyncStatus: "ready",
+          photoSyncStatus: null,
+          profileSyncStatus: null,
+          inboxEnabled: false,
+        },
+      ],
+      "Grupo Walkup",
+    );
+    assert.equal(rows[0]?.verifiedName, "Soma Promotora");
+    assert.equal(rows[0]?.requestedName, null);
+    assert.equal(rows[0]?.nameSyncStatus, "applied");
+    assert.equal(
+      phoneNumberCardName({
+        verifiedName: rows[0]?.verifiedName,
+        requestedName: rows[0]?.requestedName,
+        nameSyncStatus: rows[0]?.nameSyncStatus,
+      }),
+      "Soma Promotora",
+    );
+    purgePhoneIdentities(tenantId);
+  });
+
+  it("baixa de novo a foto do chip quando a Meta troca o arquivo", () => {
+    assert.equal(
+      shouldRefreshCachedPhonePhoto(
+        { photoExt: "jpg", photoSource: "/v/walkup.jpg" },
+        "https://pps.whatsapp.net/v/soma.jpg",
+      ),
+      true,
+    );
+    assert.equal(
+      shouldRefreshCachedPhonePhoto(
+        { photoExt: "jpg", photoSource: "/v/soma.jpg" },
+        "https://pps.whatsapp.net/v/soma.jpg?oe=ABC",
+      ),
+      false,
+    );
+    assert.equal(
+      shouldRefreshCachedPhonePhoto({ photoExt: "jpg", photoSource: "local-upload" }, "https://pps.whatsapp.net/v/soma.jpg"),
+      true,
+    );
   });
 
   it("card volta ao verified_name da Meta quando o pedido já foi aplicado", () => {
