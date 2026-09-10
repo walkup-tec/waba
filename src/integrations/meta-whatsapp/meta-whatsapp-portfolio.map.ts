@@ -4,6 +4,7 @@ import type {
   MetaPortfolioPublic,
   MetaProfileSyncStatus,
 } from "./meta-whatsapp-portfolio.types";
+import { META_WHATSAPP_DEFAULT_DISPLAY_NAME } from "./meta-whatsapp-phone-profile";
 
 export const META_PHONE_NUMBER_LIST_FIELDS =
   "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,name_status,new_display_name,new_name_status,health_status";
@@ -102,6 +103,18 @@ export function graphPhotoDownloadUrl(json: unknown): string | null {
 }
 
 /** Path estável da CDN da Meta — query string muda o tempo todo na mesma foto. */
+export function shouldRefreshCachedPhonePhoto(
+  identity: { photoExt?: string | null; photoSource?: string | null } | null | undefined,
+  graphUrl: string | null | undefined,
+): boolean {
+  const url = String(graphUrl || "").trim();
+  if (!/^https:\/\//i.test(url)) return false;
+  const nextKey = graphPhotoSourceKey(url);
+  if (!nextKey) return false;
+  if (identity?.photoExt && identity.photoSource && identity.photoSource === nextKey) return false;
+  return true;
+}
+
 export function graphPhotoSourceKey(url: string | null | undefined): string | null {
   const raw = String(url || "").trim();
   if (!raw) return null;
@@ -221,19 +234,49 @@ export function mapPhoneNameFields(json: unknown): {
   };
 }
 
+function namesLooselyRelated(left: string | null | undefined, right: string | null | undefined): boolean {
+  if (namesEqual(left, right)) return true;
+  const a = String(left || "").trim().toLowerCase();
+  const b = String(right || "").trim().toLowerCase();
+  if (!a || !b || a.length < 4 || b.length < 4) return false;
+  return a.includes(b) || b.includes(a);
+}
+
+export function isStaleDefaultDisplayNameRequest(input: {
+  verifiedName?: string | null;
+  incomingName?: string | null;
+  placeholderName?: string | null;
+}): boolean {
+  const verified = text(input.verifiedName);
+  const incoming = text(input.incomingName);
+  if (!verified || !incoming) return false;
+  if (!namesEqual(incoming, META_WHATSAPP_DEFAULT_DISPLAY_NAME)) return false;
+  if (namesEqual(verified, META_WHATSAPP_DEFAULT_DISPLAY_NAME)) return false;
+  if (namesLooselyRelated(verified, input.placeholderName)) return false;
+  return true;
+}
+
 export function resolvePhoneNameSync(input: {
   verifiedName: string | null;
   nameStatus?: string | null;
   newDisplayName: string | null;
   newNameStatus: string | null;
   localName?: string | null;
+  placeholderName?: string | null;
 }): {
   requestedName: string | null;
   nameSyncStatus: MetaProfileSyncStatus | null;
   nameNeedsRegister: boolean;
 } {
   const verified = text(input.verifiedName);
-  const incoming = text(input.newDisplayName) || text(input.localName);
+  const rawIncoming = text(input.newDisplayName) || text(input.localName);
+  const incoming = isStaleDefaultDisplayNameRequest({
+    verifiedName: verified,
+    incomingName: rawIncoming,
+    placeholderName: input.placeholderName,
+  })
+    ? null
+    : rawIncoming;
   const newStatus = String(input.newNameStatus || "").trim().toUpperCase();
   if (!incoming && !verified) {
     return { requestedName: null, nameSyncStatus: null, nameNeedsRegister: false };
