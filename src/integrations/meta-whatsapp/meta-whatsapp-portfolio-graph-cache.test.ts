@@ -8,7 +8,7 @@ import {
 } from "./meta-whatsapp-portfolio-graph-cache";
 
 describe("cache Graph do portfólio", () => {
-  it("devolve o último hydrate por 45s e some no invalidate", () => {
+  it("devolve o último hydrate por 10 min e some no invalidate", () => {
     clearPortfolioGraphCacheForTests();
     const assets = {
       portfolios: [],
@@ -18,7 +18,7 @@ describe("cache Graph do portfólio", () => {
     };
     writeCachedPortfolioGraph("tenant-port-1", assets, 1_000);
     assert.equal(readCachedPortfolioGraph("tenant-port-1", 20_000)?.selectedConnectionId, "conn-1");
-    assert.equal(readCachedPortfolioGraph("tenant-port-1", 50_000), null);
+    assert.equal(readCachedPortfolioGraph("tenant-port-1", 1_000 + 11 * 60 * 1000), null);
     writeCachedPortfolioGraph("tenant-port-1", assets, 1_000);
     invalidateCachedPortfolioGraph("tenant-port-1");
     assert.equal(readCachedPortfolioGraph("tenant-port-1", 2_000), null);
