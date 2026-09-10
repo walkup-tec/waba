@@ -15,6 +15,7 @@ const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
 const meta_whatsapp_template_waba_ids_1 = require("./meta-whatsapp-template-waba-ids");
 const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
+const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
 const meta_whatsapp_portfolio_graph_1 = require("./meta-whatsapp-portfolio-graph");
 const meta_whatsapp_portfolio_identity_store_1 = require("./meta-whatsapp-portfolio-identity.store");
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
@@ -1214,33 +1215,84 @@ class MetaWhatsappConnectionService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         if (!/^\d{6}$/.test(pin))
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_pin");
+        const sameBm = rows.filter((row) => {
+            const bm = String(row.metaBusinessId || "").trim();
+            const selectedBm = String(open.metaBusinessId || "").trim();
+            if (selectedBm && bm && bm !== selectedBm)
+                return false;
+            return true;
+        });
+        const phoneWabaId = (0, meta_whatsapp_known_owned_wabas_1.knownWabaIdForPendingPhone)(phoneNumberId) ||
+            String(sameBm.find((row) => String(row.phoneNumberId || "").trim() === phoneNumberId)?.wabaId || "").trim();
+        const candidates = [...sameBm].sort((left, right) => {
+            const leftWaba = String(left.wabaId || "").trim();
+            const rightWaba = String(right.wabaId || "").trim();
+            const leftMatch = phoneWabaId && leftWaba === phoneWabaId ? 0 : 1;
+            const rightMatch = phoneWabaId && rightWaba === phoneWabaId ? 0 : 1;
+            if (leftMatch !== rightMatch)
+                return leftMatch - rightMatch;
+            if (left.id === open.id)
+                return -1;
+            if (right.id === open.id)
+                return 1;
+            return 0;
+        });
         let token = "";
-        try {
-            token = this.decrypt(open.accessTokenEncrypted);
+        let used = open;
+        let registered = null;
+        for (const candidate of candidates.length ? candidates : [open]) {
+            try {
+                token = this.decrypt(candidate.accessTokenEncrypted);
+            }
+            catch {
+                continue;
+            }
+            if (!token)
+                continue;
+            used = candidate;
+            registered = await this.graph({
+                token,
+                method: "POST",
+                path: `${phoneNumberId}/register`,
+                body: { messaging_product: "whatsapp", pin },
+            });
+            if (registered.ok)
+                break;
+            const code = String(registered.graphCode ||
+                (registered.json && typeof registered.json === "object"
+                    ? registered.json.error?.code
+                    : "") ||
+                "").trim();
+            if (code === "133005" || code === "133006" || code === "133008" || code === "133009")
+                break;
         }
-        catch {
+        if (!token) {
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-register-failed", { tenantId: tenant.tenantId, reason: "decrypt" });
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
         }
-        const registered = await this.graph({
-            token,
-            method: "POST",
-            path: `${phoneNumberId}/register`,
-            body: { messaging_product: "whatsapp", pin },
-        });
-        if (!registered.ok) {
+        if (!registered || !registered.ok) {
+            const graphCode = String(registered?.graphCode || "").trim();
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-register-failed", {
                 tenantId: tenant.tenantId,
                 reason: "graph",
-                status: registered.status,
+                status: registered?.status || 0,
+                graphCode,
+                phoneWabaId: phoneWabaId || null,
+                connectionWabaId: String(used.wabaId || "").trim() || null,
             });
-            if (registered.status === 401)
+            if (registered?.status === 401)
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
-            throw new meta_whatsapp_errors_1.MetaWhatsappError("register_failed");
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("register_failed", undefined, (0, meta_whatsapp_graph_errors_1.publicMetaGraphRegisterMessage)({
+                status: registered?.status || 0,
+                json: registered?.json,
+                graphCode,
+                phoneWabaId,
+                phoneWabaName: (0, meta_whatsapp_known_owned_wabas_1.knownWabaNameForId)(phoneWabaId),
+            }));
         }
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-registered", {
             tenantId: tenant.tenantId,
-            connectionId: open.id,
+            connectionId: used.id,
         });
         if (open.wabaId && open.phoneNumberId && open.status !== "connected" && rows[0]?.id === open.id) {
             try {
