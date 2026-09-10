@@ -48,6 +48,15 @@ import {
 } from "./meta-whatsapp-portfolio.map";
 import { filterWabaIdsOwnedByBusiness, extraWabaIdsFromConnections } from "./meta-whatsapp-template-waba-ids";
 import {
+  clearPortfolioGraphInflight,
+  invalidateCachedPortfolioGraph,
+  readCachedPortfolioGraph,
+  readPortfolioGraphInflight,
+  setPortfolioGraphInflight,
+  shouldUsePortfolioGraphCache,
+  writeCachedPortfolioGraph,
+} from "./meta-whatsapp-portfolio-graph-cache";
+import {
   isKnownClientWabaForBusiness,
   knownOwnedWabaIdsForBusiness,
   knownPendingPhoneGraphRow,
@@ -193,6 +202,33 @@ function withLocalIdentities(
     selectedConnectionId: assets.selectedConnectionId ?? null,
     portfolio: portfolio,
     numbers: localizeNumbers(assets.numbers || []),
+  };
+}
+
+function assetsFromPortfolioCards(
+  cards: MetaPortfolioPublic[],
+  requested: string,
+): MetaPortfolioAssetsPublic {
+  const selected =
+    cards.find((item) => item.connectionId === requested) ||
+    cards.find((item) => item.id && item.id === requested) ||
+    cards[0];
+  const selectedNumbers = selected?.numbers || [];
+  return {
+    portfolios: cards,
+    selectedConnectionId: selected?.connectionId || null,
+    portfolio: selected
+      ? {
+          id: selected.id,
+          name: selected.name,
+          primaryPageId: selected.primaryPageId,
+          primaryPageName: selected.primaryPageName,
+          profilePictureUrl: selected.profilePictureUrl,
+          wabaId: selected.wabaId,
+          connectionId: selected.connectionId,
+        }
+      : null,
+    numbers: selectedNumbers,
   };
 }
 
@@ -1108,6 +1144,7 @@ export class MetaWhatsappConnectionService {
       throw new MetaWhatsappError("persist_failed");
     }
     const disconnected = await repo.disconnectOpenByTenant(tenant.tenantId, tenant.ownerEmail);
+    invalidateCachedPortfolioGraph(tenant.tenantId);
     purgePortfolioIdentity(tenant.tenantId);
     purgePhoneIdentities(tenant.tenantId);
     logMetaWhatsappSafe("portfolio-disconnected", {
@@ -1349,64 +1386,72 @@ export class MetaWhatsappConnectionService {
 
   async listPortfolioAssets(
     auth: WabaRequestAuth,
-    opts?: { connectionId?: string },
+    opts?: { connectionId?: string; fresh?: boolean },
   ): Promise<MetaPortfolioAssetsPublic> {
     const tenant = requireTenant(auth);
+    const requested = String(opts?.connectionId || "").trim();
+    const useCache = shouldUsePortfolioGraphCache() && !opts?.fresh;
+    if (useCache) {
+      const cached = readCachedPortfolioGraph(tenant.tenantId);
+      if (cached?.portfolios?.length) {
+        return withLocalIdentities(tenant.tenantId, assetsFromPortfolioCards(cached.portfolios, requested));
+      }
+      const pending = readPortfolioGraphInflight(tenant.tenantId);
+      if (pending) {
+        const raw = await pending;
+        return withLocalIdentities(tenant.tenantId, assetsFromPortfolioCards(raw.portfolios || [], requested));
+      }
+    }
+    const work = this.loadPortfolioGraphAssets(tenant.tenantId, requested);
+    if (useCache) setPortfolioGraphInflight(tenant.tenantId, work);
+    try {
+      const raw = await work;
+      if (shouldUsePortfolioGraphCache()) writeCachedPortfolioGraph(tenant.tenantId, raw);
+      return withLocalIdentities(tenant.tenantId, raw);
+    } finally {
+      clearPortfolioGraphInflight(tenant.tenantId);
+    }
+  }
+
+  private async loadPortfolioGraphAssets(
+    tenantId: string,
+    requested: string,
+  ): Promise<MetaPortfolioAssetsPublic> {
     const repo = this.repository as MetaWhatsappConnectionRepository;
     const rows =
       typeof repo.listOpenByTenant === "function"
-        ? await repo.listOpenByTenant(tenant.tenantId)
-        : [await this.repository.findOpenByTenant(tenant.tenantId)].filter(
+        ? await repo.listOpenByTenant(tenantId)
+        : [await this.repository.findOpenByTenant(tenantId)].filter(
             (item): item is MetaWhatsappConnectionRecord => Boolean(item),
           );
     if (!rows.length) {
-      return withLocalIdentities(tenant.tenantId, {
+      return {
         portfolios: [],
         selectedConnectionId: null,
         portfolio: null,
         numbers: [],
-      });
+      };
     }
 
-    const requested = String(opts?.connectionId || "").trim();
     const hydrated = await Promise.all(
       rows.map((row) =>
         hydrateOpenConnection(
           this.graph,
           this.decrypt,
-          tenant.tenantId,
+          tenantId,
           row,
           extraWabaIdsFromConnections(rows, row),
         ),
       ),
     );
     const cards = dedupePortfolioCards(hydrated.map((item) => item.card)).filter(isRenderablePortfolioCard);
-    const selected =
-      cards.find((item) => item.connectionId === requested) ||
-      cards.find((item) => item.id && item.id === String(opts?.connectionId || "").trim()) ||
-      cards[0];
-    const selectedNumbers = selected?.numbers || [];
+    const raw = assetsFromPortfolioCards(cards, requested);
     logMetaWhatsappSafe("portfolio-listed", {
-      tenantId: tenant.tenantId,
-      hasBusiness: Boolean(selected?.id),
-      numbers: selectedNumbers.length,
+      tenantId,
+      hasBusiness: Boolean(raw.portfolio?.id),
+      numbers: raw.numbers.length,
     });
-    return withLocalIdentities(tenant.tenantId, {
-      portfolios: cards,
-      selectedConnectionId: selected?.connectionId || null,
-      portfolio: selected
-        ? {
-            id: selected.id,
-            name: selected.name,
-            primaryPageId: selected.primaryPageId,
-            primaryPageName: selected.primaryPageName,
-            profilePictureUrl: selected.profilePictureUrl,
-            wabaId: selected.wabaId,
-            connectionId: selected.connectionId,
-          }
-        : null,
-      numbers: selectedNumbers,
-    });
+    return raw;
   }
 
   async registerPhoneFromAuth(
@@ -1535,7 +1580,8 @@ export class MetaWhatsappConnectionService {
       logMetaWhatsappSafe("phone-default-name-skip", { tenantId: tenant.tenantId });
     }
 
-    return this.listPortfolioAssets(auth);
+    invalidateCachedPortfolioGraph(tenant.tenantId);
+    return this.listPortfolioAssets(auth, { fresh: true });
   }
 
   async updatePhoneProfileFromAuth(
@@ -1766,7 +1812,8 @@ export class MetaWhatsappConnectionService {
       profileUpdated,
       nameFailure: nameFailure || null,
     });
-    const listed = await this.listPortfolioAssets(auth, { connectionId: open.id });
+    invalidateCachedPortfolioGraph(tenant.tenantId);
+    const listed = await this.listPortfolioAssets(auth, { connectionId: open.id, fresh: true });
     // Foto/dados ok + nome recusado: sucesso parcial (não mascara a foto aplicada).
     return {
       ...listed,
