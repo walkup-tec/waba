@@ -860,6 +860,31 @@ describe("listTemplatePickerWabas", () => {
     });
     assert.deepEqual(rows, [{ id: "1636793994538054", name: "Drax Sistemas" }]);
   });
+
+  it("Walkup: nome do Manager é WABA 01, não o fallback WABA {id}", async () => {
+    const rows = await listTemplatePickerWabas({
+      token: "tok",
+      connection: {
+        wabaId: "1014470201624992",
+        metaBusinessId: "4141369862822598",
+      },
+      graph: async (input) => {
+        if (input.path === "4141369862822598") {
+          return graphOk({
+            id: "4141369862822598",
+            owned_whatsapp_business_accounts: {
+              data: [{ id: "1014470201624992", name: "" }],
+            },
+          });
+        }
+        if (input.path === "1014470201624992") {
+          return graphOk({ id: "1014470201624992", name: "WABA 01" });
+        }
+        return graphOk({ data: [] });
+      },
+    });
+    assert.deepEqual(rows, [{ id: "1014470201624992", name: "WABA 01" }]);
+  });
 });
 
 describe("extraWabaIdsFromConnections", () => {
