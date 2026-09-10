@@ -1354,11 +1354,17 @@ export class MetaWhatsappConnectionService {
       logMetaWhatsappSafe("ignored-client-tenant", { tenantId: tenant.tenantId });
     }
     const incomingBusinessId = String(input.businessId || "").trim();
-    const open =
-      (incomingBusinessId
-        ? await this.repository.findByBusinessId(tenant.tenantId, incomingBusinessId)
-        : null) ??
-      (await this.repository.latestPendingToken(tenant.tenantId));
+    const pendingToken = await this.repository.latestPendingToken(tenant.tenantId);
+    const byBusiness = incomingBusinessId
+      ? await this.repository.findByBusinessId(tenant.tenantId, incomingBusinessId)
+      : null;
+    const mergeIntoConnected = Boolean(
+      byBusiness &&
+        byBusiness.status === "connected" &&
+        pendingToken &&
+        pendingToken.id !== byBusiness.id,
+    );
+    const open = mergeIntoConnected && byBusiness ? byBusiness : pendingToken || byBusiness;
     if (!open) {
       throw new MetaWhatsappError("no_pending_connection");
     }
@@ -1375,6 +1381,9 @@ export class MetaWhatsappConnectionService {
         metaBusinessId: businessId || null,
         displayPhoneNumber: input.displayPhoneNumber || open.displayPhoneNumber,
         verifiedName: input.verifiedName || open.verifiedName,
+        accessTokenEncrypted: mergeIntoConnected ? pendingToken?.accessTokenEncrypted || null : null,
+        tokenType: mergeIntoConnected ? pendingToken?.tokenType || null : null,
+        tokenExpiresAt: mergeIntoConnected ? pendingToken?.tokenExpiresAt || null : null,
         actorEmail: tenant.ownerEmail,
       });
       logMetaWhatsappSafe("assets-claimed", {
@@ -1442,12 +1451,25 @@ export class MetaWhatsappConnectionService {
       if (waba.status === 401) throw new MetaWhatsappError("invalid_token");
       throw new MetaWhatsappError("persist_failed");
     }
-    const phone = await this.graph({
+    const phoneFields = {
+      fields: "id,display_phone_number,verified_name,quality_rating,whatsapp_business_account",
+    };
+    let phone = await this.graph({
       token,
       method: "GET",
       path: phoneNumberId,
-      query: { fields: "id,display_phone_number,verified_name,quality_rating,whatsapp_business_account" },
+      query: phoneFields,
     });
+    const retries = process.env.NODE_TEST_CONTEXT ? 0 : 2;
+    for (let attempt = 0; !phone.ok && phone.status !== 401 && attempt < retries; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      phone = await this.graph({
+        token,
+        method: "GET",
+        path: phoneNumberId,
+        query: phoneFields,
+      });
+    }
     if (!phone.ok) {
       logMetaWhatsappSafe("graph-validation-failed", {
         tenantId: tenant.tenantId,
@@ -1455,7 +1477,13 @@ export class MetaWhatsappConnectionService {
         status: phone.status,
       });
       if (phone.status === 401) throw new MetaWhatsappError("invalid_token");
-      throw new MetaWhatsappError("persist_failed");
+      // Depois do SMS a Graph atrasa o nó do chip. A conexão já está gravada.
+      logMetaWhatsappSafe("graph-validation-deferred", {
+        tenantId: tenant.tenantId,
+        reason: "phone_not_ready",
+        status: phone.status,
+      });
+      return toMetaWhatsappPublicConnection(open);
     }
 
     const phoneWaba = wabaIdFromPhoneJson(phone.json);
