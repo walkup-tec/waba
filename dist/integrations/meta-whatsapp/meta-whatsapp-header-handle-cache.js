@@ -7,7 +7,6 @@ exports.HEADER_HANDLE_CACHE_TTL_MS = void 0;
 exports.headerFileSha256 = headerFileSha256;
 exports.readCachedHeaderHandle = readCachedHeaderHandle;
 exports.writeCachedHeaderHandle = writeCachedHeaderHandle;
-exports.readPersistedHeaderHandle = readPersistedHeaderHandle;
 exports.clearHeaderHandleCacheForTests = clearHeaderHandleCacheForTests;
 exports.isHeaderUploadAppRateLimit = isHeaderUploadAppRateLimit;
 exports.isResumableUploadHandle = isResumableUploadHandle;
@@ -44,14 +43,23 @@ function handlePath(tenantId, sha) {
 function stillFresh(at, now) {
     return Number.isFinite(at) && now - at >= 0 && now - at <= exports.HEADER_HANDLE_CACHE_TTL_MS;
 }
+function trustedUploadHandle(row) {
+    if (String(row.source || "") !== "upload")
+        return "";
+    const handle = String(row.handle || "").trim();
+    return isResumableUploadHandle(handle) ? handle : "";
+}
 function readCachedHeaderHandle(tenantId, sha, now = Date.now()) {
     const id = safeTenantId(tenantId);
     const hash = String(sha || "").trim().toLowerCase();
     if (!id || !/^[a-f0-9]{64}$/.test(hash))
         return "";
     const mem = memory.get(memoryKey(tenantId, hash));
-    if (mem && stillFresh(mem.at, now) && mem.handle)
-        return mem.handle;
+    if (mem && stillFresh(mem.at, now)) {
+        const trusted = trustedUploadHandle(mem);
+        if (trusted)
+            return trusted;
+    }
     if (mem)
         memory.delete(memoryKey(tenantId, hash));
     const file = handlePath(tenantId, hash);
@@ -59,11 +67,11 @@ function readCachedHeaderHandle(tenantId, sha, now = Date.now()) {
         return "";
     try {
         const row = JSON.parse((0, node_fs_1.readFileSync)(file, "utf8"));
-        const handle = String(row.handle || "").trim();
+        const handle = trustedUploadHandle(row);
         const at = Number(row.at || 0);
         if (!handle || !stillFresh(at, now))
             return "";
-        memory.set(memoryKey(tenantId, hash), { handle, at });
+        memory.set(memoryKey(tenantId, hash), { handle, at, source: "upload" });
         return handle;
     }
     catch {
@@ -74,32 +82,12 @@ function writeCachedHeaderHandle(tenantId, sha, handle, now = Date.now()) {
     const id = safeTenantId(tenantId);
     const hash = String(sha || "").trim().toLowerCase();
     const value = String(handle || "").trim();
-    if (!id || !/^[a-f0-9]{64}$/.test(hash) || !value)
+    if (!id || !/^[a-f0-9]{64}$/.test(hash) || !isResumableUploadHandle(value))
         return;
-    const row = { handle: value, at: now };
+    const row = { handle: value, at: now, source: "upload" };
     memory.set(memoryKey(tenantId, hash), row);
     (0, node_fs_1.mkdirSync)(handleDir(tenantId), { recursive: true });
     (0, node_fs_1.writeFileSync)(handlePath(tenantId, hash), JSON.stringify(row));
-}
-/** Lê handle gravado mesmo depois do TTL — último recurso quando POST /uploads está em código 4. */
-function readPersistedHeaderHandle(tenantId, sha) {
-    const id = safeTenantId(tenantId);
-    const hash = String(sha || "").trim().toLowerCase();
-    if (!id || !/^[a-f0-9]{64}$/.test(hash))
-        return "";
-    const mem = memory.get(memoryKey(tenantId, hash));
-    if (mem?.handle)
-        return mem.handle;
-    const file = handlePath(tenantId, hash);
-    if (!(0, node_fs_1.existsSync)(file))
-        return "";
-    try {
-        const row = JSON.parse((0, node_fs_1.readFileSync)(file, "utf8"));
-        return String(row.handle || "").trim();
-    }
-    catch {
-        return "";
-    }
 }
 function clearHeaderHandleCacheForTests() {
     memory.clear();
@@ -109,7 +97,12 @@ function isHeaderUploadAppRateLimit(error) {
     return /código\s*4\b|limitou temporariamente|application request limit|#\s*4\)/i.test(msg);
 }
 function isResumableUploadHandle(handle) {
-    return /^4[:;]/.test(String(handle || "").trim());
+    const value = String(handle || "").trim();
+    if (!value || /^https?:\/\//i.test(value))
+        return false;
+    if (/lookaside\.|fbcdn\.net/i.test(value))
+        return false;
+    return /^[0-9]+[:;]/.test(value);
 }
 function pickReusableHeaderHandle(input) {
     const sha = headerFileSha256(input.bytes);
@@ -135,7 +128,6 @@ function pickReusableHeaderHandle(input) {
         if (!any)
             any = handle;
         if (isResumableUploadHandle(handle)) {
-            writeCachedHeaderHandle(input.tenantId, sha, handle);
             return { resumable: handle, any: handle };
         }
     }
