@@ -429,6 +429,7 @@ export class MetaWhatsappTemplateService {
       status: result.json?.status ? String(result.json.status) : "PENDING",
       components,
       lastSyncedAt: now,
+      createdAt: now,
     });
     bindTemplateHeaderPreview({
       tenantId: tenant.tenantId,
