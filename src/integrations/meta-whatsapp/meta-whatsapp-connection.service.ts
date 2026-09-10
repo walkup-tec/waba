@@ -52,7 +52,10 @@ import {
   knownOwnedWabaIdsForBusiness,
   knownPendingPhoneGraphRow,
   knownPendingPhonesForBusiness,
+  knownWabaIdForPendingPhone,
+  knownWabaNameForId,
 } from "./meta-whatsapp-known-owned-wabas";
+import { publicMetaGraphRegisterMessage } from "./meta-whatsapp-graph-errors";
 import {
   fetchWabaOwner,
   fetchBusinessFromGraph,
@@ -1431,33 +1434,86 @@ export class MetaWhatsappConnectionService {
     if (!phoneNumberId) throw new MetaWhatsappError("invalid_payload");
     if (!/^\d{6}$/.test(pin)) throw new MetaWhatsappError("invalid_pin");
 
+    const sameBm = rows.filter((row) => {
+      const bm = String(row.metaBusinessId || "").trim();
+      const selectedBm = String(open.metaBusinessId || "").trim();
+      if (selectedBm && bm && bm !== selectedBm) return false;
+      return true;
+    });
+    const phoneWabaId =
+      knownWabaIdForPendingPhone(phoneNumberId) ||
+      String(
+        sameBm.find((row) => String(row.phoneNumberId || "").trim() === phoneNumberId)?.wabaId || "",
+      ).trim();
+    const candidates = [...sameBm].sort((left, right) => {
+      const leftWaba = String(left.wabaId || "").trim();
+      const rightWaba = String(right.wabaId || "").trim();
+      const leftMatch = phoneWabaId && leftWaba === phoneWabaId ? 0 : 1;
+      const rightMatch = phoneWabaId && rightWaba === phoneWabaId ? 0 : 1;
+      if (leftMatch !== rightMatch) return leftMatch - rightMatch;
+      if (left.id === open.id) return -1;
+      if (right.id === open.id) return 1;
+      return 0;
+    });
+
     let token = "";
-    try {
-      token = this.decrypt(open.accessTokenEncrypted);
-    } catch {
+    let used = open;
+    let registered: Awaited<ReturnType<MetaConnectionGraphCaller>> | null = null;
+    for (const candidate of candidates.length ? candidates : [open]) {
+      try {
+        token = this.decrypt(candidate.accessTokenEncrypted);
+      } catch {
+        continue;
+      }
+      if (!token) continue;
+      used = candidate;
+      registered = await this.graph({
+        token,
+        method: "POST",
+        path: `${phoneNumberId}/register`,
+        body: { messaging_product: "whatsapp", pin },
+      });
+      if (registered.ok) break;
+      const code = String(
+        registered.graphCode ||
+          (registered.json && typeof registered.json === "object"
+            ? (registered.json as { error?: { code?: unknown } }).error?.code
+            : "") ||
+          "",
+      ).trim();
+      if (code === "133005" || code === "133006" || code === "133008" || code === "133009") break;
+    }
+    if (!token) {
       logMetaWhatsappSafe("phone-register-failed", { tenantId: tenant.tenantId, reason: "decrypt" });
       throw new MetaWhatsappError("invalid_token");
     }
-
-    const registered = await this.graph({
-      token,
-      method: "POST",
-      path: `${phoneNumberId}/register`,
-      body: { messaging_product: "whatsapp", pin },
-    });
-    if (!registered.ok) {
+    if (!registered || !registered.ok) {
+      const graphCode = String(registered?.graphCode || "").trim();
       logMetaWhatsappSafe("phone-register-failed", {
         tenantId: tenant.tenantId,
         reason: "graph",
-        status: registered.status,
+        status: registered?.status || 0,
+        graphCode,
+        phoneWabaId: phoneWabaId || null,
+        connectionWabaId: String(used.wabaId || "").trim() || null,
       });
-      if (registered.status === 401) throw new MetaWhatsappError("invalid_token");
-      throw new MetaWhatsappError("register_failed");
+      if (registered?.status === 401) throw new MetaWhatsappError("invalid_token");
+      throw new MetaWhatsappError(
+        "register_failed",
+        undefined,
+        publicMetaGraphRegisterMessage({
+          status: registered?.status || 0,
+          json: registered?.json,
+          graphCode,
+          phoneWabaId,
+          phoneWabaName: knownWabaNameForId(phoneWabaId),
+        }),
+      );
     }
 
     logMetaWhatsappSafe("phone-registered", {
       tenantId: tenant.tenantId,
-      connectionId: open.id,
+      connectionId: used.id,
     });
 
     if (open.wabaId && open.phoneNumberId && open.status !== "connected" && rows[0]?.id === open.id) {
