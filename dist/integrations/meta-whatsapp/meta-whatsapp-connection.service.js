@@ -93,18 +93,18 @@ function requireConfigured() {
 function withLocalIdentities(tenantId, assets) {
     const localizeCard = (item) => (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessPhoto)(tenantId, (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessIdentity)(tenantId, item));
     const busyPhoneIds = (0, meta_whatsapp_phone_occupancy_1.listBusyCloudPhoneNumberIds)(tenantId);
-    const localizeNumbers = (numbers) => (0, meta_whatsapp_phone_occupancy_1.applyCloudPhoneOccupancy)(tenantId, (0, meta_whatsapp_phone_identity_store_1.applyLocalPhoneIdentities)(tenantId, numbers), busyPhoneIds);
+    const localizeNumbers = (numbers, placeholderName) => (0, meta_whatsapp_phone_occupancy_1.applyCloudPhoneOccupancy)(tenantId, (0, meta_whatsapp_phone_identity_store_1.applyLocalPhoneIdentities)(tenantId, numbers, placeholderName), busyPhoneIds);
     const portfolio = assets.portfolio ? localizeCard(assets.portfolio) : null;
     const portfolios = (assets.portfolios || []).map((item) => ({
         ...localizeCard(item),
-        numbers: localizeNumbers(item.numbers || []),
+        numbers: localizeNumbers(item.numbers || [], item.name || item.primaryPageName),
     }));
     return {
         ...assets,
         portfolios,
         selectedConnectionId: assets.selectedConnectionId ?? null,
         portfolio: portfolio,
-        numbers: localizeNumbers(assets.numbers || []),
+        numbers: localizeNumbers(assets.numbers || [], assets.portfolio?.name || assets.portfolio?.primaryPageName),
     };
 }
 function assetsFromPortfolioCards(cards, requested) {
@@ -527,7 +527,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
     const pending = merged.filter((row) => row.uiStatus !== "ativo");
     const active = merged.filter((row) => row.uiStatus === "ativo");
     const withProfiles = active.length
-        ? await attachPhoneBusinessProfiles(g, token, active, tenantId)
+        ? await attachPhoneBusinessProfiles(g, token, active, tenantId, card.name)
         : [];
     let numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(withProfiles, pending);
     if (fromThisBm.size) {
@@ -844,25 +844,22 @@ async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {
     const local = (0, meta_whatsapp_phone_identity_store_1.localPhonePhotoUrl)(phoneNumberId, identity);
     if (process.env.NODE_TEST_CONTEXT)
         return local;
-    if (identity?.photoMetaApplied && identity.photoExt)
-        return local;
     if (!url || !/^https:\/\//i.test(url))
         return local;
-    const nextKey = (0, meta_whatsapp_portfolio_map_1.graphPhotoSourceKey)(url);
-    if (identity?.photoExt && identity.photoSource && nextKey && identity.photoSource === nextKey) {
-        return (0, meta_whatsapp_phone_identity_store_1.localPhonePhotoUrl)(phoneNumberId, identity);
+    if (!(0, meta_whatsapp_portfolio_map_1.shouldRefreshCachedPhonePhoto)(identity, url)) {
+        return local;
     }
     const downloaded = await (0, meta_whatsapp_phone_profile_1.fetchHttpsProfileImage)(url);
     if (!downloaded)
         return local;
     const saved = (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenantId, phoneNumberId, {
         photo: downloaded,
-        photoSource: nextKey,
+        photoSource: (0, meta_whatsapp_portfolio_map_1.graphPhotoSourceKey)(url),
         photoMetaApplied: true,
     });
     return (0, meta_whatsapp_phone_identity_store_1.localPhonePhotoUrl)(phoneNumberId, saved) || local;
 }
-async function attachPhoneBusinessProfiles(graph, token, numbers, tenantId) {
+async function attachPhoneBusinessProfiles(graph, token, numbers, tenantId, placeholderName) {
     if (!numbers.length)
         return numbers;
     const limited = numbers.slice(0, 20);
@@ -897,6 +894,7 @@ async function attachPhoneBusinessProfiles(graph, token, numbers, tenantId) {
             nameStatus,
             newDisplayName,
             newNameStatus,
+            placeholderName,
         });
         const mapped = profile.ok ? (0, meta_whatsapp_phone_profile_1.mapWhatsappBusinessProfile)(profile.json) : null;
         const localPhoto = await cacheGraphPhonePhoto(tenantId, row.phoneNumberId, mapped?.profilePictureUrl || null);
