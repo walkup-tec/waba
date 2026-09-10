@@ -208,18 +208,32 @@ class MetaWhatsappConnectionRepository {
         return mapRow(asRow(data));
     }
     async attachClaimedAssets(tenantId, connectionId, input) {
-        const { data, error } = await this.client()
-            .from(TABLE)
-            .update({
-            waba_id: input.wabaId || null,
-            phone_number_id: input.phoneNumberId || null,
-            meta_business_id: input.metaBusinessId || null,
-            display_phone_number: input.displayPhoneNumber || null,
-            verified_name: input.verifiedName || null,
-            status: input.wabaId ? "pending_confirmation" : "pending_token",
+        const current = await this.findByIdForTenant(tenantId, connectionId);
+        if (!current || current.disconnectedAt) {
+            throw new Error("Conexão não encontrada.");
+        }
+        const keepConnected = current.status === "connected";
+        const wabaId = String(input.wabaId || current.wabaId || "").trim() || null;
+        const patch = {
+            waba_id: wabaId,
+            phone_number_id: String(input.phoneNumberId || current.phoneNumberId || "").trim() || null,
+            meta_business_id: String(input.metaBusinessId || current.metaBusinessId || "").trim() || null,
+            display_phone_number: String(input.displayPhoneNumber || current.displayPhoneNumber || "").trim() || null,
+            verified_name: String(input.verifiedName || current.verifiedName || "").trim() || null,
+            status: keepConnected ? "connected" : wabaId ? "pending_confirmation" : "pending_token",
             updated_by: input.actorEmail,
             last_error: null,
-        })
+        };
+        if (input.accessTokenEncrypted) {
+            patch.access_token_encrypted = input.accessTokenEncrypted;
+            if (input.tokenType)
+                patch.token_type = input.tokenType;
+            if (input.tokenExpiresAt !== undefined)
+                patch.token_expires_at = input.tokenExpiresAt || null;
+        }
+        const { data, error } = await this.client()
+            .from(TABLE)
+            .update(patch)
             .eq("id", connectionId)
             .eq("tenant_id", tenantId)
             .is("disconnected_at", null)
