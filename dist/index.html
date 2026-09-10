@@ -39284,6 +39284,59 @@
         ];
       }
 
+      function metaTplLabBusinessKey(value) {
+        return String(value || "").replace(/\D/g, "");
+      }
+
+      function metaTplLabBusinessesMatch(left, right) {
+        const a = metaTplLabBusinessKey(left);
+        const b = metaTplLabBusinessKey(right);
+        if (!a || !b) return false;
+        if (a === b) return true;
+        if (a.length === b.length + 1 && a.charAt(0) === "1" && a.slice(1) === b) return true;
+        if (b.length === a.length + 1 && b.charAt(0) === "1" && b.slice(1) === a) return true;
+        return false;
+      }
+
+      function metaTplLabKnownSisterWabaIds(portfolio) {
+        const bm = String(
+          (portfolio && (portfolio.metaBusinessId || portfolio.businessId || portfolio.id)) || "",
+        ).trim();
+        const andreBms = ["1759044748332124", "759044748332124", "60843286"];
+        if (andreBms.some(function (id) { return metaTplLabBusinessesMatch(bm, id); })) {
+          return ["2458602464640240", "1744257946809067"];
+        }
+        return [];
+      }
+
+      function metaTplLabMergeCardAndGraphWabas(localItems, mapped, portfolio) {
+        const local = Array.isArray(localItems) ? localItems : [];
+        const graph = Array.isArray(mapped) ? mapped : [];
+        const allow = new Set();
+        local.forEach(function (item) {
+          const id = String((item && item.id) || "").trim();
+          if (id) allow.add(id);
+        });
+        metaTplLabKnownSisterWabaIds(portfolio).forEach(function (id) {
+          if (id) allow.add(id);
+        });
+        const byId = new Map();
+        local.forEach(function (item) {
+          const id = String((item && item.id) || "").trim();
+          if (id) byId.set(id, item);
+        });
+        graph.forEach(function (item) {
+          const id = String((item && item.id) || "").trim();
+          if (!id || !allow.has(id)) return;
+          byId.set(id, item);
+        });
+        const out = [];
+        byId.forEach(function (item) {
+          out.push(item);
+        });
+        return out.length ? out : local;
+      }
+
       function metaTplLabWabaGroupsFromLocal(connectionIds) {
         return (connectionIds || []).map(function (connectionId) {
           const portfolio = metaTplLabPortfolioByConnectionId(connectionId);
@@ -39382,7 +39435,7 @@
               "/integrations/meta/whatsapp/templates/wabas?connectionId=" + encodeURIComponent(connectionId),
             );
             const mapped = metaTplMapGraphWabaItems(payload);
-            if (mapped.length) items = mapped;
+            items = metaTplLabMergeCardAndGraphWabas(localItems, mapped, portfolio);
           } catch (_error) {
             /* mantém a lista local dos chips */
           }
@@ -41538,7 +41591,10 @@
               typeof metaTplMapGraphWabaItems === "function"
                 ? metaTplMapGraphWabaItems(payload)
                 : [];
-            if (mapped.length) items = mapped;
+            items =
+              typeof metaTplLabMergeCardAndGraphWabas === "function"
+                ? metaTplLabMergeCardAndGraphWabas(localItems, mapped, portfolio)
+                : localItems;
           } catch (_error) {
             /* sem a Graph, só a WABA da conexão — nunca o dump do token */
           }
