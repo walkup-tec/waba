@@ -3,13 +3,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PORTFOLIO_GRAPH_CACHE_TTL_MS = void 0;
 exports.shouldUsePortfolioGraphCache = shouldUsePortfolioGraphCache;
 exports.readCachedPortfolioGraph = readCachedPortfolioGraph;
+exports.readStaleCachedPortfolioGraph = readStaleCachedPortfolioGraph;
 exports.writeCachedPortfolioGraph = writeCachedPortfolioGraph;
 exports.invalidateCachedPortfolioGraph = invalidateCachedPortfolioGraph;
 exports.readPortfolioGraphInflight = readPortfolioGraphInflight;
 exports.setPortfolioGraphInflight = setPortfolioGraphInflight;
 exports.clearPortfolioGraphInflight = clearPortfolioGraphInflight;
 exports.clearPortfolioGraphCacheForTests = clearPortfolioGraphCacheForTests;
-exports.PORTFOLIO_GRAPH_CACHE_TTL_MS = 45000;
+exports.PORTFOLIO_GRAPH_CACHE_TTL_MS = 10 * 60 * 1000;
 const memory = new Map();
 const inflight = new Map();
 function shouldUsePortfolioGraphCache() {
@@ -27,6 +28,12 @@ function readCachedPortfolioGraph(tenantId, now = Date.now()) {
         return null;
     }
     return row.assets;
+}
+function readStaleCachedPortfolioGraph(tenantId) {
+    const id = String(tenantId || "").trim();
+    if (!id)
+        return null;
+    return memory.get(id)?.assets || null;
 }
 function writeCachedPortfolioGraph(tenantId, assets, now = Date.now()) {
     const id = String(tenantId || "").trim();
