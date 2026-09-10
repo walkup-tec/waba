@@ -1525,7 +1525,7 @@ describe("meta portfolio service", () => {
       (error: unknown) =>
         error instanceof MetaWhatsappError &&
         error.code === "register_failed" &&
-        /WABA02/.test(error.message) &&
+        /não tem permissão neste número|conecte essa WABA|WABA02/i.test(error.message) &&
         !/Confira o PIN e tente de novo/.test(error.message),
     );
   });
@@ -1678,8 +1678,7 @@ describe("meta portfolio service", () => {
       (error: unknown) =>
         error instanceof MetaWhatsappError &&
         error.code === "register_failed" &&
-        /WABA02/.test(error.message) &&
-        /conecte essa WABA/i.test(error.message) &&
+        /não tem permissão neste número|conecte essa WABA|WABA02/i.test(error.message) &&
         !/Unsupported post request/i.test(error.message),
     );
   });
@@ -2867,7 +2866,7 @@ describe("meta portfolio service", () => {
     }
   });
 
-  it("Andre Aguiar: PIN da WABA02 aparece sem debug_token e sem owned da irmã", async () => {
+  it("Andre Aguiar: sem Graph do chip da WABA02 não inventa o número excluído", async () => {
     const andre = {
       ...connectedRow(),
       id: "conn-andre-waba01-only",
@@ -2961,14 +2960,146 @@ describe("meta portfolio service", () => {
     const card =
       (assets.portfolios || []).find((item) => item.id === "1759044748332124") || assets.portfolios?.[0];
     const numbers = card?.numbers || [];
-    assert.equal(numbers.length, 4);
-    const pending = numbers.find((item) => String(item.phoneNumberId || "") === "1311179632078208");
-    assert.ok(pending);
-    assert.equal(pending?.uiStatus, "pendente");
-    assert.equal(pending?.canActivate, true);
-    assert.equal(pending?.wabaId, "1744257946809067");
-    assert.match(String(pending?.displayPhoneNumber || ""), /95213-6942/);
-    assert.equal(pending?.verifiedName, "Relacionamento e Atendimento");
+    assert.equal(numbers.length, 3);
+    assert.equal(
+      numbers.some((item) => String(item.phoneNumberId || "") === "1311179632078208"),
+      false,
+    );
+    assert.equal(
+      numbers.some((item) => String(item.displayPhoneNumber || "").includes("95213-6942")),
+      false,
+    );
+  });
+
+  it("não lista chip que a Meta já excluiu do BM mesmo se o catálogo local ainda souber o id", async () => {
+    const andre = {
+      ...connectedRow(),
+      id: "conn-andre-waba01-listed",
+      metaBusinessId: "1759044748332124",
+      wabaId: "2458602464640240",
+      phoneNumberId: "phone-3626",
+      displayPhoneNumber: "+55 21 92368-3626",
+      verifiedName: "Relacionamento e Atendimento",
+      status: "connected" as const,
+    };
+    const connected = [
+      {
+        id: "phone-3626",
+        display_phone_number: "+55 21 92368-3626",
+        verified_name: "Relacionamento e Atendimento",
+        status: "CONNECTED",
+        code_verification_status: "VERIFIED",
+      },
+    ];
+    const liveWaba02 = {
+      id: "phone-6920",
+      display_phone_number: "+55 11 95213-6920",
+      verified_name: "André - WABA02",
+      status: "CONNECTED",
+      code_verification_status: "VERIFIED",
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [andre];
+      },
+      async findOpenByTenant() {
+        return andre;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "2458602464640240") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "2458602464640240",
+            name: "André - WABA01",
+            owner_business_info: { id: "1759044748332124", name: "60.843.286 Andre Aguiar de Sousa" },
+          },
+        };
+      }
+      if (input.path === "1744257946809067") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1744257946809067",
+            name: "André - WABA02",
+            owner_business_info: { id: "1759044748332124" },
+          },
+        };
+      }
+      if (input.path === "1759044748332124") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1759044748332124",
+            name: "60.843.286 Andre Aguiar de Sousa",
+            owned_whatsapp_business_accounts: {
+              data: [
+                { id: "2458602464640240", name: "André - WABA01", phone_numbers: { data: connected } },
+                { id: "1744257946809067", name: "André - WABA02", phone_numbers: { data: [liveWaba02] } },
+              ],
+            },
+            client_whatsapp_business_accounts: { data: [] },
+          },
+        };
+      }
+      if (input.path === "1759044748332124/owned_whatsapp_business_accounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "2458602464640240", name: "André - WABA01" },
+              { id: "1744257946809067", name: "André - WABA02" },
+            ],
+          },
+        };
+      }
+      if (input.path === "2458602464640240/phone_numbers") {
+        return { ok: true, status: 200, json: { data: connected } };
+      }
+      if (input.path === "1744257946809067/phone_numbers") {
+        return { ok: true, status: 200, json: { data: [liveWaba02] } };
+      }
+      if (input.path === "1311179632078208") {
+        return {
+          ok: false,
+          status: 400,
+          json: {
+            error: {
+              code: 100,
+              message:
+                "Unsupported get request. Object with ID '1311179632078208' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+            },
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const card =
+      (assets.portfolios || []).find((item) => item.id === "1759044748332124") || assets.portfolios?.[0];
+    const numbers = card?.numbers || [];
+    assert.equal(
+      numbers.some((item) => String(item.displayPhoneNumber || "").includes("95213-6920")),
+      true,
+    );
+    assert.equal(
+      numbers.some((item) => String(item.phoneNumberId || "") === "1311179632078208"),
+      false,
+    );
+    assert.equal(
+      numbers.some((item) => String(item.displayPhoneNumber || "").includes("95213-6942")),
+      false,
+    );
   });
 
   it("inclui chip do debug_token messaging sem tratar phone_number_id como WABA", async () => {
