@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -8,7 +8,6 @@ import {
   headerFileSha256,
   pickReusableHeaderHandle,
   readCachedHeaderHandle,
-  readPersistedHeaderHandle,
   writeCachedHeaderHandle,
 } from "./meta-whatsapp-header-handle-cache";
 import { saveTemplateHeaderPreview } from "./meta-whatsapp-template-header-preview.store";
@@ -38,7 +37,15 @@ describe("cache de handle de cabeçalho", () => {
     assert.equal(readCachedHeaderHandle("tenant-header-1", sha, 1_000 + 46 * 60 * 1000), "4::abc");
     assert.equal(readCachedHeaderHandle("tenant-header-1", sha, 1_000 + 8 * 24 * 60 * 60 * 1000), "");
     assert.equal(readCachedHeaderHandle("outro-tenant", sha, 1_000 + 10 * 60 * 1000), "");
-    assert.equal(readPersistedHeaderHandle("tenant-header-1", sha), "4::abc");
+  });
+
+  it("ignora cache sem source=upload (4:: velho de template)", () => {
+    const bytes = Buffer.from("jandira-poison");
+    const sha = headerFileSha256(bytes);
+    const dir = path.join(process.cwd(), "data", "meta-whatsapp", "template-headers", "tenant-header-poison", "handles");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, `${sha}.json`), JSON.stringify({ handle: "4::stale-from-template", at: Date.now() }));
+    assert.equal(readCachedHeaderHandle("tenant-header-poison", sha), "");
   });
 
   it("reusa o handle 4:: de um template que já tem a mesma foto local", () => {
