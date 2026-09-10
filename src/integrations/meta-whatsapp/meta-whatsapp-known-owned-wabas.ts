@@ -4,6 +4,8 @@
  *
  * André - WABA02 não aparece na Conexão se só a WABA01 estiver no fan-out.
  * Rio de Janeiro 01 (client) não entra aqui.
+ * Chip só entra no card se a Graph ainda devolver o número; catálogo local
+ * não inventa pendente já excluído do Business Manager.
  */
 
 export type KnownOwnedPendingPhone = {
@@ -44,14 +46,7 @@ export const KNOWN_OWNED_BUSINESS_WABAS: KnownOwnedBusinessWabas[] = [
       { id: ANDRE_WABA02_ID, name: "André - WABA02" },
     ],
     clientWabaIds: [RIO_DE_JANEIRO_01_WABA_ID],
-    pendingPhones: [
-      {
-        phoneNumberId: ANDRE_WABA02_PENDING_PHONE_ID,
-        displayPhoneNumber: "+55 11 95213-6942",
-        verifiedName: "Relacionamento e Atendimento",
-        wabaId: ANDRE_WABA02_ID,
-      },
-    ],
+    pendingPhones: [],
   },
 ];
 
