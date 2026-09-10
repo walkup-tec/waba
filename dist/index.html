@@ -38846,6 +38846,13 @@
             });
             if (!response.ok || payload.ok === false) {
               metaTpLog("Graph validation falhou");
+              await metaTpLoadPortfolio({ force: true });
+              if (metaTpHasVisiblePortfolios()) {
+                metaTpSetStatus("");
+                metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
+                window.__wabaMetaTechSignupActive = false;
+                return;
+              }
               const message = String(payload.error || "A Meta não confirmou a WABA/número.");
               metaTpSetStatus(message);
               metaTpFinishConnectProgress({ ok: false, message: message });
@@ -38856,7 +38863,7 @@
             metaTpLog(metaTpFormatPublicStatus(payload));
             metaTpAdvanceConnectProgress(2);
             await metaTpLoadPortfolio({ force: true });
-            if (payload.status === "connected") {
+            if (payload.status === "connected" || payload.status === "pending_confirmation") {
               const sub = await metaTpFetchJson("/integrations/meta/whatsapp/subscribe-webhooks", {
                 method: "POST",
                 body: "{}",
@@ -39111,11 +39118,19 @@
           return;
         }
         if (!payload) return;
-        const inner = payload.data || {};
-        const eventName = String(payload.event || "");
-        if (inner.waba_id) metaTpSession.wabaId = String(inner.waba_id);
-        if (inner.phone_number_id) metaTpSession.phoneNumberId = String(inner.phone_number_id);
-        if (inner.business_id) metaTpSession.businessId = String(inner.business_id);
+        const inner = payload.data && typeof payload.data === "object" ? payload.data : payload;
+        const nested = inner.data && typeof inner.data === "object" ? inner.data : {};
+        const eventName = String(payload.event || inner.event || "");
+        const wabaId = inner.waba_id || inner.wabaId || inner.current_waba_id || nested.waba_id;
+        const phoneId =
+          inner.phone_number_id ||
+          inner.phoneNumberId ||
+          inner.current_phone_number_id ||
+          nested.phone_number_id;
+        const businessId = inner.business_id || inner.businessId || nested.business_id;
+        if (wabaId) metaTpSession.wabaId = String(wabaId);
+        if (phoneId) metaTpSession.phoneNumberId = String(phoneId);
+        if (businessId) metaTpSession.businessId = String(businessId);
         if (META_TP_FINISH_EVENTS[eventName]) {
           metaTpSession.finishEvent = eventName;
           metaTpLog("signup event=" + eventName);
