@@ -177,9 +177,10 @@ class MetaWhatsappTemplateRepository {
                 throw new Error(error.message);
             return mapRow(asRow(data));
         }
+        const createdAt = String(input.createdAt || "").trim() || new Date().toISOString();
         const { data, error } = await this.client()
             .from(TABLE)
-            .insert(payload)
+            .insert({ ...payload, created_at: createdAt })
             .select(COLUMNS)
             .single();
         if (error)
