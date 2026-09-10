@@ -14,4 +14,14 @@ describe("tabela de templates: coluna WABA no lugar de Qualidade", () => {
     assert.doesNotMatch(html, /<th style="text-align:left; padding:8px;">Qualidade<\/th>/);
     assert.doesNotMatch(html, /function metaTplLabQualityLabel/);
   });
+
+  it("filtra a lista pelos botões Hoje e Ontem", () => {
+    assert.match(html, /id="meta-tpl-lab-day-today"/);
+    assert.match(html, /id="meta-tpl-lab-day-yesterday"/);
+    assert.match(html, />\s*Hoje\s*</);
+    assert.match(html, />\s*Ontem\s*</);
+    assert.match(html, /function metaTplLabSetCreatedDayFilter/);
+    assert.match(html, /function metaTplLabMatchesCreatedDay/);
+    assert.match(html, /metaTplLabMatchesCreatedDay\(entry\.item, createdDayKey\)/);
+  });
 });
