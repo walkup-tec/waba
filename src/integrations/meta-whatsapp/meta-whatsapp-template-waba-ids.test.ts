@@ -225,7 +225,9 @@ describe("template waba ids", () => {
           return graphOk({ data: [] });
         },
       });
-      assert.deepEqual(ids.sort(), ["1603712454491063", "2283911612192961", "waba-jailton"].sort());
+      assert.deepEqual(ids, ["1603712454491063"]);
+      assert.equal(ids.includes("2283911612192961"), false);
+      assert.equal(ids.includes("waba-jailton"), false);
       assert.equal(ids.includes("4653699361527400"), false);
     });
 
@@ -586,7 +588,7 @@ describe("template waba ids", () => {
       );
     });
 
-    it("Drax Sistemas: WABA owned sem número não entra no picker do portfólio", async () => {
+    it("Drax Sistemas: só a WABA do card, mesmo se outras owned tiverem número", async () => {
       const rows = await discoverTemplateWabas({
         token: "tok",
         connection: {
@@ -608,12 +610,12 @@ describe("template waba ids", () => {
                   {
                     id: "1988957871663919",
                     name: "WABA 1988957871663919",
-                    phone_numbers: { data: [] },
+                    phone_numbers: { data: [{ id: "phone-waba-1988" }] },
                   },
                   {
                     id: "1051060507541515",
                     name: "Mms Marketing E Sistemas Digitais Ltda",
-                    phone_numbers: { data: [] },
+                    phone_numbers: { data: [{ id: "phone-mms" }] },
                   },
                 ],
               },
@@ -631,12 +633,12 @@ describe("template waba ids", () => {
                 {
                   id: "1988957871663919",
                   name: "WABA 1988957871663919",
-                  phone_numbers: { data: [] },
+                  phone_numbers: { data: [{ id: "phone-waba-1988" }] },
                 },
                 {
                   id: "1051060507541515",
                   name: "Mms Marketing E Sistemas Digitais Ltda",
-                  phone_numbers: { data: [] },
+                  phone_numbers: { data: [{ id: "phone-mms" }] },
                 },
               ],
             });
