@@ -90,8 +90,8 @@ export class MetaWhatsappError extends Error {
   readonly code: MetaWhatsappErrorCode;
   readonly status: number;
 
-  constructor(code: MetaWhatsappErrorCode, status?: number) {
-    super(PUBLIC_MESSAGES[code]);
+  constructor(code: MetaWhatsappErrorCode, status?: number, publicMessage?: string) {
+    super(publicMessage || PUBLIC_MESSAGES[code]);
     this.name = "MetaWhatsappError";
     this.code = code;
     this.status = status ?? defaultStatus(code);
