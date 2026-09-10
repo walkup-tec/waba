@@ -586,6 +586,101 @@ describe("template waba ids", () => {
       );
     });
 
+    it("Walkup: se o Manager já listou as owned, debug_token e conexão antiga não inventam outra WABA", async () => {
+      const rows = await discoverTemplateWabas({
+        token: "tok",
+        connection: {
+          wabaId: "1014470201624992",
+          metaBusinessId: "4141369862822598",
+        },
+        extraWabaIds: ["1461611825811080"],
+        graph: async (input) => {
+          if (input.path === "4141369862822598") {
+            return graphOk({
+              id: "4141369862822598",
+              owned_whatsapp_business_accounts: {
+                data: [{ id: "1014470201624992", name: "Grupo Walkup" }],
+              },
+              client_whatsapp_business_accounts: { data: [] },
+            });
+          }
+          if (input.path === "4141369862822598/owned_whatsapp_business_accounts") {
+            return graphOk({ data: [{ id: "1014470201624992", name: "Grupo Walkup" }] });
+          }
+          if (input.path === "debug_token") {
+            return graphOk({
+              data: {
+                granular_scopes: [
+                  {
+                    scope: "whatsapp_business_management",
+                    target_ids: ["1014470201624992", "1461611825811080"],
+                  },
+                ],
+              },
+            });
+          }
+          if (input.path === "1014470201624992" || input.path === "1461611825811080") {
+            return graphOk({
+              id: input.path,
+              name: "Grupo Walkup",
+              owner_business_info: { id: "4141369862822598" },
+            });
+          }
+          return graphOk({ data: [] });
+        },
+      });
+      assert.deepEqual(
+        rows.map((row) => row.id),
+        ["1014470201624992"],
+      );
+      assert.equal(
+        rows.some((row) => row.id === "1461611825811080"),
+        false,
+      );
+    });
+
+    it("conexão com WABA antiga some quando o edge owned do BM já devolveu a conta atual", async () => {
+      const ids = await discoverTemplateWabaIds({
+        token: "tok",
+        connection: {
+          wabaId: "1461611825811080",
+          metaBusinessId: "4141369862822598",
+        },
+        extraWabaIds: ["1461611825811080"],
+        graph: async (input) => {
+          if (input.path === "4141369862822598") {
+            return graphOk({
+              id: "4141369862822598",
+              owned_whatsapp_business_accounts: {
+                data: [{ id: "1014470201624992", name: "Grupo Walkup" }],
+              },
+            });
+          }
+          if (input.path === "debug_token") {
+            return graphOk({
+              data: {
+                granular_scopes: [
+                  {
+                    scope: "whatsapp_business_management",
+                    target_ids: ["1461611825811080", "1014470201624992"],
+                  },
+                ],
+              },
+            });
+          }
+          if (input.path === "1014470201624992" || input.path === "1461611825811080") {
+            return graphOk({
+              id: input.path,
+              name: "Grupo Walkup",
+              owner_business_info: { id: "4141369862822598" },
+            });
+          }
+          return graphOk({ data: [] });
+        },
+      });
+      assert.deepEqual(ids, ["1014470201624992"]);
+    });
+
     it("Andre Aguiar: GET 403 no debug_token não preserva WABA de outro BM", async () => {
       const ids = await discoverTemplateWabaIds({
         token: "tok",
