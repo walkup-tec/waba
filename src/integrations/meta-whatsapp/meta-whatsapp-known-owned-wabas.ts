@@ -97,6 +97,26 @@ export function isKnownClientWabaForBusiness(businessId: string, wabaId: string)
   return knownClientWabaIdsForBusiness(businessId).includes(id);
 }
 
+export function knownWabaIdForPendingPhone(phoneNumberId: string): string {
+  const id = String(phoneNumberId || "").trim();
+  if (!id) return "";
+  for (const catalog of KNOWN_OWNED_BUSINESS_WABAS) {
+    const phone = catalog.pendingPhones.find((row) => row.phoneNumberId === id);
+    if (phone) return phone.wabaId;
+  }
+  return "";
+}
+
+export function knownWabaNameForId(wabaId: string): string {
+  const id = String(wabaId || "").trim();
+  if (!id) return "";
+  for (const catalog of KNOWN_OWNED_BUSINESS_WABAS) {
+    const row = catalog.wabas.find((item) => item.id === id);
+    if (row) return row.name;
+  }
+  return "";
+}
+
 export function knownPendingPhonesForBusiness(businessId: string): KnownOwnedPendingPhone[] {
   return knownOwnedCatalogForBusiness(businessId)?.pendingPhones.slice() || [];
 }
