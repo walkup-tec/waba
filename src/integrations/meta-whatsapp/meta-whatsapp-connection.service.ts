@@ -288,6 +288,66 @@ type HydratedPortfolio = {
   directory: MetaPortfolioPublic[];
 };
 
+type PortfolioWriteToken = {
+  id: string;
+  token: string;
+  wabaId: string;
+  metaBusinessId: string;
+};
+
+function collectPortfolioWriteTokens(
+  rows: MetaWhatsappConnectionRecord[],
+  decrypt: (value: string) => string,
+): PortfolioWriteToken[] {
+  const out: PortfolioWriteToken[] = [];
+  for (const row of rows) {
+    try {
+      const token = decrypt(row.accessTokenEncrypted);
+      if (!token) continue;
+      out.push({
+        id: row.id,
+        token,
+        wabaId: String(row.wabaId || "").trim(),
+        metaBusinessId: String(row.metaBusinessId || "").trim(),
+      });
+    } catch {
+      /* conexão sem token utilizável */
+    }
+  }
+  return out;
+}
+
+function tokensForTargetWaba(
+  preferred: string,
+  targetWabaId: string,
+  pool: PortfolioWriteToken[],
+  selectedBm: string,
+): Array<{ token: string; ownsTarget: boolean }> {
+  const target = String(targetWabaId || "").trim();
+  const out: Array<{ token: string; ownsTarget: boolean }> = [];
+  const seen = new Set<string>();
+  const add = (raw: string, ownsTarget: boolean) => {
+    const token = String(raw || "").trim();
+    if (!token || seen.has(token)) return;
+    seen.add(token);
+    out.push({ token, ownsTarget });
+  };
+  for (const row of pool) {
+    if (target && row.wabaId === target) add(row.token, true);
+  }
+  add(preferred, Boolean(target && pool.some((row) => row.token === preferred && row.wabaId === target)));
+  for (const row of pool) {
+    if (!selectedBm || !row.metaBusinessId) continue;
+    if (
+      metaBusinessIdsMatch(row.metaBusinessId, selectedBm) ||
+      knownOwnedBusinessesMatch(row.metaBusinessId, selectedBm)
+    ) {
+      add(row.token, Boolean(target && row.wabaId === target));
+    }
+  }
+  return out;
+}
+
 const BUSINESS_PHOTO_TTL_MS = 30 * 1000;
 
 async function cacheGraphBusinessPhoto(
@@ -334,6 +394,7 @@ async function hydrateOpenConnection(
   tenantId: string,
   open: MetaWhatsappConnectionRecord,
   extraWabaIds: string[] = [],
+  writeTokens: PortfolioWriteToken[] = [],
 ): Promise<HydratedPortfolio> {
   const stored = storedNumbersFromConnection(open);
   const fallback = { ...cardFromConnection(open), numbers: stored };
@@ -545,7 +606,13 @@ async function hydrateOpenConnection(
       });
       break;
     }
-    const phones = await listWabaPhoneNumbersPaged(g, token, wid);
+    const phones = await listWabaPhoneNumbersForPortfolio(
+      g,
+      wid,
+      token,
+      writeTokens,
+      String(open.metaBusinessId || businessId || storedBm || "").trim(),
+    );
     if (!phones.ok) {
       lastPhoneStatus = phones.status;
       continue;
@@ -583,7 +650,12 @@ async function hydrateOpenConnection(
   let merged = unionPortfolioNumbers(mapped, stored);
   const claimedPhoneId = String(open.phoneNumberId || "").trim();
   if (claimedPhoneId && !merged.some((row) => String(row.phoneNumberId || "").trim() === claimedPhoneId)) {
-    const extra = await fetchPhoneNodes(g, token, [claimedPhoneId], primaryWabaId);
+    const extra = await fetchPhoneNodes(
+      g,
+      [token, ...writeTokens.map((row) => row.token)],
+      [claimedPhoneId],
+      primaryWabaId,
+    );
     merged = unionPortfolioNumbers(merged, mapMetaPhoneListToPortfolioNumbers({ data: extra }));
   }
   const knownPending = knownPendingPhonesForBusiness(businessId || storedBm);
@@ -611,7 +683,8 @@ async function hydrateOpenConnection(
       const id = String(row.phoneNumberId || "").trim();
       if (claimedPhoneId && id === claimedPhoneId) return true;
       const wid = String(row.wabaId || "").trim();
-      return wid ? wabaIds.has(wid) : false;
+      if (!wid) return Boolean(String(row.displayPhoneNumber || "").trim());
+      return wabaIds.has(wid);
     });
   }
   return {
@@ -661,20 +734,28 @@ async function listDebugTokenWhatsappTargets(
 
 async function fetchPhoneNodes(
   graph: MetaConnectionGraphCaller,
-  token: string,
+  token: string | string[],
   phoneIds: string[],
   stampWabaId?: string,
 ): Promise<unknown[]> {
+  const tokens = [...new Set((Array.isArray(token) ? token : [token]).map((item) => String(item || "").trim()).filter(Boolean))];
   const out: unknown[] = [];
   const fallbackWaba = String(stampWabaId || "").trim();
   for (const id of phoneIds) {
-    const res = await graph({
-      token,
-      method: "GET",
-      path: id,
-      query: { fields: `${META_PHONE_NUMBER_CATALOG_FIELDS},whatsapp_business_account` },
-    });
-    if (!res.ok || !res.json || typeof res.json !== "object") continue;
+    let res: Awaited<ReturnType<MetaConnectionGraphCaller>> | null = null;
+    for (const item of tokens) {
+      const attempt = await graph({
+        token: item,
+        method: "GET",
+        path: id,
+        query: { fields: `${META_PHONE_NUMBER_CATALOG_FIELDS},whatsapp_business_account` },
+      });
+      if (attempt.ok && attempt.json && typeof attempt.json === "object") {
+        res = attempt;
+        break;
+      }
+    }
+    if (!res || !res.ok || !res.json || typeof res.json !== "object") continue;
     const display = String((res.json as { display_phone_number?: unknown }).display_phone_number || "").trim();
     if (!display) continue;
     const row = res.json as Record<string, unknown>;
@@ -912,6 +993,29 @@ async function listWabaPhoneNumbersPaged(
   if (catalog.ok) return catalog;
   if (defaults.ok) return defaults;
   return withLimit;
+}
+
+async function listWabaPhoneNumbersForPortfolio(
+  graph: MetaConnectionGraphCaller,
+  wabaId: string,
+  preferredToken: string,
+  pool: PortfolioWriteToken[],
+  selectedBm: string,
+): Promise<{ ok: true; json: { data: unknown[] } } | { ok: false; status: number }> {
+  const ordered = tokensForTargetWaba(preferredToken, wabaId, pool, selectedBm);
+  let emptyOk: { ok: true; json: { data: unknown[] } } | null = null;
+  let lastFail: { ok: false; status: number } = { ok: false, status: 0 };
+  for (const item of ordered) {
+    const phones = await listWabaPhoneNumbersPaged(graph, item.token, wabaId);
+    if (phones.ok && phones.json.data.length) return phones;
+    if (phones.ok) {
+      emptyOk = phones;
+      if (item.ownsTarget) return phones;
+      continue;
+    }
+    lastFail = phones;
+  }
+  return emptyOk || lastFail;
 }
 
 async function cacheGraphPhonePhoto(
@@ -1280,6 +1384,7 @@ export class MetaWhatsappConnectionService {
       if (phoneNumberId) {
         rememberOfficialPhoneDisplayName(tenant.tenantId, phoneNumberId);
       }
+      invalidateCachedPortfolioGraph(tenant.tenantId);
       return toMetaWhatsappPublicConnection(row);
     } catch {
       throw new MetaWhatsappError("persist_failed");
@@ -1389,6 +1494,7 @@ export class MetaWhatsappConnectionService {
   ): Promise<MetaPortfolioAssetsPublic> {
     const tenant = requireTenant(auth);
     const requested = String(opts?.connectionId || "").trim();
+    if (opts?.fresh) invalidateCachedPortfolioGraph(tenant.tenantId);
     if (isMetaGraphUploadCooldown()) {
       const stale = readStaleCachedPortfolioGraph(tenant.tenantId);
       if (stale?.portfolios?.length) {
@@ -1456,6 +1562,7 @@ export class MetaWhatsappConnectionService {
       };
     }
 
+    const writeTokens = collectPortfolioWriteTokens(rows, this.decrypt);
     const hydrated = await Promise.all(
       rows.map((row) =>
         hydrateOpenConnection(
@@ -1464,6 +1571,7 @@ export class MetaWhatsappConnectionService {
           tenantId,
           row,
           extraWabaIdsFromConnections(rows, row),
+          writeTokens,
         ),
       ),
     );
