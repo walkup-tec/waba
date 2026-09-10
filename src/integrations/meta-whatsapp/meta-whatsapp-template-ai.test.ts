@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, afterEach, before, describe, it } from "node:test";
 import {
   MetaWhatsappTemplateAiService,
   resolveMetaHeaderMediaMime,
@@ -210,6 +210,15 @@ function submitShell(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Assistente IA de templates Utility", () => {
+  before(async () => {
+    const { clearMetaGraphUploadCooldownForTests } = await import("./meta-whatsapp-graph-cooldown");
+    clearMetaGraphUploadCooldownForTests();
+  });
+  afterEach(async () => {
+    const { clearMetaGraphUploadCooldownForTests } = await import("./meta-whatsapp-graph-cooldown");
+    clearMetaGraphUploadCooldownForTests();
+  });
+
   it("gera exatamente três opções e persiste a análise no portfólio escolhido", async () => {
     const email = "ai-utility@example.com";
     const { service, stored } = serviceFor(email, utilityOutput());
