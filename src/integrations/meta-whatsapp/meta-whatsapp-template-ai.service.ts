@@ -14,6 +14,7 @@ import {
 } from "./meta-whatsapp-template-ai.prompt";
 import { MetaWhatsappTemplateAiRepository } from "./meta-whatsapp-template-ai.repository";
 import { saveTemplateHeaderPreview } from "./meta-whatsapp-template-header-preview.store";
+import { headerFileSha256, readCachedHeaderHandle, writeCachedHeaderHandle } from "./meta-whatsapp-header-handle-cache";
 import {
   META_TEMPLATE_AI_OUTPUT_SCHEMA,
   META_TEMPLATE_AI_SCHEMA_NAME,
@@ -735,29 +736,15 @@ export class MetaWhatsappTemplateAiService {
         "A Meta recusou o arquivo por tamanho. Vídeo de cabeçalho até 16 MB. Comprima o MP4 e envie de novo.";
       throw failed;
     }
-    const connection = await this.requirePortfolio(tenant.tenantId, connectionId);
+    const preferred = await this.requirePortfolio(tenant.tenantId, connectionId);
     const appId = readMetaAppId();
     if (!appId) throw new MetaWhatsappError("config_invalid");
-    let token = "";
-    try {
-      token = this.decrypt(connection.accessTokenEncrypted);
-    } catch {
-      throw new MetaWhatsappError("invalid_token");
-    }
-    try {
-      const uploaded = await this.uploadHeader({
-        token,
-        appId,
-        fileName,
-        mime,
-        bytes,
-        timeoutMs: mediaFormat === "VIDEO" ? 300_000 : undefined,
-      });
-      const handle = String(uploaded.handle || "").trim();
-      if (!handle) throw new MetaWhatsappError("template_upload_failed");
+    const fileSha = headerFileSha256(bytes);
+    const cachedHandle = readCachedHeaderHandle(tenant.tenantId, fileSha);
+    if (cachedHandle) {
       saveTemplateHeaderPreview({
         tenantId: tenant.tenantId,
-        handle,
+        handle: cachedHandle,
         mime,
         fileName,
         bytes,
@@ -766,22 +753,77 @@ export class MetaWhatsappTemplateAiService {
         tenantId: tenant.tenantId,
         connectionId,
         headerUpload: mediaFormat,
+        headerCache: true,
         bytes: bytes.length,
         mime,
       });
-      return { handle, mediaFormat };
-    } catch (error) {
-      if (error instanceof MetaWhatsappError) throw error;
-      const msg = String((error as { message?: string })?.message || "").replace(/\s+/g, " ").trim();
-      logMetaTemplate("AI", {
-        tenantId: tenant.tenantId,
-        connectionId,
-        headerUploadFailed: mediaFormat,
-        mime,
-        bytes: bytes.length,
-        reason: msg.slice(0, 160),
-      });
-      throw wrapMetaHeaderUploadError(error);
+      return { handle: cachedHandle, mediaFormat };
     }
+
+    const repo = this.connections as MetaWhatsappConnectionRepository;
+    const openRows =
+      typeof repo.listOpenByTenant === "function" ? await repo.listOpenByTenant(tenant.tenantId) : [];
+    const candidates: MetaWhatsappConnectionRecord[] = [preferred];
+    for (const row of openRows) {
+      if (row.id === preferred.id) continue;
+      if (row.disconnectedAt) continue;
+      if (row.status !== "connected" && row.status !== "pending_confirmation") continue;
+      if (!String(row.wabaId || "").trim()) continue;
+      candidates.push(row);
+    }
+
+    let lastError: unknown = null;
+    for (const candidate of candidates) {
+      let token = "";
+      try {
+        token = this.decrypt(candidate.accessTokenEncrypted);
+      } catch {
+        continue;
+      }
+      if (!token) continue;
+      try {
+        const uploaded = await this.uploadHeader({
+          token,
+          appId,
+          fileName,
+          mime,
+          bytes,
+          timeoutMs: mediaFormat === "VIDEO" ? 300_000 : undefined,
+        });
+        const handle = String(uploaded.handle || "").trim();
+        if (!handle) throw new MetaWhatsappError("template_upload_failed");
+        writeCachedHeaderHandle(tenant.tenantId, fileSha, handle);
+        saveTemplateHeaderPreview({
+          tenantId: tenant.tenantId,
+          handle,
+          mime,
+          fileName,
+          bytes,
+        });
+        logMetaTemplate("AI", {
+          tenantId: tenant.tenantId,
+          connectionId: candidate.id,
+          headerUpload: mediaFormat,
+          headerFallback: candidate.id !== preferred.id,
+          bytes: bytes.length,
+          mime,
+        });
+        return { handle, mediaFormat };
+      } catch (error) {
+        if (error instanceof MetaWhatsappError && error.code !== "template_upload_failed") throw error;
+        lastError = error;
+        const msg = String((error as { message?: string })?.message || "").replace(/\s+/g, " ").trim();
+        logMetaTemplate("AI", {
+          tenantId: tenant.tenantId,
+          connectionId: candidate.id,
+          headerUploadFailed: mediaFormat,
+          mime,
+          bytes: bytes.length,
+          reason: msg.slice(0, 160),
+        });
+      }
+    }
+    if (lastError instanceof MetaWhatsappError) throw lastError;
+    throw wrapMetaHeaderUploadError(lastError || new MetaWhatsappError("template_upload_failed"));
   }
 }
