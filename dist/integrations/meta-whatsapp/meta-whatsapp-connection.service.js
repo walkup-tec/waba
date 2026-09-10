@@ -17,6 +17,7 @@ const meta_whatsapp_template_waba_ids_1 = require("./meta-whatsapp-template-waba
 const meta_whatsapp_portfolio_graph_cache_1 = require("./meta-whatsapp-portfolio-graph-cache");
 const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
 const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
+const meta_whatsapp_graph_cooldown_1 = require("./meta-whatsapp-graph-cooldown");
 const meta_whatsapp_portfolio_graph_1 = require("./meta-whatsapp-portfolio-graph");
 const meta_whatsapp_portfolio_identity_store_1 = require("./meta-whatsapp-portfolio-identity.store");
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
@@ -1179,6 +1180,13 @@ class MetaWhatsappConnectionService {
     async listPortfolioAssets(auth, opts) {
         const tenant = requireTenant(auth);
         const requested = String(opts?.connectionId || "").trim();
+        if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
+            const stale = (0, meta_whatsapp_portfolio_graph_cache_1.readStaleCachedPortfolioGraph)(tenant.tenantId);
+            if (stale?.portfolios?.length) {
+                return withLocalIdentities(tenant.tenantId, assetsFromPortfolioCards(stale.portfolios, requested));
+            }
+            return withLocalIdentities(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
+        }
         const useCache = (0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)() && !opts?.fresh;
         if (useCache) {
             const cached = (0, meta_whatsapp_portfolio_graph_cache_1.readCachedPortfolioGraph)(tenant.tenantId);
@@ -1203,6 +1211,14 @@ class MetaWhatsappConnectionService {
         finally {
             (0, meta_whatsapp_portfolio_graph_cache_1.clearPortfolioGraphInflight)(tenant.tenantId);
         }
+    }
+    async loadStoredPortfolioAssets(tenantId, requested) {
+        const repo = this.repository;
+        const rows = typeof repo.listOpenByTenant === "function"
+            ? await repo.listOpenByTenant(tenantId)
+            : [await this.repository.findOpenByTenant(tenantId)].filter((item) => Boolean(item));
+        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(rows.map((row) => ({ ...cardFromConnection(row), numbers: storedNumbersFromConnection(row) }))).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+        return assetsFromPortfolioCards(cards, requested);
     }
     async loadPortfolioGraphAssets(tenantId, requested) {
         const repo = this.repository;
