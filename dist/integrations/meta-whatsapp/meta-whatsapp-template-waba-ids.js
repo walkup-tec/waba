@@ -205,6 +205,24 @@ async function listBusinessWabaEdgeRows(graph, token, businessId, edge) {
     }
     return out;
 }
+async function addDebugTokenWabas(graph, token, bm, byId) {
+    const appId = (0, meta_config_1.readMetaAppId)();
+    const appSecret = (0, meta_config_1.readMetaAppSecret)();
+    if (!appId || !appSecret || !token)
+        return;
+    const debug = await graph({
+        token: `${appId}|${appSecret}`,
+        method: "GET",
+        path: "debug_token",
+        query: { input_token: token },
+        ...DISCOVER_GRAPH,
+    });
+    if (!debug.ok)
+        return;
+    for (const id of wabaIdsFromDebugTokenJson(debug.json)) {
+        addDiscoveredWaba(byId, id, "", bm);
+    }
+}
 async function discoverTemplateWabas(input) {
     const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
     const primary = String(input.connection.wabaId || "").trim();
@@ -212,16 +230,12 @@ async function discoverTemplateWabas(input) {
     const byId = new Map();
     const ownedIds = new Set();
     const clientIds = new Set();
-    const extraSet = new Set([...(input.extraWabaIds || []), primary, ...(0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm)]
-        .map((id) => String(id || "").trim())
-        .filter((id) => id && !(0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(bm).includes(id)));
-    if (primary)
-        addDiscoveredWaba(byId, primary, "", bm);
-    for (const row of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaRowsForBusiness)(bm)) {
-        addDiscoveredWaba(byId, row.id, row.name, bm);
-    }
-    for (const id of extraSet)
-        addDiscoveredWaba(byId, id, "", bm);
+    const knownOwnedIds = new Set((0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm));
+    const extraFromConnections = [
+        ...new Set((input.extraWabaIds || [])
+            .map((id) => String(id || "").trim())
+            .filter((id) => id && !(0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(bm).includes(id))),
+    ];
     for (const id of (0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(bm))
         clientIds.add(id);
     if (bm) {
@@ -251,21 +265,23 @@ async function discoverTemplateWabas(input) {
             clientIds.add(row.id);
         }
     }
-    const appId = (0, meta_config_1.readMetaAppId)();
-    const appSecret = (0, meta_config_1.readMetaAppSecret)();
-    if (appId && appSecret && input.token) {
-        const debug = await graph({
-            token: `${appId}|${appSecret}`,
-            method: "GET",
-            path: "debug_token",
-            query: { input_token: input.token },
-            ...DISCOVER_GRAPH,
-        });
-        if (debug.ok) {
-            for (const id of wabaIdsFromDebugTokenJson(debug.json)) {
-                addDiscoveredWaba(byId, id, "", bm);
-            }
+    const ownedEdgeListed = ownedIds.size > 0;
+    if (ownedEdgeListed) {
+        // Mesma lista do Manager ("Contas do WhatsApp"). debug_token e conexão
+        // antiga não podem reintroduzir WABA que a Meta já não mostra neste BM.
+        for (const row of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaRowsForBusiness)(bm)) {
+            addDiscoveredWaba(byId, row.id, row.name, bm);
         }
+    }
+    else {
+        if (primary)
+            addDiscoveredWaba(byId, primary, "", bm);
+        for (const row of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaRowsForBusiness)(bm)) {
+            addDiscoveredWaba(byId, row.id, row.name, bm);
+        }
+        for (const id of extraFromConnections)
+            addDiscoveredWaba(byId, id, "", bm);
+        await addDebugTokenWabas(graph, input.token, bm, byId);
     }
     // WABA client (ex.: Rio de Janeiro 01) não entra no picker deste BM, mesmo se GET owner bater.
     for (const id of [...byId.keys()]) {
@@ -277,8 +293,9 @@ async function discoverTemplateWabas(input) {
             byId.delete(id);
     }
     const candidateIds = [...byId.keys()];
-    // debug_token lista WABAs de outros BMs. Sem edge client, GET 403 não pode preservar esses IDs.
-    const keepOnErrorIds = candidateIds.filter((id) => ownedIds.has(id) || extraSet.has(id));
+    const keepOnErrorIds = ownedEdgeListed
+        ? candidateIds.filter((id) => ownedIds.has(id) || knownOwnedIds.has(id))
+        : candidateIds.filter((id) => id === primary || knownOwnedIds.has(id));
     if (bm && candidateIds.length) {
         const owned = await filterWabaIdsOwnedByBusiness({
             token: input.token,
