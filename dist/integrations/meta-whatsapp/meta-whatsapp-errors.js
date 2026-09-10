@@ -43,8 +43,8 @@ const PUBLIC_MESSAGES = {
     graph_rate_limited: "A Meta limitou temporariamente as consultas desta conta WhatsApp. Aguarde alguns minutos e tente de novo. A lista que já está no WABA continua disponível.",
 };
 class MetaWhatsappError extends Error {
-    constructor(code, status) {
-        super(PUBLIC_MESSAGES[code]);
+    constructor(code, status, publicMessage) {
+        super(publicMessage || PUBLIC_MESSAGES[code]);
         this.name = "MetaWhatsappError";
         this.code = code;
         this.status = status ?? defaultStatus(code);
