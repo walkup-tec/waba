@@ -21,9 +21,9 @@ import {
 } from "./meta-whatsapp-template-graph.client";
 import {
   discoverTemplateWabaIds,
-  discoverTemplateWabas,
   extraWabaIdsFromConnections,
   pickTemplateWriteConnections,
+  templatePickerWabaIds,
 } from "./meta-whatsapp-template-waba-ids";
 import { appendSilentBlockButton } from "./meta-whatsapp-template-silent-block-button";
 import { validateTemplateCreate } from "./meta-whatsapp-template-validate";
@@ -47,7 +47,7 @@ import {
   templateHeaderPreviewKeys,
 } from "./meta-whatsapp-template-header-preview.store";
 import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template";
-import { knownOwnedWabaIdsForBusiness, knownWabaNameForId } from "./meta-whatsapp-known-owned-wabas";
+import { knownWabaNameForId } from "./meta-whatsapp-known-owned-wabas";
 import { pickReusableHeaderHandle } from "./meta-whatsapp-header-handle-cache";
 import {
   isMetaGraphUploadCooldown,
@@ -226,36 +226,11 @@ export class MetaWhatsappTemplateService {
       throw new MetaWhatsappError("invalid_token");
     }
     const graph = this.graph || callMetaGraphJson;
-    const extraWabaIds = extraWabaIdsFromConnections(
-      await this.listOpenConnections(tenant.tenantId),
-      connection,
-    );
-    if (isMetaGraphUploadCooldown()) {
-      const ids = [
-        String(connection.wabaId || "").trim(),
-        ...knownOwnedWabaIdsForBusiness(String(connection.metaBusinessId || "")),
-      ].filter(Boolean);
-      return {
-        connectionId: connection.id,
-        wabas: [...new Set(ids)].map((id) => ({ id, name: `WABA ${id}` })),
-      };
-    }
-    const discovered = await discoverTemplateWabas({
-      token,
-      connection,
-      extraWabaIds,
-      graph,
-    });
-    const unique = new Map<string, string>();
-    for (const row of discovered) {
-      const id = String((row && row.id) || "").trim();
-      if (!id) continue;
-      unique.set(id, String((row && row.name) || "").trim());
-    }
+    const ids = templatePickerWabaIds(connection);
     const wabas: Array<{ id: string; name: string }> = [];
-    for (const [id, listedName] of unique) {
-      let name = listedName && listedName !== `WABA ${id}` ? listedName : "";
-      if (!name) {
+    for (const id of ids) {
+      let name = knownWabaNameForId(id);
+      if (!name && !isMetaGraphUploadCooldown()) {
         const result = await graph({
           token,
           method: "GET",
@@ -281,21 +256,13 @@ export class MetaWhatsappTemplateService {
 
   private async resolveCreateWabaId(
     connection: MetaWhatsappConnectionRecord,
-    token: string,
+    _token: string,
     requestedRaw: string,
   ): Promise<string> {
     const primary = String(connection.wabaId || "").trim();
     const requested = String(requestedRaw || "").trim();
     if (!requested || requested === primary) return primary;
-    const allowed = await discoverTemplateWabaIds({
-      token,
-      connection,
-      extraWabaIds: extraWabaIdsFromConnections(
-        await this.listOpenConnections(connection.tenantId),
-        connection,
-      ),
-      graph: this.graph,
-    });
+    const allowed = templatePickerWabaIds(connection);
     if (allowed.includes(requested)) return requested;
     const error = new MetaWhatsappError("invalid_payload");
     error.message =
