@@ -135,14 +135,23 @@ export function isMetaPhoneConnected(metaStatus: string | null): boolean {
   return String(metaStatus || "").trim().toUpperCase() === "CONNECTED";
 }
 
-const META_PHONE_RESTRICTED_STATUSES = new Set([
+/** Número inutilizável de verdade. Não confundir com limite, qualidade ou health agregado. */
+const META_PHONE_BANNED_STATUSES = new Set([
   "BANNED",
-  "RESTRICTED",
-  "FLAGGED",
-  "RATE_LIMITED",
   "DISABLED",
   "LOCKED",
   "DELETED",
+]);
+
+/**
+ * Graph ainda lista o chip no Gerenciador.
+ * RESTRICTED = teto de mensagens; FLAGGED = qualidade baixa; RATE_LIMITED = throughput.
+ */
+const META_PHONE_CONNECTED_STATUSES = new Set([
+  "CONNECTED",
+  "FLAGGED",
+  "RATE_LIMITED",
+  "RESTRICTED",
 ]);
 
 /** Graph `health_status.can_send_message`: AVAILABLE | LIMITED | BLOCKED. */
@@ -165,9 +174,10 @@ export function parseMetaHealthCanSend(json: unknown): string | null {
 }
 
 /**
- * status da Graph (CONNECTED/RESTRICTED/BANNED/…) + health_status.
+ * status da Graph (CONNECTED/RESTRICTED/BANNED/…).
  * DISCONNECTED mesmo com SMS verificado ainda precisa do PIN de registro Cloud.
- * Só restrição/banimento da Meta esconde o PIN.
+ * Só banimento/desativação da Meta esconde o PIN.
+ * health_status BLOCKED (APP, template, BUSINESS ou limite) não é banimento do chip.
  */
 export function resolveMetaPhoneUiStatus(input: {
   metaStatus?: string | null;
@@ -175,11 +185,8 @@ export function resolveMetaPhoneUiStatus(input: {
   healthCanSend?: string | null;
 }): MetaPortfolioNumberUiStatus {
   const status = String(input.metaStatus || "").trim().toUpperCase();
-  const health = String(input.healthCanSend || "").trim().toUpperCase();
-  if (META_PHONE_RESTRICTED_STATUSES.has(status)) return "restrito";
-  if (status === "CONNECTED") {
-    return health === "BLOCKED" ? "restrito" : "ativo";
-  }
+  if (META_PHONE_BANNED_STATUSES.has(status)) return "restrito";
+  if (META_PHONE_CONNECTED_STATUSES.has(status)) return "ativo";
   return "pendente";
 }
 
@@ -197,10 +204,10 @@ function preferMetaPhoneStatus(left: string | null | undefined, right: string | 
   const b = text(right);
   const ua = String(a || "").toUpperCase();
   const ub = String(b || "").toUpperCase();
-  if (META_PHONE_RESTRICTED_STATUSES.has(ua)) return a;
-  if (META_PHONE_RESTRICTED_STATUSES.has(ub)) return b;
-  if (ua === "CONNECTED") return a;
-  if (ub === "CONNECTED") return b;
+  if (META_PHONE_BANNED_STATUSES.has(ua)) return a;
+  if (META_PHONE_BANNED_STATUSES.has(ub)) return b;
+  if (META_PHONE_CONNECTED_STATUSES.has(ua)) return a;
+  if (META_PHONE_CONNECTED_STATUSES.has(ub)) return b;
   return a || b;
 }
 
