@@ -46,6 +46,10 @@ import {
 } from "./meta-whatsapp-template-header-preview.store";
 import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template";
 import { pickReusableHeaderHandle } from "./meta-whatsapp-header-handle-cache";
+import {
+  isMetaGraphUploadCooldown,
+  metaGraphUploadCooldownMessage,
+} from "./meta-whatsapp-graph-cooldown";
 
 /** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. */
 const META_TEMPLATE_SYNC_BUDGET_MS = 20_000;
@@ -223,6 +227,13 @@ export class MetaWhatsappTemplateService {
       await this.listOpenConnections(tenant.tenantId),
       connection,
     );
+    if (isMetaGraphUploadCooldown()) {
+      const ids = [String(connection.wabaId || "").trim(), ...extraWabaIds].filter(Boolean);
+      return {
+        connectionId: connection.id,
+        wabas: [...new Set(ids)].map((id) => ({ id, name: `WABA ${id}` })),
+      };
+    }
     const discovered = await discoverTemplateWabas({
       token,
       connection,
@@ -440,6 +451,11 @@ export class MetaWhatsappTemplateService {
   ): Promise<{ templates: MetaTemplatePublic[]; pages: number; removed: number }> {
     const tenant = requireTenant(auth);
     const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
+    if (isMetaGraphUploadCooldown()) {
+      const limited = new MetaWhatsappError("graph_rate_limited");
+      limited.message = metaGraphUploadCooldownMessage();
+      throw limited;
+    }
     let token = "";
     try {
       token = this.decrypt(connection.accessTokenEncrypted);
