@@ -3175,6 +3175,125 @@
 
         .meta-onboard { max-width: none; margin: 0; }
         .meta-onboard-hero { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:16px; margin-bottom:18px; }
+        .meta-connect-progress {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          min-width: min(420px, 100%);
+          flex: 1 1 280px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          border: 1px solid rgba(59, 130, 246, 0.35);
+          background: rgba(15, 23, 42, 0.45);
+        }
+        .meta-connect-progress[hidden] { display: none !important; }
+        .meta-connect-progress.is-success {
+          align-items: center;
+          border-color: rgba(37, 211, 102, 0.45);
+          background: rgba(6, 36, 24, 0.45);
+        }
+        .meta-connect-progress.is-error {
+          align-items: center;
+          border-color: rgba(248, 113, 113, 0.45);
+          background: rgba(69, 10, 10, 0.35);
+        }
+        .meta-connect-progress-graphic {
+          position: relative;
+          width: 28px;
+          height: 28px;
+          flex: 0 0 auto;
+          margin-top: 1px;
+        }
+        .meta-connect-progress-spin {
+          display: none;
+          box-sizing: border-box;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: 2.5px solid rgba(147, 197, 253, 0.22);
+          border-top-color: #93c5fd;
+          animation: meta-connect-spin 0.7s linear infinite;
+        }
+        .meta-connect-progress.is-run .meta-connect-progress-spin { display: block; }
+        .meta-connect-progress-check {
+          display: none;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          align-items: center;
+          justify-content: center;
+          background: #25d366;
+          color: #052e16;
+        }
+        .meta-connect-progress.is-success .meta-connect-progress-check { display: inline-flex; }
+        .meta-connect-progress:not(.is-run):not(.is-success) .meta-connect-progress-graphic { display: none; }
+        .meta-connect-progress-copy { min-width: 0; flex: 1; }
+        .meta-connect-progress-title {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 700;
+          color: #e2e8f0;
+          line-height: 1.35;
+        }
+        .meta-connect-progress.is-success .meta-connect-progress-title { color: #bbf7d0; }
+        .meta-connect-progress.is-error .meta-connect-progress-title { color: #fecaca; }
+        .meta-connect-progress-bar {
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(148, 163, 184, 0.18);
+          overflow: hidden;
+          margin: 8px 0;
+        }
+        .meta-connect-progress-bar[hidden] { display: none !important; }
+        .meta-connect-progress-bar i {
+          display: block;
+          height: 100%;
+          width: 38%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #38bdf8, #34d399);
+          animation: meta-connect-indet 1.15s ease-in-out infinite;
+        }
+        .meta-connect-progress-steps {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 4px;
+        }
+        .meta-connect-progress-steps[hidden] { display: none !important; }
+        .meta-connect-progress-steps li {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          line-height: 1.3;
+          color: rgba(226, 232, 240, 0.55);
+        }
+        .meta-connect-progress-steps li::before {
+          content: "";
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          flex: 0 0 auto;
+          background: rgba(148, 163, 184, 0.35);
+        }
+        .meta-connect-progress-steps li.is-current {
+          color: #e2e8f0;
+          font-weight: 700;
+        }
+        .meta-connect-progress-steps li.is-current::before {
+          background: #38bdf8;
+          box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.22);
+        }
+        .meta-connect-progress-steps li.is-done { color: #86efac; }
+        .meta-connect-progress-steps li.is-done::before { background: #25d366; }
+        @keyframes meta-connect-spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes meta-connect-indet {
+          0% { transform: translateX(-130%); }
+          100% { transform: translateX(360%); }
+        }
         .meta-onboard-hero h2 { margin:0 0 6px; font-size:1.35rem; font-weight:700; }
         .meta-onboard-hero p { margin:0; max-width:42rem; color:rgba(226,232,240,.78); line-height:1.45; }
         .meta-onboard-cta { min-width:220px; min-height:48px; border:0; border-radius:12px; background:#25d366; color:#052e16; font-weight:700; font-size:15px; padding:12px 18px; cursor:pointer; }
@@ -22319,6 +22438,27 @@
                       </svg>
                       Conectar Portfólio
                     </button>
+                    <div
+                      id="meta-tp-connect-progress"
+                      class="meta-connect-progress"
+                      hidden
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <div class="meta-connect-progress-graphic" aria-hidden="true">
+                        <span class="meta-connect-progress-spin"></span>
+                        <span class="meta-connect-progress-check">
+                          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                            <path fill="currentColor" d="M9.2 16.6 4.8 12.2l1.4-1.4 3 3 8.6-8.6 1.4 1.4z"/>
+                          </svg>
+                        </span>
+                      </div>
+                      <div class="meta-connect-progress-copy">
+                        <p id="meta-tp-connect-progress-title" class="meta-connect-progress-title"></p>
+                        <div id="meta-tp-connect-progress-bar" class="meta-connect-progress-bar" hidden><i></i></div>
+                        <ol id="meta-tp-connect-progress-steps" class="meta-connect-progress-steps"></ol>
+                      </div>
+                    </div>
                   </div>
                   <div id="meta-tp-connected-card" class="meta-connected-card" aria-live="polite" hidden>
                     <div class="meta-connected-avatar" id="meta-tp-connected-initials">WA</div>
@@ -37561,6 +37701,116 @@
         });
       }
 
+      const META_TP_CONNECT_STEPS = [
+        "Verificando a sessão…",
+        "Lendo o status da conexão…",
+        "Consultando o portfólio na Meta…",
+        "Carregando as contas WABA…",
+        "Listando os números do WhatsApp…",
+        "Sincronizando nomes e fotos…",
+      ];
+      let metaTpConnectProgressTimer = 0;
+      let metaTpConnectProgressIndex = 0;
+      let metaTpConnectProgressActive = false;
+
+      function metaTpConnectProgressEls() {
+        return {
+          root: document.getElementById("meta-tp-connect-progress"),
+          title: document.getElementById("meta-tp-connect-progress-title"),
+          bar: document.getElementById("meta-tp-connect-progress-bar"),
+          steps: document.getElementById("meta-tp-connect-progress-steps"),
+        };
+      }
+
+      function metaTpHasVisiblePortfolios() {
+        const list = document.getElementById("meta-tp-portfolio-list");
+        const section = document.getElementById("meta-tp-portfolio");
+        if (!list || (section && section.hidden)) return false;
+        return Boolean(list.querySelector(".meta-portfolio-card:not(.is-skeleton)"));
+      }
+
+      function metaTpPaintConnectProgress(index) {
+        const els = metaTpConnectProgressEls();
+        const current = Math.max(0, Math.min(META_TP_CONNECT_STEPS.length - 1, Number(index) || 0));
+        metaTpConnectProgressIndex = current;
+        if (els.title) els.title.textContent = META_TP_CONNECT_STEPS[current];
+        if (!els.steps) return;
+        els.steps.innerHTML = META_TP_CONNECT_STEPS.map(function (label, i) {
+          const cls = i < current ? "is-done" : i === current ? "is-current" : "";
+          return "<li" + (cls ? ' class="' + cls + '"' : "") + ">" + label + "</li>";
+        }).join("");
+      }
+
+      function metaTpStopConnectProgressTimer() {
+        if (metaTpConnectProgressTimer) {
+          window.clearInterval(metaTpConnectProgressTimer);
+          metaTpConnectProgressTimer = 0;
+        }
+      }
+
+      function metaTpStartConnectProgress() {
+        const els = metaTpConnectProgressEls();
+        if (!els.root) return;
+        metaTpConnectProgressActive = true;
+        metaTpStopConnectProgressTimer();
+        els.root.hidden = false;
+        els.root.classList.remove("is-success", "is-error");
+        els.root.classList.add("is-run");
+        if (els.bar) els.bar.hidden = false;
+        if (els.steps) els.steps.hidden = false;
+        metaTpPaintConnectProgress(0);
+        metaTpConnectProgressTimer = window.setInterval(function () {
+          if (!metaTpConnectProgressActive) return;
+          if (metaTpConnectProgressIndex >= META_TP_CONNECT_STEPS.length - 1) return;
+          metaTpPaintConnectProgress(metaTpConnectProgressIndex + 1);
+        }, 2200);
+      }
+
+      function metaTpAdvanceConnectProgress(minIndex) {
+        if (!metaTpConnectProgressActive) return;
+        const next = Math.max(metaTpConnectProgressIndex, Number(minIndex) || 0);
+        metaTpPaintConnectProgress(next);
+      }
+
+      function metaTpFinishConnectProgress(opts) {
+        const options = opts || {};
+        const els = metaTpConnectProgressEls();
+        metaTpConnectProgressActive = false;
+        metaTpStopConnectProgressTimer();
+        if (!els.root) return;
+        els.root.hidden = false;
+        els.root.classList.remove("is-run", "is-success", "is-error");
+        if (els.bar) els.bar.hidden = true;
+        if (els.steps) els.steps.hidden = true;
+        const ok = options.ok !== false;
+        const hasPortfolios = options.hasPortfolios === true || metaTpHasVisiblePortfolios();
+        if (ok && hasPortfolios) {
+          els.root.classList.add("is-success");
+          if (els.title) els.title.textContent = "Conexão concluída com sucesso";
+          return;
+        }
+        if (ok) {
+          if (els.title) els.title.textContent = String(options.message || "Nenhum portfólio conectado ainda.");
+          return;
+        }
+        els.root.classList.add("is-error");
+        if (els.title) {
+          els.title.textContent = String(options.message || "Não foi possível concluir a conexão.");
+        }
+      }
+
+      window.wabaEnsureMetaPortfolioLoad = function wabaEnsureMetaPortfolioLoad() {
+        if (metaTpHasVisiblePortfolios()) {
+          metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
+          return false;
+        }
+        if (metaTpConnectProgressActive) return false;
+        if (typeof window.wabaRefreshMetaWhatsappStatus === "function") {
+          window.wabaRefreshMetaWhatsappStatus();
+        }
+        return false;
+      };
+
       function metaTpLog(step) {
         metaTpLogLines.push(String(step || "").trim());
         if (metaTpLogLines.length > 12) metaTpLogLines = metaTpLogLines.slice(-12);
@@ -38332,7 +38582,11 @@
           metaTpRenderPortfolio({ portfolio: null, numbers: [] });
           return;
         }
-        if (!silent) metaTpShowPortfolioLoading();
+        if (!silent) {
+          metaTpShowPortfolioLoading();
+          if (!metaTpConnectProgressActive) metaTpStartConnectProgress();
+          metaTpAdvanceConnectProgress(2);
+        }
         try {
           const { response, payload } = await metaTpFetchJson(
             "/integrations/meta/whatsapp/portfolio" + (force ? "?fresh=1" : ""),
@@ -38347,6 +38601,7 @@
           const next = metaTpAssetsFingerprint(payload);
           if (silent && !force && next === metaTpPortfolioFingerprint) return;
           metaTpPortfolioFingerprint = next;
+          metaTpAdvanceConnectProgress(META_TP_CONNECT_STEPS.length - 1);
           metaTpRenderPortfolio(payload);
         } catch {
           if (!silent && !force) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
@@ -38403,15 +38658,20 @@
       }
 
       async function metaTpRefreshStatusSilent() {
+        metaTpStartConnectProgress();
+        metaTpAdvanceConnectProgress(1);
         const statusReq = metaTpFetchJson("/integrations/meta/whatsapp/status");
         const portfolioReq = metaTpLoadPortfolio();
         const { response, payload } = await statusReq;
         if (!response.ok || payload.ok === false) {
-          metaTpSetStatus(String(payload.error || "Não foi possível ler o status da conexão."));
+          const message = String(payload.error || "Não foi possível ler o status da conexão.");
+          metaTpSetStatus(message);
           await portfolioReq.catch(function () {});
+          metaTpFinishConnectProgress({ ok: false, message: message });
           return payload;
         }
         metaTpSetStatus("");
+        metaTpAdvanceConnectProgress(2);
         metaTpLog(metaTpFormatPublicStatus(payload));
         try {
           await portfolioReq;
@@ -38419,7 +38679,13 @@
           if (connected === "connected" || connected === "conectado") {
             if (typeof window.wabaMetaLabSetStep === "function") window.wabaMetaLabSetStep(4);
           }
-        } catch (_err) {}
+          metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasVisiblePortfolios() });
+        } catch (_err) {
+          metaTpFinishConnectProgress({
+            ok: false,
+            message: "Não foi possível carregar os portfólios da Meta.",
+          });
+        }
         return payload;
       }
 
@@ -38429,6 +38695,7 @@
           await metaTpRefreshStatusSilent();
         } catch {
           metaTpSetStatus("Falha de rede ao ler o status.");
+          metaTpFinishConnectProgress({ ok: false, message: "Falha de rede ao ler o status." });
         }
         return false;
       };
@@ -38441,9 +38708,13 @@
           btn.setAttribute("disabled", "true");
         }
         try {
+          metaTpStartConnectProgress();
+          metaTpAdvanceConnectProgress(2);
           await metaTpLoadPortfolio({ silent: true, force: true });
+          metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasVisiblePortfolios() });
         } catch {
           metaTpSetStatus("Não foi possível atualizar os portfólios.");
+          metaTpFinishConnectProgress({ ok: false, message: "Não foi possível atualizar os portfólios." });
         } finally {
           if (btn) {
           btn.textContent = "Atualizar";
@@ -38480,8 +38751,10 @@
         if (metaTpSession.advancing) return;
         metaTpSession.advancing = true;
         try {
+          metaTpStartConnectProgress();
           if (metaTpSession.codeReceived && !metaTpSession.exchanged) {
             metaTpLog("code recebido");
+            metaTpPaintConnectProgress(1);
             let redirectUri = "";
             try {
               const cfg = await metaTpFetchJson("/integrations/meta/whatsapp/config");
@@ -38498,8 +38771,10 @@
             metaTpSession._code = "";
             if (!response.ok || payload.ok === false) {
               metaTpLog("token exchange falhou");
-              metaTpSetStatus(String(payload.error || "Não foi possível autorizar na Meta."));
+              const message = String(payload.error || "Não foi possível autorizar na Meta.");
+              metaTpSetStatus(message);
               window.__wabaMetaTechSignupActive = false;
+              metaTpFinishConnectProgress({ ok: false, message: message });
               return;
             }
             metaTpSession.exchanged = true;
@@ -38519,13 +38794,16 @@
             });
             if (!response.ok || payload.ok === false) {
               metaTpLog("claim falhou");
-              metaTpSetStatus(String(payload.error || "Não foi possível confirmar a WABA."));
+              const message = String(payload.error || "Não foi possível confirmar a WABA.");
+              metaTpSetStatus(message);
+              metaTpFinishConnectProgress({ ok: false, message: message });
               return;
             }
             metaTpLog(payload.wabaId ? "WABA claimed" : "WABA ainda ausente");
             if (payload.phoneNumberId) metaTpLog("Phone claimed");
             metaTpSetStatus("");
             metaTpLog(metaTpFormatPublicStatus(payload));
+            metaTpAdvanceConnectProgress(2);
             await metaTpLoadPortfolio({ force: true });
           }
 
@@ -38537,12 +38815,15 @@
             });
             if (!response.ok || payload.ok === false) {
               metaTpLog("Graph validation falhou");
-              metaTpSetStatus(String(payload.error || "A Meta não confirmou a WABA/número."));
+              const message = String(payload.error || "A Meta não confirmou a WABA/número.");
+              metaTpSetStatus(message);
+              metaTpFinishConnectProgress({ ok: false, message: message });
               return;
             }
             metaTpLog("connection status=" + String(payload.status || ""));
             metaTpSetStatus("");
             metaTpLog(metaTpFormatPublicStatus(payload));
+            metaTpAdvanceConnectProgress(2);
             await metaTpLoadPortfolio({ force: true });
             if (payload.status === "connected") {
               const sub = await metaTpFetchJson("/integrations/meta/whatsapp/subscribe-webhooks", {
@@ -38560,6 +38841,9 @@
               }
               window.__wabaMetaTechSignupActive = false;
             }
+          }
+          if (metaTpConnectProgressActive) {
+            metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasVisiblePortfolios() });
           }
         } finally {
           metaTpSession.advancing = false;
@@ -38825,6 +39109,7 @@
       if (document.getElementById("tab-whatsapp-oficial")) {
         metaTpStartLiveSync();
         if (metaTpLabTabVisible()) {
+          metaTpStartConnectProgress();
           metaTpShowPortfolioLoading();
           if (typeof window.wabaRefreshMetaWhatsappStatus === "function") {
             window.wabaRefreshMetaWhatsappStatus();
@@ -59594,6 +59879,9 @@
             "aria-hidden",
             nextTab !== "whatsapp-oficial" ? "true" : "false"
           );
+          if (nextTab === "whatsapp-oficial" && typeof window.wabaEnsureMetaPortfolioLoad === "function") {
+            window.wabaEnsureMetaPortfolioLoad();
+          }
         }
 
         if (whatsappInboxPanel) {
