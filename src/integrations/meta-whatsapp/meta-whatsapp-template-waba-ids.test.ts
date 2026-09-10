@@ -586,6 +586,89 @@ describe("template waba ids", () => {
       );
     });
 
+    it("Drax Sistemas: WABA owned sem número não entra no picker do portfólio", async () => {
+      const rows = await discoverTemplateWabas({
+        token: "tok",
+        connection: {
+          wabaId: "1636379994385054",
+          metaBusinessId: "1041827648719609",
+        },
+        extraWabaIds: ["1988957871663919", "1051060507541515"],
+        graph: async (input) => {
+          if (input.path === "1041827648719609") {
+            return graphOk({
+              id: "1041827648719609",
+              owned_whatsapp_business_accounts: {
+                data: [
+                  {
+                    id: "1636379994385054",
+                    name: "Drax Sistemas",
+                    phone_numbers: { data: [{ id: "phone-drax" }] },
+                  },
+                  {
+                    id: "1988957871663919",
+                    name: "WABA 1988957871663919",
+                    phone_numbers: { data: [] },
+                  },
+                  {
+                    id: "1051060507541515",
+                    name: "Mms Marketing E Sistemas Digitais Ltda",
+                    phone_numbers: { data: [] },
+                  },
+                ],
+              },
+              client_whatsapp_business_accounts: { data: [] },
+            });
+          }
+          if (input.path === "1041827648719609/owned_whatsapp_business_accounts") {
+            return graphOk({
+              data: [
+                {
+                  id: "1636379994385054",
+                  name: "Drax Sistemas",
+                  phone_numbers: { data: [{ id: "phone-drax" }] },
+                },
+                {
+                  id: "1988957871663919",
+                  name: "WABA 1988957871663919",
+                  phone_numbers: { data: [] },
+                },
+                {
+                  id: "1051060507541515",
+                  name: "Mms Marketing E Sistemas Digitais Ltda",
+                  phone_numbers: { data: [] },
+                },
+              ],
+            });
+          }
+          if (input.path === "1636379994385054") {
+            return graphOk({
+              id: "1636379994385054",
+              name: "Drax Sistemas",
+              owner_business_info: { id: "1041827648719609" },
+            });
+          }
+          if (input.path === "1988957871663919" || input.path === "1051060507541515") {
+            return graphOk({
+              id: input.path,
+              name: input.path === "1051060507541515" ? "Mms Marketing E Sistemas Digitais Ltda" : "",
+              owner_business_info: { id: "1041827648719609" },
+            });
+          }
+          return graphOk({ data: [] });
+        },
+      });
+      assert.deepEqual(
+        rows.map((row) => row.id),
+        ["1636379994385054"],
+      );
+      assert.equal(rows[0]?.name, "Drax Sistemas");
+      assert.equal(
+        rows.some((row) => row.id === "1988957871663919" || row.id === "1051060507541515"),
+        false,
+      );
+    });
+
     it("Walkup: se o Manager já listou as owned, debug_token e conexão antiga não inventam outra WABA", async () => {
       const rows = await discoverTemplateWabas({
         token: "tok",
