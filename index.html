@@ -38306,7 +38306,9 @@
         }
         if (!silent) metaTpShowPortfolioLoading();
         try {
-          const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/portfolio");
+          const { response, payload } = await metaTpFetchJson(
+            "/integrations/meta/whatsapp/portfolio" + (force ? "?fresh=1" : ""),
+          );
           if (!response.ok || payload.ok === false) {
             if (response.status === 502 || response.status === 504) {
               metaTpSetStatus("O servidor não concluiu a leitura dos números a tempo. Clique de novo em Atualizar.");
@@ -38496,7 +38498,7 @@
             if (payload.phoneNumberId) metaTpLog("Phone claimed");
             metaTpSetStatus("");
             metaTpLog(metaTpFormatPublicStatus(payload));
-            await metaTpLoadPortfolio();
+            await metaTpLoadPortfolio({ force: true });
           }
 
           if (metaTpSession.exchanged && metaTpSession.wabaId && metaTpSession.phoneNumberId) {
@@ -38513,7 +38515,7 @@
             metaTpLog("connection status=" + String(payload.status || ""));
             metaTpSetStatus("");
             metaTpLog(metaTpFormatPublicStatus(payload));
-            await metaTpLoadPortfolio();
+            await metaTpLoadPortfolio({ force: true });
             if (payload.status === "connected") {
               const sub = await metaTpFetchJson("/integrations/meta/whatsapp/subscribe-webhooks", {
                 method: "POST",
