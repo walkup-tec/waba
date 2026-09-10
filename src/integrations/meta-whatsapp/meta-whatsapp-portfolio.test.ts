@@ -1580,6 +1580,110 @@ describe("meta portfolio service", () => {
     assert.deepEqual(posts, ["token-waba02"]);
   });
 
+  it("PIN da WABA02 usa o token irmão mesmo com BM em formato de CNPJ", async () => {
+    const waba01 = {
+      ...connectedRow(),
+      id: "conn-andre-waba01",
+      metaBusinessId: "1759044748332124",
+      wabaId: "2458602464640240",
+      phoneNumberId: "phone-3626",
+      accessTokenEncrypted: encryptMetaToken("token-waba01"),
+    };
+    const waba02 = {
+      ...connectedRow(),
+      id: "conn-andre-waba02",
+      metaBusinessId: "60.843.286",
+      wabaId: "1744257946809067",
+      phoneNumberId: "1311179632078208",
+      accessTokenEncrypted: encryptMetaToken("token-waba02"),
+    };
+    const posts: string[] = [];
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [waba01, waba02];
+        },
+        async findOpenByTenant() {
+          return waba01;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      (async (input: { token?: string; method?: string; path?: string }) => {
+        if (input.method === "POST" && String(input.path || "").endsWith("/register")) {
+          posts.push(String(input.token || ""));
+          if (input.token === "token-waba02") return { ok: true, status: 200, json: { success: true } };
+          return {
+            ok: false,
+            status: 400,
+            graphCode: "100",
+            json: {
+              error: {
+                code: 100,
+                message:
+                  "Unsupported post request. Object with ID '1311179632078208' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+              },
+            },
+          };
+        }
+        return { ok: true, status: 200, json: { data: [] } };
+      }) as any,
+    );
+    await service.registerPhoneFromAuth(auth, {
+      phoneNumberId: "1311179632078208",
+      pin: "482917",
+      connectionId: "conn-andre-waba01",
+    });
+    assert.deepEqual(posts, ["token-waba02"]);
+  });
+
+  it("400 Unsupported post sem token da WABA02 explica conectar pelo +", async () => {
+    const andre = {
+      ...connectedRow(),
+      id: "conn-andre-waba01",
+      metaBusinessId: "1759044748332124",
+      wabaId: "2458602464640240",
+      phoneNumberId: "phone-3626",
+      accessTokenEncrypted: encryptMetaToken("token-waba01"),
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [andre];
+        },
+        async findOpenByTenant() {
+          return andre;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      (async () => ({
+        ok: false,
+        status: 400,
+        graphCode: "100",
+        json: {
+          error: {
+            code: 100,
+            message:
+              "Unsupported post request. Object with ID '1311179632078208' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+          },
+        },
+      })) as any,
+    );
+    await assert.rejects(
+      () =>
+        service.registerPhoneFromAuth(auth, {
+          phoneNumberId: "1311179632078208",
+          pin: "123456",
+          connectionId: "conn-andre-waba01",
+        }),
+      (error: unknown) =>
+        error instanceof MetaWhatsappError &&
+        error.code === "register_failed" &&
+        /WABA02/.test(error.message) &&
+        /conecte essa WABA/i.test(error.message) &&
+        !/Unsupported post request/i.test(error.message),
+    );
+  });
+
   it("liga o Inbox sem consultar a Graph", async () => {
     let graphCalls = 0;
     const service = new MetaWhatsappConnectionService(
