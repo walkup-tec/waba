@@ -19,6 +19,7 @@ const meta_whatsapp_template_types_1 = require("./meta-whatsapp-template.types")
 const meta_whatsapp_template_ai_repository_1 = require("./meta-whatsapp-template-ai.repository");
 const meta_whatsapp_template_header_preview_store_1 = require("./meta-whatsapp-template-header-preview.store");
 const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-template");
+const meta_whatsapp_header_handle_cache_1 = require("./meta-whatsapp-header-handle-cache");
 /** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. */
 const META_TEMPLATE_SYNC_BUDGET_MS = 20000;
 function requireTenant(auth) {
@@ -221,6 +222,19 @@ class MetaWhatsappTemplateService {
         }
         const one = await this.connections.findConnectedByTenant(tenantId);
         return one ? [one] : [];
+    }
+    async findReusableHeaderHandleForBytes(tenantId, bytes) {
+        const id = String(tenantId || "").trim();
+        if (!id || !bytes?.length || typeof this.templates.listByTenant !== "function") {
+            return { resumable: "", any: "" };
+        }
+        try {
+            const rows = await this.templates.listByTenant(id);
+            return (0, meta_whatsapp_header_handle_cache_1.pickReusableHeaderHandle)({ tenantId: id, bytes, rows });
+        }
+        catch {
+            return { resumable: "", any: "" };
+        }
     }
     async listApprovedUtilityExamples(tenantId) {
         const id = String(tenantId || "").trim();
