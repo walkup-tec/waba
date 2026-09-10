@@ -51,6 +51,7 @@ export async function uploadMetaResumableImage(
     token,
     method: "POST",
     path: `${appId}/uploads`,
+    maxAttempts: 1,
     query: {
       file_name: sanitizeUploadName(input.fileName, input.mime),
       file_length: String(input.bytes.length),
