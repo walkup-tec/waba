@@ -176,6 +176,52 @@ function cardFromConnection(open) {
         messagingLimit: open.messagingLimit,
     };
 }
+function collectPortfolioWriteTokens(rows, decrypt) {
+    const out = [];
+    for (const row of rows) {
+        try {
+            const token = decrypt(row.accessTokenEncrypted);
+            if (!token)
+                continue;
+            out.push({
+                id: row.id,
+                token,
+                wabaId: String(row.wabaId || "").trim(),
+                metaBusinessId: String(row.metaBusinessId || "").trim(),
+            });
+        }
+        catch {
+            /* conexão sem token utilizável */
+        }
+    }
+    return out;
+}
+function tokensForTargetWaba(preferred, targetWabaId, pool, selectedBm) {
+    const target = String(targetWabaId || "").trim();
+    const out = [];
+    const seen = new Set();
+    const add = (raw, ownsTarget) => {
+        const token = String(raw || "").trim();
+        if (!token || seen.has(token))
+            return;
+        seen.add(token);
+        out.push({ token, ownsTarget });
+    };
+    for (const row of pool) {
+        if (target && row.wabaId === target)
+            add(row.token, true);
+    }
+    add(preferred, Boolean(target && pool.some((row) => row.token === preferred && row.wabaId === target)));
+    for (const row of pool) {
+        if (!selectedBm || !row.metaBusinessId)
+            continue;
+        if ((0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(row.metaBusinessId, selectedBm) ||
+            (0, meta_whatsapp_known_owned_wabas_1.knownOwnedBusinessesMatch)(row.metaBusinessId, selectedBm)) {
+            add(row.token, Boolean(target && row.wabaId === target));
+        }
+    }
+    return out;
+}
 const BUSINESS_PHOTO_TTL_MS = 30 * 1000;
 async function cacheGraphBusinessPhoto(tenantId, businessId, url) {
     const id = String(businessId || "").trim();
@@ -214,7 +260,7 @@ function withHydrateLimits(graph) {
         timeoutMs: input.timeoutMs ?? HYDRATE_GRAPH.timeoutMs,
     });
 }
-async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaIds = []) {
+async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaIds = [], writeTokens = []) {
     const stored = storedNumbersFromConnection(open);
     const fallback = { ...cardFromConnection(open), numbers: stored };
     let token = "";
@@ -422,7 +468,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
             });
             break;
         }
-        const phones = await listWabaPhoneNumbersPaged(g, token, wid);
+        const phones = await listWabaPhoneNumbersForPortfolio(g, wid, token, writeTokens, String(open.metaBusinessId || businessId || storedBm || "").trim());
         if (!phones.ok) {
             lastPhoneStatus = phones.status;
             continue;
@@ -458,7 +504,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
     let merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(mapped, stored);
     const claimedPhoneId = String(open.phoneNumberId || "").trim();
     if (claimedPhoneId && !merged.some((row) => String(row.phoneNumberId || "").trim() === claimedPhoneId)) {
-        const extra = await fetchPhoneNodes(g, token, [claimedPhoneId], primaryWabaId);
+        const extra = await fetchPhoneNodes(g, [token, ...writeTokens.map((row) => row.token)], [claimedPhoneId], primaryWabaId);
         merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: extra }));
     }
     const knownPending = (0, meta_whatsapp_known_owned_wabas_1.knownPendingPhonesForBusiness)(businessId || storedBm);
@@ -490,7 +536,9 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
             if (claimedPhoneId && id === claimedPhoneId)
                 return true;
             const wid = String(row.wabaId || "").trim();
-            return wid ? wabaIds.has(wid) : false;
+            if (!wid)
+                return Boolean(String(row.displayPhoneNumber || "").trim());
+            return wabaIds.has(wid);
         });
     }
     return {
@@ -537,16 +585,24 @@ async function listDebugTokenWhatsappTargets(graph, userToken) {
     return { wabaIds: [...wabaIds], phoneIds: [...phoneIds] };
 }
 async function fetchPhoneNodes(graph, token, phoneIds, stampWabaId) {
+    const tokens = [...new Set((Array.isArray(token) ? token : [token]).map((item) => String(item || "").trim()).filter(Boolean))];
     const out = [];
     const fallbackWaba = String(stampWabaId || "").trim();
     for (const id of phoneIds) {
-        const res = await graph({
-            token,
-            method: "GET",
-            path: id,
-            query: { fields: `${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS},whatsapp_business_account` },
-        });
-        if (!res.ok || !res.json || typeof res.json !== "object")
+        let res = null;
+        for (const item of tokens) {
+            const attempt = await graph({
+                token: item,
+                method: "GET",
+                path: id,
+                query: { fields: `${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS},whatsapp_business_account` },
+            });
+            if (attempt.ok && attempt.json && typeof attempt.json === "object") {
+                res = attempt;
+                break;
+            }
+        }
+        if (!res || !res.ok || !res.json || typeof res.json !== "object")
             continue;
         const display = String(res.json.display_phone_number || "").trim();
         if (!display)
@@ -764,6 +820,24 @@ async function listWabaPhoneNumbersPaged(graph, token, wabaId) {
     if (defaults.ok)
         return defaults;
     return withLimit;
+}
+async function listWabaPhoneNumbersForPortfolio(graph, wabaId, preferredToken, pool, selectedBm) {
+    const ordered = tokensForTargetWaba(preferredToken, wabaId, pool, selectedBm);
+    let emptyOk = null;
+    let lastFail = { ok: false, status: 0 };
+    for (const item of ordered) {
+        const phones = await listWabaPhoneNumbersPaged(graph, item.token, wabaId);
+        if (phones.ok && phones.json.data.length)
+            return phones;
+        if (phones.ok) {
+            emptyOk = phones;
+            if (item.ownsTarget)
+                return phones;
+            continue;
+        }
+        lastFail = phones;
+    }
+    return emptyOk || lastFail;
 }
 async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {
     const identity = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenantId, phoneNumberId);
@@ -1076,6 +1150,7 @@ class MetaWhatsappConnectionService {
             if (phoneNumberId) {
                 rememberOfficialPhoneDisplayName(tenant.tenantId, phoneNumberId);
             }
+            (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
             return toMetaWhatsappPublicConnection(row);
         }
         catch {
@@ -1184,6 +1259,8 @@ class MetaWhatsappConnectionService {
     async listPortfolioAssets(auth, opts) {
         const tenant = requireTenant(auth);
         const requested = String(opts?.connectionId || "").trim();
+        if (opts?.fresh)
+            (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
         if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
             const stale = (0, meta_whatsapp_portfolio_graph_cache_1.readStaleCachedPortfolioGraph)(tenant.tenantId);
             if (stale?.portfolios?.length) {
@@ -1237,7 +1314,8 @@ class MetaWhatsappConnectionService {
                 numbers: [],
             };
         }
-        const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenantId, row, (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(rows, row))));
+        const writeTokens = collectPortfolioWriteTokens(rows, this.decrypt);
+        const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenantId, row, (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(rows, row), writeTokens)));
         const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(hydrated.map((item) => item.card)).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
         const raw = assetsFromPortfolioCards(cards, requested);
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-listed", {
