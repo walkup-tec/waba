@@ -9,6 +9,7 @@ import {
   knownOwnedWabaIdsForBusiness,
   knownPendingPhoneGraphRow,
   knownPendingPhonesForBusiness,
+  knownWabaIdForPendingPhone,
   metaBusinessIdsMatch,
 } from "./meta-whatsapp-known-owned-wabas";
 
@@ -37,6 +38,7 @@ describe("known owned WABAs", () => {
     assert.deepEqual(knownClientWabaIdsForBusiness("1759044748332124"), [RIO_DE_JANEIRO_01_WABA_ID]);
     assert.equal(isKnownClientWabaForBusiness("1759044748332124", RIO_DE_JANEIRO_01_WABA_ID), true);
     assert.equal(isKnownClientWabaForBusiness("1759044748332124", ANDRE_WABA02_ID), false);
+    assert.equal(knownWabaIdForPendingPhone(ANDRE_WABA02_PENDING_PHONE_ID), ANDRE_WABA02_ID);
   });
 
   it("não inventa WABA para outro BM", () => {
