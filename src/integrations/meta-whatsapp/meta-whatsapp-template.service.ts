@@ -47,7 +47,7 @@ import {
   templateHeaderPreviewKeys,
 } from "./meta-whatsapp-template-header-preview.store";
 import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template";
-import { knownWabaNameForId } from "./meta-whatsapp-known-owned-wabas";
+import { knownOwnedWabaIdsForBusiness, knownWabaNameForId } from "./meta-whatsapp-known-owned-wabas";
 import { pickReusableHeaderHandle } from "./meta-whatsapp-header-handle-cache";
 import {
   isMetaGraphUploadCooldown,
@@ -231,7 +231,10 @@ export class MetaWhatsappTemplateService {
       connection,
     );
     if (isMetaGraphUploadCooldown()) {
-      const ids = [String(connection.wabaId || "").trim(), ...extraWabaIds].filter(Boolean);
+      const ids = [
+        String(connection.wabaId || "").trim(),
+        ...knownOwnedWabaIdsForBusiness(String(connection.metaBusinessId || "")),
+      ].filter(Boolean);
       return {
         connectionId: connection.id,
         wabas: [...new Set(ids)].map((id) => ({ id, name: `WABA ${id}` })),
