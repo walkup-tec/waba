@@ -45,6 +45,7 @@ import {
   templateHeaderPreviewKeys,
 } from "./meta-whatsapp-template-header-preview.store";
 import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template";
+import { pickReusableHeaderHandle } from "./meta-whatsapp-header-handle-cache";
 
 /** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. */
 const META_TEMPLATE_SYNC_BUDGET_MS = 20_000;
@@ -294,6 +295,22 @@ export class MetaWhatsappTemplateService {
     }
     const one = await this.connections.findConnectedByTenant(tenantId);
     return one ? [one] : [];
+  }
+
+  async findReusableHeaderHandleForBytes(
+    tenantId: string,
+    bytes: Buffer,
+  ): Promise<{ resumable: string; any: string }> {
+    const id = String(tenantId || "").trim();
+    if (!id || !bytes?.length || typeof this.templates.listByTenant !== "function") {
+      return { resumable: "", any: "" };
+    }
+    try {
+      const rows = await this.templates.listByTenant(id);
+      return pickReusableHeaderHandle({ tenantId: id, bytes, rows });
+    } catch {
+      return { resumable: "", any: "" };
+    }
   }
 
   async listApprovedUtilityExamples(tenantId: string): Promise<MetaUtilityApprovedExample[]> {
