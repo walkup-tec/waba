@@ -54,6 +54,17 @@ if (!fs.existsSync(path.join(distSrc, "index.js"))) {
   process.exit(1);
 }
 copyDir(distSrc, path.join(out, "dist"));
+const htmlSrc = path.join(distSrc, "index.html");
+if (fs.existsSync(htmlSrc)) {
+  fs.copyFileSync(htmlSrc, path.join(out, "index.html"));
+}
+const gatewaySrc = path.join(root, "hostinger-gateway");
+if (fs.existsSync(gatewaySrc)) {
+  for (const name of [".htaccess", "index.php"]) {
+    const from = path.join(gatewaySrc, name);
+    if (fs.existsSync(from)) fs.copyFileSync(from, path.join(out, name));
+  }
+}
 
 const scriptsSrc = path.join(root, "scripts");
 const scriptsDest = path.join(out, "scripts");
