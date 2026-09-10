@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isPlaceholderWabaName = isPlaceholderWabaName;
 exports.isProbablyMessageTemplateRow = isProbablyMessageTemplateRow;
 exports.wabaIdsFromDebugTokenJson = wabaIdsFromDebugTokenJson;
 exports.wabaIdsFromBusinessEdgeJson = wabaIdsFromBusinessEdgeJson;
@@ -17,6 +18,11 @@ exports.pickTemplateWriteConnections = pickTemplateWriteConnections;
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
 const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
+function isPlaceholderWabaName(id, name) {
+    const wid = String(id || "").trim();
+    const label = String(name || "").trim();
+    return !label || label === wid || label === `WABA ${wid}`;
+}
 function asRecord(value) {
     return value && typeof value === "object" && !Array.isArray(value)
         ? value
@@ -162,6 +168,27 @@ async function listOwnedWabaRowsForBusiness(graph, token, businessId) {
     }
     return [...byId.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
 }
+async function resolvePickerWabaNames(graph, token, rows) {
+    return Promise.all(rows.map(async (row) => {
+        const catalog = (0, meta_whatsapp_known_owned_wabas_1.knownWabaNameForId)(row.id);
+        if (!isPlaceholderWabaName(row.id, row.name)) {
+            return { id: row.id, name: row.name };
+        }
+        if (catalog)
+            return { id: row.id, name: catalog };
+        const res = await graph({
+            token,
+            method: "GET",
+            path: row.id,
+            query: { fields: "id,name" },
+            ...DISCOVER_GRAPH,
+        });
+        const name = res.ok
+            ? String(res.json?.name || "").trim()
+            : "";
+        return { id: row.id, name: name || catalog || `WABA ${row.id}` };
+    }));
+}
 /** Picker do criar template = Contas do WhatsApp do Manager, não a WABA stale da conexão. */
 async function listTemplatePickerWabas(input) {
     const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
@@ -169,20 +196,23 @@ async function listTemplatePickerWabas(input) {
     const bm = String(input.connection.metaBusinessId || "").trim();
     const knownRows = (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaRowsForBusiness)(bm);
     const ownedRows = bm ? await listOwnedWabaRowsForBusiness(graph, input.token, bm) : [];
+    let rows = [];
     if (knownRows.length) {
         const byId = new Map(knownRows.map((row) => [row.id, row.name]));
         for (const row of ownedRows) {
-            if (byId.has(row.id) && row.name)
+            if (byId.has(row.id) && row.name && !isPlaceholderWabaName(row.id, row.name)) {
                 byId.set(row.id, row.name);
+            }
         }
-        return [...byId.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
+        rows = [...byId.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
     }
-    if (ownedRows.length) {
-        return ownedRows.map((row) => ({ id: row.id, name: row.name || `WABA ${row.id}` }));
+    else if (ownedRows.length) {
+        rows = ownedRows.map((row) => ({ id: row.id, name: row.name || `WABA ${row.id}` }));
     }
-    if (primary)
-        return [{ id: primary, name: `WABA ${primary}` }];
-    return [];
+    else if (primary) {
+        rows = [{ id: primary, name: `WABA ${primary}` }];
+    }
+    return resolvePickerWabaNames(graph, input.token, rows);
 }
 function wabaIdentityMatchesBusiness(json, businessId) {
     const wanted = String(businessId || "").trim();
