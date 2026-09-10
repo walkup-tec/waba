@@ -70,6 +70,7 @@ export type UpsertTemplateInput = {
   qualityScore?: string | null;
   rejectedReason?: string | null;
   lastSyncedAt: string;
+  createdAt?: string | null;
 };
 
 export class MetaWhatsappTemplateRepository {
@@ -210,9 +211,10 @@ export class MetaWhatsappTemplateRepository {
       return mapRow(asRow(data));
     }
 
+    const createdAt = String(input.createdAt || "").trim() || new Date().toISOString();
     const { data, error } = await this.client()
       .from(TABLE)
-      .insert(payload)
+      .insert({ ...payload, created_at: createdAt })
       .select(COLUMNS)
       .single();
     if (error) throw new Error(error.message);
