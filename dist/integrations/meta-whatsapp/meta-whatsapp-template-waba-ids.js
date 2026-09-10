@@ -11,6 +11,7 @@ exports.wabaIdentityMatchesBusiness = wabaIdentityMatchesBusiness;
 exports.filterWabaIdsOwnedByBusiness = filterWabaIdsOwnedByBusiness;
 exports.discoverTemplateWabas = discoverTemplateWabas;
 exports.discoverTemplateWabaIds = discoverTemplateWabaIds;
+exports.pickTemplateWriteConnections = pickTemplateWriteConnections;
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
 const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
@@ -300,4 +301,37 @@ async function discoverTemplateWabas(input) {
 }
 async function discoverTemplateWabaIds(input) {
     return (await discoverTemplateWabas(input)).map((row) => row.id);
+}
+function isOpenTemplateConnection(row) {
+    if (row.disconnectedAt)
+        return false;
+    return row.status === "connected" || row.status === "pending_confirmation";
+}
+/** Token da WABA01 não posta na WABA02 irmã; prefere a conexão cujo wabaId é o destino. */
+function pickTemplateWriteConnections(rows, preferred, targetWabaId) {
+    const target = String(targetWabaId || "").trim();
+    const preferredBm = String(preferred.metaBusinessId || "").trim();
+    const pool = rows.filter((row) => {
+        if (!isOpenTemplateConnection(row))
+            return false;
+        if (row.id === preferred.id)
+            return true;
+        if (target && String(row.wabaId || "").trim() === target)
+            return true;
+        if (preferredBm && (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(row.metaBusinessId || ""), preferredBm))
+            return true;
+        return false;
+    });
+    const list = pool.length ? pool : [preferred];
+    return [...list].sort((left, right) => {
+        const leftMatch = target && String(left.wabaId || "").trim() === target ? 0 : 1;
+        const rightMatch = target && String(right.wabaId || "").trim() === target ? 0 : 1;
+        if (leftMatch !== rightMatch)
+            return leftMatch - rightMatch;
+        if (left.id === preferred.id)
+            return -1;
+        if (right.id === preferred.id)
+            return 1;
+        return 0;
+    });
 }
