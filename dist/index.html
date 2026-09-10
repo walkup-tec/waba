@@ -4362,6 +4362,16 @@
           font-weight:600;
         }
         .meta-tpl-name-filter::placeholder { color:#94a3b8; font-weight:500; }
+        .instance-action-btn.meta-tpl-day-filter {
+          height: 32px;
+          padding: 0 12px;
+          font-size: 12px;
+        }
+        .instance-action-btn.meta-tpl-day-filter.is-active {
+          background: rgba(22, 101, 52, 0.85);
+          border-color: rgba(110, 255, 200, 0.6);
+          color: #f8fafc;
+        }
         .meta-tpl-name-filter:focus { outline:2px solid rgba(34,211,238,.35); outline-offset:1px; }
         .meta-tpl-status-tag {
           display:inline-flex;
@@ -22452,6 +22462,24 @@
                   <option value="PENDING">Em análise</option>
                   <option value="REJECTED">Reprovados</option>
                 </select>
+                <button
+                  id="meta-tpl-lab-day-today"
+                  type="button"
+                  class="instance-action-btn btn-refresh enabled meta-tpl-day-filter"
+                  aria-pressed="false"
+                  aria-label="Filtrar templates cadastrados hoje"
+                >
+                  Hoje
+                </button>
+                <button
+                  id="meta-tpl-lab-day-yesterday"
+                  type="button"
+                  class="instance-action-btn btn-refresh enabled meta-tpl-day-filter"
+                  aria-pressed="false"
+                  aria-label="Filtrar templates cadastrados ontem"
+                >
+                  Ontem
+                </button>
               </div>
               <div class="aquecedor-command-log" style="margin-top: 0; overflow-x: auto;">
                 <table class="meta-tpl-lab-table" style="width:100%; border-collapse:collapse; font-size:13px;">
@@ -38805,6 +38833,7 @@
       }
 
       let metaTplLabCache = [];
+      let metaTplLabCreatedDayFilter = "";
       const metaTplLabWabaNameById = {};
       let metaTplLabHydrateWabasInFlight = false;
       let metaTplLabSelected = null;
@@ -40677,6 +40706,57 @@
         return `<span class="meta-tpl-status-tag ${meta.cls}">${escapeAdminHtml(meta.label)}</span>`;
       }
 
+      function metaTplLabLocalDateKey(value) {
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return year + "-" + month + "-" + day;
+      }
+
+      function metaTplLabShiftedLocalDateKey(daysFromToday) {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + Number(daysFromToday || 0));
+        return metaTplLabLocalDateKey(date);
+      }
+
+      function metaTplLabCreatedDayKey() {
+        if (metaTplLabCreatedDayFilter === "today") return metaTplLabShiftedLocalDateKey(0);
+        if (metaTplLabCreatedDayFilter === "yesterday") return metaTplLabShiftedLocalDateKey(-1);
+        return "";
+      }
+
+      function metaTplLabMatchesCreatedDay(item, dayKey) {
+        if (!dayKey) return true;
+        const raw = String((item && (item.createdAt || item.created_at)) || "").trim();
+        if (!raw) return false;
+        return metaTplLabLocalDateKey(raw) === dayKey;
+      }
+
+      function metaTplLabSyncCreatedDayButtons() {
+        const todayBtn = document.getElementById("meta-tpl-lab-day-today");
+        const yesterdayBtn = document.getElementById("meta-tpl-lab-day-yesterday");
+        if (todayBtn) {
+          const on = metaTplLabCreatedDayFilter === "today";
+          todayBtn.classList.toggle("is-active", on);
+          todayBtn.setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        if (yesterdayBtn) {
+          const on = metaTplLabCreatedDayFilter === "yesterday";
+          yesterdayBtn.classList.toggle("is-active", on);
+          yesterdayBtn.setAttribute("aria-pressed", on ? "true" : "false");
+        }
+      }
+
+      function metaTplLabSetCreatedDayFilter(next) {
+        const value = String(next || "").trim();
+        metaTplLabCreatedDayFilter = metaTplLabCreatedDayFilter === value ? "" : value;
+        metaTplLabSyncCreatedDayButtons();
+        metaTplLabRenderTable();
+      }
+
       function metaTplLabRenderTable(templates) {
         const tbody = document.getElementById("meta-tpl-lab-tbody");
         if (!tbody) return;
@@ -40693,6 +40773,7 @@
         const nameFilter = String((document.getElementById("meta-tpl-lab-name-filter") || {}).value || "")
           .trim()
           .toLowerCase();
+        const createdDayKey = metaTplLabCreatedDayKey();
         const hidden = metaTplLabHiddenIds();
         const rows = allRows
           .map((item, originalIndex) => ({ item, originalIndex }))
@@ -40703,11 +40784,17 @@
             if (categoryFilter && categoryFilter !== "ALL" && String(entry.item?.category || "").toUpperCase() !== categoryFilter) return false;
             if (portfolioFilter && String(entry.item?.connectionId || "").trim() !== portfolioFilter) return false;
             if (nameFilter && String(entry.item?.name || "").toLowerCase().indexOf(nameFilter) === -1) return false;
+            if (!metaTplLabMatchesCreatedDay(entry.item, createdDayKey)) return false;
             return true;
           });
         if (!rows.length) {
-          tbody.innerHTML =
-            '<tr><td class="muted" colspan="8" style="padding:10px;">Nenhum template para este filtro. Use Atualizar da Meta para consultar o resultado.</td></tr>';
+          const empty =
+            metaTplLabCreatedDayFilter === "today"
+              ? "Nenhum template cadastrado hoje."
+              : metaTplLabCreatedDayFilter === "yesterday"
+                ? "Nenhum template cadastrado ontem."
+                : "Nenhum template para este filtro. Use Atualizar da Meta para consultar o resultado.";
+          tbody.innerHTML = '<tr><td class="muted" colspan="8" style="padding:10px;">' + empty + "</td></tr>";
           return;
         }
         tbody.innerHTML = rows
@@ -42649,6 +42736,12 @@
       });
       document.getElementById("meta-tpl-lab-name-filter")?.addEventListener("input", function () {
         metaTplLabRenderTable();
+      });
+      document.getElementById("meta-tpl-lab-day-today")?.addEventListener("click", function () {
+        metaTplLabSetCreatedDayFilter("today");
+      });
+      document.getElementById("meta-tpl-lab-day-yesterday")?.addEventListener("click", function () {
+        metaTplLabSetCreatedDayFilter("yesterday");
       });
       document.getElementById("meta-tpl-ai-media-format")?.addEventListener("change", metaTplAiSyncMediaFields);
       document.getElementById("meta-tpl-ai-media-file-btn")?.addEventListener("click", function () {
