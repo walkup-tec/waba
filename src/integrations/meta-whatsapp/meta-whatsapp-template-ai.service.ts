@@ -19,7 +19,6 @@ import {
   isHeaderUploadAppRateLimit,
   isResumableUploadHandle,
   readCachedHeaderHandle,
-  readPersistedHeaderHandle,
   writeCachedHeaderHandle,
 } from "./meta-whatsapp-header-handle-cache";
 import {
@@ -519,6 +518,16 @@ export class MetaWhatsappTemplateAiService {
       ...input,
       headerHandle: firstHandle,
     });
+    if (
+      (shell.mediaFormat === "IMAGE" || shell.mediaFormat === "VIDEO" || shell.mediaFormat === "DOCUMENT") &&
+      firstHandle &&
+      !isResumableUploadHandle(firstHandle)
+    ) {
+      const failed = new MetaWhatsappError("template_upload_failed");
+      failed.message =
+        "A Meta exige o handle do upload da imagem (4::), não o link lookaside do template antigo. Envie a foto de novo no Enviar.";
+      throw failed;
+    }
 
     const results: Array<{
       index: number;
@@ -747,18 +756,7 @@ export class MetaWhatsappTemplateAiService {
     const appId = readMetaAppId();
     if (!appId) throw new MetaWhatsappError("config_invalid");
     const fileSha = headerFileSha256(bytes);
-    const finder = this.templates as {
-      findReusableHeaderHandleForBytes?: (
-        tenantId: string,
-        file: Buffer,
-      ) => Promise<{ resumable: string; any: string }>;
-    };
-    const reused =
-      typeof finder.findReusableHeaderHandleForBytes === "function"
-        ? await finder.findReusableHeaderHandleForBytes(tenant.tenantId, bytes)
-        : { resumable: "", any: "" };
-    const cachedHandle =
-      readCachedHeaderHandle(tenant.tenantId, fileSha) || reused.resumable;
+    const cachedHandle = readCachedHeaderHandle(tenant.tenantId, fileSha);
     if (cachedHandle && isResumableUploadHandle(cachedHandle)) {
       saveTemplateHeaderPreview({
         tenantId: tenant.tenantId,
@@ -842,26 +840,6 @@ export class MetaWhatsappTemplateAiService {
         // Código 4 é cota do aplicativo: outro token no mesmo app só queima mais cota.
         if (isHeaderUploadAppRateLimit(error)) break;
       }
-    }
-    const persisted = readPersistedHeaderHandle(tenant.tenantId, fileSha);
-    const fallbackHandle = (isResumableUploadHandle(persisted) ? persisted : "") || reused.any;
-    if (fallbackHandle) {
-      saveTemplateHeaderPreview({
-        tenantId: tenant.tenantId,
-        handle: fallbackHandle,
-        mime,
-        fileName,
-        bytes,
-      });
-      logMetaTemplate("AI", {
-        tenantId: tenant.tenantId,
-        connectionId,
-        headerUpload: mediaFormat,
-        headerReused: true,
-        bytes: bytes.length,
-        mime,
-      });
-      return { handle: fallbackHandle, mediaFormat };
     }
     const failed = wrapMetaHeaderUploadError(lastError || new MetaWhatsappError("template_upload_failed"));
     if (/código 4|limitou temporariamente/i.test(failed.message)) {
