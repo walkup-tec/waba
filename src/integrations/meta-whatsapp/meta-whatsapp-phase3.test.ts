@@ -107,12 +107,16 @@ class FakeMetaRepo {
   ): Promise<MetaWhatsappConnectionRecord> {
     const row = await this.findByIdForTenant(tenantId, connectionId);
     if (!row) throw new Error("not found");
+    const keepConnected = row.status === "connected";
     row.wabaId = input.wabaId || row.wabaId;
     row.phoneNumberId = input.phoneNumberId || row.phoneNumberId;
     row.metaBusinessId = input.metaBusinessId || row.metaBusinessId;
     row.displayPhoneNumber = input.displayPhoneNumber || row.displayPhoneNumber;
     row.verifiedName = input.verifiedName || row.verifiedName;
-    row.status = row.wabaId ? "pending_confirmation" : row.status;
+    if (input.accessTokenEncrypted) row.accessTokenEncrypted = input.accessTokenEncrypted;
+    if (input.tokenType) row.tokenType = input.tokenType;
+    if (input.tokenExpiresAt !== undefined) row.tokenExpiresAt = input.tokenExpiresAt || null;
+    if (!keepConnected) row.status = row.wabaId ? "pending_confirmation" : row.status;
     return row;
   }
 
@@ -307,7 +311,8 @@ describe("meta-whatsapp phase 3", () => {
 
   it("adicionar número no BM existente não deixa pending_token vazio aberto", async () => {
     const repo = new FakeMetaRepo();
-    const service = new MetaWhatsappConnectionService(repo as any, oauthOk);
+    const graph = async () => ({ ok: false, status: 400, json: { error: { message: "not ready" } } });
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graph as any);
     await service.exchangeCodeAndStore(authA, { code: "ok-code" });
     await service.attachSessionAssets(authA, {
       wabaId: "1247508354180311",
@@ -315,6 +320,7 @@ describe("meta-whatsapp phase 3", () => {
       businessId: "1041827648719609",
     });
     repo.rows[0].status = "connected";
+    const previousToken = repo.rows[0].accessTokenEncrypted;
     await service.exchangeCodeAndStore(authA, { code: "ok-code" });
     assert.equal(repo.rows.filter((row) => !row.disconnectedAt).length, 2);
     await service.attachSessionAssets(authA, {
@@ -325,9 +331,32 @@ describe("meta-whatsapp phase 3", () => {
     const open = repo.rows.filter((row) => !row.disconnectedAt);
     assert.equal(open.length, 1);
     assert.equal(open[0].id, "conn-1");
+    assert.equal(open[0].status, "connected");
     assert.equal(open[0].metaBusinessId, "1041827648719609");
     assert.equal(open[0].phoneNumberId, "phone-drax-2");
+    assert.notEqual(open[0].accessTokenEncrypted, previousToken);
     assert.equal(repo.rows[1].status, "disconnected");
+    const confirmed = await service.confirmFromAuth(authA);
+    assert.equal(confirmed.status, "connected");
+  });
+
+  it("depois do SMS a Graph atrasada não derruba a conexão gravada", async () => {
+    const repo = new FakeMetaRepo();
+    const graph = async (input: { path: string }) => {
+      if (input.path === "waba-1") return { ok: true, status: 200, json: { id: "waba-1" } };
+      return { ok: false, status: 400, json: { error: { message: "Unsupported get request" } } };
+    };
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graph as any);
+    await service.exchangeCodeAndStore(authA, { code: "AUTH_CODE" });
+    await service.attachSessionAssets(authA, {
+      wabaId: "waba-1",
+      phoneNumberId: "phone-sms",
+      businessId: "bm-1",
+    });
+    const confirmed = await service.confirmFromAuth(authA);
+    assert.equal(confirmed.status, "pending_confirmation");
+    assert.equal(repo.rows[0].status, "pending_confirmation");
+    assert.equal(repo.rows[0].phoneNumberId, "phone-sms");
   });
 
   it("conexão é associada ao tenant da sessão, não ao body", async () => {
