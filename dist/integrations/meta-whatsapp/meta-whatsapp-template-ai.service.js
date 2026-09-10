@@ -417,6 +417,14 @@ class MetaWhatsappTemplateAiService {
             ...input,
             headerHandle: firstHandle,
         });
+        if ((shell.mediaFormat === "IMAGE" || shell.mediaFormat === "VIDEO" || shell.mediaFormat === "DOCUMENT") &&
+            firstHandle &&
+            !(0, meta_whatsapp_header_handle_cache_1.isResumableUploadHandle)(firstHandle)) {
+            const failed = new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed");
+            failed.message =
+                "A Meta exige o handle do upload da imagem (4::), não o link lookaside do template antigo. Envie a foto de novo no Enviar.";
+            throw failed;
+        }
         const results = [];
         const anyPending = [];
         const localFinder = this.templates;
@@ -599,11 +607,7 @@ class MetaWhatsappTemplateAiService {
         if (!appId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("config_invalid");
         const fileSha = (0, meta_whatsapp_header_handle_cache_1.headerFileSha256)(bytes);
-        const finder = this.templates;
-        const reused = typeof finder.findReusableHeaderHandleForBytes === "function"
-            ? await finder.findReusableHeaderHandleForBytes(tenant.tenantId, bytes)
-            : { resumable: "", any: "" };
-        const cachedHandle = (0, meta_whatsapp_header_handle_cache_1.readCachedHeaderHandle)(tenant.tenantId, fileSha) || reused.resumable;
+        const cachedHandle = (0, meta_whatsapp_header_handle_cache_1.readCachedHeaderHandle)(tenant.tenantId, fileSha);
         if (cachedHandle && (0, meta_whatsapp_header_handle_cache_1.isResumableUploadHandle)(cachedHandle)) {
             (0, meta_whatsapp_template_header_preview_store_1.saveTemplateHeaderPreview)({
                 tenantId: tenant.tenantId,
@@ -694,26 +698,6 @@ class MetaWhatsappTemplateAiService {
                 if ((0, meta_whatsapp_header_handle_cache_1.isHeaderUploadAppRateLimit)(error))
                     break;
             }
-        }
-        const persisted = (0, meta_whatsapp_header_handle_cache_1.readPersistedHeaderHandle)(tenant.tenantId, fileSha);
-        const fallbackHandle = ((0, meta_whatsapp_header_handle_cache_1.isResumableUploadHandle)(persisted) ? persisted : "") || reused.any;
-        if (fallbackHandle) {
-            (0, meta_whatsapp_template_header_preview_store_1.saveTemplateHeaderPreview)({
-                tenantId: tenant.tenantId,
-                handle: fallbackHandle,
-                mime,
-                fileName,
-                bytes,
-            });
-            (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
-                tenantId: tenant.tenantId,
-                connectionId,
-                headerUpload: mediaFormat,
-                headerReused: true,
-                bytes: bytes.length,
-                mime,
-            });
-            return { handle: fallbackHandle, mediaFormat };
         }
         const failed = (0, meta_whatsapp_errors_1.wrapMetaHeaderUploadError)(lastError || new meta_whatsapp_errors_1.MetaWhatsappError("template_upload_failed"));
         if (/código 4|limitou temporariamente/i.test(failed.message)) {
