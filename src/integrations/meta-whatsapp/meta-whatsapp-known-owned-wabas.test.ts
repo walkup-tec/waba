@@ -9,6 +9,7 @@ import {
   knownOwnedWabaIdsForBusiness,
   knownPendingPhoneGraphRow,
   knownPendingPhonesForBusiness,
+  knownOwnedBusinessesMatch,
   knownWabaIdForPendingPhone,
   metaBusinessIdsMatch,
 } from "./meta-whatsapp-known-owned-wabas";
@@ -17,6 +18,8 @@ describe("known owned WABAs", () => {
   it("casa o BM do André com ou sem o 1 inicial", () => {
     assert.equal(metaBusinessIdsMatch("1759044748332124", "759044748332124"), true);
     assert.equal(metaBusinessIdsMatch("1759044748332124", "60843286"), false);
+    assert.equal(knownOwnedBusinessesMatch("1759044748332124", "60.843.286"), true);
+    assert.equal(knownOwnedBusinessesMatch("1759044748332124", "1398783195605765"), false);
     assert.deepEqual(knownOwnedWabaIdsForBusiness("60.843.286").sort(), [
       "1744257946809067",
       "2458602464640240",
