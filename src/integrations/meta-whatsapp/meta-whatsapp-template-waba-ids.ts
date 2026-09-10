@@ -45,37 +45,48 @@ export function wabaIdsFromBusinessEdgeJson(json: unknown): string[] {
   return wabasFromBusinessEdgeJson(json).map((row) => row.id);
 }
 
-export function wabasFromBusinessEdgeJson(json: unknown): Array<{ id: string; name: string }> {
-  const data = asRecord(json).data;
-  const list = Array.isArray(data) ? data : [];
-  const out: Array<{ id: string; name: string }> = [];
+function phoneCountFromWabaRow(rec: Record<string, unknown>): number | null {
+  if (!Object.prototype.hasOwnProperty.call(rec, "phone_numbers")) return null;
+  const data = asRecord(rec.phone_numbers).data;
+  if (!Array.isArray(data)) return null;
+  return data.filter((item) => String(asRecord(item).id || "").trim()).length;
+}
+
+function wabasFromEdgeRows(
+  list: unknown[],
+): Array<{ id: string; name: string; phoneCount: number | null }> {
+  const out: Array<{ id: string; name: string; phoneCount: number | null }> = [];
   for (const row of list) {
     if (isProbablyMessageTemplateRow(row)) continue;
     const rec = asRecord(row);
     const id = String(rec.id || "").trim();
     if (!id) continue;
     const name = String(rec.name || "").trim();
-    out.push({ id, name: name || `WABA ${id}` });
+    out.push({ id, name: name || `WABA ${id}`, phoneCount: phoneCountFromWabaRow(rec) });
   }
   return out;
+}
+
+export function wabasFromBusinessEdgeJson(json: unknown): Array<{ id: string; name: string }> {
+  const data = asRecord(json).data;
+  return wabasFromEdgeRows(Array.isArray(data) ? data : []).map(({ id, name }) => ({ id, name }));
 }
 
 function wabasFromNamedBusinessEdge(
   json: unknown,
   edge: "owned_whatsapp_business_accounts" | "client_whatsapp_business_accounts",
-): Array<{ id: string; name: string }> {
+): Array<{ id: string; name: string; phoneCount: number | null }> {
   const data = asRecord(asRecord(json)[edge]).data;
   const list = Array.isArray(data) ? data : [];
-  const seen = new Map<string, string>();
-  for (const item of list) {
-    if (isProbablyMessageTemplateRow(item)) continue;
-    const rec = asRecord(item);
-    const id = String(rec.id || "").trim();
-    if (!id) continue;
-    const name = String(rec.name || "").trim();
-    if (!seen.has(id)) seen.set(id, name);
+  const seen = new Map<string, { name: string; phoneCount: number | null }>();
+  for (const item of wabasFromEdgeRows(list)) {
+    if (!seen.has(item.id)) seen.set(item.id, { name: item.name, phoneCount: item.phoneCount });
   }
-  return [...seen.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
+  return [...seen.entries()].map(([id, row]) => ({
+    id,
+    name: row.name || `WABA ${id}`,
+    phoneCount: row.phoneCount,
+  }));
 }
 
 export function splitWabasFromBusinessNodeJson(json: unknown): {
@@ -198,12 +209,15 @@ async function listBusinessWabaEdgeRows(
   token: string,
   businessId: string,
   edge: "owned_whatsapp_business_accounts" | "client_whatsapp_business_accounts",
-): Promise<Array<{ id: string; name: string }>> {
-  const out: Array<{ id: string; name: string }> = [];
+): Promise<Array<{ id: string; name: string; phoneCount: number | null }>> {
+  const out: Array<{ id: string; name: string; phoneCount: number | null }> = [];
   const seenCursors = new Set<string>();
   let after = "";
   for (let page = 0; page < 20; page += 1) {
-    const query: Record<string, string> = { fields: "id,name", limit: "100" };
+    const query: Record<string, string> = {
+      fields: "id,name,phone_numbers.limit(1){id}",
+      limit: "100",
+    };
     if (after) query.after = after;
     const res: MetaGraphJsonResult = await graph({
       token,
@@ -213,7 +227,8 @@ async function listBusinessWabaEdgeRows(
       ...DISCOVER_GRAPH,
     });
     if (!res.ok) break;
-    const batch = wabasFromBusinessEdgeJson(res.json);
+    const data = asRecord(res.json).data;
+    const batch = wabasFromEdgeRows(Array.isArray(data) ? data : []);
     for (const row of batch) out.push(row);
     const paging = asRecord(asRecord(res.json).paging);
     const nextAfter = String(asRecord(paging.cursors).after || "").trim();
@@ -257,6 +272,7 @@ export async function discoverTemplateWabas(input: {
   const bm = String(input.connection.metaBusinessId || "").trim();
   const byId = new Map<string, string>();
   const ownedIds = new Set<string>();
+  const ownedEmptyIds = new Set<string>();
   const clientIds = new Set<string>();
   const knownOwnedIds = new Set(knownOwnedWabaIdsForBusiness(bm));
   const extraFromConnections = [
@@ -266,6 +282,13 @@ export async function discoverTemplateWabas(input: {
         .filter((id) => id && !knownClientWabaIdsForBusiness(bm).includes(id)),
     ),
   ];
+  const pinnedIds = new Set([primary, ...knownOwnedIds].filter(Boolean));
+
+  const noteOwned = (row: { id: string; name: string; phoneCount?: number | null }) => {
+    ownedIds.add(row.id);
+    if (row.phoneCount === 0) ownedEmptyIds.add(row.id);
+    addDiscoveredWaba(byId, row.id, row.name, bm);
+  };
 
   for (const id of knownClientWabaIdsForBusiness(bm)) clientIds.add(id);
 
@@ -276,16 +299,13 @@ export async function discoverTemplateWabas(input: {
       path: bm,
       query: {
         fields:
-          "owned_whatsapp_business_accounts{id,name},client_whatsapp_business_accounts{id,name}",
+          "owned_whatsapp_business_accounts{id,name,phone_numbers.limit(1){id}},client_whatsapp_business_accounts{id,name}",
       },
       ...DISCOVER_GRAPH,
     });
     if (nested.ok) {
       const split = splitWabasFromBusinessNodeJson(nested.json);
-      for (const row of split.owned) {
-        ownedIds.add(row.id);
-        addDiscoveredWaba(byId, row.id, row.name, bm);
-      }
+      for (const row of split.owned) noteOwned(row);
       for (const row of split.client) clientIds.add(row.id);
     }
     for (const row of await listBusinessWabaEdgeRows(
@@ -294,8 +314,7 @@ export async function discoverTemplateWabas(input: {
       bm,
       "owned_whatsapp_business_accounts",
     )) {
-      ownedIds.add(row.id);
-      addDiscoveredWaba(byId, row.id, row.name, bm);
+      noteOwned(row);
     }
     for (const row of await listBusinessWabaEdgeRows(
       graph,
@@ -314,6 +333,12 @@ export async function discoverTemplateWabas(input: {
     // antiga não podem reintroduzir WABA que a Meta já não mostra neste BM.
     for (const row of knownOwnedWabaRowsForBusiness(bm)) {
       addDiscoveredWaba(byId, row.id, row.name, bm);
+    }
+    // WABA owned sem chip não existe no card do portfólio. Mantém a da
+    // conexão e irmã knownOwned (André WABA02). Extra/stale vazio sai.
+    for (const id of [...byId.keys()]) {
+      if (pinnedIds.has(id)) continue;
+      if (ownedEmptyIds.has(id)) byId.delete(id);
     }
   } else {
     if (primary) addDiscoveredWaba(byId, primary, "", bm);
