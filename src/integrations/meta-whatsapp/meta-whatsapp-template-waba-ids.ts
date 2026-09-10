@@ -136,13 +136,71 @@ export function extraWabaIdsFromConnections(
   return [...out];
 }
 
-/** Criar template / picker: só a WABA do card e irmãs knownOwned (André WABA02). */
+/** Criar template: catálogo do Manager (Drax/André). Sem catálogo, a WABA da conexão. */
 export function templatePickerWabaIds(
   connection: Pick<MetaWhatsappConnectionRecord, "wabaId" | "metaBusinessId">,
 ): string[] {
   const primary = String(connection.wabaId || "").trim();
   const bm = String(connection.metaBusinessId || "").trim();
-  return [...new Set([primary, ...knownOwnedWabaIdsForBusiness(bm)].filter(Boolean))];
+  const known = knownOwnedWabaIdsForBusiness(bm);
+  if (known.length) return [...new Set(known)];
+  return primary ? [primary] : [];
+}
+
+async function listOwnedWabaRowsForBusiness(
+  graph: TemplateGraphCaller,
+  token: string,
+  businessId: string,
+): Promise<Array<{ id: string; name: string }>> {
+  const byId = new Map<string, string>();
+  const nested: MetaGraphJsonResult = await graph({
+    token,
+    method: "GET",
+    path: businessId,
+    query: {
+      fields: "owned_whatsapp_business_accounts{id,name}",
+    },
+    ...DISCOVER_GRAPH,
+  });
+  if (nested.ok) {
+    for (const row of splitWabasFromBusinessNodeJson(nested.json).owned) {
+      addDiscoveredWaba(byId, row.id, row.name, businessId);
+    }
+  }
+  for (const row of await listBusinessWabaEdgeRows(
+    graph,
+    token,
+    businessId,
+    "owned_whatsapp_business_accounts",
+  )) {
+    addDiscoveredWaba(byId, row.id, row.name, businessId);
+  }
+  return [...byId.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
+}
+
+/** Picker do criar template = Contas do WhatsApp do Manager, não a WABA stale da conexão. */
+export async function listTemplatePickerWabas(input: {
+  token: string;
+  connection: Pick<MetaWhatsappConnectionRecord, "wabaId" | "metaBusinessId">;
+  graph?: TemplateGraphCaller;
+}): Promise<Array<{ id: string; name: string }>> {
+  const graph = input.graph || callMetaGraphJson;
+  const primary = String(input.connection.wabaId || "").trim();
+  const bm = String(input.connection.metaBusinessId || "").trim();
+  const knownRows = knownOwnedWabaRowsForBusiness(bm);
+  const ownedRows = bm ? await listOwnedWabaRowsForBusiness(graph, input.token, bm) : [];
+  if (knownRows.length) {
+    const byId = new Map(knownRows.map((row) => [row.id, row.name]));
+    for (const row of ownedRows) {
+      if (byId.has(row.id) && row.name) byId.set(row.id, row.name);
+    }
+    return [...byId.entries()].map(([id, name]) => ({ id, name: name || `WABA ${id}` }));
+  }
+  if (ownedRows.length) {
+    return ownedRows.map((row) => ({ id: row.id, name: row.name || `WABA ${row.id}` }));
+  }
+  if (primary) return [{ id: primary, name: `WABA ${primary}` }];
+  return [];
 }
 
 export function wabaIdentityMatchesBusiness(json: unknown, businessId: string): boolean {
