@@ -1389,6 +1389,116 @@ describe("Assistente IA de templates Utility", () => {
     }
   });
 
+  it("reusa o handle da mesma foto sem chamar a Meta de novo", async () => {
+    const email = "header-cache@example.com";
+    const row = connection(email);
+    const previousAppId = process.env.META_APP_ID;
+    process.env.META_APP_ID = "app-test-header-cache";
+    const { clearHeaderHandleCacheForTests } = await import("./meta-whatsapp-header-handle-cache");
+    clearHeaderHandleCacheForTests();
+    let uploads = 0;
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          return tenantId === row.tenantId && id === row.id ? row : null;
+        },
+        async listOpenByTenant() {
+          return [row];
+        },
+      } as any,
+      {} as any,
+      async () => ({ value: utilityOutput(), model: "gpt-test", responseId: "r", latencyMs: 1 }),
+      {} as any,
+      () => "token-cache",
+      async () => {
+        uploads += 1;
+        return { handle: "4::cached-once" };
+      },
+    );
+    const tinyPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    try {
+      const first = await service.uploadHeaderMediaFromAuth(
+        { email, role: "subscriber" },
+        { connectionId: row.id, mediaFormat: "IMAGE", fileName: "logo.png", mime: "image/png", bytes: tinyPng },
+      );
+      const second = await service.uploadHeaderMediaFromAuth(
+        { email, role: "subscriber" },
+        { connectionId: row.id, mediaFormat: "IMAGE", fileName: "logo.png", mime: "image/png", bytes: tinyPng },
+      );
+      assert.equal(first.handle, "4::cached-once");
+      assert.equal(second.handle, "4::cached-once");
+      assert.equal(uploads, 1);
+    } finally {
+      clearHeaderHandleCacheForTests();
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+    }
+  });
+
+  it("se o token da primeira conexão toma código 4, tenta o token da outra", async () => {
+    const email = "header-failover@example.com";
+    const andre = connection(email, {
+      id: "conn-andre",
+      wabaId: "2458602464640240",
+      accessTokenEncrypted: "enc-andre",
+    });
+    const drax = connection(email, {
+      id: "conn-drax",
+      wabaId: "2283911612192961",
+      accessTokenEncrypted: "enc-drax",
+    });
+    const previousAppId = process.env.META_APP_ID;
+    process.env.META_APP_ID = "app-test-header-failover";
+    const { clearHeaderHandleCacheForTests } = await import("./meta-whatsapp-header-handle-cache");
+    clearHeaderHandleCacheForTests();
+    const rateLimitText = publicMetaGraphMediaUploadMessage(
+      { error: { message: "(#4) Application request limit reached", code: 4 } },
+      { fileBytes: 14_513 },
+    );
+    const tokens: string[] = [];
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          if (tenantId !== andre.tenantId) return null;
+          if (id === andre.id) return andre;
+          if (id === drax.id) return drax;
+          return null;
+        },
+        async listOpenByTenant() {
+          return [andre, drax];
+        },
+      } as any,
+      {} as any,
+      async () => ({ value: utilityOutput(), model: "gpt-test", responseId: "r", latencyMs: 1 }),
+      {} as any,
+      (encrypted: string) => (encrypted === "enc-andre" ? "token-andre" : "token-drax"),
+      async (input: { token?: string }) => {
+        tokens.push(String(input.token || ""));
+        if (input.token === "token-andre") throw new Error(rateLimitText);
+        return { handle: "4::drax-ok" };
+      },
+    );
+    const tinyPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    try {
+      const uploaded = await service.uploadHeaderMediaFromAuth(
+        { email, role: "subscriber" },
+        { connectionId: andre.id, mediaFormat: "IMAGE", fileName: "logo.png", mime: "image/png", bytes: tinyPng },
+      );
+      assert.equal(uploaded.handle, "4::drax-ok");
+      assert.deepEqual(tokens, ["token-andre", "token-drax"]);
+    } finally {
+      clearHeaderHandleCacheForTests();
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+    }
+  });
+
 });
 
 describe("OpenAI Responses com Structured Outputs", () => {
