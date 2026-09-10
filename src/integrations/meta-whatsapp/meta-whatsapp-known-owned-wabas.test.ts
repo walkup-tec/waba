@@ -41,4 +41,8 @@ describe("known owned WABAs", () => {
     assert.deepEqual(knownOwnedWabaIdsForBusiness("4141369862822598"), []);
     assert.deepEqual(knownPendingPhonesForBusiness("bm-drax-2000"), []);
   });
+
+  it("Drax Sistemas: só a WABA do Manager, não a conexão stale", () => {
+    assert.deepEqual(knownOwnedWabaIdsForBusiness("1041827648719609"), ["1636793994538054"]);
+  });
 });
