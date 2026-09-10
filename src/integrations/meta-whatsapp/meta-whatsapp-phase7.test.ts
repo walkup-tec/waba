@@ -325,6 +325,29 @@ describe("fase 7 validação de template", () => {
     );
   });
 
+  it("recusa lookaside como header_handle de IMAGE", () => {
+    assert.throws(
+      () =>
+        validateTemplateCreate({
+          name: "jandira_v3_3_1",
+          language: "pt_BR",
+          category: "UTILITY",
+          components: [
+            {
+              type: "HEADER",
+              format: "IMAGE",
+              example: { header_handle: ["https://lookaside.fbsbx.com/whatsapp/sample.png"] },
+            },
+            { type: "BODY", text: "Olá, recebemos sua solicitação." },
+          ],
+        }),
+      (error: unknown) =>
+        error instanceof MetaWhatsappError &&
+        error.code === "template_upload_failed" &&
+        /lookaside|4::/i.test(String((error as Error).message)),
+    );
+  });
+
   it("aceita BODY com exemplo informado pelo cliente", () => {
     const validated = validateTemplateCreate({
       name: "Retorno_Lead",
