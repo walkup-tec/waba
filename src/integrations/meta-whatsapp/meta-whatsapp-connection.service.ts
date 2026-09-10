@@ -41,6 +41,7 @@ import {
   namesEqual,
   graphPhotoDownloadUrl,
   graphPhotoSourceKey,
+  shouldRefreshCachedPhonePhoto,
   safePublicPhotoUrl,
   META_PHONE_NUMBER_LIST_FIELDS_WITH_LIMIT,
   META_PHONE_NUMBER_CATALOG_FIELDS,
@@ -192,19 +193,26 @@ function withLocalIdentities(
   const localizeCard = (item: MetaPortfolioPublic) =>
     applyLocalPortfolioBusinessPhoto(tenantId, applyLocalPortfolioBusinessIdentity(tenantId, item));
   const busyPhoneIds = listBusyCloudPhoneNumberIds(tenantId);
-  const localizeNumbers = (numbers: MetaPortfolioNumberPublic[]) =>
-    applyCloudPhoneOccupancy(tenantId, applyLocalPhoneIdentities(tenantId, numbers), busyPhoneIds);
+  const localizeNumbers = (numbers: MetaPortfolioNumberPublic[], placeholderName?: string | null) =>
+    applyCloudPhoneOccupancy(
+      tenantId,
+      applyLocalPhoneIdentities(tenantId, numbers, placeholderName),
+      busyPhoneIds,
+    );
   const portfolio = assets.portfolio ? localizeCard(assets.portfolio) : null;
   const portfolios = (assets.portfolios || []).map((item) => ({
     ...localizeCard(item),
-    numbers: localizeNumbers(item.numbers || []),
+    numbers: localizeNumbers(item.numbers || [], item.name || item.primaryPageName),
   }));
   return {
     ...assets,
     portfolios,
     selectedConnectionId: assets.selectedConnectionId ?? null,
     portfolio: portfolio,
-    numbers: localizeNumbers(assets.numbers || []),
+    numbers: localizeNumbers(
+      assets.numbers || [],
+      assets.portfolio?.name || assets.portfolio?.primaryPageName,
+    ),
   };
 }
 
@@ -675,7 +683,7 @@ async function hydrateOpenConnection(
   const pending = merged.filter((row) => row.uiStatus !== "ativo");
   const active = merged.filter((row) => row.uiStatus === "ativo");
   const withProfiles = active.length
-    ? await attachPhoneBusinessProfiles(g, token, active, tenantId)
+    ? await attachPhoneBusinessProfiles(g, token, active, tenantId, card.name)
     : [];
   let numbers = unionPortfolioNumbers(withProfiles, pending);
   if (fromThisBm.size) {
@@ -1026,17 +1034,15 @@ async function cacheGraphPhonePhoto(
   const identity = readPhoneIdentity(tenantId, phoneNumberId);
   const local = localPhonePhotoUrl(phoneNumberId, identity);
   if (process.env.NODE_TEST_CONTEXT) return local;
-  if (identity?.photoMetaApplied && identity.photoExt) return local;
   if (!url || !/^https:\/\//i.test(url)) return local;
-  const nextKey = graphPhotoSourceKey(url);
-  if (identity?.photoExt && identity.photoSource && nextKey && identity.photoSource === nextKey) {
-    return localPhonePhotoUrl(phoneNumberId, identity);
+  if (!shouldRefreshCachedPhonePhoto(identity, url)) {
+    return local;
   }
   const downloaded = await fetchHttpsProfileImage(url);
   if (!downloaded) return local;
   const saved = writePhoneIdentity(tenantId, phoneNumberId, {
     photo: downloaded,
-    photoSource: nextKey,
+    photoSource: graphPhotoSourceKey(url),
     photoMetaApplied: true,
   });
   return localPhonePhotoUrl(phoneNumberId, saved) || local;
@@ -1047,6 +1053,7 @@ async function attachPhoneBusinessProfiles(
   token: string,
   numbers: MetaPortfolioNumberPublic[],
   tenantId: string,
+  placeholderName?: string | null,
 ): Promise<MetaPortfolioNumberPublic[]> {
   if (!numbers.length) return numbers;
   const limited = numbers.slice(0, 20);
@@ -1082,6 +1089,7 @@ async function attachPhoneBusinessProfiles(
         nameStatus,
         newDisplayName,
         newNameStatus,
+        placeholderName,
       });
       const mapped = profile.ok ? mapWhatsappBusinessProfile(profile.json) : null;
       const localPhoto = await cacheGraphPhonePhoto(tenantId, row.phoneNumberId, mapped?.profilePictureUrl || null);
