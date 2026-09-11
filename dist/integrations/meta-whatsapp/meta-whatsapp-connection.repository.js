@@ -363,6 +363,30 @@ class MetaWhatsappConnectionRepository {
         if (error)
             throw new Error(error.message);
     }
+    async reopenLeftManagerForBusinesses(tenantId, businessIds, actorEmail) {
+        const tenant = String(tenantId || "").trim();
+        const ids = [...new Set(businessIds.map((id) => String(id || "").trim()).filter(Boolean))];
+        if (!tenant || !ids.length)
+            return 0;
+        const now = new Date().toISOString();
+        const { data, error } = await this.client()
+            .from(TABLE)
+            .update({
+            status: "connected",
+            disconnected_at: null,
+            updated_by: actorEmail,
+            last_error: null,
+            updated_at: now,
+        })
+            .eq("tenant_id", tenant)
+            .eq("status", "disconnected")
+            .eq("last_error", "left_manager")
+            .in("meta_business_id", ids)
+            .select("id");
+        if (error)
+            throw new Error(error.message);
+        return (data || []).length;
+    }
     async disconnectOne(tenantId, connectionId, actorEmail) {
         const tenant = String(tenantId || "").trim();
         const id = String(connectionId || "").trim();
