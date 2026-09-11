@@ -24,6 +24,31 @@ const meta_whatsapp_header_handle_cache_1 = require("./meta-whatsapp-header-hand
 const meta_whatsapp_graph_cooldown_1 = require("./meta-whatsapp-graph-cooldown");
 /** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. */
 const META_TEMPLATE_SYNC_BUDGET_MS = 20000;
+/** Último recurso: WABAs do debug_token que o catálogo/card não listou. */
+const META_TEMPLATE_SYNC_DEBUG_WABA_CAP = 8;
+async function resolveSyncFallbackWabaIds(input) {
+    const tried = new Set([...input.alreadyTried].map((id) => String(id || "").trim()).filter(Boolean));
+    const debugIds = await (0, meta_whatsapp_template_waba_ids_1.listDebugTokenManagedWabaIds)({
+        token: input.token,
+        graph: input.graph,
+    });
+    const clients = new Set((0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(input.businessId));
+    const unused = debugIds.filter((id) => id && !tried.has(id) && !clients.has(id));
+    if (!unused.length)
+        return [];
+    const bm = String(input.businessId || "").trim();
+    if (bm) {
+        const owned = await (0, meta_whatsapp_template_waba_ids_1.filterWabaIdsOwnedByBusiness)({
+            token: input.token,
+            businessId: bm,
+            ids: unused,
+            graph: input.graph,
+        });
+        if (owned.length)
+            return [...new Set(owned.map((row) => row.id))];
+    }
+    return unused.slice(0, META_TEMPLATE_SYNC_DEBUG_WABA_CAP);
+}
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -367,23 +392,26 @@ class MetaWhatsappTemplateService {
             graph: this.graph,
         });
         const targets = [...new Set([...pickerIds, ...wabaIds, primaryWabaId].filter(Boolean))];
-        for (const wabaId of targets) {
+        const tried = new Set();
+        const throwSyncTimeout = () => {
+            const error = new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", 503);
+            error.message = "A Meta demorou demais para listar os templates. Tente de novo em instantes.";
+            throw error;
+        };
+        const listOneWaba = async (wabaId) => {
+            if (!wabaId || tried.has(wabaId))
+                return "skip";
+            tried.add(wabaId);
             const elapsed = Date.now() - startedAt;
             if (elapsed >= META_TEMPLATE_SYNC_BUDGET_MS) {
-                if (!listedByWaba.length) {
-                    const error = new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", 503);
-                    error.message =
-                        "A Meta demorou demais para listar os templates. Tente de novo em instantes.";
-                    throw error;
-                }
                 (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
-                    reason: "skip_sync_budget",
+                    reason: listedByWaba.length ? "skip_sync_budget" : "skip_sync_budget_try_fallback",
                     tenantId: tenant.tenantId,
                     wabaId,
                     elapsedMs: elapsed,
                     listed: listedByWaba.length,
                 });
-                break;
+                return "budget";
             }
             const listed = await (0, meta_whatsapp_template_graph_client_1.listWabaMessageTemplates)({
                 token,
@@ -394,19 +422,65 @@ class MetaWhatsappTemplateService {
             });
             if (!listed.ok) {
                 const denied = (0, meta_whatsapp_graph_errors_1.isMetaGraphWabaWriteDenied)(listed.result.json, listed.result.status);
-                if (denied || wabaId !== primaryWabaId) {
+                const rateLimited = (0, meta_whatsapp_graph_errors_1.isMetaGraphRateLimitPayload)(listed.result.json, listed.result.graphCode);
+                if (denied) {
                     (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
-                        reason: denied ? "skip_waba_denied" : "skip_extra_waba",
+                        reason: "skip_waba_denied",
                         tenantId: tenant.tenantId,
                         wabaId,
                         status: listed.result.status,
                     });
-                    continue;
+                    return "skip";
                 }
-                throwFromGraph(listed.result);
+                if (wabaId === primaryWabaId || rateLimited) {
+                    throwFromGraph(listed.result);
+                }
+                (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
+                    reason: "skip_extra_waba",
+                    tenantId: tenant.tenantId,
+                    wabaId,
+                    status: listed.result.status,
+                });
+                return "skip";
             }
             pages += listed.pages;
-            listedByWaba.push({ wabaId, items: listed.items, pages: listed.pages, complete: listed.complete });
+            listedByWaba.push({
+                wabaId,
+                items: listed.items,
+                pages: listed.pages,
+                complete: listed.complete,
+            });
+            return "ok";
+        };
+        for (const wabaId of targets) {
+            if ((await listOneWaba(wabaId)) === "budget")
+                break;
+        }
+        if (!listedByWaba.length) {
+            const fallbackIds = await resolveSyncFallbackWabaIds({
+                token,
+                businessId: String(connection.metaBusinessId || ""),
+                alreadyTried: tried,
+                graph: this.graph,
+            });
+            if (fallbackIds.length) {
+                (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
+                    reason: "fallback_debug_token_wabas",
+                    tenantId: tenant.tenantId,
+                    wabaCount: fallbackIds.length,
+                });
+            }
+            for (const wabaId of fallbackIds) {
+                const outcome = await listOneWaba(wabaId);
+                if (outcome === "budget") {
+                    if (!listedByWaba.length)
+                        throwSyncTimeout();
+                    break;
+                }
+            }
+        }
+        if (!listedByWaba.length && Date.now() - startedAt >= META_TEMPLATE_SYNC_BUDGET_MS) {
+            throwSyncTimeout();
         }
         if (!listedByWaba.length) {
             const error = new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", 424);
