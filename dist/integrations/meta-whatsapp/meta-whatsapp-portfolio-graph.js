@@ -7,6 +7,7 @@ exports.fillPageNameById = fillPageNameById;
 exports.fetchBusinessFromGraph = fetchBusinessFromGraph;
 exports.fetchAssignedBusinesses = fetchAssignedBusinesses;
 exports.directoryFromAssigned = directoryFromAssigned;
+exports.fetchVisibleBusinessCard = fetchVisibleBusinessCard;
 exports.fetchKnownBusinessPortfolios = fetchKnownBusinessPortfolios;
 const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
@@ -304,6 +305,19 @@ function directoryFromAssigned(json) {
     return (0, meta_whatsapp_portfolio_map_1.listMetaBusinessNodes)(json)
         .map((row) => (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(row, {}))
         .filter((biz) => Boolean(biz.id && (biz.name || biz.primaryPageName || biz.primaryPageId)));
+}
+/** Um GET id,name — não usa a cascata pesada do card. */
+async function fetchVisibleBusinessCard(graph, token, businessId) {
+    const id = String(businessId || "").trim();
+    if (!id)
+        return null;
+    const res = await getFields(graph, token, id, exports.META_BUSINESS_NAME_FIELDS);
+    if (!res.ok || (0, meta_whatsapp_graph_errors_1.isMetaGraphObjectNotAdministered)(res.json, res.status))
+        return null;
+    const card = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(res.json, { id });
+    if (!card.id || !card.name)
+        return null;
+    return card;
 }
 var meta_whatsapp_portfolio_map_2 = require("./meta-whatsapp-portfolio.map");
 Object.defineProperty(exports, "pickMetaBusinessNode", { enumerable: true, get: function () { return meta_whatsapp_portfolio_map_2.pickMetaBusinessNode; } });
