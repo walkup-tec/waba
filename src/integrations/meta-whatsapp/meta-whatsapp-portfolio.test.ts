@@ -1887,6 +1887,157 @@ describe("meta portfolio service", () => {
     assert.equal(pending?.canActivate, true);
   });
 
+  it("omite da lista o portfólio cujo token já não administra a WABA e desconecta", async () => {
+    const andre = {
+      ...connectedRow(),
+      id: "conn-andre",
+      metaBusinessId: "1759044748332124",
+      wabaId: "2458602464640240",
+      accessTokenEncrypted: encryptMetaToken("token-andre"),
+    };
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const disconnected: string[] = [];
+    const graph = async (input: { path: string }) => {
+      if (input.path === "2458602464640240") {
+        return {
+          ok: false,
+          status: 400,
+          json: {
+            error: {
+              code: 100,
+              message:
+                "Unsupported post request. Object with ID '2458602464640240' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+            },
+          },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path === "1014470201624992/phone_numbers") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-walkup",
+                display_phone_number: "+55 11 95213-7761",
+                verified_name: "Grupo Walkup",
+                status: "CONNECTED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [andre, walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+        async disconnectOne(_tenantId: string, connectionId: string) {
+          disconnected.push(connectionId);
+          return true;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    assert.equal(
+      (assets.portfolios || []).some(
+        (item) => item.id === "1759044748332124" || item.connectionId === "conn-andre",
+      ),
+      false,
+    );
+    assert.ok(
+      (assets.portfolios || []).some(
+        (item) => item.id === "4141369862822598" || item.wabaId === "1014470201624992",
+      ),
+    );
+    assert.deepEqual(disconnected, ["conn-andre"]);
+  });
+
+  it("mantém o card quando a Graph recusa com 403 genérico, sem texto de objeto inexistente", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+    };
+    const disconnected: string[] = [];
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1014470201624992") {
+        return { ok: false, status: 403, json: { error: { message: "permissions" } } };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-1",
+                display_phone_number: "+55 11 95213-7761",
+                verified_name: "Grupo Walkup",
+                status: "CONNECTED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+        async disconnectOne(_tenantId: string, connectionId: string) {
+          disconnected.push(connectionId);
+          return true;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    assert.ok(
+      (assets.portfolios || []).some(
+        (item) => item.id === "4141369862822598" || item.wabaId === "1014470201624992",
+      ),
+    );
+    assert.deepEqual(disconnected, []);
+  });
+
   it("liga o Inbox sem consultar a Graph", async () => {
     let graphCalls = 0;
     const service = new MetaWhatsappConnectionService(
@@ -4060,8 +4211,26 @@ describe("meta portfolio graph", () => {
     };
     const waba = await fetchWabaOwner(graph as any, "token", "1014470201624992");
     assert.equal(waba.ok, true);
+    assert.equal(waba.denied, false);
     assert.equal(waba.hint.businessId, "4141369862822598");
     assert.equal(waba.hint.primaryPageName, "Grupo Walkup");
+  });
+
+  it("marca WABA não administrada quando a Graph devolve Unsupported post", async () => {
+    const graph = async () => ({
+      ok: false,
+      status: 400,
+      json: {
+        error: {
+          code: 100,
+          message:
+            "Unsupported post request. Object with ID '2458602464640240' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+        },
+      },
+    });
+    const waba = await fetchWabaOwner(graph as any, "token", "2458602464640240");
+    assert.equal(waba.ok, false);
+    assert.equal(waba.denied, true);
   });
 
   it("preenche Página e foto pelas páginas do token quando o Business não traz primary_page", async () => {
