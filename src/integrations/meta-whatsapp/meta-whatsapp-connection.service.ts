@@ -66,6 +66,7 @@ import {
   knownWabaIdForPendingPhone,
   knownWabaNameForId,
   metaBusinessIdsMatch,
+  businessIdsToReopenAfterFalseLeftManager,
 } from "./meta-whatsapp-known-owned-wabas";
 import { publicMetaGraphRegisterMessage } from "./meta-whatsapp-graph-errors";
 import { isMetaGraphUploadCooldown } from "./meta-whatsapp-graph-cooldown";
@@ -427,29 +428,38 @@ async function hydrateOpenConnection(
   if (!storedWaba && !storedBm) {
     return { card: fallback, directory: [], connectionId: open.id };
   }
-  const wabaLookup = storedWaba || storedBm;
-  const waba = wabaLookup
-    ? await fetchWabaOwner(g, token, wabaLookup)
-    : {
-        hint: {
-          wabaId: null,
-          wabaName: null,
-          businessId: null,
-          businessName: null,
-          primaryPageId: null,
-          primaryPageName: null,
-          profilePictureUrl: null,
-        },
-        json: null,
-        ok: false,
-        denied: false,
-      };
-  if (waba.denied) {
+  const emptyOwner = {
+    hint: {
+      wabaId: null,
+      wabaName: null,
+      businessId: null,
+      businessName: null,
+      primaryPageId: null,
+      primaryPageName: null,
+      profilePictureUrl: null,
+    },
+    json: null as unknown,
+    ok: false,
+    denied: false,
+  };
+  const waba = storedWaba ? await fetchWabaOwner(g, token, storedWaba) : emptyOwner;
+  const bmOwner =
+    storedBm && storedBm !== storedWaba
+      ? await fetchWabaOwner(g, token, storedBm)
+      : storedBm
+        ? waba
+        : emptyOwner;
+  const stillHasWaba = waba.ok;
+  const stillHasBm = Boolean(storedBm && bmOwner.ok);
+  const leftManager =
+    !stillHasWaba && ((storedBm && bmOwner.denied) || (!storedBm && waba.denied));
+  if (leftManager) {
     logMetaWhatsappSafe("portfolio-left-manager", {
       tenantId,
-      reason: "waba-not-administered",
+      reason: "bm-not-administered",
       connectionId: open.id,
-      wabaId: wabaLookup || null,
+      wabaId: storedWaba || null,
+      businessId: storedBm || null,
     });
     return {
       card: {
@@ -466,7 +476,15 @@ async function hydrateOpenConnection(
       leftManager: true,
     };
   }
-  if (wabaLookup && !waba.ok) {
+  if (waba.denied && stillHasBm) {
+    logMetaWhatsappSafe("portfolio-stale-waba", {
+      tenantId,
+      connectionId: open.id,
+      wabaId: storedWaba || null,
+      businessId: storedBm || null,
+    });
+  }
+  if ((storedWaba && !waba.ok && !waba.denied) || (storedBm && !bmOwner.ok && !bmOwner.denied)) {
     logMetaWhatsappSafe("portfolio-list-partial", {
       tenantId,
       reason: "waba-identity",
@@ -474,10 +492,12 @@ async function hydrateOpenConnection(
     });
   }
 
-  const hint = waba.hint;
-  const resolvedWaba =
-    storedWaba ||
-    (hint.businessId && hint.wabaId && hint.wabaId !== hint.businessId ? hint.wabaId : "");
+  const identity = stillHasWaba ? waba : emptyOwner;
+  const hint = identity.hint;
+  const resolvedWaba = stillHasWaba
+    ? storedWaba ||
+      (hint.businessId && hint.wabaId && hint.wabaId !== hint.businessId ? hint.wabaId : "")
+    : "";
   const resolvedBm =
     hint.businessId || businessIdNotWaba(storedBm, resolvedWaba || storedWaba) || "";
 
@@ -498,7 +518,7 @@ async function hydrateOpenConnection(
   let card = mergePortfolioIdentity({
     fallback,
     business: matched,
-    waba: waba.json || fetchedBm.wabaJson,
+    waba: identity.json || fetchedBm.wabaJson,
   });
   const graphCard =
     fetchedBm.card ||
@@ -512,7 +532,7 @@ async function hydrateOpenConnection(
       primaryPageId: graphCard.primaryPageId || hint.primaryPageId || card.primaryPageId,
       primaryPageName: graphCard.primaryPageName || hint.primaryPageName || card.primaryPageName,
       profilePictureUrl: graphCard.profilePictureUrl || card.profilePictureUrl,
-      wabaId: graphCard.wabaId || card.wabaId || resolvedWaba || storedWaba,
+      wabaId: graphCard.wabaId || card.wabaId || resolvedWaba,
       connectionId: open.id,
     };
   }
@@ -529,17 +549,17 @@ async function hydrateOpenConnection(
   const photoDownloadUrl =
     fetchedBm.photoDownloadUrl ||
     graphPhotoDownloadUrl(matched) ||
-    graphPhotoDownloadUrl(waba.json) ||
+    graphPhotoDownloadUrl(identity.json) ||
     card.profilePictureUrl;
   const localPhoto = await cacheGraphBusinessPhoto(tenantId, card.id, photoDownloadUrl);
   card = {
     ...card,
     profilePictureUrl: localPhoto || card.profilePictureUrl,
-    wabaId: card.wabaId || resolvedWaba || storedWaba,
+    wabaId: card.wabaId || resolvedWaba,
   };
   writePortfolioBusinessIdentity(tenantId, card);
 
-  const primaryWabaId = resolvedWaba || storedWaba;
+  const primaryWabaId = resolvedWaba;
   const businessId = String(card.id || resolvedBm || "").trim();
 
   /**
@@ -1625,6 +1645,24 @@ export class MetaWhatsappConnectionService {
     actorEmail = "",
   ): Promise<MetaPortfolioAssetsPublic> {
     const repo = this.repository as MetaWhatsappConnectionRepository;
+    if (typeof repo.reopenLeftManagerForBusinesses === "function") {
+      try {
+        const restored = await repo.reopenLeftManagerForBusinesses(
+          tenantId,
+          businessIdsToReopenAfterFalseLeftManager(),
+          actorEmail,
+        );
+        if (restored) {
+          invalidateCachedPortfolioGraph(tenantId);
+          logMetaWhatsappSafe("portfolio-reopen-left-manager", {
+            tenantId,
+            restored,
+          });
+        }
+      } catch {
+        logMetaWhatsappSafe("portfolio-reopen-left-manager-failed", { tenantId });
+      }
+    }
     const rows =
       typeof repo.listOpenByTenant === "function"
         ? await repo.listOpenByTenant(tenantId)
