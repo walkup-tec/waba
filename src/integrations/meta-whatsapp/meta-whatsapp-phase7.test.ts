@@ -106,6 +106,14 @@ class FakeConnections {
   }
   async touchLastWebhookAt() {}
   async patchConfirmedMetadata() {}
+  async disconnectOne(tenantId: string, connectionId: string) {
+    const row = this.rows.find((item) => item.tenantId === tenantId && item.id === connectionId);
+    if (!row || row.disconnectedAt) return false;
+    row.status = "disconnected";
+    row.disconnectedAt = "2026-09-11T11:27:00.000Z";
+    row.lastError = "left_manager";
+    return true;
+  }
 }
 
 class FakeTemplates {
@@ -1500,6 +1508,53 @@ describe("fase 7 sync", () => {
       listTokens.includes("token-waba02:1744257946809067/message_templates"),
       true,
     );
+  });
+
+  it("portfólio fora do Manager não quebra o Atualizar da Meta e sai da conexão aberta", async () => {
+    const denied = {
+      error: {
+        code: 100,
+        message:
+          "Unsupported post request. Object with ID '2458602464640240' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+      },
+    };
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "8c2b6139-14dc-44d7-9e8c-c92a0e9b7935",
+        wabaId: "2458602464640240",
+        metaBusinessId: "1759044748332124",
+      }),
+    );
+    const templates = new FakeTemplates();
+    templates.rows.push(
+      templateRow({
+        id: "old-andre",
+        connectionId: "8c2b6139-14dc-44d7-9e8c-c92a0e9b7935",
+        wabaId: "2458602464640240",
+        name: "andre_antigo",
+      }),
+    );
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input: { path: string }) => {
+        if (input.path.endsWith("/message_templates")) {
+          return graphErr(400, { graphCode: "100", json: denied });
+        }
+        return graphJson({ data: [] });
+      },
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(
+      auth(EMAIL_A),
+      "8c2b6139-14dc-44d7-9e8c-c92a0e9b7935",
+    );
+    assert.equal(result.skippedUnmanaged, true);
+    assert.equal(result.pages, 0);
+    assert.equal(connections.rows[0].status, "disconnected");
+    const listed = await service.listFromAuth(auth(EMAIL_A));
+    assert.equal(listed.some((row) => row.name === "andre_antigo"), false);
   });
 });
 
