@@ -18,6 +18,7 @@ exports.knownOwnedWabaIdsForBusiness = knownOwnedWabaIdsForBusiness;
 exports.knownOwnedWabaRowsForBusiness = knownOwnedWabaRowsForBusiness;
 exports.knownClientWabaIdsForBusiness = knownClientWabaIdsForBusiness;
 exports.isKnownClientWabaForBusiness = isKnownClientWabaForBusiness;
+exports.isKnownClientWabaId = isKnownClientWabaId;
 exports.knownWabaIdForPendingPhone = knownWabaIdForPendingPhone;
 exports.knownWabaNameForId = knownWabaNameForId;
 exports.knownPendingPhonesForBusiness = knownPendingPhonesForBusiness;
@@ -102,6 +103,13 @@ function isKnownClientWabaForBusiness(businessId, wabaId) {
     if (!id)
         return false;
     return knownClientWabaIdsForBusiness(businessId).includes(id);
+}
+/** WABA client de qualquer BM catalogado (ex.: Rio) — não entra no sync de outro portfólio. */
+function isKnownClientWabaId(wabaId) {
+    const id = String(wabaId || "").trim();
+    if (!id)
+        return false;
+    return exports.KNOWN_OWNED_BUSINESS_WABAS.some((row) => row.clientWabaIds.includes(id));
 }
 function knownWabaIdForPendingPhone(phoneNumberId) {
     const id = String(phoneNumberId || "").trim();
