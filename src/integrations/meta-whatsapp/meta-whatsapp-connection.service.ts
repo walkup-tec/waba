@@ -294,6 +294,8 @@ function cardFromConnection(open: MetaWhatsappConnectionRecord): MetaPortfolioPu
 type HydratedPortfolio = {
   card: MetaPortfolioPublic;
   directory: MetaPortfolioPublic[];
+  connectionId: string;
+  leftManager?: boolean;
 };
 
 type PortfolioWriteToken = {
@@ -415,7 +417,7 @@ async function hydrateOpenConnection(
       reason: "decrypt",
       connectionId: open.id,
     });
-    return { card: fallback, directory: [] };
+    return { card: fallback, directory: [], connectionId: open.id };
   }
 
   const g = withHydrateLimits(graph);
@@ -423,10 +425,47 @@ async function hydrateOpenConnection(
   const storedWaba = String(open.wabaId || "").trim();
   const storedBm = String(open.metaBusinessId || "").trim();
   if (!storedWaba && !storedBm) {
-    return { card: fallback, directory: [] };
+    return { card: fallback, directory: [], connectionId: open.id };
   }
   const wabaLookup = storedWaba || storedBm;
-  const waba = wabaLookup ? await fetchWabaOwner(g, token, wabaLookup) : { hint: { wabaId: null, wabaName: null, businessId: null, businessName: null, primaryPageId: null, primaryPageName: null, profilePictureUrl: null }, json: null, ok: false };
+  const waba = wabaLookup
+    ? await fetchWabaOwner(g, token, wabaLookup)
+    : {
+        hint: {
+          wabaId: null,
+          wabaName: null,
+          businessId: null,
+          businessName: null,
+          primaryPageId: null,
+          primaryPageName: null,
+          profilePictureUrl: null,
+        },
+        json: null,
+        ok: false,
+        denied: false,
+      };
+  if (waba.denied) {
+    logMetaWhatsappSafe("portfolio-left-manager", {
+      tenantId,
+      reason: "waba-not-administered",
+      connectionId: open.id,
+      wabaId: wabaLookup || null,
+    });
+    return {
+      card: {
+        ...fallback,
+        id: "",
+        name: null,
+        primaryPageId: null,
+        primaryPageName: null,
+        wabaId: "",
+        numbers: [],
+      },
+      directory: [],
+      connectionId: open.id,
+      leftManager: true,
+    };
+  }
   if (wabaLookup && !waba.ok) {
     logMetaWhatsappSafe("portfolio-list-partial", {
       tenantId,
@@ -643,6 +682,7 @@ async function hydrateOpenConnection(
         numbers: stored,
       },
       directory,
+      connectionId: open.id,
     };
   }
 
@@ -703,6 +743,7 @@ async function hydrateOpenConnection(
       numbers,
     },
     directory,
+    connectionId: open.id,
   };
 }
 
@@ -1550,7 +1591,7 @@ export class MetaWhatsappConnectionService {
         return withLocalIdentities(tenant.tenantId, assetsFromPortfolioCards(raw.portfolios || [], requested));
       }
     }
-    const work = this.loadPortfolioGraphAssets(tenant.tenantId, requested);
+    const work = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail);
     if (useCache) setPortfolioGraphInflight(tenant.tenantId, work);
     try {
       const raw = await work;
@@ -1581,6 +1622,7 @@ export class MetaWhatsappConnectionService {
   private async loadPortfolioGraphAssets(
     tenantId: string,
     requested: string,
+    actorEmail = "",
   ): Promise<MetaPortfolioAssetsPublic> {
     const repo = this.repository as MetaWhatsappConnectionRepository;
     const rows =
@@ -1611,12 +1653,31 @@ export class MetaWhatsappConnectionService {
         ),
       ),
     );
-    const cards = dedupePortfolioCards(hydrated.map((item) => item.card)).filter(isRenderablePortfolioCard);
+    const leftIds = hydrated
+      .filter((item) => item.leftManager)
+      .map((item) => String(item.connectionId || "").trim())
+      .filter(Boolean);
+    const kept = hydrated.filter((item) => !item.leftManager);
+    const cards = dedupePortfolioCards(kept.map((item) => item.card)).filter(isRenderablePortfolioCard);
+    if (leftIds.length && typeof repo.disconnectOne === "function") {
+      for (const connectionId of leftIds) {
+        try {
+          await repo.disconnectOne(tenantId, connectionId, actorEmail);
+        } catch {
+          logMetaWhatsappSafe("portfolio-left-manager-disconnect-failed", {
+            tenantId,
+            connectionId,
+          });
+        }
+      }
+      invalidateCachedPortfolioGraph(tenantId);
+    }
     const raw = assetsFromPortfolioCards(cards, requested);
     logMetaWhatsappSafe("portfolio-listed", {
       tenantId,
       hasBusiness: Boolean(raw.portfolio?.id),
       numbers: raw.numbers.length,
+      leftManager: leftIds.length,
     });
     return raw;
   }
