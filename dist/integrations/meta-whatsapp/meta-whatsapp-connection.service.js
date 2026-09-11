@@ -1418,7 +1418,32 @@ class MetaWhatsappConnectionService {
             .map((item) => String(item.connectionId || "").trim())
             .filter(Boolean);
         const kept = hydrated.filter((item) => !item.leftManager);
-        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(kept.map((item) => item.card)).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+        const fromConnections = kept.map((item) => item.card);
+        const fromDirectory = kept.flatMap((item) => item.directory || []);
+        const listedIds = new Set([...fromConnections, ...fromDirectory]
+            .map((item) => String(item.id || "").trim())
+            .filter(Boolean));
+        const missingAdminIds = meta_whatsapp_known_owned_wabas_1.MARILZA_DE_CASTRO_BUSINESS_IDS.filter((id) => ![...listedIds].some((listed) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(listed, id)));
+        const extraCards = [];
+        if (missingAdminIds.length) {
+            const keptConn = new Set(kept.map((item) => item.connectionId));
+            const tokens = writeTokens
+                .filter((row) => keptConn.has(row.id))
+                .map((row) => row.token)
+                .filter(Boolean);
+            const g = withHydrateLimits(this.graph);
+            for (const businessId of missingAdminIds) {
+                let found = null;
+                for (const token of tokens) {
+                    found = await (0, meta_whatsapp_portfolio_graph_1.fetchVisibleBusinessCard)(g, token, businessId);
+                    if (found)
+                        break;
+                }
+                if (found?.id)
+                    extraCards.push(found);
+            }
+        }
+        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)([...fromConnections, ...fromDirectory, ...extraCards]).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
         if (leftIds.length && typeof repo.disconnectOne === "function") {
             for (const connectionId of leftIds) {
                 try {
