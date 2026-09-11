@@ -13,6 +13,7 @@ import {
   campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
 } from "./waba-campaign-report-read-overrides";
+import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
 import {
   filterOutMetricsExcludedOwners,
   isWabaMetricsExcludedOwnerEmail,
@@ -135,6 +136,7 @@ export const buildCampaignComparisonFromIntakes = (
       const apiKind = resolveIntakeApiKindFromIntake(intake);
       const rates = computeRatesFromReport(report);
       const showClicks =
+        campaignAttendedByLaboratorioStaff(intake) &&
         report.source === "meta_lab" &&
         !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report);
       return {
