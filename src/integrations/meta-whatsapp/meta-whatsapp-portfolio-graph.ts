@@ -373,6 +373,21 @@ export function directoryFromAssigned(json: unknown): MetaPortfolioPublic[] {
     .filter((biz) => Boolean(biz.id && (biz.name || biz.primaryPageName || biz.primaryPageId)));
 }
 
+/** Um GET id,name — não usa a cascata pesada do card. */
+export async function fetchVisibleBusinessCard(
+  graph: PortfolioGraphCaller,
+  token: string,
+  businessId: string,
+): Promise<MetaPortfolioPublic | null> {
+  const id = String(businessId || "").trim();
+  if (!id) return null;
+  const res = await getFields(graph, token, id, META_BUSINESS_NAME_FIELDS);
+  if (!res.ok || isMetaGraphObjectNotAdministered(res.json, res.status)) return null;
+  const card = mapMetaBusinessToPortfolio(res.json, { id });
+  if (!card.id || !card.name) return null;
+  return card;
+}
+
 export { pickMetaBusinessNode } from "./meta-whatsapp-portfolio.map";
 
 export async function fetchKnownBusinessPortfolios(
