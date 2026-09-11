@@ -43,7 +43,12 @@ const prodEnv = {
 function lookup(
   users: Record<
     string,
-    { email: string; role: "master" | "operacional" | "suporte"; menuPermissions?: Record<string, boolean> | null }
+    {
+      email: string;
+      fullName?: string;
+      role: "master" | "operacional" | "suporte";
+      menuPermissions?: Record<string, boolean> | null;
+    }
   >,
 ): LaboratorioStaffLookup {
   return {
@@ -110,6 +115,43 @@ describe("campanha atendida pelo Laboratório", () => {
       false,
     );
     assert.equal(campaignAttendedByLaboratorioStaff({}, staff, prodEnv), false);
+  });
+
+  it("Douglas fica no relatório manual mesmo com menu do Laboratório", () => {
+    const withDouglas = lookup({
+      "douglas.op@waba.test": {
+        email: "douglas.op@waba.test",
+        fullName: "Douglas",
+        role: "operacional",
+        menuPermissions: {
+          "whatsapp-oficial": true,
+          "whatsapp-templates": true,
+          "whatsapp-disparo-cloud": true,
+        },
+      },
+      "lab.op@waba.test": {
+        email: "lab.op@waba.test",
+        fullName: "Mozart Lab",
+        role: "operacional",
+        menuPermissions: { "whatsapp-oficial": true, "whatsapp-templates": true },
+      },
+    });
+    assert.equal(
+      campaignAttendedByLaboratorioStaff(
+        { assignedOperacionalEmail: "douglas.op@waba.test" },
+        withDouglas,
+        prodEnv,
+      ),
+      false,
+    );
+    assert.equal(
+      campaignAttendedByLaboratorioStaff(
+        { assignedOperacionalEmail: "lab.op@waba.test" },
+        withDouglas,
+        prodEnv,
+      ),
+      true,
+    );
   });
 });
 
