@@ -13,6 +13,7 @@ exports.listTemplatePickerWabas = listTemplatePickerWabas;
 exports.wabaIdentityMatchesBusiness = wabaIdentityMatchesBusiness;
 exports.filterWabaIdsOwnedByBusiness = filterWabaIdsOwnedByBusiness;
 exports.listDebugTokenManagedWabaIds = listDebugTokenManagedWabaIds;
+exports.listSyncTargetWabaIds = listSyncTargetWabaIds;
 exports.discoverTemplateWabas = discoverTemplateWabas;
 exports.discoverTemplateWabaIds = discoverTemplateWabaIds;
 exports.pickTemplateWriteConnections = pickTemplateWriteConnections;
@@ -312,11 +313,66 @@ async function listDebugTokenManagedWabaIds(input) {
         method: "GET",
         path: "debug_token",
         query: { input_token: input.token },
-        ...DISCOVER_GRAPH,
+        maxAttempts: 1,
+        timeoutMs: input.timeoutMs || DISCOVER_GRAPH.timeoutMs,
     });
     if (!debug.ok)
         return [];
     return wabaIdsFromDebugTokenJson(debug.json);
+}
+const SYNC_GRAPH = { maxAttempts: 1, timeoutMs: 4000 };
+/**
+ * Alvos do Atualizar da Meta: catálogo/card + no máximo um snapshot owned.
+ * O discover completo (paginação + identity GET) estoura o Traefik (~30s → 502 vazio).
+ */
+async function listSyncTargetWabaIds(input) {
+    const primary = String(input.connection.wabaId || "").trim();
+    const bm = String(input.connection.metaBusinessId || "").trim();
+    const ids = new Set([...templatePickerWabaIds(input.connection), primary].filter(Boolean));
+    if ((0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm).length)
+        return [...ids];
+    const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
+    const call = { maxAttempts: 1, timeoutMs: input.timeoutMs || SYNC_GRAPH.timeoutMs };
+    let ownedFromNested = 0;
+    if (bm) {
+        const nested = await graph({
+            token: input.token,
+            method: "GET",
+            path: bm,
+            query: { fields: "owned_whatsapp_business_accounts{id,name}" },
+            ...call,
+        });
+        if (nested.ok) {
+            for (const row of splitWabasFromBusinessNodeJson(nested.json).owned) {
+                if (row.id && !(0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaId)(row.id)) {
+                    ids.add(row.id);
+                    ownedFromNested += 1;
+                }
+            }
+        }
+        if (!ownedFromNested) {
+            const edge = await graph({
+                token: input.token,
+                method: "GET",
+                path: `${bm}/owned_whatsapp_business_accounts`,
+                query: { fields: "id,name", limit: "100" },
+                ...call,
+            });
+            if (edge.ok) {
+                for (const id of wabaIdsFromBusinessEdgeJson(edge.json)) {
+                    if (id && !(0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaId)(id))
+                        ids.add(id);
+                }
+            }
+        }
+    }
+    for (const raw of input.extraWabaIds || []) {
+        const id = String(raw || "").trim();
+        if (id && !(0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaId)(id) && !(0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(bm).includes(id)) {
+            ids.add(id);
+        }
+    }
+    return [...ids];
 }
 async function addDebugTokenWabas(graph, token, bm, byId) {
     for (const id of await listDebugTokenManagedWabaIds({ token, graph })) {
