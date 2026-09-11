@@ -1434,6 +1434,73 @@ describe("fase 7 sync", () => {
       else process.env.META_APP_SECRET = previousSecret;
     }
   });
+
+  it("Atualizar da Meta no card da WABA01 usa o token da WABA02 irmã", async () => {
+    const denied = {
+      error: {
+        code: 100,
+        message:
+          "Unsupported post request. Object with ID '2458602464640240' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+      },
+    };
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "8c2b6139-14dc-44d7-9e8c-c92a0e9b7935",
+        wabaId: "2458602464640240",
+        metaBusinessId: "1759044748332124",
+        accessTokenEncrypted: "v1:enc-waba01",
+      }),
+      connectedRow({
+        id: "conn-waba02",
+        wabaId: "1744257946809067",
+        metaBusinessId: "1759044748332124",
+        accessTokenEncrypted: "v1:enc-waba02",
+        status: "pending_confirmation",
+      }),
+    );
+    const templates = new FakeTemplates();
+    const listTokens: string[] = [];
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input: { path: string; token?: string }) => {
+        if (input.path.endsWith("/message_templates")) {
+          listTokens.push(`${input.token}:${input.path}`);
+        }
+        if (input.path === "2458602464640240/message_templates") {
+          return graphErr(400, { graphCode: "100", json: denied });
+        }
+        if (input.path === "1744257946809067/message_templates") {
+          if (input.token !== "token-waba02") {
+            return graphErr(400, { graphCode: "100", json: denied });
+          }
+          return graphJson({
+            data: [
+              {
+                id: "tpl-waba02",
+                name: "andre_waba02_ok",
+                language: "pt_BR",
+                status: "APPROVED",
+              },
+            ],
+          });
+        }
+        return graphJson({ data: [] });
+      },
+      (encrypted) => (String(encrypted).includes("waba02") ? "token-waba02" : "token-waba01"),
+    );
+    const result = await service.syncFromAuth(
+      auth(EMAIL_A),
+      "8c2b6139-14dc-44d7-9e8c-c92a0e9b7935",
+    );
+    assert.equal(templates.rows.some((row) => row.name === "andre_waba02_ok"), true);
+    assert.equal(result.pages >= 1, true);
+    assert.equal(
+      listTokens.includes("token-waba02:1744257946809067/message_templates"),
+      true,
+    );
+  });
 });
 
 describe("fase 7 webhook de template", () => {
