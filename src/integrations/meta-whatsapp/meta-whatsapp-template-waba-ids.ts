@@ -343,24 +343,32 @@ async function listBusinessWabaEdgeRows(
   return out;
 }
 
+export async function listDebugTokenManagedWabaIds(input: {
+  token: string;
+  graph?: TemplateGraphCaller;
+}): Promise<string[]> {
+  const graph = input.graph || callMetaGraphJson;
+  const appId = readMetaAppId();
+  const appSecret = readMetaAppSecret();
+  if (!appId || !appSecret || !input.token) return [];
+  const debug = await graph({
+    token: `${appId}|${appSecret}`,
+    method: "GET",
+    path: "debug_token",
+    query: { input_token: input.token },
+    ...DISCOVER_GRAPH,
+  });
+  if (!debug.ok) return [];
+  return wabaIdsFromDebugTokenJson(debug.json);
+}
+
 async function addDebugTokenWabas(
   graph: TemplateGraphCaller,
   token: string,
   bm: string,
   byId: Map<string, string>,
 ): Promise<void> {
-  const appId = readMetaAppId();
-  const appSecret = readMetaAppSecret();
-  if (!appId || !appSecret || !token) return;
-  const debug = await graph({
-    token: `${appId}|${appSecret}`,
-    method: "GET",
-    path: "debug_token",
-    query: { input_token: token },
-    ...DISCOVER_GRAPH,
-  });
-  if (!debug.ok) return;
-  for (const id of wabaIdsFromDebugTokenJson(debug.json)) {
+  for (const id of await listDebugTokenManagedWabaIds({ token, graph })) {
     addDiscoveredWaba(byId, id, "", bm);
   }
 }
