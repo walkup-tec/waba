@@ -47,9 +47,21 @@ export const WALKUP_WABA01_ID = "1014470201624992";
 /** Card Grupo Walkup App — WABA gravada no banco já veio misturada (Drax). */
 export const WALKUP_APP_BUSINESS_IDS = ["1247508354180311"] as const;
 
+export const MARILZA_DE_CASTRO_BUSINESS_IDS = ["4681844838758316"] as const;
+
+/** BMs que o Manager do laboratório administra — entram na lista se a Graph devolver o objeto. */
+export function catalogAdminBusinessIds(): string[] {
+  return [
+    ...DRAX_SISTEMAS_BUSINESS_IDS,
+    ...WALKUP_BUSINESS_IDS,
+    ...WALKUP_APP_BUSINESS_IDS,
+    ...MARILZA_DE_CASTRO_BUSINESS_IDS,
+  ];
+}
+
 /** Reabrir só estes BMs após o disconnect agressivo por WABA antiga. */
 export function businessIdsToReopenAfterFalseLeftManager(): string[] {
-  return [...DRAX_SISTEMAS_BUSINESS_IDS, ...WALKUP_BUSINESS_IDS, ...WALKUP_APP_BUSINESS_IDS];
+  return catalogAdminBusinessIds();
 }
 
 export const KNOWN_OWNED_BUSINESS_WABAS: KnownOwnedBusinessWabas[] = [
