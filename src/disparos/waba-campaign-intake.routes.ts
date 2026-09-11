@@ -723,6 +723,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       intake.performanceReport,
     );
     const showClicks =
+      campaignAttendedByLaboratorioStaff(intake) &&
       report?.source === "meta_lab" &&
       !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report);
     const metrics = report
