@@ -42643,6 +42643,7 @@
         try {
           let pages = 0;
           let removed = 0;
+          let skippedUnmanaged = 0;
           let rateLimited = false;
           let rateLimitMessage = "";
           for (let i = 0; i < ids.length; i += 1) {
@@ -42651,8 +42652,12 @@
                 method: "POST",
                 body: JSON.stringify({ connectionId: ids[i] }),
               });
-              pages += Number(payload.pages || 1);
-              removed += Number(payload.removed || 0);
+              if (payload && payload.skippedUnmanaged) {
+                skippedUnmanaged += 1;
+              } else {
+                pages += Number(payload.pages || 1);
+                removed += Number(payload.removed || 0);
+              }
             } catch (error) {
               if (metaTplLabIsRateLimitError(error)) {
                 rateLimited = true;
@@ -42662,10 +42667,24 @@
                     : "A Meta limitou temporariamente as consultas. Aguarde alguns minutos e tente de novo.";
                 break;
               }
-              throw error;
+              const text = error && error.message ? String(error.message) : "";
+              if (/conecte a WABA que aparece no Manager/i.test(text) || /token desta conexão/i.test(text)) {
+                skippedUnmanaged += 1;
+              } else {
+                throw error;
+              }
             }
             if (i < ids.length - 1) {
               await new Promise((resolve) => setTimeout(resolve, 700));
+            }
+          }
+          if (skippedUnmanaged && typeof metaTpLoadPortfolio === "function") {
+            try {
+              await metaTpLoadPortfolio({ silent: true, force: true });
+              if (typeof metaTplLabFillPortfolioFilter === "function") metaTplLabFillPortfolioFilter();
+              if (typeof metaTplLabFillPortfolioSelect === "function") metaTplLabFillPortfolioSelect();
+            } catch {
+              /* a tabela de templates segue mesmo se o card ainda não sumiu */
             }
           }
           const listed = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
@@ -42673,11 +42692,16 @@
           void metaTplLabHydrateWabaNames();
           if (rateLimited) {
             metaTplLabSetStatus(rateLimitMessage);
+          } else if (!pages && skippedUnmanaged && skippedUnmanaged === ids.length) {
+            metaTplLabSetStatus(
+              "Nenhum destes cards está no seu Gerenciador da Meta. Conecte só os portfólios que aparecem lá.",
+            );
           } else {
             metaTplLabSetStatus(
               "Sincronizado. páginas=" +
                 String(pages) +
-                (removed ? ". Removidos da Meta=" + String(removed) : ""),
+                (removed ? ". Removidos da Meta=" + String(removed) : "") +
+                (skippedUnmanaged ? ". Fora do Manager=" + String(skippedUnmanaged) : ""),
             );
           }
         } catch (error) {
