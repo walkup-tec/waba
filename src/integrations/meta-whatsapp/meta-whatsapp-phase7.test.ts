@@ -597,6 +597,18 @@ describe("fase 7 paginação Graph", () => {
     assert.equal(listed.complete, true);
     assert.equal(listed.items.map((item) => item?.name).join(","), "p1,p2");
   });
+
+  it("para a paginação no deadline sem estourar o proxy", async () => {
+    const listed = await listWabaMessageTemplates({
+      token: "tok",
+      wabaId: "waba-a",
+      deadlineAt: Date.now() - 1,
+      graph: async () => graphJson({ data: [{ id: "1", name: "p1", language: "pt_BR" }] }),
+    });
+    assert.equal(listed.ok, false);
+    if (listed.ok) return;
+    assert.equal(listed.result.timeout, true);
+  });
 });
 
 describe("fase 7 criação e erros Graph", () => {
@@ -1101,7 +1113,7 @@ describe("fase 7 sync", () => {
       () => "tok",
     );
     const result = await service.syncFromAuth(auth(EMAIL_A));
-    assert.equal(result.pages, 20);
+    assert.equal(result.pages, 8);
     assert.equal(result.removed, 0);
     assert.equal(templates.rows.some((row) => row.name === "antigo_local"), true);
   });
