@@ -6,6 +6,7 @@ import {
   discoverTemplateWabas,
   extraWabaIdsFromConnections,
   isProbablyMessageTemplateRow,
+  listSyncTargetWabaIds,
   listTemplatePickerWabas,
   pickTemplateWriteConnections,
   templatePickerWabaIds,
@@ -831,6 +832,44 @@ describe("templatePickerWabaIds", () => {
       }),
       ["2458602464640240", "1744257946809067"],
     );
+  });
+});
+
+describe("listSyncTargetWabaIds", () => {
+  it("Drax: catálogo local, sem consultar edges do BM", async () => {
+    const paths: string[] = [];
+    const ids = await listSyncTargetWabaIds({
+      token: "tok",
+      connection: {
+        wabaId: "1988957871663919",
+        metaBusinessId: "1041827648719609",
+      },
+      graph: async (input) => {
+        paths.push(input.path);
+        return graphOk({ data: [] });
+      },
+    });
+    assert.deepEqual(ids.sort(), ["1636793994538054", "1988957871663919"].sort());
+    assert.deepEqual(paths, []);
+  });
+
+  it("BM sem catálogo: um snapshot owned se o nested vier vazio", async () => {
+    const paths: string[] = [];
+    const ids = await listSyncTargetWabaIds({
+      token: "tok",
+      connection: { wabaId: "waba-a", metaBusinessId: "1398783195605765" },
+      graph: async (input) => {
+        paths.push(input.path);
+        if (input.path === "1398783195605765/owned_whatsapp_business_accounts") {
+          return graphOk({ data: [{ id: "waba-b", name: "Irmã" }] });
+        }
+        return graphOk({ data: [] });
+      },
+    });
+    assert.equal(ids.includes("waba-a"), true);
+    assert.equal(ids.includes("waba-b"), true);
+    assert.equal(paths.includes("1398783195605765/client_whatsapp_business_accounts"), false);
+    assert.equal(paths.filter((path) => path.includes("owned_whatsapp")).length, 1);
   });
 });
 
