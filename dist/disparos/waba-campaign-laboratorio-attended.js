@@ -7,6 +7,22 @@ const waba_menu_permissions_service_1 = require("../menus/waba-menu-permissions.
 const waba_menu_registry_1 = require("../menus/waba-menu-registry");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
+/** Operadores da fila oficial: relatório manual, sem cliques da Meta. */
+function staffUsesManualOperatorReport(email, lookup) {
+    const normalized = normalizeEmail(email);
+    if (!normalized)
+        return false;
+    const local = normalized.split("@")[0] || "";
+    if (local === "douglas" || local.startsWith("douglas.") || local.startsWith("douglas_")) {
+        return true;
+    }
+    const user = lookup.getByEmail(normalized);
+    const name = String(user?.fullName || "").trim().toLowerCase();
+    if (!name)
+        return false;
+    const first = name.split(/\s+/)[0] || "";
+    return first === "douglas";
+}
 function defaultLookup() {
     return new waba_system_user_service_1.WabaSystemUserService();
 }
@@ -36,10 +52,16 @@ function staffEmailHasLaboratorioAccess(email, lookup = defaultLookup(), env = p
  */
 function campaignAttendedByLaboratorioStaff(intake, lookup = defaultLookup(), env = process.env) {
     const assigned = normalizeEmail(String(intake.assignedOperacionalEmail || ""));
-    if (assigned)
+    if (assigned) {
+        if (staffUsesManualOperatorReport(assigned, lookup))
+            return false;
         return staffEmailHasLaboratorioAccess(assigned, lookup, env);
+    }
     const started = normalizeEmail(String(intake.startedByEmail || ""));
-    if (started)
+    if (started) {
+        if (staffUsesManualOperatorReport(started, lookup))
+            return false;
         return staffEmailHasLaboratorioAccess(started, lookup, env);
+    }
     return false;
 }
