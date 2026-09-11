@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  isMetaGraphObjectNotAdministered,
   isMetaGraphRateLimitCode,
   isMetaGraphRateLimitPayload,
   isMetaGraphWabaWriteDenied,
@@ -46,6 +47,32 @@ describe("erros Graph de cota", () => {
     const message = publicMetaGraphTemplateMessage("permanent", 400, json);
     assert.match(message, /não gerencia essa conta|conecte essa WABA/i);
     assert.doesNotMatch(message, /Unsupported post request/i);
+  });
+
+  it("objeto não administrado usa o texto da Graph, não 403 genérico nem cota", () => {
+    assert.equal(
+      isMetaGraphObjectNotAdministered({
+        error: {
+          message:
+            "Unsupported post request. Object with ID '2458602464640240' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+          code: 100,
+        },
+      }, 400),
+      true,
+    );
+    assert.equal(
+      isMetaGraphObjectNotAdministered({ error: { message: "permissions" } }, 403),
+      false,
+    );
+    assert.equal(
+      isMetaGraphObjectNotAdministered({
+        error: {
+          code: 80008,
+          message: "(#80008) There have been too many calls to this WhatsApp Business account.",
+        },
+      }, 400),
+      false,
+    );
   });
 });
 
