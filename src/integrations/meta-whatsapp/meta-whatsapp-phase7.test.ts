@@ -1234,6 +1234,194 @@ describe("fase 7 sync", () => {
     assert.equal(templates.rows.some((row) => row.name === "drax_ok"), true);
     assert.equal(result.pages >= 1, true);
   });
+
+  it("Atualizar da Meta usa WABA do debug_token se card e Manager recusarem o GET", async () => {
+    const previousId = process.env.META_APP_ID;
+    const previousSecret = process.env.META_APP_SECRET;
+    process.env.META_APP_ID = "app-test";
+    process.env.META_APP_SECRET = "secret-test";
+    const denied = {
+      error: {
+        code: 100,
+        message:
+          "Unsupported post request. Object with ID '1988957871663919' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+      },
+    };
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "4557df49-7de8-4f24-906c-7e58cb21facf",
+        wabaId: "1988957871663919",
+        metaBusinessId: "1041827648719609",
+      }),
+    );
+    const templates = new FakeTemplates();
+    const templatePaths: string[] = [];
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input: { path: string }) => {
+        if (input.path.endsWith("/message_templates")) templatePaths.push(input.path);
+        if (input.path === "debug_token") {
+          return graphJson({
+            data: {
+              granular_scopes: [
+                {
+                  scope: "whatsapp_business_management",
+                  target_ids: ["waba-token-ok", "1581808413746453"],
+                },
+              ],
+            },
+          });
+        }
+        if (
+          input.path === "1041827648719609" ||
+          input.path === "1041827648719609/owned_whatsapp_business_accounts"
+        ) {
+          return graphJson({
+            owned_whatsapp_business_accounts: {
+              data: [{ id: "1636793994538054", name: "Drax Sistemas" }],
+            },
+            data: [{ id: "1636793994538054", name: "Drax Sistemas" }],
+          });
+        }
+        if (input.path === "1636793994538054") {
+          return graphJson({
+            id: "1636793994538054",
+            name: "Drax Sistemas",
+            owner_business_info: { id: "1041827648719609" },
+          });
+        }
+        if (input.path === "waba-token-ok") {
+          return graphJson({
+            id: "waba-token-ok",
+            name: "Conta do token",
+            owner_business_info: { id: "1041827648719609" },
+          });
+        }
+        if (input.path === "1581808413746453") {
+          return graphJson({
+            id: "1581808413746453",
+            name: "Rio de Janeiro 01",
+            owner_business_info: { id: "1759044748332124" },
+          });
+        }
+        if (
+          input.path === "1988957871663919/message_templates" ||
+          input.path === "1636793994538054/message_templates"
+        ) {
+          return graphErr(400, { graphCode: "100", json: denied });
+        }
+        if (input.path === "waba-token-ok/message_templates") {
+          return graphJson({
+            data: [
+              {
+                id: "tpl-token",
+                name: "token_ok",
+                language: "pt_BR",
+                status: "APPROVED",
+              },
+            ],
+          });
+        }
+        return graphJson({ data: [] });
+      },
+      () => "tok",
+    );
+    try {
+      const result = await service.syncFromAuth(
+        auth(EMAIL_A),
+        "4557df49-7de8-4f24-906c-7e58cb21facf",
+      );
+      assert.equal(templates.rows.some((row) => row.name === "token_ok"), true);
+      assert.equal(result.pages >= 1, true);
+      assert.equal(templatePaths.includes("waba-token-ok/message_templates"), true);
+      assert.equal(templatePaths.includes("1581808413746453/message_templates"), false);
+    } finally {
+      if (previousId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousId;
+      if (previousSecret === undefined) delete process.env.META_APP_SECRET;
+      else process.env.META_APP_SECRET = previousSecret;
+    }
+  });
+
+  it("Atualizar da Meta tenta WABA do token mesmo se o owner_business_info não bater no BM do card", async () => {
+    const previousId = process.env.META_APP_ID;
+    const previousSecret = process.env.META_APP_SECRET;
+    process.env.META_APP_ID = "app-test";
+    process.env.META_APP_SECRET = "secret-test";
+    const denied = {
+      error: {
+        code: 100,
+        message:
+          "Unsupported post request. Object with ID 'stale-waba' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+      },
+    };
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        wabaId: "stale-waba",
+        metaBusinessId: "bm-unknown",
+      }),
+    );
+    const templates = new FakeTemplates();
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input: { path: string }) => {
+        if (input.path === "debug_token") {
+          return graphJson({
+            data: {
+              granular_scopes: [
+                { scope: "whatsapp_business_management", target_ids: ["waba-token-ok"] },
+              ],
+            },
+          });
+        }
+        if (input.path === "stale-waba") {
+          return graphJson({
+            id: "stale-waba",
+            name: "Card antigo",
+            owner_business_info: { id: "bm-unknown" },
+          });
+        }
+        if (input.path === "waba-token-ok") {
+          return graphJson({
+            id: "waba-token-ok",
+            name: "Conta do token",
+            owner_business_info: { id: "other-bm" },
+          });
+        }
+        if (input.path === "stale-waba/message_templates") {
+          return graphErr(400, { graphCode: "100", json: denied });
+        }
+        if (input.path === "waba-token-ok/message_templates") {
+          return graphJson({
+            data: [
+              {
+                id: "tpl-last",
+                name: "last_resort_ok",
+                language: "pt_BR",
+                status: "APPROVED",
+              },
+            ],
+          });
+        }
+        return graphJson({ data: [] });
+      },
+      () => "tok",
+    );
+    try {
+      const result = await service.syncFromAuth(auth(EMAIL_A), "conn-a");
+      assert.equal(templates.rows.some((row) => row.name === "last_resort_ok"), true);
+      assert.equal(result.pages >= 1, true);
+    } finally {
+      if (previousId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousId;
+      if (previousSecret === undefined) delete process.env.META_APP_SECRET;
+      else process.env.META_APP_SECRET = previousSecret;
+    }
+  });
 });
 
 describe("fase 7 webhook de template", () => {
