@@ -1904,7 +1904,7 @@ describe("meta portfolio service", () => {
     };
     const disconnected: string[] = [];
     const graph = async (input: { path: string }) => {
-      if (input.path === "2458602464640240") {
+      if (input.path === "2458602464640240" || input.path === "1759044748332124") {
         return {
           ok: false,
           status: 400,
@@ -1978,6 +1978,138 @@ describe("meta portfolio service", () => {
       ),
     );
     assert.deepEqual(disconnected, ["conn-andre"]);
+  });
+
+  it("mantém Drax quando a WABA gravada é antiga e o BM ainda responde", async () => {
+    const drax = {
+      ...connectedRow(),
+      id: "conn-drax",
+      metaBusinessId: "1041827648719609",
+      wabaId: "1988957871663919",
+      accessTokenEncrypted: encryptMetaToken("token-drax"),
+    };
+    const disconnected: string[] = [];
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1988957871663919") {
+        return {
+          ok: false,
+          status: 400,
+          json: {
+            error: {
+              code: 100,
+              message:
+                "Unsupported post request. Object with ID '1988957871663919' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+            },
+          },
+        };
+      }
+      if (input.path === "1041827648719609") {
+        return { ok: true, status: 200, json: { id: "1041827648719609", name: "Drax Sistemas" } };
+      }
+      if (input.path === "1636793994538054/phone_numbers") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-drax",
+                display_phone_number: "+55 51 92636-1676",
+                verified_name: "Drax Sistemas",
+                status: "CONNECTED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [drax];
+        },
+        async findOpenByTenant() {
+          return drax;
+        },
+        async disconnectOne(_tenantId: string, connectionId: string) {
+          disconnected.push(connectionId);
+          return true;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    assert.ok((assets.portfolios || []).some((item) => item.id === "1041827648719609"));
+    assert.deepEqual(disconnected, []);
+  });
+
+  it("reabre Drax e Walkup App desconectados por engano e não mistura a WABA antiga", async () => {
+    const drax = {
+      ...connectedRow(),
+      id: "conn-drax",
+      metaBusinessId: "1041827648719609",
+      wabaId: "1988957871663919",
+      accessTokenEncrypted: encryptMetaToken("token-drax"),
+    };
+    const walkupApp = {
+      ...connectedRow(),
+      id: "conn-walkup-app",
+      metaBusinessId: "1247508354180311",
+      wabaId: "1636793994538054",
+      accessTokenEncrypted: encryptMetaToken("token-app"),
+    };
+    let open: MetaWhatsappConnectionRecord[] = [];
+    let reopened: string[] = [];
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1988957871663919" || input.path === "1636793994538054") {
+        return {
+          ok: false,
+          status: 400,
+          json: {
+            error: {
+              code: 100,
+              message:
+                "Unsupported post request. Object with ID '1636793994538054' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+            },
+          },
+        };
+      }
+      if (input.path === "1041827648719609") {
+        return { ok: true, status: 200, json: { id: "1041827648719609", name: "Drax Sistemas" } };
+      }
+      if (input.path === "1247508354180311") {
+        return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup App" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async reopenLeftManagerForBusinesses(_tenantId: string, businessIds: string[]) {
+          reopened = businessIds.slice();
+          open = [drax, walkupApp];
+          return 2;
+        },
+        async listOpenByTenant() {
+          return open;
+        },
+        async findOpenByTenant() {
+          return open[0] || null;
+        },
+        async disconnectOne() {
+          return false;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    assert.ok(reopened.includes("1041827648719609"));
+    assert.ok(reopened.includes("1247508354180311"));
+    const ids = (assets.portfolios || []).map((item) => item.id);
+    assert.ok(ids.includes("1041827648719609"));
+    assert.ok(ids.includes("1247508354180311"));
   });
 
   it("mantém o card quando a Graph recusa com 403 genérico, sem texto de objeto inexistente", async () => {
