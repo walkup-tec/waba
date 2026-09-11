@@ -8,6 +8,7 @@ exports.fetchBusinessFromGraph = fetchBusinessFromGraph;
 exports.fetchAssignedBusinesses = fetchAssignedBusinesses;
 exports.directoryFromAssigned = directoryFromAssigned;
 exports.fetchKnownBusinessPortfolios = fetchKnownBusinessPortfolios;
+const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
 /** IDs oficiais no Business Manager — só entram no card se a Graph devolver o objeto. */
 exports.META_PORTFOLIO_BUSINESS_IDS = [
@@ -53,10 +54,16 @@ async function getFields(graph, token, path, fields) {
 async function fetchWabaOwner(graph, token, wabaId) {
     const id = String(wabaId || "").trim();
     if (!id)
-        return { hint: emptyHint, json: null, ok: false };
+        return { hint: emptyHint, json: null, ok: false, denied: false };
     const res = await getFields(graph, token, id, exports.META_WABA_OWNER_FIELDS);
-    if (!res.ok)
-        return { hint: emptyHint, json: null, ok: false };
+    if (!res.ok) {
+        return {
+            hint: emptyHint,
+            json: res.json ?? null,
+            ok: false,
+            denied: (0, meta_whatsapp_graph_errors_1.isMetaGraphObjectNotAdministered)(res.json, res.status),
+        };
+    }
     let json = res.json;
     let hint = (0, meta_whatsapp_portfolio_map_1.mapMetaWabaIdentity)(json);
     if (!hint.primaryPageName) {
@@ -70,7 +77,7 @@ async function fetchWabaOwner(graph, token, wabaId) {
             }
         }
     }
-    return { hint, json, ok: true };
+    return { hint, json, ok: true, denied: false };
 }
 async function mergePrimaryPageFromGraph(graph, token, businessId, card, pageRes) {
     if (pageRes.ok) {
