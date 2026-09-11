@@ -5,6 +5,7 @@ exports.classifyMetaGraphError = classifyMetaGraphError;
 exports.publicMetaGraphSendMessage = publicMetaGraphSendMessage;
 exports.isMetaGraphRateLimitCode = isMetaGraphRateLimitCode;
 exports.isMetaGraphWabaWriteDenied = isMetaGraphWabaWriteDenied;
+exports.isMetaGraphObjectNotAdministered = isMetaGraphObjectNotAdministered;
 exports.isMetaGraphRateLimitPayload = isMetaGraphRateLimitPayload;
 exports.publicMetaGraphRateLimitMessage = publicMetaGraphRateLimitMessage;
 exports.safePublicGraphTemplateDetail = safePublicGraphTemplateDetail;
@@ -71,6 +72,15 @@ function isMetaGraphRateLimitCode(code) {
 function isMetaGraphWabaWriteDenied(json, status) {
     if (status === 403)
         return true;
+    return isMetaGraphObjectNotAdministered(json, status);
+}
+/**
+ * Token sem acesso ao objeto (WABA/BM) na Graph.
+ * Só o texto da Meta — 403 genérico ("permissions") e 80008 não entram.
+ */
+function isMetaGraphObjectNotAdministered(json, _status) {
+    if (isMetaGraphRateLimitPayload(json))
+        return false;
     const detail = safePublicGraphTemplateDetail(json);
     const err = json?.error;
     const text = `${detail} ${String(err?.message || "")} ${String(err?.error_user_msg || "")}`;
