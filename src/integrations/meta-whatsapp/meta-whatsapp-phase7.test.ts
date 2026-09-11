@@ -1119,6 +1119,13 @@ describe("fase 7 sync", () => {
         if (input.path === "1398783195605765/owned_whatsapp_business_accounts") {
           return graphJson({ data: [{ id: "waba-b", name: "Drax Sistemas 01" }] });
         }
+        if (input.path === "waba-a" || input.path === "waba-b") {
+          return graphJson({
+            id: input.path,
+            name: input.path === "waba-b" ? "Drax Sistemas 01" : "Conta A",
+            owner_business_info: { id: "1398783195605765" },
+          });
+        }
         if (input.path === "waba-a/message_templates") {
           return graphJson({ data: [] });
         }
@@ -1181,6 +1188,50 @@ describe("fase 7 sync", () => {
     );
     const result = await service.syncFromAuth(auth(EMAIL_A), "conn-a");
     assert.equal(templates.rows.some((row) => row.name === "ok_local"), true);
+    assert.equal(result.pages >= 1, true);
+  });
+
+  it("Atualizar da Meta segue se a WABA gravada no card for recusada e a do Manager listar", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        wabaId: "1988957871663919",
+        metaBusinessId: "1041827648719609",
+      }),
+    );
+    const templates = new FakeTemplates();
+    const denied = {
+      error: {
+        code: 100,
+        message:
+          "Unsupported post request. Object with ID '1988957871663919' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+      },
+    };
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input: { path: string }) => {
+        if (input.path === "1988957871663919/message_templates") {
+          return graphErr(400, { graphCode: "100", json: denied });
+        }
+        if (input.path === "1636793994538054/message_templates") {
+          return graphJson({
+            data: [
+              {
+                id: "tpl-drax",
+                name: "drax_ok",
+                language: "pt_BR",
+                status: "APPROVED",
+              },
+            ],
+          });
+        }
+        return graphJson({ data: [] });
+      },
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A), "conn-a");
+    assert.equal(templates.rows.some((row) => row.name === "drax_ok"), true);
     assert.equal(result.pages >= 1, true);
   });
 });
