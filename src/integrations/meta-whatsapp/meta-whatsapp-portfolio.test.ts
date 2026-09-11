@@ -22,7 +22,7 @@ import {
   phoneNumberCardName,
   META_PHONE_NUMBER_LIST_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
-import { fetchBusinessFromGraph, fetchKnownBusinessPortfolios, fetchWabaOwner, directoryFromAssigned } from "./meta-whatsapp-portfolio-graph";
+import { fetchBusinessFromGraph, fetchKnownBusinessPortfolios, fetchVisibleBusinessCard, fetchWabaOwner, directoryFromAssigned } from "./meta-whatsapp-portfolio-graph";
 import { encryptMetaToken, decryptMetaToken } from "./meta-token-crypto";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
@@ -2110,6 +2110,112 @@ describe("meta portfolio service", () => {
     const ids = (assets.portfolios || []).map((item) => item.id);
     assert.ok(ids.includes("1041827648719609"));
     assert.ok(ids.includes("1247508354180311"));
+  });
+
+  it("mostra Marilza de Castro quando me/businesses devolve o BM administrado", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "4141369862822598", name: "Grupo Walkup" },
+              { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
+            ],
+          },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const ids = (assets.portfolios || []).map((item) => item.id);
+    assert.ok(ids.includes("4141369862822598"));
+    assert.ok(ids.includes("4681844838758316"));
+    const marilza = (assets.portfolios || []).find((item) => item.id === "4681844838758316");
+    assert.equal(marilza?.name, "60.846.306 Marilza de Castro");
+  });
+
+  it("busca o BM da Marilza com o token já conectado quando me/businesses omite", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "4681844838758316") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const marilza = (assets.portfolios || []).find((item) => item.id === "4681844838758316");
+    assert.equal(marilza?.name, "60.846.306 Marilza de Castro");
   });
 
   it("mantém o card quando a Graph recusa com 403 genérico, sem texto de objeto inexistente", async () => {
@@ -4363,6 +4469,22 @@ describe("meta portfolio graph", () => {
     const waba = await fetchWabaOwner(graph as any, "token", "2458602464640240");
     assert.equal(waba.ok, false);
     assert.equal(waba.denied, true);
+  });
+
+  it("lê o card da Marilza com um GET id,name quando o token ainda administra o BM", async () => {
+    const graph = async (input: { path: string }) => {
+      if (input.path === "4681844838758316") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
+        };
+      }
+      return { ok: false, status: 400, json: { error: { code: 100 } } };
+    };
+    const card = await fetchVisibleBusinessCard(graph as any, "token", "4681844838758316");
+    assert.equal(card?.id, "4681844838758316");
+    assert.equal(card?.name, "60.846.306 Marilza de Castro");
   });
 
   it("preenche Página e foto pelas páginas do token quando o Business não traz primary_page", async () => {
