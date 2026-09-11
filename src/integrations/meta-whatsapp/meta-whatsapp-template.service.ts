@@ -22,6 +22,8 @@ import {
 import {
   discoverTemplateWabaIds,
   extraWabaIdsFromConnections,
+  filterWabaIdsOwnedByBusiness,
+  listDebugTokenManagedWabaIds,
   listTemplatePickerWabas,
   pickTemplateWriteConnections,
   templatePickerWabaIds,
@@ -48,7 +50,7 @@ import {
   templateHeaderPreviewKeys,
 } from "./meta-whatsapp-template-header-preview.store";
 import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template";
-import { knownWabaNameForId } from "./meta-whatsapp-known-owned-wabas";
+import { knownClientWabaIdsForBusiness, knownWabaNameForId } from "./meta-whatsapp-known-owned-wabas";
 import { pickReusableHeaderHandle } from "./meta-whatsapp-header-handle-cache";
 import {
   isMetaGraphUploadCooldown,
@@ -57,6 +59,37 @@ import {
 
 /** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. */
 const META_TEMPLATE_SYNC_BUDGET_MS = 20_000;
+/** Último recurso: WABAs do debug_token que o catálogo/card não listou. */
+const META_TEMPLATE_SYNC_DEBUG_WABA_CAP = 8;
+
+async function resolveSyncFallbackWabaIds(input: {
+  token: string;
+  businessId: string;
+  alreadyTried: Iterable<string>;
+  graph?: TemplateGraphCaller;
+}): Promise<string[]> {
+  const tried = new Set(
+    [...input.alreadyTried].map((id) => String(id || "").trim()).filter(Boolean),
+  );
+  const debugIds = await listDebugTokenManagedWabaIds({
+    token: input.token,
+    graph: input.graph,
+  });
+  const clients = new Set(knownClientWabaIdsForBusiness(input.businessId));
+  const unused = debugIds.filter((id) => id && !tried.has(id) && !clients.has(id));
+  if (!unused.length) return [];
+  const bm = String(input.businessId || "").trim();
+  if (bm) {
+    const owned = await filterWabaIdsOwnedByBusiness({
+      token: input.token,
+      businessId: bm,
+      ids: unused,
+      graph: input.graph,
+    });
+    if (owned.length) return [...new Set(owned.map((row) => row.id))];
+  }
+  return unused.slice(0, META_TEMPLATE_SYNC_DEBUG_WABA_CAP);
+}
 
 function requireTenant(auth: WabaRequestAuth) {
   try {
@@ -474,23 +507,25 @@ export class MetaWhatsappTemplateService {
       graph: this.graph,
     });
     const targets = [...new Set([...pickerIds, ...wabaIds, primaryWabaId].filter(Boolean))];
-    for (const wabaId of targets) {
+    const tried = new Set<string>();
+    const throwSyncTimeout = (): never => {
+      const error = new MetaWhatsappError("send_failed", 503);
+      error.message = "A Meta demorou demais para listar os templates. Tente de novo em instantes.";
+      throw error;
+    };
+    const listOneWaba = async (wabaId: string): Promise<"ok" | "skip" | "budget"> => {
+      if (!wabaId || tried.has(wabaId)) return "skip";
+      tried.add(wabaId);
       const elapsed = Date.now() - startedAt;
       if (elapsed >= META_TEMPLATE_SYNC_BUDGET_MS) {
-        if (!listedByWaba.length) {
-          const error = new MetaWhatsappError("send_failed", 503);
-          error.message =
-            "A Meta demorou demais para listar os templates. Tente de novo em instantes.";
-          throw error;
-        }
         logMetaTemplate("SYNC", {
-          reason: "skip_sync_budget",
+          reason: listedByWaba.length ? "skip_sync_budget" : "skip_sync_budget_try_fallback",
           tenantId: tenant.tenantId,
           wabaId,
           elapsedMs: elapsed,
           listed: listedByWaba.length,
         });
-        break;
+        return "budget";
       }
       const listed = await listWabaMessageTemplates({
         token,
@@ -501,19 +536,63 @@ export class MetaWhatsappTemplateService {
       });
       if (!listed.ok) {
         const denied = isMetaGraphWabaWriteDenied(listed.result.json, listed.result.status);
-        if (denied || wabaId !== primaryWabaId) {
+        const rateLimited = isMetaGraphRateLimitPayload(listed.result.json, listed.result.graphCode);
+        if (denied) {
           logMetaTemplate("SYNC", {
-            reason: denied ? "skip_waba_denied" : "skip_extra_waba",
+            reason: "skip_waba_denied",
             tenantId: tenant.tenantId,
             wabaId,
             status: listed.result.status,
           });
-          continue;
+          return "skip";
         }
-        throwFromGraph(listed.result);
+        if (wabaId === primaryWabaId || rateLimited) {
+          throwFromGraph(listed.result);
+        }
+        logMetaTemplate("SYNC", {
+          reason: "skip_extra_waba",
+          tenantId: tenant.tenantId,
+          wabaId,
+          status: listed.result.status,
+        });
+        return "skip";
       }
       pages += listed.pages;
-      listedByWaba.push({ wabaId, items: listed.items, pages: listed.pages, complete: listed.complete });
+      listedByWaba.push({
+        wabaId,
+        items: listed.items,
+        pages: listed.pages,
+        complete: listed.complete,
+      });
+      return "ok";
+    };
+    for (const wabaId of targets) {
+      if ((await listOneWaba(wabaId)) === "budget") break;
+    }
+    if (!listedByWaba.length) {
+      const fallbackIds = await resolveSyncFallbackWabaIds({
+        token,
+        businessId: String(connection.metaBusinessId || ""),
+        alreadyTried: tried,
+        graph: this.graph,
+      });
+      if (fallbackIds.length) {
+        logMetaTemplate("SYNC", {
+          reason: "fallback_debug_token_wabas",
+          tenantId: tenant.tenantId,
+          wabaCount: fallbackIds.length,
+        });
+      }
+      for (const wabaId of fallbackIds) {
+        const outcome = await listOneWaba(wabaId);
+        if (outcome === "budget") {
+          if (!listedByWaba.length) throwSyncTimeout();
+          break;
+        }
+      }
+    }
+    if (!listedByWaba.length && Date.now() - startedAt >= META_TEMPLATE_SYNC_BUDGET_MS) {
+      throwSyncTimeout();
     }
     if (!listedByWaba.length) {
       const error = new MetaWhatsappError("send_failed", 424);
