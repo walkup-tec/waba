@@ -9,7 +9,8 @@
  * não inventa pendente já excluído do Business Manager.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KNOWN_OWNED_BUSINESS_WABAS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.KNOWN_OWNED_BUSINESS_WABAS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.businessIdsToReopenAfterFalseLeftManager = businessIdsToReopenAfterFalseLeftManager;
 exports.normalizeMetaBusinessKey = normalizeMetaBusinessKey;
 exports.metaBusinessIdsMatch = metaBusinessIdsMatch;
 exports.knownOwnedBusinessesMatch = knownOwnedBusinessesMatch;
@@ -36,6 +37,12 @@ exports.DRAX_SISTEMAS_BUSINESS_IDS = ["1041827648719609"];
 exports.DRAX_SISTEMAS_WABA_ID = "1636793994538054";
 exports.WALKUP_BUSINESS_IDS = ["4141369862822598"];
 exports.WALKUP_WABA01_ID = "1014470201624992";
+/** Card Grupo Walkup App — WABA gravada no banco já veio misturada (Drax). */
+exports.WALKUP_APP_BUSINESS_IDS = ["1247508354180311"];
+/** Reabrir só estes BMs após o disconnect agressivo por WABA antiga. */
+function businessIdsToReopenAfterFalseLeftManager() {
+    return [...exports.DRAX_SISTEMAS_BUSINESS_IDS, ...exports.WALKUP_BUSINESS_IDS, ...exports.WALKUP_APP_BUSINESS_IDS];
+}
 exports.KNOWN_OWNED_BUSINESS_WABAS = [
     {
         businessIds: [...exports.ANDRE_AGUIAR_BUSINESS_IDS],
