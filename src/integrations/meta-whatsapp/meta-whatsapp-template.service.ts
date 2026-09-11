@@ -334,11 +334,28 @@ export class MetaWhatsappTemplateService {
     const rows = await this.templates.listByTenant(tenant.tenantId);
     const openRows = await this.listOpenConnections(tenant.tenantId);
     const byId = new Map(openRows.map((row) => [row.id, row]));
-    logMetaTemplate("LIST", { tenantId: tenant.tenantId, count: rows.length });
-    return rows.map((row) => {
+    const visible = rows.filter((row) => byId.has(row.connectionId));
+    logMetaTemplate("LIST", { tenantId: tenant.tenantId, count: visible.length });
+    return visible.map((row) => {
       const connection = byId.get(row.connectionId);
       return toPublicTemplate(row, connection ? publicPortfolioName(connection) : "Portfólio");
     });
+  }
+
+  private async markConnectionLeftManager(
+    tenantId: string,
+    connectionId: string,
+    actorEmail: string,
+  ): Promise<void> {
+    const repo = this.connections as {
+      disconnectOne?: (tenantId: string, connectionId: string, actorEmail: string) => Promise<boolean>;
+    };
+    if (typeof repo.disconnectOne !== "function") return;
+    try {
+      await repo.disconnectOne(tenantId, connectionId, actorEmail);
+    } catch {
+      logMetaTemplate("ERROR", { reason: "left_manager_disconnect_failed", tenantId, connectionId });
+    }
   }
 
   async createFromAuth(
@@ -465,7 +482,12 @@ export class MetaWhatsappTemplateService {
   async syncFromAuth(
     auth: WabaRequestAuth,
     connectionId?: string,
-  ): Promise<{ templates: MetaTemplatePublic[]; pages: number; removed: number }> {
+  ): Promise<{
+    templates: MetaTemplatePublic[];
+    pages: number;
+    removed: number;
+    skippedUnmanaged?: boolean;
+  }> {
     const tenant = requireTenant(auth);
     const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
     if (isMetaGraphUploadCooldown()) {
@@ -634,12 +656,20 @@ export class MetaWhatsappTemplateService {
       throwSyncTimeout();
     }
     if (!listedByWaba.length) {
-      const error = new MetaWhatsappError("send_failed", 424);
-      error.message =
-        "A Meta não deixou listar os templates com o token desta conexão. " +
-        "No Laboratório, clique em + no portfólio e conecte a WABA que aparece no Manager (não a conta antiga gravada no card). " +
-        "Depois clique de novo em Atualizar da Meta.";
-      throw error;
+      await this.markConnectionLeftManager(tenant.tenantId, connection.id, tenant.ownerEmail);
+      logMetaTemplate("SYNC", {
+        reason: "skip_unmanaged_portfolio",
+        tenantId: tenant.tenantId,
+        connectionId: connection.id,
+        wabaId: primaryWabaId,
+      });
+      const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+      return {
+        templates: rows.map((row) => toPublicTemplate(row, publicPortfolioName(connection))),
+        pages: 0,
+        removed: 0,
+        skippedUnmanaged: true,
+      };
     }
     const now = new Date().toISOString();
     const upserted: MetaTemplateRecord[] = [];
