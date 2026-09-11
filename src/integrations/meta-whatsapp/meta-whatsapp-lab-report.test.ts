@@ -63,7 +63,11 @@ describe("campanha atendida pelo Laboratório", () => {
     "lab.op@waba.test": {
       email: "lab.op@waba.test",
       role: "operacional",
-      menuPermissions: { "whatsapp-oficial": true, "whatsapp-templates": true },
+      menuPermissions: {
+        "whatsapp-oficial": true,
+        "whatsapp-templates": true,
+        "whatsapp-disparo-cloud": true,
+      },
     },
     "fila.op@waba.test": {
       email: "fila.op@waba.test",
@@ -117,11 +121,10 @@ describe("campanha atendida pelo Laboratório", () => {
     assert.equal(campaignAttendedByLaboratorioStaff({}, staff, prodEnv), false);
   });
 
-  it("Douglas fica no relatório manual mesmo com menu do Laboratório", () => {
-    const withDouglas = lookup({
-      "douglas.op@waba.test": {
-        email: "douglas.op@waba.test",
-        fullName: "Douglas",
+  it("transferida para operador sem Disparo Cloud vira relatório manual", () => {
+    const users = lookup({
+      "lab.op@waba.test": {
+        email: "lab.op@waba.test",
         role: "operacional",
         menuPermissions: {
           "whatsapp-oficial": true,
@@ -129,28 +132,25 @@ describe("campanha atendida pelo Laboratório", () => {
           "whatsapp-disparo-cloud": true,
         },
       },
-      "lab.op@waba.test": {
-        email: "lab.op@waba.test",
-        fullName: "Mozart Lab",
+      "douglas.op@waba.test": {
+        email: "douglas.op@waba.test",
+        fullName: "Douglas",
         role: "operacional",
-        menuPermissions: { "whatsapp-oficial": true, "whatsapp-templates": true },
+        menuPermissions: {
+          "whatsapp-oficial": true,
+          "whatsapp-templates": true,
+        },
       },
     });
+    const campaign = { assignedOperacionalEmail: "lab.op@waba.test", startedByEmail: "lab.op@waba.test" };
+    assert.equal(campaignAttendedByLaboratorioStaff(campaign, users, prodEnv), true);
     assert.equal(
       campaignAttendedByLaboratorioStaff(
-        { assignedOperacionalEmail: "douglas.op@waba.test" },
-        withDouglas,
+        { ...campaign, assignedOperacionalEmail: "douglas.op@waba.test" },
+        users,
         prodEnv,
       ),
       false,
-    );
-    assert.equal(
-      campaignAttendedByLaboratorioStaff(
-        { assignedOperacionalEmail: "lab.op@waba.test" },
-        withDouglas,
-        prodEnv,
-      ),
-      true,
     );
   });
 });
