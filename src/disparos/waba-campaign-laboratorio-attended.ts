@@ -7,8 +7,28 @@ import type { WabaSystemUser } from "../users/waba-system-user.repository";
 const normalizeEmail = (value: string): string => String(value || "").trim().toLowerCase();
 
 export type LaboratorioStaffLookup = {
-  getByEmail(email: string): Pick<WabaSystemUser, "email" | "role" | "menuPermissions"> | null;
+  getByEmail(email: string):
+    | (Pick<WabaSystemUser, "email" | "role" | "menuPermissions"> & { fullName?: string | null })
+    | null;
 };
+
+/** Operadores da fila oficial: relatório manual, sem cliques da Meta. */
+function staffUsesManualOperatorReport(
+  email: string,
+  lookup: LaboratorioStaffLookup,
+): boolean {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+  const local = normalized.split("@")[0] || "";
+  if (local === "douglas" || local.startsWith("douglas.") || local.startsWith("douglas_")) {
+    return true;
+  }
+  const user = lookup.getByEmail(normalized);
+  const name = String(user?.fullName || "").trim().toLowerCase();
+  if (!name) return false;
+  const first = name.split(/\s+/)[0] || "";
+  return first === "douglas";
+}
 
 export type CampaignLaboratorioAttendee = {
   assignedOperacionalEmail?: string | null;
@@ -52,8 +72,14 @@ export function campaignAttendedByLaboratorioStaff(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   const assigned = normalizeEmail(String(intake.assignedOperacionalEmail || ""));
-  if (assigned) return staffEmailHasLaboratorioAccess(assigned, lookup, env);
+  if (assigned) {
+    if (staffUsesManualOperatorReport(assigned, lookup)) return false;
+    return staffEmailHasLaboratorioAccess(assigned, lookup, env);
+  }
   const started = normalizeEmail(String(intake.startedByEmail || ""));
-  if (started) return staffEmailHasLaboratorioAccess(started, lookup, env);
+  if (started) {
+    if (staffUsesManualOperatorReport(started, lookup)) return false;
+    return staffEmailHasLaboratorioAccess(started, lookup, env);
+  }
   return false;
 }
