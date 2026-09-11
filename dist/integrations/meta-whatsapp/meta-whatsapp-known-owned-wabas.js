@@ -9,7 +9,8 @@
  * não inventa pendente já excluído do Business Manager.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KNOWN_OWNED_BUSINESS_WABAS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.KNOWN_OWNED_BUSINESS_WABAS = exports.MARILZA_DE_CASTRO_BUSINESS_IDS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.catalogAdminBusinessIds = catalogAdminBusinessIds;
 exports.businessIdsToReopenAfterFalseLeftManager = businessIdsToReopenAfterFalseLeftManager;
 exports.normalizeMetaBusinessKey = normalizeMetaBusinessKey;
 exports.metaBusinessIdsMatch = metaBusinessIdsMatch;
@@ -39,9 +40,19 @@ exports.WALKUP_BUSINESS_IDS = ["4141369862822598"];
 exports.WALKUP_WABA01_ID = "1014470201624992";
 /** Card Grupo Walkup App — WABA gravada no banco já veio misturada (Drax). */
 exports.WALKUP_APP_BUSINESS_IDS = ["1247508354180311"];
+exports.MARILZA_DE_CASTRO_BUSINESS_IDS = ["4681844838758316"];
+/** BMs que o Manager do laboratório administra — entram na lista se a Graph devolver o objeto. */
+function catalogAdminBusinessIds() {
+    return [
+        ...exports.DRAX_SISTEMAS_BUSINESS_IDS,
+        ...exports.WALKUP_BUSINESS_IDS,
+        ...exports.WALKUP_APP_BUSINESS_IDS,
+        ...exports.MARILZA_DE_CASTRO_BUSINESS_IDS,
+    ];
+}
 /** Reabrir só estes BMs após o disconnect agressivo por WABA antiga. */
 function businessIdsToReopenAfterFalseLeftManager() {
-    return [...exports.DRAX_SISTEMAS_BUSINESS_IDS, ...exports.WALKUP_BUSINESS_IDS, ...exports.WALKUP_APP_BUSINESS_IDS];
+    return catalogAdminBusinessIds();
 }
 exports.KNOWN_OWNED_BUSINESS_WABAS = [
     {
