@@ -118,6 +118,13 @@ export function isKnownClientWabaForBusiness(businessId: string, wabaId: string)
   return knownClientWabaIdsForBusiness(businessId).includes(id);
 }
 
+/** WABA client de qualquer BM catalogado (ex.: Rio) — não entra no sync de outro portfólio. */
+export function isKnownClientWabaId(wabaId: string): boolean {
+  const id = String(wabaId || "").trim();
+  if (!id) return false;
+  return KNOWN_OWNED_BUSINESS_WABAS.some((row) => row.clientWabaIds.includes(id));
+}
+
 export function knownWabaIdForPendingPhone(phoneNumberId: string): string {
   const id = String(phoneNumberId || "").trim();
   if (!id) return "";
