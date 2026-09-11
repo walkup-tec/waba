@@ -240,11 +240,23 @@ class MetaWhatsappTemplateService {
         const rows = await this.templates.listByTenant(tenant.tenantId);
         const openRows = await this.listOpenConnections(tenant.tenantId);
         const byId = new Map(openRows.map((row) => [row.id, row]));
-        (0, meta_whatsapp_template_log_1.logMetaTemplate)("LIST", { tenantId: tenant.tenantId, count: rows.length });
-        return rows.map((row) => {
+        const visible = rows.filter((row) => byId.has(row.connectionId));
+        (0, meta_whatsapp_template_log_1.logMetaTemplate)("LIST", { tenantId: tenant.tenantId, count: visible.length });
+        return visible.map((row) => {
             const connection = byId.get(row.connectionId);
             return (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, connection ? publicPortfolioName(connection) : "Portfólio");
         });
+    }
+    async markConnectionLeftManager(tenantId, connectionId, actorEmail) {
+        const repo = this.connections;
+        if (typeof repo.disconnectOne !== "function")
+            return;
+        try {
+            await repo.disconnectOne(tenantId, connectionId, actorEmail);
+        }
+        catch {
+            (0, meta_whatsapp_template_log_1.logMetaTemplate)("ERROR", { reason: "left_manager_disconnect_failed", tenantId, connectionId });
+        }
     }
     async createFromAuth(auth, body) {
         const tenant = requireTenant(auth);
@@ -518,12 +530,20 @@ class MetaWhatsappTemplateService {
             throwSyncTimeout();
         }
         if (!listedByWaba.length) {
-            const error = new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", 424);
-            error.message =
-                "A Meta não deixou listar os templates com o token desta conexão. " +
-                    "No Laboratório, clique em + no portfólio e conecte a WABA que aparece no Manager (não a conta antiga gravada no card). " +
-                    "Depois clique de novo em Atualizar da Meta.";
-            throw error;
+            await this.markConnectionLeftManager(tenant.tenantId, connection.id, tenant.ownerEmail);
+            (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
+                reason: "skip_unmanaged_portfolio",
+                tenantId: tenant.tenantId,
+                connectionId: connection.id,
+                wabaId: primaryWabaId,
+            });
+            const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+            return {
+                templates: rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection))),
+                pages: 0,
+                removed: 0,
+                skippedUnmanaged: true,
+            };
         }
         const now = new Date().toISOString();
         const upserted = [];
