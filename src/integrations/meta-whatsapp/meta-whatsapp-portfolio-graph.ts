@@ -1,4 +1,5 @@
 import type { MetaGraphJsonResult } from "./meta-whatsapp-graph.client";
+import { isMetaGraphObjectNotAdministered } from "./meta-whatsapp-graph-errors";
 import {
   mapMetaBusinessToPortfolio,
   mapMetaWabaIdentity,
@@ -77,11 +78,18 @@ export async function fetchWabaOwner(
   graph: PortfolioGraphCaller,
   token: string,
   wabaId: string,
-): Promise<{ hint: MetaWabaIdentityHint; json: unknown; ok: boolean }> {
+): Promise<{ hint: MetaWabaIdentityHint; json: unknown; ok: boolean; denied: boolean }> {
   const id = String(wabaId || "").trim();
-  if (!id) return { hint: emptyHint, json: null, ok: false };
+  if (!id) return { hint: emptyHint, json: null, ok: false, denied: false };
   const res = await getFields(graph, token, id, META_WABA_OWNER_FIELDS);
-  if (!res.ok) return { hint: emptyHint, json: null, ok: false };
+  if (!res.ok) {
+    return {
+      hint: emptyHint,
+      json: res.json ?? null,
+      ok: false,
+      denied: isMetaGraphObjectNotAdministered(res.json, res.status),
+    };
+  }
   let json = res.json;
   let hint = mapMetaWabaIdentity(json);
   if (!hint.primaryPageName) {
@@ -95,7 +103,7 @@ export async function fetchWabaOwner(
       }
     }
   }
-  return { hint, json, ok: true };
+  return { hint, json, ok: true, denied: false };
 }
 
 async function mergePrimaryPageFromGraph(
