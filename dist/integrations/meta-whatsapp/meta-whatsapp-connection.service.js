@@ -273,16 +273,53 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
             reason: "decrypt",
             connectionId: open.id,
         });
-        return { card: fallback, directory: [] };
+        return { card: fallback, directory: [], connectionId: open.id };
     }
     const g = withHydrateLimits(graph);
     const storedWaba = String(open.wabaId || "").trim();
     const storedBm = String(open.metaBusinessId || "").trim();
     if (!storedWaba && !storedBm) {
-        return { card: fallback, directory: [] };
+        return { card: fallback, directory: [], connectionId: open.id };
     }
     const wabaLookup = storedWaba || storedBm;
-    const waba = wabaLookup ? await (0, meta_whatsapp_portfolio_graph_1.fetchWabaOwner)(g, token, wabaLookup) : { hint: { wabaId: null, wabaName: null, businessId: null, businessName: null, primaryPageId: null, primaryPageName: null, profilePictureUrl: null }, json: null, ok: false };
+    const waba = wabaLookup
+        ? await (0, meta_whatsapp_portfolio_graph_1.fetchWabaOwner)(g, token, wabaLookup)
+        : {
+            hint: {
+                wabaId: null,
+                wabaName: null,
+                businessId: null,
+                businessName: null,
+                primaryPageId: null,
+                primaryPageName: null,
+                profilePictureUrl: null,
+            },
+            json: null,
+            ok: false,
+            denied: false,
+        };
+    if (waba.denied) {
+        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-left-manager", {
+            tenantId,
+            reason: "waba-not-administered",
+            connectionId: open.id,
+            wabaId: wabaLookup || null,
+        });
+        return {
+            card: {
+                ...fallback,
+                id: "",
+                name: null,
+                primaryPageId: null,
+                primaryPageName: null,
+                wabaId: "",
+                numbers: [],
+            },
+            directory: [],
+            connectionId: open.id,
+            leftManager: true,
+        };
+    }
     if (wabaLookup && !waba.ok) {
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-partial", {
             tenantId,
@@ -491,6 +528,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
                 numbers: stored,
             },
             directory,
+            connectionId: open.id,
         };
     }
     (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-fanout", {
@@ -549,6 +587,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
             numbers,
         },
         directory,
+        connectionId: open.id,
     };
 }
 /** WABAs (management) e chips (messaging) liberados no token — Embedded Signup manage-accounts. */
@@ -1305,7 +1344,7 @@ class MetaWhatsappConnectionService {
                 return withLocalIdentities(tenant.tenantId, assetsFromPortfolioCards(raw.portfolios || [], requested));
             }
         }
-        const work = this.loadPortfolioGraphAssets(tenant.tenantId, requested);
+        const work = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail);
         if (useCache)
             (0, meta_whatsapp_portfolio_graph_cache_1.setPortfolioGraphInflight)(tenant.tenantId, work);
         try {
@@ -1326,7 +1365,7 @@ class MetaWhatsappConnectionService {
         const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(rows.map((row) => ({ ...cardFromConnection(row), numbers: storedNumbersFromConnection(row) }))).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
         return assetsFromPortfolioCards(cards, requested);
     }
-    async loadPortfolioGraphAssets(tenantId, requested) {
+    async loadPortfolioGraphAssets(tenantId, requested, actorEmail = "") {
         const repo = this.repository;
         const rows = typeof repo.listOpenByTenant === "function"
             ? await repo.listOpenByTenant(tenantId)
@@ -1341,12 +1380,32 @@ class MetaWhatsappConnectionService {
         }
         const writeTokens = collectPortfolioWriteTokens(rows, this.decrypt);
         const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenantId, row, (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(rows, row), writeTokens)));
-        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(hydrated.map((item) => item.card)).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+        const leftIds = hydrated
+            .filter((item) => item.leftManager)
+            .map((item) => String(item.connectionId || "").trim())
+            .filter(Boolean);
+        const kept = hydrated.filter((item) => !item.leftManager);
+        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(kept.map((item) => item.card)).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+        if (leftIds.length && typeof repo.disconnectOne === "function") {
+            for (const connectionId of leftIds) {
+                try {
+                    await repo.disconnectOne(tenantId, connectionId, actorEmail);
+                }
+                catch {
+                    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-left-manager-disconnect-failed", {
+                        tenantId,
+                        connectionId,
+                    });
+                }
+            }
+            (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenantId);
+        }
         const raw = assetsFromPortfolioCards(cards, requested);
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-listed", {
             tenantId,
             hasBusiness: Boolean(raw.portfolio?.id),
             numbers: raw.numbers.length,
+            leftManager: leftIds.length,
         });
         return raw;
     }
