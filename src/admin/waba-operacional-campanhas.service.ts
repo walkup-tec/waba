@@ -534,7 +534,7 @@ export class WabaOperacionalCampanhasService {
       intake.createdAt,
       report || stored,
     );
-    const showClicks = (laboratorioAttended || stored?.source === "meta_lab") && !hideClicks;
+    const showClicks = laboratorioAttended && !hideClicks;
     return {
       campaignId: intake.id,
       campaignName: intake.campaignName,
