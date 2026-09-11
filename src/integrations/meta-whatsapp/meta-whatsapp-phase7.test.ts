@@ -1542,6 +1542,9 @@ describe("fase 7 sync", () => {
         if (input.path.endsWith("/message_templates")) {
           return graphErr(400, { graphCode: "100", json: denied });
         }
+        if (input.path === "1759044748332124" || input.path === "2458602464640240") {
+          return graphErr(400, { graphCode: "100", json: denied });
+        }
         return graphJson({ data: [] });
       },
       () => "tok",
@@ -1555,6 +1558,45 @@ describe("fase 7 sync", () => {
     assert.equal(connections.rows[0].status, "disconnected");
     const listed = await service.listFromAuth(auth(EMAIL_A));
     assert.equal(listed.some((row) => row.name === "andre_antigo"), false);
+  });
+
+  it("WABA antiga recusada não desconecta o BM que o token ainda administra", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "conn-drax",
+        wabaId: "1988957871663919",
+        metaBusinessId: "1041827648719609",
+      }),
+    );
+    const templates = new FakeTemplates();
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input: { path: string }) => {
+        if (input.path.endsWith("/message_templates")) {
+          return graphErr(400, {
+            graphCode: "100",
+            json: {
+              error: {
+                code: 100,
+                message:
+                  "Unsupported post request. Object with ID '1988957871663919' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+              },
+            },
+          });
+        }
+        if (input.path === "1041827648719609") {
+          return graphJson({ id: "1041827648719609", name: "Drax Sistemas" });
+        }
+        return graphJson({ data: [] });
+      },
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A), "conn-drax");
+    assert.equal(result.skippedUnmanaged, true);
+    assert.equal(connections.rows[0].status, "connected");
+    assert.equal(connections.rows[0].disconnectedAt, null);
   });
 });
 
