@@ -32,7 +32,27 @@ async function listWabaMessageTemplates(input) {
     let after = "";
     let pages = 0;
     let complete = true;
-    for (let page = 0; page < MAX_PAGES; page++) {
+    const maxPages = Math.min(MAX_PAGES, Math.max(1, Math.floor(Number(input.maxPages) || MAX_PAGES)));
+    for (let page = 0; page < maxPages; page++) {
+        if (input.deadlineAt && Date.now() >= input.deadlineAt) {
+            if (pages === 0) {
+                return {
+                    ok: false,
+                    result: {
+                        ok: false,
+                        status: 0,
+                        json: null,
+                        body: "",
+                        timeout: true,
+                        kind: "transient",
+                        graphCode: null,
+                        attempts: 1,
+                    },
+                };
+            }
+            complete = false;
+            break;
+        }
         const query = {
             fields: LIST_FIELDS,
             limit: "50",
@@ -60,7 +80,7 @@ async function listWabaMessageTemplates(input) {
         }
         seenCursors.add(nextAfter);
         after = nextAfter;
-        if (page === MAX_PAGES - 1)
+        if (page === maxPages - 1)
             complete = false;
     }
     return { ok: true, items, pages, complete };
