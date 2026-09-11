@@ -12,6 +12,7 @@ exports.templatePickerWabaIds = templatePickerWabaIds;
 exports.listTemplatePickerWabas = listTemplatePickerWabas;
 exports.wabaIdentityMatchesBusiness = wabaIdentityMatchesBusiness;
 exports.filterWabaIdsOwnedByBusiness = filterWabaIdsOwnedByBusiness;
+exports.listDebugTokenManagedWabaIds = listDebugTokenManagedWabaIds;
 exports.discoverTemplateWabas = discoverTemplateWabas;
 exports.discoverTemplateWabaIds = discoverTemplateWabaIds;
 exports.pickTemplateWriteConnections = pickTemplateWriteConnections;
@@ -300,21 +301,25 @@ async function listBusinessWabaEdgeRows(graph, token, businessId, edge) {
     }
     return out;
 }
-async function addDebugTokenWabas(graph, token, bm, byId) {
+async function listDebugTokenManagedWabaIds(input) {
+    const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
     const appId = (0, meta_config_1.readMetaAppId)();
     const appSecret = (0, meta_config_1.readMetaAppSecret)();
-    if (!appId || !appSecret || !token)
-        return;
+    if (!appId || !appSecret || !input.token)
+        return [];
     const debug = await graph({
         token: `${appId}|${appSecret}`,
         method: "GET",
         path: "debug_token",
-        query: { input_token: token },
+        query: { input_token: input.token },
         ...DISCOVER_GRAPH,
     });
     if (!debug.ok)
-        return;
-    for (const id of wabaIdsFromDebugTokenJson(debug.json)) {
+        return [];
+    return wabaIdsFromDebugTokenJson(debug.json);
+}
+async function addDebugTokenWabas(graph, token, bm, byId) {
+    for (const id of await listDebugTokenManagedWabaIds({ token, graph })) {
         addDiscoveredWaba(byId, id, "", bm);
     }
 }
