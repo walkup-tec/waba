@@ -499,18 +499,28 @@ export class MetaWhatsappTemplateService {
     const deadlineAt = startedAt + META_TEMPLATE_SYNC_BUDGET_MS;
     const primaryWabaId = String(connection.wabaId || "").trim();
     const remainingMs = () => Math.max(0, deadlineAt - Date.now());
+    const openRows = await this.listOpenConnections(tenant.tenantId);
     const wabaIds = await listSyncTargetWabaIds({
       token,
       connection,
-      extraWabaIds: extraWabaIdsFromConnections(
-        await this.listOpenConnections(tenant.tenantId),
-        connection,
-      ),
+      extraWabaIds: extraWabaIdsFromConnections(openRows, connection),
       graph: this.graph,
       timeoutMs: Math.min(4000, Math.max(1500, remainingMs())),
     });
     const targets = [...new Set(wabaIds.filter(Boolean))];
     const tried = new Set<string>();
+    const tokenByConnection = new Map<string, string>([[connection.id, token]]);
+    const tokenFor = (row: MetaWhatsappConnectionRecord): string => {
+      if (tokenByConnection.has(row.id)) return tokenByConnection.get(row.id) || "";
+      try {
+        const next = this.decrypt(row.accessTokenEncrypted);
+        tokenByConnection.set(row.id, next);
+        return next;
+      } catch {
+        tokenByConnection.set(row.id, "");
+        return "";
+      }
+    };
     const throwSyncTimeout = (): never => {
       const error = new MetaWhatsappError("send_failed", 503);
       error.message = "A Meta demorou demais para listar os templates. Tente de novo em instantes.";
@@ -530,49 +540,68 @@ export class MetaWhatsappTemplateService {
         });
         return "budget";
       }
-      const listed = await listWabaMessageTemplates({
-        token,
-        wabaId,
-        graph: this.graph,
-        maxAttempts: 1,
-        timeoutMs: Math.min(
-          META_TEMPLATE_SYNC_LIST_TIMEOUT_MS,
-          Math.max(1500, remainingMs()),
-        ),
-        maxPages: META_TEMPLATE_SYNC_MAX_PAGES,
-        deadlineAt,
-      });
-      if (!listed.ok) {
+      const writers = pickTemplateWriteConnections(openRows, connection, wabaId).slice(0, 2);
+      let last: Awaited<ReturnType<typeof listWabaMessageTemplates>> | null = null;
+      for (const writer of writers) {
+        if (Date.now() >= deadlineAt) return "budget";
+        const writerToken = tokenFor(writer);
+        if (!writerToken) continue;
+        const listed = await listWabaMessageTemplates({
+          token: writerToken,
+          wabaId,
+          graph: this.graph,
+          maxAttempts: 1,
+          timeoutMs: Math.min(
+            META_TEMPLATE_SYNC_LIST_TIMEOUT_MS,
+            Math.max(1500, remainingMs()),
+          ),
+          maxPages: META_TEMPLATE_SYNC_MAX_PAGES,
+          deadlineAt,
+        });
+        last = listed;
+        if (listed.ok) {
+          pages += listed.pages;
+          listedByWaba.push({
+            wabaId,
+            items: listed.items,
+            pages: listed.pages,
+            complete: listed.complete,
+          });
+          return "ok";
+        }
         const denied = isMetaGraphWabaWriteDenied(listed.result.json, listed.result.status);
         const rateLimited = isMetaGraphRateLimitPayload(listed.result.json, listed.result.graphCode);
+        if (rateLimited) throwFromGraph(listed.result);
         if (denied) {
           logMetaTemplate("SYNC", {
             reason: "skip_waba_denied",
             tenantId: tenant.tenantId,
             wabaId,
+            connectionId: writer.id,
             status: listed.result.status,
           });
-          return "skip";
+          continue;
         }
-        if (wabaId === primaryWabaId || rateLimited) {
+        if (wabaId === primaryWabaId && writer.id === connection.id) {
           throwFromGraph(listed.result);
         }
         logMetaTemplate("SYNC", {
           reason: "skip_extra_waba",
           tenantId: tenant.tenantId,
           wabaId,
+          connectionId: writer.id,
           status: listed.result.status,
         });
-        return "skip";
       }
-      pages += listed.pages;
-      listedByWaba.push({
-        wabaId,
-        items: listed.items,
-        pages: listed.pages,
-        complete: listed.complete,
-      });
-      return "ok";
+      if (
+        last &&
+        !last.ok &&
+        wabaId === primaryWabaId &&
+        !isMetaGraphWabaWriteDenied(last.result.json, last.result.status)
+      ) {
+        throwFromGraph(last.result);
+      }
+      return "skip";
     };
     for (const wabaId of targets) {
       if ((await listOneWaba(wabaId)) === "budget") break;
