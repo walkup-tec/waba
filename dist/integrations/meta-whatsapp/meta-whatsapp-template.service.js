@@ -12,6 +12,7 @@ const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.re
 const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
 const meta_whatsapp_template_graph_client_1 = require("./meta-whatsapp-template-graph.client");
 const meta_whatsapp_template_waba_ids_1 = require("./meta-whatsapp-template-waba-ids");
+const meta_whatsapp_portfolio_graph_1 = require("./meta-whatsapp-portfolio-graph");
 const meta_whatsapp_template_silent_block_button_1 = require("./meta-whatsapp-template-silent-block-button");
 const meta_whatsapp_template_validate_1 = require("./meta-whatsapp-template-validate");
 const meta_whatsapp_template_ai_approved_examples_1 = require("./meta-whatsapp-template-ai-approved-examples");
@@ -530,6 +531,32 @@ class MetaWhatsappTemplateService {
             throwSyncTimeout();
         }
         if (!listedByWaba.length) {
+            const bm = String(connection.metaBusinessId || "").trim();
+            const graph = this.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
+            const bmOwner = bm
+                ? await (0, meta_whatsapp_portfolio_graph_1.fetchWabaOwner)((input) => graph({
+                    token: input.token,
+                    method: input.method,
+                    path: input.path,
+                    query: input.query,
+                }), token, bm)
+                : { ok: false, denied: false };
+            if (bmOwner.ok) {
+                (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
+                    reason: "skip_stale_waba_keep_bm",
+                    tenantId: tenant.tenantId,
+                    connectionId: connection.id,
+                    wabaId: primaryWabaId,
+                    businessId: bm,
+                });
+                const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+                return {
+                    templates: rows.map((row) => (0, meta_whatsapp_template_types_1.toPublicTemplate)(row, publicPortfolioName(connection))),
+                    pages: 0,
+                    removed: 0,
+                    skippedUnmanaged: true,
+                };
+            }
             await this.markConnectionLeftManager(tenant.tenantId, connection.id, tenant.ownerEmail);
             (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
                 reason: "skip_unmanaged_portfolio",
