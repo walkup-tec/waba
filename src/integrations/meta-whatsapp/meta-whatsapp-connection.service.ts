@@ -67,6 +67,7 @@ import {
   knownWabaNameForId,
   metaBusinessIdsMatch,
   businessIdsToReopenAfterFalseLeftManager,
+  MARILZA_DE_CASTRO_BUSINESS_IDS,
 } from "./meta-whatsapp-known-owned-wabas";
 import { publicMetaGraphRegisterMessage } from "./meta-whatsapp-graph-errors";
 import { isMetaGraphUploadCooldown } from "./meta-whatsapp-graph-cooldown";
@@ -75,6 +76,7 @@ import {
   fetchBusinessFromGraph,
   fetchAssignedBusinesses,
   directoryFromAssigned,
+  fetchVisibleBusinessCard,
   pickMetaBusinessNode,
   fillPageNameById,
 } from "./meta-whatsapp-portfolio-graph";
@@ -1696,7 +1698,36 @@ export class MetaWhatsappConnectionService {
       .map((item) => String(item.connectionId || "").trim())
       .filter(Boolean);
     const kept = hydrated.filter((item) => !item.leftManager);
-    const cards = dedupePortfolioCards(kept.map((item) => item.card)).filter(isRenderablePortfolioCard);
+    const fromConnections = kept.map((item) => item.card);
+    const fromDirectory = kept.flatMap((item) => item.directory || []);
+    const listedIds = new Set(
+      [...fromConnections, ...fromDirectory]
+        .map((item) => String(item.id || "").trim())
+        .filter(Boolean),
+    );
+    const missingAdminIds = MARILZA_DE_CASTRO_BUSINESS_IDS.filter(
+      (id) => ![...listedIds].some((listed) => metaBusinessIdsMatch(listed, id)),
+    );
+    const extraCards: MetaPortfolioPublic[] = [];
+    if (missingAdminIds.length) {
+      const keptConn = new Set(kept.map((item) => item.connectionId));
+      const tokens = writeTokens
+        .filter((row) => keptConn.has(row.id))
+        .map((row) => row.token)
+        .filter(Boolean);
+      const g = withHydrateLimits(this.graph);
+      for (const businessId of missingAdminIds) {
+        let found: MetaPortfolioPublic | null = null;
+        for (const token of tokens) {
+          found = await fetchVisibleBusinessCard(g, token, businessId);
+          if (found) break;
+        }
+        if (found?.id) extraCards.push(found);
+      }
+    }
+    const cards = dedupePortfolioCards([...fromConnections, ...fromDirectory, ...extraCards]).filter(
+      isRenderablePortfolioCard,
+    );
     if (leftIds.length && typeof repo.disconnectOne === "function") {
       for (const connectionId of leftIds) {
         try {
