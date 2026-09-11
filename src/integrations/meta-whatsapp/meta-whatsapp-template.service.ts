@@ -244,22 +244,14 @@ export class MetaWhatsappTemplateService {
 
   private async resolveCreateWabaId(
     connection: MetaWhatsappConnectionRecord,
-    token: string,
+    _token: string,
     requestedRaw: string,
   ): Promise<string> {
+    const primary = String(connection.wabaId || "").trim();
     const requested = String(requestedRaw || "").trim();
-    const listed = await listTemplatePickerWabas({
-      token,
-      connection,
-      graph: this.graph,
-    });
-    const allowed = listed.map((row) => row.id);
-    if (!requested) return allowed[0] || String(connection.wabaId || "").trim();
-    if (allowed.includes(requested)) return requested;
-    const error = new MetaWhatsappError("invalid_payload");
-    error.message =
-      "Esta conta WABA não pertence ao portfólio selecionado. Escolha a WABA onde o template deve ser cadastrado.";
-    throw error;
+    if (!requested || requested === primary) return primary;
+    if (templatePickerWabaIds(connection).includes(requested)) return requested;
+    return primary;
   }
 
   private async listOpenConnections(tenantId: string): Promise<MetaWhatsappConnectionRecord[]> {
@@ -470,7 +462,8 @@ export class MetaWhatsappTemplateService {
     }> = [];
     let pages = 0;
     const startedAt = Date.now();
-    const primaryWabaId = String(connection.wabaId);
+    const primaryWabaId = String(connection.wabaId || "").trim();
+    const pickerIds = templatePickerWabaIds(connection);
     const wabaIds = await discoverTemplateWabaIds({
       token,
       connection,
@@ -480,7 +473,7 @@ export class MetaWhatsappTemplateService {
       ),
       graph: this.graph,
     });
-    const targets = wabaIds.length ? wabaIds : [primaryWabaId];
+    const targets = [...new Set([...pickerIds, ...wabaIds, primaryWabaId].filter(Boolean))];
     for (const wabaId of targets) {
       const elapsed = Date.now() - startedAt;
       if (elapsed >= META_TEMPLATE_SYNC_BUDGET_MS) {
@@ -507,20 +500,28 @@ export class MetaWhatsappTemplateService {
         timeoutMs: Math.min(8000, Math.max(2000, META_TEMPLATE_SYNC_BUDGET_MS - elapsed)),
       });
       if (!listed.ok) {
-        if (wabaId === primaryWabaId) throwFromGraph(listed.result);
-        logMetaTemplate("SYNC", {
-          reason: "skip_extra_waba",
-          tenantId: tenant.tenantId,
-          wabaId,
-          status: listed.result.status,
-        });
-        continue;
+        const denied = isMetaGraphWabaWriteDenied(listed.result.json, listed.result.status);
+        if (denied || wabaId !== primaryWabaId) {
+          logMetaTemplate("SYNC", {
+            reason: denied ? "skip_waba_denied" : "skip_extra_waba",
+            tenantId: tenant.tenantId,
+            wabaId,
+            status: listed.result.status,
+          });
+          continue;
+        }
+        throwFromGraph(listed.result);
       }
       pages += listed.pages;
       listedByWaba.push({ wabaId, items: listed.items, pages: listed.pages, complete: listed.complete });
     }
     if (!listedByWaba.length) {
-      throw new MetaWhatsappError("send_failed", 424);
+      const error = new MetaWhatsappError("send_failed", 424);
+      error.message =
+        "A Meta não deixou listar os templates com o token desta conexão. " +
+        "No Laboratório, clique em + no portfólio e conecte a WABA que aparece no Manager (não a conta antiga gravada no card). " +
+        "Depois clique de novo em Atualizar da Meta.";
+      throw error;
     }
     const now = new Date().toISOString();
     const upserted: MetaTemplateRecord[] = [];
