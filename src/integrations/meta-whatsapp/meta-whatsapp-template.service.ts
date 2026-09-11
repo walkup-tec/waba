@@ -27,6 +27,7 @@ import {
   pickTemplateWriteConnections,
   templatePickerWabaIds,
 } from "./meta-whatsapp-template-waba-ids";
+import { fetchWabaOwner } from "./meta-whatsapp-portfolio-graph";
 import { appendSilentBlockButton } from "./meta-whatsapp-template-silent-block-button";
 import { validateTemplateCreate } from "./meta-whatsapp-template-validate";
 import {
@@ -656,6 +657,37 @@ export class MetaWhatsappTemplateService {
       throwSyncTimeout();
     }
     if (!listedByWaba.length) {
+      const bm = String(connection.metaBusinessId || "").trim();
+      const graph = this.graph || callMetaGraphJson;
+      const bmOwner = bm
+        ? await fetchWabaOwner(
+            (input) =>
+              graph({
+                token: input.token,
+                method: input.method,
+                path: input.path,
+                query: input.query,
+              }),
+            token,
+            bm,
+          )
+        : { ok: false, denied: false };
+      if (bmOwner.ok) {
+        logMetaTemplate("SYNC", {
+          reason: "skip_stale_waba_keep_bm",
+          tenantId: tenant.tenantId,
+          connectionId: connection.id,
+          wabaId: primaryWabaId,
+          businessId: bm,
+        });
+        const rows = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
+        return {
+          templates: rows.map((row) => toPublicTemplate(row, publicPortfolioName(connection))),
+          pages: 0,
+          removed: 0,
+          skippedUnmanaged: true,
+        };
+      }
       await this.markConnectionLeftManager(tenant.tenantId, connection.id, tenant.ownerEmail);
       logMetaTemplate("SYNC", {
         reason: "skip_unmanaged_portfolio",
