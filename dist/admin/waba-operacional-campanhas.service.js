@@ -330,7 +330,7 @@ class WabaOperacionalCampanhasService {
             liveFromMeta = true;
         }
         const hideClicks = (0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report || stored);
-        const showClicks = (laboratorioAttended || stored?.source === "meta_lab") && !hideClicks;
+        const showClicks = laboratorioAttended && !hideClicks;
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,
