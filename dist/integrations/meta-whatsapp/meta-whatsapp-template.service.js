@@ -173,22 +173,14 @@ class MetaWhatsappTemplateService {
         }
         return { connectionId: connection.id, wabas };
     }
-    async resolveCreateWabaId(connection, token, requestedRaw) {
+    async resolveCreateWabaId(connection, _token, requestedRaw) {
+        const primary = String(connection.wabaId || "").trim();
         const requested = String(requestedRaw || "").trim();
-        const listed = await (0, meta_whatsapp_template_waba_ids_1.listTemplatePickerWabas)({
-            token,
-            connection,
-            graph: this.graph,
-        });
-        const allowed = listed.map((row) => row.id);
-        if (!requested)
-            return allowed[0] || String(connection.wabaId || "").trim();
-        if (allowed.includes(requested))
+        if (!requested || requested === primary)
+            return primary;
+        if ((0, meta_whatsapp_template_waba_ids_1.templatePickerWabaIds)(connection).includes(requested))
             return requested;
-        const error = new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
-        error.message =
-            "Esta conta WABA não pertence ao portfólio selecionado. Escolha a WABA onde o template deve ser cadastrado.";
-        throw error;
+        return primary;
     }
     async listOpenConnections(tenantId) {
         const repo = this.connections;
@@ -366,14 +358,15 @@ class MetaWhatsappTemplateService {
         const listedByWaba = [];
         let pages = 0;
         const startedAt = Date.now();
-        const primaryWabaId = String(connection.wabaId);
+        const primaryWabaId = String(connection.wabaId || "").trim();
+        const pickerIds = (0, meta_whatsapp_template_waba_ids_1.templatePickerWabaIds)(connection);
         const wabaIds = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
             token,
             connection,
             extraWabaIds: (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(await this.listOpenConnections(tenant.tenantId), connection),
             graph: this.graph,
         });
-        const targets = wabaIds.length ? wabaIds : [primaryWabaId];
+        const targets = [...new Set([...pickerIds, ...wabaIds, primaryWabaId].filter(Boolean))];
         for (const wabaId of targets) {
             const elapsed = Date.now() - startedAt;
             if (elapsed >= META_TEMPLATE_SYNC_BUDGET_MS) {
@@ -400,21 +393,28 @@ class MetaWhatsappTemplateService {
                 timeoutMs: Math.min(8000, Math.max(2000, META_TEMPLATE_SYNC_BUDGET_MS - elapsed)),
             });
             if (!listed.ok) {
-                if (wabaId === primaryWabaId)
-                    throwFromGraph(listed.result);
-                (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
-                    reason: "skip_extra_waba",
-                    tenantId: tenant.tenantId,
-                    wabaId,
-                    status: listed.result.status,
-                });
-                continue;
+                const denied = (0, meta_whatsapp_graph_errors_1.isMetaGraphWabaWriteDenied)(listed.result.json, listed.result.status);
+                if (denied || wabaId !== primaryWabaId) {
+                    (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
+                        reason: denied ? "skip_waba_denied" : "skip_extra_waba",
+                        tenantId: tenant.tenantId,
+                        wabaId,
+                        status: listed.result.status,
+                    });
+                    continue;
+                }
+                throwFromGraph(listed.result);
             }
             pages += listed.pages;
             listedByWaba.push({ wabaId, items: listed.items, pages: listed.pages, complete: listed.complete });
         }
         if (!listedByWaba.length) {
-            throw new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", 424);
+            const error = new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", 424);
+            error.message =
+                "A Meta não deixou listar os templates com o token desta conexão. " +
+                    "No Laboratório, clique em + no portfólio e conecte a WABA que aparece no Manager (não a conta antiga gravada no card). " +
+                    "Depois clique de novo em Atualizar da Meta.";
+            throw error;
         }
         const now = new Date().toISOString();
         const upserted = [];
