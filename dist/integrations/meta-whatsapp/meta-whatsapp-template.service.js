@@ -22,32 +22,25 @@ const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-te
 const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
 const meta_whatsapp_header_handle_cache_1 = require("./meta-whatsapp-header-handle-cache");
 const meta_whatsapp_graph_cooldown_1 = require("./meta-whatsapp-graph-cooldown");
-/** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. */
-const META_TEMPLATE_SYNC_BUDGET_MS = 20000;
+/** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. Devolver JSON antes. */
+const META_TEMPLATE_SYNC_BUDGET_MS = 12000;
+const META_TEMPLATE_SYNC_LIST_TIMEOUT_MS = 3500;
+const META_TEMPLATE_SYNC_MAX_PAGES = 8;
 /** Último recurso: WABAs do debug_token que o catálogo/card não listou. */
-const META_TEMPLATE_SYNC_DEBUG_WABA_CAP = 8;
+const META_TEMPLATE_SYNC_DEBUG_WABA_CAP = 3;
 async function resolveSyncFallbackWabaIds(input) {
     const tried = new Set([...input.alreadyTried].map((id) => String(id || "").trim()).filter(Boolean));
     const debugIds = await (0, meta_whatsapp_template_waba_ids_1.listDebugTokenManagedWabaIds)({
         token: input.token,
         graph: input.graph,
+        timeoutMs: input.timeoutMs,
     });
-    const clients = new Set((0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(input.businessId));
-    const unused = debugIds.filter((id) => id && !tried.has(id) && !clients.has(id));
+    const unused = debugIds.filter((id) => id && !tried.has(id) && !(0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaId)(id) && !(0, meta_whatsapp_known_owned_wabas_1.knownClientWabaIdsForBusiness)(input.businessId).includes(id));
     if (!unused.length)
         return [];
-    const bm = String(input.businessId || "").trim();
-    if (bm) {
-        const owned = await (0, meta_whatsapp_template_waba_ids_1.filterWabaIdsOwnedByBusiness)({
-            token: input.token,
-            businessId: bm,
-            ids: unused,
-            graph: input.graph,
-        });
-        if (owned.length)
-            return [...new Set(owned.map((row) => row.id))];
-    }
-    return unused.slice(0, META_TEMPLATE_SYNC_DEBUG_WABA_CAP);
+    const preferred = (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(input.businessId).filter((id) => unused.includes(id));
+    const rest = unused.filter((id) => !preferred.includes(id));
+    return [...preferred, ...rest].slice(0, META_TEMPLATE_SYNC_DEBUG_WABA_CAP);
 }
 function requireTenant(auth) {
     try {
@@ -383,15 +376,17 @@ class MetaWhatsappTemplateService {
         const listedByWaba = [];
         let pages = 0;
         const startedAt = Date.now();
+        const deadlineAt = startedAt + META_TEMPLATE_SYNC_BUDGET_MS;
         const primaryWabaId = String(connection.wabaId || "").trim();
-        const pickerIds = (0, meta_whatsapp_template_waba_ids_1.templatePickerWabaIds)(connection);
-        const wabaIds = await (0, meta_whatsapp_template_waba_ids_1.discoverTemplateWabaIds)({
+        const remainingMs = () => Math.max(0, deadlineAt - Date.now());
+        const wabaIds = await (0, meta_whatsapp_template_waba_ids_1.listSyncTargetWabaIds)({
             token,
             connection,
             extraWabaIds: (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(await this.listOpenConnections(tenant.tenantId), connection),
             graph: this.graph,
+            timeoutMs: Math.min(4000, Math.max(1500, remainingMs())),
         });
-        const targets = [...new Set([...pickerIds, ...wabaIds, primaryWabaId].filter(Boolean))];
+        const targets = [...new Set(wabaIds.filter(Boolean))];
         const tried = new Set();
         const throwSyncTimeout = () => {
             const error = new meta_whatsapp_errors_1.MetaWhatsappError("send_failed", 503);
@@ -418,7 +413,9 @@ class MetaWhatsappTemplateService {
                 wabaId,
                 graph: this.graph,
                 maxAttempts: 1,
-                timeoutMs: Math.min(8000, Math.max(2000, META_TEMPLATE_SYNC_BUDGET_MS - elapsed)),
+                timeoutMs: Math.min(META_TEMPLATE_SYNC_LIST_TIMEOUT_MS, Math.max(1500, remainingMs())),
+                maxPages: META_TEMPLATE_SYNC_MAX_PAGES,
+                deadlineAt,
             });
             if (!listed.ok) {
                 const denied = (0, meta_whatsapp_graph_errors_1.isMetaGraphWabaWriteDenied)(listed.result.json, listed.result.status);
@@ -456,12 +453,13 @@ class MetaWhatsappTemplateService {
             if ((await listOneWaba(wabaId)) === "budget")
                 break;
         }
-        if (!listedByWaba.length) {
+        if (!listedByWaba.length && remainingMs() >= 2000) {
             const fallbackIds = await resolveSyncFallbackWabaIds({
                 token,
                 businessId: String(connection.metaBusinessId || ""),
                 alreadyTried: tried,
                 graph: this.graph,
+                timeoutMs: Math.min(3000, remainingMs()),
             });
             if (fallbackIds.length) {
                 (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
@@ -472,6 +470,8 @@ class MetaWhatsappTemplateService {
             }
             for (const wabaId of fallbackIds) {
                 const outcome = await listOneWaba(wabaId);
+                if (listedByWaba.length)
+                    break;
                 if (outcome === "budget") {
                     if (!listedByWaba.length)
                         throwSyncTimeout();
