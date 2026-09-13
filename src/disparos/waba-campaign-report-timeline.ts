@@ -1,5 +1,6 @@
 import { findBroadcastByIntakeCampaignId } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 import { lookupTemplateApprovedAt } from "../integrations/meta-whatsapp/meta-whatsapp-template-approved-at.store";
+import { resolveCampaignReportOverride } from "./waba-campaign-report-read-overrides";
 import type { WabaCampaignIntake } from "./waba-campaign-intake.repository";
 
 export const META_REPORT_COLLECTION_NOTE =
@@ -105,6 +106,12 @@ export function buildSubscriberCampaignTimeline(input: {
 }
 
 export function collectIntakeReportTimeline(intake: WabaCampaignIntake): SubscriberReportTimeline {
+  const override = resolveCampaignReportOverride(
+    intake.campaignName,
+    intake.createdAt,
+    intake.performanceReport,
+    intake.id,
+  )?.timeline;
   const broadcast = findBroadcastByIntakeCampaignId(intake.id);
   const templateApprovedAt =
     firstNonEmptyIso(broadcast?.templateApprovedAt) ||
@@ -117,10 +124,10 @@ export function collectIntakeReportTimeline(intake: WabaCampaignIntake): Subscri
         })
       : null);
   return buildSubscriberCampaignTimeline({
-    createdAt: intake.createdAt,
-    attendanceStartedAt: intake.startedAt,
-    templateApprovedAt,
-    dispatchStartedAt: resolveDispatchStartedAt(broadcast),
-    dispatchFinishedAt: broadcast?.sendFinishedAt || null,
+    createdAt: override?.createdAt ?? intake.createdAt,
+    attendanceStartedAt: override?.attendanceStartedAt ?? intake.startedAt,
+    templateApprovedAt: override?.templateApprovedAt ?? templateApprovedAt,
+    dispatchStartedAt: override?.dispatchStartedAt ?? resolveDispatchStartedAt(broadcast),
+    dispatchFinishedAt: override?.dispatchFinishedAt ?? broadcast?.sendFinishedAt ?? null,
   });
 }
