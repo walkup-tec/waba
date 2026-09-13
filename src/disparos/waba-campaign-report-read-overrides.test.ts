@@ -6,6 +6,7 @@ import {
   applyCampaignReportReadOverride,
   campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
+  campaignReportShowsClicks,
   resolveCampaignReportReadOverride,
 } from "./waba-campaign-report-read-overrides";
 
@@ -166,6 +167,78 @@ describe("override pontual do relatório", () => {
     assert.equal(got?.delivered, 0);
     assert.equal(got?.read, 0);
     assert.equal(got?.failed, 0);
+  });
+
+  it("Convite para base Jandira recebe indicadores manuais com cliques", () => {
+    const stored = report({
+      totalLeads: 1800,
+      sent: 0,
+      delivered: 0,
+      read: 0,
+      failed: 0,
+      clicks: 0,
+      source: "manual",
+    });
+    const got = applyCampaignReportReadOverride(
+      "Convite para base Jandira",
+      "2026-09-12T10:00:00.000Z",
+      stored,
+    );
+    assert.equal(got?.sent, 1652);
+    assert.equal(got?.delivered, 1553);
+    assert.equal(got?.read, 931);
+    assert.equal(got?.failed, 79);
+    assert.equal(got?.clicks, 130);
+    assert.equal(got?.totalLeads, 1800);
+    assert.equal(
+      campaignReportShowsClicks("Convite para base Jandira", "2026-09-12T10:00:00.000Z", stored),
+      true,
+    );
+    assert.equal(
+      campaignReportHidesClicks("Convite para base Jandira", "2026-09-12T10:00:00.000Z", stored),
+      false,
+    );
+
+    const metrics = computeCampaignPerformanceMetrics({
+      totalLeads: 1800,
+      sent: 1652,
+      delivered: 1553,
+      read: 931,
+      failed: 79,
+      clicks: 130,
+    });
+    assert.equal(metrics.clickRate, 8.37);
+    assert.equal(metrics.deliveryRate, 94.01);
+    assert.equal(metrics.readRate, 59.95);
+  });
+
+  it("Convite para base Jandira não altera Campanha Jandira nem nome parecido", () => {
+    const jandira = report({
+      totalLeads: 1990,
+      sent: 1156,
+      delivered: 0,
+      read: 0,
+      failed: 2,
+    });
+    const other = applyCampaignReportReadOverride(
+      "Convite para base Jandira 2",
+      "2026-09-12T10:00:00.000Z",
+      report({ sent: 10, delivered: 8, read: 4, failed: 1, clicks: 2 }),
+    );
+    const kept = applyCampaignReportReadOverride(
+      "Campanha Jandira",
+      "2026-09-02T10:00:00.000Z",
+      jandira,
+    );
+    assert.equal(kept?.delivered, 981);
+    assert.equal(kept?.read, 431);
+    assert.equal(campaignReportHidesClicks("Campanha Jandira", "2026-09-02T10:00:00.000Z", jandira), true);
+    assert.equal(other?.sent, 10);
+    assert.equal(other?.clicks, 2);
+    assert.equal(
+      campaignReportShowsClicks("Convite para base Jandira 2", "2026-09-12T10:00:00.000Z"),
+      false,
+    );
   });
 
   it("Campanha Jandira 2 fica Em andamento e não casa a Jandira antiga", () => {
