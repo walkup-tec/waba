@@ -119,9 +119,12 @@ const resolvePlannedSendCount = (ownerEmail, importedLineCount, requestedSendCou
 };
 const resolveReportedSentCount = (intake) => {
     const status = normalizeStoredStatus(intake.status);
-    if (status !== "completed" || !intake.performanceReport)
+    if (status !== "completed")
         return 0;
-    const sent = Math.round(Number(intake.performanceReport.sent ?? NaN));
+    const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+    if (!report)
+        return 0;
+    const sent = Math.round(Number(report.sent ?? NaN));
     if (!Number.isFinite(sent) || sent < 0)
         return 0;
     return sent;
@@ -569,9 +572,10 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             });
         }
         const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
-        const showClicks = (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake) &&
-            report?.source === "meta_lab" &&
-            !(0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report);
+        const showClicks = (0, waba_campaign_report_read_overrides_1.campaignReportShowsClicks)(intake.campaignName, intake.createdAt, report) ||
+            ((0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake) &&
+                report?.source === "meta_lab" &&
+                !(0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report));
         const metrics = report
             ? (0, waba_campaign_performance_metrics_1.computeCampaignPerformanceMetrics)({
                 totalLeads: report.totalLeads,
