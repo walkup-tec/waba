@@ -41,6 +41,13 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         failed: 120,
         clicks: 47,
         showClicks: true,
+        timeline: {
+            createdAt: "2026-09-07T18:03:00.000Z",
+            attendanceStartedAt: "2026-09-08T10:00:00.000Z",
+            templateApprovedAt: "2026-09-11T18:40:00.000Z",
+            dispatchStartedAt: "2026-09-11T19:00:00.000Z",
+            dispatchFinishedAt: "2026-09-11T19:12:00.000Z",
+        },
     },
     {
         name: "Convite para base Jandira",
@@ -51,6 +58,13 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         failed: 79,
         clicks: 130,
         showClicks: true,
+        timeline: {
+            createdAt: "2026-09-07T18:03:00.000Z",
+            attendanceStartedAt: "2026-09-08T10:15:00.000Z",
+            templateApprovedAt: "2026-09-11T19:35:00.000Z",
+            dispatchStartedAt: "2026-09-11T19:50:00.000Z",
+            dispatchFinishedAt: "2026-09-11T20:22:00.000Z",
+        },
     },
 ];
 const normalizeCampaignName = (value) => String(value || "")
