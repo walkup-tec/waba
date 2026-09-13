@@ -310,8 +310,7 @@ class WabaOperacionalCampanhasService {
         }
         const totalLeads = resolvePlannedSendCount(intake);
         const laboratorioAttended = (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake);
-        const stored = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
-        let report = stored;
+        let report = intake.performanceReport;
         let liveFromMeta = false;
         const broadcast = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
         if (laboratorioAttended && status === "in_progress" && broadcast) {
@@ -329,8 +328,10 @@ class WabaOperacionalCampanhasService {
             };
             liveFromMeta = true;
         }
-        const hideClicks = (0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report || stored);
-        const showClicks = laboratorioAttended && !hideClicks;
+        report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, report) ?? undefined;
+        const hideClicks = (0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report);
+        const showClicks = (0, waba_campaign_report_read_overrides_1.campaignReportShowsClicks)(intake.campaignName, intake.createdAt, report) ||
+            (laboratorioAttended && !hideClicks);
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,
