@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.applyCampaignReportReadOverride = exports.campaignReportHidesClicks = exports.resolveCampaignReportReadOverride = exports.campaignHoldsSubscriberInProgress = exports.resolveCampaignReportOverride = void 0;
+exports.applyCampaignReportReadOverride = exports.campaignReportShowsClicks = exports.campaignReportHidesClicks = exports.resolveCampaignReportReadOverride = exports.campaignHoldsSubscriberInProgress = exports.resolveCampaignReportOverride = void 0;
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 const meta_whatsapp_broadcast_void_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-void");
 const CAMPAIGN_REPORT_OVERRIDES = [
@@ -38,6 +38,16 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         delivered: 1724,
         read: 986,
         failed: 232,
+    },
+    {
+        name: "Convite para base Jandira",
+        matchExactName: true,
+        sent: 1652,
+        delivered: 1553,
+        read: 931,
+        failed: 79,
+        clicks: 130,
+        showClicks: true,
     },
 ];
 const normalizeCampaignName = (value) => String(value || "")
@@ -95,6 +105,9 @@ const fingerprintMatches = (report, fingerprint) => {
 const ruleMatches = (rule, campaignName, createdAt, report, intakeId) => {
     if (rule.intakeId && String(intakeId || "").trim() === rule.intakeId)
         return true;
+    if (rule.matchExactName) {
+        return normalizeCampaignName(campaignName) === normalizeCampaignName(rule.name);
+    }
     if (!namesMatch(campaignName, rule.name))
         return false;
     if (rule.holdSubscriberInProgress) {
@@ -152,20 +165,43 @@ const resolveCampaignReportReadOverride = (campaignName, createdAt, report) => {
 exports.resolveCampaignReportReadOverride = resolveCampaignReportReadOverride;
 const campaignReportHidesClicks = (campaignName, createdAt, report) => Boolean((0, exports.resolveCampaignReportOverride)(campaignName, createdAt, report)?.hideClicks);
 exports.campaignReportHidesClicks = campaignReportHidesClicks;
+const campaignReportShowsClicks = (campaignName, createdAt, report) => Boolean((0, exports.resolveCampaignReportOverride)(campaignName, createdAt, report)?.showClicks);
+exports.campaignReportShowsClicks = campaignReportShowsClicks;
 const applyCampaignReportReadOverride = (campaignName, createdAt, report) => {
-    if (!report)
-        return report;
     const rule = (0, exports.resolveCampaignReportOverride)(campaignName, createdAt, report);
     if (!rule)
         return report;
-    const nextDelivered = rule.delivered != null ? rule.delivered : report.delivered;
-    const nextRead = rule.read != null ? rule.read : report.read;
-    const nextFailed = rule.failed != null ? rule.failed : report.failed;
-    if (nextDelivered === report.delivered &&
+    const base = report || {
+        totalLeads: 0,
+        sent: 0,
+        delivered: 0,
+        read: 0,
+        failed: 0,
+        clicks: 0,
+        source: "manual",
+        filledAt: "",
+        filledByEmail: "",
+    };
+    const nextSent = rule.sent != null ? rule.sent : base.sent;
+    const nextDelivered = rule.delivered != null ? rule.delivered : base.delivered;
+    const nextRead = rule.read != null ? rule.read : base.read;
+    const nextFailed = rule.failed != null ? rule.failed : base.failed;
+    const nextClicks = rule.clicks != null ? rule.clicks : base.clicks;
+    if (report &&
+        nextSent === report.sent &&
+        nextDelivered === report.delivered &&
         nextRead === report.read &&
-        nextFailed === report.failed) {
+        nextFailed === report.failed &&
+        nextClicks === report.clicks) {
         return report;
     }
-    return { ...report, delivered: nextDelivered, read: nextRead, failed: nextFailed };
+    return {
+        ...base,
+        sent: nextSent,
+        delivered: nextDelivered,
+        read: nextRead,
+        failed: nextFailed,
+        clicks: nextClicks,
+    };
 };
 exports.applyCampaignReportReadOverride = applyCampaignReportReadOverride;
