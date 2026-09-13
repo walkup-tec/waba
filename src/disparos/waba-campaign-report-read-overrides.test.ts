@@ -113,16 +113,7 @@ describe("override pontual do relatório", () => {
     assert.equal(campaignReportHidesClicks("6 DE AGOSTO", augustStamp, stored), false);
   });
 
-  it("Opt in PTX recebe entregues/lidos/falhados na proporção do relatório-base", () => {
-    const baseSent = 1161;
-    const ptxSent = 1980;
-    const expectedDelivered = Math.round((1011 / baseSent) * ptxSent);
-    const expectedRead = Math.round((578 / baseSent) * ptxSent);
-    const expectedFailed = Math.round((136 / baseSent) * ptxSent);
-    assert.equal(expectedDelivered, 1724);
-    assert.equal(expectedRead, 986);
-    assert.equal(expectedFailed, 232);
-
+  it("Opt in PTX recebe indicadores manuais com cliques", () => {
     const stored = report({
       totalLeads: 2996,
       sent: 1980,
@@ -130,43 +121,39 @@ describe("override pontual do relatório", () => {
       read: 0,
       failed: 0,
       clicks: 203,
+      source: "manual",
     });
     const got = applyCampaignReportReadOverride("Opt in PTX", "2026-09-09T01:34:51.000Z", stored);
-    assert.equal(got?.delivered, 1724);
-    assert.equal(got?.read, 986);
-    assert.equal(got?.failed, 232);
-    assert.equal(got?.sent, 1980);
-    assert.equal(got?.clicks, 203);
+    assert.equal(got?.sent, 825);
+    assert.equal(got?.delivered, 695);
+    assert.equal(got?.read, 417);
+    assert.equal(got?.failed, 120);
+    assert.equal(got?.clicks, 47);
+    assert.equal(got?.totalLeads, 2996);
+    assert.equal(campaignReportShowsClicks("Opt in PTX", "2026-09-09T01:34:51.000Z", stored), true);
     assert.equal(campaignReportHidesClicks("Opt in PTX", "2026-09-09T01:34:51.000Z", stored), false);
 
     const metrics = computeCampaignPerformanceMetrics({
       totalLeads: 2996,
-      sent: 1980,
-      delivered: 1724,
-      read: 986,
-      failed: 232,
-      clicks: 203,
+      sent: 825,
+      delivered: 695,
+      read: 417,
+      failed: 120,
+      clicks: 47,
     });
-    assert.equal(metrics.deliveryRate, 87.07);
-    assert.equal(metrics.readRate, 57.19);
-    assert.equal(metrics.failureRate, 7.74);
-    assert.equal(metrics.clickRate, 11.77);
-    assert.equal(metrics.pendingSent, 24);
-    assert.equal(metrics.bonusShipments, 1016);
+    assert.equal(metrics.deliveryRate, 84.24);
+    assert.equal(metrics.readRate, 60);
+    assert.equal(metrics.failureRate, 4.01);
+    assert.equal(metrics.clickRate, 6.76);
   });
 
-  it("Opt in PTX com enviados diferentes não recebe a estimativa", () => {
-    const stored = report({
-      totalLeads: 2996,
-      sent: 1800,
-      delivered: 0,
-      read: 0,
-      failed: 0,
-    });
-    const got = applyCampaignReportReadOverride("Opt in PTX", "2026-09-09T01:34:51.000Z", stored);
-    assert.equal(got?.delivered, 0);
-    assert.equal(got?.read, 0);
-    assert.equal(got?.failed, 0);
+  it("Opt in PTX não altera campanha com nome parecido", () => {
+    const stored = report({ sent: 10, delivered: 8, read: 4, failed: 1, clicks: 2 });
+    const got = applyCampaignReportReadOverride("Opt in PTX 2", "2026-09-09T01:34:51.000Z", stored);
+    assert.equal(got?.sent, 10);
+    assert.equal(got?.delivered, 8);
+    assert.equal(got?.clicks, 2);
+    assert.equal(campaignReportShowsClicks("Opt in PTX 2", "2026-09-09T01:34:51.000Z", stored), false);
   });
 
   it("Convite para base Jandira recebe indicadores manuais com cliques", () => {
