@@ -1,11 +1,31 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { WabaCampaignIntake } from "./waba-campaign-intake.repository";
 import {
   META_REPORT_COLLECTION_NOTE,
   buildSubscriberCampaignTimeline,
+  collectIntakeReportTimeline,
   formatCampaignReportDateTime,
   resolveDispatchStartedAt,
 } from "./waba-campaign-report-timeline";
+
+const stubIntake = (campaignName: string): WabaCampaignIntake => ({
+  id: `override-${campaignName}`,
+  ownerEmail: "assinante@exemplo.com",
+  campaignName,
+  regionDdd: "51",
+  textOptions: ["a", "b", "c"],
+  imageFileName: "img.png",
+  imageStoredPath: "/tmp/img.png",
+  spreadsheetFileName: "leads.xlsx",
+  spreadsheetStoredPath: "/tmp/leads.xlsx",
+  importedLineCount: 1000,
+  plannedSendCount: 1000,
+  status: "completed",
+  startedAt: "2026-01-01T00:00:00.000Z",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+});
 
 describe("linha do tempo do relatório do assinante", () => {
   it("formata dia completo e horário em São Paulo", () => {
@@ -60,5 +80,46 @@ describe("linha do tempo do relatório do assinante", () => {
     assert.equal(timeline.items[4]?.display, "Quarta-feira, 2 de setembro de 2026 - 16:22:15");
     assert.equal(timeline.metaCollectionNote, META_REPORT_COLLECTION_NOTE);
     assert.match(timeline.metaCollectionNote, /3 horas/);
+  });
+
+  it("Opt in PTX usa a linha do tempo pontual em Brasília", () => {
+    const timeline = collectIntakeReportTimeline(stubIntake("Opt in PTX"));
+    assert.deepEqual(
+      timeline.items.map((item) => item.display),
+      [
+        "Segunda-feira, 7 de setembro de 2026 - 15:03:00",
+        "Terça-feira, 8 de setembro de 2026 - 07:00:00",
+        "Sexta-feira, 11 de setembro de 2026 - 15:40:00",
+        "Sexta-feira, 11 de setembro de 2026 - 16:00:00",
+        "Sexta-feira, 11 de setembro de 2026 - 16:12:00",
+      ],
+    );
+  });
+
+  it("Convite para base Jandira usa a linha do tempo pontual em Brasília", () => {
+    const timeline = collectIntakeReportTimeline(stubIntake("Convite para base Jandira"));
+    assert.deepEqual(
+      timeline.items.map((item) => item.display),
+      [
+        "Segunda-feira, 7 de setembro de 2026 - 15:03:00",
+        "Terça-feira, 8 de setembro de 2026 - 07:15:00",
+        "Sexta-feira, 11 de setembro de 2026 - 16:35:00",
+        "Sexta-feira, 11 de setembro de 2026 - 16:50:00",
+        "Sexta-feira, 11 de setembro de 2026 - 17:22:00",
+      ],
+    );
+  });
+
+  it("outra campanha não recebe a linha do tempo da PTX nem da Jandira", () => {
+    const timeline = collectIntakeReportTimeline({
+      ...stubIntake("Outra campanha"),
+      startedAt: undefined,
+    });
+    assert.equal(timeline.items.length, 1);
+    assert.equal(timeline.items[0]?.key, "createdAt");
+    assert.equal(
+      timeline.items.some((item) => item.display.includes("7 de setembro de 2026")),
+      false,
+    );
   });
 });
