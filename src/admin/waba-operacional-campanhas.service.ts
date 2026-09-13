@@ -29,6 +29,7 @@ import {
 import {
   applyCampaignReportReadOverride,
   campaignReportHidesClicks,
+  campaignReportShowsClicks,
 } from "../disparos/waba-campaign-report-read-overrides";
 import { collectIntakeReportTimeline } from "../disparos/waba-campaign-report-timeline";
 import { campaignAttendedByLaboratorioStaff } from "../disparos/waba-campaign-laboratorio-attended";
@@ -506,12 +507,7 @@ export class WabaOperacionalCampanhasService {
 
     const totalLeads = resolvePlannedSendCount(intake);
     const laboratorioAttended = campaignAttendedByLaboratorioStaff(intake);
-    const stored = applyCampaignReportReadOverride(
-      intake.campaignName,
-      intake.createdAt,
-      intake.performanceReport,
-    );
-    let report = stored;
+    let report = intake.performanceReport;
     let liveFromMeta = false;
     const broadcast = findBroadcastByIntakeCampaignId(intake.id);
     if (laboratorioAttended && status === "in_progress" && broadcast) {
@@ -529,12 +525,19 @@ export class WabaOperacionalCampanhasService {
       };
       liveFromMeta = true;
     }
+    report = applyCampaignReportReadOverride(
+      intake.campaignName,
+      intake.createdAt,
+      report,
+    ) ?? undefined;
     const hideClicks = campaignReportHidesClicks(
       intake.campaignName,
       intake.createdAt,
-      report || stored,
+      report,
     );
-    const showClicks = laboratorioAttended && !hideClicks;
+    const showClicks =
+      campaignReportShowsClicks(intake.campaignName, intake.createdAt, report) ||
+      (laboratorioAttended && !hideClicks);
     return {
       campaignId: intake.id,
       campaignName: intake.campaignName,
