@@ -12,6 +12,7 @@ import {
   applyCampaignReportReadOverride,
   campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
+  campaignReportShowsClicks,
 } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
 import {
@@ -136,9 +137,10 @@ export const buildCampaignComparisonFromIntakes = (
       const apiKind = resolveIntakeApiKindFromIntake(intake);
       const rates = computeRatesFromReport(report);
       const showClicks =
-        campaignAttendedByLaboratorioStaff(intake) &&
-        report.source === "meta_lab" &&
-        !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report);
+        campaignReportShowsClicks(intake.campaignName, intake.createdAt, report) ||
+        (campaignAttendedByLaboratorioStaff(intake) &&
+          report.source === "meta_lab" &&
+          !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report));
       return {
         id: intake.id,
         campaignName: intake.campaignName,
