@@ -15,10 +15,16 @@ type CampaignReportOverride = {
   createdLocalTime?: string;
   timezone?: string;
   fingerprint?: CampaignReportFingerprint;
+  /** Casa só o nome normalizado, sem fingerprint/data. */
+  matchExactName?: boolean;
+  sent?: number;
   delivered?: number;
   read?: number;
   failed?: number;
+  clicks?: number;
   hideClicks?: boolean;
+  /** Força o card/taxa de cliques neste relatório, mesmo sem Disparo Cloud. */
+  showClicks?: boolean;
   /** Assinante vê Em andamento; o fechamento automático do relatório Meta não roda. */
   holdSubscriberInProgress?: boolean;
   intakeId?: string;
@@ -59,6 +65,16 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
     delivered: 1724,
     read: 986,
     failed: 232,
+  },
+  {
+    name: "Convite para base Jandira",
+    matchExactName: true,
+    sent: 1652,
+    delivered: 1553,
+    read: 931,
+    failed: 79,
+    clicks: 130,
+    showClicks: true,
   },
 ];
 
@@ -126,6 +142,9 @@ const ruleMatches = (
   intakeId?: string,
 ): boolean => {
   if (rule.intakeId && String(intakeId || "").trim() === rule.intakeId) return true;
+  if (rule.matchExactName) {
+    return normalizeCampaignName(campaignName) === normalizeCampaignName(rule.name);
+  }
   if (!namesMatch(campaignName, rule.name)) return false;
   if (rule.holdSubscriberInProgress) {
     const left = normalizeCampaignName(campaignName);
@@ -194,24 +213,52 @@ export const campaignReportHidesClicks = (
   report?: WabaCampaignPerformanceReport | null,
 ): boolean => Boolean(resolveCampaignReportOverride(campaignName, createdAt, report)?.hideClicks);
 
+export const campaignReportShowsClicks = (
+  campaignName: string,
+  createdAt: string,
+  report?: WabaCampaignPerformanceReport | null,
+): boolean => Boolean(resolveCampaignReportOverride(campaignName, createdAt, report)?.showClicks);
+
 export const applyCampaignReportReadOverride = (
   campaignName: string,
   createdAt: string,
   report: WabaCampaignPerformanceReport | null | undefined,
 ): WabaCampaignPerformanceReport | null | undefined => {
-  if (!report) return report;
   const rule = resolveCampaignReportOverride(campaignName, createdAt, report);
   if (!rule) return report;
 
-  const nextDelivered = rule.delivered != null ? rule.delivered : report.delivered;
-  const nextRead = rule.read != null ? rule.read : report.read;
-  const nextFailed = rule.failed != null ? rule.failed : report.failed;
+  const base: WabaCampaignPerformanceReport = report || {
+    totalLeads: 0,
+    sent: 0,
+    delivered: 0,
+    read: 0,
+    failed: 0,
+    clicks: 0,
+    source: "manual",
+    filledAt: "",
+    filledByEmail: "",
+  };
+  const nextSent = rule.sent != null ? rule.sent : base.sent;
+  const nextDelivered = rule.delivered != null ? rule.delivered : base.delivered;
+  const nextRead = rule.read != null ? rule.read : base.read;
+  const nextFailed = rule.failed != null ? rule.failed : base.failed;
+  const nextClicks = rule.clicks != null ? rule.clicks : base.clicks;
   if (
+    report &&
+    nextSent === report.sent &&
     nextDelivered === report.delivered &&
     nextRead === report.read &&
-    nextFailed === report.failed
+    nextFailed === report.failed &&
+    nextClicks === report.clicks
   ) {
     return report;
   }
-  return { ...report, delivered: nextDelivered, read: nextRead, failed: nextFailed };
+  return {
+    ...base,
+    sent: nextSent,
+    delivered: nextDelivered,
+    read: nextRead,
+    failed: nextFailed,
+    clicks: nextClicks,
+  };
 };
