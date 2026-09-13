@@ -35,6 +35,7 @@ import {
 import {
   applyCampaignReportReadOverride,
   campaignReportHidesClicks,
+  campaignReportShowsClicks,
   campaignHoldsSubscriberInProgress,
 } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
@@ -174,8 +175,14 @@ const resolvePlannedSendCount = (
 
 const resolveReportedSentCount = (intake: WabaCampaignIntake): number => {
   const status = normalizeStoredStatus(intake.status);
-  if (status !== "completed" || !intake.performanceReport) return 0;
-  const sent = Math.round(Number(intake.performanceReport.sent ?? NaN));
+  if (status !== "completed") return 0;
+  const report = applyCampaignReportReadOverride(
+    intake.campaignName,
+    intake.createdAt,
+    intake.performanceReport,
+  );
+  if (!report) return 0;
+  const sent = Math.round(Number(report.sent ?? NaN));
   if (!Number.isFinite(sent) || sent < 0) return 0;
   return sent;
 };
@@ -723,9 +730,10 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       intake.performanceReport,
     );
     const showClicks =
-      campaignAttendedByLaboratorioStaff(intake) &&
-      report?.source === "meta_lab" &&
-      !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report);
+      campaignReportShowsClicks(intake.campaignName, intake.createdAt, report) ||
+      (campaignAttendedByLaboratorioStaff(intake) &&
+        report?.source === "meta_lab" &&
+        !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report));
     const metrics = report
       ? computeCampaignPerformanceMetrics({
           totalLeads: report.totalLeads,
