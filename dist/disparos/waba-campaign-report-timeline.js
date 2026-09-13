@@ -8,6 +8,7 @@ exports.buildSubscriberCampaignTimeline = buildSubscriberCampaignTimeline;
 exports.collectIntakeReportTimeline = collectIntakeReportTimeline;
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 const meta_whatsapp_template_approved_at_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-template-approved-at.store");
+const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 exports.META_REPORT_COLLECTION_NOTE = "A Meta pode demorar até 3 horas após o fim do disparo para finalizar a coleta e a exibição dos dados deste relatório.";
 exports.SUBSCRIBER_REPORT_TIMELINE_DEFS = [
     { key: "createdAt", label: "Criação da Campanha" },
@@ -83,6 +84,7 @@ function buildSubscriberCampaignTimeline(input) {
     };
 }
 function collectIntakeReportTimeline(intake) {
+    const override = (0, waba_campaign_report_read_overrides_1.resolveCampaignReportOverride)(intake.campaignName, intake.createdAt, intake.performanceReport, intake.id)?.timeline;
     const broadcast = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
     const templateApprovedAt = firstNonEmptyIso(broadcast?.templateApprovedAt) ||
         (broadcast
@@ -94,10 +96,10 @@ function collectIntakeReportTimeline(intake) {
             })
             : null);
     return buildSubscriberCampaignTimeline({
-        createdAt: intake.createdAt,
-        attendanceStartedAt: intake.startedAt,
-        templateApprovedAt,
-        dispatchStartedAt: resolveDispatchStartedAt(broadcast),
-        dispatchFinishedAt: broadcast?.sendFinishedAt || null,
+        createdAt: override?.createdAt ?? intake.createdAt,
+        attendanceStartedAt: override?.attendanceStartedAt ?? intake.startedAt,
+        templateApprovedAt: override?.templateApprovedAt ?? templateApprovedAt,
+        dispatchStartedAt: override?.dispatchStartedAt ?? resolveDispatchStartedAt(broadcast),
+        dispatchFinishedAt: override?.dispatchFinishedAt ?? broadcast?.sendFinishedAt ?? null,
     });
 }
