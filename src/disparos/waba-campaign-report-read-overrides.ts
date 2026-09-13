@@ -61,10 +61,13 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
   },
   {
     name: "Opt in PTX",
-    fingerprint: { totalLeads: 2996, sent: 1980, delivered: 0, failed: 0 },
-    delivered: 1724,
-    read: 986,
-    failed: 232,
+    matchExactName: true,
+    sent: 825,
+    delivered: 695,
+    read: 417,
+    failed: 120,
+    clicks: 47,
+    showClicks: true,
   },
   {
     name: "Convite para base Jandira",
