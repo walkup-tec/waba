@@ -44,9 +44,10 @@ const buildCampaignComparisonFromIntakes = (intakes, options) => {
         const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
         const rates = computeRatesFromReport(report);
-        const showClicks = (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake) &&
-            report.source === "meta_lab" &&
-            !(0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report);
+        const showClicks = (0, waba_campaign_report_read_overrides_1.campaignReportShowsClicks)(intake.campaignName, intake.createdAt, report) ||
+            ((0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake) &&
+                report.source === "meta_lab" &&
+                !(0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report));
         return {
             id: intake.id,
             campaignName: intake.campaignName,
