@@ -22,7 +22,10 @@ describe("Disparo Cloud: portfólios, WABAs, números e limite diário", () => {
     assert.match(html, /Carregando contas WABA deste portfólio/);
     assert.match(html, /nunca o dump do token/);
     assert.match(html, /function metaTplBroadcastNumberMatchesSelectedWaba/);
+    assert.match(html, /function metaTplBroadcastVisibleNumberEntries/);
     assert.match(html, /1636793994538054/);
     assert.match(html, /1988957871663919/);
+    assert.match(html, /Pendente — ative com o PIN na aba Portfólios/);
+    assert.match(html, /force: onDisparoCloud/);
   });
 });
