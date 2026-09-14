@@ -18,6 +18,7 @@ const waba_campaign_report_read_overrides_1 = require("../disparos/waba-campaign
 const waba_campaign_report_timeline_1 = require("../disparos/waba-campaign-report-timeline");
 const waba_campaign_laboratorio_attended_1 = require("../disparos/waba-campaign-laboratorio-attended");
 const waba_campaign_intake_short_url_1 = require("../disparos/waba-campaign-intake-short-url");
+const waba_campaign_intake_vitoria_short_url_1 = require("../disparos/waba-campaign-intake-vitoria-short-url");
 const waba_campaign_report_read_overrides_2 = require("../disparos/waba-campaign-report-read-overrides");
 const waba_campaign_report_finalize_service_1 = require("../disparos/waba-campaign-report-finalize.service");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
@@ -306,6 +307,7 @@ class WabaOperacionalCampanhasService {
         return this.toListItem(updated, staff);
     }
     async getCampaignReport(campaignId, staff) {
+        await (0, waba_campaign_intake_vitoria_short_url_1.ensureVitoriaDaConquistaIntakeShortUrlByCampaignId)(campaignId);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
         const status = normalizeStoredStatus(intake.status);
         if (status !== "in_progress" && status !== "completed" && status !== "error_reported") {
@@ -377,6 +379,7 @@ class WabaOperacionalCampanhasService {
     }
     async saveCampaignReport(campaignId, body, staff) {
         this.assertCanMutateCampaigns(staff);
+        await (0, waba_campaign_intake_vitoria_short_url_1.ensureVitoriaDaConquistaIntakeShortUrlByCampaignId)(campaignId);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
         if ((0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake)) {
             throw new Error("Esta campanha é atendida pelo Laboratório. Os indicadores vêm da Meta automaticamente.");
