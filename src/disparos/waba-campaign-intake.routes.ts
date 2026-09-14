@@ -64,7 +64,7 @@ import {
   resolveCampaignIntakeDuplicateWindowMs,
   withCampaignIntakeSubmissionLock,
 } from "./waba-campaign-intake-idempotency";
-import { WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT } from "./waba-campaign-intake.constants";
+import { campaignMinPlannedSendCountForEmail } from "./waba-campaign-intake.constants";
 import {
   parseCampaignMediaKind,
   validateCampaignIntakeMedia,
@@ -142,11 +142,12 @@ const resolvePlannedSendCount = (
       error: "Informe a quantidade de envios desejada.",
     };
   }
-  if (requestedSendCount < WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+  const minPlanned = campaignMinPlannedSendCountForEmail(ownerEmail);
+  if (requestedSendCount < minPlanned) {
     return {
       plannedSendCount: 0,
       isMaster: unlimitedCredits,
-      error: `A campanha deve ter no mínimo ${WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} envios.`,
+      error: `A campanha deve ter no mínimo ${minPlanned} envios.`,
     };
   }
   if (requestedSendCount > importedLineCount) {
@@ -524,12 +525,13 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       if (importedLineCount < 1) {
         return res.status(400).json({ error: "O arquivo não contém linhas de leads." });
       }
-      if (importedLineCount < WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+      const minPlanned = campaignMinPlannedSendCountForEmail(auth.email);
+      if (importedLineCount < minPlanned) {
         return res.status(400).json({
           error:
             apiKind === "oficial"
-              ? `O arquivo precisa ter no mínimo ${WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} contatos únicos para gerar a campanha.`
-              : `O arquivo precisa ter no mínimo ${WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} contatos para gerar a campanha.`,
+              ? `O arquivo precisa ter no mínimo ${minPlanned} contatos únicos para gerar a campanha.`
+              : `O arquivo precisa ter no mínimo ${minPlanned} contatos para gerar a campanha.`,
         });
       }
 
