@@ -39314,7 +39314,40 @@
         if (andreBms.some(function (id) { return metaTplLabBusinessesMatch(bm, id); })) {
           return ["2458602464640240", "1744257946809067"];
         }
+        if (metaTplLabBusinessesMatch(bm, "1041827648719609")) {
+          return ["1636793994538054", "1988957871663919"];
+        }
         return [];
+      }
+
+      function metaTplLabEquivalentWabaIds(portfolio) {
+        const ids = {};
+        function add(value) {
+          const id = String(value || "").trim();
+          if (id) ids[id] = true;
+        }
+        add(portfolio && portfolio.wabaId);
+        metaTplLabKnownSisterWabaIds(portfolio).forEach(add);
+        return ids;
+      }
+
+      function metaTplBroadcastNumberMatchesSelectedWaba(connectionId, portfolio, item, wabaKeys) {
+        const itemWaba = String((item && item.wabaId) || "").trim();
+        const aliases = metaTplLabEquivalentWabaIds(portfolio);
+        if (itemWaba && wabaKeys.has(metaTplBroadcastWabaKey(connectionId, itemWaba))) return true;
+        const selected = [];
+        const prefix = String(connectionId || "") + ":";
+        wabaKeys.forEach(function (key) {
+          if (String(key || "").indexOf(prefix) === 0) selected.push(String(key).slice(prefix.length));
+        });
+        if (!itemWaba) {
+          return selected.some(function (id) {
+            return Boolean(aliases[id]);
+          });
+        }
+        return selected.some(function (id) {
+          return Boolean(aliases[id] && aliases[itemWaba]);
+        });
       }
 
       function metaTplLabMergeCardAndGraphWabas(localItems, mapped, _portfolio) {
@@ -41832,12 +41865,20 @@
           const portfolioWabaId = String((portfolio && portfolio.wabaId) || "").trim();
           ((portfolio && portfolio.numbers) || []).forEach(function (item) {
             const wabaId = String((item && item.wabaId) || portfolioWabaId || "").trim();
-            if (!wabaKeys.has(metaTplBroadcastWabaKey(connectionId, wabaId))) return;
+            if (
+              !metaTplBroadcastNumberMatchesSelectedWaba(
+                connectionId,
+                portfolio,
+                item,
+                wabaKeys,
+              )
+            ) {
+              return;
+            }
             if (
               String(item.uiStatus || "") === "ativo" &&
               String(item.dispatchStatus || "livre") !== "em_disparo" &&
-              String(item.phoneNumberId || "").trim() &&
-              String(item.displayPhoneNumber || "").trim()
+              String(item.phoneNumberId || "").trim()
             ) {
               out.push({
                 item: item,
