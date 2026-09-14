@@ -33,6 +33,7 @@ import {
 } from "../disparos/waba-campaign-report-read-overrides";
 import { collectIntakeReportTimeline } from "../disparos/waba-campaign-report-timeline";
 import { campaignAttendedByLaboratorioStaff } from "../disparos/waba-campaign-laboratorio-attended";
+import { resolveCampaignCardResponseLink } from "../disparos/waba-campaign-intake-short-url";
 import { finalizeIntakePerformanceReport } from "../disparos/waba-campaign-report-finalize.service";
 import {
   campaignIntakeDisplayOptionsFromBroadcast,
@@ -121,6 +122,7 @@ export type OperacionalCampaignDetail = OperacionalCampaignListItem & {
   hasWhatsappLogo: boolean;
   textOptions: [string, string, string];
   responseLink: string;
+  responseShortUrl: string;
   imageFileName: string;
   mediaKind: "image" | "video";
   spreadsheetFileName: string;
@@ -439,7 +441,8 @@ export class WabaOperacionalCampanhasService {
       whatsappLogoFileName: String(intake.whatsappLogoFileName ?? "").trim(),
       hasWhatsappLogo,
       textOptions: intake.textOptions,
-      responseLink: String(intake.responseLink ?? "").trim(),
+      responseLink: resolveCampaignCardResponseLink(intake),
+      responseShortUrl: String(intake.responseShortUrl ?? "").trim(),
       imageFileName: intake.imageFileName,
       mediaKind: intake.campaignMediaKind === "video" ? "video" : "image",
       spreadsheetFileName: intake.spreadsheetFileName,
