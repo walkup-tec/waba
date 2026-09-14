@@ -7,6 +7,7 @@ exports.findShortLinkBySlug = findShortLinkBySlug;
 exports.createShortLinkRecord = createShortLinkRecord;
 exports.incrementShortLinkClicks = incrementShortLinkClicks;
 exports.attachCampaignIdToShortLink = attachCampaignIdToShortLink;
+exports.getShortLinkClicksByCampaignId = getShortLinkClicksByCampaignId;
 exports.getShortLinkClicksByUrl = getShortLinkClicksByUrl;
 exports.extractSlugFromPublicShortUrl = extractSlugFromPublicShortUrl;
 exports.normalizeSlug = normalizeSlug;
@@ -105,6 +106,15 @@ async function attachCampaignIdToShortLink(slug, campaignId) {
     record.campaignId = id;
     await persistStore(store);
     return true;
+}
+async function getShortLinkClicksByCampaignId(campaignId) {
+    const id = String(campaignId || "").trim();
+    if (!id)
+        return 0;
+    const store = await loadStore();
+    return store.links
+        .filter((row) => String(row.campaignId || "").trim() === id)
+        .reduce((sum, row) => sum + Math.max(0, Number(row.clicks || 0)), 0);
 }
 async function getShortLinkClicksByUrl(shortUrl) {
     const slug = extractSlugFromPublicShortUrl(shortUrl);
