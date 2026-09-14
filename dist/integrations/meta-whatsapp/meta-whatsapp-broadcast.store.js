@@ -20,6 +20,8 @@ exports.reopenOptInPtxBroadcastToContinue = reopenOptInPtxBroadcastToContinue;
 exports.listStaleRunningBroadcastsWithoutPending = listStaleRunningBroadcastsWithoutPending;
 exports.finalizeStaleRunningBroadcast = finalizeStaleRunningBroadcast;
 exports.voidBroadcastCampaignForRetry = voidBroadcastCampaignForRetry;
+exports.pauseBroadcastCampaign = pauseBroadcastCampaign;
+exports.hideBroadcastCampaign = hideBroadcastCampaign;
 exports.ensureVoidedFailedCloudBroadcasts = ensureVoidedFailedCloudBroadcasts;
 exports.voidAbandonedCloudBroadcastsForRetry = voidAbandonedCloudBroadcastsForRetry;
 exports.matchBroadcastLeadForMetaStatus = matchBroadcastLeadForMetaStatus;
@@ -152,6 +154,8 @@ function mergeBroadcastCampaignPreservingMeta(incoming, stored) {
         sendFinishedAt: incoming.sendFinishedAt || stored.sendFinishedAt,
         templateApprovedAt: stored.templateApprovedAt || incoming.templateApprovedAt,
         voidedAt: incoming.voidedAt || stored.voidedAt,
+        pausedAt: incoming.pausedAt || stored.pausedAt,
+        hiddenAt: incoming.hiddenAt || stored.hiddenAt,
     };
 }
 function saveBroadcastCampaign(row) {
@@ -172,6 +176,7 @@ function findBroadcastCampaign(tenantId, id) {
 }
 function listBroadcastCampaigns(tenantId, limit = 8) {
     return listAllBroadcastCampaigns(tenantId)
+        .filter((row) => !(0, meta_whatsapp_broadcast_void_1.isBroadcastHidden)(row))
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
         .slice(0, Math.max(1, limit));
 }
@@ -181,7 +186,7 @@ function listAllBroadcastCampaigns(tenantId) {
         .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
 }
 function isActiveBroadcastRow(row) {
-    return !String(row.voidedAt || "").trim();
+    return !(0, meta_whatsapp_broadcast_void_1.isBroadcastVoided)(row) && !(0, meta_whatsapp_broadcast_void_1.isBroadcastHidden)(row);
 }
 function indexBroadcastProgressByIntakeId() {
     const map = new Map();
@@ -220,11 +225,11 @@ function findBroadcastByIntakeCampaignId(intakeCampaignId) {
     const row = rows[0];
     return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
 }
-/** running/queued sem void — lotes que o operacional não deve interromper com Redeploy. */
+/** running/queued sem void/pause/hide — lotes que o operacional não deve interromper com Redeploy. */
 function listActiveCloudBroadcasts() {
     return readStore()
         .campaigns.filter((row) => {
-        if (String(row.voidedAt || "").trim())
+        if ((0, meta_whatsapp_broadcast_void_1.isBroadcastStoppedByOperator)(row))
             return false;
         return row.status === "running" || row.status === "queued";
     })
@@ -242,7 +247,7 @@ function broadcastLeadIsPendingSend(lead) {
 function listResumableOrphanedBroadcasts() {
     return readStore()
         .campaigns.filter((row) => {
-        if (String(row.voidedAt || "").trim())
+        if ((0, meta_whatsapp_broadcast_void_1.isBroadcastStoppedByOperator)(row))
             return false;
         if (row.status !== "running" && row.status !== "queued")
             return false;
@@ -264,6 +269,8 @@ function reopenOptInPtxBroadcastToContinue() {
     const row = rows[0];
     if (!row)
         return null;
+    if ((0, meta_whatsapp_broadcast_void_1.isBroadcastPaused)(row) || (0, meta_whatsapp_broadcast_void_1.isBroadcastHidden)(row))
+        return null;
     let queuedReset = 0;
     for (const lead of row.leads || []) {
         const status = String(lead.status || "").trim();
@@ -284,12 +291,13 @@ function reopenOptInPtxBroadcastToContinue() {
     if (!(row.leads || []).some(broadcastLeadIsPendingSend))
         return null;
     const alreadyOpen = (row.status === "running" || row.status === "queued") &&
-        !String(row.voidedAt || "").trim() &&
+        !(0, meta_whatsapp_broadcast_void_1.isBroadcastStoppedByOperator)(row) &&
         queuedReset === 0;
     if (!alreadyOpen) {
         const now = new Date().toISOString();
         row.status = "running";
         row.voidedAt = undefined;
+        row.pausedAt = undefined;
         row.sendFinishedAt = undefined;
         row.updatedAt = now;
         writeStore(store);
@@ -300,7 +308,7 @@ function reopenOptInPtxBroadcastToContinue() {
 function listStaleRunningBroadcastsWithoutPending() {
     return readStore()
         .campaigns.filter((row) => {
-        if (String(row.voidedAt || "").trim())
+        if ((0, meta_whatsapp_broadcast_void_1.isBroadcastStoppedByOperator)(row))
             return false;
         if (row.status !== "running")
             return false;
@@ -314,7 +322,7 @@ function finalizeStaleRunningBroadcast(campaignId) {
         return null;
     const store = readStore();
     const row = store.campaigns.find((item) => item.id === id);
-    if (!row || String(row.voidedAt || "").trim())
+    if (!row || (0, meta_whatsapp_broadcast_void_1.isBroadcastStoppedByOperator)(row))
         return null;
     if (row.status !== "running")
         return null;
@@ -344,6 +352,41 @@ function voidBroadcastCampaignForRetry(campaignId) {
     writeStore(store);
     return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
 }
+function pauseBroadcastCampaign(campaignId) {
+    const id = String(campaignId || "").trim();
+    if (!id)
+        return null;
+    const store = readStore();
+    const row = store.campaigns.find((item) => item.id === id);
+    if (!row)
+        return null;
+    if (row.pausedAt)
+        return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+    const now = new Date().toISOString();
+    row.pausedAt = now;
+    row.updatedAt = now;
+    writeStore(store);
+    return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+}
+function hideBroadcastCampaign(campaignId) {
+    const id = String(campaignId || "").trim();
+    if (!id)
+        return null;
+    const store = readStore();
+    const row = store.campaigns.find((item) => item.id === id);
+    if (!row)
+        return null;
+    if (row.hiddenAt)
+        return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+    const now = new Date().toISOString();
+    if (!row.voidedAt && !row.pausedAt && (row.status === "queued" || row.status === "running")) {
+        row.pausedAt = now;
+    }
+    row.hiddenAt = now;
+    row.updatedAt = now;
+    writeStore(store);
+    return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+}
 function ensureVoidedFailedCloudBroadcasts() {
     return voidAbandonedCloudBroadcastsForRetry(meta_whatsapp_broadcast_void_1.shouldVoidCloudBroadcast);
 }
@@ -352,7 +395,7 @@ function voidAbandonedCloudBroadcastsForRetry(shouldVoid) {
     const now = new Date().toISOString();
     let changed = 0;
     for (const row of store.campaigns) {
-        if (row.voidedAt)
+        if (row.voidedAt || row.pausedAt || row.hiddenAt)
             continue;
         if (!shouldVoid(row))
             continue;
@@ -511,6 +554,9 @@ function publicBroadcastCampaign(row) {
         clicks: Math.max(0, Number(row.clicks || 0)),
         intakeCampaignId: row.intakeCampaignId || undefined,
         status: row.status,
+        voidedAt: row.voidedAt || undefined,
+        pausedAt: row.pausedAt || undefined,
+        sendStartedAt: row.sendStartedAt || undefined,
         total: row.total,
         sent: row.sent,
         failed: row.failed,
