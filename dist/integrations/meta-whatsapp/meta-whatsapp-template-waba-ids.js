@@ -134,7 +134,7 @@ function extraWabaIdsFromConnections(rows, current) {
         if (id && id !== selfWaba)
             out.add(id);
     }
-    for (const id of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm)) {
+    for (const id of (0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)(bm, selfWaba)) {
         if (id && id !== selfWaba)
             out.add(id);
     }
