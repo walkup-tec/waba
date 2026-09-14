@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CLOUD_BROADCAST_RESUME_WATCHDOG_MS = void 0;
 exports.buildCloudBroadcastProtectSnapshot = buildCloudBroadcastProtectSnapshot;
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
 /** Intervalo do guardião em processo (retoma loop morto sem Redeploy). */
 exports.CLOUD_BROADCAST_RESUME_WATCHDOG_MS = 20000;
 function pendingCount(row) {
@@ -15,7 +16,7 @@ function pendingCount(row) {
 function buildCloudBroadcastProtectSnapshot(input) {
     const items = input.campaigns
         .filter((row) => {
-        if (String(row.voidedAt || "").trim())
+        if ((0, meta_whatsapp_broadcast_void_1.isBroadcastStoppedByOperator)(row))
             return false;
         return row.status === "running" || row.status === "queued";
     })
