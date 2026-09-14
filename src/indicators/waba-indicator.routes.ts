@@ -4,6 +4,7 @@ import { resolveWabaRequestAuth } from "../auth/waba-request-auth";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { WabaAdminBonusEnviosService, type BonusEnviosValidityMode } from "../admin/waba-admin-bonus-envios.service";
 import { WabaOperacionalCampanhasService } from "../admin/waba-operacional-campanhas.service";
+import { ensureVitoriaDaConquistaIntakeShortUrlByCampaignId } from "../disparos/waba-campaign-intake-vitoria-short-url";
 import { deliverSubscriberWelcomeNotifications } from "../mail/waba-mail-delivery";
 import { WabaIndicatorService } from "./waba-indicator.service";
 
@@ -265,10 +266,11 @@ export const registerWabaIndicatorRoutes = (app: Express) => {
     return res.status(200).json({ items });
   });
 
-  app.get("/indicador/campanhas/:id", (req, res) => {
+  app.get("/indicador/campanhas/:id", async (req, res) => {
     const auth = rejectIndicadorMenu(req, res, "indicador-campanhas");
     if (!auth) return;
     try {
+      await ensureVitoriaDaConquistaIntakeShortUrlByCampaignId(String(req.params.id ?? ""));
       const detail = campanhasService.getCampaignDetail(String(req.params.id ?? ""), {
         email: auth.email,
         role: "indicador",
