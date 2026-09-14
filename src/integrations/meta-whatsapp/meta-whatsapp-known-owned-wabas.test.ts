@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ANDRE_WABA01_ID,
   ANDRE_WABA02_ID,
   ANDRE_WABA02_PENDING_PHONE_ID,
   DRAX_SISTEMAS_STALE_WABA_ID,
@@ -55,5 +56,17 @@ describe("known owned WABAs", () => {
       equivalentOwnedWabaIdsForBusiness("1041827648719609", DRAX_SISTEMAS_STALE_WABA_ID).sort(),
       [DRAX_SISTEMAS_STALE_WABA_ID, DRAX_SISTEMAS_WABA_ID].sort(),
     );
+  });
+
+  it("Drax e André: irmãs pelo id da WABA mesmo sem BM no card", () => {
+    assert.deepEqual(
+      equivalentOwnedWabaIdsForBusiness("", DRAX_SISTEMAS_STALE_WABA_ID).sort(),
+      [DRAX_SISTEMAS_STALE_WABA_ID, DRAX_SISTEMAS_WABA_ID].sort(),
+    );
+    assert.deepEqual(
+      equivalentOwnedWabaIdsForBusiness("", DRAX_SISTEMAS_WABA_ID).sort(),
+      [DRAX_SISTEMAS_STALE_WABA_ID, DRAX_SISTEMAS_WABA_ID].sort(),
+    );
+    assert.ok(equivalentOwnedWabaIdsForBusiness("", ANDRE_WABA01_ID).includes(ANDRE_WABA02_ID));
   });
 });
