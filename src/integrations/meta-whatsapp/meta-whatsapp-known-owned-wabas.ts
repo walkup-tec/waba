@@ -40,6 +40,8 @@ export const RIO_DE_JANEIRO_01_WABA_ID = "1581808413746453";
 
 export const DRAX_SISTEMAS_BUSINESS_IDS = ["1041827648719609"] as const;
 export const DRAX_SISTEMAS_WABA_ID = "1636793994538054";
+/** Conexão Embedded Signup antiga; a WABA01 do Manager é DRAX_SISTEMAS_WABA_ID. */
+export const DRAX_SISTEMAS_STALE_WABA_ID = "1988957871663919";
 
 export const WALKUP_BUSINESS_IDS = ["4141369862822598"] as const;
 export const WALKUP_WABA01_ID = "1014470201624992";
@@ -122,6 +124,22 @@ export function knownOwnedCatalogForBusiness(businessId: string): KnownOwnedBusi
 
 export function knownOwnedWabaIdsForBusiness(businessId: string): string[] {
   return (knownOwnedCatalogForBusiness(businessId)?.wabas || []).map((row) => row.id);
+}
+
+/** Ids da mesma conta no card (Manager + conexão stale). Não usar no picker de WABA. */
+export function equivalentOwnedWabaIdsForBusiness(
+  businessId: string,
+  storedWabaId?: string | null,
+): string[] {
+  const ids = new Set<string>();
+  const stored = String(storedWabaId || "").trim();
+  if (stored) ids.add(stored);
+  for (const id of knownOwnedWabaIdsForBusiness(businessId)) ids.add(id);
+  if (knownOwnedCatalogForBusiness(businessId) === knownOwnedCatalogForBusiness(DRAX_SISTEMAS_BUSINESS_IDS[0])) {
+    ids.add(DRAX_SISTEMAS_WABA_ID);
+    ids.add(DRAX_SISTEMAS_STALE_WABA_ID);
+  }
+  return [...ids].filter(Boolean);
 }
 
 export function knownOwnedWabaRowsForBusiness(businessId: string): KnownOwnedWabaRow[] {
