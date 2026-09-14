@@ -25887,7 +25887,7 @@
         <div id="admin-campanhas-report-entry" class="admin-campanhas-report-entry">
           <h3 class="admin-campanhas-report-entry-title">Registrar resultados</h3>
           <p class="admin-campanhas-report-entry-hint">
-            Preencha enviados, entregues, lidos e falhados. Cliques vêm da URL da campanha e não podem ser editados.
+            Preencha enviados, entregues, lidos e falhados. A campanha só pode ser finalizada com todos os indicadores preenchidos. Cliques vêm da URL da campanha e não podem ser editados.
           </p>
           <form id="admin-campanhas-report-form" class="admin-campanhas-report-grid" autocomplete="off">
             <div class="admin-campanhas-report-field">
@@ -48381,6 +48381,45 @@
         entry?.classList.toggle("is-loading", Boolean(isLoading));
       }
 
+      function parseAdminCampanhasReportFilledMetric(id) {
+        const raw = String(document.getElementById(id)?.value ?? "").trim();
+        if (!raw) return null;
+        const parsed = Math.round(Number(raw));
+        if (!Number.isFinite(parsed) || parsed < 0) return null;
+        return parsed;
+      }
+
+      function collectAdminCampanhasReportMetricsOrError() {
+        const sent = parseAdminCampanhasReportFilledMetric("admin-campanhas-report-sent");
+        const delivered = parseAdminCampanhasReportFilledMetric("admin-campanhas-report-delivered");
+        const read = parseAdminCampanhasReportFilledMetric("admin-campanhas-report-read");
+        const failed = parseAdminCampanhasReportFilledMetric("admin-campanhas-report-failed");
+        if ([sent, delivered, read, failed].some((value) => value == null)) {
+          return {
+            ok: false,
+            error:
+              "Preencha todos os indicadores do relatório (enviados, entregues, lidos e falhados) antes de finalizar a campanha.",
+          };
+        }
+        if (sent === 0 && delivered === 0 && read === 0 && failed === 0) {
+          return {
+            ok: false,
+            error:
+              "Preencha todos os indicadores do relatório (enviados, entregues, lidos e falhados) antes de finalizar a campanha.",
+          };
+        }
+        return { ok: true, metrics: { sent, delivered, read, failed } };
+      }
+
+      function syncAdminCampanhasReportSaveEnabled() {
+        const saveBtn = document.getElementById("admin-campanhas-report-save-btn");
+        if (!saveBtn || adminCampanhasReportReadOnly) return;
+        const complete = collectAdminCampanhasReportMetricsOrError().ok;
+        saveBtn.classList.toggle("enabled", complete);
+        if (complete) saveBtn.removeAttribute("disabled");
+        else saveBtn.setAttribute("disabled", "true");
+      }
+
       function focusAdminCampanhasReportEntry() {
         const entry = document.getElementById("admin-campanhas-report-entry");
         const firstInput = document.getElementById("admin-campanhas-report-sent");
@@ -48422,7 +48461,7 @@
           if (adminCampanhasReportReadOnly) {
             saveBtn.setAttribute("disabled", "");
           } else {
-            saveBtn.removeAttribute("disabled");
+            syncAdminCampanhasReportSaveEnabled();
           }
         }
         if (entry) {
@@ -48454,8 +48493,12 @@
         const setValue = (id, key) => {
           const input = document.getElementById(id);
           if (!input) return;
-          const value = Number(report[key] ?? 0);
-          input.value = Number.isFinite(value) ? String(Math.max(0, Math.round(value))) : "0";
+          if (report[key] == null || report[key] === "") {
+            input.value = "";
+            return;
+          }
+          const value = Number(report[key]);
+          input.value = Number.isFinite(value) ? String(Math.max(0, Math.round(value))) : "";
         };
         setValue("admin-campanhas-report-sent", "sent");
         setValue("admin-campanhas-report-delivered", "delivered");
@@ -48476,13 +48519,14 @@
         reportForm?.classList.toggle("admin-campanhas-report-grid--clicks", adminCampanhasReportShowClicks);
         if (reportHint) {
           reportHint.textContent = adminCampanhasReportShowClicks
-            ? "Preencha enviados, entregues, lidos e falhados. Cliques vêm da URL da campanha e não podem ser editados."
-            : "Preencha os campos abaixo. O gráfico e as taxas são atualizados automaticamente.";
+            ? "Preencha enviados, entregues, lidos e falhados. A campanha só pode ser finalizada com todos os indicadores preenchidos. Cliques vêm da URL da campanha e não podem ser editados."
+            : "Preencha enviados, entregues, lidos e falhados. A campanha só pode ser finalizada com todos os indicadores preenchidos.";
         }
         // Grava timeline antes do readOnly (que redesenha o dashboard) para operacional = assinante.
         adminCampanhasReportTimelinePayload = data;
         setAdminCampanhasReportReadOnly(Boolean(data.isReadOnly));
         renderAdminCampanhasReportUnified(data);
+        if (!adminCampanhasReportReadOnly) syncAdminCampanhasReportSaveEnabled();
       }
 
       async function openAdminCampanhasReport(campaignId, campaignName, options = {}) {
@@ -48530,13 +48574,22 @@
         const campaignId = adminCampanhasReportCampaignId;
         if (!campaignId || adminCampanhasReportReadOnly) return;
 
-        const readField = (id) => Math.max(0, Math.round(Number(document.getElementById(id)?.value || 0)));
-        const body = {
-          sent: readField("admin-campanhas-report-sent"),
-          delivered: readField("admin-campanhas-report-delivered"),
-          read: readField("admin-campanhas-report-read"),
-          failed: readField("admin-campanhas-report-failed"),
-        };
+        const form = document.getElementById("admin-campanhas-report-form");
+        if (form && typeof form.checkValidity === "function" && !form.checkValidity()) {
+          form.reportValidity();
+          showToast(
+            "Preencha todos os indicadores do relatório (enviados, entregues, lidos e falhados) antes de finalizar a campanha.",
+            "warning"
+          );
+          return;
+        }
+        const parsed = collectAdminCampanhasReportMetricsOrError();
+        if (!parsed.ok) {
+          form?.reportValidity?.();
+          showToast(parsed.error, "warning");
+          return;
+        }
+        const body = parsed.metrics;
 
         const saveBtn = document.getElementById("admin-campanhas-report-save-btn");
         const previousLabel = saveBtn?.textContent || "Campanha Finalizada";
@@ -48832,6 +48885,7 @@
           .forEach((input) => {
             input.addEventListener("input", () => {
               updateAdminCampanhasReportDashboard();
+              syncAdminCampanhasReportSaveEnabled();
             });
           });
 
