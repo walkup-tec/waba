@@ -31,6 +31,8 @@ const waba_campaign_intake_idempotency_1 = require("./waba-campaign-intake-idemp
 const waba_campaign_intake_constants_1 = require("./waba-campaign-intake.constants");
 const waba_campaign_intake_media_1 = require("./waba-campaign-intake-media");
 const waba_campaign_schedule_1 = require("./waba-campaign-schedule");
+const waba_public_base_url_1 = require("../lib/waba-public-base-url");
+const waba_campaign_intake_short_url_1 = require("./waba-campaign-intake-short-url");
 const intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
 const masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService();
@@ -448,6 +450,18 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 }
                 const now = new Date().toISOString();
                 const intakeId = (0, node_crypto_1.randomUUID)();
+                let responseShortUrl = "";
+                let responseShortSlug = "";
+                if ((0, waba_campaign_intake_short_url_1.shouldCreateIntakeTrackedShortUrl)(apiKind)) {
+                    const tracked = await (0, waba_campaign_intake_short_url_1.createCampaignIntakeTrackedShortUrl)({
+                        destinationUrl: responseLink,
+                        campaignId: intakeId,
+                        ownerEmail: auth.email,
+                        publicBaseHints: (0, waba_public_base_url_1.publicBaseHintsFromExpressRequest)(req),
+                    });
+                    responseShortUrl = tracked.shortUrl;
+                    responseShortSlug = tracked.shortSlug;
+                }
                 const storageDir = (0, waba_campaign_intake_repository_1.resolveCampaignIntakeStorageDir)(intakeId);
                 const imageExt = mediaCheck.extension;
                 const logoExt = logoMime.includes("png") ? ".png" : ".jpg";
@@ -480,6 +494,8 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                     whatsappLogoStoredPath,
                     textOptions,
                     responseLink,
+                    ...(responseShortUrl ? { responseShortUrl } : {}),
+                    ...(responseShortSlug ? { responseShortSlug } : {}),
                     campaignMediaKind: mediaKind,
                     imageFileName: imageFile.originalname || `campaign-media${imageExt}`,
                     imageStoredPath,
