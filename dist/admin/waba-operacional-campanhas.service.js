@@ -17,6 +17,7 @@ const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-int
 const waba_campaign_report_read_overrides_1 = require("../disparos/waba-campaign-report-read-overrides");
 const waba_campaign_report_timeline_1 = require("../disparos/waba-campaign-report-timeline");
 const waba_campaign_laboratorio_attended_1 = require("../disparos/waba-campaign-laboratorio-attended");
+const waba_campaign_intake_short_url_1 = require("../disparos/waba-campaign-intake-short-url");
 const waba_campaign_report_finalize_service_1 = require("../disparos/waba-campaign-report-finalize.service");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
@@ -269,7 +270,8 @@ class WabaOperacionalCampanhasService {
             whatsappLogoFileName: String(intake.whatsappLogoFileName ?? "").trim(),
             hasWhatsappLogo,
             textOptions: intake.textOptions,
-            responseLink: String(intake.responseLink ?? "").trim(),
+            responseLink: (0, waba_campaign_intake_short_url_1.resolveCampaignCardResponseLink)(intake),
+            responseShortUrl: String(intake.responseShortUrl ?? "").trim(),
             imageFileName: intake.imageFileName,
             mediaKind: intake.campaignMediaKind === "video" ? "video" : "image",
             spreadsheetFileName: intake.spreadsheetFileName,
