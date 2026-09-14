@@ -26,6 +26,8 @@ describe("Disparo Cloud: portfólios, WABAs, números e limite diário", () => {
     assert.match(html, /1636793994538054/);
     assert.match(html, /1988957871663919/);
     assert.match(html, /Pendente — ative com o PIN na aba Portfólios/);
+    assert.match(html, /function metaTplLabIsClientWabaId/);
+    assert.match(html, /onSelectedCard/);
     assert.match(html, /force: onDisparoCloud/);
   });
 });
