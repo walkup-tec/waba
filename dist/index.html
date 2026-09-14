@@ -41886,9 +41886,17 @@
         );
       }
 
+      function metaTplLabIsClientWabaId(wabaId) {
+        return String(wabaId || "").trim() === "1581808413746453";
+      }
+
       function metaTplBroadcastVisibleNumberEntries() {
         const selected = metaTplBroadcastSelectedWabaTargets();
         const connectionIds = new Set(metaTplBroadcastSelectedConnectionIds());
+        selected.forEach(function (item) {
+          const id = String((item && item.connectionId) || "").trim();
+          if (id) connectionIds.add(id);
+        });
         const wabaKeys = new Set(
           selected.map(function (item) {
             return metaTplBroadcastWabaKey(item.connectionId, item.wabaId);
@@ -41912,30 +41920,43 @@
         });
         if (!wabaKeys.size) return [];
         const portfolios = metaTpSession && Array.isArray(metaTpSession.portfolios) ? metaTpSession.portfolios : [];
+        const selectedBizIds = {};
+        portfolios.forEach(function (portfolio) {
+          const connectionId = String((portfolio && portfolio.connectionId) || "").trim();
+          const biz = String((portfolio && portfolio.id) || "").trim();
+          if (connectionId && biz && connectionIds.has(connectionId)) selectedBizIds[biz] = true;
+        });
         const out = [];
         const seen = {};
         portfolios.forEach(function (portfolio) {
-          const connectionId = String((portfolio && portfolio.connectionId) || "").trim();
-          if (!connectionId) return;
-          const onSelectedConn = connectionIds.has(connectionId);
+          const cardConnectionId = String((portfolio && portfolio.connectionId) || "").trim();
+          const businessId = String((portfolio && portfolio.id) || "").trim();
+          const onSelectedCard =
+            Boolean(cardConnectionId && connectionIds.has(cardConnectionId)) ||
+            Boolean(businessId && selectedBizIds[businessId]);
+          const connectionId = cardConnectionId || (onSelectedCard ? Array.from(connectionIds)[0] || "" : "");
+          if (!connectionId && !onSelectedCard) return;
           const portfolioName =
             typeof metaTpPortfolioTitle === "function"
               ? metaTpPortfolioTitle(portfolio || {})
               : String((portfolio && portfolio.name) || "Portfólio").trim() || "Portfólio";
           const portfolioWabaId = String((portfolio && portfolio.wabaId) || "").trim();
           ((portfolio && portfolio.numbers) || []).forEach(function (item) {
-            const phoneNumberId = String((item && item.phoneNumberId) || "").trim();
+            const phoneNumberId = String((item && item.phoneNumberId) || (item && item.displayPhoneNumber) || "").trim();
             if (!phoneNumberId || seen[phoneNumberId]) return;
-            const wabaId = String((item && item.wabaId) || portfolioWabaId || "").trim();
-            const match = wabaId
-              ? Boolean(aliasWabas[wabaId])
-              : onSelectedConn &&
+            const itemWaba = String((item && item.wabaId) || "").trim();
+            const wabaId = itemWaba || portfolioWabaId;
+            if (wabaId && metaTplLabIsClientWabaId(wabaId) && !aliasWabas[wabaId]) return;
+            const match =
+              onSelectedCard ||
+              Boolean(wabaId && aliasWabas[wabaId]) ||
+              (connectionId &&
                 metaTplBroadcastNumberMatchesSelectedWaba(
                   connectionId,
                   portfolio,
                   item,
                   wabaKeys,
-                );
+                ));
             if (!match) return;
             seen[phoneNumberId] = true;
             out.push({
@@ -42315,7 +42336,7 @@
         const entries = metaTplBroadcastActiveNumberEntries();
         if (!visible.length) {
           root.innerHTML =
-            '<span class="muted">Nenhum número destas WABAs no Laboratório. Abra Portfólios e clique em Atualizar da Meta. Se o chip estiver Pendente, ative com o PIN.</span>';
+            '<span class="muted">Nenhum número destas WABAs no Laboratório. Os chips Ativos do card em Portfólios deveriam aparecer aqui — clique em Atualizar da Meta e marque o mesmo portfólio.</span>';
           metaTplBroadcastRenderSplitPreview();
           return;
         }
