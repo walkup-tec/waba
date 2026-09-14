@@ -84,11 +84,12 @@ const resolvePlannedSendCount = (ownerEmail, importedLineCount, requestedSendCou
             error: "Informe a quantidade de envios desejada.",
         };
     }
-    if (requestedSendCount < waba_campaign_intake_constants_1.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+    const minPlanned = (0, waba_campaign_intake_constants_1.campaignMinPlannedSendCountForEmail)(ownerEmail);
+    if (requestedSendCount < minPlanned) {
         return {
             plannedSendCount: 0,
             isMaster: unlimitedCredits,
-            error: `A campanha deve ter no mínimo ${waba_campaign_intake_constants_1.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} envios.`,
+            error: `A campanha deve ter no mínimo ${minPlanned} envios.`,
         };
     }
     if (requestedSendCount > importedLineCount) {
@@ -407,11 +408,12 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             if (importedLineCount < 1) {
                 return res.status(400).json({ error: "O arquivo não contém linhas de leads." });
             }
-            if (importedLineCount < waba_campaign_intake_constants_1.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+            const minPlanned = (0, waba_campaign_intake_constants_1.campaignMinPlannedSendCountForEmail)(auth.email);
+            if (importedLineCount < minPlanned) {
                 return res.status(400).json({
                     error: apiKind === "oficial"
-                        ? `O arquivo precisa ter no mínimo ${waba_campaign_intake_constants_1.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} contatos únicos para gerar a campanha.`
-                        : `O arquivo precisa ter no mínimo ${waba_campaign_intake_constants_1.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} contatos para gerar a campanha.`,
+                        ? `O arquivo precisa ter no mínimo ${minPlanned} contatos únicos para gerar a campanha.`
+                        : `O arquivo precisa ter no mínimo ${minPlanned} contatos para gerar a campanha.`,
                 });
             }
             const requestedSendCount = parseRequestedPlannedSendCount(body);
