@@ -343,7 +343,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             const spreadsheetFile = files?.spreadsheet?.[0];
             if (!imageFile) {
                 return res.status(400).json({
-                    error: "Envie a imagem (PNG ou JPG, 1080×1080) ou o vídeo MP4 da campanha.",
+                    error: "Envie a imagem (PNG ou JPG, 1200×628) ou o vídeo MP4 da campanha.",
                 });
             }
             if (!whatsappLogoFile) {
