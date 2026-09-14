@@ -4016,6 +4016,25 @@
           background: linear-gradient(90deg, #16a34a, #4ade80);
         }
         .meta-tpl-broadcast-progress-label { color: #94a3b8; font-size: 12px; white-space: nowrap; }
+        .meta-tpl-broadcast-health {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 6px;
+        }
+        .meta-tpl-broadcast-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          min-width: 168px;
+        }
+        .meta-tpl-broadcast-actions .instance-action-btn { margin: 0; }
+        .meta-tpl-broadcast-actions .instance-action-btn:disabled,
+        .meta-tpl-broadcast-actions .instance-action-btn.disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+        .meta-tpl-broadcast-row-unhealthy td { background: rgba(239, 68, 68, 0.06); }
         .meta-tpl-broadcast-numbers {
           display: flex;
           flex-direction: column;
@@ -22911,11 +22930,12 @@
                       <th>Envios</th>
                       <th>Andamento</th>
                       <th>Status</th>
+                      <th>Ações</th>
                     </tr>
                   </thead>
                   <tbody id="meta-tpl-broadcast-history-tbody">
                     <tr>
-                      <td class="muted" colspan="6">Nenhuma campanha iniciada neste Laboratório.</td>
+                      <td class="muted" colspan="7">Nenhuma campanha iniciada neste Laboratório.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -40531,6 +40551,34 @@
             status: "running",
             statusKey: "running",
             statusLabel: "Enviando",
+            canCancel: false,
+            canPause: true,
+            canDelete: true,
+            showPause: true,
+            health: { ok: true, key: "ok", label: "" },
+          },
+          {
+            id: "demo-broadcast-2",
+            startedAt: "2026-09-14T11:52:19.000Z",
+            campaignName: "Cashback ok",
+            clientName: "Mozart",
+            plannedSendCount: 12266,
+            sent: 0,
+            processedCount: 0,
+            progressPercent: 0,
+            status: "queued",
+            statusKey: "scheduled",
+            statusLabel: "Agendado",
+            scheduledSendLabel: "14/09/2026, 01:00",
+            canCancel: true,
+            canPause: false,
+            canDelete: true,
+            showPause: false,
+            health: {
+              ok: false,
+              key: "missed_schedule",
+              label: "Horário passou e o disparo não começou",
+            },
           },
         ];
       }
@@ -42489,8 +42537,101 @@
         if (key === "collecting") return { label: item.statusLabel || "Coletando relatório da Meta", cls: "is-pending" };
         if (key === "queued") return { label: item.statusLabel || "Na fila", cls: "is-pending" };
         if (key === "failed" || key === "error") return { label: item.statusLabel || "Falha no envio", cls: "is-rejected" };
+        if (key === "paused") return { label: item.statusLabel || "Pausado", cls: "is-paused" };
         if (key === "cancelled") return { label: item.statusLabel || "Cancelada", cls: "is-disabled" };
         return { label: String((item && item.statusLabel) || "Em andamento"), cls: "is-pending" };
+      }
+
+      function metaTplBroadcastHistoryHealth(item) {
+        const health = item && item.health;
+        if (!health || health.ok !== false) return null;
+        return {
+          label: String(health.label || "Campanha sem disparo").trim() || "Campanha sem disparo",
+          key: String(health.key || "unhealthy"),
+        };
+      }
+
+      function metaTplBroadcastHistoryActionButton(action, label, enabled, extraClass) {
+        const cls = extraClass ? " " + extraClass : "";
+        if (enabled) {
+          return (
+            '<button type="button" class="instance-action-btn enabled' +
+            cls +
+            '" data-broadcast-action="' +
+            metaTpEsc(action) +
+            '">' +
+            metaTpEsc(label) +
+            "</button>"
+          );
+        }
+        return (
+          '<button type="button" class="instance-action-btn disabled' +
+          cls +
+          '" data-broadcast-action="' +
+          metaTpEsc(action) +
+          '" disabled>' +
+          metaTpEsc(label) +
+          "</button>"
+        );
+      }
+
+      function metaTplBroadcastBindHistoryActions() {
+        const tbody = metaTplBroadcastEl("meta-tpl-broadcast-history-tbody");
+        if (!tbody || tbody.dataset.actionsBound === "1") return;
+        tbody.dataset.actionsBound = "1";
+        tbody.addEventListener("click", function (event) {
+          const btn = event.target && event.target.closest ? event.target.closest("[data-broadcast-action]") : null;
+          if (!btn || btn.disabled || btn.classList.contains("disabled")) return;
+          const row = btn.closest("tr");
+          const id = String((row && row.getAttribute("data-broadcast-id")) || "").trim();
+          const action = String(btn.getAttribute("data-broadcast-action") || "").trim();
+          if (!id || !action) return;
+          void metaTplBroadcastRunHistoryAction(action, id, btn);
+        });
+      }
+
+      async function metaTplBroadcastRunHistoryAction(action, id, btn) {
+        const prompts = {
+          cancel: {
+            title: "Cancelar campanha",
+            text: "Cancelar esta campanha configurada? Ela não será disparada.",
+            confirmLabel: "Cancelar campanha",
+          },
+          pause: {
+            title: "Pausar disparo",
+            text: "Pausar o disparo agora? Os envios param e o número fica livre.",
+            confirmLabel: "Pausar",
+          },
+          hide: {
+            title: "Excluir da lista",
+            text: "Excluir esta campanha da tabela? O registro some da lista. Você pode criar outra depois.",
+            confirmLabel: "Excluir",
+          },
+        };
+        const prompt = prompts[action];
+        if (!prompt) return;
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          metaTplBroadcastSetStatus("Pré-visualização: esta ação só funciona no Laboratório real.");
+          return;
+        }
+        const ok = await openAppConfirm({
+          title: prompt.title,
+          text: prompt.text,
+          confirmLabel: prompt.confirmLabel,
+          danger: true,
+        });
+        if (!ok) return;
+        if (btn) btn.disabled = true;
+        try {
+          await metaTplLabFetchJson(
+            "/integrations/meta/whatsapp/broadcast/" + encodeURIComponent(id) + "/" + action,
+            { method: "POST" },
+          );
+          await metaTplBroadcastLoadHistory();
+        } catch (error) {
+          if (btn) btn.disabled = false;
+          metaTplBroadcastSetStatus(String((error && error.message) || "Não foi possível concluir a ação."));
+        }
       }
 
       function metaTplBroadcastRenderHistory(items) {
@@ -42499,7 +42640,7 @@
         const rows = Array.isArray(items) ? items : [];
         if (!rows.length) {
           tbody.innerHTML =
-            '<tr><td class="muted" colspan="6">Nenhuma campanha iniciada neste Laboratório.</td></tr>';
+            '<tr><td class="muted" colspan="7">Nenhuma campanha iniciada neste Laboratório.</td></tr>';
           return;
         }
         tbody.innerHTML = rows
@@ -42511,9 +42652,19 @@
             const processed = Math.max(0, Math.round(Number(item.processedCount || item.sent || 0)));
             const percent = Math.max(0, Math.min(100, Math.round(Number(item.progressPercent || 0))));
             const status = metaTplBroadcastHistoryStatusMeta(item);
+            const health = metaTplBroadcastHistoryHealth(item);
             const scheduleTag = String((item && item.scheduledSendLabel) || "").trim();
+            const canCancel = item && item.canCancel === true;
+            const canPause = item && item.canPause === true;
+            const canDelete = item && item.canDelete !== false;
+            const showPause = item && item.showPause === true;
+            const rowId = String((item && item.id) || "").trim();
             return (
-              "<tr>" +
+              '<tr data-broadcast-id="' +
+              metaTpEsc(rowId) +
+              '"' +
+              (health ? ' class="meta-tpl-broadcast-row-unhealthy"' : "") +
+              ">" +
               "<td>" +
               metaTpEsc(started) +
               "</td>" +
@@ -42542,22 +42693,44 @@
               " / " +
               envios +
               "</span></div></td>" +
-              "<td>" +
+              "<td><div class=\"meta-tpl-broadcast-health\">" +
               '<span class="meta-tpl-status-tag ' +
               status.cls +
               '">' +
               metaTpEsc(status.label) +
-              "</span></td>" +
+              "</span>" +
+              (health
+                ? '<span class="meta-tpl-status-tag is-flagged" title="' +
+                  metaTpEsc(health.label) +
+                  '">' +
+                  metaTpEsc(health.label) +
+                  "</span>"
+                : "") +
+              "</div></td>" +
+              '<td><div class="meta-tpl-broadcast-actions">' +
+              metaTplBroadcastHistoryActionButton("cancel", "Cancelar", canCancel, "") +
+              (showPause ? metaTplBroadcastHistoryActionButton("pause", "Pausar", canPause, "btn-proxy-campanha") : "") +
+              metaTplBroadcastHistoryActionButton("hide", "Excluir", canDelete, "btn-delete") +
+              "</div></td>" +
               "</tr>"
             );
           })
           .join("");
+        metaTplBroadcastBindHistoryActions();
       }
 
       function metaTplBroadcastHistoryNeedsPoll(items) {
         return (items || []).some(function (item) {
           const key = String((item && item.statusKey) || item && item.status || "");
-          return key === "queued" || key === "scheduled" || key === "running" || key === "collecting" || key === "in_progress";
+          const unhealthy = item && item.health && item.health.ok === false;
+          return (
+            key === "queued" ||
+            key === "scheduled" ||
+            key === "running" ||
+            key === "collecting" ||
+            key === "in_progress" ||
+            unhealthy
+          );
         });
       }
 
@@ -42581,7 +42754,7 @@
         } catch (_error) {
           if (!tbody.innerHTML) {
             tbody.innerHTML =
-              '<tr><td class="muted" colspan="6">Não foi possível carregar as campanhas iniciadas.</td></tr>';
+              '<tr><td class="muted" colspan="7">Não foi possível carregar as campanhas iniciadas.</td></tr>';
           }
         }
       }
@@ -42683,6 +42856,11 @@
               status: "running",
               statusKey: "running",
               statusLabel: "Enviando",
+              canCancel: false,
+              canPause: true,
+              canDelete: true,
+              showPause: true,
+              health: { ok: true, key: "ok", label: "" },
             },
           ]);
           metaTplBroadcastSetStatus("Disparo iniciado. Acompanhe o andamento na tabela. Preview — nada foi enviado à Meta.");
