@@ -567,6 +567,31 @@ describe("ocupação do número no Disparo Cloud", () => {
     assert.equal(busy.has("c1"), true);
     assert.equal(busy.has("c2"), false);
   });
+
+  it("pausa ou exclusão libera o número mesmo com campanha em andamento", () => {
+    const busy = collectBusyCloudPhoneNumberIds(
+      [
+        {
+          phoneNumberId: "phone-a",
+          status: "running",
+          intakeCampaignId: "paused",
+          pausedAt: "2026-09-14T12:00:00.000Z",
+        },
+        {
+          phoneNumberId: "phone-b",
+          status: "queued",
+          intakeCampaignId: "hidden",
+          hiddenAt: "2026-09-14T12:00:00.000Z",
+        },
+      ],
+      new Map([
+        ["paused", "in_progress"],
+        ["hidden", "in_progress"],
+      ]),
+    );
+    assert.equal(busy.has("phone-a"), false);
+    assert.equal(busy.has("phone-b"), false);
+  });
 });
 
 describe("campanha do assinante no Disparo Cloud", () => {
@@ -625,6 +650,14 @@ describe("histórico do Disparo Cloud", () => {
         voided: true,
       }).label,
       "Cancelado",
+    );
+    assert.equal(
+      cloudBroadcastDisplayStatus({
+        broadcastStatus: "running",
+        intakeStatus: "in_progress",
+        paused: true,
+      }).label,
+      "Pausado",
     );
   });
 });
