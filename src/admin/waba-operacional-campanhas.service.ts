@@ -39,6 +39,7 @@ import {
   resolveOperacionalManualReportClicks,
   resolveOperacionalManualReportShowClicks,
 } from "../disparos/waba-campaign-intake-short-url";
+import { ensureVitoriaDaConquistaIntakeShortUrlByCampaignId } from "../disparos/waba-campaign-intake-vitoria-short-url";
 import { resolveCampaignReportOverride } from "../disparos/waba-campaign-report-read-overrides";
 import { finalizeIntakePerformanceReport } from "../disparos/waba-campaign-report-finalize.service";
 import {
@@ -510,6 +511,7 @@ export class WabaOperacionalCampanhasService {
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
   ): Promise<OperacionalCampaignReportView> {
+    await ensureVitoriaDaConquistaIntakeShortUrlByCampaignId(campaignId);
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
 
     const status = normalizeStoredStatus(intake.status);
@@ -609,6 +611,7 @@ export class WabaOperacionalCampanhasService {
     staff: OperacionalCampanhasStaffContext,
   ): Promise<OperacionalCampaignDetail> {
     this.assertCanMutateCampaigns(staff);
+    await ensureVitoriaDaConquistaIntakeShortUrlByCampaignId(campaignId);
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
     if (campaignAttendedByLaboratorioStaff(intake)) {
       throw new Error(
