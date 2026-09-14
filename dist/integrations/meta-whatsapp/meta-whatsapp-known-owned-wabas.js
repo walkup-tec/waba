@@ -11,6 +11,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KNOWN_OWNED_BUSINESS_WABAS = exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = exports.MARILZA_DE_CASTRO_BUSINESS_IDS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_STALE_WABA_ID = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
 exports.catalogBackfillBusinessIds = catalogBackfillBusinessIds;
+exports.catalogBusinessLabel = catalogBusinessLabel;
 exports.catalogAgencyBusinessIds = catalogAgencyBusinessIds;
 exports.catalogAdminBusinessIds = catalogAdminBusinessIds;
 exports.businessIdsToReopenAfterFalseLeftManager = businessIdsToReopenAfterFalseLeftManager;
@@ -47,9 +48,24 @@ exports.WALKUP_WABA01_ID = "1014470201624992";
 exports.WALKUP_APP_BUSINESS_IDS = ["1247508354180311"];
 exports.MARILZA_DE_CASTRO_BUSINESS_IDS = ["4681844838758316"];
 exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = ["962298516898955"];
+const CATALOG_ADMIN_BUSINESS_LABELS = {
+    "4681844838758316": "60.846.306 Marilza de Castro",
+    "962298516898955": "60.845.972 Flaviane Ferreira Trindade",
+};
 /** BMs de cliente administrados no laboratório — o me/businesses costuma omitir. */
 function catalogBackfillBusinessIds() {
     return [...exports.MARILZA_DE_CASTRO_BUSINESS_IDS, ...exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS];
+}
+/** Nome oficial do BM no Manager, quando a Graph devolve o id sem name. */
+function catalogBusinessLabel(businessId) {
+    const wanted = String(businessId || "").trim();
+    if (!wanted)
+        return "";
+    for (const [id, name] of Object.entries(CATALOG_ADMIN_BUSINESS_LABELS)) {
+        if (metaBusinessIdsMatch(id, wanted))
+            return name;
+    }
+    return "";
 }
 /** BMs da agência — o Atualizar varre /clients e /owned_businesses destes IDs. */
 function catalogAgencyBusinessIds() {
