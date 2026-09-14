@@ -67,6 +67,7 @@ import {
   knownWabaNameForId,
   metaBusinessIdsMatch,
   businessIdsToReopenAfterFalseLeftManager,
+  catalogAgencyBusinessIds,
   catalogBackfillBusinessIds,
 } from "./meta-whatsapp-known-owned-wabas";
 import { publicMetaGraphRegisterMessage } from "./meta-whatsapp-graph-errors";
@@ -76,6 +77,7 @@ import {
   fetchBusinessFromGraph,
   fetchAssignedBusinesses,
   directoryFromAssigned,
+  discoverAdministeredBusinessNodes,
   fetchVisibleBusinessCard,
   pickMetaBusinessNode,
   fillPageNameById,
@@ -399,6 +401,44 @@ function withHydrateLimits(graph: MetaConnectionGraphCaller): MetaConnectionGrap
       maxAttempts: input.maxAttempts ?? HYDRATE_GRAPH.maxAttempts,
       timeoutMs: input.timeoutMs ?? HYDRATE_GRAPH.timeoutMs,
     });
+}
+
+function listedHasBusinessId(listedIds: Set<string>, businessId: string): boolean {
+  return [...listedIds].some((listed) => metaBusinessIdsMatch(listed, businessId));
+}
+
+async function collectDiscoveredAdminCards(input: {
+  graph: MetaConnectionGraphCaller;
+  tokens: string[];
+  listedIds: Set<string>;
+}): Promise<MetaPortfolioPublic[]> {
+  const extra: MetaPortfolioPublic[] = [];
+  const addIfMissing = (card: MetaPortfolioPublic | null) => {
+    const id = String(card?.id || "").trim();
+    if (!id || !card || listedHasBusinessId(input.listedIds, id)) return;
+    input.listedIds.add(id);
+    extra.push(card);
+  };
+
+  const seeds = catalogAgencyBusinessIds();
+  for (const token of input.tokens) {
+    if (!token) continue;
+    const nodes = await discoverAdministeredBusinessNodes(input.graph, token, seeds);
+    for (const card of directoryFromAssigned({ data: nodes })) addIfMissing(card);
+  }
+
+  for (const businessId of catalogBackfillBusinessIds()) {
+    if (listedHasBusinessId(input.listedIds, businessId)) continue;
+    for (const token of input.tokens) {
+      if (!token) continue;
+      const found = await fetchVisibleBusinessCard(input.graph, token, businessId);
+      if (found) {
+        addIfMissing(found);
+        break;
+      }
+    }
+  }
+  return extra;
 }
 
 async function hydrateOpenConnection(
@@ -1711,26 +1751,16 @@ export class MetaWhatsappConnectionService {
         .map((item) => String(item.id || "").trim())
         .filter(Boolean),
     );
-    const missingAdminIds = catalogBackfillBusinessIds().filter(
-      (id) => ![...listedIds].some((listed) => metaBusinessIdsMatch(listed, id)),
-    );
-    const extraCards: MetaPortfolioPublic[] = [];
-    if (missingAdminIds.length) {
-      const keptConn = new Set(kept.map((item) => item.connectionId));
-      const tokens = writeTokens
-        .filter((row) => keptConn.has(row.id))
-        .map((row) => row.token)
-        .filter(Boolean);
-      const g = withHydrateLimits(this.graph);
-      for (const businessId of missingAdminIds) {
-        let found: MetaPortfolioPublic | null = null;
-        for (const token of tokens) {
-          found = await fetchVisibleBusinessCard(g, token, businessId);
-          if (found) break;
-        }
-        if (found?.id) extraCards.push(found);
-      }
-    }
+    const keptConn = new Set(kept.map((item) => item.connectionId));
+    const tokens = writeTokens
+      .filter((row) => keptConn.has(row.id))
+      .map((row) => row.token)
+      .filter(Boolean);
+    const extraCards = await collectDiscoveredAdminCards({
+      graph: withHydrateLimits(this.graph),
+      tokens,
+      listedIds,
+    });
     const cards = dedupePortfolioCards([...fromConnections, ...fromDirectory, ...extraCards]).filter(
       isRenderablePortfolioCard,
     );
