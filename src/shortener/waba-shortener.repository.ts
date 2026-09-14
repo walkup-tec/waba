@@ -120,6 +120,15 @@ export async function attachCampaignIdToShortLink(slug: string, campaignId: stri
   return true;
 }
 
+export async function getShortLinkClicksByCampaignId(campaignId: string): Promise<number> {
+  const id = String(campaignId || "").trim();
+  if (!id) return 0;
+  const store = await loadStore();
+  return store.links
+    .filter((row) => String(row.campaignId || "").trim() === id)
+    .reduce((sum, row) => sum + Math.max(0, Number(row.clicks || 0)), 0);
+}
+
 export async function getShortLinkClicksByUrl(shortUrl: string): Promise<number | null> {
   const slug = extractSlugFromPublicShortUrl(shortUrl);
   if (!slug) return null;
