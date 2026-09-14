@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { rejectUnlessStaffMenu } from "../auth/waba-staff-menu-auth";
 import { WabaOperacionalCampanhasService } from "./waba-operacional-campanhas.service";
+import { ensureVitoriaDaConquistaIntakeShortUrlByCampaignId } from "../disparos/waba-campaign-intake-vitoria-short-url";
 
 const OPERACIONAL_CAMPANHAS_MENU_ID = "admin-campanhas";
 const operacionalCampanhasService = new WabaOperacionalCampanhasService();
@@ -30,10 +31,11 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
     return res.status(200).json({ items });
   });
 
-  app.get("/admin/operacional/campanhas/:id", (req, res) => {
+  app.get("/admin/operacional/campanhas/:id", async (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
     try {
+      await ensureVitoriaDaConquistaIntakeShortUrlByCampaignId(req.params.id);
       const detail = operacionalCampanhasService.getCampaignDetail(req.params.id, {
         email: auth.email,
         role: auth.role,
