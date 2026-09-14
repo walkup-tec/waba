@@ -18,6 +18,7 @@ import {
   catalogAdminBusinessIds,
   catalogAgencyBusinessIds,
   catalogBackfillBusinessIds,
+  catalogBusinessLabel,
 } from "./meta-whatsapp-known-owned-wabas";
 
 describe("known owned WABAs", () => {
@@ -86,5 +87,15 @@ describe("known owned WABAs", () => {
     assert.ok(agencies.includes("1247508354180311"));
     assert.equal(agencies.includes("962298516898955"), false);
     assert.equal(agencies.includes("4681844838758316"), false);
+  });
+
+  it("nomeia Flaviane e Marilza pelo catálogo quando o id casa", () => {
+    assert.equal(
+      catalogBusinessLabel("962298516898955"),
+      "60.845.972 Flaviane Ferreira Trindade",
+    );
+    assert.equal(catalogBusinessLabel("1962298516898955"), "60.845.972 Flaviane Ferreira Trindade");
+    assert.equal(catalogBusinessLabel("4681844838758316"), "60.846.306 Marilza de Castro");
+    assert.equal(catalogBusinessLabel("1041827648719609"), "");
   });
 });
