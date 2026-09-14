@@ -1,7 +1,7 @@
 "use strict";
-/** Números do Disparo Cloud podem vir de vários portfólios; o relatório permanece um só. */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BroadcastPhoneSelectionError = void 0;
+exports.broadcastNumberMatchesSelectedWaba = broadcastNumberMatchesSelectedWaba;
 exports.indexBroadcastPortfolioPhones = indexBroadcastPortfolioPhones;
 exports.resolveBroadcastPhoneBindings = resolveBroadcastPhoneBindings;
 exports.connectionIdByPhoneNumber = connectionIdByPhoneNumber;
@@ -11,6 +11,7 @@ exports.templateMissingOnPortfolioMessage = templateMissingOnPortfolioMessage;
 exports.templateWabaMismatchMessage = templateWabaMismatchMessage;
 exports.bindingMatchesTemplateWaba = bindingMatchesTemplateWaba;
 exports.connectionNeedsLocalTemplate = connectionNeedsLocalTemplate;
+const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
 class BroadcastPhoneSelectionError extends Error {
     constructor(reason, message) {
         super(message);
@@ -18,6 +19,28 @@ class BroadcastPhoneSelectionError extends Error {
     }
 }
 exports.BroadcastPhoneSelectionError = BroadcastPhoneSelectionError;
+function broadcastNumberMatchesSelectedWaba(input) {
+    const connectionId = String(input.connectionId || "").trim();
+    if (!connectionId)
+        return false;
+    const selectedForCard = input.selected
+        .filter((row) => String(row.connectionId || "").trim() === connectionId)
+        .map((row) => String(row.wabaId || "").trim())
+        .filter(Boolean);
+    if (!selectedForCard.length)
+        return false;
+    const itemWaba = String(input.itemWabaId || "").trim();
+    const aliases = new Set((0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)(String(input.businessId || ""), input.portfolioWabaId));
+    const portfolioWaba = String(input.portfolioWabaId || "").trim();
+    if (portfolioWaba)
+        aliases.add(portfolioWaba);
+    if (!itemWaba) {
+        return selectedForCard.some((id) => aliases.has(id));
+    }
+    if (selectedForCard.includes(itemWaba))
+        return true;
+    return selectedForCard.some((id) => aliases.has(id) && aliases.has(itemWaba));
+}
 function indexBroadcastPortfolioPhones(portfolios) {
     const catalog = new Map();
     for (const card of portfolios || []) {
