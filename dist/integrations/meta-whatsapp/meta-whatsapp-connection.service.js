@@ -272,14 +272,6 @@ async function collectDiscoveredAdminCards(input) {
         input.listedIds.add(id);
         extra.push(card);
     };
-    const seeds = (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)();
-    for (const token of input.tokens) {
-        if (!token)
-            continue;
-        const nodes = await (0, meta_whatsapp_portfolio_graph_1.discoverAdministeredBusinessNodes)(input.graph, token, seeds);
-        for (const card of (0, meta_whatsapp_portfolio_graph_1.directoryFromAssigned)({ data: nodes }))
-            addIfMissing(card);
-    }
     for (const businessId of (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)()) {
         if (listedHasBusinessId(input.listedIds, businessId))
             continue;
@@ -292,6 +284,19 @@ async function collectDiscoveredAdminCards(input) {
                 break;
             }
         }
+    }
+    try {
+        const seeds = (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)();
+        for (const token of input.tokens) {
+            if (!token)
+                continue;
+            const nodes = await (0, meta_whatsapp_portfolio_graph_1.discoverAdministeredBusinessNodes)(input.graph, token, seeds);
+            for (const card of (0, meta_whatsapp_portfolio_graph_1.directoryFromAssigned)({ data: nodes }))
+                addIfMissing(card);
+        }
+    }
+    catch {
+        /* a varredura da agência não pode impedir o card já confirmado no GET */
     }
     return extra;
 }
