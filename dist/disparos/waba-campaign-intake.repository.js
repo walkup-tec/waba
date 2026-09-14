@@ -5,7 +5,7 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
 const data_path_1 = require("../data-path");
 const waba_campaign_credit_funding_1 = require("../billing/waba-campaign-credit-funding");
-const STORE_FILE = (0, data_path_1.resolveDataFile)("waba-campaign-intakes.json");
+const storeFile = () => (0, data_path_1.resolveDataFile)("waba-campaign-intakes.json");
 const resolveCampaignIntakeStorageDir = (intakeId) => {
     const base = (0, data_path_1.resolveDataDir)();
     const dir = `${base}/campaign-intakes/${intakeId}`;
@@ -16,17 +16,18 @@ const resolveCampaignIntakeStorageDir = (intakeId) => {
 exports.resolveCampaignIntakeStorageDir = resolveCampaignIntakeStorageDir;
 const emptyStore = () => ({ version: 1, intakes: [] });
 const ensureStore = () => {
-    const folder = (0, node_path_1.dirname)(STORE_FILE);
+    const filePath = storeFile();
+    const folder = (0, node_path_1.dirname)(filePath);
     if (!(0, node_fs_1.existsSync)(folder))
         (0, node_fs_1.mkdirSync)(folder, { recursive: true });
-    if (!(0, node_fs_1.existsSync)(STORE_FILE)) {
-        (0, node_fs_1.writeFileSync)(STORE_FILE, JSON.stringify(emptyStore(), null, 2), "utf-8");
+    if (!(0, node_fs_1.existsSync)(filePath)) {
+        (0, node_fs_1.writeFileSync)(filePath, JSON.stringify(emptyStore(), null, 2), "utf-8");
     }
 };
 const readStore = () => {
     ensureStore();
     try {
-        const parsed = JSON.parse((0, node_fs_1.readFileSync)(STORE_FILE, "utf-8"));
+        const parsed = JSON.parse((0, node_fs_1.readFileSync)(storeFile(), "utf-8"));
         if (parsed?.version !== 1 || !Array.isArray(parsed.intakes))
             return emptyStore();
         return parsed;
@@ -37,10 +38,11 @@ const readStore = () => {
 };
 const writeStore = (store) => {
     ensureStore();
+    const filePath = storeFile();
     const payload = JSON.stringify(store, null, 2);
-    const tmp = `${STORE_FILE}.${process.pid}.${Date.now()}.tmp`;
+    const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
     (0, node_fs_1.writeFileSync)(tmp, payload, "utf-8");
-    (0, node_fs_1.renameSync)(tmp, STORE_FILE);
+    (0, node_fs_1.renameSync)(tmp, filePath);
 };
 class WabaCampaignIntakeRepository {
     create(intake) {
