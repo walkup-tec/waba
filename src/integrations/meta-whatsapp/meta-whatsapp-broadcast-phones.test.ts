@@ -7,6 +7,7 @@ import {
   connectionIdByPhoneNumber,
   connectionNeedsLocalTemplate,
   indexBroadcastPortfolioPhones,
+  listBroadcastNumbersForSelectedWabas,
   resolveBroadcastPhoneBindings,
   templateMissingOnPortfolioMessage,
 } from "./meta-whatsapp-broadcast-phones";
@@ -75,6 +76,48 @@ describe("meta-whatsapp-broadcast-phones", () => {
       }),
       false,
     );
+    assert.equal(
+      broadcastNumberMatchesSelectedWaba({
+        connectionId: "conn-drax",
+        selected,
+        itemWabaId: "1988957871663919",
+        portfolioWabaId: "1988957871663919",
+      }),
+      true,
+    );
+  });
+
+  it("Drax: lista o chip Pendente de outro card com a mesma WABA01", () => {
+    const rows = listBroadcastNumbersForSelectedWabas({
+      selected: [{ connectionId: "conn-drax", wabaId: "1636793994538054" }],
+      portfolios: [
+        {
+          connectionId: "conn-drax",
+          name: "Drax Sistemas",
+          wabaId: "1988957871663919",
+          numbers: [],
+        },
+        {
+          connectionId: "conn-walkup-app",
+          name: "Grupo Walkup App",
+          wabaId: "1636793994538054",
+          numbers: [
+            {
+              phoneNumberId: "phone-16007",
+              displayPhoneNumber: "+55 51 92636-16007",
+              verifiedName: "Relacionamento e Atendimento",
+              uiStatus: "pendente",
+              dispatchStatus: "livre",
+              wabaId: "1636793994538054",
+            },
+          ],
+        },
+      ],
+    });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.phoneNumberId, "phone-16007");
+    assert.equal(rows[0]?.uiStatus, "pendente");
+    assert.equal(rows[0]?.connectionId, "conn-walkup-app");
   });
 
   it("indexa números de vários portfólios", () => {
