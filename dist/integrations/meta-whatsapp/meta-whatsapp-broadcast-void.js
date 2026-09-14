@@ -4,6 +4,9 @@ exports.OPT_IN_PTX_RESUME_BROADCAST_ID = exports.OPT_IN_PTX_RESUME_INTAKE_ID_LEG
 exports.isOptInPtxResumeIntake = isOptInPtxResumeIntake;
 exports.isOptInPtxResumeCampaign = isOptInPtxResumeCampaign;
 exports.isBroadcastVoided = isBroadcastVoided;
+exports.isBroadcastPaused = isBroadcastPaused;
+exports.isBroadcastHidden = isBroadcastHidden;
+exports.isBroadcastStoppedByOperator = isBroadcastStoppedByOperator;
 exports.shouldAbortBroadcastOnHeaderMediaFailure = shouldAbortBroadcastOnHeaderMediaFailure;
 exports.isBroadcastAbandonedForRetry = isBroadcastAbandonedForRetry;
 exports.shouldVoidCloudBroadcast = shouldVoidCloudBroadcast;
@@ -34,6 +37,15 @@ function leadCountsAsFailed(lead) {
 }
 function isBroadcastVoided(row) {
     return Boolean(String(row?.voidedAt || "").trim());
+}
+function isBroadcastPaused(row) {
+    return Boolean(String(row?.pausedAt || "").trim());
+}
+function isBroadcastHidden(row) {
+    return Boolean(String(row?.hiddenAt || "").trim());
+}
+function isBroadcastStoppedByOperator(row) {
+    return isBroadcastVoided(row) || isBroadcastPaused(row) || isBroadcastHidden(row);
 }
 /** Cabeçalho recusado (131053): não continuar o lote — Graph aceita e ninguém recebe. */
 function shouldAbortBroadcastOnHeaderMediaFailure(row) {
@@ -76,7 +88,7 @@ function shouldVoidCloudBroadcast(row) {
 function isCloudBroadcastInactiveForRetry(row) {
     if (!row)
         return true;
-    return (isBroadcastVoided(row) ||
+    return (isBroadcastStoppedByOperator(row) ||
         isBroadcastAbandonedForRetry(row) ||
         shouldAbortBroadcastOnHeaderMediaFailure(row));
 }
