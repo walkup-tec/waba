@@ -80,7 +80,7 @@ export type WabaCampaignIntake = {
   /** URL curta WABA (`/s/{slug}`) gerada na criação da campanha Oficial. */
   responseShortUrl?: string;
   responseShortSlug?: string;
-  /** Mídia do disparo: imagem 1080×1080 ou vídeo MP4. Campanhas antigas sem o campo são imagem. */
+  /** Mídia do disparo: imagem 1200×628 ou vídeo MP4. Campanhas antigas sem o campo são imagem. */
   campaignMediaKind?: "image" | "video";
   imageFileName: string;
   imageStoredPath: string;
