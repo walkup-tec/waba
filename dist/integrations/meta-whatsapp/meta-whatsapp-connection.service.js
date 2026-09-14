@@ -419,7 +419,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
         if (wid)
             wabaIds.add(wid);
     }
-    for (const id of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(businessId || storedBm)) {
+    for (const id of (0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)(businessId || storedBm, primaryWabaId || storedWaba)) {
         const wid = String(id || "").trim();
         if (wid)
             wabaIds.add(wid);
@@ -446,7 +446,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
         if (wid)
             fromThisBm.add(wid);
     }
-    for (const id of (0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(businessId || storedBm)) {
+    for (const id of (0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)(businessId || storedBm, primaryWabaId || storedWaba)) {
         const wid = String(id || "").trim();
         if (wid)
             fromThisBm.add(wid);
