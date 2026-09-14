@@ -50,6 +50,12 @@ export const WALKUP_WABA01_ID = "1014470201624992";
 export const WALKUP_APP_BUSINESS_IDS = ["1247508354180311"] as const;
 
 export const MARILZA_DE_CASTRO_BUSINESS_IDS = ["4681844838758316"] as const;
+export const FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = ["962298516898955"] as const;
+
+/** BMs de cliente administrados no laboratório — o me/businesses costuma omitir. */
+export function catalogBackfillBusinessIds(): string[] {
+  return [...MARILZA_DE_CASTRO_BUSINESS_IDS, ...FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS];
+}
 
 /** BMs que o Manager do laboratório administra — entram na lista se a Graph devolver o objeto. */
 export function catalogAdminBusinessIds(): string[] {
@@ -57,7 +63,7 @@ export function catalogAdminBusinessIds(): string[] {
     ...DRAX_SISTEMAS_BUSINESS_IDS,
     ...WALKUP_BUSINESS_IDS,
     ...WALKUP_APP_BUSINESS_IDS,
-    ...MARILZA_DE_CASTRO_BUSINESS_IDS,
+    ...catalogBackfillBusinessIds(),
   ];
 }
 
