@@ -21,6 +21,7 @@ const waba_campaign_intake_short_url_1 = require("../disparos/waba-campaign-inta
 const waba_campaign_intake_vitoria_short_url_1 = require("../disparos/waba-campaign-intake-vitoria-short-url");
 const waba_campaign_report_read_overrides_2 = require("../disparos/waba-campaign-report-read-overrides");
 const waba_campaign_report_finalize_service_1 = require("../disparos/waba-campaign-report-finalize.service");
+const waba_campaign_report_metrics_1 = require("../disparos/waba-campaign-report-metrics");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_campaign_operacional_segment_rules_1 = require("../services/waba-campaign-operacional-segment-rules");
@@ -54,21 +55,11 @@ const formatDateLabel = (iso) => {
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
 const toDisplayStatus = (status, laboratorioAttended = false, broadcastProgress) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "operacional", (0, waba_campaign_intake_status_1.campaignIntakeDisplayOptionsFromBroadcast)(laboratorioAttended, broadcastProgress));
 const isCampaignAwaitingConfiguration = (status) => status === "generated" || status === "in_progress";
-const parseNonNegativeInt = (value) => {
-    const parsed = Math.round(Number(value));
-    if (!Number.isFinite(parsed) || parsed < 0)
-        return -1;
-    return parsed;
-};
 const toPerformanceReportMetricsInput = (body) => {
-    const sent = parseNonNegativeInt(body.sent);
-    const delivered = parseNonNegativeInt(body.delivered);
-    const read = parseNonNegativeInt(body.read);
-    const failed = parseNonNegativeInt(body.failed);
-    if ([sent, delivered, read, failed].some((value) => value < 0)) {
+    const parsed = (0, waba_campaign_report_metrics_1.parseManualCampaignReportMetrics)(body);
+    if (!parsed || (0, waba_campaign_report_metrics_1.isManualCampaignReportIncomplete)(parsed))
         return null;
-    }
-    return { sent, delivered, read, failed };
+    return parsed;
 };
 const resolveIntakeApiKind = (intake, orderRepository) => {
     if (intake.apiKind === "oficial" || intake.apiKind === "alternativa") {
@@ -346,6 +337,8 @@ class WabaOperacionalCampanhasService {
         const clicks = laboratorioAttended
             ? trackedClicks
             : (0, waba_campaign_intake_short_url_1.resolveOperacionalManualReportClicks)({ overrideClicks, trackedClicks });
+        const hasSavedReport = Boolean(String(intake.performanceReport?.filledAt || "").trim());
+        const prefillManualMetrics = laboratorioAttended || hasSavedReport;
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,
@@ -367,10 +360,10 @@ class WabaOperacionalCampanhasService {
             liveFromMeta,
             report: {
                 totalLeads,
-                sent: Math.max(0, Math.round(Number(report?.sent || 0))),
-                delivered: Math.max(0, Math.round(Number(report?.delivered || 0))),
-                read: Math.max(0, Math.round(Number(report?.read || 0))),
-                failed: Math.max(0, Math.round(Number(report?.failed || 0))),
+                sent: prefillManualMetrics ? Math.max(0, Math.round(Number(report?.sent || 0))) : null,
+                delivered: prefillManualMetrics ? Math.max(0, Math.round(Number(report?.delivered || 0))) : null,
+                read: prefillManualMetrics ? Math.max(0, Math.round(Number(report?.read || 0))) : null,
+                failed: prefillManualMetrics ? Math.max(0, Math.round(Number(report?.failed || 0))) : null,
                 ...(showClicks ? { clicks } : {}),
             },
             // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
@@ -396,7 +389,7 @@ class WabaOperacionalCampanhasService {
         }
         const parsed = toPerformanceReportMetricsInput(body);
         if (!parsed) {
-            throw new Error("Informe valores numéricos válidos (zero ou maior) em todos os campos.");
+            throw new Error(waba_campaign_report_metrics_1.MANUAL_CAMPAIGN_REPORT_INCOMPLETE_MESSAGE);
         }
         const overrideClicks = (0, waba_campaign_report_read_overrides_2.resolveCampaignReportOverride)(intake.campaignName, intake.createdAt, intake.performanceReport, intake.id)?.clicks;
         const trackedClicks = await (0, waba_campaign_intake_short_url_1.resolveIntakeTrackedShortUrlClicks)(intake);
