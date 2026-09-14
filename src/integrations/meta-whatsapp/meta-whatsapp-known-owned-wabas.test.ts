@@ -16,6 +16,7 @@ import {
   knownWabaIdForPendingPhone,
   metaBusinessIdsMatch,
   catalogAdminBusinessIds,
+  catalogAgencyBusinessIds,
   catalogBackfillBusinessIds,
 } from "./meta-whatsapp-known-owned-wabas";
 
@@ -76,5 +77,14 @@ describe("known owned WABAs", () => {
     assert.ok(catalogBackfillBusinessIds().includes("962298516898955"));
     assert.ok(catalogAdminBusinessIds().includes("962298516898955"));
     assert.ok(catalogAdminBusinessIds().includes("4681844838758316"));
+  });
+
+  it("varre só os BMs da agência no Atualizar, sem tratar cliente como semente", () => {
+    const agencies = catalogAgencyBusinessIds();
+    assert.ok(agencies.includes("1041827648719609"));
+    assert.ok(agencies.includes("4141369862822598"));
+    assert.ok(agencies.includes("1247508354180311"));
+    assert.equal(agencies.includes("962298516898955"), false);
+    assert.equal(agencies.includes("4681844838758316"), false);
   });
 });
