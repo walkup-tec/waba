@@ -2,6 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shouldCreateIntakeTrackedShortUrl = shouldCreateIntakeTrackedShortUrl;
 exports.resolveCampaignCardResponseLink = resolveCampaignCardResponseLink;
+exports.resolveOperacionalManualReportShowClicks = resolveOperacionalManualReportShowClicks;
+exports.resolveOperacionalManualReportClicks = resolveOperacionalManualReportClicks;
+exports.resolveIntakeTrackedShortUrlClicks = resolveIntakeTrackedShortUrlClicks;
 exports.createCampaignIntakeTrackedShortUrl = createCampaignIntakeTrackedShortUrl;
 const waba_shortener_service_1 = require("../shortener/waba-shortener.service");
 const waba_shortener_repository_1 = require("../shortener/waba-shortener.repository");
@@ -12,6 +15,26 @@ function shouldCreateIntakeTrackedShortUrl(apiKind) {
 }
 function resolveCampaignCardResponseLink(intake) {
     return String(intake.responseShortUrl || intake.responseLink || "").trim();
+}
+function resolveOperacionalManualReportShowClicks(input) {
+    return Boolean(input.forceShowClicks) || !input.hideClicks;
+}
+function resolveOperacionalManualReportClicks(input) {
+    if (input.overrideClicks != null) {
+        return Math.max(0, Math.round(Number(input.overrideClicks) || 0));
+    }
+    return Math.max(0, Math.round(Number(input.trackedClicks || 0)));
+}
+async function resolveIntakeTrackedShortUrlClicks(intake) {
+    const slug = String(intake.responseShortSlug || "").trim() ||
+        (0, waba_shortener_repository_1.extractSlugFromPublicShortUrl)(String(intake.responseShortUrl || "")) ||
+        "";
+    if (slug) {
+        const record = await (0, waba_shortener_repository_1.findShortLinkBySlug)(slug);
+        if (record)
+            return Math.max(0, Number(record.clicks || 0));
+    }
+    return (0, waba_shortener_repository_1.getShortLinkClicksByCampaignId)(String(intake.id || ""));
 }
 async function createCampaignIntakeTrackedShortUrl(input, deps = {}) {
     const campaignId = String(input.campaignId || "").trim();
