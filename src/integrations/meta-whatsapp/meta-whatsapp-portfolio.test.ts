@@ -2353,6 +2353,64 @@ describe("meta portfolio service", () => {
     assert.equal(flaviane?.name, "60.845.972 Flaviane Ferreira Trindade");
   });
 
+  it("consulta Flaviane no GET do catálogo antes de varrer /clients", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const paths: string[] = [];
+    const graph = async (input: { path: string }) => {
+      paths.push(input.path);
+      if (input.path === "962298516898955") {
+        return { ok: true, status: 200, json: { id: "962298516898955" } };
+      }
+      if (input.path === "4681844838758316") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const flaviane = (assets.portfolios || []).find((item) => item.id === "962298516898955");
+    assert.equal(flaviane?.name, "60.845.972 Flaviane Ferreira Trindade");
+    const flavianeAt = paths.indexOf("962298516898955");
+    const clientsAt = paths.findIndex((path) => path.endsWith("/clients"));
+    assert.ok(flavianeAt >= 0);
+    assert.ok(clientsAt < 0 || flavianeAt < clientsAt);
+  });
+
   it("lista BM de cliente devolvido em /clients da agência mesmo omitido em me/businesses", async () => {
     const walkup = {
       ...connectedRow(),
