@@ -1,13 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CAMPAIGN_VIDEO_ERROR = exports.CAMPAIGN_IMAGE_ERROR = exports.CAMPAIGN_VIDEO_RULES = exports.CAMPAIGN_IMAGE_RULES = exports.CAMPAIGN_VIDEO_MAX_BYTES = void 0;
+exports.CAMPAIGN_VIDEO_ERROR = exports.CAMPAIGN_IMAGE_ERROR = exports.CAMPAIGN_VIDEO_RULES = exports.CAMPAIGN_IMAGE_RULES = exports.CAMPAIGN_IMAGE_HEIGHT = exports.CAMPAIGN_IMAGE_WIDTH = exports.CAMPAIGN_VIDEO_MAX_BYTES = void 0;
 exports.parseCampaignMediaKind = parseCampaignMediaKind;
 exports.sniffCampaignMediaMime = sniffCampaignMediaMime;
 exports.validateCampaignIntakeMedia = validateCampaignIntakeMedia;
+const waba_campaign_messenger_images_service_1 = require("./waba-campaign-messenger-images.service");
 exports.CAMPAIGN_VIDEO_MAX_BYTES = 16 * 1024 * 1024;
+exports.CAMPAIGN_IMAGE_WIDTH = 1200;
+exports.CAMPAIGN_IMAGE_HEIGHT = 628;
 exports.CAMPAIGN_IMAGE_RULES = [
     "Arquivo PNG ou JPG",
-    "Exatamente 1080 × 1080 px",
+    "Exatamente 1200 × 628 px",
 ];
 exports.CAMPAIGN_VIDEO_RULES = [
     "Arquivo .mp4 (MP4)",
@@ -15,7 +18,7 @@ exports.CAMPAIGN_VIDEO_RULES = [
     "Até 16 MB",
     "Não use MOV, WebM, AVI, MKV ou GIF",
 ];
-exports.CAMPAIGN_IMAGE_ERROR = "A imagem deve ser PNG ou JPG, com 1080 × 1080 px.";
+exports.CAMPAIGN_IMAGE_ERROR = "A imagem deve ser PNG ou JPG, com 1200 × 628 px.";
 exports.CAMPAIGN_VIDEO_ERROR = "O vídeo deve ser MP4 (.mp4), H.264 com áudio AAC ou sem áudio, e ter no máximo 16 MB.";
 function parseCampaignMediaKind(value) {
     return String(value || "").trim().toLowerCase() === "video" ? "video" : "image";
@@ -65,6 +68,10 @@ function validateCampaignIntakeMedia(input) {
         ext === "jpeg";
     const png = sniffed === "image/png" || declared === "image/png" || ext === "png";
     if (sniffed === "video/mp4" || (sniffed !== "image/jpeg" && sniffed !== "image/png" && !jpeg && !png)) {
+        return { ok: false, error: exports.CAMPAIGN_IMAGE_ERROR };
+    }
+    const dims = (0, waba_campaign_messenger_images_service_1.readImageDimensions)(input.buffer);
+    if (!dims || dims.width !== exports.CAMPAIGN_IMAGE_WIDTH || dims.height !== exports.CAMPAIGN_IMAGE_HEIGHT) {
         return { ok: false, error: exports.CAMPAIGN_IMAGE_ERROR };
     }
     if (sniffed === "image/png" || (!sniffed && png && !jpeg)) {
