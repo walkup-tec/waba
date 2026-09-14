@@ -33,7 +33,13 @@ import {
 } from "../disparos/waba-campaign-report-read-overrides";
 import { collectIntakeReportTimeline } from "../disparos/waba-campaign-report-timeline";
 import { campaignAttendedByLaboratorioStaff } from "../disparos/waba-campaign-laboratorio-attended";
-import { resolveCampaignCardResponseLink } from "../disparos/waba-campaign-intake-short-url";
+import {
+  resolveCampaignCardResponseLink,
+  resolveIntakeTrackedShortUrlClicks,
+  resolveOperacionalManualReportClicks,
+  resolveOperacionalManualReportShowClicks,
+} from "../disparos/waba-campaign-intake-short-url";
+import { resolveCampaignReportOverride } from "../disparos/waba-campaign-report-read-overrides";
 import { finalizeIntakePerformanceReport } from "../disparos/waba-campaign-report-finalize.service";
 import {
   campaignIntakeDisplayOptionsFromBroadcast,
@@ -113,6 +119,23 @@ export type OperacionalBmInoperanteResult = {
   reassigned: boolean;
   exhausted: boolean;
   message: string;
+};
+
+export type OperacionalCampaignReportView = {
+  campaignId: string;
+  campaignName: string;
+  status: WabaCampaignIntakeStatus;
+  displayStatus: string;
+  plannedSendCount: number;
+  totalLeads: number;
+  isReadOnly: boolean;
+  laboratorioAttended: boolean;
+  showClicks: boolean;
+  clicksLocked: boolean;
+  source: "manual" | "meta_lab" | null;
+  liveFromMeta: boolean;
+  report: OperacionalCampaignReportInput | null;
+  timeline: ReturnType<typeof collectIntakeReportTimeline>;
 };
 
 export type OperacionalCampaignDetail = OperacionalCampaignListItem & {
@@ -483,24 +506,10 @@ export class WabaOperacionalCampanhasService {
     return this.toListItem(updated, staff);
   }
 
-  getCampaignReport(
+  async getCampaignReport(
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
-  ): {
-    campaignId: string;
-    campaignName: string;
-    status: WabaCampaignIntakeStatus;
-    displayStatus: string;
-    plannedSendCount: number;
-    totalLeads: number;
-    isReadOnly: boolean;
-    laboratorioAttended: boolean;
-    showClicks: boolean;
-    source: "manual" | "meta_lab" | null;
-    liveFromMeta: boolean;
-    report: OperacionalCampaignReportInput | null;
-    timeline: ReturnType<typeof collectIntakeReportTimeline>;
-  } {
+  ): Promise<OperacionalCampaignReportView> {
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
 
     const status = normalizeStoredStatus(intake.status);
@@ -538,9 +547,26 @@ export class WabaOperacionalCampanhasService {
       intake.createdAt,
       report,
     );
-    const showClicks =
-      campaignReportShowsClicks(intake.campaignName, intake.createdAt, report) ||
-      (laboratorioAttended && !hideClicks);
+    const forceShowClicks = campaignReportShowsClicks(
+      intake.campaignName,
+      intake.createdAt,
+      report,
+    );
+    const showClicks = laboratorioAttended
+      ? forceShowClicks || !hideClicks
+      : resolveOperacionalManualReportShowClicks({ hideClicks, forceShowClicks });
+    const overrideClicks = resolveCampaignReportOverride(
+      intake.campaignName,
+      intake.createdAt,
+      report,
+      intake.id,
+    )?.clicks;
+    const trackedClicks = laboratorioAttended
+      ? Math.max(0, Math.round(Number(report?.clicks || 0)))
+      : await resolveIntakeTrackedShortUrlClicks(intake);
+    const clicks = laboratorioAttended
+      ? trackedClicks
+      : resolveOperacionalManualReportClicks({ overrideClicks, trackedClicks });
     return {
       campaignId: intake.id,
       campaignName: intake.campaignName,
@@ -561,28 +587,27 @@ export class WabaOperacionalCampanhasService {
       isReadOnly: laboratorioAttended || status === "completed" || status === "error_reported",
       laboratorioAttended,
       showClicks,
+      clicksLocked: showClicks,
       source: report?.source || (laboratorioAttended ? "meta_lab" : null),
       liveFromMeta,
-      report: report
-        ? {
-            totalLeads,
-            sent: report.sent,
-            delivered: report.delivered,
-            read: report.read,
-            failed: report.failed,
-            ...(showClicks ? { clicks: Math.max(0, Math.round(Number(report.clicks || 0))) } : {}),
-          }
-        : null,
+      report: {
+        totalLeads,
+        sent: Math.max(0, Math.round(Number(report?.sent || 0))),
+        delivered: Math.max(0, Math.round(Number(report?.delivered || 0))),
+        read: Math.max(0, Math.round(Number(report?.read || 0))),
+        failed: Math.max(0, Math.round(Number(report?.failed || 0))),
+        ...(showClicks ? { clicks } : {}),
+      },
       // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
       timeline: collectIntakeReportTimeline(intake),
     };
   }
 
-  saveCampaignReport(
+  async saveCampaignReport(
     campaignId: string,
     body: Record<string, unknown>,
     staff: OperacionalCampanhasStaffContext,
-  ): OperacionalCampaignDetail {
+  ): Promise<OperacionalCampaignDetail> {
     this.assertCanMutateCampaigns(staff);
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
     if (campaignAttendedByLaboratorioStaff(intake)) {
@@ -606,10 +631,18 @@ export class WabaOperacionalCampanhasService {
     if (!parsed) {
       throw new Error("Informe valores numéricos válidos (zero ou maior) em todos os campos.");
     }
+    const overrideClicks = resolveCampaignReportOverride(
+      intake.campaignName,
+      intake.createdAt,
+      intake.performanceReport,
+      intake.id,
+    )?.clicks;
+    const trackedClicks = await resolveIntakeTrackedShortUrlClicks(intake);
+    const clicks = resolveOperacionalManualReportClicks({ overrideClicks, trackedClicks });
 
     const updated = finalizeIntakePerformanceReport({
       campaignId,
-      metrics: parsed,
+      metrics: { ...parsed, clicks },
       filledByEmail: staff.email,
       source: "manual",
       intakeRepository: this.intakeRepository,
