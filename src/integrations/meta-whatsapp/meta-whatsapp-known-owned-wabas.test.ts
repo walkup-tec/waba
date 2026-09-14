@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 import {
   ANDRE_WABA02_ID,
   ANDRE_WABA02_PENDING_PHONE_ID,
+  DRAX_SISTEMAS_STALE_WABA_ID,
+  DRAX_SISTEMAS_WABA_ID,
   RIO_DE_JANEIRO_01_WABA_ID,
+  equivalentOwnedWabaIdsForBusiness,
   isKnownClientWabaForBusiness,
   knownClientWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
@@ -48,5 +51,9 @@ describe("known owned WABAs", () => {
 
   it("Drax Sistemas: só a WABA do Manager, não a conexão stale", () => {
     assert.deepEqual(knownOwnedWabaIdsForBusiness("1041827648719609"), ["1636793994538054"]);
+    assert.deepEqual(
+      equivalentOwnedWabaIdsForBusiness("1041827648719609", DRAX_SISTEMAS_STALE_WABA_ID).sort(),
+      [DRAX_SISTEMAS_STALE_WABA_ID, DRAX_SISTEMAS_WABA_ID].sort(),
+    );
   });
 });
