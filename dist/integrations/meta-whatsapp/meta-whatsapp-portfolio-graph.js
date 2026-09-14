@@ -12,6 +12,7 @@ exports.fetchVisibleBusinessCard = fetchVisibleBusinessCard;
 exports.fetchKnownBusinessPortfolios = fetchKnownBusinessPortfolios;
 const meta_whatsapp_graph_errors_1 = require("./meta-whatsapp-graph-errors");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
+const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
 /** IDs oficiais no Business Manager — só entram no card se a Graph devolver o objeto. */
 exports.META_PORTFOLIO_BUSINESS_IDS = [
     "1041827648719609",
@@ -415,10 +416,14 @@ async function fetchVisibleBusinessCard(graph, token, businessId) {
     const res = await getFields(graph, token, id, exports.META_BUSINESS_NAME_FIELDS);
     if (!res.ok || (0, meta_whatsapp_graph_errors_1.isMetaGraphObjectNotAdministered)(res.json, res.status))
         return null;
-    const card = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(res.json, { id });
-    if (!card.id || !card.name)
+    const graphId = text(asRecord(res.json).id);
+    if (!graphId)
         return null;
-    return card;
+    const card = (0, meta_whatsapp_portfolio_map_1.mapMetaBusinessToPortfolio)(res.json, { id: graphId });
+    const name = card.name || (0, meta_whatsapp_known_owned_wabas_1.catalogBusinessLabel)(graphId);
+    if (!name)
+        return null;
+    return { ...card, id: graphId, name };
 }
 var meta_whatsapp_portfolio_map_2 = require("./meta-whatsapp-portfolio.map");
 Object.defineProperty(exports, "pickMetaBusinessNode", { enumerable: true, get: function () { return meta_whatsapp_portfolio_map_2.pickMetaBusinessNode; } });
