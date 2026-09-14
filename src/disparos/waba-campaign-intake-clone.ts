@@ -127,6 +127,8 @@ export function cloneCampaignIntakeWithPlannedSends(input: {
   delete clone.supplierPayoutSettlementId;
   delete clone.bmInoperanteRegisteredAt;
   delete clone.scheduledSendAt;
+  delete clone.responseShortUrl;
+  delete clone.responseShortSlug;
 
   repository.create(clone);
   return { ok: true, skipped: false, intake: clone };
