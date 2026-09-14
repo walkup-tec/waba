@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   attachBroadcastLeadPhoneBindings,
   bindingsFromCampaignPhones,
+  broadcastNumberMatchesSelectedWaba,
   connectionIdByPhoneNumber,
   connectionNeedsLocalTemplate,
   indexBroadcastPortfolioPhones,
@@ -32,6 +33,50 @@ const portfolios = [
 ];
 
 describe("meta-whatsapp-broadcast-phones", () => {
+  it("Drax: WABA01 do Manager lista o chip mesmo com wabaId stale ou vazio", () => {
+    const selected = [{ connectionId: "conn-drax", wabaId: "1636793994538054" }];
+    assert.equal(
+      broadcastNumberMatchesSelectedWaba({
+        connectionId: "conn-drax",
+        selected,
+        itemWabaId: "1988957871663919",
+        portfolioWabaId: "1988957871663919",
+        businessId: "1041827648719609",
+      }),
+      true,
+    );
+    assert.equal(
+      broadcastNumberMatchesSelectedWaba({
+        connectionId: "conn-drax",
+        selected,
+        itemWabaId: "",
+        portfolioWabaId: "1988957871663919",
+        businessId: "1041827648719609",
+      }),
+      true,
+    );
+    assert.equal(
+      broadcastNumberMatchesSelectedWaba({
+        connectionId: "conn-drax",
+        selected,
+        itemWabaId: "1636793994538054",
+        portfolioWabaId: "1636793994538054",
+        businessId: "1041827648719609",
+      }),
+      true,
+    );
+    assert.equal(
+      broadcastNumberMatchesSelectedWaba({
+        connectionId: "conn-drax",
+        selected,
+        itemWabaId: "1014470201624992",
+        portfolioWabaId: "1988957871663919",
+        businessId: "1041827648719609",
+      }),
+      false,
+    );
+  });
+
   it("indexa números de vários portfólios", () => {
     const catalog = indexBroadcastPortfolioPhones(portfolios);
     assert.equal(catalog.get("b1")?.connectionId, "conn-b");
