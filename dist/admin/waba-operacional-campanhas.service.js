@@ -18,6 +18,7 @@ const waba_campaign_report_read_overrides_1 = require("../disparos/waba-campaign
 const waba_campaign_report_timeline_1 = require("../disparos/waba-campaign-report-timeline");
 const waba_campaign_laboratorio_attended_1 = require("../disparos/waba-campaign-laboratorio-attended");
 const waba_campaign_intake_short_url_1 = require("../disparos/waba-campaign-intake-short-url");
+const waba_campaign_report_read_overrides_2 = require("../disparos/waba-campaign-report-read-overrides");
 const waba_campaign_report_finalize_service_1 = require("../disparos/waba-campaign-report-finalize.service");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
@@ -304,7 +305,7 @@ class WabaOperacionalCampanhasService {
             throw new Error("Não foi possível atualizar a campanha.");
         return this.toListItem(updated, staff);
     }
-    getCampaignReport(campaignId, staff) {
+    async getCampaignReport(campaignId, staff) {
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
         const status = normalizeStoredStatus(intake.status);
         if (status !== "in_progress" && status !== "completed" && status !== "error_reported") {
@@ -332,8 +333,17 @@ class WabaOperacionalCampanhasService {
         }
         report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, report) ?? undefined;
         const hideClicks = (0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report);
-        const showClicks = (0, waba_campaign_report_read_overrides_1.campaignReportShowsClicks)(intake.campaignName, intake.createdAt, report) ||
-            (laboratorioAttended && !hideClicks);
+        const forceShowClicks = (0, waba_campaign_report_read_overrides_1.campaignReportShowsClicks)(intake.campaignName, intake.createdAt, report);
+        const showClicks = laboratorioAttended
+            ? forceShowClicks || !hideClicks
+            : (0, waba_campaign_intake_short_url_1.resolveOperacionalManualReportShowClicks)({ hideClicks, forceShowClicks });
+        const overrideClicks = (0, waba_campaign_report_read_overrides_2.resolveCampaignReportOverride)(intake.campaignName, intake.createdAt, report, intake.id)?.clicks;
+        const trackedClicks = laboratorioAttended
+            ? Math.max(0, Math.round(Number(report?.clicks || 0)))
+            : await (0, waba_campaign_intake_short_url_1.resolveIntakeTrackedShortUrlClicks)(intake);
+        const clicks = laboratorioAttended
+            ? trackedClicks
+            : (0, waba_campaign_intake_short_url_1.resolveOperacionalManualReportClicks)({ overrideClicks, trackedClicks });
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,
@@ -350,23 +360,22 @@ class WabaOperacionalCampanhasService {
             isReadOnly: laboratorioAttended || status === "completed" || status === "error_reported",
             laboratorioAttended,
             showClicks,
+            clicksLocked: showClicks,
             source: report?.source || (laboratorioAttended ? "meta_lab" : null),
             liveFromMeta,
-            report: report
-                ? {
-                    totalLeads,
-                    sent: report.sent,
-                    delivered: report.delivered,
-                    read: report.read,
-                    failed: report.failed,
-                    ...(showClicks ? { clicks: Math.max(0, Math.round(Number(report.clicks || 0))) } : {}),
-                }
-                : null,
+            report: {
+                totalLeads,
+                sent: Math.max(0, Math.round(Number(report?.sent || 0))),
+                delivered: Math.max(0, Math.round(Number(report?.delivered || 0))),
+                read: Math.max(0, Math.round(Number(report?.read || 0))),
+                failed: Math.max(0, Math.round(Number(report?.failed || 0))),
+                ...(showClicks ? { clicks } : {}),
+            },
             // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
             timeline: (0, waba_campaign_report_timeline_1.collectIntakeReportTimeline)(intake),
         };
     }
-    saveCampaignReport(campaignId, body, staff) {
+    async saveCampaignReport(campaignId, body, staff) {
         this.assertCanMutateCampaigns(staff);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
         if ((0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake)) {
@@ -386,9 +395,12 @@ class WabaOperacionalCampanhasService {
         if (!parsed) {
             throw new Error("Informe valores numéricos válidos (zero ou maior) em todos os campos.");
         }
+        const overrideClicks = (0, waba_campaign_report_read_overrides_2.resolveCampaignReportOverride)(intake.campaignName, intake.createdAt, intake.performanceReport, intake.id)?.clicks;
+        const trackedClicks = await (0, waba_campaign_intake_short_url_1.resolveIntakeTrackedShortUrlClicks)(intake);
+        const clicks = (0, waba_campaign_intake_short_url_1.resolveOperacionalManualReportClicks)({ overrideClicks, trackedClicks });
         const updated = (0, waba_campaign_report_finalize_service_1.finalizeIntakePerformanceReport)({
             campaignId,
-            metrics: parsed,
+            metrics: { ...parsed, clicks },
             filledByEmail: staff.email,
             source: "manual",
             intakeRepository: this.intakeRepository,
