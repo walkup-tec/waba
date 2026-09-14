@@ -57,14 +57,14 @@ export function catalogBackfillBusinessIds(): string[] {
   return [...MARILZA_DE_CASTRO_BUSINESS_IDS, ...FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS];
 }
 
+/** BMs da agência — o Atualizar varre /clients e /owned_businesses destes IDs. */
+export function catalogAgencyBusinessIds(): string[] {
+  return [...DRAX_SISTEMAS_BUSINESS_IDS, ...WALKUP_BUSINESS_IDS, ...WALKUP_APP_BUSINESS_IDS];
+}
+
 /** BMs que o Manager do laboratório administra — entram na lista se a Graph devolver o objeto. */
 export function catalogAdminBusinessIds(): string[] {
-  return [
-    ...DRAX_SISTEMAS_BUSINESS_IDS,
-    ...WALKUP_BUSINESS_IDS,
-    ...WALKUP_APP_BUSINESS_IDS,
-    ...catalogBackfillBusinessIds(),
-  ];
+  return [...catalogAgencyBusinessIds(), ...catalogBackfillBusinessIds()];
 }
 
 /** Reabrir só estes BMs após o disconnect agressivo por WABA antiga. */
