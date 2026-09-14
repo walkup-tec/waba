@@ -1,4 +1,4 @@
-import { equivalentOwnedWabaIdsForBusiness } from "./meta-whatsapp-known-owned-wabas";
+import { equivalentOwnedWabaIdsForBusiness, isKnownClientWabaId } from "./meta-whatsapp-known-owned-wabas";
 
 /** Números do Disparo Cloud podem vir de vários portfólios; o relatório permanece um só. */
 
@@ -75,6 +75,7 @@ export function listBroadcastNumbersForSelectedWabas(input: {
     }>;
   }>;
   selected: ReadonlyArray<{ connectionId?: string | null; wabaId?: string | null }>;
+  selectedConnectionIds?: ReadonlyArray<string | null | undefined>;
 }): Array<{
   phoneNumberId: string;
   connectionId: string;
@@ -87,14 +88,23 @@ export function listBroadcastNumbersForSelectedWabas(input: {
   messagingLimit: string;
 }> {
   const selected = (input.selected || []).filter((row) => String(row.wabaId || "").trim());
-  if (!selected.length) return [];
   const selectedConnections = new Set(
-    selected.map((row) => String(row.connectionId || "").trim()).filter(Boolean),
+    [
+      ...(input.selectedConnectionIds || []).map((id) => String(id || "").trim()),
+      ...selected.map((row) => String(row.connectionId || "").trim()),
+    ].filter(Boolean),
   );
+  if (!selected.length && !selectedConnections.size) return [];
   const aliasWabas = new Set<string>();
   for (const row of selected) {
     for (const id of equivalentOwnedWabaIdsForBusiness("", row.wabaId)) aliasWabas.add(id);
   }
+  const selectedBizIds = new Set(
+    (input.portfolios || [])
+      .filter((card) => selectedConnections.has(String(card.connectionId || "").trim()))
+      .map((card) => String(card.id || "").trim())
+      .filter(Boolean),
+  );
   const out: Array<{
     phoneNumberId: string;
     connectionId: string;
@@ -108,32 +118,45 @@ export function listBroadcastNumbersForSelectedWabas(input: {
   }> = [];
   const seen = new Set<string>();
   for (const card of input.portfolios || []) {
-    const connectionId = String(card.connectionId || "").trim();
-    if (!connectionId) continue;
+    const cardConnectionId = String(card.connectionId || "").trim();
+    const businessId = String(card.id || "").trim();
+    const onSelectedCard =
+      Boolean(cardConnectionId && selectedConnections.has(cardConnectionId)) ||
+      Boolean(businessId && selectedBizIds.has(businessId));
+    const connectionId =
+      cardConnectionId ||
+      (onSelectedCard ? [...selectedConnections][0] || "" : "");
+    if (!connectionId && !onSelectedCard) continue;
     const portfolioWaba = String(card.wabaId || "").trim();
-    const onSelectedConn = selectedConnections.has(connectionId);
     const portfolioName = String(card.name || "").trim() || null;
     for (const number of card.numbers || []) {
-      const phoneNumberId = String(number.phoneNumberId || "").trim();
+      const phoneNumberId = String(number.phoneNumberId || number.displayPhoneNumber || "").trim();
       if (!phoneNumberId || seen.has(phoneNumberId)) continue;
-      const itemWaba = String(number.wabaId || portfolioWaba || "").trim();
-      const match = itemWaba
-        ? aliasWabas.has(itemWaba)
-        : onSelectedConn &&
-          broadcastNumberMatchesSelectedWaba({
-            connectionId,
-            selected,
-            itemWabaId: number.wabaId,
-            portfolioWabaId: card.wabaId,
-            businessId: card.id,
-          });
+      const itemWaba = String(number.wabaId || "").trim();
+      const effectiveWaba = itemWaba || portfolioWaba;
+      if (effectiveWaba && isKnownClientWabaId(effectiveWaba) && !aliasWabas.has(effectiveWaba)) {
+        continue;
+      }
+      const match =
+        onSelectedCard ||
+        Boolean(effectiveWaba && aliasWabas.has(effectiveWaba)) ||
+        Boolean(
+          connectionId &&
+            broadcastNumberMatchesSelectedWaba({
+              connectionId,
+              selected,
+              itemWabaId: number.wabaId,
+              portfolioWabaId: card.wabaId,
+              businessId: card.id,
+            }),
+        );
       if (!match) continue;
       seen.add(phoneNumberId);
       out.push({
         phoneNumberId,
         connectionId,
         portfolioName,
-        wabaId: itemWaba || null,
+        wabaId: effectiveWaba || null,
         uiStatus: String(number.uiStatus || "").trim(),
         dispatchStatus: String(number.dispatchStatus || "livre").trim(),
         displayPhoneNumber: number.displayPhoneNumber ? String(number.displayPhoneNumber) : null,
