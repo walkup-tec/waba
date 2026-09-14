@@ -11,6 +11,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KNOWN_OWNED_BUSINESS_WABAS = exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = exports.MARILZA_DE_CASTRO_BUSINESS_IDS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_STALE_WABA_ID = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
 exports.catalogBackfillBusinessIds = catalogBackfillBusinessIds;
+exports.catalogAgencyBusinessIds = catalogAgencyBusinessIds;
 exports.catalogAdminBusinessIds = catalogAdminBusinessIds;
 exports.businessIdsToReopenAfterFalseLeftManager = businessIdsToReopenAfterFalseLeftManager;
 exports.normalizeMetaBusinessKey = normalizeMetaBusinessKey;
@@ -50,14 +51,13 @@ exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = ["962298516898955"];
 function catalogBackfillBusinessIds() {
     return [...exports.MARILZA_DE_CASTRO_BUSINESS_IDS, ...exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS];
 }
+/** BMs da agência — o Atualizar varre /clients e /owned_businesses destes IDs. */
+function catalogAgencyBusinessIds() {
+    return [...exports.DRAX_SISTEMAS_BUSINESS_IDS, ...exports.WALKUP_BUSINESS_IDS, ...exports.WALKUP_APP_BUSINESS_IDS];
+}
 /** BMs que o Manager do laboratório administra — entram na lista se a Graph devolver o objeto. */
 function catalogAdminBusinessIds() {
-    return [
-        ...exports.DRAX_SISTEMAS_BUSINESS_IDS,
-        ...exports.WALKUP_BUSINESS_IDS,
-        ...exports.WALKUP_APP_BUSINESS_IDS,
-        ...catalogBackfillBusinessIds(),
-    ];
+    return [...catalogAgencyBusinessIds(), ...catalogBackfillBusinessIds()];
 }
 /** Reabrir só estes BMs após o disconnect agressivo por WABA antiga. */
 function businessIdsToReopenAfterFalseLeftManager() {
