@@ -420,13 +420,6 @@ async function collectDiscoveredAdminCards(input: {
     extra.push(card);
   };
 
-  const seeds = catalogAgencyBusinessIds();
-  for (const token of input.tokens) {
-    if (!token) continue;
-    const nodes = await discoverAdministeredBusinessNodes(input.graph, token, seeds);
-    for (const card of directoryFromAssigned({ data: nodes })) addIfMissing(card);
-  }
-
   for (const businessId of catalogBackfillBusinessIds()) {
     if (listedHasBusinessId(input.listedIds, businessId)) continue;
     for (const token of input.tokens) {
@@ -437,6 +430,17 @@ async function collectDiscoveredAdminCards(input: {
         break;
       }
     }
+  }
+
+  try {
+    const seeds = catalogAgencyBusinessIds();
+    for (const token of input.tokens) {
+      if (!token) continue;
+      const nodes = await discoverAdministeredBusinessNodes(input.graph, token, seeds);
+      for (const card of directoryFromAssigned({ data: nodes })) addIfMissing(card);
+    }
+  } catch {
+    /* a varredura da agência não pode impedir o card já confirmado no GET */
   }
   return extra;
 }
