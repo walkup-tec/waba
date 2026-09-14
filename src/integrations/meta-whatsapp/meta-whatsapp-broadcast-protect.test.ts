@@ -60,4 +60,18 @@ describe("proteção Disparo Cloud", () => {
     assert.equal(snap.blockRedeploy, false);
     assert.equal(snap.count, 0);
   });
+
+  it("ignora pausada e libera Redeploy", () => {
+    const snap = buildCloudBroadcastProtectSnapshot({
+      campaigns: [
+        base({
+          id: "paused",
+          pausedAt: "2026-09-14T12:00:00.000Z",
+        }),
+      ],
+      isLoopAlive: () => true,
+    });
+    assert.equal(snap.active, false);
+    assert.equal(snap.blockRedeploy, false);
+  });
 });
