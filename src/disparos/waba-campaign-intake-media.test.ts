@@ -1,12 +1,31 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  CAMPAIGN_IMAGE_ERROR,
+  CAMPAIGN_IMAGE_HEIGHT,
+  CAMPAIGN_IMAGE_WIDTH,
   CAMPAIGN_VIDEO_ERROR,
   CAMPAIGN_VIDEO_MAX_BYTES,
   parseCampaignMediaKind,
   sniffCampaignMediaMime,
   validateCampaignIntakeMedia,
 } from "./waba-campaign-intake-media";
+
+function pngWithSize(width: number, height: number): Buffer {
+  const buf = Buffer.alloc(24, 0);
+  buf[0] = 0x89;
+  buf[1] = 0x50;
+  buf[2] = 0x4e;
+  buf[3] = 0x47;
+  buf[4] = 0x0d;
+  buf[5] = 0x0a;
+  buf[6] = 0x1a;
+  buf[7] = 0x0a;
+  buf.write("IHDR", 12, "ascii");
+  buf.writeUInt32BE(width, 16);
+  buf.writeUInt32BE(height, 20);
+  return buf;
+}
 
 describe("mídia da campanha do assinante", () => {
   it("trata vídeo só quando o assinante escolhe vídeo", () => {
@@ -56,5 +75,25 @@ describe("mídia da campanha do assinante", () => {
     huge.write("isom", 8, "ascii");
     const tooBig = validateCampaignIntakeMedia({ kind: "video", buffer: huge, fileName: "grande.mp4" });
     assert.equal(tooBig.ok, false);
+  });
+
+  it("exige imagem PNG/JPG exatamente 1200 × 628 px", () => {
+    const ok = validateCampaignIntakeMedia({
+      kind: "image",
+      buffer: pngWithSize(CAMPAIGN_IMAGE_WIDTH, CAMPAIGN_IMAGE_HEIGHT),
+      mime: "image/png",
+      fileName: "campanha.png",
+    });
+    assert.equal(ok.ok, true);
+    if (ok.ok) assert.equal(ok.extension, ".png");
+
+    const square = validateCampaignIntakeMedia({
+      kind: "image",
+      buffer: pngWithSize(1080, 1080),
+      mime: "image/png",
+      fileName: "quadrada.png",
+    });
+    assert.equal(square.ok, false);
+    if (!square.ok) assert.equal(square.error, CAMPAIGN_IMAGE_ERROR);
   });
 });
