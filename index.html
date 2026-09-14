@@ -47486,7 +47486,7 @@
           </div>
         `;
 
-        const responseLink = String(campaign.responseLink || "").trim();
+        const responseLink = String(campaign.responseShortUrl || campaign.responseLink || "").trim();
         adminCampanhasDetailResponseLink = responseLink;
         const responseLinkHtml = !responseLink
           ? '<span class="muted">—</span>'
