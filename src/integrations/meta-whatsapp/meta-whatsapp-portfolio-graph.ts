@@ -347,24 +347,138 @@ export async function fetchBusinessFromGraph(
   };
 }
 
+const ASSIGNED_BUSINESS_FIELDS =
+  "id,name,profile_picture_uri,picture,primary_page{id,name,picture}";
+const ASSIGNED_BUSINESS_FIELDS_BASIC = "id,name";
+const ADMIN_BUSINESS_FIELDS = "id,name";
+const CLIENT_WABA_OWNER_FIELDS = "id,name,owner_business_info{id,name}";
+const USER_ASSET_BUSINESS_FIELDS = "id,name,business{id,name}";
+const GRAPH_COLLECTION_PAGE_LIMIT = 20;
+
+function pagingAfter(json: unknown): string {
+  const paging = asRecord(asRecord(json).paging);
+  return text(asRecord(paging.cursors).after) || "";
+}
+
+function businessNodeId(row: unknown): string {
+  return text(asRecord(row).id) || "";
+}
+
+async function paginateGraphCollection(
+  graph: PortfolioGraphCaller,
+  token: string,
+  path: string,
+  query: Record<string, string>,
+): Promise<{ ok: boolean; rows: unknown[] }> {
+  const rows: unknown[] = [];
+  const seen = new Set<string>();
+  let after = "";
+  let firstOk = false;
+  for (let page = 0; page < GRAPH_COLLECTION_PAGE_LIMIT; page += 1) {
+    const q = { ...query };
+    if (after) q.after = after;
+    const res = await graph({
+      token,
+      method: "GET",
+      path,
+      query: q,
+    });
+    if (!res.ok) break;
+    firstOk = true;
+    const batch = listMetaBusinessNodes(res.json);
+    for (const row of batch) rows.push(row);
+    const nextAfter = pagingAfter(res.json);
+    if (!nextAfter || nextAfter === after || seen.has(nextAfter) || !batch.length) break;
+    seen.add(nextAfter);
+    after = nextAfter;
+  }
+  return { ok: firstOk, rows };
+}
+
 export async function fetchAssignedBusinesses(
   graph: PortfolioGraphCaller,
   token: string,
 ): Promise<unknown> {
-  const rich = await graph({
-    token,
-    method: "GET",
-    path: "me/businesses",
-    query: { fields: "id,name,profile_picture_uri,picture,primary_page{id,name,picture}", limit: "50" },
+  const rich = await paginateGraphCollection(graph, token, "me/businesses", {
+    fields: ASSIGNED_BUSINESS_FIELDS,
+    limit: "50",
   });
-  if (rich.ok) return rich.json;
-  const basic = await graph({
-    token,
-    method: "GET",
-    path: "me/businesses",
-    query: { fields: "id,name", limit: "50" },
+  if (rich.ok) return { data: rich.rows };
+  const basic = await paginateGraphCollection(graph, token, "me/businesses", {
+    fields: ASSIGNED_BUSINESS_FIELDS_BASIC,
+    limit: "50",
   });
-  return basic.ok ? basic.json : null;
+  return basic.ok ? { data: basic.rows } : null;
+}
+
+function takeBusinessNode(row: unknown): unknown | null {
+  const id = businessNodeId(row);
+  const name = text(asRecord(row).name);
+  if (!id || !name) return null;
+  return { id, name };
+}
+
+function takeNestedBusiness(row: unknown, key: string): unknown | null {
+  return takeBusinessNode(asRecord(row)[key]);
+}
+
+export async function discoverAdministeredBusinessNodes(
+  graph: PortfolioGraphCaller,
+  token: string,
+  seedBusinessIds: string[],
+): Promise<unknown[]> {
+  const nodes: unknown[] = [];
+  const seen = new Set<string>();
+  const add = (row: unknown) => {
+    const node = takeBusinessNode(row);
+    const id = businessNodeId(node);
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    nodes.push(node);
+  };
+
+  const seeds = [...new Set(seedBusinessIds.map((id) => String(id || "").trim()).filter(Boolean))];
+  for (const seed of seeds) {
+    const clients = await paginateGraphCollection(graph, token, `${seed}/clients`, {
+      fields: ADMIN_BUSINESS_FIELDS,
+      limit: "100",
+    });
+    for (const row of clients.rows) add(row);
+    const owned = await paginateGraphCollection(graph, token, `${seed}/owned_businesses`, {
+      fields: ADMIN_BUSINESS_FIELDS,
+      limit: "100",
+    });
+    for (const row of owned.rows) add(row);
+    const clientWabas = await paginateGraphCollection(
+      graph,
+      token,
+      `${seed}/client_whatsapp_business_accounts`,
+      { fields: CLIENT_WABA_OWNER_FIELDS, limit: "100" },
+    );
+    for (const row of clientWabas.rows) {
+      const owner = takeNestedBusiness(row, "owner_business_info");
+      if (owner) add(owner);
+    }
+  }
+
+  const adaccounts = await paginateGraphCollection(graph, token, "me/adaccounts", {
+    fields: USER_ASSET_BUSINESS_FIELDS,
+    limit: "100",
+  });
+  for (const row of adaccounts.rows) {
+    const biz = takeNestedBusiness(row, "business");
+    if (biz) add(biz);
+  }
+  const pages = await paginateGraphCollection(graph, token, "me/accounts", {
+    fields: USER_ASSET_BUSINESS_FIELDS,
+    limit: "100",
+  });
+  for (const row of pages.rows) {
+    const biz = takeNestedBusiness(row, "business");
+    if (biz) add(biz);
+  }
+
+  return nodes;
 }
 
 export function directoryFromAssigned(json: unknown): MetaPortfolioPublic[] {
