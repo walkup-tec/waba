@@ -21678,7 +21678,7 @@
                       <label class="dis-campaign-media-kind-card">
                         <input type="radio" name="dis-wizard-media-kind" value="image" checked />
                         <span class="dis-campaign-media-kind-title">Imagem</span>
-                        <span class="dis-campaign-media-kind-sub">PNG ou JPG quadrada</span>
+                        <span class="dis-campaign-media-kind-sub">PNG ou JPG 1200 × 628</span>
                       </label>
                       <label class="dis-campaign-media-kind-card">
                         <input type="radio" name="dis-wizard-media-kind" value="video" />
@@ -21690,7 +21690,7 @@
                       <p class="dis-campaign-media-rules-title">Antes de enviar, use este formato:</p>
                       <ul id="dis-wizard-media-rules-list" class="dis-campaign-media-rules-list">
                         <li>Arquivo PNG ou JPG</li>
-                        <li>Exatamente 1080 × 1080 px</li>
+                        <li>Exatamente 1200 × 628 px</li>
                       </ul>
                     </div>
                     <div class="aquecedor-field">
@@ -53178,7 +53178,7 @@
       let disCampaignWizardImageFile = null;
       let disCampaignWizardMediaKind = "image";
       const DIS_CAMPAIGN_MEDIA_RULES = {
-        image: ["Arquivo PNG ou JPG", "Exatamente 1080 × 1080 px"],
+        image: ["Arquivo PNG ou JPG", "Exatamente 1200 × 628 px"],
         video: [
           "Arquivo .mp4 (MP4)",
           "Vídeo H.264 e áudio AAC, ou sem áudio",
@@ -53287,11 +53287,11 @@
             if (!imageFromInput) {
               return kind === "video"
                 ? "Envie o vídeo da campanha em MP4 (.mp4), até 16 MB."
-                : "Envie a imagem da campanha (PNG ou JPG, 1080×1080 px).";
+                : "Envie a imagem da campanha (PNG ou JPG, 1200×628 px).";
             }
             return kind === "video"
               ? "Aguarde a validação do vídeo ou envie um arquivo MP4 (.mp4) de até 16 MB."
-              : "Aguarde a validação da imagem ou envie um arquivo 1080×1080 px (PNG ou JPG).";
+              : "Aguarde a validação da imagem ou envie um arquivo 1200×628 px (PNG ou JPG).";
           }
           return "";
         }
@@ -53650,7 +53650,7 @@
       function getDisCampaignWizardMediaMissingMessage() {
         return getDisCampaignWizardMediaKind() === "video"
           ? "Envie o vídeo da campanha em MP4 (.mp4), H.264, até 16 MB."
-          : "Envie a imagem da campanha com 1080×1080 px (PNG ou JPG).";
+          : "Envie a imagem da campanha com 1200×628 px (PNG ou JPG).";
       }
 
       function syncDisCampaignWizardMediaKindUi() {
@@ -53764,9 +53764,9 @@
             img.onerror = () => reject(new Error("invalid"));
             img.src = objectUrl;
           });
-          if (dimensions.width !== 1080 || dimensions.height !== 1080) {
+          if (dimensions.width !== 1200 || dimensions.height !== 628) {
             return showError(
-              `A imagem deve ser 1080×1080 px (enviada: ${dimensions.width}×${dimensions.height}).`
+              `A imagem deve ser 1200×628 px (enviada: ${dimensions.width}×${dimensions.height}).`
             );
           }
           disCampaignWizardImageFile = file;
