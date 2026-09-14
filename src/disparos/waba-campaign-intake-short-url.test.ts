@@ -4,6 +4,8 @@ import { MetaWhatsappError } from "../integrations/meta-whatsapp/meta-whatsapp-e
 import {
   createCampaignIntakeTrackedShortUrl,
   resolveCampaignCardResponseLink,
+  resolveOperacionalManualReportClicks,
+  resolveOperacionalManualReportShowClicks,
   shouldCreateIntakeTrackedShortUrl,
 } from "./waba-campaign-intake-short-url";
 
@@ -50,6 +52,18 @@ describe("URL curta na criação da campanha Oficial", () => {
     assert.equal(created.shortUrl, "https://wabadisparos.com.br/s/n8abcde");
     assert.equal(created.shortSlug, "n8abcde");
     assert.deepEqual(attached, [{ slug: "n8abcde", campaignId: "camp-oficial-1" }]);
+  });
+
+  it("relatório manual do operador mostra cliques da URL e ignora o valor enviado no form", () => {
+    assert.equal(resolveOperacionalManualReportShowClicks({ hideClicks: false }), true);
+    assert.equal(resolveOperacionalManualReportShowClicks({ hideClicks: true }), false);
+    assert.equal(
+      resolveOperacionalManualReportShowClicks({ hideClicks: true, forceShowClicks: true }),
+      true,
+    );
+    assert.equal(resolveOperacionalManualReportClicks({ trackedClicks: 47 }), 47);
+    assert.equal(resolveOperacionalManualReportClicks({ overrideClicks: 130, trackedClicks: 47 }), 130);
+    assert.equal(resolveOperacionalManualReportClicks({ trackedClicks: -3 }), 0);
   });
 
   it("recusa link inválido com o mesmo recado do wizard", async () => {
