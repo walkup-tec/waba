@@ -144,11 +144,11 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
     }
   });
 
-  app.get("/admin/operacional/campanhas/:id/relatorio", (req, res) => {
+  app.get("/admin/operacional/campanhas/:id/relatorio", async (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
     try {
-      const report = operacionalCampanhasService.getCampaignReport(req.params.id, {
+      const report = await operacionalCampanhasService.getCampaignReport(req.params.id, {
         email: auth.email,
         role: auth.role,
       });
@@ -160,13 +160,13 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
     }
   });
 
-  app.put("/admin/operacional/campanhas/:id/relatorio", (req, res) => {
+  app.put("/admin/operacional/campanhas/:id/relatorio", async (req, res) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
     if (rejectIfIndicadorMutation(auth, res)) return;
     try {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      const campaign = operacionalCampanhasService.saveCampaignReport(req.params.id, body, {
+      const campaign = await operacionalCampanhasService.saveCampaignReport(req.params.id, body, {
         email: auth.email,
         role: auth.role,
       });
