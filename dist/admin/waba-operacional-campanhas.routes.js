@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaOperacionalCampanhasRoutes = void 0;
 const waba_staff_menu_auth_1 = require("../auth/waba-staff-menu-auth");
 const waba_operacional_campanhas_service_1 = require("./waba-operacional-campanhas.service");
+const waba_campaign_intake_vitoria_short_url_1 = require("../disparos/waba-campaign-intake-vitoria-short-url");
 const OPERACIONAL_CAMPANHAS_MENU_ID = "admin-campanhas";
 const operacionalCampanhasService = new waba_operacional_campanhas_service_1.WabaOperacionalCampanhasService();
 const rejectOperacionalCampanhasAccess = (req, res) => (0, waba_staff_menu_auth_1.rejectUnlessStaffMenu)(req, res, OPERACIONAL_CAMPANHAS_MENU_ID);
@@ -24,11 +25,12 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
         });
         return res.status(200).json({ items });
     });
-    app.get("/admin/operacional/campanhas/:id", (req, res) => {
+    app.get("/admin/operacional/campanhas/:id", async (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)
             return;
         try {
+            await (0, waba_campaign_intake_vitoria_short_url_1.ensureVitoriaDaConquistaIntakeShortUrlByCampaignId)(req.params.id);
             const detail = operacionalCampanhasService.getCampaignDetail(req.params.id, {
                 email: auth.email,
                 role: auth.role,
