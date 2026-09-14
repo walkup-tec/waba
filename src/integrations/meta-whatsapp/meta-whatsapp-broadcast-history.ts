@@ -1,5 +1,7 @@
 import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
 import { formatScheduledSendLabel, isScheduledSendPending } from "../../disparos/waba-campaign-schedule";
+import { cloudBroadcastActionFlags } from "./meta-whatsapp-broadcast-actions";
+import { evaluateCloudBroadcastHealth } from "./meta-whatsapp-broadcast-health";
 import { publicBroadcastCampaign, type MetaBroadcastCampaign } from "./meta-whatsapp-broadcast.store";
 
 export function cloudBroadcastProgress(input: {
@@ -27,9 +29,11 @@ export function cloudBroadcastDisplayStatus(input: {
   broadcastStatus?: string | null;
   intakeStatus?: string | null;
   voided?: boolean;
+  paused?: boolean;
   scheduledSendAt?: string | null;
 }): { key: string; label: string } {
   if (input.voided) return { key: "cancelled", label: "Cancelado" };
+  if (input.paused) return { key: "paused", label: "Pausado" };
   const intake = input.intakeStatus ? normalizeCampaignIntakeStatus(input.intakeStatus) : "";
   if (intake === "completed") return { key: "completed", label: "Finalizado" };
   if (intake === "error_reported") return { key: "error", label: "Erro reportado" };
@@ -68,9 +72,12 @@ export function toCloudBroadcastHistoryItem(input: {
     broadcastStatus: input.campaign.status,
     intakeStatus: input.intakeStatus,
     voided: Boolean(String(input.campaign.voidedAt || "").trim()),
+    paused: Boolean(String(input.campaign.pausedAt || "").trim()),
     scheduledSendAt: input.campaign.scheduledSendAt,
   });
   const scheduledSendAt = String(input.campaign.scheduledSendAt || "").trim();
+  const actions = cloudBroadcastActionFlags(input.campaign);
+  const health = evaluateCloudBroadcastHealth(input.campaign);
   return {
     ...publicBroadcastCampaign(input.campaign),
     startedAt: input.campaign.createdAt,
@@ -83,5 +90,10 @@ export function toCloudBroadcastHistoryItem(input: {
     statusLabel: display.label,
     scheduledSendAt: scheduledSendAt || undefined,
     scheduledSendLabel: formatScheduledSendLabel(scheduledSendAt),
+    canCancel: actions.canCancel,
+    canPause: actions.canPause,
+    canDelete: actions.canDelete,
+    showPause: actions.showPause,
+    health,
   };
 }
