@@ -260,6 +260,41 @@ function withHydrateLimits(graph) {
         timeoutMs: input.timeoutMs ?? HYDRATE_GRAPH.timeoutMs,
     });
 }
+function listedHasBusinessId(listedIds, businessId) {
+    return [...listedIds].some((listed) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(listed, businessId));
+}
+async function collectDiscoveredAdminCards(input) {
+    const extra = [];
+    const addIfMissing = (card) => {
+        const id = String(card?.id || "").trim();
+        if (!id || !card || listedHasBusinessId(input.listedIds, id))
+            return;
+        input.listedIds.add(id);
+        extra.push(card);
+    };
+    const seeds = (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)();
+    for (const token of input.tokens) {
+        if (!token)
+            continue;
+        const nodes = await (0, meta_whatsapp_portfolio_graph_1.discoverAdministeredBusinessNodes)(input.graph, token, seeds);
+        for (const card of (0, meta_whatsapp_portfolio_graph_1.directoryFromAssigned)({ data: nodes }))
+            addIfMissing(card);
+    }
+    for (const businessId of (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)()) {
+        if (listedHasBusinessId(input.listedIds, businessId))
+            continue;
+        for (const token of input.tokens) {
+            if (!token)
+                continue;
+            const found = await (0, meta_whatsapp_portfolio_graph_1.fetchVisibleBusinessCard)(input.graph, token, businessId);
+            if (found) {
+                addIfMissing(found);
+                break;
+            }
+        }
+    }
+    return extra;
+}
 async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaIds = [], writeTokens = []) {
     const stored = storedNumbersFromConnection(open);
     const fallback = { ...cardFromConnection(open), numbers: stored };
@@ -1423,26 +1458,16 @@ class MetaWhatsappConnectionService {
         const listedIds = new Set([...fromConnections, ...fromDirectory]
             .map((item) => String(item.id || "").trim())
             .filter(Boolean));
-        const missingAdminIds = (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)().filter((id) => ![...listedIds].some((listed) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(listed, id)));
-        const extraCards = [];
-        if (missingAdminIds.length) {
-            const keptConn = new Set(kept.map((item) => item.connectionId));
-            const tokens = writeTokens
-                .filter((row) => keptConn.has(row.id))
-                .map((row) => row.token)
-                .filter(Boolean);
-            const g = withHydrateLimits(this.graph);
-            for (const businessId of missingAdminIds) {
-                let found = null;
-                for (const token of tokens) {
-                    found = await (0, meta_whatsapp_portfolio_graph_1.fetchVisibleBusinessCard)(g, token, businessId);
-                    if (found)
-                        break;
-                }
-                if (found?.id)
-                    extraCards.push(found);
-            }
-        }
+        const keptConn = new Set(kept.map((item) => item.connectionId));
+        const tokens = writeTokens
+            .filter((row) => keptConn.has(row.id))
+            .map((row) => row.token)
+            .filter(Boolean);
+        const extraCards = await collectDiscoveredAdminCards({
+            graph: withHydrateLimits(this.graph),
+            tokens,
+            listedIds,
+        });
         const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)([...fromConnections, ...fromDirectory, ...extraCards]).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
         if (leftIds.length && typeof repo.disconnectOne === "function") {
             for (const connectionId of leftIds) {
