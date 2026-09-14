@@ -38,6 +38,24 @@ export function isBroadcastVoided(
   return Boolean(String(row?.voidedAt || "").trim());
 }
 
+export function isBroadcastPaused(
+  row: Pick<MetaBroadcastCampaign, "pausedAt"> | null | undefined,
+): boolean {
+  return Boolean(String(row?.pausedAt || "").trim());
+}
+
+export function isBroadcastHidden(
+  row: Pick<MetaBroadcastCampaign, "hiddenAt"> | null | undefined,
+): boolean {
+  return Boolean(String(row?.hiddenAt || "").trim());
+}
+
+export function isBroadcastStoppedByOperator(
+  row: Pick<MetaBroadcastCampaign, "voidedAt" | "pausedAt" | "hiddenAt"> | null | undefined,
+): boolean {
+  return isBroadcastVoided(row) || isBroadcastPaused(row) || isBroadcastHidden(row);
+}
+
 /** Cabeçalho recusado (131053): não continuar o lote — Graph aceita e ninguém recebe. */
 export function shouldAbortBroadcastOnHeaderMediaFailure(
   row: Pick<MetaBroadcastCampaign, "leads"> | null | undefined,
@@ -75,7 +93,7 @@ export function shouldVoidCloudBroadcast(row: MetaBroadcastCampaign): boolean {
 export function isCloudBroadcastInactiveForRetry(row: MetaBroadcastCampaign | null | undefined): boolean {
   if (!row) return true;
   return (
-    isBroadcastVoided(row) ||
+    isBroadcastStoppedByOperator(row) ||
     isBroadcastAbandonedForRetry(row) ||
     shouldAbortBroadcastOnHeaderMediaFailure(row)
   );
