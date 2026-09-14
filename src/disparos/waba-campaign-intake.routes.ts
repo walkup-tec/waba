@@ -70,6 +70,11 @@ import {
   validateCampaignIntakeMedia,
 } from "./waba-campaign-intake-media";
 import { formatScheduledSendLabel, parseScheduledSendAt } from "./waba-campaign-schedule";
+import { publicBaseHintsFromExpressRequest } from "../lib/waba-public-base-url";
+import {
+  createCampaignIntakeTrackedShortUrl,
+  shouldCreateIntakeTrackedShortUrl,
+} from "./waba-campaign-intake-short-url";
 
 const intakeRepository = new WabaCampaignIntakeRepository();
 const disparosCreditsService = new WabaDisparosCreditsService();
@@ -577,6 +582,18 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
 
         const now = new Date().toISOString();
         const intakeId = randomUUID();
+        let responseShortUrl = "";
+        let responseShortSlug = "";
+        if (shouldCreateIntakeTrackedShortUrl(apiKind)) {
+          const tracked = await createCampaignIntakeTrackedShortUrl({
+            destinationUrl: responseLink,
+            campaignId: intakeId,
+            ownerEmail: auth.email,
+            publicBaseHints: publicBaseHintsFromExpressRequest(req),
+          });
+          responseShortUrl = tracked.shortUrl;
+          responseShortSlug = tracked.shortSlug;
+        }
         const storageDir = resolveCampaignIntakeStorageDir(intakeId);
         const imageExt = mediaCheck.extension;
         const logoExt = logoMime.includes("png") ? ".png" : ".jpg";
@@ -614,6 +631,8 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           whatsappLogoStoredPath,
           textOptions,
           responseLink,
+          ...(responseShortUrl ? { responseShortUrl } : {}),
+          ...(responseShortSlug ? { responseShortSlug } : {}),
           campaignMediaKind: mediaKind,
           imageFileName: imageFile.originalname || `campaign-media${imageExt}`,
           imageStoredPath,
