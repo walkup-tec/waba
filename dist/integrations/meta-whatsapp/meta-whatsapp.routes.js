@@ -747,6 +747,57 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             return handleMetaError(res, error);
         }
     });
+    app.post("/integrations/meta/whatsapp/broadcast/:id/cancel", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            warnClientTenantClaim(req);
+            const campaign = broadcastService.cancelFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(req.params.id || ""));
+            return sendPublic(res, 200, { ok: true, campaign });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
+    app.post("/integrations/meta/whatsapp/broadcast/:id/pause", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            warnClientTenantClaim(req);
+            const campaign = broadcastService.pauseFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(req.params.id || ""));
+            return sendPublic(res, 200, { ok: true, campaign });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
+    app.post("/integrations/meta/whatsapp/broadcast/:id/hide", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            warnClientTenantClaim(req);
+            const campaign = broadcastService.hideFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(req.params.id || ""));
+            return sendPublic(res, 200, { ok: true, campaign });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
     app.get("/integrations/meta/whatsapp/broadcast/:id", async (req, res) => {
         try {
             if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
