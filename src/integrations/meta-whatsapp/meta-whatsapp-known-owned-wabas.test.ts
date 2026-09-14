@@ -15,6 +15,8 @@ import {
   knownOwnedBusinessesMatch,
   knownWabaIdForPendingPhone,
   metaBusinessIdsMatch,
+  catalogAdminBusinessIds,
+  catalogBackfillBusinessIds,
 } from "./meta-whatsapp-known-owned-wabas";
 
 describe("known owned WABAs", () => {
@@ -68,5 +70,11 @@ describe("known owned WABAs", () => {
       [DRAX_SISTEMAS_STALE_WABA_ID, DRAX_SISTEMAS_WABA_ID].sort(),
     );
     assert.ok(equivalentOwnedWabaIdsForBusiness("", ANDRE_WABA01_ID).includes(ANDRE_WABA02_ID));
+  });
+
+  it("inclui Flaviane Ferreira Trindade no backfill de BM administrado", () => {
+    assert.ok(catalogBackfillBusinessIds().includes("962298516898955"));
+    assert.ok(catalogAdminBusinessIds().includes("962298516898955"));
+    assert.ok(catalogAdminBusinessIds().includes("4681844838758316"));
   });
 });
