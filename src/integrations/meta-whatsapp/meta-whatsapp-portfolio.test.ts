@@ -22,7 +22,7 @@ import {
   phoneNumberCardName,
   META_PHONE_NUMBER_LIST_FIELDS,
 } from "./meta-whatsapp-portfolio.map";
-import { fetchBusinessFromGraph, fetchKnownBusinessPortfolios, fetchVisibleBusinessCard, fetchWabaOwner, directoryFromAssigned } from "./meta-whatsapp-portfolio-graph";
+import { fetchBusinessFromGraph, fetchKnownBusinessPortfolios, fetchVisibleBusinessCard, fetchWabaOwner, directoryFromAssigned, fetchAssignedBusinesses, discoverAdministeredBusinessNodes } from "./meta-whatsapp-portfolio-graph";
 import { encryptMetaToken, decryptMetaToken } from "./meta-token-crypto";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
@@ -221,6 +221,85 @@ describe("meta portfolio mapper", () => {
     assert.equal(assigned.length, 1);
     assert.equal(assigned[0]?.id, "3887084984861602");
     assert.equal(assigned[0]?.primaryPageName, "Drax Sistemas e Tecnologia");
+  });
+
+  it("pagina me/businesses no Atualizar em vez de parar nos primeiros 50", async () => {
+    const graph = async (input: { path: string; query?: Record<string, string> }) => {
+      assert.equal(input.path, "me/businesses");
+      if (!input.query?.after) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [{ id: "111", name: "Primeira página" }],
+            paging: { cursors: { after: "cursor-page-2" } },
+          },
+        };
+      }
+      assert.equal(input.query.after, "cursor-page-2");
+      return {
+        ok: true,
+        status: 200,
+        json: { data: [{ id: "222", name: "Segunda página" }] },
+      };
+    };
+    const json = await fetchAssignedBusinesses(graph as any, "token");
+    const ids = directoryFromAssigned(json).map((item) => item.id);
+    assert.deepEqual(ids, ["111", "222"]);
+  });
+
+  it("descobre BM em /clients, /owned_businesses e dono da WABA client", async () => {
+    const graph = async (input: { path: string }) => {
+      if (input.path === "4141369862822598/clients") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "555000111222333", name: "Cliente via clients" }] },
+        };
+      }
+      if (input.path === "4141369862822598/owned_businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "777000111222333", name: "Filha owned" }] },
+        };
+      }
+      if (input.path === "4141369862822598/client_whatsapp_business_accounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "waba-client",
+                name: "WABA client",
+                owner_business_info: { id: "888000111222333", name: "Dono da WABA client" },
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "me/adaccounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [{ id: "act-1", business: { id: "999000111222333", name: "BM do anúncio" } }],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const nodes = await discoverAdministeredBusinessNodes(graph as any, "token", [
+      "4141369862822598",
+    ]);
+    const ids = nodes.map((row) => String((row as { id?: string }).id || "")).sort();
+    assert.deepEqual(ids, [
+      "555000111222333",
+      "777000111222333",
+      "888000111222333",
+      "999000111222333",
+    ]);
   });
 
   it("não mostra o WABA como card de portfólio quando já existe o Business", () => {
@@ -2272,6 +2351,71 @@ describe("meta portfolio service", () => {
     const assets = await service.listPortfolioAssets(auth);
     const flaviane = (assets.portfolios || []).find((item) => item.id === "962298516898955");
     assert.equal(flaviane?.name, "60.845.972 Flaviane Ferreira Trindade");
+  });
+
+  it("lista BM de cliente devolvido em /clients da agência mesmo omitido em me/businesses", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "4141369862822598/clients") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [{ id: "555000111222333", name: "61.000.001 Cliente Novo Admin" }],
+          },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path === "4681844838758316") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
+        };
+      }
+      if (input.path === "962298516898955") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "962298516898955", name: "60.845.972 Flaviane Ferreira Trindade" },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const novo = (assets.portfolios || []).find((item) => item.id === "555000111222333");
+    assert.equal(novo?.name, "61.000.001 Cliente Novo Admin");
   });
 
   it("mantém o card quando a Graph recusa com 403 genérico, sem texto de objeto inexistente", async () => {
