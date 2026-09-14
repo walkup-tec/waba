@@ -48,38 +48,53 @@ function broadcastNumberMatchesSelectedWaba(input) {
 }
 function listBroadcastNumbersForSelectedWabas(input) {
     const selected = (input.selected || []).filter((row) => String(row.wabaId || "").trim());
-    if (!selected.length)
+    const selectedConnections = new Set([
+        ...(input.selectedConnectionIds || []).map((id) => String(id || "").trim()),
+        ...selected.map((row) => String(row.connectionId || "").trim()),
+    ].filter(Boolean));
+    if (!selected.length && !selectedConnections.size)
         return [];
-    const selectedConnections = new Set(selected.map((row) => String(row.connectionId || "").trim()).filter(Boolean));
     const aliasWabas = new Set();
     for (const row of selected) {
         for (const id of (0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)("", row.wabaId))
             aliasWabas.add(id);
     }
+    const selectedBizIds = new Set((input.portfolios || [])
+        .filter((card) => selectedConnections.has(String(card.connectionId || "").trim()))
+        .map((card) => String(card.id || "").trim())
+        .filter(Boolean));
     const out = [];
     const seen = new Set();
     for (const card of input.portfolios || []) {
-        const connectionId = String(card.connectionId || "").trim();
-        if (!connectionId)
+        const cardConnectionId = String(card.connectionId || "").trim();
+        const businessId = String(card.id || "").trim();
+        const onSelectedCard = Boolean(cardConnectionId && selectedConnections.has(cardConnectionId)) ||
+            Boolean(businessId && selectedBizIds.has(businessId));
+        const connectionId = cardConnectionId ||
+            (onSelectedCard ? [...selectedConnections][0] || "" : "");
+        if (!connectionId && !onSelectedCard)
             continue;
         const portfolioWaba = String(card.wabaId || "").trim();
-        const onSelectedConn = selectedConnections.has(connectionId);
         const portfolioName = String(card.name || "").trim() || null;
         for (const number of card.numbers || []) {
-            const phoneNumberId = String(number.phoneNumberId || "").trim();
+            const phoneNumberId = String(number.phoneNumberId || number.displayPhoneNumber || "").trim();
             if (!phoneNumberId || seen.has(phoneNumberId))
                 continue;
-            const itemWaba = String(number.wabaId || portfolioWaba || "").trim();
-            const match = itemWaba
-                ? aliasWabas.has(itemWaba)
-                : onSelectedConn &&
+            const itemWaba = String(number.wabaId || "").trim();
+            const effectiveWaba = itemWaba || portfolioWaba;
+            if (effectiveWaba && (0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaId)(effectiveWaba) && !aliasWabas.has(effectiveWaba)) {
+                continue;
+            }
+            const match = onSelectedCard ||
+                Boolean(effectiveWaba && aliasWabas.has(effectiveWaba)) ||
+                Boolean(connectionId &&
                     broadcastNumberMatchesSelectedWaba({
                         connectionId,
                         selected,
                         itemWabaId: number.wabaId,
                         portfolioWabaId: card.wabaId,
                         businessId: card.id,
-                    });
+                    }));
             if (!match)
                 continue;
             seen.add(phoneNumberId);
@@ -87,7 +102,7 @@ function listBroadcastNumbersForSelectedWabas(input) {
                 phoneNumberId,
                 connectionId,
                 portfolioName,
-                wabaId: itemWaba || null,
+                wabaId: effectiveWaba || null,
                 uiStatus: String(number.uiStatus || "").trim(),
                 dispatchStatus: String(number.dispatchStatus || "livre").trim(),
                 displayPhoneNumber: number.displayPhoneNumber ? String(number.displayPhoneNumber) : null,
