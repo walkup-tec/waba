@@ -5,6 +5,7 @@ import type { TemplateGraphCaller } from "./meta-whatsapp-template-graph.client"
 import {
   isKnownClientWabaId,
   knownClientWabaIdsForBusiness,
+  equivalentOwnedWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
   knownOwnedWabaRowsForBusiness,
   knownWabaNameForId,
@@ -138,7 +139,7 @@ export function extraWabaIdsFromConnections(
     const id = String(row.wabaId || "").trim();
     if (id && id !== selfWaba) out.add(id);
   }
-  for (const id of knownOwnedWabaIdsForBusiness(bm)) {
+  for (const id of equivalentOwnedWabaIdsForBusiness(bm, selfWaba)) {
     if (id && id !== selfWaba) out.add(id);
   }
   return [...out];
