@@ -9,7 +9,7 @@
  * não inventa pendente já excluído do Business Manager.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KNOWN_OWNED_BUSINESS_WABAS = exports.MARILZA_DE_CASTRO_BUSINESS_IDS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.KNOWN_OWNED_BUSINESS_WABAS = exports.MARILZA_DE_CASTRO_BUSINESS_IDS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_STALE_WABA_ID = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
 exports.catalogAdminBusinessIds = catalogAdminBusinessIds;
 exports.businessIdsToReopenAfterFalseLeftManager = businessIdsToReopenAfterFalseLeftManager;
 exports.normalizeMetaBusinessKey = normalizeMetaBusinessKey;
@@ -17,6 +17,7 @@ exports.metaBusinessIdsMatch = metaBusinessIdsMatch;
 exports.knownOwnedBusinessesMatch = knownOwnedBusinessesMatch;
 exports.knownOwnedCatalogForBusiness = knownOwnedCatalogForBusiness;
 exports.knownOwnedWabaIdsForBusiness = knownOwnedWabaIdsForBusiness;
+exports.equivalentOwnedWabaIdsForBusiness = equivalentOwnedWabaIdsForBusiness;
 exports.knownOwnedWabaRowsForBusiness = knownOwnedWabaRowsForBusiness;
 exports.knownClientWabaIdsForBusiness = knownClientWabaIdsForBusiness;
 exports.isKnownClientWabaForBusiness = isKnownClientWabaForBusiness;
@@ -36,6 +37,8 @@ exports.ANDRE_WABA02_PENDING_PHONE_ID = "1311179632078208";
 exports.RIO_DE_JANEIRO_01_WABA_ID = "1581808413746453";
 exports.DRAX_SISTEMAS_BUSINESS_IDS = ["1041827648719609"];
 exports.DRAX_SISTEMAS_WABA_ID = "1636793994538054";
+/** Conexão Embedded Signup antiga; a WABA01 do Manager é DRAX_SISTEMAS_WABA_ID. */
+exports.DRAX_SISTEMAS_STALE_WABA_ID = "1988957871663919";
 exports.WALKUP_BUSINESS_IDS = ["4141369862822598"];
 exports.WALKUP_WABA01_ID = "1014470201624992";
 /** Card Grupo Walkup App — WABA gravada no banco já veio misturada (Drax). */
@@ -109,6 +112,20 @@ function knownOwnedCatalogForBusiness(businessId) {
 }
 function knownOwnedWabaIdsForBusiness(businessId) {
     return (knownOwnedCatalogForBusiness(businessId)?.wabas || []).map((row) => row.id);
+}
+/** Ids da mesma conta no card (Manager + conexão stale). Não usar no picker de WABA. */
+function equivalentOwnedWabaIdsForBusiness(businessId, storedWabaId) {
+    const ids = new Set();
+    const stored = String(storedWabaId || "").trim();
+    if (stored)
+        ids.add(stored);
+    for (const id of knownOwnedWabaIdsForBusiness(businessId))
+        ids.add(id);
+    if (knownOwnedCatalogForBusiness(businessId) === knownOwnedCatalogForBusiness(exports.DRAX_SISTEMAS_BUSINESS_IDS[0])) {
+        ids.add(exports.DRAX_SISTEMAS_WABA_ID);
+        ids.add(exports.DRAX_SISTEMAS_STALE_WABA_ID);
+    }
+    return [...ids].filter(Boolean);
 }
 function knownOwnedWabaRowsForBusiness(businessId) {
     return knownOwnedCatalogForBusiness(businessId)?.wabas.slice() || [];
