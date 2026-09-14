@@ -1,5 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import {
+  isBroadcastHidden,
+  isBroadcastPaused,
+  isBroadcastStoppedByOperator,
+  isBroadcastVoided,
   isOptInPtxResumeCampaign,
   shouldAbortBroadcastOnHeaderMediaFailure,
   shouldVoidCloudBroadcast,
@@ -67,6 +71,10 @@ export type MetaBroadcastCampaign = {
   reportFinalizedAt?: string;
   /** Cancelado para refazer o Disparo Cloud; não ocupa número nem bloqueia o vínculo. */
   voidedAt?: string;
+  /** Pausado no meio do disparo; o loop para e o número fica livre. */
+  pausedAt?: string;
+  /** Removido da tabela do Laboratório; o registro permanece para relatório. */
+  hiddenAt?: string;
   total: number;
   sent: number;
   failed: number;
@@ -203,6 +211,8 @@ export function mergeBroadcastCampaignPreservingMeta(
     sendFinishedAt: incoming.sendFinishedAt || stored.sendFinishedAt,
     templateApprovedAt: stored.templateApprovedAt || incoming.templateApprovedAt,
     voidedAt: incoming.voidedAt || stored.voidedAt,
+    pausedAt: incoming.pausedAt || stored.pausedAt,
+    hiddenAt: incoming.hiddenAt || stored.hiddenAt,
   };
 }
 
@@ -224,6 +234,7 @@ export function findBroadcastCampaign(tenantId: string, id: string): MetaBroadca
 
 export function listBroadcastCampaigns(tenantId: string, limit = 8): MetaBroadcastCampaign[] {
   return listAllBroadcastCampaigns(tenantId)
+    .filter((row) => !isBroadcastHidden(row))
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
     .slice(0, Math.max(1, limit));
 }
@@ -242,7 +253,7 @@ export type CloudBroadcastProgressHint = {
 };
 
 function isActiveBroadcastRow(row: MetaBroadcastCampaign): boolean {
-  return !String(row.voidedAt || "").trim();
+  return !isBroadcastVoided(row) && !isBroadcastHidden(row);
 }
 
 export function indexBroadcastProgressByIntakeId(): Map<string, CloudBroadcastProgressHint> {
@@ -283,11 +294,11 @@ export function findBroadcastByIntakeCampaignId(intakeCampaignId: string): MetaB
   return row ? { ...row, leads: row.leads.map((lead) => ({ ...lead })) } : null;
 }
 
-/** running/queued sem void — lotes que o operacional não deve interromper com Redeploy. */
+/** running/queued sem void/pause/hide — lotes que o operacional não deve interromper com Redeploy. */
 export function listActiveCloudBroadcasts(): MetaBroadcastCampaign[] {
   return readStore()
     .campaigns.filter((row) => {
-      if (String(row.voidedAt || "").trim()) return false;
+      if (isBroadcastStoppedByOperator(row)) return false;
       return row.status === "running" || row.status === "queued";
     })
     .map((row) => ({ ...row, leads: row.leads.map((lead) => ({ ...lead })) }));
@@ -306,7 +317,7 @@ export function broadcastLeadIsPendingSend(lead: MetaBroadcastLead | null | unde
 export function listResumableOrphanedBroadcasts(): MetaBroadcastCampaign[] {
   return readStore()
     .campaigns.filter((row) => {
-      if (String(row.voidedAt || "").trim()) return false;
+      if (isBroadcastStoppedByOperator(row)) return false;
       if (row.status !== "running" && row.status !== "queued") return false;
       if (row.status !== "running" && isScheduledSendPending(row.scheduledSendAt)) return false;
       return (row.leads || []).some(broadcastLeadIsPendingSend);
@@ -325,6 +336,7 @@ export function reopenOptInPtxBroadcastToContinue(): MetaBroadcastCampaign | nul
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   const row = rows[0];
   if (!row) return null;
+  if (isBroadcastPaused(row) || isBroadcastHidden(row)) return null;
   let queuedReset = 0;
   for (const lead of row.leads || []) {
     const status = String(lead.status || "").trim();
@@ -343,12 +355,13 @@ export function reopenOptInPtxBroadcastToContinue(): MetaBroadcastCampaign | nul
   if (!(row.leads || []).some(broadcastLeadIsPendingSend)) return null;
   const alreadyOpen =
     (row.status === "running" || row.status === "queued") &&
-    !String(row.voidedAt || "").trim() &&
+    !isBroadcastStoppedByOperator(row) &&
     queuedReset === 0;
   if (!alreadyOpen) {
     const now = new Date().toISOString();
     row.status = "running";
     row.voidedAt = undefined;
+    row.pausedAt = undefined;
     row.sendFinishedAt = undefined;
     row.updatedAt = now;
     writeStore(store);
@@ -360,7 +373,7 @@ export function reopenOptInPtxBroadcastToContinue(): MetaBroadcastCampaign | nul
 export function listStaleRunningBroadcastsWithoutPending(): MetaBroadcastCampaign[] {
   return readStore()
     .campaigns.filter((row) => {
-      if (String(row.voidedAt || "").trim()) return false;
+      if (isBroadcastStoppedByOperator(row)) return false;
       if (row.status !== "running") return false;
       return !(row.leads || []).some(broadcastLeadIsPendingSend);
     })
@@ -372,7 +385,7 @@ export function finalizeStaleRunningBroadcast(campaignId: string): MetaBroadcast
   if (!id) return null;
   const store = readStore();
   const row = store.campaigns.find((item) => item.id === id);
-  if (!row || String(row.voidedAt || "").trim()) return null;
+  if (!row || isBroadcastStoppedByOperator(row)) return null;
   if (row.status !== "running") return null;
   if ((row.leads || []).some(broadcastLeadIsPendingSend)) return null;
   const now = new Date().toISOString();
@@ -398,6 +411,37 @@ export function voidBroadcastCampaignForRetry(campaignId: string): MetaBroadcast
   return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
 }
 
+export function pauseBroadcastCampaign(campaignId: string): MetaBroadcastCampaign | null {
+  const id = String(campaignId || "").trim();
+  if (!id) return null;
+  const store = readStore();
+  const row = store.campaigns.find((item) => item.id === id);
+  if (!row) return null;
+  if (row.pausedAt) return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+  const now = new Date().toISOString();
+  row.pausedAt = now;
+  row.updatedAt = now;
+  writeStore(store);
+  return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+}
+
+export function hideBroadcastCampaign(campaignId: string): MetaBroadcastCampaign | null {
+  const id = String(campaignId || "").trim();
+  if (!id) return null;
+  const store = readStore();
+  const row = store.campaigns.find((item) => item.id === id);
+  if (!row) return null;
+  if (row.hiddenAt) return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+  const now = new Date().toISOString();
+  if (!row.voidedAt && !row.pausedAt && (row.status === "queued" || row.status === "running")) {
+    row.pausedAt = now;
+  }
+  row.hiddenAt = now;
+  row.updatedAt = now;
+  writeStore(store);
+  return { ...row, leads: row.leads.map((lead) => ({ ...lead })) };
+}
+
 export function ensureVoidedFailedCloudBroadcasts(): number {
   return voidAbandonedCloudBroadcastsForRetry(shouldVoidCloudBroadcast);
 }
@@ -409,7 +453,7 @@ export function voidAbandonedCloudBroadcastsForRetry(
   const now = new Date().toISOString();
   let changed = 0;
   for (const row of store.campaigns) {
-    if (row.voidedAt) continue;
+    if (row.voidedAt || row.pausedAt || row.hiddenAt) continue;
     if (!shouldVoid(row)) continue;
     row.status = "failed";
     row.voidedAt = now;
@@ -579,6 +623,9 @@ export function publicBroadcastCampaign(row: MetaBroadcastCampaign) {
     clicks: Math.max(0, Number(row.clicks || 0)),
     intakeCampaignId: row.intakeCampaignId || undefined,
     status: row.status,
+    voidedAt: row.voidedAt || undefined,
+    pausedAt: row.pausedAt || undefined,
+    sendStartedAt: row.sendStartedAt || undefined,
     total: row.total,
     sent: row.sent,
     failed: row.failed,
