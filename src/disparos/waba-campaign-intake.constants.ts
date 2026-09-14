@@ -10,8 +10,23 @@ export const WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT = 1000;
 /** Só este assinante fica sem o piso de 1000 envios. */
 export const WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL = "mozart.pmo@gmail.com";
 
+/** Fila fixa do Mozart: toda campanha gerada por ele vai para este operacional. */
+export const WABA_MOZART_FORCED_OPERACIONAL_EMAIL = "drax@draxsistemas.com.br";
+
+function normalizeOwnerEmail(email: string | null | undefined): string {
+  return String(email || "").trim().toLowerCase();
+}
+
 export function campaignMinPlannedSendCountForEmail(email: string | null | undefined): number {
-  const normalized = String(email || "").trim().toLowerCase();
-  if (normalized === WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL) return 1;
+  if (normalizeOwnerEmail(email) === WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL) return 1;
   return WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT;
+}
+
+export function forcedOperacionalEmailForCampaignOwner(
+  ownerEmail: string | null | undefined,
+): string | null {
+  if (normalizeOwnerEmail(ownerEmail) === WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL) {
+    return WABA_MOZART_FORCED_OPERACIONAL_EMAIL;
+  }
+  return null;
 }
