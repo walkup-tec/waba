@@ -950,6 +950,16 @@ describe("extraWabaIdsFromConnections", () => {
       ["1744257946809067"],
     );
   });
+
+  it("Drax: WABA01 do Manager entra mesmo com conexão stale e BM vazio", () => {
+    assert.deepEqual(
+      extraWabaIdsFromConnections(
+        [{ id: "c1", wabaId: "1988957871663919", metaBusinessId: "" }],
+        { id: "c1", wabaId: "1988957871663919", metaBusinessId: "" },
+      ),
+      ["1636793994538054"],
+    );
+  });
 });
 
 describe("pickTemplateWriteConnections", () => {
