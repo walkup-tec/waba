@@ -104,4 +104,27 @@ describe("cancelar Disparo Cloud sem entrega", () => {
     });
     assert.equal(shouldVoidCloudBroadcast(optIn), false);
   });
+
+  it("pausa e exclusão deixam o lote inativo para novo vínculo", () => {
+    assert.equal(
+      isCloudBroadcastInactiveForRetry(
+        base({
+          status: "running",
+          pausedAt: "2026-09-14T12:00:00.000Z",
+          leads: [{ waId: "5511999000001", status: "queued" }],
+        }),
+      ),
+      true,
+    );
+    assert.equal(
+      isCloudBroadcastInactiveForRetry(
+        base({
+          status: "queued",
+          hiddenAt: "2026-09-14T12:00:00.000Z",
+          leads: [{ waId: "5511999000001", status: "queued" }],
+        }),
+      ),
+      true,
+    );
+  });
 });
