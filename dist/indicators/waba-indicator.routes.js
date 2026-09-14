@@ -5,6 +5,7 @@ const waba_staff_menu_auth_1 = require("../auth/waba-staff-menu-auth");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_admin_bonus_envios_service_1 = require("../admin/waba-admin-bonus-envios.service");
 const waba_operacional_campanhas_service_1 = require("../admin/waba-operacional-campanhas.service");
+const waba_campaign_intake_vitoria_short_url_1 = require("../disparos/waba-campaign-intake-vitoria-short-url");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_indicator_service_1 = require("./waba-indicator.service");
 const indicatorService = new waba_indicator_service_1.WabaIndicatorService();
@@ -254,11 +255,12 @@ const registerWabaIndicatorRoutes = (app) => {
         const items = campanhasService.listCampaigns({ email: auth.email, role: "indicador" });
         return res.status(200).json({ items });
     });
-    app.get("/indicador/campanhas/:id", (req, res) => {
+    app.get("/indicador/campanhas/:id", async (req, res) => {
         const auth = rejectIndicadorMenu(req, res, "indicador-campanhas");
         if (!auth)
             return;
         try {
+            await (0, waba_campaign_intake_vitoria_short_url_1.ensureVitoriaDaConquistaIntakeShortUrlByCampaignId)(String(req.params.id ?? ""));
             const detail = campanhasService.getCampaignDetail(String(req.params.id ?? ""), {
                 email: auth.email,
                 role: "indicador",
