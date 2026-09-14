@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL = exports.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT = exports.WABA_CAMPAIGN_INTAKE_SAFE_PARSER = exports.WABA_CAMPAIGN_INTAKE_API_VERSION = void 0;
+exports.WABA_MOZART_FORCED_OPERACIONAL_EMAIL = exports.WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL = exports.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT = exports.WABA_CAMPAIGN_INTAKE_SAFE_PARSER = exports.WABA_CAMPAIGN_INTAKE_API_VERSION = void 0;
 exports.campaignMinPlannedSendCountForEmail = campaignMinPlannedSendCountForEmail;
+exports.forcedOperacionalEmailForCampaignOwner = forcedOperacionalEmailForCampaignOwner;
 /** Versão exposta em GET /health — o frontend valida antes do POST intake. */
 exports.WABA_CAMPAIGN_INTAKE_API_VERSION = 6;
 /** Indica que json/urlencoded não consomem o body do POST /disparos/campanhas/intake. */
@@ -10,9 +11,19 @@ exports.WABA_CAMPAIGN_INTAKE_SAFE_PARSER = true;
 exports.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT = 1000;
 /** Só este assinante fica sem o piso de 1000 envios. */
 exports.WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL = "mozart.pmo@gmail.com";
+/** Fila fixa do Mozart: toda campanha gerada por ele vai para este operacional. */
+exports.WABA_MOZART_FORCED_OPERACIONAL_EMAIL = "drax@draxsistemas.com.br";
+function normalizeOwnerEmail(email) {
+    return String(email || "").trim().toLowerCase();
+}
 function campaignMinPlannedSendCountForEmail(email) {
-    const normalized = String(email || "").trim().toLowerCase();
-    if (normalized === exports.WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL)
+    if (normalizeOwnerEmail(email) === exports.WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL)
         return 1;
     return exports.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT;
+}
+function forcedOperacionalEmailForCampaignOwner(ownerEmail) {
+    if (normalizeOwnerEmail(ownerEmail) === exports.WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL) {
+        return exports.WABA_MOZART_FORCED_OPERACIONAL_EMAIL;
+    }
+    return null;
 }
