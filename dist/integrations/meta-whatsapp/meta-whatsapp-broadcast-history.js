@@ -5,6 +5,8 @@ exports.cloudBroadcastDisplayStatus = cloudBroadcastDisplayStatus;
 exports.toCloudBroadcastHistoryItem = toCloudBroadcastHistoryItem;
 const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-intake-status");
 const waba_campaign_schedule_1 = require("../../disparos/waba-campaign-schedule");
+const meta_whatsapp_broadcast_actions_1 = require("./meta-whatsapp-broadcast-actions");
+const meta_whatsapp_broadcast_health_1 = require("./meta-whatsapp-broadcast-health");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
 function cloudBroadcastProgress(input) {
     const requested = Math.max(0, Math.round(Number(input.plannedSendCount || input.total || 0)));
@@ -24,6 +26,8 @@ function cloudBroadcastProgress(input) {
 function cloudBroadcastDisplayStatus(input) {
     if (input.voided)
         return { key: "cancelled", label: "Cancelado" };
+    if (input.paused)
+        return { key: "paused", label: "Pausado" };
     const intake = input.intakeStatus ? (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(input.intakeStatus) : "";
     if (intake === "completed")
         return { key: "completed", label: "Finalizado" };
@@ -63,9 +67,12 @@ function toCloudBroadcastHistoryItem(input) {
         broadcastStatus: input.campaign.status,
         intakeStatus: input.intakeStatus,
         voided: Boolean(String(input.campaign.voidedAt || "").trim()),
+        paused: Boolean(String(input.campaign.pausedAt || "").trim()),
         scheduledSendAt: input.campaign.scheduledSendAt,
     });
     const scheduledSendAt = String(input.campaign.scheduledSendAt || "").trim();
+    const actions = (0, meta_whatsapp_broadcast_actions_1.cloudBroadcastActionFlags)(input.campaign);
+    const health = (0, meta_whatsapp_broadcast_health_1.evaluateCloudBroadcastHealth)(input.campaign);
     return {
         ...(0, meta_whatsapp_broadcast_store_1.publicBroadcastCampaign)(input.campaign),
         startedAt: input.campaign.createdAt,
@@ -78,5 +85,10 @@ function toCloudBroadcastHistoryItem(input) {
         statusLabel: display.label,
         scheduledSendAt: scheduledSendAt || undefined,
         scheduledSendLabel: (0, waba_campaign_schedule_1.formatScheduledSendLabel)(scheduledSendAt),
+        canCancel: actions.canCancel,
+        canPause: actions.canPause,
+        canDelete: actions.canDelete,
+        showPause: actions.showPause,
+        health,
     };
 }
