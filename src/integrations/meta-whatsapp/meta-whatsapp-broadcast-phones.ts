@@ -1,3 +1,5 @@
+import { equivalentOwnedWabaIdsForBusiness } from "./meta-whatsapp-known-owned-wabas";
+
 /** Números do Disparo Cloud podem vir de vários portfólios; o relatório permanece um só. */
 
 export type MetaBroadcastPhoneCatalogItem = {
@@ -23,6 +25,35 @@ export class BroadcastPhoneSelectionError extends Error {
     super(message);
     this.reason = reason;
   }
+}
+
+export function broadcastNumberMatchesSelectedWaba(input: {
+  connectionId: string;
+  selected: ReadonlyArray<{ connectionId?: string | null; wabaId?: string | null }>;
+  itemWabaId?: string | null;
+  portfolioWabaId?: string | null;
+  businessId?: string | null;
+}): boolean {
+  const connectionId = String(input.connectionId || "").trim();
+  if (!connectionId) return false;
+  const selectedForCard = input.selected
+    .filter((row) => String(row.connectionId || "").trim() === connectionId)
+    .map((row) => String(row.wabaId || "").trim())
+    .filter(Boolean);
+  if (!selectedForCard.length) return false;
+
+  const itemWaba = String(input.itemWabaId || "").trim();
+  const aliases = new Set(
+    equivalentOwnedWabaIdsForBusiness(String(input.businessId || ""), input.portfolioWabaId),
+  );
+  const portfolioWaba = String(input.portfolioWabaId || "").trim();
+  if (portfolioWaba) aliases.add(portfolioWaba);
+
+  if (!itemWaba) {
+    return selectedForCard.some((id) => aliases.has(id));
+  }
+  if (selectedForCard.includes(itemWaba)) return true;
+  return selectedForCard.some((id) => aliases.has(id) && aliases.has(itemWaba));
 }
 
 export function indexBroadcastPortfolioPhones(
