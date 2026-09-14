@@ -47,10 +47,12 @@ import {
   findBroadcastByIntakeCampaignId,
   findBroadcastCampaign,
   finalizeStaleRunningBroadcast,
+  hideBroadcastCampaign,
   listActiveCloudBroadcasts,
   listBroadcastCampaigns,
   listResumableOrphanedBroadcasts,
   listStaleRunningBroadcastsWithoutPending,
+  pauseBroadcastCampaign,
   publicBroadcastCampaign,
   reopenOptInPtxBroadcastToContinue,
   saveBroadcastCampaign,
@@ -81,7 +83,13 @@ import {
   CLOUD_BROADCAST_RESUME_WATCHDOG_MS,
   type CloudBroadcastProtectSnapshot,
 } from "./meta-whatsapp-broadcast-protect";
-import { isBroadcastVoided, isCloudBroadcastInactiveForRetry } from "./meta-whatsapp-broadcast-void";
+import { decideCancelBroadcast, decideHideBroadcast, decidePauseBroadcast } from "./meta-whatsapp-broadcast-actions";
+import {
+  isBroadcastHidden,
+  isBroadcastPaused,
+  isBroadcastVoided,
+  isCloudBroadcastInactiveForRetry,
+} from "./meta-whatsapp-broadcast-void";
 import { scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
 import { attachCampaignIdToShortLink } from "../../shortener/waba-shortener.service";
 import {
@@ -784,6 +792,19 @@ export class MetaWhatsappBroadcastService {
           });
           return;
         }
+        if (isBroadcastPaused(live) || isBroadcastHidden(live)) {
+          row.pausedAt = live.pausedAt;
+          row.hiddenAt = live.hiddenAt;
+          row.sendFinishedAt = new Date().toISOString();
+          saveBroadcastCampaign(row);
+          logMetaWhatsappSafe("broadcast-aborted", {
+            tenantId,
+            campaignId,
+            sent: row.sent,
+            reason: "paused_or_hidden",
+          });
+          return;
+        }
         if (live.status === "failed") {
           row.status = "failed";
           row.sendFinishedAt = new Date().toISOString();
@@ -918,6 +939,55 @@ export class MetaWhatsappBroadcastService {
     return publicBroadcastCampaign(row);
   }
 
+  private historyItemFor(row: MetaBroadcastCampaign) {
+    const intakes = new WabaCampaignIntakeRepository();
+    const subscribers = new WabaSubscriberRepository();
+    const intake = row.intakeCampaignId ? intakes.getById(row.intakeCampaignId) : null;
+    const ownerEmail = String(intake?.ownerEmail || "").trim().toLowerCase();
+    const clientName = String(subscribers.getByEmail(ownerEmail)?.fullName || ownerEmail).trim();
+    return toCloudBroadcastHistoryItem({
+      campaign: row,
+      campaignName: intake?.campaignName,
+      clientName,
+      plannedSendCount: intake?.plannedSendCount ?? row.total,
+      intakeStatus: intake?.status,
+    });
+  }
+
+  private requireOwnedCampaign(auth: WabaRequestAuth, id: string): MetaBroadcastCampaign {
+    const tenant = requireTenant(auth);
+    const row = findBroadcastCampaign(tenant.tenantId, String(id || "").trim());
+    if (!row) fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
+    return row;
+  }
+
+  cancelFromAuth(auth: WabaRequestAuth, id: string) {
+    const row = this.requireOwnedCampaign(auth, id);
+    const decision = decideCancelBroadcast(row);
+    if (!decision.ok) fail("invalid_payload", decision.error);
+    const next = voidBroadcastCampaignForRetry(row.id);
+    if (!next) fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
+    return this.historyItemFor(next);
+  }
+
+  pauseFromAuth(auth: WabaRequestAuth, id: string) {
+    const row = this.requireOwnedCampaign(auth, id);
+    const decision = decidePauseBroadcast(row);
+    if (!decision.ok) fail("invalid_payload", decision.error);
+    const next = pauseBroadcastCampaign(row.id);
+    if (!next) fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
+    return this.historyItemFor(next);
+  }
+
+  hideFromAuth(auth: WabaRequestAuth, id: string) {
+    const row = this.requireOwnedCampaign(auth, id);
+    const decision = decideHideBroadcast(row);
+    if (!decision.ok) fail("invalid_payload", decision.error);
+    const next = hideBroadcastCampaign(row.id);
+    if (!next) fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
+    return this.historyItemFor(next);
+  }
+
   /**
    * Campanhas do assinante Em andamento e atendidas por quem tem Laboratório.
    * Só essas entram no Disparo Cloud e recebem indicadores/cliques automáticos.
@@ -980,7 +1050,7 @@ export class MetaWhatsappBroadcastService {
     const tenantId = String(row.tenantId || "").trim();
     if (!campaignId || !tenantId) return false;
     if (running.has(campaignId)) return false;
-    if (isBroadcastVoided(row)) return false;
+    if (isBroadcastVoided(row) || isBroadcastPaused(row) || isBroadcastHidden(row)) return false;
     if (row.status !== "running" && isScheduledSendPending(row.scheduledSendAt)) return false;
     try {
       const loaded = await this.loadApprovedTemplate(tenantId, row.connectionId, row.templateId);
