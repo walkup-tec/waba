@@ -133,7 +133,7 @@ type Store = {
   intakes: WabaCampaignIntake[];
 };
 
-const STORE_FILE = resolveDataFile("waba-campaign-intakes.json");
+const storeFile = () => resolveDataFile("waba-campaign-intakes.json");
 
 export const resolveCampaignIntakeStorageDir = (intakeId: string): string => {
   const base = resolveDataDir();
@@ -145,17 +145,18 @@ export const resolveCampaignIntakeStorageDir = (intakeId: string): string => {
 const emptyStore = (): Store => ({ version: 1, intakes: [] });
 
 const ensureStore = () => {
-  const folder = dirname(STORE_FILE);
+  const filePath = storeFile();
+  const folder = dirname(filePath);
   if (!existsSync(folder)) mkdirSync(folder, { recursive: true });
-  if (!existsSync(STORE_FILE)) {
-    writeFileSync(STORE_FILE, JSON.stringify(emptyStore(), null, 2), "utf-8");
+  if (!existsSync(filePath)) {
+    writeFileSync(filePath, JSON.stringify(emptyStore(), null, 2), "utf-8");
   }
 };
 
 const readStore = (): Store => {
   ensureStore();
   try {
-    const parsed = JSON.parse(readFileSync(STORE_FILE, "utf-8")) as Store;
+    const parsed = JSON.parse(readFileSync(storeFile(), "utf-8")) as Store;
     if (parsed?.version !== 1 || !Array.isArray(parsed.intakes)) return emptyStore();
     return parsed;
   } catch {
@@ -165,10 +166,11 @@ const readStore = (): Store => {
 
 const writeStore = (store: Store) => {
   ensureStore();
+  const filePath = storeFile();
   const payload = JSON.stringify(store, null, 2);
-  const tmp = `${STORE_FILE}.${process.pid}.${Date.now()}.tmp`;
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   writeFileSync(tmp, payload, "utf-8");
-  renameSync(tmp, STORE_FILE);
+  renameSync(tmp, filePath);
 };
 
 export class WabaCampaignIntakeRepository {
