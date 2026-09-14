@@ -34,7 +34,7 @@ function finalizeIntakePerformanceReport(input) {
         delivered: Math.max(0, Math.round(Number(input.metrics.delivered || 0))),
         read: Math.max(0, Math.round(Number(input.metrics.read || 0))),
         failed: Math.max(0, Math.round(Number(input.metrics.failed || 0))),
-        ...(input.source === "meta_lab"
+        ...(input.metrics.clicks != null || input.source === "meta_lab"
             ? { clicks: Math.max(0, Math.round(Number(input.metrics.clicks || 0))) }
             : {}),
         source: input.source,
