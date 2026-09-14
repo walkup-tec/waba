@@ -135,12 +135,12 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             return res.status(status).json({ error: message });
         }
     });
-    app.get("/admin/operacional/campanhas/:id/relatorio", (req, res) => {
+    app.get("/admin/operacional/campanhas/:id/relatorio", async (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)
             return;
         try {
-            const report = operacionalCampanhasService.getCampaignReport(req.params.id, {
+            const report = await operacionalCampanhasService.getCampaignReport(req.params.id, {
                 email: auth.email,
                 role: auth.role,
             });
@@ -152,7 +152,7 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             });
         }
     });
-    app.put("/admin/operacional/campanhas/:id/relatorio", (req, res) => {
+    app.put("/admin/operacional/campanhas/:id/relatorio", async (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)
             return;
@@ -160,7 +160,7 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             return;
         try {
             const body = (req.body ?? {});
-            const campaign = operacionalCampanhasService.saveCampaignReport(req.params.id, body, {
+            const campaign = await operacionalCampanhasService.saveCampaignReport(req.params.id, body, {
                 email: auth.email,
                 role: auth.role,
             });
