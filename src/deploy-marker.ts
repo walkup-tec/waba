@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-13-121000-CAMPAIGN-TIMELINE-OVERRIDE";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-14-094500-OFICIAL-INTAKE-SHORT-URL";
