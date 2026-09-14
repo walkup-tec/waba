@@ -1423,7 +1423,7 @@ class MetaWhatsappConnectionService {
         const listedIds = new Set([...fromConnections, ...fromDirectory]
             .map((item) => String(item.id || "").trim())
             .filter(Boolean));
-        const missingAdminIds = meta_whatsapp_known_owned_wabas_1.MARILZA_DE_CASTRO_BUSINESS_IDS.filter((id) => ![...listedIds].some((listed) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(listed, id)));
+        const missingAdminIds = (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)().filter((id) => ![...listedIds].some((listed) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(listed, id)));
         const extraCards = [];
         if (missingAdminIds.length) {
             const keptConn = new Set(kept.map((item) => item.connectionId));
