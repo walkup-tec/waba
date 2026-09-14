@@ -67,7 +67,7 @@ import {
   knownWabaNameForId,
   metaBusinessIdsMatch,
   businessIdsToReopenAfterFalseLeftManager,
-  MARILZA_DE_CASTRO_BUSINESS_IDS,
+  catalogBackfillBusinessIds,
 } from "./meta-whatsapp-known-owned-wabas";
 import { publicMetaGraphRegisterMessage } from "./meta-whatsapp-graph-errors";
 import { isMetaGraphUploadCooldown } from "./meta-whatsapp-graph-cooldown";
@@ -1711,7 +1711,7 @@ export class MetaWhatsappConnectionService {
         .map((item) => String(item.id || "").trim())
         .filter(Boolean),
     );
-    const missingAdminIds = MARILZA_DE_CASTRO_BUSINESS_IDS.filter(
+    const missingAdminIds = catalogBackfillBusinessIds().filter(
       (id) => ![...listedIds].some((listed) => metaBusinessIdsMatch(listed, id)),
     );
     const extraCards: MetaPortfolioPublic[] = [];
