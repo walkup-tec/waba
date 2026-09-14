@@ -43,6 +43,12 @@ import { ensureVitoriaDaConquistaIntakeShortUrlByCampaignId } from "../disparos/
 import { resolveCampaignReportOverride } from "../disparos/waba-campaign-report-read-overrides";
 import { finalizeIntakePerformanceReport } from "../disparos/waba-campaign-report-finalize.service";
 import {
+  MANUAL_CAMPAIGN_REPORT_INCOMPLETE_MESSAGE,
+  isManualCampaignReportIncomplete,
+  parseManualCampaignReportMetrics,
+  type ManualCampaignReportMetrics,
+} from "../disparos/waba-campaign-report-metrics";
+import {
   campaignIntakeDisplayOptionsFromBroadcast,
   normalizeCampaignIntakeStatus,
   toCampaignIntakeDisplayStatus,
@@ -108,10 +114,10 @@ export type OperacionalCampaignListItem = {
 
 export type OperacionalCampaignReportInput = {
   totalLeads: number;
-  sent: number;
-  delivered: number;
-  read: number;
-  failed: number;
+  sent: number | null;
+  delivered: number | null;
+  read: number | null;
+  failed: number | null;
   clicks?: number;
 };
 
@@ -191,23 +197,12 @@ const toDisplayStatus = (
 const isCampaignAwaitingConfiguration = (status: WabaCampaignIntakeStatus): boolean =>
   status === "generated" || status === "in_progress";
 
-const parseNonNegativeInt = (value: unknown): number => {
-  const parsed = Math.round(Number(value));
-  if (!Number.isFinite(parsed) || parsed < 0) return -1;
-  return parsed;
-};
-
 const toPerformanceReportMetricsInput = (
   body: Record<string, unknown>,
-): Omit<OperacionalCampaignReportInput, "totalLeads"> | null => {
-  const sent = parseNonNegativeInt(body.sent);
-  const delivered = parseNonNegativeInt(body.delivered);
-  const read = parseNonNegativeInt(body.read);
-  const failed = parseNonNegativeInt(body.failed);
-  if ([sent, delivered, read, failed].some((value) => value < 0)) {
-    return null;
-  }
-  return { sent, delivered, read, failed };
+): ManualCampaignReportMetrics | null => {
+  const parsed = parseManualCampaignReportMetrics(body);
+  if (!parsed || isManualCampaignReportIncomplete(parsed)) return null;
+  return parsed;
 };
 
 const resolveIntakeApiKind = (
@@ -569,6 +564,8 @@ export class WabaOperacionalCampanhasService {
     const clicks = laboratorioAttended
       ? trackedClicks
       : resolveOperacionalManualReportClicks({ overrideClicks, trackedClicks });
+    const hasSavedReport = Boolean(String(intake.performanceReport?.filledAt || "").trim());
+    const prefillManualMetrics = laboratorioAttended || hasSavedReport;
     return {
       campaignId: intake.id,
       campaignName: intake.campaignName,
@@ -594,10 +591,10 @@ export class WabaOperacionalCampanhasService {
       liveFromMeta,
       report: {
         totalLeads,
-        sent: Math.max(0, Math.round(Number(report?.sent || 0))),
-        delivered: Math.max(0, Math.round(Number(report?.delivered || 0))),
-        read: Math.max(0, Math.round(Number(report?.read || 0))),
-        failed: Math.max(0, Math.round(Number(report?.failed || 0))),
+        sent: prefillManualMetrics ? Math.max(0, Math.round(Number(report?.sent || 0))) : null,
+        delivered: prefillManualMetrics ? Math.max(0, Math.round(Number(report?.delivered || 0))) : null,
+        read: prefillManualMetrics ? Math.max(0, Math.round(Number(report?.read || 0))) : null,
+        failed: prefillManualMetrics ? Math.max(0, Math.round(Number(report?.failed || 0))) : null,
         ...(showClicks ? { clicks } : {}),
       },
       // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
@@ -632,7 +629,7 @@ export class WabaOperacionalCampanhasService {
 
     const parsed = toPerformanceReportMetricsInput(body);
     if (!parsed) {
-      throw new Error("Informe valores numéricos válidos (zero ou maior) em todos os campos.");
+      throw new Error(MANUAL_CAMPAIGN_REPORT_INCOMPLETE_MESSAGE);
     }
     const overrideClicks = resolveCampaignReportOverride(
       intake.campaignName,
