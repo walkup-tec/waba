@@ -1,10 +1,14 @@
+import { readImageDimensions } from "./waba-campaign-messenger-images.service";
+
 export type CampaignIntakeMediaKind = "image" | "video";
 
 export const CAMPAIGN_VIDEO_MAX_BYTES = 16 * 1024 * 1024;
+export const CAMPAIGN_IMAGE_WIDTH = 1200;
+export const CAMPAIGN_IMAGE_HEIGHT = 628;
 
 export const CAMPAIGN_IMAGE_RULES = [
   "Arquivo PNG ou JPG",
-  "Exatamente 1080 × 1080 px",
+  "Exatamente 1200 × 628 px",
 ] as const;
 
 export const CAMPAIGN_VIDEO_RULES = [
@@ -14,7 +18,7 @@ export const CAMPAIGN_VIDEO_RULES = [
   "Não use MOV, WebM, AVI, MKV ou GIF",
 ] as const;
 
-export const CAMPAIGN_IMAGE_ERROR = "A imagem deve ser PNG ou JPG, com 1080 × 1080 px.";
+export const CAMPAIGN_IMAGE_ERROR = "A imagem deve ser PNG ou JPG, com 1200 × 628 px.";
 export const CAMPAIGN_VIDEO_ERROR =
   "O vídeo deve ser MP4 (.mp4), H.264 com áudio AAC ou sem áudio, e ter no máximo 16 MB.";
 
@@ -76,6 +80,10 @@ export function validateCampaignIntakeMedia(input: {
     ext === "jpeg";
   const png = sniffed === "image/png" || declared === "image/png" || ext === "png";
   if (sniffed === "video/mp4" || (sniffed !== "image/jpeg" && sniffed !== "image/png" && !jpeg && !png)) {
+    return { ok: false, error: CAMPAIGN_IMAGE_ERROR };
+  }
+  const dims = readImageDimensions(input.buffer);
+  if (!dims || dims.width !== CAMPAIGN_IMAGE_WIDTH || dims.height !== CAMPAIGN_IMAGE_HEIGHT) {
     return { ok: false, error: CAMPAIGN_IMAGE_ERROR };
   }
   if (sniffed === "image/png" || (!sniffed && png && !jpeg)) {
