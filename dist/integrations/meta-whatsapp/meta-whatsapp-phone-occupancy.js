@@ -27,6 +27,8 @@ function isCloudPhoneBusyForCampaign(input) {
 function collectBusyCloudPhoneNumberIds(campaigns, intakeStatusById) {
     const busy = new Set();
     for (const row of campaigns) {
+        if ((0, meta_whatsapp_broadcast_void_1.isBroadcastPaused)(row) || (0, meta_whatsapp_broadcast_void_1.isBroadcastHidden)(row))
+            continue;
         const intakeId = String(row.intakeCampaignId || "").trim();
         const intakeStatus = intakeId ? intakeStatusById.get(intakeId) : undefined;
         if (!isCloudPhoneBusyForCampaign({
