@@ -201,4 +201,22 @@ describe("resume de Disparo Cloud órfão pós-Redeploy", () => {
     );
     assert.ok(listResumableOrphanedBroadcasts().some((row) => row.id === "camp-hora-chegou"));
   });
+
+  it("não retoma lote pausado pelo operacional", async () => {
+    process.chdir(dataRoot);
+    const { listResumableOrphanedBroadcasts, saveBroadcastCampaign } = await import(
+      "./meta-whatsapp-broadcast.store"
+    );
+    saveBroadcastCampaign(
+      base({
+        id: "camp-pausada",
+        status: "running",
+        pausedAt: new Date().toISOString(),
+      }),
+    );
+    assert.equal(
+      listResumableOrphanedBroadcasts().some((row) => row.id === "camp-pausada"),
+      false,
+    );
+  });
 });
