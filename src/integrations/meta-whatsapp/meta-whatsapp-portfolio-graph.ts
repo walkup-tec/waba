@@ -12,6 +12,7 @@ import {
   type MetaWabaIdentityHint,
 } from "./meta-whatsapp-portfolio.map";
 import type { MetaPortfolioPublic } from "./meta-whatsapp-portfolio.types";
+import { catalogBusinessLabel } from "./meta-whatsapp-known-owned-wabas";
 
 /** IDs oficiais no Business Manager — só entram no card se a Graph devolver o objeto. */
 export const META_PORTFOLIO_BUSINESS_IDS = [
@@ -497,9 +498,12 @@ export async function fetchVisibleBusinessCard(
   if (!id) return null;
   const res = await getFields(graph, token, id, META_BUSINESS_NAME_FIELDS);
   if (!res.ok || isMetaGraphObjectNotAdministered(res.json, res.status)) return null;
-  const card = mapMetaBusinessToPortfolio(res.json, { id });
-  if (!card.id || !card.name) return null;
-  return card;
+  const graphId = text(asRecord(res.json).id);
+  if (!graphId) return null;
+  const card = mapMetaBusinessToPortfolio(res.json, { id: graphId });
+  const name = card.name || catalogBusinessLabel(graphId);
+  if (!name) return null;
+  return { ...card, id: graphId, name };
 }
 
 export { pickMetaBusinessNode } from "./meta-whatsapp-portfolio.map";
