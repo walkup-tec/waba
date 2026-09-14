@@ -24,6 +24,7 @@ const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store
 const meta_whatsapp_broadcast_split_1 = require("./meta-whatsapp-broadcast-split");
 const meta_whatsapp_broadcast_phones_1 = require("./meta-whatsapp-broadcast-phones");
 const meta_whatsapp_broadcast_protect_1 = require("./meta-whatsapp-broadcast-protect");
+const meta_whatsapp_broadcast_actions_1 = require("./meta-whatsapp-broadcast-actions");
 const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
 const meta_whatsapp_broadcast_report_1 = require("./meta-whatsapp-broadcast-report");
 const waba_shortener_service_1 = require("../../shortener/waba-shortener.service");
@@ -562,6 +563,19 @@ class MetaWhatsappBroadcastService {
                     });
                     return;
                 }
+                if ((0, meta_whatsapp_broadcast_void_1.isBroadcastPaused)(live) || (0, meta_whatsapp_broadcast_void_1.isBroadcastHidden)(live)) {
+                    row.pausedAt = live.pausedAt;
+                    row.hiddenAt = live.hiddenAt;
+                    row.sendFinishedAt = new Date().toISOString();
+                    (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(row);
+                    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-aborted", {
+                        tenantId,
+                        campaignId,
+                        sent: row.sent,
+                        reason: "paused_or_hidden",
+                    });
+                    return;
+                }
                 if (live.status === "failed") {
                     row.status = "failed";
                     row.sendFinishedAt = new Date().toISOString();
@@ -697,6 +711,57 @@ class MetaWhatsappBroadcastService {
             fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
         return (0, meta_whatsapp_broadcast_store_1.publicBroadcastCampaign)(row);
     }
+    historyItemFor(row) {
+        const intakes = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
+        const subscribers = new waba_subscriber_repository_1.WabaSubscriberRepository();
+        const intake = row.intakeCampaignId ? intakes.getById(row.intakeCampaignId) : null;
+        const ownerEmail = String(intake?.ownerEmail || "").trim().toLowerCase();
+        const clientName = String(subscribers.getByEmail(ownerEmail)?.fullName || ownerEmail).trim();
+        return (0, meta_whatsapp_broadcast_history_1.toCloudBroadcastHistoryItem)({
+            campaign: row,
+            campaignName: intake?.campaignName,
+            clientName,
+            plannedSendCount: intake?.plannedSendCount ?? row.total,
+            intakeStatus: intake?.status,
+        });
+    }
+    requireOwnedCampaign(auth, id) {
+        const tenant = requireTenant(auth);
+        const row = (0, meta_whatsapp_broadcast_store_1.findBroadcastCampaign)(tenant.tenantId, String(id || "").trim());
+        if (!row)
+            fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
+        return row;
+    }
+    cancelFromAuth(auth, id) {
+        const row = this.requireOwnedCampaign(auth, id);
+        const decision = (0, meta_whatsapp_broadcast_actions_1.decideCancelBroadcast)(row);
+        if (!decision.ok)
+            fail("invalid_payload", decision.error);
+        const next = (0, meta_whatsapp_broadcast_store_1.voidBroadcastCampaignForRetry)(row.id);
+        if (!next)
+            fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
+        return this.historyItemFor(next);
+    }
+    pauseFromAuth(auth, id) {
+        const row = this.requireOwnedCampaign(auth, id);
+        const decision = (0, meta_whatsapp_broadcast_actions_1.decidePauseBroadcast)(row);
+        if (!decision.ok)
+            fail("invalid_payload", decision.error);
+        const next = (0, meta_whatsapp_broadcast_store_1.pauseBroadcastCampaign)(row.id);
+        if (!next)
+            fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
+        return this.historyItemFor(next);
+    }
+    hideFromAuth(auth, id) {
+        const row = this.requireOwnedCampaign(auth, id);
+        const decision = (0, meta_whatsapp_broadcast_actions_1.decideHideBroadcast)(row);
+        if (!decision.ok)
+            fail("invalid_payload", decision.error);
+        const next = (0, meta_whatsapp_broadcast_store_1.hideBroadcastCampaign)(row.id);
+        if (!next)
+            fail("template_not_found", "Disparo Cloud não encontrado nesta conta.");
+        return this.historyItemFor(next);
+    }
     /**
      * Campanhas do assinante Em andamento e atendidas por quem tem Laboratório.
      * Só essas entram no Disparo Cloud e recebem indicadores/cliques automáticos.
@@ -763,7 +828,7 @@ class MetaWhatsappBroadcastService {
             return false;
         if (running.has(campaignId))
             return false;
-        if ((0, meta_whatsapp_broadcast_void_1.isBroadcastVoided)(row))
+        if ((0, meta_whatsapp_broadcast_void_1.isBroadcastVoided)(row) || (0, meta_whatsapp_broadcast_void_1.isBroadcastPaused)(row) || (0, meta_whatsapp_broadcast_void_1.isBroadcastHidden)(row))
             return false;
         if (row.status !== "running" && (0, waba_campaign_schedule_1.isScheduledSendPending)(row.scheduledSendAt))
             return false;
