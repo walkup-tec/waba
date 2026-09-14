@@ -1,6 +1,10 @@
 import type { WabaPublicBaseRequestHints } from "../lib/waba-public-base-url";
 import { attachCampaignIdToShortLink } from "../shortener/waba-shortener.service";
-import { extractSlugFromPublicShortUrl } from "../shortener/waba-shortener.repository";
+import {
+  extractSlugFromPublicShortUrl,
+  findShortLinkBySlug,
+  getShortLinkClicksByCampaignId,
+} from "../shortener/waba-shortener.repository";
 import { MetaWhatsappError } from "../integrations/meta-whatsapp/meta-whatsapp-errors";
 import { createMetaTemplateButtonShortUrl } from "../integrations/meta-whatsapp/meta-whatsapp-template-ai-short-url";
 import type { WabaDispatchesApiKind } from "./waba-dispatches-api-kind";
@@ -21,6 +25,39 @@ export function shouldCreateIntakeTrackedShortUrl(apiKind: WabaDispatchesApiKind
 
 export function resolveCampaignCardResponseLink(intake: CampaignIntakeShortUrlFields): string {
   return String(intake.responseShortUrl || intake.responseLink || "").trim();
+}
+
+export function resolveOperacionalManualReportShowClicks(input: {
+  hideClicks?: boolean;
+  forceShowClicks?: boolean;
+}): boolean {
+  return Boolean(input.forceShowClicks) || !input.hideClicks;
+}
+
+export function resolveOperacionalManualReportClicks(input: {
+  overrideClicks?: number | null;
+  trackedClicks?: number | null;
+}): number {
+  if (input.overrideClicks != null) {
+    return Math.max(0, Math.round(Number(input.overrideClicks) || 0));
+  }
+  return Math.max(0, Math.round(Number(input.trackedClicks || 0)));
+}
+
+export async function resolveIntakeTrackedShortUrlClicks(intake: {
+  id?: string | null;
+  responseShortSlug?: string | null;
+  responseShortUrl?: string | null;
+}): Promise<number> {
+  const slug =
+    String(intake.responseShortSlug || "").trim() ||
+    extractSlugFromPublicShortUrl(String(intake.responseShortUrl || "")) ||
+    "";
+  if (slug) {
+    const record = await findShortLinkBySlug(slug);
+    if (record) return Math.max(0, Number(record.clicks || 0));
+  }
+  return getShortLinkClicksByCampaignId(String(intake.id || ""));
 }
 
 export type CreateCampaignIntakeTrackedShortUrlDeps = {
