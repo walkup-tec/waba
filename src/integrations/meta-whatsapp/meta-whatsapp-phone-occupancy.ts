@@ -4,7 +4,7 @@ import {
   listAllBroadcastCampaigns,
   type MetaBroadcastCampaign,
 } from "./meta-whatsapp-broadcast.store";
-import { isCloudBroadcastInactiveForRetry } from "./meta-whatsapp-broadcast-void";
+import { isBroadcastHidden, isBroadcastPaused, isCloudBroadcastInactiveForRetry } from "./meta-whatsapp-broadcast-void";
 import { campaignPhoneNumberIds } from "./meta-whatsapp-broadcast-split";
 import type { MetaPortfolioNumberPublic } from "./meta-whatsapp-portfolio.types";
 
@@ -35,12 +35,15 @@ export function collectBusyCloudPhoneNumberIds(
     status: MetaBroadcastCampaign["status"];
     intakeCampaignId?: string;
     voidedAt?: string;
+    pausedAt?: string;
+    hiddenAt?: string;
     leads?: MetaBroadcastCampaign["leads"];
   }>,
   intakeStatusById: ReadonlyMap<string, string>,
 ): Set<string> {
   const busy = new Set<string>();
   for (const row of campaigns) {
+    if (isBroadcastPaused(row) || isBroadcastHidden(row)) continue;
     const intakeId = String(row.intakeCampaignId || "").trim();
     const intakeStatus = intakeId ? intakeStatusById.get(intakeId) : undefined;
     if (
