@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BroadcastPhoneSelectionError = void 0;
 exports.broadcastNumberMatchesSelectedWaba = broadcastNumberMatchesSelectedWaba;
+exports.listBroadcastNumbersForSelectedWabas = listBroadcastNumbersForSelectedWabas;
 exports.indexBroadcastPortfolioPhones = indexBroadcastPortfolioPhones;
 exports.resolveBroadcastPhoneBindings = resolveBroadcastPhoneBindings;
 exports.connectionIdByPhoneNumber = connectionIdByPhoneNumber;
@@ -30,16 +31,72 @@ function broadcastNumberMatchesSelectedWaba(input) {
     if (!selectedForCard.length)
         return false;
     const itemWaba = String(input.itemWabaId || "").trim();
-    const aliases = new Set((0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)(String(input.businessId || ""), input.portfolioWabaId));
+    const businessId = String(input.businessId || "").trim();
     const portfolioWaba = String(input.portfolioWabaId || "").trim();
+    const portfolioAliases = new Set((0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)(businessId, portfolioWaba));
     if (portfolioWaba)
-        aliases.add(portfolioWaba);
+        portfolioAliases.add(portfolioWaba);
     if (!itemWaba) {
-        return selectedForCard.some((id) => aliases.has(id));
+        return selectedForCard.some((id) => portfolioAliases.has(id));
     }
     if (selectedForCard.includes(itemWaba))
         return true;
-    return selectedForCard.some((id) => aliases.has(id) && aliases.has(itemWaba));
+    return selectedForCard.some((id) => {
+        const selectedAliases = new Set((0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)(businessId, id));
+        return selectedAliases.has(itemWaba);
+    });
+}
+function listBroadcastNumbersForSelectedWabas(input) {
+    const selected = (input.selected || []).filter((row) => String(row.wabaId || "").trim());
+    if (!selected.length)
+        return [];
+    const selectedConnections = new Set(selected.map((row) => String(row.connectionId || "").trim()).filter(Boolean));
+    const aliasWabas = new Set();
+    for (const row of selected) {
+        for (const id of (0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)("", row.wabaId))
+            aliasWabas.add(id);
+    }
+    const out = [];
+    const seen = new Set();
+    for (const card of input.portfolios || []) {
+        const connectionId = String(card.connectionId || "").trim();
+        if (!connectionId)
+            continue;
+        const portfolioWaba = String(card.wabaId || "").trim();
+        const onSelectedConn = selectedConnections.has(connectionId);
+        const portfolioName = String(card.name || "").trim() || null;
+        for (const number of card.numbers || []) {
+            const phoneNumberId = String(number.phoneNumberId || "").trim();
+            if (!phoneNumberId || seen.has(phoneNumberId))
+                continue;
+            const itemWaba = String(number.wabaId || portfolioWaba || "").trim();
+            const match = itemWaba
+                ? aliasWabas.has(itemWaba)
+                : onSelectedConn &&
+                    broadcastNumberMatchesSelectedWaba({
+                        connectionId,
+                        selected,
+                        itemWabaId: number.wabaId,
+                        portfolioWabaId: card.wabaId,
+                        businessId: card.id,
+                    });
+            if (!match)
+                continue;
+            seen.add(phoneNumberId);
+            out.push({
+                phoneNumberId,
+                connectionId,
+                portfolioName,
+                wabaId: itemWaba || null,
+                uiStatus: String(number.uiStatus || "").trim(),
+                dispatchStatus: String(number.dispatchStatus || "livre").trim(),
+                displayPhoneNumber: number.displayPhoneNumber ? String(number.displayPhoneNumber) : null,
+                verifiedName: number.verifiedName ? String(number.verifiedName) : null,
+                messagingLimit: String(number.messagingLimit || "").trim(),
+            });
+        }
+    }
+    return out;
 }
 function indexBroadcastPortfolioPhones(portfolios) {
     const catalog = new Map();
