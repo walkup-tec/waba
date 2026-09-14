@@ -87,6 +87,103 @@ describe("meta-whatsapp-broadcast-phones", () => {
     );
   });
 
+  it("Drax: chip Ativo do card Portfólios entra no Disparo Cloud mesmo com wabaId de outro card", () => {
+    const rows = listBroadcastNumbersForSelectedWabas({
+      selectedConnectionIds: ["conn-drax"],
+      selected: [{ connectionId: "conn-drax", wabaId: "1636793994538054" }],
+      portfolios: [
+        {
+          id: "1041827648719609",
+          connectionId: "conn-drax",
+          name: "Drax Sistemas",
+          wabaId: "1014470201624992",
+          numbers: [
+            {
+              phoneNumberId: "phone-16007",
+              displayPhoneNumber: "+55 51 92636-16007",
+              verifiedName: "Relacionamento e Atendimento",
+              uiStatus: "ativo",
+              dispatchStatus: "livre",
+              wabaId: "1014470201624992",
+            },
+          ],
+        },
+      ],
+    });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.phoneNumberId, "phone-16007");
+    assert.equal(rows[0]?.uiStatus, "ativo");
+    assert.equal(rows[0]?.displayPhoneNumber, "+55 51 92636-16007");
+  });
+
+  it("Drax: card sem connectionId ainda lista o chip Ativo do mesmo BM", () => {
+    const rows = listBroadcastNumbersForSelectedWabas({
+      selectedConnectionIds: ["conn-drax"],
+      selected: [{ connectionId: "conn-drax", wabaId: "1636793994538054" }],
+      portfolios: [
+        {
+          id: "1041827648719609",
+          connectionId: "conn-drax",
+          name: "Drax Sistemas",
+          wabaId: "1636793994538054",
+          numbers: [],
+        },
+        {
+          id: "1041827648719609",
+          name: "Drax Sistemas",
+          wabaId: "1636793994538054",
+          numbers: [
+            {
+              phoneNumberId: "phone-16007",
+              displayPhoneNumber: "+55 51 92636-16007",
+              verifiedName: "Relacionamento e Atendimento",
+              uiStatus: "ativo",
+              dispatchStatus: "livre",
+            },
+          ],
+        },
+      ],
+    });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.phoneNumberId, "phone-16007");
+    assert.equal(rows[0]?.connectionId, "conn-drax");
+  });
+
+  it("não mistura chip client Rio no card do André", () => {
+    const rows = listBroadcastNumbersForSelectedWabas({
+      selectedConnectionIds: ["conn-andre"],
+      selected: [{ connectionId: "conn-andre", wabaId: "2458602464640240" }],
+      portfolios: [
+        {
+          id: "1759044748332124",
+          connectionId: "conn-andre",
+          name: "André Aguiar",
+          wabaId: "2458602464640240",
+          numbers: [
+            {
+              phoneNumberId: "phone-rio",
+              displayPhoneNumber: "+55 21 99999-0001",
+              uiStatus: "ativo",
+              dispatchStatus: "livre",
+              wabaId: "1581808413746453",
+            },
+            {
+              phoneNumberId: "phone-andre",
+              displayPhoneNumber: "+55 21 99999-0002",
+              uiStatus: "ativo",
+              dispatchStatus: "livre",
+              wabaId: "2458602464640240",
+            },
+          ],
+        },
+      ],
+    });
+    assert.deepEqual(
+      rows.map((row) => row.phoneNumberId),
+      ["phone-andre"],
+    );
+  });
+
   it("Drax: lista o chip Pendente de outro card com a mesma WABA01", () => {
     const rows = listBroadcastNumbersForSelectedWabas({
       selected: [{ connectionId: "conn-drax", wabaId: "1636793994538054" }],
