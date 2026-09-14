@@ -2,6 +2,7 @@ import {
   broadcastLeadIsPendingSend,
   type MetaBroadcastCampaign,
 } from "./meta-whatsapp-broadcast.store";
+import { isBroadcastStoppedByOperator } from "./meta-whatsapp-broadcast-void";
 
 /** Intervalo do guardião em processo (retoma loop morto sem Redeploy). */
 export const CLOUD_BROADCAST_RESUME_WATCHDOG_MS = 20_000;
@@ -46,7 +47,7 @@ export function buildCloudBroadcastProtectSnapshot(input: {
 }): CloudBroadcastProtectSnapshot {
   const items: CloudBroadcastProtectItem[] = input.campaigns
     .filter((row) => {
-      if (String(row.voidedAt || "").trim()) return false;
+      if (isBroadcastStoppedByOperator(row)) return false;
       return row.status === "running" || row.status === "queued";
     })
     .map((row) => {
