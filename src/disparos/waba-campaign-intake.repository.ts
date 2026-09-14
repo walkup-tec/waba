@@ -77,6 +77,9 @@ export type WabaCampaignIntake = {
   textOptions: [string, string, string];
   /** Link de resposta (CTA) informado pelo assinante no wizard. */
   responseLink?: string;
+  /** URL curta WABA (`/s/{slug}`) gerada na criação da campanha Oficial. */
+  responseShortUrl?: string;
+  responseShortSlug?: string;
   /** Mídia do disparo: imagem 1080×1080 ou vídeo MP4. Campanhas antigas sem o campo são imagem. */
   campaignMediaKind?: "image" | "video";
   imageFileName: string;
