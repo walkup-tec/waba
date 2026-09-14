@@ -11,6 +11,7 @@ const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_operacional_dispatches_apis_1 = require("../users/waba-operacional-dispatches-apis");
 const waba_campaign_operacional_segment_rules_1 = require("./waba-campaign-operacional-segment-rules");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
+const waba_campaign_intake_constants_1 = require("../disparos/waba-campaign-intake.constants");
 exports.CAMPAIGN_START_OVERDUE_MS = 24 * 60 * 60 * 1000;
 exports.CAMPAIGN_REASSIGN_DEADLINE_MS = 30 * 60 * 60 * 1000;
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
@@ -51,7 +52,40 @@ class WabaCampaignSupplierAssignmentService {
             tried.add(current);
         return tried;
     }
+    resolveSupplierForOperacionalEmail(intake, operacionalEmailRaw) {
+        const operacionalEmail = normalizeEmail(operacionalEmailRaw);
+        if (!operacionalEmail)
+            return null;
+        const apiKind = this.resolveIntakeApiKind(intake);
+        const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+        const supplierSegment = subscriberSegment === "bets" ? "bets" : "outros";
+        const operacional = this.systemUserService.getByEmail(operacionalEmail);
+        const config = this.splitService.getConfig();
+        const suppliers = Array.isArray(config.suppliers) ? config.suppliers : [];
+        return (suppliers.find((row) => normalizeEmail(row.systemUserEmail) === operacionalEmail &&
+            row.apiKind === apiKind &&
+            (row.segment || "outros") === supplierSegment) ??
+            suppliers.find((row) => normalizeEmail(row.systemUserEmail) === operacionalEmail && row.apiKind === apiKind) ??
+            suppliers.find((row) => normalizeEmail(row.systemUserEmail) === operacionalEmail) ?? {
+            id: `forced-${operacionalEmail.replace(/[^a-z0-9]+/gi, "-")}-${apiKind}-${supplierSegment}`,
+            name: String(operacional?.fullName || operacionalEmail).trim(),
+            apiKind,
+            systemUserEmail: operacionalEmail,
+            segment: supplierSegment,
+            priority: 1,
+            costPerShipmentCents: 0,
+            pixKey: "",
+            active: true,
+        });
+    }
     pickNextSupplier(intake, excludeEmails) {
+        const forcedEmail = (0, waba_campaign_intake_constants_1.forcedOperacionalEmailForCampaignOwner)(intake.ownerEmail);
+        if (forcedEmail) {
+            const tried = excludeEmails ?? new Set();
+            if (tried.has(forcedEmail))
+                return null;
+            return this.resolveSupplierForOperacionalEmail(intake, forcedEmail);
+        }
         const tried = excludeEmails ?? this.listTriedOperacionalEmails(intake);
         const candidates = this.listCandidateSuppliers(intake);
         for (const supplier of candidates) {
@@ -80,18 +114,20 @@ class WabaCampaignSupplierAssignmentService {
             reason,
         };
     }
-    assignToSupplier(intake, supplier, reason) {
+    assignToSupplier(intake, supplier, reason, options) {
         const operacionalEmail = normalizeEmail(supplier.systemUserEmail);
         if (!operacionalEmail) {
             throw new Error("Fornecedor sem usuário operacional vinculado.");
         }
         const operacional = this.systemUserService.getByEmail(operacionalEmail);
-        if (!operacional || operacional.role !== "operacional") {
-            throw new Error("Fornecedor sem usuário operacional válido.");
-        }
-        const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-        if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
-            throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
+        if (!options?.bypassEligibility) {
+            if (!operacional || operacional.role !== "operacional") {
+                throw new Error("Fornecedor sem usuário operacional válido.");
+            }
+            const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+            if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
+                throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
+            }
         }
         const name = String(operacional?.fullName || supplier.name || operacionalEmail).trim();
         const now = new Date().toISOString();
@@ -112,10 +148,13 @@ class WabaCampaignSupplierAssignmentService {
     ensureInitialAssignment(intake) {
         if (normalizeEmail(intake.assignedOperacionalEmail ?? ""))
             return intake;
+        const forcedEmail = (0, waba_campaign_intake_constants_1.forcedOperacionalEmailForCampaignOwner)(intake.ownerEmail);
         const supplier = this.pickNextSupplier(intake, new Set());
         if (!supplier)
             return intake;
-        return this.assignToSupplier(intake, supplier, "initial");
+        return this.assignToSupplier(intake, supplier, "initial", {
+            bypassEligibility: Boolean(forcedEmail),
+        });
     }
     async reassignCampaign(intakeId, reason) {
         const intake = this.intakeRepository.getById(intakeId);
@@ -123,6 +162,9 @@ class WabaCampaignSupplierAssignmentService {
             throw new Error("Campanha não encontrada.");
         if (intake.status !== "generated") {
             throw new Error("Somente campanhas aguardando configuração podem ser reatribuídas.");
+        }
+        if ((0, waba_campaign_intake_constants_1.forcedOperacionalEmailForCampaignOwner)(intake.ownerEmail)) {
+            return { intake, reassigned: false, exhausted: false };
         }
         const tried = this.listTriedOperacionalEmails(intake);
         const next = this.pickNextSupplier(intake, tried);
@@ -194,6 +236,8 @@ class WabaCampaignSupplierAssignmentService {
             if (!normalizeEmail(intake.assignedOperacionalEmail ?? "")) {
                 intake = this.ensureInitialAssignment(intake);
             }
+            if ((0, waba_campaign_intake_constants_1.forcedOperacionalEmailForCampaignOwner)(intake.ownerEmail))
+                continue;
             if (intake.status !== "generated")
                 continue;
             scanned += 1;
