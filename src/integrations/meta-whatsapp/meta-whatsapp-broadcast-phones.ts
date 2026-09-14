@@ -43,17 +43,106 @@ export function broadcastNumberMatchesSelectedWaba(input: {
   if (!selectedForCard.length) return false;
 
   const itemWaba = String(input.itemWabaId || "").trim();
-  const aliases = new Set(
-    equivalentOwnedWabaIdsForBusiness(String(input.businessId || ""), input.portfolioWabaId),
-  );
+  const businessId = String(input.businessId || "").trim();
   const portfolioWaba = String(input.portfolioWabaId || "").trim();
-  if (portfolioWaba) aliases.add(portfolioWaba);
+  const portfolioAliases = new Set(equivalentOwnedWabaIdsForBusiness(businessId, portfolioWaba));
+  if (portfolioWaba) portfolioAliases.add(portfolioWaba);
 
   if (!itemWaba) {
-    return selectedForCard.some((id) => aliases.has(id));
+    return selectedForCard.some((id) => portfolioAliases.has(id));
   }
   if (selectedForCard.includes(itemWaba)) return true;
-  return selectedForCard.some((id) => aliases.has(id) && aliases.has(itemWaba));
+  return selectedForCard.some((id) => {
+    const selectedAliases = new Set(equivalentOwnedWabaIdsForBusiness(businessId, id));
+    return selectedAliases.has(itemWaba);
+  });
+}
+
+export function listBroadcastNumbersForSelectedWabas(input: {
+  portfolios: ReadonlyArray<{
+    id?: string | null;
+    connectionId?: string | null;
+    name?: string | null;
+    wabaId?: string | null;
+    numbers?: ReadonlyArray<{
+      phoneNumberId?: string | null;
+      displayPhoneNumber?: string | null;
+      verifiedName?: string | null;
+      uiStatus?: string | null;
+      dispatchStatus?: string | null;
+      wabaId?: string | null;
+      messagingLimit?: string | null;
+    }>;
+  }>;
+  selected: ReadonlyArray<{ connectionId?: string | null; wabaId?: string | null }>;
+}): Array<{
+  phoneNumberId: string;
+  connectionId: string;
+  portfolioName: string | null;
+  wabaId: string | null;
+  uiStatus: string;
+  dispatchStatus: string;
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
+  messagingLimit: string;
+}> {
+  const selected = (input.selected || []).filter((row) => String(row.wabaId || "").trim());
+  if (!selected.length) return [];
+  const selectedConnections = new Set(
+    selected.map((row) => String(row.connectionId || "").trim()).filter(Boolean),
+  );
+  const aliasWabas = new Set<string>();
+  for (const row of selected) {
+    for (const id of equivalentOwnedWabaIdsForBusiness("", row.wabaId)) aliasWabas.add(id);
+  }
+  const out: Array<{
+    phoneNumberId: string;
+    connectionId: string;
+    portfolioName: string | null;
+    wabaId: string | null;
+    uiStatus: string;
+    dispatchStatus: string;
+    displayPhoneNumber: string | null;
+    verifiedName: string | null;
+    messagingLimit: string;
+  }> = [];
+  const seen = new Set<string>();
+  for (const card of input.portfolios || []) {
+    const connectionId = String(card.connectionId || "").trim();
+    if (!connectionId) continue;
+    const portfolioWaba = String(card.wabaId || "").trim();
+    const onSelectedConn = selectedConnections.has(connectionId);
+    const portfolioName = String(card.name || "").trim() || null;
+    for (const number of card.numbers || []) {
+      const phoneNumberId = String(number.phoneNumberId || "").trim();
+      if (!phoneNumberId || seen.has(phoneNumberId)) continue;
+      const itemWaba = String(number.wabaId || portfolioWaba || "").trim();
+      const match = itemWaba
+        ? aliasWabas.has(itemWaba)
+        : onSelectedConn &&
+          broadcastNumberMatchesSelectedWaba({
+            connectionId,
+            selected,
+            itemWabaId: number.wabaId,
+            portfolioWabaId: card.wabaId,
+            businessId: card.id,
+          });
+      if (!match) continue;
+      seen.add(phoneNumberId);
+      out.push({
+        phoneNumberId,
+        connectionId,
+        portfolioName,
+        wabaId: itemWaba || null,
+        uiStatus: String(number.uiStatus || "").trim(),
+        dispatchStatus: String(number.dispatchStatus || "livre").trim(),
+        displayPhoneNumber: number.displayPhoneNumber ? String(number.displayPhoneNumber) : null,
+        verifiedName: number.verifiedName ? String(number.verifiedName) : null,
+        messagingLimit: String(number.messagingLimit || "").trim(),
+      });
+    }
+  }
+  return out;
 }
 
 export function indexBroadcastPortfolioPhones(
