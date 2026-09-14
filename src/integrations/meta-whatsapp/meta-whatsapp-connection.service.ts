@@ -60,8 +60,8 @@ import {
 } from "./meta-whatsapp-portfolio-graph-cache";
 import {
   isKnownClientWabaForBusiness,
+  equivalentOwnedWabaIdsForBusiness,
   knownOwnedBusinessesMatch,
-  knownOwnedWabaIdsForBusiness,
   knownPendingPhonesForBusiness,
   knownWabaIdForPendingPhone,
   knownWabaNameForId,
@@ -577,7 +577,10 @@ async function hydrateOpenConnection(
     const wid = String(id || "").trim();
     if (wid) wabaIds.add(wid);
   }
-  for (const id of knownOwnedWabaIdsForBusiness(businessId || storedBm)) {
+  for (const id of equivalentOwnedWabaIdsForBusiness(
+    businessId || storedBm,
+    primaryWabaId || storedWaba,
+  )) {
     const wid = String(id || "").trim();
     if (wid) wabaIds.add(wid);
   }
@@ -600,7 +603,10 @@ async function hydrateOpenConnection(
     const wid = String(id || "").trim();
     if (wid) fromThisBm.add(wid);
   }
-  for (const id of knownOwnedWabaIdsForBusiness(businessId || storedBm)) {
+  for (const id of equivalentOwnedWabaIdsForBusiness(
+    businessId || storedBm,
+    primaryWabaId || storedWaba,
+  )) {
     const wid = String(id || "").trim();
     if (wid) fromThisBm.add(wid);
   }
