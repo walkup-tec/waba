@@ -4044,6 +4044,13 @@
           color: #e2e8f0;
         }
         .meta-tpl-broadcast-number-option input { margin-top: 3px; }
+        .meta-tpl-broadcast-number-option.is-disabled { opacity: 0.72; }
+        .meta-tpl-broadcast-number-option .meta-tpl-broadcast-number-hint {
+          display: block;
+          font-size: 12px;
+          color: #94a3b8;
+          margin-top: 2px;
+        }
         .meta-tpl-lab-checkboxes,
         .meta-tpl-lab-portfolios {
           display: flex;
@@ -39257,7 +39264,8 @@
           const id = String(wabaId || "").trim();
           if (!id) return;
           // Chip de WABA client (ex.: Rio de Janeiro 01) não entra no portfólio marcado.
-          if (ownedId && id !== ownedId) return;
+          // Irmãs do mesmo BM (Drax 1636/1988, André 01/02) entram.
+          if (ownedId && id !== ownedId && !metaTplLabIsSisterWabaId(ownedId, id)) return;
           const prev = map.get(id) || { id: id, hints: [] };
           const label = String(hint || "").trim();
           if (label && prev.hints.indexOf(label) === -1) prev.hints.push(label);
@@ -39306,16 +39314,44 @@
         return false;
       }
 
+      function metaTplLabDraxSisterWabaIds() {
+        return ["1636793994538054", "1988957871663919"];
+      }
+
+      function metaTplLabAndreSisterWabaIds() {
+        return ["2458602464640240", "1744257946809067"];
+      }
+
+      function metaTplLabIsSisterWabaId(left, right) {
+        const a = String(left || "").trim();
+        const b = String(right || "").trim();
+        if (!a || !b) return false;
+        if (a === b) return true;
+        const drax = metaTplLabDraxSisterWabaIds();
+        if (drax.indexOf(a) !== -1 && drax.indexOf(b) !== -1) return true;
+        const andre = metaTplLabAndreSisterWabaIds();
+        return andre.indexOf(a) !== -1 && andre.indexOf(b) !== -1;
+      }
+
       function metaTplLabKnownSisterWabaIds(portfolio) {
         const bm = String(
           (portfolio && (portfolio.metaBusinessId || portfolio.businessId || portfolio.id)) || "",
         ).trim();
+        const owned = String((portfolio && portfolio.wabaId) || "").trim();
         const andreBms = ["1759044748332124", "759044748332124", "60843286"];
         if (andreBms.some(function (id) { return metaTplLabBusinessesMatch(bm, id); })) {
-          return ["2458602464640240", "1744257946809067"];
+          return metaTplLabAndreSisterWabaIds();
         }
         if (metaTplLabBusinessesMatch(bm, "1041827648719609")) {
-          return ["1636793994538054", "1988957871663919"];
+          return metaTplLabDraxSisterWabaIds();
+        }
+        if (metaTplLabDraxSisterWabaIds().indexOf(owned) !== -1) return metaTplLabDraxSisterWabaIds();
+        if (metaTplLabAndreSisterWabaIds().indexOf(owned) !== -1) return metaTplLabAndreSisterWabaIds();
+        const numbers = (portfolio && portfolio.numbers) || [];
+        for (let i = 0; i < numbers.length; i += 1) {
+          const wid = String((numbers[i] && numbers[i].wabaId) || "").trim();
+          if (metaTplLabDraxSisterWabaIds().indexOf(wid) !== -1) return metaTplLabDraxSisterWabaIds();
+          if (metaTplLabAndreSisterWabaIds().indexOf(wid) !== -1) return metaTplLabAndreSisterWabaIds();
         }
         return [];
       }
@@ -39335,18 +39371,23 @@
         const itemWaba = String((item && item.wabaId) || "").trim();
         const aliases = metaTplLabEquivalentWabaIds(portfolio);
         if (itemWaba && wabaKeys.has(metaTplBroadcastWabaKey(connectionId, itemWaba))) return true;
-        const selected = [];
+        const selectedOnCard = [];
         const prefix = String(connectionId || "") + ":";
         wabaKeys.forEach(function (key) {
-          if (String(key || "").indexOf(prefix) === 0) selected.push(String(key).slice(prefix.length));
+          const raw = String(key || "");
+          const sep = raw.indexOf(":");
+          if (sep === -1) return;
+          const wid = raw.slice(sep + 1);
+          if (raw.indexOf(prefix) === 0) selectedOnCard.push(wid);
+          else if (itemWaba && metaTplLabIsSisterWabaId(wid, itemWaba)) selectedOnCard.push(wid);
         });
         if (!itemWaba) {
-          return selected.some(function (id) {
+          return selectedOnCard.some(function (id) {
             return Boolean(aliases[id]);
           });
         }
-        return selected.some(function (id) {
-          return Boolean(aliases[id] && aliases[itemWaba]);
+        return selectedOnCard.some(function (id) {
+          return id === itemWaba || metaTplLabIsSisterWabaId(id, itemWaba);
         });
       }
 
@@ -41845,52 +41886,78 @@
         );
       }
 
-      function metaTplBroadcastActiveNumberEntries() {
+      function metaTplBroadcastVisibleNumberEntries() {
+        const selected = metaTplBroadcastSelectedWabaTargets();
         const connectionIds = new Set(metaTplBroadcastSelectedConnectionIds());
         const wabaKeys = new Set(
-          metaTplBroadcastSelectedWabaTargets().map(function (item) {
+          selected.map(function (item) {
             return metaTplBroadcastWabaKey(item.connectionId, item.wabaId);
           }),
         );
-        if (!connectionIds.size || !wabaKeys.size) return [];
+        const aliasWabas = {};
+        selected.forEach(function (item) {
+          const id = String((item && item.wabaId) || "").trim();
+          if (!id) return;
+          aliasWabas[id] = true;
+          if (metaTplLabDraxSisterWabaIds().indexOf(id) !== -1) {
+            metaTplLabDraxSisterWabaIds().forEach(function (sister) {
+              aliasWabas[sister] = true;
+            });
+          }
+          if (metaTplLabAndreSisterWabaIds().indexOf(id) !== -1) {
+            metaTplLabAndreSisterWabaIds().forEach(function (sister) {
+              aliasWabas[sister] = true;
+            });
+          }
+        });
+        if (!wabaKeys.size) return [];
         const portfolios = metaTpSession && Array.isArray(metaTpSession.portfolios) ? metaTpSession.portfolios : [];
         const out = [];
+        const seen = {};
         portfolios.forEach(function (portfolio) {
           const connectionId = String((portfolio && portfolio.connectionId) || "").trim();
-          if (!connectionId || !connectionIds.has(connectionId)) return;
+          if (!connectionId) return;
+          const onSelectedConn = connectionIds.has(connectionId);
           const portfolioName =
             typeof metaTpPortfolioTitle === "function"
               ? metaTpPortfolioTitle(portfolio || {})
               : String((portfolio && portfolio.name) || "Portfólio").trim() || "Portfólio";
           const portfolioWabaId = String((portfolio && portfolio.wabaId) || "").trim();
           ((portfolio && portfolio.numbers) || []).forEach(function (item) {
+            const phoneNumberId = String((item && item.phoneNumberId) || "").trim();
+            if (!phoneNumberId || seen[phoneNumberId]) return;
             const wabaId = String((item && item.wabaId) || portfolioWabaId || "").trim();
-            if (
-              !metaTplBroadcastNumberMatchesSelectedWaba(
-                connectionId,
-                portfolio,
-                item,
-                wabaKeys,
-              )
-            ) {
-              return;
-            }
-            if (
-              String(item.uiStatus || "") === "ativo" &&
-              String(item.dispatchStatus || "livre") !== "em_disparo" &&
-              String(item.phoneNumberId || "").trim()
-            ) {
-              out.push({
-                item: item,
-                portfolioName: portfolioName,
-                connectionId: connectionId,
-                wabaId: wabaId,
-                messagingLimit: String((item && item.messagingLimit) || (portfolio && portfolio.messagingLimit) || "").trim(),
-              });
-            }
+            const match = wabaId
+              ? Boolean(aliasWabas[wabaId])
+              : onSelectedConn &&
+                metaTplBroadcastNumberMatchesSelectedWaba(
+                  connectionId,
+                  portfolio,
+                  item,
+                  wabaKeys,
+                );
+            if (!match) return;
+            seen[phoneNumberId] = true;
+            out.push({
+              item: item,
+              portfolioName: portfolioName,
+              connectionId: connectionId,
+              wabaId: wabaId,
+              messagingLimit: String((item && item.messagingLimit) || (portfolio && portfolio.messagingLimit) || "").trim(),
+            });
           });
         });
         return out;
+      }
+
+      function metaTplBroadcastActiveNumberEntries() {
+        return metaTplBroadcastVisibleNumberEntries().filter(function (entry) {
+          const item = entry && entry.item;
+          return (
+            String((item && item.uiStatus) || "") === "ativo" &&
+            String((item && item.dispatchStatus) || "livre") !== "em_disparo"
+          );
+        });
       }
 
       function metaTplBroadcastActiveNumbers() {
@@ -42244,15 +42311,16 @@
           metaTplBroadcastRenderSplitPreview();
           return;
         }
+        const visible = metaTplBroadcastVisibleNumberEntries();
         const entries = metaTplBroadcastActiveNumberEntries();
-        if (!entries.length) {
+        if (!visible.length) {
           root.innerHTML =
-            '<span class="muted">Nenhum número Ativo e disponível nestas WABAs. Números em disparo liberam após o relatório.</span>';
+            '<span class="muted">Nenhum número destas WABAs no Laboratório. Abra Portfólios e clique em Atualizar da Meta. Se o chip estiver Pendente, ative com o PIN.</span>';
           metaTplBroadcastRenderSplitPreview();
           return;
         }
         const groups = [];
-        entries.forEach(function (entry) {
+        visible.forEach(function (entry) {
           const last = groups[groups.length - 1];
           if (!last || last.connectionId !== entry.connectionId) {
             groups.push({
@@ -42271,12 +42339,28 @@
                 const item = entry.item;
                 const id = String(item.phoneNumberId || "").trim();
                 const phone = String(item.displayPhoneNumber || id).trim();
-                const visible = metaTpNumberVisibleName(item);
-                const name = visible;
+                const visibleName = metaTpNumberVisibleName(item);
+                const name = visibleName;
                 const label = name ? name + " · " + phone : phone;
-                const checked = previous.has(id) || (previous.size === 0 && entries.length === 1) ? " checked" : "";
+                const uiStatus = String((item && item.uiStatus) || "");
+                const busy = String((item && item.dispatchStatus) || "livre") === "em_disparo";
+                const selectable = uiStatus === "ativo" && !busy && id;
+                const hint =
+                  uiStatus === "restrito"
+                    ? "Restrito/banido pela Meta"
+                    : busy
+                      ? "Em disparo — libera após o relatório"
+                      : uiStatus !== "ativo"
+                        ? "Pendente — ative com o PIN na aba Portfólios"
+                        : "";
+                const checked =
+                  selectable && (previous.has(id) || (previous.size === 0 && entries.length === 1))
+                    ? " checked"
+                    : "";
                 return (
-                  '<label class="meta-tpl-broadcast-number-option">' +
+                  '<label class="meta-tpl-broadcast-number-option' +
+                  (selectable ? "" : " is-disabled") +
+                  '">' +
                   '<input type="checkbox" data-phone-number-id="' +
                   metaTpEsc(id) +
                   '" data-connection-id="' +
@@ -42285,9 +42369,13 @@
                   metaTpEsc(entry.wabaId || "") +
                   '"' +
                   checked +
+                  (selectable ? "" : " disabled") +
                   " />" +
                   "<span>" +
                   metaTpEsc(label) +
+                  (hint
+                    ? '<span class="meta-tpl-broadcast-number-hint">' + metaTpEsc(hint) + "</span>"
+                    : "") +
                   "</span></label>"
                 );
               })
@@ -42642,11 +42730,13 @@
         }
         metaTplLabFillPortfolioSelect();
         metaTplLabFillPortfolioFilter();
+        const cloudPanel = document.getElementById("tab-whatsapp-disparo-cloud");
+        const onDisparoCloud = Boolean(cloudPanel && !cloudPanel.classList.contains("tab-hidden"));
         if (
           typeof metaTpLoadPortfolio === "function" &&
-          !(metaTpSession.portfolios && metaTpSession.portfolios.length)
+          (onDisparoCloud || !(metaTpSession.portfolios && metaTpSession.portfolios.length))
         ) {
-          await metaTpLoadPortfolio({ silent: true }).catch(() => null);
+          await metaTpLoadPortfolio({ silent: true, force: onDisparoCloud }).catch(() => null);
           metaTplLabFillPortfolioSelect();
           metaTplLabFillPortfolioFilter();
         }
