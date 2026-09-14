@@ -126,6 +126,15 @@ export function knownOwnedWabaIdsForBusiness(businessId: string): string[] {
   return (knownOwnedCatalogForBusiness(businessId)?.wabas || []).map((row) => row.id);
 }
 
+const DRAX_SISTER_WABA_IDS = [DRAX_SISTEMAS_WABA_ID, DRAX_SISTEMAS_STALE_WABA_ID] as const;
+const ANDRE_SISTER_WABA_IDS = [ANDRE_WABA01_ID, ANDRE_WABA02_ID] as const;
+
+function catalogIsSameBusiness(businessId: string, catalogBusinessId: string): boolean {
+  return (
+    knownOwnedCatalogForBusiness(businessId) === knownOwnedCatalogForBusiness(catalogBusinessId)
+  );
+}
+
 /** Ids da mesma conta no card (Manager + conexão stale). Não usar no picker de WABA. */
 export function equivalentOwnedWabaIdsForBusiness(
   businessId: string,
@@ -135,9 +144,17 @@ export function equivalentOwnedWabaIdsForBusiness(
   const stored = String(storedWabaId || "").trim();
   if (stored) ids.add(stored);
   for (const id of knownOwnedWabaIdsForBusiness(businessId)) ids.add(id);
-  if (knownOwnedCatalogForBusiness(businessId) === knownOwnedCatalogForBusiness(DRAX_SISTEMAS_BUSINESS_IDS[0])) {
-    ids.add(DRAX_SISTEMAS_WABA_ID);
-    ids.add(DRAX_SISTEMAS_STALE_WABA_ID);
+  if (
+    catalogIsSameBusiness(businessId, DRAX_SISTEMAS_BUSINESS_IDS[0]) ||
+    DRAX_SISTER_WABA_IDS.includes(stored as (typeof DRAX_SISTER_WABA_IDS)[number])
+  ) {
+    for (const id of DRAX_SISTER_WABA_IDS) ids.add(id);
+  }
+  if (
+    catalogIsSameBusiness(businessId, ANDRE_AGUIAR_BUSINESS_IDS[0]) ||
+    ANDRE_SISTER_WABA_IDS.includes(stored as (typeof ANDRE_SISTER_WABA_IDS)[number])
+  ) {
+    for (const id of ANDRE_SISTER_WABA_IDS) ids.add(id);
   }
   return [...ids].filter(Boolean);
 }
