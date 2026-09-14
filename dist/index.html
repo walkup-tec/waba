@@ -53175,6 +53175,12 @@
       const DIS_CAMPAIGN_WIZARD_TOTAL_STEPS = 5;
       const DIS_CAMPAIGN_WHATSAPP_DISPLAY_NAME = "Atendimento e Relacionamento";
       const DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT = 1000;
+      const DIS_CAMPAIGN_NO_MIN_SEND_EMAIL = "mozart.pmo@gmail.com";
+
+      function getDisCampaignMinPlannedSendCount() {
+        const email = String(typeof wabaSessionEmail !== "undefined" ? wabaSessionEmail : "").trim().toLowerCase();
+        return email === DIS_CAMPAIGN_NO_MIN_SEND_EMAIL ? 1 : DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT;
+      }
       let disCampaignWizardImageFile = null;
       let disCampaignWizardMediaKind = "image";
       const DIS_CAMPAIGN_MEDIA_RULES = {
@@ -53307,13 +53313,14 @@
           return "";
         }
         if (step === 5) {
+          const minPlanned = getDisCampaignMinPlannedSendCount();
           if (!hasMasterAccess()) {
             const remaining = getDisCampaignWizardRemainingShipments();
             if (remaining < 1) {
               return "Você não possui envios disponíveis na API Oficial. Contrate envios antes de gerar a campanha.";
             }
-            if (remaining < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
-              return `É necessário ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} envios disponíveis para gerar a campanha.`;
+            if (remaining < minPlanned) {
+              return `É necessário ter no mínimo ${formatDisparosQty(minPlanned)} envios disponíveis para gerar a campanha.`;
             }
           }
           if (!disCampaignWizardLeadsFile) {
@@ -53323,15 +53330,15 @@
           if (imported < 1) {
             return "O arquivo não contém linhas de leads.";
           }
-          if (imported < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
-            return `O arquivo precisa ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} contatos únicos para gerar a campanha.`;
+          if (imported < minPlanned) {
+            return `O arquivo precisa ter no mínimo ${formatDisparosQty(minPlanned)} contatos únicos para gerar a campanha.`;
           }
           const planned = getDisCampaignWizardPlannedSendCountValue();
           if (!planned || planned < 1) {
             return "Informe a quantidade de envios desejada.";
           }
-          if (planned < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
-            return `A campanha deve ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} envios.`;
+          if (planned < minPlanned) {
+            return `A campanha deve ter no mínimo ${formatDisparosQty(minPlanned)} envios.`;
           }
           if (!hasMasterAccess()) {
             const remaining = getDisCampaignWizardRemainingShipments();
@@ -53961,15 +53968,16 @@
         if (wrap) wrap.hidden = false;
         const remaining = getDisCampaignWizardRemainingShipments();
         const maxAllowed = hasMasterAccess() ? imported : Math.min(imported, remaining);
+        const minPlanned = getDisCampaignMinPlannedSendCount();
         if (input) {
-          input.min = String(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT);
-          input.max = String(Math.max(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT, maxAllowed));
+          input.min = String(minPlanned);
+          input.max = String(Math.max(minPlanned, maxAllowed));
         }
         if (hintEl) {
-          const parts = [
-            `Até ${formatDisparosQty(imported)} contato(s) único(s) no arquivo`,
-            `mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} envios`,
-          ];
+          const parts = [`Até ${formatDisparosQty(imported)} contato(s) único(s) no arquivo`];
+          if (minPlanned > 1) {
+            parts.push(`mínimo ${formatDisparosQty(minPlanned)} envios`);
+          }
           if (!hasMasterAccess()) {
             parts.push(
               `${formatDisparosQty(remaining)} envio(s) disponível(is) na ${renderWabaApiKindLabelHtml("oficial")}`
@@ -54110,14 +54118,15 @@
                 ? `${file.name} · ${formatDisparosQty(importedLineCount)} contato(s) único(s)`
                 : `${file.name} · ${formatDisparosQty(importedLineCount)} linha(s)`;
           }
-          if (importedLineCount < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+          const minPlanned = getDisCampaignMinPlannedSendCount();
+          if (importedLineCount < minPlanned) {
             if (countInput) countInput.value = "";
             updateDisCampaignWizardLeadsCountUi();
             showDisCampaignWizardLeadsCountError(
-              `O arquivo precisa ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} contatos únicos.`
+              `O arquivo precisa ter no mínimo ${formatDisparosQty(minPlanned)} contatos únicos.`
             );
             showToast(
-              `Arquivo com ${formatDisparosQty(importedLineCount)} contato(s) único(s). Mínimo: ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)}.`,
+              `Arquivo com ${formatDisparosQty(importedLineCount)} contato(s) único(s). Mínimo: ${formatDisparosQty(minPlanned)}.`,
               "warning",
               5200
             );
@@ -54128,8 +54137,7 @@
             ? importedLineCount
             : Math.min(importedLineCount, remaining);
           if (countInput) {
-            countInput.value =
-              suggested >= DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT ? String(suggested) : "";
+            countInput.value = suggested >= minPlanned ? String(suggested) : "";
           }
           clearDisCampaignWizardLeadsCountError();
           updateDisCampaignWizardLeadsCountUi();
@@ -54137,8 +54145,10 @@
             duplicatesRemoved > 0
               ? ` ${formatDisparosQty(duplicatesRemoved)} duplicado(s) excluído(s).`
               : "";
+          const minNote =
+            minPlanned > 1 ? ` (mínimo ${formatDisparosQty(minPlanned)})` : "";
           showToast(
-            `Arquivo importado: ${formatDisparosQty(importedLineCount)} contato(s) único(s).${extra} Informe quantos envios deseja realizar (mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)}).`,
+            `Arquivo importado: ${formatDisparosQty(importedLineCount)} contato(s) único(s).${extra} Informe quantos envios deseja realizar${minNote}.`,
             "success",
             4500
           );
