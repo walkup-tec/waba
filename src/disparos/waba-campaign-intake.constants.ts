@@ -6,3 +6,12 @@ export const WABA_CAMPAIGN_INTAKE_SAFE_PARSER = true;
 
 /** Mínimo de envios por campanha (wizard API Oficial). */
 export const WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT = 1000;
+
+/** Só este assinante fica sem o piso de 1000 envios. */
+export const WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL = "mozart.pmo@gmail.com";
+
+export function campaignMinPlannedSendCountForEmail(email: string | null | undefined): number {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (normalized === WABA_CAMPAIGN_NO_MIN_SEND_COUNT_EMAIL) return 1;
+  return WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT;
+}
