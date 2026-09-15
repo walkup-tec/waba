@@ -543,7 +543,7 @@ export async function discoverAdministeredBusinessNodes(
   graph: PortfolioGraphCaller,
   token: string,
   seedBusinessIds: string[],
-  opts?: { onlyClients?: boolean },
+  opts?: { onlyClients?: boolean; onlyOwned?: boolean },
 ): Promise<unknown[]> {
   const nodes: unknown[] = [];
   const seen = new Set<string>();
@@ -557,17 +557,20 @@ export async function discoverAdministeredBusinessNodes(
 
   const seeds = [...new Set(seedBusinessIds.map((id) => String(id || "").trim()).filter(Boolean))];
   for (const seed of seeds) {
-    const clients = await paginateGraphCollection(graph, token, `${seed}/clients`, {
-      fields: ADMIN_BUSINESS_FIELDS,
-      limit: "100",
-    });
-    for (const row of clients.rows) add(row);
+    if (!opts?.onlyOwned) {
+      const clients = await paginateGraphCollection(graph, token, `${seed}/clients`, {
+        fields: ADMIN_BUSINESS_FIELDS,
+        limit: "100",
+      });
+      for (const row of clients.rows) add(row);
+    }
     if (opts?.onlyClients) continue;
     const owned = await paginateGraphCollection(graph, token, `${seed}/owned_businesses`, {
       fields: ADMIN_BUSINESS_FIELDS,
       limit: "100",
     });
     for (const row of owned.rows) add(row);
+    if (opts?.onlyOwned) continue;
     const clientWabas = await paginateGraphCollection(
       graph,
       token,
@@ -580,7 +583,7 @@ export async function discoverAdministeredBusinessNodes(
     }
   }
 
-  if (opts?.onlyClients) return nodes;
+  if (opts?.onlyClients || opts?.onlyOwned) return nodes;
 
   const adaccounts = await paginateGraphCollection(graph, token, "me/adaccounts", {
     fields: USER_ASSET_BUSINESS_FIELDS,
