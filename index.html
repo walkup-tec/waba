@@ -24471,7 +24471,7 @@
                         <th class="mlc-col-date">Data gerada</th>
                         <th class="mlc-col-pages" title="Páginas do portal já avançadas / meta">Páginas</th>
                         <th class="mlc-col-cnpj" title="CNPJs copiados do portal (pool + já usados)">CNPJs</th>
-                        <th class="mlc-col-leads" title="Leads higienizados (com celular nesta lista)">Higienizados</th>
+                        <th class="mlc-col-leads" title="Leads higienizados acumulados da pesquisa (celular)">Higienizados</th>
                         <th class="mlc-col-stage">Etapa</th>
                       </tr>
                     </thead>
@@ -45133,50 +45133,27 @@
           '" data-mlc-name="' +
           escapeAdminHtml(String(item?.name || "lista")) +
           '" title="Excluir esta linha do histórico"><span class="mlc-delete-spin" aria-hidden="true"></span><span class="mlc-delete-label">Excluir</span></button>';
-        const campaignDls = Array.isArray(item?.campaignDownloads)
-          ? item.campaignDownloads
-          : [];
-        const downloadTargets =
-          campaignDls.length > 0
-            ? campaignDls
-            : status === "ready" && item?.exportFileName
-              ? [
-                  {
-                    id: item.id,
-                    listaLabel: item.listaLabel || "Baixar Excel",
-                    downloadedAt: item.downloadedAt || null,
-                  },
-                ]
-              : [];
-        const downloadBtns = downloadTargets
-          .map((dl) => {
-            const dlId = encodeURIComponent(String(dl.id || ""));
-            const done = Boolean(dl.downloadedAt);
-            const label = escapeAdminHtml(
-              String(dl.listaLabel || "Baixar Excel").trim() || "Baixar Excel"
-            );
-            const cls =
-              "instance-action-btn enabled mlc-dl-btn " +
-              (done ? "mlc-dl-done" : "mlc-dl-pending");
-            const title = done
-              ? "Já baixado — clique para baixar de novo"
-              : "Baixar Excel (marca como baixado)";
-            return (
-              '<a class="' +
-              cls +
+        const listaCount = Math.max(0, Math.round(Number(item?.listaLeadCount || 0) || 0));
+        const listaFresh = Boolean(item?.listaHasNewRecords) || !item?.listaDownloadedAt;
+        const listaBtn =
+          listaCount > 0
+            ? '<a class="instance-action-btn enabled mlc-dl-btn ' +
+              (listaFresh ? "mlc-dl-pending" : "mlc-dl-done") +
               '" href="' +
-              resolveWabaPublicPath("/admin/marketing/leads-cnpj/" + dlId + "/download") +
-              '" data-mlc-download-id="' +
-              dlId +
+              resolveWabaPublicPath("/admin/marketing/leads-cnpj/" + id + "/lista") +
+              '" data-mlc-lista-id="' +
+              id +
               '" title="' +
-              title +
-              '">' +
-              label +
-              "</a>"
-            );
-          })
-          .join("");
-        return '<div class="mlc-download-cell">' + stopBtn + deleteBtn + downloadBtns + "</div>";
+              (listaFresh
+                ? "Baixar todos os registros gerados até agora (" +
+                  listaCount.toLocaleString("pt-BR") +
+                  ")"
+                : "Baixar de novo o acumulado atual (" +
+                  listaCount.toLocaleString("pt-BR") +
+                  ")") +
+              '">Lista</a>'
+            : "";
+        return '<div class="mlc-download-cell">' + stopBtn + deleteBtn + listaBtn + "</div>";
       }
       function normalizeMlcCnaeInput(value) {
         const raw = String(value || "").trim();
@@ -45303,7 +45280,7 @@
               '<td class="mlc-col-cnpj" title="CNPJs copiados do portal">' +
               cnpjCopied.toLocaleString("pt-BR") +
               "</td>" +
-              '<td class="mlc-col-leads" title="Leads higienizados (celular)">' +
+              '<td class="mlc-col-leads" title="Leads higienizados acumulados (celular)">' +
               higienizados.toLocaleString("pt-BR") +
               "</td>" +
               '<td class="mlc-col-stage">' +
@@ -45478,10 +45455,9 @@
         document.getElementById("mlc-tbody")?.addEventListener("click", (event) => {
           const dl = event.target?.closest?.("a.mlc-dl-btn");
           if (dl) {
-            // GET /download já marca downloadedAt; atualiza a cor azul→verde em seguida.
             setTimeout(() => {
               void loadMarketingLeadsCnpjHistory({ silent: true });
-            }, 900);
+            }, 1500);
             return;
           }
           const stopBtn = event.target?.closest?.(".mlc-stop-btn");
