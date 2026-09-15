@@ -225,7 +225,9 @@ describe("meta portfolio mapper", () => {
 
   it("pagina me/businesses no Atualizar em vez de parar nos primeiros 50", async () => {
     const graph = async (input: { path: string; query?: Record<string, string> }) => {
-      assert.equal(input.path, "me/businesses");
+      if (input.path !== "me/businesses") {
+        return { ok: true, status: 200, json: { data: [] } };
+      }
       if (!input.query?.after) {
         return {
           ok: true,
@@ -246,6 +248,56 @@ describe("meta portfolio mapper", () => {
     const json = await fetchAssignedBusinesses(graph as any, "token");
     const ids = directoryFromAssigned(json).map((item) => item.id);
     assert.deepEqual(ids, ["111", "222"]);
+  });
+
+  it("une me/businesses com business_users — a mesma lista do select da Meta", async () => {
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me") {
+        return { ok: true, status: 200, json: { id: "fb-user-mozart" } };
+      }
+      if (input.path === "me/businesses" || input.path === "fb-user-mozart/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "4141369862822598", name: "Grupo Walkup" }] },
+        };
+      }
+      if (input.path === "me/business_users" || input.path === "fb-user-mozart/business_users") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "bu-1", business: { id: "4141369862822598", name: "Grupo Walkup" } },
+              { id: "bu-2", business: { id: "1041827648719609", name: "Drax Sistemas" } },
+              { id: "bu-3", business: { id: "1247508354180311", name: "Grupo Walkup App" } },
+              { id: "bu-4", business: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" } },
+              {
+                id: "bu-5",
+                business: { id: "962298516898955", name: "60.845.972 Flaviane Ferreira Trindade" },
+              },
+              {
+                id: "bu-6",
+                business: { id: "527976961111111", name: "52.797.696 Natally Caricia Muniz Bezerra" },
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const json = await fetchAssignedBusinesses(graph as any, "token");
+    const names = directoryFromAssigned(json)
+      .map((item) => item.name)
+      .sort();
+    assert.deepEqual(names, [
+      "52.797.696 Natally Caricia Muniz Bezerra",
+      "60.845.972 Flaviane Ferreira Trindade",
+      "60.846.306 Marilza de Castro",
+      "Drax Sistemas",
+      "Grupo Walkup",
+      "Grupo Walkup App",
+    ]);
   });
 
   it("descobre BM em /clients, /owned_businesses e dono da WABA client", async () => {
@@ -2474,6 +2526,93 @@ describe("meta portfolio service", () => {
     const assets = await service.listPortfolioAssets(auth);
     const novo = (assets.portfolios || []).find((item) => item.id === "555000111222333");
     assert.equal(novo?.name, "61.000.001 Cliente Novo Admin");
+  });
+
+  it("na Conexão lista os BMs de business_users mesmo quando me/businesses omite", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me") {
+        return { ok: true, status: 200, json: { id: "fb-user-mozart" } };
+      }
+      if (input.path === "me/businesses" || input.path === "fb-user-mozart/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "4141369862822598", name: "Grupo Walkup" }] },
+        };
+      }
+      if (input.path === "me/business_users" || input.path === "fb-user-mozart/business_users") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "bu-w", business: { id: "4141369862822598", name: "Grupo Walkup" } },
+              {
+                id: "bu-n",
+                business: { id: "527976961111111", name: "52.797.696 Natally Caricia Muniz Bezerra" },
+              },
+              {
+                id: "bu-f",
+                business: { id: "962298516898955", name: "60.845.972 Flaviane Ferreira Trindade" },
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path === "4681844838758316") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
+        };
+      }
+      if (input.path === "962298516898955") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "962298516898955", name: "60.845.972 Flaviane Ferreira Trindade" },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const names = (assets.portfolios || []).map((item) => item.name);
+    assert.ok(names.includes("Grupo Walkup"));
+    assert.ok(names.includes("52.797.696 Natally Caricia Muniz Bezerra"));
+    assert.ok(names.includes("60.845.972 Flaviane Ferreira Trindade"));
   });
 
   it("mantém o card quando a Graph recusa com 403 genérico, sem texto de objeto inexistente", async () => {
