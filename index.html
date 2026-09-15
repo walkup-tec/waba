@@ -38372,11 +38372,7 @@
       let metaTpPortfolioPage = "ativas";
 
       function metaTpPortfolioIsRestricted(item) {
-        const name = String((item && (item.name || item.primaryPageName)) || "").trim();
-        if (/^BAN(?:\s|[A-Z0-9_])/i.test(name) || /^BAN\b/i.test(name)) return true;
-        return ((item && item.numbers) || []).some(function (row) {
-          return String((row && row.uiStatus) || "") === "restrito";
-        });
+        return Boolean(item && item.hidden === true);
       }
 
       function metaTpFilterPortfoliosByPage(portfolios, page) {
@@ -38650,7 +38646,7 @@
               '<span aria-hidden="true">' +
               metaTpEsc(metaTpInitials(name)) +
               "</span></div>" +
-              (bizId === "—"
+              (bizId === "—" || item.hidden === true
                 ? ""
                 : '<button type="button" class="meta-portfolio-hide" data-meta-hide-portfolio="' +
                   metaTpEsc(bizId) +
@@ -38786,6 +38782,7 @@
             return {
               id: item.id || "",
               name: item.name || "",
+              hidden: item.hidden === true,
               page: item.primaryPageName || "",
               pageId: item.primaryPageId || "",
               waba: item.wabaId || "",
@@ -39513,6 +39510,9 @@
 
       function metaTplLabPortfolioOptions() {
         return (metaTpSession.portfolios || [])
+          .filter(function (portfolio) {
+            return !portfolio || portfolio.hidden !== true;
+          })
           .map(function (portfolio) {
             return {
               connectionId: String((portfolio && portfolio.connectionId) || "").trim(),
