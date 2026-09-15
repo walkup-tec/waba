@@ -4,9 +4,14 @@ import { resolveDataDir } from "../../data-path";
 import { metaBusinessIdsMatch } from "./meta-whatsapp-known-owned-wabas";
 import { normalizeManualBusinessId } from "./meta-whatsapp-manual-business.store";
 
+export type HiddenBusinessRow = {
+  id: string;
+  name: string;
+};
+
 type Store = {
   version: 1;
-  byTenant: Record<string, string[]>;
+  byTenant: Record<string, Array<string | HiddenBusinessRow>>;
 };
 
 const FILE_NAME = "meta-whatsapp-hidden-businesses.json";
@@ -39,23 +44,28 @@ function writeStore(store: Store): void {
   writeFileSync(file, JSON.stringify(store), "utf8");
 }
 
-function normalizeHiddenIds(rows: unknown): string[] {
+function normalizeHiddenRows(rows: unknown): HiddenBusinessRow[] {
   if (!Array.isArray(rows)) return [];
   const seen = new Set<string>();
-  const ids: string[] = [];
+  const out: HiddenBusinessRow[] = [];
   for (const row of rows) {
-    const id = normalizeManualBusinessId(String(row || ""));
+    const raw = row && typeof row === "object" ? (row as HiddenBusinessRow) : { id: String(row || ""), name: "" };
+    const id = normalizeManualBusinessId(String(raw.id || ""));
     if (id.length < 6 || seen.has(id)) continue;
     seen.add(id);
-    ids.push(id);
+    out.push({ id, name: String(raw.name || "").trim() });
   }
-  return ids;
+  return out;
+}
+
+export function listHiddenBusinesses(tenantId: string): HiddenBusinessRow[] {
+  const key = String(tenantId || "").trim();
+  if (!key) return [];
+  return normalizeHiddenRows(readStore().byTenant[key]);
 }
 
 export function listHiddenBusinessIds(tenantId: string): string[] {
-  const key = String(tenantId || "").trim();
-  if (!key) return [];
-  return normalizeHiddenIds(readStore().byTenant[key]);
+  return listHiddenBusinesses(tenantId).map((row) => row.id);
 }
 
 export function isHiddenBusiness(tenantId: string, businessId: string): boolean {
@@ -64,20 +74,24 @@ export function isHiddenBusiness(tenantId: string, businessId: string): boolean 
   return listHiddenBusinessIds(tenantId).some((hidden) => metaBusinessIdsMatch(hidden, id));
 }
 
-export function hideBusiness(tenantId: string, businessId: string): string {
+export function hideBusiness(tenantId: string, businessId: string, name = ""): HiddenBusinessRow {
   const key = String(tenantId || "").trim();
   const id = normalizeManualBusinessId(businessId);
+  const label = String(name || "").trim();
   if (!key || id.length < 6) {
     throw new Error("ID do portfólio inválido.");
   }
   const store = readStore();
-  const current = normalizeHiddenIds(store.byTenant[key]);
-  if (!current.some((hidden) => metaBusinessIdsMatch(hidden, id))) {
-    current.push(id);
+  const current = normalizeHiddenRows(store.byTenant[key]);
+  const idx = current.findIndex((row) => metaBusinessIdsMatch(row.id, id));
+  if (idx >= 0) {
+    current[idx] = { id, name: label || current[idx].name };
+  } else {
+    current.push({ id, name: label });
   }
   store.byTenant[key] = current;
   writeStore(store);
-  return id;
+  return current[idx >= 0 ? idx : current.length - 1];
 }
 
 export function unhideBusiness(tenantId: string, businessId: string): void {
@@ -85,8 +99,8 @@ export function unhideBusiness(tenantId: string, businessId: string): void {
   const id = normalizeManualBusinessId(businessId);
   if (!key || id.length < 6) return;
   const store = readStore();
-  const current = normalizeHiddenIds(store.byTenant[key]);
-  const next = current.filter((hidden) => !metaBusinessIdsMatch(hidden, id));
+  const current = normalizeHiddenRows(store.byTenant[key]);
+  const next = current.filter((row) => !metaBusinessIdsMatch(row.id, id));
   if (next.length === current.length) return;
   if (next.length) store.byTenant[key] = next;
   else delete store.byTenant[key];
