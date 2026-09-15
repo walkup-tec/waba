@@ -234,6 +234,26 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  app.post("/integrations/meta/whatsapp/portfolio/hide-business", async (req: Request, res: Response) => {
+    try {
+      if (!isMetaOfficialPortfolioLabEnabled()) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Recurso indisponível neste ambiente.",
+          code: "config_invalid",
+        });
+      }
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const assets = await service.hidePortfolioBusiness(
+        resolveWabaRequestAuth(req),
+        String(body.businessId || body.id || ""),
+      );
+      return sendPublic(res, 200, { ok: true, ...assets });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
   app.get("/integrations/meta/whatsapp/portfolio", async (req: Request, res: Response) => {
     try {
       if (!isMetaOfficialPortfolioLabEnabled()) {
