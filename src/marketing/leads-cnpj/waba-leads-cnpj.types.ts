@@ -101,6 +101,10 @@ export type WabaLeadsCnpjPool = {
    * a partir do pool até uma nova extração manual.
    */
   autoContinuePaused?: boolean;
+  /** Último download do Excel acumulado (botão Lista). */
+  listaDownloadedAt?: string | null;
+  /** Quantidade de linhas no último Excel acumulado baixado. */
+  listaExportedCount?: number;
 };
 
 /** Cursor de raspagem Casa dos Dados (página Oruga). */
@@ -182,8 +186,14 @@ export type WabaLeadsCnpjListSummary = {
   listaIndex?: number | null;
   listaLabel?: string | null;
   downloadedAt?: string | null;
-  /** Excels ready da mesma campanha (botões Lista 01…N). */
+  /** Excels ready da mesma campanha (legado; a UI usa o botão único Lista). */
   campaignDownloads?: WabaLeadsCnpjDownloadSummary[];
+  /** Linhas do Excel acumulado (todos os lotes da pesquisa). */
+  listaLeadCount?: number;
+  /** Último download do Excel acumulado. */
+  listaDownloadedAt?: string | null;
+  /** true quando há registros novos desde o último download. */
+  listaHasNewRecords?: boolean;
   /** CNPJs ainda no pool da campanha (lista total não finalizada). */
   poolPending?: number;
   /** true só quando pool zerou e não há lote em andamento desta campanha. */
