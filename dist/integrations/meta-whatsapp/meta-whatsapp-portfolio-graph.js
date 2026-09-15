@@ -408,17 +408,17 @@ async function fetchAssignedBusinesses(graph, token, opts) {
     const me = await fetchGraphUserNode(graph, token);
     for (const row of me.rows)
         add(row);
-    const userIds = [
-        ...new Set([me.userId, ...(opts?.facebookUserIds || [])]
+    const extraUserIds = [
+        ...new Set([...(opts?.facebookUserIds || [])]
             .map((id) => String(id || "").trim())
-            .filter(Boolean)),
+            .filter((id) => id && id !== me.userId)),
     ];
-    const businessPaths = ["me/businesses", ...userIds.map((id) => `${id}/businesses`)];
+    const businessPaths = ["me/businesses", ...extraUserIds.map((id) => `${id}/businesses`)];
     for (const path of [...new Set(businessPaths)]) {
         for (const row of await fetchBusinessesEdge(graph, token, path))
             add(row);
     }
-    const memberPaths = ["me/business_users", ...userIds.map((id) => `${id}/business_users`)];
+    const memberPaths = ["me/business_users", ...extraUserIds.map((id) => `${id}/business_users`)];
     for (const path of [...new Set(memberPaths)]) {
         const members = await paginateGraphCollection(graph, token, path, {
             fields: USER_BUSINESS_MEMBER_FIELDS,
@@ -457,7 +457,7 @@ function takeBusinessNode(row) {
 function takeNestedBusiness(row, key) {
     return takeBusinessNode(asRecord(row)[key]);
 }
-async function discoverAdministeredBusinessNodes(graph, token, seedBusinessIds) {
+async function discoverAdministeredBusinessNodes(graph, token, seedBusinessIds, opts) {
     const nodes = [];
     const seen = new Set();
     const add = (row) => {
@@ -476,6 +476,8 @@ async function discoverAdministeredBusinessNodes(graph, token, seedBusinessIds) 
         });
         for (const row of clients.rows)
             add(row);
+        if (opts?.onlyClients)
+            continue;
         const owned = await paginateGraphCollection(graph, token, `${seed}/owned_businesses`, {
             fields: ADMIN_BUSINESS_FIELDS,
             limit: "100",
@@ -489,6 +491,8 @@ async function discoverAdministeredBusinessNodes(graph, token, seedBusinessIds) 
                 add(owner);
         }
     }
+    if (opts?.onlyClients)
+        return nodes;
     const adaccounts = await paginateGraphCollection(graph, token, "me/adaccounts", {
         fields: USER_ASSET_BUSINESS_FIELDS,
         limit: "100",
