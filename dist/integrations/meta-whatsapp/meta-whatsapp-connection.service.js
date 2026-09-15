@@ -389,8 +389,9 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
             (hint.businessId && hint.wabaId && hint.wabaId !== hint.businessId ? hint.wabaId : "")
         : "";
     const resolvedBm = hint.businessId || (0, meta_whatsapp_portfolio_map_1.businessIdNotWaba)(storedBm, resolvedWaba || storedWaba) || "";
+    const debugTargets = await listDebugTokenWhatsappTargets(g, token);
     const [assignedJson, fetchedBm] = await Promise.all([
-        (0, meta_whatsapp_portfolio_graph_1.fetchAssignedBusinesses)(g, token),
+        (0, meta_whatsapp_portfolio_graph_1.fetchAssignedBusinesses)(g, token, { facebookUserIds: debugTargets.userId ? [debugTargets.userId] : [] }),
         resolvedBm
             ? (0, meta_whatsapp_portfolio_graph_1.fetchBusinessFromGraph)(g, token, resolvedBm)
             : Promise.resolve({
@@ -502,7 +503,6 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
     for (const id of nestedFromMe.clientWabaIds)
         clientIds.add(id);
     pushPhones(nestedFromMe.phones);
-    const debugTargets = await listDebugTokenWhatsappTargets(g, token);
     const debugPhoneNodes = await fetchPhoneNodes(g, token, debugTargets.phoneIds);
     pushPhones(debugPhoneNodes);
     if (businessId) {
@@ -650,10 +650,11 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
 }
 /** WABAs (management) e chips (messaging) liberados no token — Embedded Signup manage-accounts. */
 async function listDebugTokenWhatsappTargets(graph, userToken) {
+    const empty = { wabaIds: [], phoneIds: [], userId: "" };
     const appId = (0, meta_config_1.readMetaAppId)();
     const appSecret = (0, meta_config_1.readMetaAppSecret)();
     if (!appId || !appSecret || !userToken)
-        return { wabaIds: [], phoneIds: [] };
+        return empty;
     const res = await graph({
         token: `${appId}|${appSecret}`,
         method: "GET",
@@ -661,7 +662,7 @@ async function listDebugTokenWhatsappTargets(graph, userToken) {
         query: { input_token: userToken },
     });
     if (!res.ok)
-        return { wabaIds: [], phoneIds: [] };
+        return empty;
     const payload = (res.json && typeof res.json === "object" ? res.json : {});
     const granular = Array.isArray(payload.data?.granular_scopes) ? payload.data.granular_scopes : [];
     const wabaIds = new Set();
@@ -679,7 +680,11 @@ async function listDebugTokenWhatsappTargets(graph, userToken) {
                 phoneIds.add(id);
         }
     }
-    return { wabaIds: [...wabaIds], phoneIds: [...phoneIds] };
+    return {
+        wabaIds: [...wabaIds],
+        phoneIds: [...phoneIds],
+        userId: String(payload.data?.user_id || "").trim(),
+    };
 }
 async function fetchPhoneNodes(graph, token, phoneIds, stampWabaId) {
     const tokens = [...new Set((Array.isArray(token) ? token : [token]).map((item) => String(item || "").trim()).filter(Boolean))];
