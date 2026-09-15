@@ -404,15 +404,44 @@ async function paginateGraphCollection(
   return { ok: firstOk, rows };
 }
 
-async function fetchGraphUserId(graph: PortfolioGraphCaller, token: string): Promise<string> {
-  const me = await graph({
+const ME_SELECT_FIELDS =
+  "id,businesses.limit(100){id,name,profile_picture_uri,primary_page{id,name,picture}},business_users.limit(100){id,role,business{id,name,profile_picture_uri,primary_page{id,name,picture}}}";
+
+function businessRowsFromUserNode(json: unknown): unknown[] {
+  const rec = asRecord(json);
+  const out: unknown[] = [];
+  for (const row of listMetaBusinessNodes(rec.businesses)) out.push(row);
+  for (const row of listMetaBusinessNodes(rec.business_users)) {
+    const biz = asRecord(row).business;
+    if (biz) out.push(biz);
+  }
+  return out;
+}
+
+async function fetchGraphUserNode(
+  graph: PortfolioGraphCaller,
+  token: string,
+): Promise<{ userId: string; rows: unknown[] }> {
+  const nested = await graph({
+    token,
+    method: "GET",
+    path: "me",
+    query: { fields: ME_SELECT_FIELDS },
+  });
+  if (nested.ok) {
+    return {
+      userId: text(asRecord(nested.json).id) || "",
+      rows: businessRowsFromUserNode(nested.json),
+    };
+  }
+  const basic = await graph({
     token,
     method: "GET",
     path: "me",
     query: { fields: "id" },
   });
-  if (!me.ok) return "";
-  return text(asRecord(me.json).id) || "";
+  if (!basic.ok) return { userId: "", rows: [] };
+  return { userId: text(asRecord(basic.json).id) || "", rows: [] };
 }
 
 async function fetchBusinessesEdge(
@@ -443,6 +472,7 @@ const USER_BUSINESS_MEMBER_FIELDS =
 export async function fetchAssignedBusinesses(
   graph: PortfolioGraphCaller,
   token: string,
+  opts?: { facebookUserIds?: string[] },
 ): Promise<unknown> {
   const rows: unknown[] = [];
   const seen = new Set<string>();
@@ -450,22 +480,26 @@ export async function fetchAssignedBusinesses(
     const rec = asRecord(row);
     const id = text(rec.id);
     if (!id || seen.has(id)) return;
-    if (!text(rec.name) && !text(asRecord(rec.primary_page).name) && !text(asRecord(rec.primary_page).id)) {
-      return;
-    }
     seen.add(id);
     rows.push(row);
   };
 
-  const userId = await fetchGraphUserId(graph, token);
-  const businessPaths = ["me/businesses"];
-  if (userId) businessPaths.push(`${userId}/businesses`);
+  const me = await fetchGraphUserNode(graph, token);
+  for (const row of me.rows) add(row);
+
+  const userIds = [
+    ...new Set(
+      [me.userId, ...(opts?.facebookUserIds || [])]
+        .map((id) => String(id || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const businessPaths = ["me/businesses", ...userIds.map((id) => `${id}/businesses`)];
   for (const path of [...new Set(businessPaths)]) {
     for (const row of await fetchBusinessesEdge(graph, token, path)) add(row);
   }
 
-  const memberPaths = ["me/business_users"];
-  if (userId) memberPaths.push(`${userId}/business_users`);
+  const memberPaths = ["me/business_users", ...userIds.map((id) => `${id}/business_users`)];
   for (const path of [...new Set(memberPaths)]) {
     const members = await paginateGraphCollection(graph, token, path, {
       fields: USER_BUSINESS_MEMBER_FIELDS,
@@ -477,7 +511,21 @@ export async function fetchAssignedBusinesses(
     }
   }
 
-  return rows.length ? { data: rows } : { data: [] };
+  const named: unknown[] = [];
+  for (const row of rows) {
+    const rec = asRecord(row);
+    const id = text(rec.id);
+    const name = text(rec.name) || catalogBusinessLabel(id || "");
+    if (id && name) {
+      named.push({ ...rec, id, name });
+      continue;
+    }
+    if (!id) continue;
+    const card = await fetchVisibleBusinessCard(graph, token, id);
+    if (card?.id && card.name) named.push({ ...rec, id: card.id, name: card.name });
+  }
+
+  return { data: named };
 }
 
 function takeBusinessNode(row: unknown): unknown | null {
