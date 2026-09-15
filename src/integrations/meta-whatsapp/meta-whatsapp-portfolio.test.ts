@@ -419,6 +419,29 @@ describe("meta portfolio mapper", () => {
     ]);
   });
 
+  it("na lista rápida da Conexão só varre /clients da agência", async () => {
+    const paths: string[] = [];
+    const graph = async (input: { path: string }) => {
+      paths.push(input.path);
+      if (input.path === "4141369862822598/clients") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "527976960000111", name: "52.797.696 Natally Caricia Muniz Bezerra" }] },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const nodes = await discoverAdministeredBusinessNodes(graph as any, "token", ["4141369862822598"], {
+      onlyClients: true,
+    });
+    assert.equal(String((nodes[0] as { id?: string } | undefined)?.id || ""), "527976960000111");
+    assert.equal(
+      paths.some((path) => path.endsWith("/owned_businesses") || path === "me/adaccounts"),
+      false,
+    );
+  });
+
   it("não mostra o WABA como card de portfólio quando já existe o Business", () => {
     const cards = dedupePortfolioCards([
       {
@@ -1209,7 +1232,7 @@ describe("meta portfolio service", () => {
     assert.equal(assets.portfolio?.name, "Grupo Walkup");
     assert.equal(assets.portfolio?.primaryPageName, "Soma Promotora");
     assert.equal(assets.portfolio?.profilePictureUrl, "https://scontent.xx.fbcdn.net/v/walkup.png");
-    assert.match(graphFields[0] || "", /owner_business_info/);
+    assert.ok(graphFields.some((item) => /owner_business_info/.test(item)));
     assert.ok(graphFields.some((item) => /profile_picture_uri/.test(item)));
     assert.ok(graphFields.some((item) => /primary_page/.test(item)));
     // Nested BM fields also embed new_display_name inside phone_numbers{...}; match exact list fields.
