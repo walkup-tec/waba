@@ -77,7 +77,7 @@ import {
 } from "./meta-whatsapp-manual-business.store";
 import {
   hideBusiness,
-  isHiddenBusiness,
+  listHiddenBusinesses,
   listHiddenBusinessIds,
   unhideBusiness,
 } from "./meta-whatsapp-hidden-business.store";
@@ -232,24 +232,40 @@ function withLocalIdentities(
   };
 }
 
-function omitHiddenPortfolioAssets(
+function markHiddenPortfolioAssets(
   tenantId: string,
   assets: MetaPortfolioAssetsPublic,
 ): MetaPortfolioAssetsPublic {
-  const hidden = listHiddenBusinessIds(tenantId);
-  if (!hidden.length) return assets;
+  const hiddenRows = listHiddenBusinesses(tenantId);
   const isHiddenId = (value: string) =>
-    hidden.some((hiddenId) => metaBusinessIdsMatch(String(value || ""), hiddenId));
-  const visible = (assets.portfolios || []).filter((item) => !isHiddenId(String(item.id || "")));
-  if (visible.length === (assets.portfolios || []).length) return assets;
-  const selectedStillVisible = Boolean(assets.portfolio?.id) && !isHiddenId(String(assets.portfolio?.id || ""));
-  const selected = selectedStillVisible
-    ? visible.find((item) => metaBusinessIdsMatch(String(item.id || ""), String(assets.portfolio?.id || ""))) ||
-      visible[0]
-    : visible[0];
+    hiddenRows.some((row) => metaBusinessIdsMatch(String(value || ""), row.id));
+  const portfolios = (assets.portfolios || []).map((item) => ({
+    ...item,
+    hidden: isHiddenId(String(item.id || "")),
+  }));
+  for (const row of hiddenRows) {
+    if (portfolios.some((item) => metaBusinessIdsMatch(String(item.id || ""), row.id))) continue;
+    portfolios.push({
+      id: row.id,
+      name: row.name || null,
+      primaryPageId: null,
+      primaryPageName: null,
+      profilePictureUrl: null,
+      wabaId: null,
+      hidden: true,
+      numbers: [],
+    });
+  }
+  const active = portfolios.filter((item) => !item.hidden);
+  const requested = String(assets.selectedConnectionId || assets.portfolio?.id || "");
+  const selected =
+    active.find((item) => item.connectionId === requested) ||
+    active.find((item) => item.id && metaBusinessIdsMatch(String(item.id), requested)) ||
+    active[0] ||
+    null;
   return {
     ...assets,
-    portfolios: visible,
+    portfolios,
     selectedConnectionId: selected?.connectionId || null,
     portfolio: selected
       ? {
@@ -260,6 +276,7 @@ function omitHiddenPortfolioAssets(
           profilePictureUrl: selected.profilePictureUrl,
           wabaId: selected.wabaId,
           connectionId: selected.connectionId,
+          hidden: selected.hidden,
         }
       : null,
     numbers: selected?.numbers || [],
@@ -270,11 +287,7 @@ function localizeAndHidePortfolioAssets(
   tenantId: string,
   assets: MetaPortfolioAssetsPublic,
 ): MetaPortfolioAssetsPublic {
-  return omitHiddenPortfolioAssets(tenantId, withLocalIdentities(tenantId, assets));
-}
-
-function visibleManualBusinessIds(tenantId: string): string[] {
-  return listManualBusinessIds(tenantId).filter((id) => !isHiddenBusiness(tenantId, id));
+  return markHiddenPortfolioAssets(tenantId, withLocalIdentities(tenantId, assets));
 }
 
 function assetsFromPortfolioCards(
@@ -1857,11 +1870,14 @@ export class MetaWhatsappConnectionService {
       );
     }
     hideBusiness(tenant.tenantId, businessId);
+    const assets = await this.listPortfolioAssets(auth);
+    const card = (assets.portfolios || []).find((item) => metaBusinessIdsMatch(String(item.id || ""), businessId));
+    if (card?.name) hideBusiness(tenant.tenantId, businessId, card.name);
     logMetaWhatsappSafe("portfolio-business-hidden", {
       tenantId: tenant.tenantId,
       businessId,
     });
-    return this.listPortfolioAssets(auth);
+    return assets;
   }
 
   private async loadStoredPortfolioAssets(
@@ -1892,8 +1908,9 @@ export class MetaWhatsappConnectionService {
         const restored = await repo.reopenLeftManagerForBusinesses(
           tenantId,
           [
-            ...businessIdsToReopenAfterFalseLeftManager().filter((id) => !isHiddenBusiness(tenantId, id)),
-            ...visibleManualBusinessIds(tenantId),
+            ...businessIdsToReopenAfterFalseLeftManager(),
+            ...listManualBusinessIds(tenantId),
+            ...listHiddenBusinessIds(tenantId),
           ],
           actorEmail,
         );
@@ -1927,7 +1944,7 @@ export class MetaWhatsappConnectionService {
     const selectPage = await collectSelectPageAdminCards({
       graph: withHydrateLimits(this.graph),
       writeTokens,
-      extraBusinessIds: visibleManualBusinessIds(tenantId),
+      extraBusinessIds: [...listManualBusinessIds(tenantId), ...listHiddenBusinessIds(tenantId)],
     });
     const hydrated = await Promise.all(
       rows.map((row) =>
