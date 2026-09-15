@@ -313,6 +313,16 @@ async function collectSelectPageAdminCards(input) {
     catch {
         /* /clients lento não pode impedir a lista da select */
     }
+    try {
+        for (const token of tokens) {
+            const nodes = await (0, meta_whatsapp_portfolio_graph_1.discoverAdministeredBusinessNodes)(shortGraph, token, (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)(), { onlyOwned: true });
+            for (const card of (0, meta_whatsapp_portfolio_graph_1.directoryFromAssigned)({ data: nodes }))
+                addIfMissing(card);
+        }
+    }
+    catch {
+        /* /owned_businesses lento não pode impedir a lista da select */
+    }
     return { cards, assignedByConnectionId };
 }
 async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaIds = [], writeTokens = [], extras = {}) {
