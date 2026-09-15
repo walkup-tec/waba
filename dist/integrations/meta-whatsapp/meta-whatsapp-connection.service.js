@@ -109,22 +109,36 @@ function withLocalIdentities(tenantId, assets) {
         numbers: localizeNumbers(assets.numbers || [], assets.portfolio?.name || assets.portfolio?.primaryPageName),
     };
 }
-function omitHiddenPortfolioAssets(tenantId, assets) {
-    const hidden = (0, meta_whatsapp_hidden_business_store_1.listHiddenBusinessIds)(tenantId);
-    if (!hidden.length)
-        return assets;
-    const isHiddenId = (value) => hidden.some((hiddenId) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(value || ""), hiddenId));
-    const visible = (assets.portfolios || []).filter((item) => !isHiddenId(String(item.id || "")));
-    if (visible.length === (assets.portfolios || []).length)
-        return assets;
-    const selectedStillVisible = Boolean(assets.portfolio?.id) && !isHiddenId(String(assets.portfolio?.id || ""));
-    const selected = selectedStillVisible
-        ? visible.find((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), String(assets.portfolio?.id || ""))) ||
-            visible[0]
-        : visible[0];
+function markHiddenPortfolioAssets(tenantId, assets) {
+    const hiddenRows = (0, meta_whatsapp_hidden_business_store_1.listHiddenBusinesses)(tenantId);
+    const isHiddenId = (value) => hiddenRows.some((row) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(value || ""), row.id));
+    const portfolios = (assets.portfolios || []).map((item) => ({
+        ...item,
+        hidden: isHiddenId(String(item.id || "")),
+    }));
+    for (const row of hiddenRows) {
+        if (portfolios.some((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), row.id)))
+            continue;
+        portfolios.push({
+            id: row.id,
+            name: row.name || null,
+            primaryPageId: null,
+            primaryPageName: null,
+            profilePictureUrl: null,
+            wabaId: null,
+            hidden: true,
+            numbers: [],
+        });
+    }
+    const active = portfolios.filter((item) => !item.hidden);
+    const requested = String(assets.selectedConnectionId || assets.portfolio?.id || "");
+    const selected = active.find((item) => item.connectionId === requested) ||
+        active.find((item) => item.id && (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id), requested)) ||
+        active[0] ||
+        null;
     return {
         ...assets,
-        portfolios: visible,
+        portfolios,
         selectedConnectionId: selected?.connectionId || null,
         portfolio: selected
             ? {
@@ -135,16 +149,14 @@ function omitHiddenPortfolioAssets(tenantId, assets) {
                 profilePictureUrl: selected.profilePictureUrl,
                 wabaId: selected.wabaId,
                 connectionId: selected.connectionId,
+                hidden: selected.hidden,
             }
             : null,
         numbers: selected?.numbers || [],
     };
 }
 function localizeAndHidePortfolioAssets(tenantId, assets) {
-    return omitHiddenPortfolioAssets(tenantId, withLocalIdentities(tenantId, assets));
-}
-function visibleManualBusinessIds(tenantId) {
-    return (0, meta_whatsapp_manual_business_store_1.listManualBusinessIds)(tenantId).filter((id) => !(0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, id));
+    return markHiddenPortfolioAssets(tenantId, withLocalIdentities(tenantId, assets));
 }
 function assetsFromPortfolioCards(cards, requested) {
     const selected = cards.find((item) => item.connectionId === requested) ||
@@ -1540,11 +1552,15 @@ class MetaWhatsappConnectionService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload", 400, "Informe o ID numérico do portfólio (Business Manager).");
         }
         (0, meta_whatsapp_hidden_business_store_1.hideBusiness)(tenant.tenantId, businessId);
+        const assets = await this.listPortfolioAssets(auth);
+        const card = (assets.portfolios || []).find((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), businessId));
+        if (card?.name)
+            (0, meta_whatsapp_hidden_business_store_1.hideBusiness)(tenant.tenantId, businessId, card.name);
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-business-hidden", {
             tenantId: tenant.tenantId,
             businessId,
         });
-        return this.listPortfolioAssets(auth);
+        return assets;
     }
     async loadStoredPortfolioAssets(tenantId, requested) {
         const repo = this.repository;
@@ -1559,8 +1575,9 @@ class MetaWhatsappConnectionService {
         if (typeof repo.reopenLeftManagerForBusinesses === "function") {
             try {
                 const restored = await repo.reopenLeftManagerForBusinesses(tenantId, [
-                    ...(0, meta_whatsapp_known_owned_wabas_1.businessIdsToReopenAfterFalseLeftManager)().filter((id) => !(0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, id)),
-                    ...visibleManualBusinessIds(tenantId),
+                    ...(0, meta_whatsapp_known_owned_wabas_1.businessIdsToReopenAfterFalseLeftManager)(),
+                    ...(0, meta_whatsapp_manual_business_store_1.listManualBusinessIds)(tenantId),
+                    ...(0, meta_whatsapp_hidden_business_store_1.listHiddenBusinessIds)(tenantId),
                 ], actorEmail);
                 if (restored) {
                     (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenantId);
@@ -1589,7 +1606,7 @@ class MetaWhatsappConnectionService {
         const selectPage = await collectSelectPageAdminCards({
             graph: withHydrateLimits(this.graph),
             writeTokens,
-            extraBusinessIds: visibleManualBusinessIds(tenantId),
+            extraBusinessIds: [...(0, meta_whatsapp_manual_business_store_1.listManualBusinessIds)(tenantId), ...(0, meta_whatsapp_hidden_business_store_1.listHiddenBusinessIds)(tenantId)],
         });
         const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenantId, row, (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(rows, row), writeTokens, { assignedJson: selectPage.assignedByConnectionId.get(row.id) })));
         const leftIds = hydrated
