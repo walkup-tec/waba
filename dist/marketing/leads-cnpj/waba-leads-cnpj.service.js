@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaLeadsCnpjService = void 0;
+exports.isLeadsCnpjSearchRunning = isLeadsCnpjSearchRunning;
 exports.resolveScrapeHistoryMetrics = resolveScrapeHistoryMetrics;
 exports.saoPauloDayKey = saoPauloDayKey;
 exports.campaignBaseName = campaignBaseName;
@@ -13,8 +14,13 @@ const waba_leads_cnpj_excel_service_1 = require("./waba-leads-cnpj-excel.service
 const waba_leads_cnpj_casadosdados_adapter_1 = require("./waba-leads-cnpj-casadosdados.adapter");
 const waba_leads_cnpj_enrichment_adapter_1 = require("./waba-leads-cnpj-enrichment.adapter");
 const runningJobs = new Set();
-/** Jobs cancelados pelo usuário (Excluir) — interrompe runJob/enrich em andamento. */
+/** Jobs cancelados pelo usuário (Excluir / Parar) — interrompe runJob/enrich em andamento. */
 const cancelledJobs = new Set();
+/** Busca ainda em execução (portal, fila ou ReceitaWS). */
+function isLeadsCnpjSearchRunning(status) {
+    const value = String(status || "").trim();
+    return value === "draft" || value === "scraping" || value === "enriching" || value === "queued";
+}
 /** Timers do pipeline automático (1 arquivo/dia → próximo dia a partir do pool). */
 const continueTimers = new Map();
 /** Timer global da fila de enriquecimento (1 campanha por dia civil SP). */
@@ -657,6 +663,8 @@ class WabaLeadsCnpjService {
         const key = String(campaignKey || "").trim();
         if (!key || this.isCampaignPortalCopyComplete(key))
             return;
+        if (this.repository.getPool(key)?.autoContinuePaused)
+            return;
         const lists = this.repository
             .list()
             .filter((l) => String(l.campaignKey || "").trim() === key && l.source === "portal");
@@ -948,6 +956,65 @@ class WabaLeadsCnpjService {
         cancelledJobs.delete(listId);
         const downloads = this.listSummaries().find((s) => s.id === updated.id)?.campaignDownloads || [];
         return toSummary(updated, downloads);
+    }
+    /**
+     * Para a busca desta pesquisa: fecha Chromium/ReceitaWS, pausa o pipeline
+     * automático e mantém listas/Excels já gerados.
+     */
+    stopCampaignSearch(id) {
+        const listId = String(id || "").trim();
+        const list = this.repository.getById(listId);
+        if (!list)
+            throw new Error("Lista não encontrada.");
+        const campaignKey = String(list.campaignKey || buildCampaignKey(campaignBaseName(list.name), list.source)).trim();
+        const sameCampaign = campaignKey
+            ? this.repository.list().filter((item) => String(item.campaignKey || "").trim() === campaignKey)
+            : [list];
+        const running = sameCampaign.filter((item) => isLeadsCnpjSearchRunning(item.status));
+        if (!running.length) {
+            throw new Error("Não há busca em andamento para parar.");
+        }
+        for (const item of running) {
+            cancelledJobs.add(item.id);
+            forceReleasePortalScrapeSlot(item.id);
+            phoneRefreshJobs.delete(item.id);
+        }
+        this.clearContinueTimer(campaignKey);
+        if (campaignKey) {
+            const existingPool = this.repository.getPool(campaignKey);
+            if (!existingPool) {
+                this.repository.mergePool({
+                    key: campaignKey,
+                    name: campaignBaseName(list.name),
+                    source: list.source,
+                    filters: list.filters,
+                    items: [],
+                    usedCnpjs: this.repository.collectUsedCnpjs(campaignKey),
+                    persist: "flush",
+                });
+            }
+            this.repository.setPoolAutoContinuePaused(campaignKey, true);
+            this.removeCampaignFromEnrichOrder(campaignKey);
+        }
+        const now = new Date().toISOString();
+        let updated = list;
+        for (const item of running) {
+            const next = this.repository.update({
+                ...item,
+                status: "stopped",
+                error: null,
+                progressMessage: `Busca interrompida pelo operador. ${String(item.progressMessage || "Listas já geradas foram mantidas.").slice(0, 140)}`,
+                updatedAt: now,
+            }, { persist: "flush" });
+            if (next.id === list.id)
+                updated = next;
+        }
+        this.armGlobalEnrichQueue();
+        const downloads = this.listSummaries().find((s) => s.id === updated.id)?.campaignDownloads || [];
+        return toSummary(updated, downloads, {
+            poolPending: campaignKey ? this.repository.getPool(campaignKey)?.pending.length || 0 : 0,
+            campaignFinished: false,
+        });
     }
     /**
      * Exclui a extração como se nunca tivesse existido:
@@ -1540,12 +1607,13 @@ class WabaLeadsCnpjService {
         const campaignKey = buildCampaignKey(baseName, source);
         clearCampaignPurged(campaignKey);
         const existingToday = this.repository.findListByCampaignDay(campaignKey, dayKey);
-        if (existingToday && existingToday.status !== "failed") {
+        const reuseToday = existingToday?.status === "failed" || existingToday?.status === "stopped";
+        if (existingToday && !reuseToday) {
             throw new Error(`Já existe lista de hoje (${dayKey}) para “${baseName}” (status: ${existingToday.status}). Amanhã: nova linha + novo arquivo, sem CNPJs repetidos.`);
         }
         const dailyName = `${baseName} · ${dayKey}`;
         const now = new Date().toISOString();
-        const listId = existingToday?.status === "failed" ? existingToday.id : this.repository.newId();
+        const listId = reuseToday && existingToday ? existingToday.id : this.repository.newId();
         const list = {
             id: listId,
             name: dailyName,
@@ -1564,13 +1632,13 @@ class WabaLeadsCnpjService {
             campaignKey,
             skipPortalScrape: Boolean(input.skipPortalScrape),
             // Reprocessar failed: mantém cursor e pool já arquivado.
-            scrapeCheckpoint: existingToday?.status === "failed" ? existingToday.scrapeCheckpoint ?? null : null,
+            scrapeCheckpoint: reuseToday && existingToday ? existingToday.scrapeCheckpoint ?? null : null,
             scrapeReconnectAttempts: 0,
             progressMessage: input.skipPortalScrape
                 ? `Pipeline diário: montando lote ${dayKey} a partir do pool…`
                 : source === "manual"
                     ? "Montando lote do dia (sem duplicados)…"
-                    : existingToday?.status === "failed" && existingToday.scrapeCheckpoint?.nextPage
+                    : reuseToday && existingToday?.scrapeCheckpoint?.nextPage
                         ? `Retomando coleta na página ${existingToday.scrapeCheckpoint.nextPage}…`
                         : "Iniciando coleta do lote diário…",
         };
@@ -1590,7 +1658,7 @@ class WabaLeadsCnpjService {
                 usedCnpjs: used,
             });
         }
-        if (existingToday?.status === "failed") {
+        if (reuseToday) {
             this.repository.update(list);
         }
         else {
