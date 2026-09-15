@@ -69,6 +69,19 @@ const registerWabaLeadsCnpjRoutes = (app) => {
             });
         }
     });
+    app.get("/admin/marketing/leads-cnpj/:id/lista", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const download = service.getCampaignListaDownload(String(req.params.id || ""));
+            return res.download(download.filePath, download.downloadName);
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível gerar a Lista.",
+            });
+        }
+    });
     app.get("/admin/marketing/leads-cnpj/:id/download", (req, res) => {
         if (!rejectNonMaster(req, res))
             return;
