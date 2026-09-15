@@ -552,6 +552,8 @@ export function dedupePortfolioCards(cards: MetaPortfolioPublic[]): MetaPortfoli
     host.primaryPageId = host.primaryPageId || extra.primaryPageId;
     host.profilePictureUrl = host.profilePictureUrl || extra.profilePictureUrl;
     host.wabaId = host.wabaId || extra.wabaId;
+    host.connectionId = host.connectionId || extra.connectionId;
+    host.messagingLimit = host.messagingLimit || extra.messagingLimit;
     host.numbers = unionPortfolioNumbers(host.numbers || [], extra.numbers || []);
   };
 
