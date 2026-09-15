@@ -7,6 +7,7 @@ import {
   buildLeadsCnpjExcelBuffer,
   expandLeadsByMobileForEvo,
   isEvoBrazilMobileDigits,
+  mergeLeadsForCampaignLista,
   sanitizeExportBaseName,
 } from "./waba-leads-cnpj-excel.service";
 import {
@@ -320,7 +321,14 @@ export function resolveScrapeHistoryMetrics(
 function toSummary(
   list: WabaLeadsCnpjList,
   downloads: WabaLeadsCnpjDownloadSummary[] = [],
-  extras?: { poolPending?: number; campaignFinished?: boolean; usedCount?: number },
+  extras?: {
+    poolPending?: number;
+    campaignFinished?: boolean;
+    usedCount?: number;
+    listaLeadCount?: number;
+    listaDownloadedAt?: string | null;
+    listaHasNewRecords?: boolean;
+  },
 ): WabaLeadsCnpjListSummary {
   const listaIndex =
     list.listaIndex != null && Number(list.listaIndex) > 0
@@ -352,8 +360,49 @@ function toSummary(
     pagesDone: scrape.pagesDone,
     pagesTotal: scrape.pagesTotal,
     cnpjCopied: scrape.cnpjCopied,
-    leadsHigienizados: countLeadsHigienizados(list),
+    leadsHigienizados:
+      extras?.listaLeadCount != null ? extras.listaLeadCount : countLeadsHigienizados(list),
+    listaLeadCount: extras?.listaLeadCount ?? 0,
+    listaDownloadedAt: extras?.listaDownloadedAt ?? null,
+    listaHasNewRecords: Boolean(extras?.listaHasNewRecords),
   };
+}
+
+function historyRank(status: string): number {
+  if (isLeadsCnpjSearchRunning(status)) return 3;
+  if (status === "stopped") return 2;
+  if (status === "ready") return 1;
+  return 0;
+}
+
+/** Uma linha de histórico por pesquisa (não um card por lote diário). */
+export function pickCampaignHistoryLists(lists: WabaLeadsCnpjList[]): WabaLeadsCnpjList[] {
+  const groups = new Map<string, WabaLeadsCnpjList[]>();
+  const orphans: WabaLeadsCnpjList[] = [];
+  for (const list of lists) {
+    const key = String(list.campaignKey || "").trim();
+    if (!key) {
+      orphans.push(list);
+      continue;
+    }
+    const arr = groups.get(key) || [];
+    arr.push(list);
+    groups.set(key, arr);
+  }
+  const picked: WabaLeadsCnpjList[] = [];
+  for (const arr of groups.values()) {
+    arr.sort((a, b) => {
+      const byStatus = historyRank(b.status) - historyRank(a.status);
+      if (byStatus) return byStatus;
+      return String(b.updatedAt || b.createdAt || "").localeCompare(
+        String(a.updatedAt || a.createdAt || ""),
+      );
+    });
+    picked.push(arr[0]);
+  }
+  return [...picked, ...orphans].sort((a, b) =>
+    String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+  );
 }
 
 /** Dia civil em America/Sao_Paulo (YYYY-MM-DD). */
@@ -569,30 +618,27 @@ export class WabaLeadsCnpjService {
       arr.sort((a, b) => a.listaIndex - b.listaIndex);
     }
 
-    const items = lists
-      .slice()
-      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
-      .map((list) => {
+    const items = pickCampaignHistoryLists(lists).map((list) => {
         const key = String(list.campaignKey || "").trim();
-        const poolPending = key
-          ? this.repository.getPool(key)?.pending.length || 0
-          : 0;
+        const sameCampaign = key
+          ? lists.filter((item) => String(item.campaignKey || "").trim() === key)
+          : [list];
+        const pool = key ? this.repository.getPool(key) : null;
+        const poolPending = pool?.pending.length || 0;
         const usedCount = key ? this.repository.collectUsedCnpjs(key).size : 0;
-        const busySame = key
-          ? lists.some(
-              (l) =>
-                String(l.campaignKey || "").trim() === key &&
-                (l.status === "enriching" ||
-                  l.status === "queued" ||
-                  l.status === "scraping" ||
-                  l.status === "draft"),
-            )
-          : false;
+        const busySame = sameCampaign.some((item) => isLeadsCnpjSearchRunning(item.status));
         const campaignFinished = Boolean(key) && poolPending === 0 && !busySame;
+        const listaLeads = mergeLeadsForCampaignLista(sameCampaign);
+        const listaLeadCount = listaLeads.length;
+        const listaDownloadedAt = pool?.listaDownloadedAt || null;
+        const exported = Math.max(0, Math.round(Number(pool?.listaExportedCount || 0) || 0));
         return toSummary(list, key ? downloadsByCampaign.get(key) || [] : [], {
           poolPending,
           campaignFinished,
           usedCount,
+          listaLeadCount,
+          listaDownloadedAt,
+          listaHasNewRecords: listaLeadCount > exported,
         });
       });
 
@@ -633,6 +679,60 @@ export class WabaLeadsCnpjService {
 
   getById(id: string): WabaLeadsCnpjList | null {
     return this.repository.getById(id);
+  }
+
+  /**
+   * Excel único da pesquisa: todos os registros higienizados acumulados até agora.
+   * Cada clique regenera o arquivo com o saldo atual.
+   */
+  getCampaignListaDownload(id: string): {
+    filePath: string;
+    fileName: string;
+    downloadName: string;
+    leadCount: number;
+  } {
+    const listId = String(id || "").trim();
+    const list = this.repository.getById(listId);
+    if (!list) throw new Error("Lista não encontrada.");
+    const campaignKey = String(
+      list.campaignKey || buildCampaignKey(campaignBaseName(list.name), list.source),
+    ).trim();
+    const sameCampaign = campaignKey
+      ? this.repository.list().filter((item) => String(item.campaignKey || "").trim() === campaignKey)
+      : [list];
+    const leads = mergeLeadsForCampaignLista(sameCampaign);
+    if (!leads.length) {
+      throw new Error("Ainda não há registros higienizados para gerar a Lista.");
+    }
+    const baseName = campaignBaseName(list.name);
+    const exportFileName = this.repository.saveExportFile(
+      list.id,
+      buildLeadsCnpjExcelBuffer(leads),
+      sanitizeExportBaseName(`${baseName}-Lista`),
+      "acumulada",
+    );
+    if (campaignKey) {
+      if (!this.repository.getPool(campaignKey)) {
+        this.repository.mergePool({
+          key: campaignKey,
+          name: baseName,
+          source: list.source,
+          filters: list.filters,
+          items: [],
+          usedCnpjs: this.repository.collectUsedCnpjs(campaignKey),
+          persist: "flush",
+        });
+      }
+      this.repository.markPoolListaExport(campaignKey, leads.length);
+    }
+    const filePath = this.repository.resolveExportPath(exportFileName);
+    if (!filePath) throw new Error("Não foi possível gravar o Excel da Lista.");
+    return {
+      filePath,
+      fileName: exportFileName,
+      downloadName: `${sanitizeExportBaseName(baseName)}-Lista.xlsx`,
+      leadCount: leads.length,
+    };
   }
 
   getDownload(id: string): { filePath: string; fileName: string; downloadName: string } | null {
