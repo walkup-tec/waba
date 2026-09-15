@@ -143,9 +143,20 @@ class MetaWhatsappTemplateService {
     }
     async requireConnectedWaba(tenantId, connectionId) {
         const requested = String(connectionId || "").trim();
-        const row = requested
+        let row = requested
             ? await this.connections.findByIdForTenant(tenantId, requested)
             : await this.connections.findConnectedByTenant(tenantId);
+        if (!row && requested) {
+            const open = await this.listOpenConnections(tenantId);
+            row =
+                open.find((item) => String(item.id || "").trim() === requested) ||
+                    open.find((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.metaBusinessId || ""), requested)) ||
+                    null;
+            const repo = this.connections;
+            if (!row && typeof repo.findByBusinessId === "function") {
+                row = await repo.findByBusinessId(tenantId, requested);
+            }
+        }
         if (!row ||
             (row.status !== "connected" && row.status !== "pending_confirmation") ||
             !row.wabaId) {
