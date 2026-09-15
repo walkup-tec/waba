@@ -14,6 +14,8 @@ export type MetaPortfolioPublic = {
   connectionId?: string | null;
   /** Limite diário de envios do portfólio (tier Meta, ex. TIER_2K, ou número). */
   messagingLimit?: string | null;
+  /** Clicou em Ocultar — vai para a página Restritas. */
+  hidden?: boolean;
   numbers?: MetaPortfolioNumberPublic[];
 };
 
