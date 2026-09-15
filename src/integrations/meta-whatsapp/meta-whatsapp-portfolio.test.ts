@@ -2639,6 +2639,55 @@ describe("meta portfolio service", () => {
     assert.ok(clientsAt < 0 || flavianeAt < clientsAt);
   });
 
+  it("Adicionar BM consulta o ID na Graph e lista o card", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1888000111222333") {
+        return { ok: true, status: 200, json: { id: "1888000111222333", name: "Drax Waba" } };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    await assert.rejects(
+      () => service.addManualPortfolioBusiness(auth, "12"),
+      /ID numérico do portfólio/,
+    );
+    const assets = await service.addManualPortfolioBusiness(auth, "1888.000.111.222.333");
+    const added = (assets.portfolios || []).find((item) => item.id === "1888000111222333");
+    assert.equal(added?.name, "Drax Waba");
+  });
+
   it("lista BM criado no administrador via /owned_businesses da agência", async () => {
     const drax = {
       ...connectedRow(),
