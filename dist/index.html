@@ -3393,9 +3393,35 @@
           justify-content: space-between;
           gap: 12px;
           margin: 0 0 14px;
+          flex-wrap: wrap;
         }
         .meta-portfolio-heading .meta-lab-card-title {
           margin: 0;
+        }
+        .meta-portfolio-heading-actions {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+        .meta-portfolio-add-bm {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .meta-portfolio-add-bm input {
+          width: min(188px, 42vw);
+          min-height: 34px;
+          border-radius: 8px;
+          border: 1px solid rgba(148, 163, 184, 0.35);
+          background: rgba(15, 23, 42, 0.55);
+          color: #e2e8f0;
+          padding: 6px 10px;
+          font-size: 12px;
+        }
+        .meta-portfolio-add-bm input::placeholder {
+          color: rgba(226, 232, 240, 0.45);
         }
         .meta-portfolio-heading .instance-action-btn {
           min-height: 34px;
@@ -22545,14 +22571,31 @@
                 <article id="meta-tp-portfolio" class="meta-lab-card meta-portfolio" hidden>
                   <div class="meta-portfolio-heading">
                     <h3 class="meta-lab-card-title">Portfólios</h3>
-                    <button
-                      type="button"
-                      class="instance-action-btn btn-refresh enabled"
-                      id="meta-tp-portfolio-refresh"
-                      onclick="return window.wabaRefreshMetaPortfolios(event);"
-                    >
-                      Atualizar
-                    </button>
+                    <div class="meta-portfolio-heading-actions">
+                      <form id="meta-tp-add-bm-form" class="meta-portfolio-add-bm" action="#" onsubmit="return window.wabaAddMetaPortfolioById(event);">
+                        <label class="visually-hidden" for="meta-tp-add-bm-id">ID do portfólio</label>
+                        <input
+                          id="meta-tp-add-bm-id"
+                          name="businessId"
+                          type="text"
+                          inputmode="numeric"
+                          autocomplete="off"
+                          spellcheck="false"
+                          placeholder="ID do portfólio"
+                        />
+                        <button type="submit" class="instance-action-btn btn-qrcode enabled" id="meta-tp-add-bm-btn">
+                          Adicionar BM
+                        </button>
+                      </form>
+                      <button
+                        type="button"
+                        class="instance-action-btn btn-refresh enabled"
+                        id="meta-tp-portfolio-refresh"
+                        onclick="return window.wabaRefreshMetaPortfolios(event);"
+                      >
+                        Atualizar
+                      </button>
+                    </div>
                   </div>
                   <p id="meta-tp-photo-status" class="muted" role="status" aria-live="polite" hidden></p>
                   <div id="meta-tp-portfolio-list" class="meta-portfolio-shell"></div>
@@ -38782,6 +38825,56 @@
         } catch {
           metaTpSetStatus("Falha de rede ao ler o status.");
           metaTpFinishConnectProgress({ ok: false, message: "Falha de rede ao ler o status." });
+        }
+        return false;
+      };
+
+      window.wabaAddMetaPortfolioById = async function wabaAddMetaPortfolioById(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        const input = document.getElementById("meta-tp-add-bm-id");
+        const btn = document.getElementById("meta-tp-add-bm-btn");
+        const businessId = String(input?.value || "").replace(/\D/g, "");
+        if (businessId.length < 6) {
+          metaTpSetStatus("Informe o ID numérico do portfólio.");
+          input?.focus();
+          return false;
+        }
+        if (btn) {
+          btn.textContent = "Adicionando…";
+          btn.setAttribute("disabled", "true");
+        }
+        if (input) input.setAttribute("disabled", "true");
+        try {
+          const { response, payload } = await metaTpFetchJson(
+            "/integrations/meta/whatsapp/portfolio/add-business",
+            {
+              method: "POST",
+              body: JSON.stringify({ businessId }),
+            }
+          );
+          if (!response.ok || payload.ok === false) {
+            metaTpSetStatus(String(payload.error || "Não foi possível adicionar esse Business Manager."));
+            return false;
+          }
+          metaTpPortfolioFingerprint = metaTpAssetsFingerprint(payload);
+          metaTpRenderPortfolio(payload);
+          if (input) input.value = "";
+          const added = (payload.portfolios || []).find(function (item) {
+            return String(item?.id || "").replace(/\D/g, "") === businessId;
+          });
+          metaTpSetStatus(
+            added?.name
+              ? 'Portfólio "' + added.name + '" adicionado.'
+              : "Portfólio adicionado."
+          );
+        } catch {
+          metaTpSetStatus("Falha de rede ao adicionar o Business Manager.");
+        } finally {
+          if (btn) {
+            btn.textContent = "Adicionar BM";
+            btn.removeAttribute("disabled");
+          }
+          if (input) input.removeAttribute("disabled");
         }
         return false;
       };
