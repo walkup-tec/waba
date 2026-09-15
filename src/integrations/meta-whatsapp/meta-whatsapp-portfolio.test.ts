@@ -2493,6 +2493,69 @@ describe("meta portfolio service", () => {
     assert.equal(flaviane?.name, "60.845.972 Flaviane Ferreira Trindade");
   });
 
+  it("busca o BM da Natally com o token já conectado quando me/businesses omite", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1832926164812406") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "1832926164812406", name: "52.797.696 Natally Carissia Muniz Bezerra" },
+        };
+      }
+      if (input.path === "962298516898955") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "962298516898955", name: "60.845.972 Flaviane Ferreira Trindade" },
+        };
+      }
+      if (input.path === "4681844838758316") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const natally = (assets.portfolios || []).find((item) => item.id === "1832926164812406");
+    assert.equal(natally?.name, "52.797.696 Natally Carissia Muniz Bezerra");
+  });
+
   it("consulta Flaviane no GET do catálogo antes de varrer /clients", async () => {
     const walkup = {
       ...connectedRow(),
