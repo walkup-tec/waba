@@ -190,14 +190,8 @@ export function resolveMetaPhoneUiStatus(input: {
   return "pendente";
 }
 
-export function isRestrictedPortfolioCard(card: {
-  name?: string | null;
-  primaryPageName?: string | null;
-  numbers?: Array<{ uiStatus?: string | null } | null> | null;
-}): boolean {
-  const name = String(card?.name || card?.primaryPageName || "").trim();
-  if (/^BAN(?:\s|[A-Z0-9_])/i.test(name) || /^BAN\b/i.test(name)) return true;
-  return (card?.numbers || []).some((row) => String(row?.uiStatus || "") === "restrito");
+export function isRestrictedPortfolioCard(card: { hidden?: boolean | null }): boolean {
+  return card?.hidden === true;
 }
 
 export function canActivateMetaPhoneNumber(
