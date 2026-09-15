@@ -300,6 +300,71 @@ describe("meta portfolio mapper", () => {
     ]);
   });
 
+  it("lista BM sem página quando o user_id do debug_token devolve business_users", async () => {
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me") {
+        return { ok: true, status: 200, json: { id: "1636793994538054" } };
+      }
+      if (input.path === "me/businesses" || input.path === "1636793994538054/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "1041827648719609", name: "Drax Sistemas" }] },
+        };
+      }
+      if (input.path === "fb-user-mozart/business_users") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "bu-natally",
+                business: { id: "527976960000111", name: "52.797.696 Natally Caricia Muniz Bezerra" },
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const json = await fetchAssignedBusinesses(graph as any, "token", {
+      facebookUserIds: ["fb-user-mozart"],
+    });
+    const natally = directoryFromAssigned(json).find((item) =>
+      String(item.name || "").includes("Natally"),
+    );
+    assert.equal(natally?.id, "527976960000111");
+    assert.equal(natally?.name, "52.797.696 Natally Caricia Muniz Bezerra");
+    assert.equal(natally?.primaryPageId, null);
+  });
+
+  it("completa o nome do BM sem página com GET id,name", async () => {
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me") {
+        return { ok: true, status: 200, json: { id: "fb-user-mozart" } };
+      }
+      if (input.path === "me/business_users") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "bu-n", business: { id: "527976960000111" } }] },
+        };
+      }
+      if (input.path === "527976960000111") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "527976960000111", name: "52.797.696 Natally Caricia Muniz Bezerra" },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const json = await fetchAssignedBusinesses(graph as any, "token");
+    const natally = directoryFromAssigned(json).find((item) => item.id === "527976960000111");
+    assert.equal(natally?.name, "52.797.696 Natally Caricia Muniz Bezerra");
+  });
+
   it("descobre BM em /clients, /owned_businesses e dono da WABA client", async () => {
     const graph = async (input: { path: string }) => {
       if (input.path === "4141369862822598/clients") {
@@ -2613,6 +2678,106 @@ describe("meta portfolio service", () => {
     assert.ok(names.includes("Grupo Walkup"));
     assert.ok(names.includes("52.797.696 Natally Caricia Muniz Bezerra"));
     assert.ok(names.includes("60.845.972 Flaviane Ferreira Trindade"));
+  });
+
+  it("Conexão: user_id do debug_token lista Natally mesmo com me apontando para a WABA", async () => {
+    const previousAppId = process.env.META_APP_ID;
+    const previousAppSecret = process.env.META_APP_SECRET;
+    process.env.META_APP_ID = "app-test-natally";
+    process.env.META_APP_SECRET = "secret-test-natally";
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    try {
+      const graph = async (input: { path: string }) => {
+        if (input.path === "debug_token") {
+          return {
+            ok: true,
+            status: 200,
+            json: { data: { user_id: "fb-user-mozart", granular_scopes: [] } },
+          };
+        }
+        if (input.path === "me") {
+          return { ok: true, status: 200, json: { id: "1014470201624992" } };
+        }
+        if (input.path === "me/businesses" || input.path === "1014470201624992/businesses") {
+          return {
+            ok: true,
+            status: 200,
+            json: { data: [{ id: "4141369862822598", name: "Grupo Walkup" }] },
+          };
+        }
+        if (input.path === "fb-user-mozart/business_users") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              data: [
+                {
+                  id: "bu-n",
+                  business: { id: "527976960000111", name: "52.797.696 Natally Caricia Muniz Bezerra" },
+                },
+              ],
+            },
+          };
+        }
+        if (input.path === "1014470201624992") {
+          return {
+            ok: true,
+            status: 200,
+            json: {
+              id: "1014470201624992",
+              name: "WABA 01",
+              owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+            },
+          };
+        }
+        if (input.path === "4141369862822598") {
+          return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+        }
+        if (input.path === "4681844838758316") {
+          return {
+            ok: true,
+            status: 200,
+            json: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
+          };
+        }
+        if (input.path === "962298516898955") {
+          return {
+            ok: true,
+            status: 200,
+            json: { id: "962298516898955", name: "60.845.972 Flaviane Ferreira Trindade" },
+          };
+        }
+        return { ok: true, status: 200, json: { data: [] } };
+      };
+      const service = new MetaWhatsappConnectionService(
+        {
+          async listOpenByTenant() {
+            return [walkup];
+          },
+          async findOpenByTenant() {
+            return walkup;
+          },
+        } as any,
+        { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+        graph as any,
+      );
+      const assets = await service.listPortfolioAssets(auth);
+      const natally = (assets.portfolios || []).find((item) =>
+        String(item.name || "").includes("Natally"),
+      );
+      assert.equal(natally?.name, "52.797.696 Natally Caricia Muniz Bezerra");
+    } finally {
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+      if (previousAppSecret === undefined) delete process.env.META_APP_SECRET;
+      else process.env.META_APP_SECRET = previousAppSecret;
+    }
   });
 
   it("mantém o card quando a Graph recusa com 403 genérico, sem texto de objeto inexistente", async () => {
