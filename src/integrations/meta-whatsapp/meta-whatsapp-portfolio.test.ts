@@ -442,6 +442,31 @@ describe("meta portfolio mapper", () => {
     );
   });
 
+  it("na lista rápida da Conexão varre /owned_businesses da agência sem ads/pages", async () => {
+    const paths: string[] = [];
+    const graph = async (input: { path: string }) => {
+      paths.push(input.path);
+      if (input.path === "1041827648719609/owned_businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "1999000111222333", name: "Drax Waba" }] },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const nodes = await discoverAdministeredBusinessNodes(graph as any, "token", ["1041827648719609"], {
+      onlyOwned: true,
+    });
+    assert.equal(String((nodes[0] as { id?: string } | undefined)?.id || ""), "1999000111222333");
+    assert.equal(String((nodes[0] as { name?: string } | undefined)?.name || ""), "Drax Waba");
+    assert.equal(
+      paths.some((path) => path.endsWith("/clients") || path === "me/adaccounts" || path === "me/accounts"),
+      false,
+    );
+    assert.ok(paths.some((path) => path.endsWith("/owned_businesses")));
+  });
+
   it("não mostra o WABA como card de portfólio quando já existe o Business", () => {
     const cards = dedupePortfolioCards([
       {
@@ -2612,6 +2637,55 @@ describe("meta portfolio service", () => {
     const clientsAt = paths.findIndex((path) => path.endsWith("/clients"));
     assert.ok(flavianeAt >= 0);
     assert.ok(clientsAt < 0 || flavianeAt < clientsAt);
+  });
+
+  it("lista BM criado no administrador via /owned_businesses da agência", async () => {
+    const drax = {
+      ...connectedRow(),
+      id: "conn-drax",
+      metaBusinessId: "1041827648719609",
+      wabaId: "1636793994538054",
+      accessTokenEncrypted: encryptMetaToken("token-drax"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1041827648719609/owned_businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "1999000111222333", name: "Drax Waba" }] },
+        };
+      }
+      if (input.path === "1636793994538054") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1636793994538054",
+            name: "WABA 01",
+            owner_business_info: { id: "1041827648719609", name: "Drax Sistemas" },
+          },
+        };
+      }
+      if (input.path === "1041827648719609") {
+        return { ok: true, status: 200, json: { id: "1041827648719609", name: "Drax Sistemas" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [drax];
+        },
+        async findOpenByTenant() {
+          return drax;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const created = (assets.portfolios || []).find((item) => item.id === "1999000111222333");
+    assert.equal(created?.name, "Drax Waba");
   });
 
   it("lista BM de cliente devolvido em /clients da agência mesmo omitido em me/businesses", async () => {
