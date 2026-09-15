@@ -75,6 +75,12 @@ import {
   listManualBusinessIds,
   normalizeManualBusinessId,
 } from "./meta-whatsapp-manual-business.store";
+import {
+  hideBusiness,
+  isHiddenBusiness,
+  listHiddenBusinessIds,
+  unhideBusiness,
+} from "./meta-whatsapp-hidden-business.store";
 import { publicMetaGraphRegisterMessage } from "./meta-whatsapp-graph-errors";
 import { isMetaGraphUploadCooldown } from "./meta-whatsapp-graph-cooldown";
 import {
@@ -224,6 +230,51 @@ function withLocalIdentities(
       assets.portfolio?.name || assets.portfolio?.primaryPageName,
     ),
   };
+}
+
+function omitHiddenPortfolioAssets(
+  tenantId: string,
+  assets: MetaPortfolioAssetsPublic,
+): MetaPortfolioAssetsPublic {
+  const hidden = listHiddenBusinessIds(tenantId);
+  if (!hidden.length) return assets;
+  const isHiddenId = (value: string) =>
+    hidden.some((hiddenId) => metaBusinessIdsMatch(String(value || ""), hiddenId));
+  const visible = (assets.portfolios || []).filter((item) => !isHiddenId(String(item.id || "")));
+  if (visible.length === (assets.portfolios || []).length) return assets;
+  const selectedStillVisible = Boolean(assets.portfolio?.id) && !isHiddenId(String(assets.portfolio?.id || ""));
+  const selected = selectedStillVisible
+    ? visible.find((item) => metaBusinessIdsMatch(String(item.id || ""), String(assets.portfolio?.id || ""))) ||
+      visible[0]
+    : visible[0];
+  return {
+    ...assets,
+    portfolios: visible,
+    selectedConnectionId: selected?.connectionId || null,
+    portfolio: selected
+      ? {
+          id: selected.id,
+          name: selected.name,
+          primaryPageId: selected.primaryPageId,
+          primaryPageName: selected.primaryPageName,
+          profilePictureUrl: selected.profilePictureUrl,
+          wabaId: selected.wabaId,
+          connectionId: selected.connectionId,
+        }
+      : null,
+    numbers: selected?.numbers || [],
+  };
+}
+
+function localizeAndHidePortfolioAssets(
+  tenantId: string,
+  assets: MetaPortfolioAssetsPublic,
+): MetaPortfolioAssetsPublic {
+  return omitHiddenPortfolioAssets(tenantId, withLocalIdentities(tenantId, assets));
+}
+
+function visibleManualBusinessIds(tenantId: string): string[] {
+  return listManualBusinessIds(tenantId).filter((id) => !isHiddenBusiness(tenantId, id));
 }
 
 function assetsFromPortfolioCards(
@@ -1703,20 +1754,26 @@ export class MetaWhatsappConnectionService {
     if (isMetaGraphUploadCooldown()) {
       const stale = readStaleCachedPortfolioGraph(tenant.tenantId);
       if (stale?.portfolios?.length) {
-        return withLocalIdentities(tenant.tenantId, assetsFromPortfolioCards(stale.portfolios, requested));
+        return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(stale.portfolios, requested));
       }
-      return withLocalIdentities(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
+      return localizeAndHidePortfolioAssets(
+        tenant.tenantId,
+        await this.loadStoredPortfolioAssets(tenant.tenantId, requested),
+      );
     }
     const useCache = shouldUsePortfolioGraphCache() && !opts?.fresh;
     if (useCache) {
       const cached = readCachedPortfolioGraph(tenant.tenantId);
       if (cached?.portfolios?.length) {
-        return withLocalIdentities(tenant.tenantId, assetsFromPortfolioCards(cached.portfolios, requested));
+        return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(cached.portfolios, requested));
       }
       const pending = readPortfolioGraphInflight(tenant.tenantId);
       if (pending) {
         const raw = await pending;
-        return withLocalIdentities(tenant.tenantId, assetsFromPortfolioCards(raw.portfolios || [], requested));
+        return localizeAndHidePortfolioAssets(
+          tenant.tenantId,
+          assetsFromPortfolioCards(raw.portfolios || [], requested),
+        );
       }
     }
     const work = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail);
@@ -1724,7 +1781,7 @@ export class MetaWhatsappConnectionService {
     try {
       const raw = await work;
       if (shouldUsePortfolioGraphCache()) writeCachedPortfolioGraph(tenant.tenantId, raw);
-      return withLocalIdentities(tenant.tenantId, raw);
+      return localizeAndHidePortfolioAssets(tenant.tenantId, raw);
     } finally {
       clearPortfolioGraphInflight(tenant.tenantId);
     }
@@ -1772,6 +1829,7 @@ export class MetaWhatsappConnectionService {
         "A Meta não devolveu esse Business Manager com a conexão atual. Confira o ID e se sua conta administra esse BM.",
       );
     }
+    unhideBusiness(tenant.tenantId, card.id);
     addManualBusiness(tenant.tenantId, card.id, card.name);
     invalidateCachedPortfolioGraph(tenant.tenantId);
     logMetaWhatsappSafe("portfolio-manual-business-added", {
@@ -1779,6 +1837,31 @@ export class MetaWhatsappConnectionService {
       businessId: card.id,
     });
     return this.listPortfolioAssets(auth, { fresh: true });
+  }
+
+  /**
+   * Esconde o BM da lista do laboratório. O Atualizar não devolve o card.
+   * Adicionar BM com o mesmo ID reexibe.
+   */
+  async hidePortfolioBusiness(
+    auth: WabaRequestAuth,
+    rawBusinessId: string,
+  ): Promise<MetaPortfolioAssetsPublic> {
+    const tenant = requireTenant(auth);
+    const businessId = normalizeManualBusinessId(rawBusinessId);
+    if (businessId.length < 6) {
+      throw new MetaWhatsappError(
+        "invalid_payload",
+        400,
+        "Informe o ID numérico do portfólio (Business Manager).",
+      );
+    }
+    hideBusiness(tenant.tenantId, businessId);
+    logMetaWhatsappSafe("portfolio-business-hidden", {
+      tenantId: tenant.tenantId,
+      businessId,
+    });
+    return this.listPortfolioAssets(auth);
   }
 
   private async loadStoredPortfolioAssets(
@@ -1808,7 +1891,10 @@ export class MetaWhatsappConnectionService {
       try {
         const restored = await repo.reopenLeftManagerForBusinesses(
           tenantId,
-          [...businessIdsToReopenAfterFalseLeftManager(), ...listManualBusinessIds(tenantId)],
+          [
+            ...businessIdsToReopenAfterFalseLeftManager().filter((id) => !isHiddenBusiness(tenantId, id)),
+            ...visibleManualBusinessIds(tenantId),
+          ],
           actorEmail,
         );
         if (restored) {
@@ -1841,7 +1927,7 @@ export class MetaWhatsappConnectionService {
     const selectPage = await collectSelectPageAdminCards({
       graph: withHydrateLimits(this.graph),
       writeTokens,
-      extraBusinessIds: listManualBusinessIds(tenantId),
+      extraBusinessIds: visibleManualBusinessIds(tenantId),
     });
     const hydrated = await Promise.all(
       rows.map((row) =>
