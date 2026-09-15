@@ -187,10 +187,7 @@ function resolveMetaPhoneUiStatus(input) {
     return "pendente";
 }
 function isRestrictedPortfolioCard(card) {
-    const name = String(card?.name || card?.primaryPageName || "").trim();
-    if (/^BAN(?:\s|[A-Z0-9_])/i.test(name) || /^BAN\b/i.test(name))
-        return true;
-    return (card?.numbers || []).some((row) => String(row?.uiStatus || "") === "restrito");
+    return card?.hidden === true;
 }
 function canActivateMetaPhoneNumber(uiStatus, nameNeedsRegister) {
     if (uiStatus === "restrito")
