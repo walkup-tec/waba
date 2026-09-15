@@ -9,6 +9,7 @@ exports.safePublicPhotoUrl = safePublicPhotoUrl;
 exports.isMetaPhoneConnected = isMetaPhoneConnected;
 exports.parseMetaHealthCanSend = parseMetaHealthCanSend;
 exports.resolveMetaPhoneUiStatus = resolveMetaPhoneUiStatus;
+exports.isRestrictedPortfolioCard = isRestrictedPortfolioCard;
 exports.canActivateMetaPhoneNumber = canActivateMetaPhoneNumber;
 exports.namesEqual = namesEqual;
 exports.mapPhoneNameFields = mapPhoneNameFields;
@@ -184,6 +185,12 @@ function resolveMetaPhoneUiStatus(input) {
     if (META_PHONE_CONNECTED_STATUSES.has(status))
         return "ativo";
     return "pendente";
+}
+function isRestrictedPortfolioCard(card) {
+    const name = String(card?.name || card?.primaryPageName || "").trim();
+    if (/^BAN(?:\s|[A-Z0-9_])/i.test(name) || /^BAN\b/i.test(name))
+        return true;
+    return (card?.numbers || []).some((row) => String(row?.uiStatus || "") === "restrito");
 }
 function canActivateMetaPhoneNumber(uiStatus, nameNeedsRegister) {
     if (uiStatus === "restrito")
