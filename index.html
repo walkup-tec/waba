@@ -39511,17 +39511,24 @@
       function metaTplLabPortfolioOptions() {
         return (metaTpSession.portfolios || [])
           .filter(function (portfolio) {
-            return !portfolio || portfolio.hidden !== true;
+            return Boolean(portfolio) && portfolio.hidden !== true;
           })
           .map(function (portfolio) {
+            const connectionId = String((portfolio && portfolio.connectionId) || "").trim();
+            const businessId = String((portfolio && portfolio.id) || "").replace(/\D/g, "");
+            const wabaFromNumbers = ((portfolio && portfolio.numbers) || [])
+              .map(function (row) {
+                return String((row && row.wabaId) || "").trim();
+              })
+              .find(Boolean);
             return {
-              connectionId: String((portfolio && portfolio.connectionId) || "").trim(),
+              connectionId: connectionId || businessId,
               label: metaTpPortfolioTitle(portfolio || {}),
-              wabaId: String((portfolio && portfolio.wabaId) || "").trim(),
+              wabaId: String((portfolio && portfolio.wabaId) || "").trim() || wabaFromNumbers || "",
             };
           })
           .filter(function (item) {
-            return item.connectionId && item.wabaId;
+            return Boolean(item.connectionId);
           });
       }
 
@@ -39574,10 +39581,16 @@
       function metaTplLabPortfolioByConnectionId(connectionId) {
         const id = String(connectionId || "").trim();
         if (!id) return null;
+        const digits = id.replace(/\D/g, "");
         return (
           (metaTpSession.portfolios || []).find(function (item) {
             return String((item && item.connectionId) || "") === id;
-          }) || null
+          }) ||
+          (metaTpSession.portfolios || []).find(function (item) {
+            const biz = String((item && item.id) || "").replace(/\D/g, "");
+            return Boolean(digits) && (biz === digits || String((item && item.id) || "") === id);
+          }) ||
+          null
         );
       }
 
