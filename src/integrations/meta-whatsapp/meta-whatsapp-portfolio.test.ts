@@ -495,7 +495,37 @@ describe("meta portfolio mapper", () => {
     assert.equal(cards.length, 1);
     assert.equal(cards[0]?.id, "1041827648719609");
     assert.equal(cards[0]?.name, "Drax Sistemas");
+    assert.equal(cards[0]?.connectionId, "conn-drax");
     assert.equal((cards[0]?.numbers || []).length, 1);
+  });
+
+  it("ao unir card da Graph com a conexão, preserva connectionId e WABA", () => {
+    const cards = dedupePortfolioCards([
+      {
+        id: "1247508354180311",
+        name: "Grupo Walkup App",
+        primaryPageId: null,
+        primaryPageName: null,
+        profilePictureUrl: null,
+        wabaId: "1636793994538054",
+        connectionId: null,
+        numbers: [],
+      },
+      {
+        id: "1247508354180311",
+        name: null,
+        primaryPageId: null,
+        primaryPageName: null,
+        profilePictureUrl: null,
+        wabaId: "1636793994538054",
+        connectionId: "conn-walkup-app",
+        numbers: [],
+      },
+    ]);
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0]?.connectionId, "conn-walkup-app");
+    assert.equal(cards[0]?.wabaId, "1636793994538054");
+    assert.equal(cards[0]?.name, "Grupo Walkup App");
   });
 
   it("não trata pending_token vazio como card de portfólio", () => {
