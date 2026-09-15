@@ -358,7 +358,15 @@ const GRAPH_COLLECTION_PAGE_LIMIT = 20;
 
 function pagingAfter(json: unknown): string {
   const paging = asRecord(asRecord(json).paging);
-  return text(asRecord(paging.cursors).after) || "";
+  const cursor = text(asRecord(paging.cursors).after);
+  if (cursor) return cursor;
+  const next = text(paging.next);
+  if (!next) return "";
+  try {
+    return new URL(next).searchParams.get("after") || "";
+  } catch {
+    return "";
+  }
 }
 
 function businessNodeId(row: unknown): string {
@@ -389,27 +397,87 @@ async function paginateGraphCollection(
     const batch = listMetaBusinessNodes(res.json);
     for (const row of batch) rows.push(row);
     const nextAfter = pagingAfter(res.json);
-    if (!nextAfter || nextAfter === after || seen.has(nextAfter) || !batch.length) break;
+    if (!nextAfter || nextAfter === after || seen.has(nextAfter)) break;
     seen.add(nextAfter);
     after = nextAfter;
   }
   return { ok: firstOk, rows };
 }
 
+async function fetchGraphUserId(graph: PortfolioGraphCaller, token: string): Promise<string> {
+  const me = await graph({
+    token,
+    method: "GET",
+    path: "me",
+    query: { fields: "id" },
+  });
+  if (!me.ok) return "";
+  return text(asRecord(me.json).id) || "";
+}
+
+async function fetchBusinessesEdge(
+  graph: PortfolioGraphCaller,
+  token: string,
+  path: string,
+): Promise<unknown[]> {
+  const rich = await paginateGraphCollection(graph, token, path, {
+    fields: ASSIGNED_BUSINESS_FIELDS,
+    limit: "50",
+  });
+  if (rich.ok) return rich.rows;
+  const basic = await paginateGraphCollection(graph, token, path, {
+    fields: ASSIGNED_BUSINESS_FIELDS_BASIC,
+    limit: "50",
+  });
+  return basic.ok ? basic.rows : [];
+}
+
+const USER_BUSINESS_MEMBER_FIELDS =
+  "id,role,business{id,name,profile_picture_uri,primary_page{id,name,picture}}";
+
+/**
+ * Mesma lista da tela business.facebook.com/select:
+ * GET /{user-id}/businesses e GET /{user-id}/business_users (cada item traz o BM).
+ * @see https://developers.facebook.com/docs/graph-api/reference/user/businesses/
+ */
 export async function fetchAssignedBusinesses(
   graph: PortfolioGraphCaller,
   token: string,
 ): Promise<unknown> {
-  const rich = await paginateGraphCollection(graph, token, "me/businesses", {
-    fields: ASSIGNED_BUSINESS_FIELDS,
-    limit: "50",
-  });
-  if (rich.ok) return { data: rich.rows };
-  const basic = await paginateGraphCollection(graph, token, "me/businesses", {
-    fields: ASSIGNED_BUSINESS_FIELDS_BASIC,
-    limit: "50",
-  });
-  return basic.ok ? { data: basic.rows } : null;
+  const rows: unknown[] = [];
+  const seen = new Set<string>();
+  const add = (row: unknown) => {
+    const rec = asRecord(row);
+    const id = text(rec.id);
+    if (!id || seen.has(id)) return;
+    if (!text(rec.name) && !text(asRecord(rec.primary_page).name) && !text(asRecord(rec.primary_page).id)) {
+      return;
+    }
+    seen.add(id);
+    rows.push(row);
+  };
+
+  const userId = await fetchGraphUserId(graph, token);
+  const businessPaths = ["me/businesses"];
+  if (userId) businessPaths.push(`${userId}/businesses`);
+  for (const path of [...new Set(businessPaths)]) {
+    for (const row of await fetchBusinessesEdge(graph, token, path)) add(row);
+  }
+
+  const memberPaths = ["me/business_users"];
+  if (userId) memberPaths.push(`${userId}/business_users`);
+  for (const path of [...new Set(memberPaths)]) {
+    const members = await paginateGraphCollection(graph, token, path, {
+      fields: USER_BUSINESS_MEMBER_FIELDS,
+      limit: "100",
+    });
+    for (const row of members.rows) {
+      const biz = asRecord(row).business;
+      if (biz) add(biz);
+    }
+  }
+
+  return rows.length ? { data: rows } : { data: [] };
 }
 
 function takeBusinessNode(row: unknown): unknown | null {
