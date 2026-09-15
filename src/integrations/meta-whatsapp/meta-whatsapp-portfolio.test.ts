@@ -31,6 +31,7 @@ import { parseDisplayName, parseProfilePhoto, parseProfilePhotoFromBytes, parseV
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity, writePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 import { applyLocalPhoneIdentities, listPhoneInboxChannels, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
+import { unhideBusiness } from "./meta-whatsapp-hidden-business.store";
 
 describe("meta portfolio mapper", () => {
   it("mapeia card do portfólio sem vazar token", () => {
@@ -2686,6 +2687,67 @@ describe("meta portfolio service", () => {
     const assets = await service.addManualPortfolioBusiness(auth, "1888.000.111.222.333");
     const added = (assets.portfolios || []).find((item) => item.id === "1888000111222333");
     assert.equal(added?.name, "Drax Waba");
+  });
+
+  it("Ocultar BM tira o card da lista e o Atualizar não devolve", async () => {
+    const hideAuth: WabaRequestAuth = { email: "hide-bm@exemplo.com", role: "subscriber" };
+    const hideTenant = deriveStableMetaTenantId("hide-bm@exemplo.com");
+    unhideBusiness(hideTenant, "1041827648719609");
+    const banned = {
+      ...connectedRow(),
+      id: "conn-ban-drax",
+      tenantId: hideTenant,
+      ownerEmail: "hide-bm@exemplo.com",
+      metaBusinessId: "1041827648719609",
+      wabaId: "1988957871663919",
+      accessTokenEncrypted: encryptMetaToken("token-ban-drax"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1988957871663919") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1988957871663919",
+            name: "WABA ES",
+            owner_business_info: { id: "1041827648719609", name: "BAN Drax Sistemas" },
+          },
+        };
+      }
+      if (input.path === "1041827648719609") {
+        return { ok: true, status: 200, json: { id: "1041827648719609", name: "BAN Drax Sistemas" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [banned];
+        },
+        async findOpenByTenant() {
+          return banned;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    await assert.rejects(
+      () => service.hidePortfolioBusiness(hideAuth, "12"),
+      /ID numérico do portfólio/,
+    );
+    const listed = await service.listPortfolioAssets(hideAuth, { fresh: true });
+    assert.ok((listed.portfolios || []).some((item) => item.id === "1041827648719609"));
+    const hidden = await service.hidePortfolioBusiness(hideAuth, "1041.827.648.719.609");
+    assert.equal(
+      (hidden.portfolios || []).some((item) => item.id === "1041827648719609"),
+      false,
+    );
+    const again = await service.listPortfolioAssets(hideAuth, { fresh: true });
+    assert.equal(
+      (again.portfolios || []).some((item) => item.id === "1041827648719609"),
+      false,
+    );
+    unhideBusiness(hideTenant, "1041827648719609");
   });
 
   it("lista BM criado no administrador via /owned_businesses da agência", async () => {
