@@ -118,6 +118,7 @@ export function listBroadcastNumbersForSelectedWabas(input: {
   }> = [];
   const seen = new Set<string>();
   for (const card of input.portfolios || []) {
+    if ((card as { hidden?: boolean }).hidden === true) continue;
     const cardConnectionId = String(card.connectionId || "").trim();
     const businessId = String(card.id || "").trim();
     const onSelectedCard =
@@ -183,6 +184,7 @@ export function indexBroadcastPortfolioPhones(
 ): Map<string, MetaBroadcastPhoneCatalogItem> {
   const catalog = new Map<string, MetaBroadcastPhoneCatalogItem>();
   for (const card of portfolios || []) {
+    if ((card as { hidden?: boolean }).hidden === true) continue;
     const connectionId = String(card.connectionId || "").trim();
     if (!connectionId) continue;
     const portfolioName = String(card.name || "").trim() || null;
