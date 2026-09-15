@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractMobilePhonesForEvo = extractMobilePhonesForEvo;
 exports.expandLeadsByMobileForEvo = expandLeadsByMobileForEvo;
+exports.mergeLeadsForCampaignLista = mergeLeadsForCampaignLista;
 exports.buildLeadsCnpjExcelBuffer = buildLeadsCnpjExcelBuffer;
 exports.sanitizeExportBaseName = sanitizeExportBaseName;
 exports.isEvoBrazilMobileDigits = isEvoBrazilMobileDigits;
@@ -148,6 +149,28 @@ function expandLeadsByMobileForEvo(leads) {
         }
     }
     return rows;
+}
+/** Uma linha por celular, sem repetir CNPJ+telefone entre lotes da mesma pesquisa. */
+function mergeLeadsForCampaignLista(lists) {
+    const map = new Map();
+    for (const list of lists) {
+        const day = String(list.dayKey || "");
+        if (day.includes("#portal-copy"))
+            continue;
+        if (/\bc[oó]pia portal\b/i.test(String(list.name || "")))
+            continue;
+        const expanded = expandLeadsByMobileForEvo(Array.isArray(list.leads) ? list.leads : []);
+        for (const lead of expanded) {
+            const cnpj = String(lead.cnpj || "").replace(/\D/g, "");
+            const tel = String(lead.telefone || "").replace(/\D/g, "");
+            if (cnpj.length !== 14 || !tel)
+                continue;
+            const key = `${cnpj}|${tel}`;
+            if (!map.has(key))
+                map.set(key, lead);
+        }
+    }
+    return [...map.values()];
 }
 function buildLeadsCnpjExcelBuffer(leads) {
     const withPhone = leads.filter((lead) => String(lead.telefone || "").trim().length > 0);
