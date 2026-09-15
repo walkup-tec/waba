@@ -32,7 +32,7 @@ import { parseDisplayName, parseProfilePhoto, parseProfilePhotoFromBytes, parseV
 import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity, writePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 import { applyLocalPhoneIdentities, listPhoneInboxChannels, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
-import { unhideBusiness } from "./meta-whatsapp-hidden-business.store";
+import { hideBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
 
 describe("meta portfolio mapper", () => {
   it("mapeia card do portfólio sem vazar token", () => {
@@ -748,22 +748,10 @@ describe("meta portfolio mapper", () => {
     assert.equal(disabled?.canActivate, false);
   });
 
-  it("separa portfólio BAN/restrito da página Ativas", () => {
-    assert.equal(isRestrictedPortfolioCard({ name: "BAN Drax Sistemas" }), true);
-    assert.equal(
-      isRestrictedPortfolioCard({
-        name: "Grupo Walkup",
-        numbers: [{ uiStatus: "restrito" }],
-      }),
-      true,
-    );
-    assert.equal(
-      isRestrictedPortfolioCard({
-        name: "Drax Waba",
-        numbers: [{ uiStatus: "ativo" }],
-      }),
-      false,
-    );
+  it("Restritas são só os BMs ocultados", () => {
+    assert.equal(isRestrictedPortfolioCard({ hidden: true }), true);
+    assert.equal(isRestrictedPortfolioCard({ hidden: false }), false);
+    assert.equal(isRestrictedPortfolioCard({}), false);
   });
 
   it("limite, qualidade e health BLOCKED não marcam o chip como banido", () => {
@@ -2708,7 +2696,7 @@ describe("meta portfolio service", () => {
     assert.equal(added?.name, "Drax Waba");
   });
 
-  it("Ocultar BM tira o card da lista e o Atualizar não devolve", async () => {
+  it("Ocultar BM marca o card para Restritas e o Atualizar devolve", async () => {
     const hideAuth: WabaRequestAuth = { email: "hide-bm@exemplo.com", role: "subscriber" };
     const hideTenant = deriveStableMetaTenantId("hide-bm@exemplo.com");
     unhideBusiness(hideTenant, "1041827648719609");
@@ -2755,18 +2743,69 @@ describe("meta portfolio service", () => {
       /ID numérico do portfólio/,
     );
     const listed = await service.listPortfolioAssets(hideAuth, { fresh: true });
-    assert.ok((listed.portfolios || []).some((item) => item.id === "1041827648719609"));
+    const listedCard = (listed.portfolios || []).find((item) => item.id === "1041827648719609");
+    assert.equal(listedCard?.hidden, false);
     const hidden = await service.hidePortfolioBusiness(hideAuth, "1041.827.648.719.609");
+    const hiddenCard = (hidden.portfolios || []).find((item) => item.id === "1041827648719609");
+    assert.equal(hiddenCard?.hidden, true);
+    assert.equal(hiddenCard?.name, "BAN Drax Sistemas");
     assert.equal(
-      (hidden.portfolios || []).some((item) => item.id === "1041827648719609"),
+      (hidden.portfolios || []).filter((item) => !item.hidden).some((item) => item.id === "1041827648719609"),
       false,
     );
     const again = await service.listPortfolioAssets(hideAuth, { fresh: true });
-    assert.equal(
-      (again.portfolios || []).some((item) => item.id === "1041827648719609"),
-      false,
-    );
+    assert.equal((again.portfolios || []).find((item) => item.id === "1041827648719609")?.hidden, true);
     unhideBusiness(hideTenant, "1041827648719609");
+  });
+
+  it("Ocultar BM sem card na Graph ainda lista em Restritas", async () => {
+    const hideAuth: WabaRequestAuth = { email: "hide-stub@exemplo.com", role: "subscriber" };
+    const hideTenant = deriveStableMetaTenantId("hide-stub@exemplo.com");
+    unhideBusiness(hideTenant, "1999000111222333");
+    hideBusiness(hideTenant, "1999000111222333", "Cliente oculto");
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup-stub",
+      tenantId: hideTenant,
+      ownerEmail: "hide-stub@exemplo.com",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup-stub"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(hideAuth, { fresh: true });
+    const stub = (assets.portfolios || []).find((item) => item.id === "1999000111222333");
+    assert.equal(stub?.hidden, true);
+    assert.equal(stub?.name, "Cliente oculto");
+    unhideBusiness(hideTenant, "1999000111222333");
   });
 
   it("lista BM criado no administrador via /owned_businesses da agência", async () => {
