@@ -382,6 +382,18 @@ export class WabaLeadsCnpjRepository {
     return true;
   }
 
+  markPoolListaExport(key: string, exportedCount: number): void {
+    const normalized = String(key || "").trim();
+    if (!normalized) return;
+    const store = this.getPoolStore();
+    const pool = store.pools.find((p) => p.key === normalized);
+    if (!pool) return;
+    pool.listaDownloadedAt = new Date().toISOString();
+    pool.listaExportedCount = Math.max(0, Math.round(Number(exportedCount) || 0));
+    pool.updatedAt = pool.listaDownloadedAt;
+    this.schedulePoolPersist("flush");
+  }
+
   setPoolAutoContinuePaused(key: string, paused: boolean): void {
     const normalized = String(key || "").trim();
     if (!normalized) return;
