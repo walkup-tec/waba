@@ -3979,6 +3979,27 @@
         #meta-tp-photo-status {
           margin: 0 0 10px;
         }
+        .meta-portfolio-pages {
+          display: inline-flex;
+          margin: 0 0 12px;
+          margin-right: 0;
+        }
+        .meta-portfolio-pages[hidden] {
+          display: none;
+        }
+        .meta-portfolio-pages .admin-campanhas-bucket-btn {
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
+        .meta-portfolio-shell > .meta-portfolio-page-empty {
+          grid-column: 1 / -1;
+          margin: 0;
+          padding: 36px 20px;
+          text-align: center;
+          color: rgba(226, 232, 240, 0.72);
+          font-size: 14px;
+          line-height: 1.5;
+        }
         .meta-edit-modal {
           position: fixed;
           inset: 0;
@@ -22632,6 +22653,28 @@
                     </div>
                   </div>
                   <p id="meta-tp-photo-status" class="muted" role="status" aria-live="polite" hidden></p>
+                  <nav id="meta-tp-portfolio-pages" class="admin-campanhas-buckets meta-portfolio-pages" role="tablist" aria-label="Páginas dos portfólios" hidden>
+                    <button
+                      type="button"
+                      class="admin-campanhas-bucket-btn is-active"
+                      role="tab"
+                      aria-selected="true"
+                      data-meta-portfolio-page="ativas"
+                    >
+                      Ativas
+                      <span id="meta-tp-portfolio-count-ativas" class="admin-campanhas-bucket-count">0</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="admin-campanhas-bucket-btn"
+                      role="tab"
+                      aria-selected="false"
+                      data-meta-portfolio-page="restritas"
+                    >
+                      Restritas
+                      <span id="meta-tp-portfolio-count-restritas" class="admin-campanhas-bucket-count">0</span>
+                    </button>
+                  </nav>
                   <div id="meta-tp-portfolio-list" class="meta-portfolio-shell"></div>
                   <div class="meta-portfolio-toolbar">
                     <button type="button" class="meta-onboard-cta meta-onboard-cta-secondary" id="meta-tp-reset-lab" data-meta-reset-portfolio="1">Excluir e recomeçar</button>
@@ -38326,6 +38369,44 @@
         return biz;
       }
 
+      let metaTpPortfolioPage = "ativas";
+
+      function metaTpPortfolioIsRestricted(item) {
+        const name = String((item && (item.name || item.primaryPageName)) || "").trim();
+        if (/^BAN(?:\s|[A-Z0-9_])/i.test(name) || /^BAN\b/i.test(name)) return true;
+        return ((item && item.numbers) || []).some(function (row) {
+          return String((row && row.uiStatus) || "") === "restrito";
+        });
+      }
+
+      function metaTpFilterPortfoliosByPage(portfolios, page) {
+        return (portfolios || []).filter(function (item) {
+          const restricted = metaTpPortfolioIsRestricted(item);
+          return page === "restritas" ? restricted : !restricted;
+        });
+      }
+
+      function metaTpSyncPortfolioPageNav(bundles) {
+        const nav = document.getElementById("meta-tp-portfolio-pages");
+        const ativasEl = document.getElementById("meta-tp-portfolio-count-ativas");
+        const restritasEl = document.getElementById("meta-tp-portfolio-count-restritas");
+        if (ativasEl) ativasEl.textContent = String(metaTpFilterPortfoliosByPage(bundles, "ativas").length);
+        if (restritasEl) restritasEl.textContent = String(metaTpFilterPortfoliosByPage(bundles, "restritas").length);
+        if (nav) nav.hidden = false;
+        Array.prototype.forEach.call(document.querySelectorAll("[data-meta-portfolio-page]"), function (btn) {
+          const active = btn.getAttribute("data-meta-portfolio-page") === metaTpPortfolioPage;
+          btn.classList.toggle("is-active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+        });
+      }
+
+      function metaTpSetPortfolioPage(page) {
+        const next = page === "restritas" ? "restritas" : "ativas";
+        if (next === metaTpPortfolioPage) return;
+        metaTpPortfolioPage = next;
+        metaTpRenderPortfolio({ portfolios: metaTpSession.portfolios });
+      }
+
       function metaTpPortfolioBundles(assets) {
         const incoming = assets || {};
         const list = Array.isArray(incoming.portfolios) ? incoming.portfolios : [];
@@ -38531,6 +38612,15 @@
       function metaTpRenderPortfolioCards(portfolios, selectedId) {
         const listEl = document.getElementById("meta-tp-portfolio-list");
         if (!listEl) return;
+        if (!(portfolios || []).length) {
+          listEl.innerHTML =
+            '<p class="meta-portfolio-page-empty">' +
+            (metaTpPortfolioPage === "restritas"
+              ? "Nenhum portfólio restrito nesta página."
+              : "Nenhum portfólio ativo nesta página.") +
+            "</p>";
+          return;
+        }
         const selectedKey = String(selectedId || "");
         const selected =
           (portfolios || []).find(function (item) {
@@ -38654,25 +38744,31 @@
         metaTpSession.portfolios = bundles;
         if (typeof metaTplLabFillPortfolioSelect === "function") metaTplLabFillPortfolioSelect();
         if (!section) return;
+        const pagesNav = document.getElementById("meta-tp-portfolio-pages");
         if (!bundles.length) {
           section.hidden = true;
+          if (pagesNav) pagesNav.hidden = true;
           return;
         }
         section.hidden = false;
         if (empty) empty.hidden = true;
+        metaTpSyncPortfolioPageNav(bundles);
+        const visible = metaTpFilterPortfoliosByPage(bundles, metaTpPortfolioPage);
         const savedBiz = String(metaTpSession.savedBusinessId || "").trim();
         const selected =
-          bundles.find(function (item) {
+          visible.find(function (item) {
             return metaTpBusinessIdLabel(item) === savedBiz;
-          }) || bundles[0];
-        const selectedBiz = metaTpBusinessIdLabel(selected);
-        if (selectedBiz !== "—") metaTpSession.savedBusinessId = selectedBiz;
-        metaTpSession.savedWabaId = String((selected && selected.wabaId) || metaTpSession.savedWabaId || "");
-        metaTpSession.portfolioPrimaryPageId = String((selected && selected.primaryPageId) || "").trim();
+          }) || visible[0];
+        const selectedBiz = selected ? metaTpBusinessIdLabel(selected) : "";
+        if (selected && selectedBiz !== "—") metaTpSession.savedBusinessId = selectedBiz;
+        if (selected) {
+          metaTpSession.savedWabaId = String(selected.wabaId || metaTpSession.savedWabaId || "");
+          metaTpSession.portfolioPrimaryPageId = String(selected.primaryPageId || "").trim();
+        }
         metaTpSession.numbers = bundles.reduce(function (all, item) {
           return all.concat(Array.isArray(item.numbers) ? item.numbers : []);
         }, []);
-        metaTpRenderPortfolioCards(bundles, selectedBiz === "—" ? "" : selectedBiz);
+        metaTpRenderPortfolioCards(visible, selectedBiz === "—" ? "" : selectedBiz);
         if (typeof metaTplBroadcastFillWabas === "function") metaTplBroadcastFillWabas();
         if (typeof metaTplBroadcastRefreshWabasFromMeta === "function") void metaTplBroadcastRefreshWabasFromMeta();
         if (typeof metaTplBroadcastFillNumbers === "function") metaTplBroadcastFillNumbers();
@@ -38724,6 +38820,8 @@
         if (!section || !listEl) return;
         if (listEl.querySelector(".meta-portfolio-card:not(.is-skeleton)")) return;
         section.hidden = false;
+        const pagesNav = document.getElementById("meta-tp-portfolio-pages");
+        if (pagesNav) pagesNav.hidden = false;
         listEl.innerHTML =
           '<div class="meta-portfolio-rail" aria-busy="true">' +
           '<article class="meta-portfolio-card is-skeleton" aria-hidden="true"></article>' +
@@ -38900,11 +38998,15 @@
             return false;
           }
           metaTpPortfolioFingerprint = metaTpAssetsFingerprint(payload);
-          metaTpRenderPortfolio(payload);
-          if (input) input.value = "";
           const added = (payload.portfolios || []).find(function (item) {
             return String(item?.id || "").replace(/\D/g, "") === businessId;
           });
+          if (added) {
+            metaTpPortfolioPage = metaTpPortfolioIsRestricted(added) ? "restritas" : "ativas";
+            metaTpSession.savedBusinessId = businessId;
+          }
+          metaTpRenderPortfolio(payload);
+          if (input) input.value = "";
           metaTpSetStatus(
             added?.name
               ? 'Portfólio "' + added.name + '" adicionado.'
@@ -39195,6 +39297,12 @@
         if (target.id === "meta-tp-reset-lab" || (target.closest && target.closest("[data-meta-reset-portfolio]"))) {
           event.preventDefault();
           metaTpResetOfficialLab();
+          return;
+        }
+        const portfolioPageBtn = target.closest("[data-meta-portfolio-page]");
+        if (portfolioPageBtn) {
+          event.preventDefault();
+          metaTpSetPortfolioPage(portfolioPageBtn.getAttribute("data-meta-portfolio-page"));
           return;
         }
         const hidePortfolioBtn = target.closest("[data-meta-hide-portfolio]");
