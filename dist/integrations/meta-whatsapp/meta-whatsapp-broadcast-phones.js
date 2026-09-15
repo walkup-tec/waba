@@ -66,6 +66,8 @@ function listBroadcastNumbersForSelectedWabas(input) {
     const out = [];
     const seen = new Set();
     for (const card of input.portfolios || []) {
+        if (card.hidden === true)
+            continue;
         const cardConnectionId = String(card.connectionId || "").trim();
         const businessId = String(card.id || "").trim();
         const onSelectedCard = Boolean(cardConnectionId && selectedConnections.has(cardConnectionId)) ||
@@ -116,6 +118,8 @@ function listBroadcastNumbersForSelectedWabas(input) {
 function indexBroadcastPortfolioPhones(portfolios) {
     const catalog = new Map();
     for (const card of portfolios || []) {
+        if (card.hidden === true)
+            continue;
         const connectionId = String(card.connectionId || "").trim();
         if (!connectionId)
             continue;
