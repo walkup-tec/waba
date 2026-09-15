@@ -463,6 +463,19 @@ async function collectSelectPageAdminCards(input: {
   } catch {
     /* /clients lento não pode impedir a lista da select */
   }
+  try {
+    for (const token of tokens) {
+      const nodes = await discoverAdministeredBusinessNodes(
+        shortGraph,
+        token,
+        catalogAgencyBusinessIds(),
+        { onlyOwned: true },
+      );
+      for (const card of directoryFromAssigned({ data: nodes })) addIfMissing(card);
+    }
+  } catch {
+    /* /owned_businesses lento não pode impedir a lista da select */
+  }
 
   return { cards, assignedByConnectionId };
 }
