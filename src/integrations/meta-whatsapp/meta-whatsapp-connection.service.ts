@@ -70,6 +70,11 @@ import {
   catalogAgencyBusinessIds,
   catalogBackfillBusinessIds,
 } from "./meta-whatsapp-known-owned-wabas";
+import {
+  addManualBusiness,
+  listManualBusinessIds,
+  normalizeManualBusinessId,
+} from "./meta-whatsapp-manual-business.store";
 import { publicMetaGraphRegisterMessage } from "./meta-whatsapp-graph-errors";
 import { isMetaGraphUploadCooldown } from "./meta-whatsapp-graph-cooldown";
 import {
@@ -410,6 +415,7 @@ function listedHasBusinessId(listedIds: Set<string>, businessId: string): boolea
 async function collectSelectPageAdminCards(input: {
   graph: MetaConnectionGraphCaller;
   writeTokens: PortfolioWriteToken[];
+  extraBusinessIds?: string[];
 }): Promise<{ cards: MetaPortfolioPublic[]; assignedByConnectionId: Map<string, unknown> }> {
   const cards: MetaPortfolioPublic[] = [];
   const listedIds = new Set<string>();
@@ -437,7 +443,11 @@ async function collectSelectPageAdminCards(input: {
   }
 
   const tokens = [...jsonByToken.keys()];
-  for (const businessId of catalogBackfillBusinessIds()) {
+  const extraIds = [
+    ...catalogBackfillBusinessIds(),
+    ...(input.extraBusinessIds || []).map((id) => normalizeManualBusinessId(id)).filter(Boolean),
+  ];
+  for (const businessId of extraIds) {
     if (listedHasBusinessId(listedIds, businessId)) continue;
     for (const token of tokens) {
       const found = await fetchVisibleBusinessCard(input.graph, token, businessId);
@@ -1720,6 +1730,57 @@ export class MetaWhatsappConnectionService {
     }
   }
 
+  /**
+   * GET {business-id} com o token já conectado e guarda o ID para o Atualizar.
+   * Sem WABA inventada — o card pode ficar vazio.
+   */
+  async addManualPortfolioBusiness(
+    auth: WabaRequestAuth,
+    rawBusinessId: string,
+  ): Promise<MetaPortfolioAssetsPublic> {
+    const tenant = requireTenant(auth);
+    const businessId = normalizeManualBusinessId(rawBusinessId);
+    if (businessId.length < 6) {
+      throw new MetaWhatsappError(
+        "invalid_payload",
+        400,
+        "Informe o ID numérico do portfólio (Business Manager).",
+      );
+    }
+    const repo = this.repository as MetaWhatsappConnectionRepository;
+    const rows =
+      typeof repo.listOpenByTenant === "function"
+        ? await repo.listOpenByTenant(tenant.tenantId)
+        : [await this.repository.findOpenByTenant(tenant.tenantId)].filter(
+            (item): item is MetaWhatsappConnectionRecord => Boolean(item),
+          );
+    const writeTokens = collectPortfolioWriteTokens(rows, this.decrypt);
+    if (!writeTokens.length) {
+      throw new MetaWhatsappError("not_connected");
+    }
+    let card: MetaPortfolioPublic | null = null;
+    for (const row of writeTokens) {
+      const token = String(row.token || "").trim();
+      if (!token) continue;
+      card = await fetchVisibleBusinessCard(this.graph, token, businessId);
+      if (card?.id) break;
+    }
+    if (!card?.id || !card.name) {
+      throw new MetaWhatsappError(
+        "invalid_payload",
+        400,
+        "A Meta não devolveu esse Business Manager com a conexão atual. Confira o ID e se sua conta administra esse BM.",
+      );
+    }
+    addManualBusiness(tenant.tenantId, card.id, card.name);
+    invalidateCachedPortfolioGraph(tenant.tenantId);
+    logMetaWhatsappSafe("portfolio-manual-business-added", {
+      tenantId: tenant.tenantId,
+      businessId: card.id,
+    });
+    return this.listPortfolioAssets(auth, { fresh: true });
+  }
+
   private async loadStoredPortfolioAssets(
     tenantId: string,
     requested: string,
@@ -1747,7 +1808,7 @@ export class MetaWhatsappConnectionService {
       try {
         const restored = await repo.reopenLeftManagerForBusinesses(
           tenantId,
-          businessIdsToReopenAfterFalseLeftManager(),
+          [...businessIdsToReopenAfterFalseLeftManager(), ...listManualBusinessIds(tenantId)],
           actorEmail,
         );
         if (restored) {
@@ -1780,6 +1841,7 @@ export class MetaWhatsappConnectionService {
     const selectPage = await collectSelectPageAdminCards({
       graph: withHydrateLimits(this.graph),
       writeTokens,
+      extraBusinessIds: listManualBusinessIds(tenantId),
     });
     const hydrated = await Promise.all(
       rows.map((row) =>
