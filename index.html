@@ -3602,6 +3602,40 @@
           0% { background-position: 100% 0; }
           100% { background-position: -100% 0; }
         }
+        .meta-portfolio-card-lead {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          flex: 0 0 auto;
+          min-width: 48px;
+        }
+        .meta-portfolio-hide {
+          appearance: none;
+          border: 0;
+          background: transparent;
+          padding: 0;
+          margin: 0;
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          line-height: 1;
+          color: rgba(148, 163, 184, 0.42);
+          cursor: pointer;
+        }
+        .meta-portfolio-card:hover .meta-portfolio-hide,
+        .meta-portfolio-card:focus-within .meta-portfolio-hide {
+          color: rgba(148, 163, 184, 0.78);
+        }
+        .meta-portfolio-hide:hover,
+        .meta-portfolio-hide:focus-visible {
+          color: #f87171;
+        }
+        .meta-portfolio-hide:focus-visible {
+          outline: 1px solid rgba(248, 113, 113, 0.55);
+          outline-offset: 2px;
+          border-radius: 4px;
+        }
         .meta-portfolio-card-copy { flex: 1; min-width: 0; }
         .meta-portfolio-meta {
           display: grid;
@@ -38520,11 +38554,20 @@
               '" tabindex="0" aria-label="Portfólio ' +
               metaTpEsc(name) +
               '">' +
+              '<div class="meta-portfolio-card-lead">' +
               '<div class="meta-portfolio-logo">' +
               '<img alt="" hidden referrerpolicy="no-referrer" />' +
               '<span aria-hidden="true">' +
               metaTpEsc(metaTpInitials(name)) +
               "</span></div>" +
+              (bizId === "—"
+                ? ""
+                : '<button type="button" class="meta-portfolio-hide" data-meta-hide-portfolio="' +
+                  metaTpEsc(bizId) +
+                  '" title="Ocultar este portfólio da lista" aria-label="Ocultar portfólio ' +
+                  metaTpEsc(name) +
+                  '">Ocultar</button>') +
+              "</div>" +
               '<div class="meta-portfolio-card-copy">' +
               "<h3" +
               (isSelected ? ' id="meta-tp-portfolio-name"' : "") +
@@ -38879,6 +38922,33 @@
         return false;
       };
 
+      window.wabaHideMetaPortfolio = async function wabaHideMetaPortfolio(businessId) {
+        const id = String(businessId || "").replace(/\D/g, "");
+        if (id.length < 6) {
+          metaTpSetStatus("Não foi possível ocultar este portfólio.");
+          return false;
+        }
+        try {
+          const { response, payload } = await metaTpFetchJson(
+            "/integrations/meta/whatsapp/portfolio/hide-business",
+            {
+              method: "POST",
+              body: JSON.stringify({ businessId: id }),
+            }
+          );
+          if (!response.ok || payload.ok === false) {
+            metaTpSetStatus(String(payload.error || "Não foi possível ocultar este portfólio."));
+            return false;
+          }
+          metaTpPortfolioFingerprint = metaTpAssetsFingerprint(payload);
+          metaTpRenderPortfolio(payload);
+          metaTpSetStatus("Portfólio oculto da lista.");
+        } catch {
+          metaTpSetStatus("Falha de rede ao ocultar o portfólio.");
+        }
+        return false;
+      };
+
       window.wabaRefreshMetaPortfolios = async function wabaRefreshMetaPortfolios(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         const btn = document.getElementById("meta-tp-portfolio-refresh");
@@ -39127,6 +39197,13 @@
           metaTpResetOfficialLab();
           return;
         }
+        const hidePortfolioBtn = target.closest("[data-meta-hide-portfolio]");
+        if (hidePortfolioBtn) {
+          event.preventDefault();
+          event.stopPropagation();
+          window.wabaHideMetaPortfolio(hidePortfolioBtn.getAttribute("data-meta-hide-portfolio"));
+          return;
+        }
         const addNumberBtn = target.closest("[data-meta-add-number]");
         if (addNumberBtn) {
           event.preventDefault();
@@ -39220,7 +39297,13 @@
         }
         const portfolioCard = target.closest(".meta-portfolio-card");
         const listEl = document.getElementById("meta-tp-portfolio-list");
-        if (portfolioCard && listEl && listEl.contains(portfolioCard) && !target.closest(".meta-portfolio-add")) {
+        if (
+          portfolioCard &&
+          listEl &&
+          listEl.contains(portfolioCard) &&
+          !target.closest(".meta-portfolio-add") &&
+          !target.closest("[data-meta-hide-portfolio]")
+        ) {
           const nextId = String(portfolioCard.getAttribute("data-meta-portfolio-id") || "").trim();
           if (nextId && nextId !== String(metaTpSession.savedBusinessId || "").trim()) {
             metaTpSession.savedBusinessId = nextId;
@@ -39248,7 +39331,7 @@
         if (event.key !== "Enter" && event.key !== " ") return;
         const target = event.target;
         if (!target || !target.closest) return;
-        if (target.closest(".meta-portfolio-add")) return;
+        if (target.closest(".meta-portfolio-add") || target.closest("[data-meta-hide-portfolio]")) return;
         const card = target.closest(".meta-portfolio-card");
         if (!card) return;
         event.preventDefault();
