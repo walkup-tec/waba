@@ -263,21 +263,38 @@ function withHydrateLimits(graph) {
 function listedHasBusinessId(listedIds, businessId) {
     return [...listedIds].some((listed) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(listed, businessId));
 }
-async function collectDiscoveredAdminCards(input) {
-    const extra = [];
+async function collectSelectPageAdminCards(input) {
+    const cards = [];
+    const listedIds = new Set();
+    const assignedByConnectionId = new Map();
+    const jsonByToken = new Map();
     const addIfMissing = (card) => {
         const id = String(card?.id || "").trim();
-        if (!id || !card || listedHasBusinessId(input.listedIds, id))
+        if (!id || !card || listedHasBusinessId(listedIds, id))
             return;
-        input.listedIds.add(id);
-        extra.push(card);
+        listedIds.add(id);
+        cards.push(card);
     };
-    for (const businessId of (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)()) {
-        if (listedHasBusinessId(input.listedIds, businessId))
+    for (const row of input.writeTokens) {
+        const token = String(row.token || "").trim();
+        if (!token)
             continue;
-        for (const token of input.tokens) {
-            if (!token)
-                continue;
+        if (!jsonByToken.has(token)) {
+            const debug = await listDebugTokenWhatsappTargets(input.graph, token);
+            const json = await (0, meta_whatsapp_portfolio_graph_1.fetchAssignedBusinesses)(input.graph, token, {
+                facebookUserIds: debug.userId ? [debug.userId] : [],
+            });
+            jsonByToken.set(token, json);
+            for (const card of (0, meta_whatsapp_portfolio_graph_1.directoryFromAssigned)(json))
+                addIfMissing(card);
+        }
+        assignedByConnectionId.set(row.id, jsonByToken.get(token));
+    }
+    const tokens = [...jsonByToken.keys()];
+    for (const businessId of (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)()) {
+        if (listedHasBusinessId(listedIds, businessId))
+            continue;
+        for (const token of tokens) {
             const found = await (0, meta_whatsapp_portfolio_graph_1.fetchVisibleBusinessCard)(input.graph, token, businessId);
             if (found) {
                 addIfMissing(found);
@@ -285,22 +302,20 @@ async function collectDiscoveredAdminCards(input) {
             }
         }
     }
+    const shortGraph = (req) => input.graph({ ...req, maxAttempts: 1, timeoutMs: 2500 });
     try {
-        const seeds = (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)();
-        for (const token of input.tokens) {
-            if (!token)
-                continue;
-            const nodes = await (0, meta_whatsapp_portfolio_graph_1.discoverAdministeredBusinessNodes)(input.graph, token, seeds);
+        for (const token of tokens) {
+            const nodes = await (0, meta_whatsapp_portfolio_graph_1.discoverAdministeredBusinessNodes)(shortGraph, token, (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)(), { onlyClients: true });
             for (const card of (0, meta_whatsapp_portfolio_graph_1.directoryFromAssigned)({ data: nodes }))
                 addIfMissing(card);
         }
     }
     catch {
-        /* a varredura da agência não pode impedir o card já confirmado no GET */
+        /* /clients lento não pode impedir a lista da select */
     }
-    return extra;
+    return { cards, assignedByConnectionId };
 }
-async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaIds = [], writeTokens = []) {
+async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaIds = [], writeTokens = [], extras = {}) {
     const stored = storedNumbersFromConnection(open);
     const fallback = { ...cardFromConnection(open), numbers: stored };
     let token = "";
@@ -391,7 +406,9 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
     const resolvedBm = hint.businessId || (0, meta_whatsapp_portfolio_map_1.businessIdNotWaba)(storedBm, resolvedWaba || storedWaba) || "";
     const debugTargets = await listDebugTokenWhatsappTargets(g, token);
     const [assignedJson, fetchedBm] = await Promise.all([
-        (0, meta_whatsapp_portfolio_graph_1.fetchAssignedBusinesses)(g, token, { facebookUserIds: debugTargets.userId ? [debugTargets.userId] : [] }),
+        extras.assignedJson !== undefined
+            ? Promise.resolve(extras.assignedJson)
+            : (0, meta_whatsapp_portfolio_graph_1.fetchAssignedBusinesses)(g, token, { facebookUserIds: debugTargets.userId ? [debugTargets.userId] : [] }),
         resolvedBm
             ? (0, meta_whatsapp_portfolio_graph_1.fetchBusinessFromGraph)(g, token, resolvedBm)
             : Promise.resolve({
@@ -1457,7 +1474,11 @@ class MetaWhatsappConnectionService {
             };
         }
         const writeTokens = collectPortfolioWriteTokens(rows, this.decrypt);
-        const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenantId, row, (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(rows, row), writeTokens)));
+        const selectPage = await collectSelectPageAdminCards({
+            graph: withHydrateLimits(this.graph),
+            writeTokens,
+        });
+        const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenantId, row, (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(rows, row), writeTokens, { assignedJson: selectPage.assignedByConnectionId.get(row.id) })));
         const leftIds = hydrated
             .filter((item) => item.leftManager)
             .map((item) => String(item.connectionId || "").trim())
@@ -1465,20 +1486,11 @@ class MetaWhatsappConnectionService {
         const kept = hydrated.filter((item) => !item.leftManager);
         const fromConnections = kept.map((item) => item.card);
         const fromDirectory = kept.flatMap((item) => item.directory || []);
-        const listedIds = new Set([...fromConnections, ...fromDirectory]
-            .map((item) => String(item.id || "").trim())
-            .filter(Boolean));
-        const keptConn = new Set(kept.map((item) => item.connectionId));
-        const tokens = writeTokens
-            .filter((row) => keptConn.has(row.id))
-            .map((row) => row.token)
-            .filter(Boolean);
-        const extraCards = await collectDiscoveredAdminCards({
-            graph: withHydrateLimits(this.graph),
-            tokens,
-            listedIds,
-        });
-        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)([...fromConnections, ...fromDirectory, ...extraCards]).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)([
+            ...selectPage.cards,
+            ...fromConnections,
+            ...fromDirectory,
+        ]).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
         if (leftIds.length && typeof repo.disconnectOne === "function") {
             for (const connectionId of leftIds) {
                 try {
