@@ -13,6 +13,7 @@ import {
   unionPortfolioNumbers,
   dedupePortfolioCards,
   isRenderablePortfolioCard,
+  isRestrictedPortfolioCard,
   graphPhotoDownloadUrl,
   graphPhotoSourceKey,
   shouldRefreshCachedPhonePhoto,
@@ -745,6 +746,24 @@ describe("meta portfolio mapper", () => {
     });
     assert.equal(disabled?.uiStatus, "restrito");
     assert.equal(disabled?.canActivate, false);
+  });
+
+  it("separa portfólio BAN/restrito da página Ativas", () => {
+    assert.equal(isRestrictedPortfolioCard({ name: "BAN Drax Sistemas" }), true);
+    assert.equal(
+      isRestrictedPortfolioCard({
+        name: "Grupo Walkup",
+        numbers: [{ uiStatus: "restrito" }],
+      }),
+      true,
+    );
+    assert.equal(
+      isRestrictedPortfolioCard({
+        name: "Drax Waba",
+        numbers: [{ uiStatus: "ativo" }],
+      }),
+      false,
+    );
   });
 
   it("limite, qualidade e health BLOCKED não marcam o chip como banido", () => {
