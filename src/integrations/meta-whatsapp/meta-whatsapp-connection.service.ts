@@ -547,8 +547,9 @@ async function hydrateOpenConnection(
   const resolvedBm =
     hint.businessId || businessIdNotWaba(storedBm, resolvedWaba || storedWaba) || "";
 
+  const debugTargets = await listDebugTokenWhatsappTargets(g, token);
   const [assignedJson, fetchedBm] = await Promise.all([
-    fetchAssignedBusinesses(g, token),
+    fetchAssignedBusinesses(g, token, { facebookUserIds: debugTargets.userId ? [debugTargets.userId] : [] }),
     resolvedBm
       ? fetchBusinessFromGraph(g, token, resolvedBm)
       : Promise.resolve({
@@ -665,7 +666,6 @@ async function hydrateOpenConnection(
   for (const id of nestedFromMe.clientWabaIds) clientIds.add(id);
   pushPhones(nestedFromMe.phones);
 
-  const debugTargets = await listDebugTokenWhatsappTargets(g, token);
   const debugPhoneNodes = await fetchPhoneNodes(g, token, debugTargets.phoneIds);
   pushPhones(debugPhoneNodes);
   if (businessId) {
@@ -823,19 +823,23 @@ async function hydrateOpenConnection(
 async function listDebugTokenWhatsappTargets(
   graph: MetaConnectionGraphCaller,
   userToken: string,
-): Promise<{ wabaIds: string[]; phoneIds: string[] }> {
+): Promise<{ wabaIds: string[]; phoneIds: string[]; userId: string }> {
+  const empty = { wabaIds: [] as string[], phoneIds: [] as string[], userId: "" };
   const appId = readMetaAppId();
   const appSecret = readMetaAppSecret();
-  if (!appId || !appSecret || !userToken) return { wabaIds: [], phoneIds: [] };
+  if (!appId || !appSecret || !userToken) return empty;
   const res = await graph({
     token: `${appId}|${appSecret}`,
     method: "GET",
     path: "debug_token",
     query: { input_token: userToken },
   });
-  if (!res.ok) return { wabaIds: [], phoneIds: [] };
+  if (!res.ok) return empty;
   const payload = (res.json && typeof res.json === "object" ? res.json : {}) as {
-    data?: { granular_scopes?: Array<{ scope?: unknown; target_ids?: unknown }> };
+    data?: {
+      user_id?: unknown;
+      granular_scopes?: Array<{ scope?: unknown; target_ids?: unknown }>;
+    };
   };
   const granular = Array.isArray(payload.data?.granular_scopes) ? payload.data!.granular_scopes! : [];
   const wabaIds = new Set<string>();
@@ -850,7 +854,11 @@ async function listDebugTokenWhatsappTargets(
       else if (scope === "whatsapp_business_messaging") phoneIds.add(id);
     }
   }
-  return { wabaIds: [...wabaIds], phoneIds: [...phoneIds] };
+  return {
+    wabaIds: [...wabaIds],
+    phoneIds: [...phoneIds],
+    userId: String(payload.data?.user_id || "").trim(),
+  };
 }
 
 async function fetchPhoneNodes(
