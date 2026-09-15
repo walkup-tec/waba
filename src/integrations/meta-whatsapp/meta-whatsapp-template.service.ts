@@ -55,6 +55,7 @@ import {
   knownClientWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
   knownWabaNameForId,
+  metaBusinessIdsMatch,
 } from "./meta-whatsapp-known-owned-wabas";
 import { pickReusableHeaderHandle } from "./meta-whatsapp-header-handle-cache";
 import {
@@ -213,9 +214,22 @@ export class MetaWhatsappTemplateService {
     connectionId?: string,
   ): Promise<MetaWhatsappConnectionRecord> {
     const requested = String(connectionId || "").trim();
-    const row = requested
+    let row = requested
       ? await this.connections.findByIdForTenant(tenantId, requested)
       : await this.connections.findConnectedByTenant(tenantId);
+    if (!row && requested) {
+      const open = await this.listOpenConnections(tenantId);
+      row =
+        open.find((item) => String(item.id || "").trim() === requested) ||
+        open.find((item) => metaBusinessIdsMatch(String(item.metaBusinessId || ""), requested)) ||
+        null;
+      const repo = this.connections as {
+        findByBusinessId?: (tenantId: string, businessId: string) => Promise<MetaWhatsappConnectionRecord | null>;
+      };
+      if (!row && typeof repo.findByBusinessId === "function") {
+        row = await repo.findByBusinessId(tenantId, requested);
+      }
+    }
     if (
       !row ||
       (row.status !== "connected" && row.status !== "pending_confirmation") ||
