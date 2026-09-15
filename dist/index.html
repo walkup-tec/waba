@@ -5548,9 +5548,29 @@
         background: rgba(22, 101, 52, 0.9);
         border-color: rgba(134, 239, 172, 0.75);
       }
+      .mlc-download-cell .mlc-stop-btn.enabled {
+        background: rgba(180, 83, 9, 0.88);
+        border-color: rgba(251, 191, 36, 0.7);
+        color: #fff7ed;
+      }
+      .mlc-stop-btn.is-stopping,
       .mlc-delete-btn.is-deleting {
         pointer-events: none;
         opacity: 0.9;
+      }
+      .mlc-stop-btn.is-stopping .mlc-stop-spin {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-right: 6px;
+        border-radius: 50%;
+        border: 2px solid rgba(254, 243, 199, 0.35);
+        border-top-color: #fde68a;
+        animation: mlc-spin 0.8s linear infinite;
+        vertical-align: -2px;
+      }
+      .mlc-stop-btn .mlc-stop-spin {
+        display: none;
       }
       .mlc-delete-btn.is-deleting .mlc-delete-spin {
         display: inline-block;
@@ -44935,8 +44955,10 @@
             draft: "Rascunho",
             scraping: "Coletando",
             enriching: "Enriquecendo",
+            queued: "Na fila",
             ready: "Pronto",
             failed: "Falhou",
+            stopped: "Parado",
           }[String(status || "")] || String(status || "—")
         );
       }
@@ -44969,7 +44991,7 @@
         }
         if (/\bfilters\b|^\s*filters:/.test(msg)) return "pesquisando";
         if (status === "ready") return "baixar";
-        if (status === "failed") {
+        if (status === "stopped" || status === "failed") {
           if (/enriquec|receitaws|lote/.test(msg)) return "enriquecendo";
           if (/página|copi|card|cnpj|colet/.test(msg)) return "copiando";
           if (/filtro|pesquis|cnae|buscar|aplicando|search|cta|ack|cdp|probe|dispatch/.test(msg))
@@ -45000,13 +45022,20 @@
       function renderMarketingLeadsCnpjStageCell(item) {
         const status = String(item?.status || "");
         const activeKey = resolveMarketingLeadsCnpjStage(item);
-        const busy = status === "scraping" || status === "enriching" || status === "draft";
+        const busy =
+          status === "scraping" ||
+          status === "enriching" ||
+          status === "queued" ||
+          status === "draft";
         const failed = status === "failed";
+        const stopped = status === "stopped";
         const activeIdx = MLC_STAGES.findIndex((s) => s.key === activeKey);
-        const currentLabel = failed
-          ? "Falhou"
-          : MLC_STAGES.find((s) => s.key === activeKey)?.label ||
-            marketingLeadsCnpjStatusLabel(status);
+        const currentLabel = stopped
+          ? "Parado"
+          : failed
+            ? "Falhou"
+            : MLC_STAGES.find((s) => s.key === activeKey)?.label ||
+              marketingLeadsCnpjStatusLabel(status);
         const spinnerClass =
           busy ? "mlc-spinner" : status === "ready" ? "mlc-spinner is-done" : "mlc-spinner is-done";
         const pills = MLC_STAGES.map((stage, idx) => {
@@ -45086,6 +45115,18 @@
       function renderMarketingLeadsCnpjActionsCell(item) {
         const status = String(item?.status || "");
         const id = encodeURIComponent(String(item?.id || ""));
+        const running =
+          status === "scraping" ||
+          status === "enriching" ||
+          status === "queued" ||
+          status === "draft";
+        const stopBtn = running
+          ? '<button type="button" class="instance-action-btn enabled mlc-stop-btn" data-mlc-id="' +
+            id +
+            '" data-mlc-name="' +
+            escapeAdminHtml(String(item?.name || "lista")) +
+            '" title="Parar completamente a busca desta pesquisa"><span class="mlc-stop-spin" aria-hidden="true"></span><span class="mlc-stop-label">Parar</span></button>'
+          : "";
         const deleteBtn =
           '<button type="button" class="instance-action-btn btn-delete enabled mlc-delete-btn" data-mlc-id="' +
           id +
@@ -45135,7 +45176,7 @@
             );
           })
           .join("");
-        return '<div class="mlc-download-cell">' + deleteBtn + downloadBtns + "</div>";
+        return '<div class="mlc-download-cell">' + stopBtn + deleteBtn + downloadBtns + "</div>";
       }
       function normalizeMlcCnaeInput(value) {
         const raw = String(value || "").trim();
@@ -45273,6 +45314,49 @@
           })
           .join("");
       }
+      async function stopMarketingLeadsCnpjSearch(id, name, btn) {
+        const listId = String(id || "").trim();
+        if (!listId) return;
+        if (btn?.classList?.contains("is-stopping")) return;
+        const label = String(name || "esta pesquisa");
+        const stopOk = await openAppConfirm({
+          title: "Parar busca",
+          text:
+            'Parar completamente a busca de "' +
+            label +
+            '"? As listas já geradas permanecem. O processo não continua sozinho.',
+          confirmLabel: "Parar",
+          danger: true,
+        });
+        if (!stopOk) return;
+        if (btn) {
+          btn.classList.add("is-stopping");
+          btn.setAttribute("disabled", "true");
+          const labelEl = btn.querySelector(".mlc-stop-label");
+          if (labelEl) labelEl.textContent = "Parando…";
+        }
+        try {
+          const response = await fetchWithTimeout(
+            resolveWabaPublicPath(
+              "/admin/marketing/leads-cnpj/" + encodeURIComponent(listId) + "/stop"
+            ),
+            { method: "POST" },
+            30000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload?.error || "Falha ao parar a busca.");
+          showToast("Busca interrompida. Listas já geradas foram mantidas.", "success");
+          void loadMarketingLeadsCnpjHistory({ silent: true });
+        } catch (error) {
+          if (btn) {
+            btn.classList.remove("is-stopping");
+            btn.removeAttribute("disabled");
+            const labelEl = btn.querySelector(".mlc-stop-label");
+            if (labelEl) labelEl.textContent = "Parar";
+          }
+          showToast(error?.message || "Falha ao parar a busca.", "error");
+        }
+      }
       async function deleteMarketingLeadsCnpjList(id, name, btn) {
         const listId = String(id || "").trim();
         if (!listId) return;
@@ -45352,6 +45436,7 @@
             (item) =>
               item.status === "scraping" ||
               item.status === "enriching" ||
+              item.status === "queued" ||
               item.status === "draft"
           );
           if (busy) startMarketingLeadsCnpjPolling();
@@ -45397,6 +45482,16 @@
             setTimeout(() => {
               void loadMarketingLeadsCnpjHistory({ silent: true });
             }, 900);
+            return;
+          }
+          const stopBtn = event.target?.closest?.(".mlc-stop-btn");
+          if (stopBtn) {
+            event.preventDefault();
+            void stopMarketingLeadsCnpjSearch(
+              stopBtn.getAttribute("data-mlc-id"),
+              stopBtn.getAttribute("data-mlc-name"),
+              stopBtn
+            );
             return;
           }
           const btn = event.target?.closest?.(".mlc-delete-btn");
