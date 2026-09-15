@@ -107,6 +107,27 @@ export function expandLeadsByMobileForEvo(leads: WabaLeadsCnpjLead[]): WabaLeads
   return rows;
 }
 
+/** Uma linha por celular, sem repetir CNPJ+telefone entre lotes da mesma pesquisa. */
+export function mergeLeadsForCampaignLista(
+  lists: Array<{ leads?: WabaLeadsCnpjLead[] | null; dayKey?: string | null; name?: string | null }>,
+): WabaLeadsCnpjLead[] {
+  const map = new Map<string, WabaLeadsCnpjLead>();
+  for (const list of lists) {
+    const day = String(list.dayKey || "");
+    if (day.includes("#portal-copy")) continue;
+    if (/\bc[oó]pia portal\b/i.test(String(list.name || ""))) continue;
+    const expanded = expandLeadsByMobileForEvo(Array.isArray(list.leads) ? list.leads : []);
+    for (const lead of expanded) {
+      const cnpj = String(lead.cnpj || "").replace(/\D/g, "");
+      const tel = String(lead.telefone || "").replace(/\D/g, "");
+      if (cnpj.length !== 14 || !tel) continue;
+      const key = `${cnpj}|${tel}`;
+      if (!map.has(key)) map.set(key, lead);
+    }
+  }
+  return [...map.values()];
+}
+
 export function buildLeadsCnpjExcelBuffer(leads: WabaLeadsCnpjLead[]): Buffer {
   const withPhone = leads.filter((lead) => String(lead.telefone || "").trim().length > 0);
   const rows = withPhone.map((lead) => ({
