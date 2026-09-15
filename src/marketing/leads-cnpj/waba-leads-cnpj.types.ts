@@ -4,7 +4,8 @@ export type WabaLeadsCnpjListStatus =
   | "enriching"
   | "queued"
   | "ready"
-  | "failed";
+  | "failed"
+  | "stopped";
 
 export type WabaLeadsCnpjLead = {
   cnpj: string;
