@@ -339,16 +339,41 @@ async function paginateGraphCollection(graph, token, path, query) {
     }
     return { ok: firstOk, rows };
 }
-async function fetchGraphUserId(graph, token) {
-    const me = await graph({
+const ME_SELECT_FIELDS = "id,businesses.limit(100){id,name,profile_picture_uri,primary_page{id,name,picture}},business_users.limit(100){id,role,business{id,name,profile_picture_uri,primary_page{id,name,picture}}}";
+function businessRowsFromUserNode(json) {
+    const rec = asRecord(json);
+    const out = [];
+    for (const row of (0, meta_whatsapp_portfolio_map_1.listMetaBusinessNodes)(rec.businesses))
+        out.push(row);
+    for (const row of (0, meta_whatsapp_portfolio_map_1.listMetaBusinessNodes)(rec.business_users)) {
+        const biz = asRecord(row).business;
+        if (biz)
+            out.push(biz);
+    }
+    return out;
+}
+async function fetchGraphUserNode(graph, token) {
+    const nested = await graph({
+        token,
+        method: "GET",
+        path: "me",
+        query: { fields: ME_SELECT_FIELDS },
+    });
+    if (nested.ok) {
+        return {
+            userId: text(asRecord(nested.json).id) || "",
+            rows: businessRowsFromUserNode(nested.json),
+        };
+    }
+    const basic = await graph({
         token,
         method: "GET",
         path: "me",
         query: { fields: "id" },
     });
-    if (!me.ok)
-        return "";
-    return text(asRecord(me.json).id) || "";
+    if (!basic.ok)
+        return { userId: "", rows: [] };
+    return { userId: text(asRecord(basic.json).id) || "", rows: [] };
 }
 async function fetchBusinessesEdge(graph, token, path) {
     const rich = await paginateGraphCollection(graph, token, path, {
@@ -369,7 +394,7 @@ const USER_BUSINESS_MEMBER_FIELDS = "id,role,business{id,name,profile_picture_ur
  * GET /{user-id}/businesses e GET /{user-id}/business_users (cada item traz o BM).
  * @see https://developers.facebook.com/docs/graph-api/reference/user/businesses/
  */
-async function fetchAssignedBusinesses(graph, token) {
+async function fetchAssignedBusinesses(graph, token, opts) {
     const rows = [];
     const seen = new Set();
     const add = (row) => {
@@ -377,23 +402,23 @@ async function fetchAssignedBusinesses(graph, token) {
         const id = text(rec.id);
         if (!id || seen.has(id))
             return;
-        if (!text(rec.name) && !text(asRecord(rec.primary_page).name) && !text(asRecord(rec.primary_page).id)) {
-            return;
-        }
         seen.add(id);
         rows.push(row);
     };
-    const userId = await fetchGraphUserId(graph, token);
-    const businessPaths = ["me/businesses"];
-    if (userId)
-        businessPaths.push(`${userId}/businesses`);
+    const me = await fetchGraphUserNode(graph, token);
+    for (const row of me.rows)
+        add(row);
+    const userIds = [
+        ...new Set([me.userId, ...(opts?.facebookUserIds || [])]
+            .map((id) => String(id || "").trim())
+            .filter(Boolean)),
+    ];
+    const businessPaths = ["me/businesses", ...userIds.map((id) => `${id}/businesses`)];
     for (const path of [...new Set(businessPaths)]) {
         for (const row of await fetchBusinessesEdge(graph, token, path))
             add(row);
     }
-    const memberPaths = ["me/business_users"];
-    if (userId)
-        memberPaths.push(`${userId}/business_users`);
+    const memberPaths = ["me/business_users", ...userIds.map((id) => `${id}/business_users`)];
     for (const path of [...new Set(memberPaths)]) {
         const members = await paginateGraphCollection(graph, token, path, {
             fields: USER_BUSINESS_MEMBER_FIELDS,
@@ -405,7 +430,22 @@ async function fetchAssignedBusinesses(graph, token) {
                 add(biz);
         }
     }
-    return rows.length ? { data: rows } : { data: [] };
+    const named = [];
+    for (const row of rows) {
+        const rec = asRecord(row);
+        const id = text(rec.id);
+        const name = text(rec.name) || (0, meta_whatsapp_known_owned_wabas_1.catalogBusinessLabel)(id || "");
+        if (id && name) {
+            named.push({ ...rec, id, name });
+            continue;
+        }
+        if (!id)
+            continue;
+        const card = await fetchVisibleBusinessCard(graph, token, id);
+        if (card?.id && card.name)
+            named.push({ ...rec, id: card.id, name: card.name });
+    }
+    return { data: named };
 }
 function takeBusinessNode(row) {
     const id = businessNodeId(row);
