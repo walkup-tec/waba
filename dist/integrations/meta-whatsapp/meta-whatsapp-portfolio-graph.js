@@ -470,12 +470,14 @@ async function discoverAdministeredBusinessNodes(graph, token, seedBusinessIds, 
     };
     const seeds = [...new Set(seedBusinessIds.map((id) => String(id || "").trim()).filter(Boolean))];
     for (const seed of seeds) {
-        const clients = await paginateGraphCollection(graph, token, `${seed}/clients`, {
-            fields: ADMIN_BUSINESS_FIELDS,
-            limit: "100",
-        });
-        for (const row of clients.rows)
-            add(row);
+        if (!opts?.onlyOwned) {
+            const clients = await paginateGraphCollection(graph, token, `${seed}/clients`, {
+                fields: ADMIN_BUSINESS_FIELDS,
+                limit: "100",
+            });
+            for (const row of clients.rows)
+                add(row);
+        }
         if (opts?.onlyClients)
             continue;
         const owned = await paginateGraphCollection(graph, token, `${seed}/owned_businesses`, {
@@ -484,6 +486,8 @@ async function discoverAdministeredBusinessNodes(graph, token, seedBusinessIds, 
         });
         for (const row of owned.rows)
             add(row);
+        if (opts?.onlyOwned)
+            continue;
         const clientWabas = await paginateGraphCollection(graph, token, `${seed}/client_whatsapp_business_accounts`, { fields: CLIENT_WABA_OWNER_FIELDS, limit: "100" });
         for (const row of clientWabas.rows) {
             const owner = takeNestedBusiness(row, "owner_business_info");
@@ -491,7 +495,7 @@ async function discoverAdministeredBusinessNodes(graph, token, seedBusinessIds, 
                 add(owner);
         }
     }
-    if (opts?.onlyClients)
+    if (opts?.onlyClients || opts?.onlyOwned)
         return nodes;
     const adaccounts = await paginateGraphCollection(graph, token, "me/adaccounts", {
         fields: USER_ASSET_BUSINESS_FIELDS,
