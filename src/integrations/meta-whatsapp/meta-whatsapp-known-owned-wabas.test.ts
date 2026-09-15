@@ -78,6 +78,8 @@ describe("known owned WABAs", () => {
     assert.ok(catalogBackfillBusinessIds().includes("962298516898955"));
     assert.ok(catalogAdminBusinessIds().includes("962298516898955"));
     assert.ok(catalogAdminBusinessIds().includes("4681844838758316"));
+    assert.ok(catalogBackfillBusinessIds().includes("1832926164812406"));
+    assert.ok(catalogAdminBusinessIds().includes("1832926164812406"));
   });
 
   it("varre só os BMs da agência no Atualizar, sem tratar cliente como semente", () => {
@@ -87,6 +89,7 @@ describe("known owned WABAs", () => {
     assert.ok(agencies.includes("1247508354180311"));
     assert.equal(agencies.includes("962298516898955"), false);
     assert.equal(agencies.includes("4681844838758316"), false);
+    assert.equal(agencies.includes("1832926164812406"), false);
   });
 
   it("nomeia Flaviane e Marilza pelo catálogo quando o id casa", () => {
@@ -96,6 +99,10 @@ describe("known owned WABAs", () => {
     );
     assert.equal(catalogBusinessLabel("1962298516898955"), "60.845.972 Flaviane Ferreira Trindade");
     assert.equal(catalogBusinessLabel("4681844838758316"), "60.846.306 Marilza de Castro");
+    assert.equal(
+      catalogBusinessLabel("1832926164812406"),
+      "52.797.696 Natally Carissia Muniz Bezerra",
+    );
     assert.equal(catalogBusinessLabel("1041827648719609"), "");
   });
 });
