@@ -110,6 +110,20 @@ describe("linha do tempo do relatório do assinante", () => {
     );
   });
 
+  it("VITORIA DA CONQUISTA usa a linha do tempo pontual em Brasília", () => {
+    const timeline = collectIntakeReportTimeline(stubIntake("VITORIA DA CONQUISTA"));
+    assert.deepEqual(
+      timeline.items.map((item) => item.display),
+      [
+        "Terça-feira, 8 de setembro de 2026 - 18:01:00",
+        "Quarta-feira, 9 de setembro de 2026 - 15:34:00",
+        "Quinta-feira, 10 de setembro de 2026 - 18:01:00",
+        "Segunda-feira, 14 de setembro de 2026 - 12:01:00",
+        "Segunda-feira, 14 de setembro de 2026 - 12:17:00",
+      ],
+    );
+  });
+
   it("outra campanha não recebe a linha do tempo da PTX nem da Jandira", () => {
     const timeline = collectIntakeReportTimeline({
       ...stubIntake("Outra campanha"),
