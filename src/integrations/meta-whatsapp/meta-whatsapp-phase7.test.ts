@@ -95,7 +95,10 @@ class FakeConnections {
     return this.rows.filter(
       (row) =>
         row.tenantId === tenantId &&
-        (row.status === "connected" || row.status === "pending_confirmation"),
+        !row.disconnectedAt &&
+        (row.status === "pending_token" ||
+          row.status === "pending_confirmation" ||
+          row.status === "connected"),
     );
   }
   async findConnectedByPhoneNumberId(phoneNumberId: string) {
@@ -113,6 +116,37 @@ class FakeConnections {
     row.disconnectedAt = "2026-09-11T11:27:00.000Z";
     row.lastError = "left_manager";
     return true;
+  }
+  async findByBusinessId(tenantId: string, businessId: string) {
+    return (
+      this.rows.find(
+        (row) =>
+          row.tenantId === tenantId &&
+          String(row.metaBusinessId || "") === String(businessId || "") &&
+          !row.disconnectedAt &&
+          (row.status === "pending_token" ||
+            row.status === "pending_confirmation" ||
+            row.status === "connected"),
+      ) || null
+    );
+  }
+  async reopenLeftManagerForBusinesses(tenantId: string, businessIds: string[]) {
+    const wanted = new Set(businessIds.map((id) => String(id || "").trim()).filter(Boolean));
+    let restored = 0;
+    for (const row of this.rows) {
+      if (
+        row.tenantId === tenantId &&
+        row.status === "disconnected" &&
+        row.lastError === "left_manager" &&
+        wanted.has(String(row.metaBusinessId || "").trim())
+      ) {
+        row.status = "connected";
+        row.disconnectedAt = null;
+        row.lastError = null;
+        restored += 1;
+      }
+    }
+    return restored;
   }
 }
 
@@ -1599,6 +1633,118 @@ describe("fase 7 sync", () => {
     assert.equal(templates.rows.some((row) => row.name === "marilza_ok"), true);
     assert.equal(result.pages >= 1, true);
     assert.equal(result.skippedUnmanaged, undefined);
+  });
+
+  it("Atualizar da Meta ignora pending_token sem WABA e usa a conexão do mesmo BM", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "pending-marilza",
+        status: "pending_token",
+        wabaId: "",
+        metaBusinessId: "4681844838758316",
+        updatedAt: "2026-09-16T14:00:00.000Z",
+      }),
+      connectedRow({
+        id: "4557df49-7de8-4f24-906c-7e58cb21facf",
+        metaBusinessId: "4681844838758316",
+        wabaId: "waba-marilza",
+        updatedAt: "2026-09-01T12:00:00.000Z",
+      }),
+    );
+    const templates = new FakeTemplates();
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async () =>
+        graphJson({
+          data: [
+            {
+              id: "tpl-marilza-2",
+              name: "marilza_ok",
+              language: "pt_BR",
+              category: "UTILITY",
+              status: "APPROVED",
+              components: [{ type: "BODY", text: "Oi" }],
+            },
+          ],
+        }),
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A), "4681844838758316");
+    assert.equal(templates.rows.some((row) => row.name === "marilza_ok"), true);
+    assert.equal(result.pages >= 1, true);
+  });
+
+  it("Atualizar da Meta reabre BM do catálogo desconectado por left_manager", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "4557df49-7de8-4f24-906c-7e58cb21facf",
+        metaBusinessId: "4681844838758316",
+        wabaId: "waba-marilza",
+        status: "disconnected",
+        disconnectedAt: "2026-09-16T14:00:00.000Z",
+        lastError: "left_manager",
+      }),
+    );
+    const templates = new FakeTemplates();
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async () =>
+        graphJson({
+          data: [
+            {
+              id: "tpl-marilza-3",
+              name: "marilza_reopen",
+              language: "pt_BR",
+              category: "UTILITY",
+              status: "APPROVED",
+              components: [{ type: "BODY", text: "Oi" }],
+            },
+          ],
+        }),
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A), "4681844838758316");
+    assert.equal(connections.rows[0].status, "connected");
+    assert.equal(templates.rows.some((row) => row.name === "marilza_reopen"), true);
+    assert.equal(result.pages >= 1, true);
+  });
+
+  it("BM do catálogo admin não é desconectado quando a lista da Meta vem vazia", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "4557df49-7de8-4f24-906c-7e58cb21facf",
+        metaBusinessId: "4681844838758316",
+        wabaId: "waba-marilza",
+      }),
+    );
+    const templates = new FakeTemplates();
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input: { path: string }) => {
+        if (input.path.endsWith("/message_templates")) {
+          return graphErr(400, {
+            graphCode: "100",
+            json: {
+              error: {
+                code: 100,
+                message: "Unsupported post request. Object with ID 'waba-marilza' does not exist.",
+              },
+            },
+          });
+        }
+        return graphErr(400, { graphCode: "100", json: { error: { code: 100, message: "denied" } } });
+      },
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A), "4681844838758316");
+    assert.equal(result.skippedUnmanaged, true);
+    assert.equal(connections.rows[0].status, "connected");
   });
 
   it("WABA antiga recusada não desconecta o BM que o token ainda administra", async () => {
