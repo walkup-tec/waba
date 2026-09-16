@@ -6,6 +6,7 @@ import {
 } from "../instances/evo-connection-state.service";
 import { expandBrazilWhatsAppNumberVariants } from "../instances/evo-instance-phone.service";
 import { sendEvoImageAlert, sendEvoTextAlert, sendEvoUrlButtonAlert } from "../monitoring/evo-text-alert.client";
+import { CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT } from "./waba-mail.templates";
 import {
   resolveConnectedEvoInstanceByPhoneHint,
   resolveConnectedEvoOutboundInstance,
@@ -397,7 +398,7 @@ const trySendViaSlot = async (input: {
           targetNumber: destination,
           buttonLabel: button?.label || "Relatório",
           buttonUrl,
-          messageText: "Toque para abrir o relatório da campanha no seu painel.",
+          messageText: CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT,
           timeoutMs,
         });
         if (!buttonResult.ok) {
