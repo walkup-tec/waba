@@ -22686,9 +22686,7 @@
                 <p id="meta-tp-connect-status" class="muted" style="margin:0 0 10px;" role="status" aria-live="polite" hidden></p>
                 <div class="meta-onboard-next">
                   <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaOpenLabTab('whatsapp-templates');">Ir para Templates</button>
-                  <button type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaOpenLabTab('whatsapp-inbox');">Abrir atendimento</button>
                   <button id="meta-tp-refresh-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaRefreshMetaWhatsappStatus(event);">Atualizar</button>
-                  <button id="meta-tp-subscribe-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaSubscribeMetaWhatsappWebhooks(event);">Inscrever webhooks</button>
                 </div>
                 <p id="meta-tp-connect-log" hidden></p>
               </div>
@@ -39068,29 +39066,6 @@
           btn.textContent = "Atualizar";
           btn.removeAttribute("disabled");
         }
-        }
-        return false;
-      };
-
-      window.wabaSubscribeMetaWhatsappWebhooks = async function wabaSubscribeMetaWhatsappWebhooks(event) {
-        if (event && typeof event.preventDefault === "function") event.preventDefault();
-        try {
-          const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/subscribe-webhooks", {
-            method: "POST",
-            body: "{}",
-          });
-          if (!response.ok || payload.ok === false) {
-            metaTpLog("webhooks: " + String(payload.error || "falha"));
-            return false;
-          }
-          metaTpLog(
-            payload.alreadySubscribed
-              ? "webhooks: já inscrito"
-              : "webhooks: inscrição concluída",
-          );
-          if (typeof window.wabaRefreshMetaInbox === "function") window.wabaRefreshMetaInbox();
-        } catch {
-          metaTpLog("webhooks: falha de rede");
         }
         return false;
       };
