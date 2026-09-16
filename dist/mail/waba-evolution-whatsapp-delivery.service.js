@@ -6,6 +6,7 @@ const evo_api_config_1 = require("../evo-api-config");
 const evo_connection_state_service_1 = require("../instances/evo-connection-state.service");
 const evo_instance_phone_service_1 = require("../instances/evo-instance-phone.service");
 const evo_text_alert_client_1 = require("../monitoring/evo-text-alert.client");
+const waba_mail_templates_1 = require("./waba-mail.templates");
 const waba_push_community_service_1 = require("../push/waba-push-community.service");
 const aquecedor_instance_lifecycle_service_1 = require("../services/aquecedor-instance-lifecycle.service");
 const waba_evolution_delivery_ack_1 = require("./waba-evolution-delivery-ack");
@@ -299,7 +300,7 @@ const trySendViaSlot = async (input) => {
                     targetNumber: destination,
                     buttonLabel: button?.label || "Relatório",
                     buttonUrl,
-                    messageText: "Toque para abrir o relatório da campanha no seu painel.",
+                    messageText: waba_mail_templates_1.CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT,
                     timeoutMs,
                 });
                 if (!buttonResult.ok) {
