@@ -309,7 +309,11 @@ export async function sendEvoUrlButtonAlert(input: {
   const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
   const buttonUrl = String(input.buttonUrl || "").trim();
   const buttonLabel = String(input.buttonLabel || "Relatório").trim() || "Relatório";
-  const description = String(input.messageText || "").trim() || "Relatório da campanha";
+  const title = String(input.messageText || "")
+    .trim()
+    .replace(/\*([^*\n]+)\*/g, "$1")
+    .replace(/\*/g, "")
+    .trim() || "Relatório da campanha";
   if (!instanceName || !targetNumber || !buttonUrl) {
     return { ok: false, detail: "Dados insuficientes para sendButtons.", status: 0 };
   }
@@ -323,8 +327,8 @@ export async function sendEvoUrlButtonAlert(input: {
     apiKey: resolveEvoApiKey(),
     body: {
       number: targetNumber,
-      title: "\u00A0",
-      description,
+      title,
+      description: "\u00A0",
       footer: "",
       buttons: [{ type: "url", displayText: buttonLabel, url: buttonUrl }],
     },
