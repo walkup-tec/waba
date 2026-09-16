@@ -51,6 +51,8 @@ import {
 } from "./meta-whatsapp-template-header-preview.store";
 import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template";
 import {
+  businessIdsToReopenAfterFalseLeftManager,
+  catalogAdminBusinessIds,
   isKnownClientWabaId,
   knownClientWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
@@ -66,10 +68,44 @@ import { isPostgresUuid } from "./meta-whatsapp-template-route-id";
 
 /** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. Devolver JSON antes. */
 const META_TEMPLATE_SYNC_BUDGET_MS = 12_000;
+const META_TEMPLATE_SYNC_PERSIST_BUDGET_MS = 20_000;
 const META_TEMPLATE_SYNC_LIST_TIMEOUT_MS = 3_500;
 const META_TEMPLATE_SYNC_MAX_PAGES = 8;
 /** Último recurso: WABAs do debug_token que o catálogo/card não listou. */
 const META_TEMPLATE_SYNC_DEBUG_WABA_CAP = 3;
+
+function isUsableTemplateConnection(
+  row: MetaWhatsappConnectionRecord | null | undefined,
+): row is MetaWhatsappConnectionRecord {
+  return Boolean(
+    row &&
+      (row.status === "connected" || row.status === "pending_confirmation") &&
+      String(row.wabaId || "").trim(),
+  );
+}
+
+function connectionMatchesRequest(row: MetaWhatsappConnectionRecord, requested: string): boolean {
+  const want = String(requested || "").trim();
+  if (!want) return false;
+  if (String(row.id || "").trim() === want) return true;
+  return metaBusinessIdsMatch(String(row.metaBusinessId || ""), want);
+}
+
+function pickUsableOpenConnection(
+  open: MetaWhatsappConnectionRecord[],
+  requested: string,
+): MetaWhatsappConnectionRecord | null {
+  const matches = open.filter(
+    (row) => connectionMatchesRequest(row, requested) && isUsableTemplateConnection(row),
+  );
+  return matches.find((row) => row.status === "connected") || matches[0] || null;
+}
+
+function isCatalogAdminBusiness(businessId: string): boolean {
+  const bm = String(businessId || "").trim();
+  if (!bm) return false;
+  return catalogAdminBusinessIds().some((id) => metaBusinessIdsMatch(id, bm));
+}
 
 async function resolveSyncFallbackWabaIds(input: {
   token: string;
@@ -213,41 +249,68 @@ export class MetaWhatsappTemplateService {
   async requireConnectedWaba(
     tenantId: string,
     connectionId?: string,
+    actorEmail = "",
   ): Promise<MetaWhatsappConnectionRecord> {
     const requested = String(connectionId || "").trim();
-    let row: MetaWhatsappConnectionRecord | null = null;
-    if (!requested) {
-      row = await this.connections.findConnectedByTenant(tenantId);
-    } else if (isPostgresUuid(requested)) {
+    const lookup = async (): Promise<MetaWhatsappConnectionRecord | null> => {
+      let row: MetaWhatsappConnectionRecord | null = null;
+      if (!requested) {
+        row = await this.connections.findConnectedByTenant(tenantId);
+      } else if (isPostgresUuid(requested)) {
+        try {
+          row = await this.connections.findByIdForTenant(tenantId, requested);
+        } catch (error) {
+          const text = String((error as { message?: string })?.message || error || "");
+          if (!/invalid input syntax for type uuid/i.test(text)) throw error;
+          row = null;
+        }
+      }
+      if (!isUsableTemplateConnection(row) && requested) {
+        const open = await this.listOpenConnections(tenantId);
+        row = pickUsableOpenConnection(open, requested);
+        const repo = this.connections as {
+          findByBusinessId?: (
+            tenantId: string,
+            businessId: string,
+          ) => Promise<MetaWhatsappConnectionRecord | null>;
+        };
+        if (!isUsableTemplateConnection(row) && typeof repo.findByBusinessId === "function") {
+          const byBm = await repo.findByBusinessId(tenantId, requested);
+          if (isUsableTemplateConnection(byBm)) row = byBm;
+        }
+      }
+      return isUsableTemplateConnection(row) ? row : null;
+    };
+
+    let row = await lookup();
+    const repo = this.connections as {
+      reopenLeftManagerForBusinesses?: (
+        tenantId: string,
+        businessIds: string[],
+        actorEmail: string,
+      ) => Promise<number>;
+    };
+    if (!row && requested && !isPostgresUuid(requested) && typeof repo.reopenLeftManagerForBusinesses === "function") {
       try {
-        row = await this.connections.findByIdForTenant(tenantId, requested);
-      } catch (error) {
-        const text = String((error as { message?: string })?.message || error || "");
-        if (!/invalid input syntax for type uuid/i.test(text)) throw error;
-        row = null;
+        const restored = await repo.reopenLeftManagerForBusinesses(
+          tenantId,
+          [...new Set([requested, ...businessIdsToReopenAfterFalseLeftManager()])],
+          String(actorEmail || "").trim(),
+        );
+        if (restored) {
+          logMetaTemplate("SYNC", {
+            reason: "reopen_left_manager_for_sync",
+            tenantId,
+            connectionId: requested,
+            restored,
+          });
+        }
+      } catch {
+        logMetaTemplate("ERROR", { reason: "reopen_left_manager_for_sync_failed", tenantId, connectionId: requested });
       }
+      row = await lookup();
     }
-    if (!row && requested) {
-      const open = await this.listOpenConnections(tenantId);
-      row =
-        open.find((item) => String(item.id || "").trim() === requested) ||
-        open.find((item) => metaBusinessIdsMatch(String(item.metaBusinessId || ""), requested)) ||
-        null;
-      const repo = this.connections as {
-        findByBusinessId?: (tenantId: string, businessId: string) => Promise<MetaWhatsappConnectionRecord | null>;
-      };
-      if (!row && typeof repo.findByBusinessId === "function") {
-        row = await repo.findByBusinessId(tenantId, requested);
-      }
-    }
-    if (
-      !row ||
-      (row.status !== "connected" && row.status !== "pending_confirmation") ||
-      !row.wabaId
-    ) {
-      throw new MetaWhatsappError("not_connected");
-    }
-    if (row.tenantId !== tenantId) throw new MetaWhatsappError("not_connected");
+    if (!row || row.tenantId !== tenantId) throw new MetaWhatsappError("not_connected");
     return row;
   }
 
@@ -514,7 +577,11 @@ export class MetaWhatsappTemplateService {
     skippedUnmanaged?: boolean;
   }> {
     const tenant = requireTenant(auth);
-    const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId);
+    const connection = await this.requireConnectedWaba(
+      tenant.tenantId,
+      connectionId,
+      tenant.ownerEmail,
+    );
     if (isMetaGraphUploadCooldown()) {
       const limited = new MetaWhatsappError("graph_rate_limited");
       limited.message = metaGraphUploadCooldownMessage();
@@ -683,22 +750,26 @@ export class MetaWhatsappTemplateService {
     if (!listedByWaba.length) {
       const bm = String(connection.metaBusinessId || "").trim();
       const graph = this.graph || callMetaGraphJson;
-      const bmOwner = bm
-        ? await fetchWabaOwner(
-            (input) =>
-              graph({
-                token: input.token,
-                method: input.method,
-                path: input.path,
-                query: input.query,
-              }),
-            token,
-            bm,
-          )
-        : { ok: false, denied: false };
-      if (bmOwner.ok) {
+      const ownerTimeoutMs = Math.min(3000, remainingMs());
+      const bmOwner =
+        bm && ownerTimeoutMs >= 1500
+          ? await fetchWabaOwner(
+              (input) =>
+                graph({
+                  token: input.token,
+                  method: input.method,
+                  path: input.path,
+                  query: input.query,
+                  maxAttempts: 1,
+                  timeoutMs: ownerTimeoutMs,
+                }),
+              token,
+              bm,
+            )
+          : { ok: false, denied: false };
+      if (bmOwner.ok || isCatalogAdminBusiness(bm)) {
         logMetaTemplate("SYNC", {
-          reason: "skip_stale_waba_keep_bm",
+          reason: bmOwner.ok ? "skip_stale_waba_keep_bm" : "skip_stale_waba_keep_admin_bm",
           tenantId: tenant.tenantId,
           connectionId: connection.id,
           wabaId: primaryWabaId,
@@ -728,14 +799,20 @@ export class MetaWhatsappTemplateService {
       };
     }
     const now = new Date().toISOString();
+    const persistDeadlineAt = startedAt + META_TEMPLATE_SYNC_PERSIST_BUDGET_MS;
     const upserted: MetaTemplateRecord[] = [];
     const keepMetaIds = new Set<string>();
     const keepNameLang = new Set<string>();
     const completedWabas = new Set<string>();
+    let persistTruncated = false;
     for (const listed of listedByWaba) {
       if (listed.complete) completedWabas.add(listed.wabaId);
       for (const item of listed.items) {
         if (!item) continue;
+        if (Date.now() >= persistDeadlineAt) {
+          persistTruncated = true;
+          break;
+        }
         keepMetaIds.add(String(item.metaTemplateId || "").trim());
         keepNameLang.add(`${listed.wabaId}::${item.name}::${item.language}`);
         const previous =
@@ -788,9 +865,17 @@ export class MetaWhatsappTemplateService {
           logMetaTemplate("ERROR", { reason: "ai_outcome_sync_failed", tenantId: tenant.tenantId });
         }
       }
+      if (persistTruncated) break;
     }
     let removed = 0;
-    if (completedWabas.size) {
+    if (persistTruncated) {
+      logMetaTemplate("SYNC", {
+        reason: "skip_prune_persist_budget",
+        tenantId: tenant.tenantId,
+        pages,
+        upserted: upserted.length,
+      });
+    } else if (completedWabas.size) {
       const locals = await this.templates.listByTenantConnection(tenant.tenantId, connection.id);
       for (const row of locals) {
         if (!completedWabas.has(row.wabaId)) continue;
