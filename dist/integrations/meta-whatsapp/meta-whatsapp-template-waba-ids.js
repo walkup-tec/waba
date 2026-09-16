@@ -321,6 +321,8 @@ async function listDebugTokenManagedWabaIds(input) {
     return wabaIdsFromDebugTokenJson(debug.json);
 }
 const SYNC_GRAPH = { maxAttempts: 1, timeoutMs: 4000 };
+/** BM de cliente sem catálogo: no máximo 1 WABA extra do snapshot owned. */
+const SYNC_GRAPH_OWNED_EXTRA_CAP = 1;
 /**
  * Alvos do Atualizar da Meta: catálogo/card + no máximo um snapshot owned.
  * O discover completo (paginação + identity GET) estoura o Traefik (~30s → 502 vazio).
@@ -333,6 +335,7 @@ async function listSyncTargetWabaIds(input) {
         return [...ids];
     const graph = input.graph || meta_whatsapp_graph_client_1.callMetaGraphJson;
     const call = { maxAttempts: 1, timeoutMs: input.timeoutMs || SYNC_GRAPH.timeoutMs };
+    const graphOwned = [];
     let ownedFromNested = 0;
     if (bm) {
         const nested = await graph({
@@ -345,7 +348,7 @@ async function listSyncTargetWabaIds(input) {
         if (nested.ok) {
             for (const row of splitWabasFromBusinessNodeJson(nested.json).owned) {
                 if (row.id && !(0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaId)(row.id)) {
-                    ids.add(row.id);
+                    graphOwned.push(row.id);
                     ownedFromNested += 1;
                 }
             }
@@ -361,10 +364,19 @@ async function listSyncTargetWabaIds(input) {
             if (edge.ok) {
                 for (const id of wabaIdsFromBusinessEdgeJson(edge.json)) {
                     if (id && !(0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaId)(id))
-                        ids.add(id);
+                        graphOwned.push(id);
                 }
             }
         }
+    }
+    let extras = 0;
+    for (const id of graphOwned) {
+        if (!id || id === primary || ids.has(id))
+            continue;
+        ids.add(id);
+        extras += 1;
+        if (extras >= SYNC_GRAPH_OWNED_EXTRA_CAP)
+            break;
     }
     for (const raw of input.extraWabaIds || []) {
         const id = String(raw || "").trim();
