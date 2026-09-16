@@ -54,12 +54,13 @@ function finalizeIntakePerformanceReport(input) {
     if (bonusShipments > 0) {
         bonusService.grantCampaignBonus(intake.ownerEmail, input.campaignId, bonusShipments, (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake));
     }
-    (0, waba_campaign_completed_notify_service_1.notifyCampaignCompletedAsync)({
-        ownerEmail: intake.ownerEmail,
-        campaignId: input.campaignId,
-        campaignName: intake.campaignName,
-    });
     const completedIntake = intakeRepository.getById(input.campaignId) ?? updated;
+    (0, waba_campaign_completed_notify_service_1.notifyCampaignCompletedAsync)({
+        ownerEmail: completedIntake.ownerEmail,
+        campaignId: input.campaignId,
+        campaignName: completedIntake.campaignName,
+        intake: completedIntake,
+    });
     void splitService.payoutSupplierForCompletedCampaign(completedIntake).then((settlement) => {
         if (settlement?.id) {
             intakeRepository.updateById(input.campaignId, {
