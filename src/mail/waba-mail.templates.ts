@@ -227,6 +227,10 @@ export type CampaignCompletedTemplateInput = {
   reportImageCid?: string;
 };
 
+/** WhatsApp: um * de cada lado deixa a linha em negrito. */
+export const CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT =
+  "*Toque para abrir o relatório da campanha no seu painel.*";
+
 export const buildCampaignCompletedWhatsAppText = (input: {
   recipientName: string;
   recipientEmail: string;
@@ -240,8 +244,6 @@ export const buildCampaignCompletedWhatsAppText = (input: {
     `Informamos que sua campanha ${campaignName} foi concluída e o relatório de desempenho já está disponível para consulta.`,
     "",
     "Agradecemos pela confiança em nossos serviços. Toque em Relatório para acessar os resultados da campanha diretamente no seu painel.",
-    "",
-    "Se tiver dúvidas sobre os números ou quiser iniciar um novo disparo, nossa equipe está pronta para ajudar.",
     "",
     "Atenciosamente,",
     "Equipe Drax Sistemas",
@@ -274,9 +276,6 @@ export const buildCampaignCompletedTemplate = (input: CampaignCompletedTemplateI
       os resultados da campanha diretamente no seu painel.
     </p>
     ${primaryButtonHtml(input.reportUrl, "Acesse o relatório")}
-    <p style="margin:16px 0 0;color:#1e293b;">
-      Se tiver dúvidas sobre os números ou quiser iniciar um novo disparo, nossa equipe está pronta para ajudar.
-    </p>
     <p style="margin:16px 0 0;color:#1e293b;">
       Atenciosamente,<br />
       <strong>Equipe Drax Sistemas</strong>
