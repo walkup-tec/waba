@@ -4,7 +4,7 @@ exports.finalizeIntakePerformanceReport = finalizeIntakePerformanceReport;
 const waba_disparos_bonus_service_1 = require("../billing/waba-disparos-bonus.service");
 const waba_campaign_credit_funding_1 = require("../billing/waba-campaign-credit-funding");
 const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-split.service");
-const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
+const waba_campaign_completed_notify_service_1 = require("../mail/waba-campaign-completed-notify.service");
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
@@ -54,7 +54,7 @@ function finalizeIntakePerformanceReport(input) {
     if (bonusShipments > 0) {
         bonusService.grantCampaignBonus(intake.ownerEmail, input.campaignId, bonusShipments, (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake));
     }
-    (0, waba_mail_delivery_1.notifyCampaignCompletedEmail)({
+    (0, waba_campaign_completed_notify_service_1.notifyCampaignCompletedAsync)({
         ownerEmail: intake.ownerEmail,
         campaignId: input.campaignId,
         campaignName: intake.campaignName,
