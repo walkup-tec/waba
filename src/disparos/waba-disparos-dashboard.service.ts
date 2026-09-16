@@ -3,16 +3,13 @@ import {
   WABA_DISPATCHES_API_LABELS,
   type WabaDispatchesApiKind,
 } from "./waba-dispatches-api-kind";
-import type {
-  WabaCampaignIntake,
-  WabaCampaignIntakeStatus,
-} from "./waba-campaign-intake.repository";
-import { normalizeCampaignIntakeStatus } from "./waba-campaign-intake-status";
+import type { WabaCampaignIntake } from "./waba-campaign-intake.repository";
 import {
   applyCampaignReportReadOverride,
   campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
   campaignReportShowsClicks,
+  resolveOverriddenCampaignStatus,
 } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
 import {
@@ -85,9 +82,6 @@ export type DisparosDashboardOverview = {
   message: string;
 };
 
-const normalizeStoredStatus = (status: string): WabaCampaignIntakeStatus =>
-  normalizeCampaignIntakeStatus(status);
-
 const roundMetric = (value: unknown): number => {
   const parsed = Math.round(Number(value));
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
@@ -125,8 +119,18 @@ export const buildCampaignComparisonFromIntakes = (
       if (campaignHoldsSubscriberInProgress(intake.campaignName, intake.createdAt, intake.id)) {
         return false;
       }
-      const status = normalizeStoredStatus(intake.status);
-      return status === "completed" && Boolean(intake.performanceReport);
+      const status = resolveOverriddenCampaignStatus(
+        intake.campaignName,
+        intake.createdAt,
+        intake.status,
+        intake.id,
+      );
+      const report = applyCampaignReportReadOverride(
+        intake.campaignName,
+        intake.createdAt,
+        intake.performanceReport,
+      );
+      return status === "completed" && Boolean(report);
     })
     .map((intake) => {
       const report = applyCampaignReportReadOverride(
@@ -242,21 +246,26 @@ const aggregateDisparosDashboardFromIntakes = (
       intake.createdAt,
       intake.id,
     );
-    const status = holdInProgress ? "in_progress" : normalizeStoredStatus(intake.status);
+    const status = resolveOverriddenCampaignStatus(
+      intake.campaignName,
+      intake.createdAt,
+      intake.status,
+      intake.id,
+    );
     if (status === "completed" || status === "error_reported") completed += 1;
     else if (status === "in_progress") inProgress += 1;
     else if (status === "generated") awaiting += 1;
 
-    if (holdInProgress || status !== "completed" || !intake.performanceReport) continue;
-
-    withReport += 1;
-    const apiKind = resolveIntakeApiKindFromIntake(intake);
-    withReportByApi[apiKind] += 1;
     const report = applyCampaignReportReadOverride(
       intake.campaignName,
       intake.createdAt,
       intake.performanceReport,
-    )!;
+    );
+    if (holdInProgress || status !== "completed" || !report) continue;
+
+    withReport += 1;
+    const apiKind = resolveIntakeApiKindFromIntake(intake);
+    withReportByApi[apiKind] += 1;
     const addLeads = roundMetric(report.totalLeads);
     const addSent = roundMetric(report.sent);
     const addDelivered = roundMetric(report.delivered);
