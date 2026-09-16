@@ -156,6 +156,31 @@ describe("override pontual do relatório", () => {
     assert.equal(campaignReportShowsClicks("Opt in PTX 2", "2026-09-09T01:34:51.000Z", stored), false);
   });
 
+  it("VITORIA DA CONQUISTA recebe indicadores manuais e preserva cliques", () => {
+    const stored = report({
+      totalLeads: 1000,
+      sent: 1,
+      delivered: 1,
+      read: 1,
+      failed: 1,
+      clicks: 33,
+      source: "meta_lab",
+    });
+    const got = applyCampaignReportReadOverride("VITORIA DA CONQUISTA", "2026-09-08T21:01:00.000Z", stored);
+    assert.equal(got?.sent, 907);
+    assert.equal(got?.delivered, 782);
+    assert.equal(got?.read, 484);
+    assert.equal(got?.failed, 86);
+    assert.equal(got?.clicks, 33);
+    assert.equal(got?.totalLeads, 1000);
+    assert.equal(campaignReportHidesClicks("VITORIA DA CONQUISTA", "2026-09-08T21:01:00.000Z", stored), false);
+    assert.equal(campaignReportShowsClicks("VITORIA DA CONQUISTA", "2026-09-08T21:01:00.000Z", stored), false);
+
+    const other = applyCampaignReportReadOverride("VITORIA DA CONQUISTA 2", "2026-09-08T21:01:00.000Z", stored);
+    assert.equal(other?.sent, 1);
+    assert.equal(other?.clicks, 33);
+  });
+
   it("Convite para base Jandira recebe indicadores manuais com cliques", () => {
     const stored = report({
       totalLeads: 1800,
