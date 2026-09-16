@@ -62,6 +62,7 @@ import {
   isMetaGraphUploadCooldown,
   metaGraphUploadCooldownMessage,
 } from "./meta-whatsapp-graph-cooldown";
+import { isPostgresUuid } from "./meta-whatsapp-template-route-id";
 
 /** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. Devolver JSON antes. */
 const META_TEMPLATE_SYNC_BUDGET_MS = 12_000;
@@ -214,9 +215,18 @@ export class MetaWhatsappTemplateService {
     connectionId?: string,
   ): Promise<MetaWhatsappConnectionRecord> {
     const requested = String(connectionId || "").trim();
-    let row = requested
-      ? await this.connections.findByIdForTenant(tenantId, requested)
-      : await this.connections.findConnectedByTenant(tenantId);
+    let row: MetaWhatsappConnectionRecord | null = null;
+    if (!requested) {
+      row = await this.connections.findConnectedByTenant(tenantId);
+    } else if (isPostgresUuid(requested)) {
+      try {
+        row = await this.connections.findByIdForTenant(tenantId, requested);
+      } catch (error) {
+        const text = String((error as { message?: string })?.message || error || "");
+        if (!/invalid input syntax for type uuid/i.test(text)) throw error;
+        row = null;
+      }
+    }
     if (!row && requested) {
       const open = await this.listOpenConnections(tenantId);
       row =
