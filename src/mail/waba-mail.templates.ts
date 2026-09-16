@@ -227,9 +227,13 @@ export type CampaignCompletedTemplateInput = {
   reportImageCid?: string;
 };
 
-/** WhatsApp: um * de cada lado deixa a linha em negrito. */
+/**
+ * Texto do card do botão Relatório.
+ * A Evolution envolve o title com * *; não mande asterisco no texto
+ * (vira * solto no topo do card).
+ */
 export const CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT =
-  "*Toque para abrir o relatório da campanha no seu painel.*";
+  "Toque para abrir o relatório da campanha no seu painel.";
 
 export const buildCampaignCompletedWhatsAppText = (input: {
   recipientName: string;
