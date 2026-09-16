@@ -3,7 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.VITORIA_COMPLETED_NOTIFY_TEST_WHATSAPP = exports.VITORIA_COMPLETED_NOTIFY_TEST_EMAIL = exports.VITORIA_COMPLETED_NOTIFY_TEST_ID = void 0;
+exports.CAMPAIGN_COMPLETED_EVO_INSTANCE_LABELS = exports.CAMPAIGN_COMPLETED_EVO_PHONE_HINTS = exports.VITORIA_COMPLETED_NOTIFY_TEST_WHATSAPP = exports.VITORIA_COMPLETED_NOTIFY_TEST_EMAIL = exports.VITORIA_COMPLETED_NOTIFY_TEST_ID = void 0;
+exports.resolveCampaignCompletedNotifyTarget = resolveCampaignCompletedNotifyTarget;
 exports.notifyCampaignCompleted = notifyCampaignCompleted;
 exports.notifyCampaignCompletedAsync = notifyCampaignCompletedAsync;
 exports.buildVitoriaCompletedNotifySnapshot = buildVitoriaCompletedNotifySnapshot;
@@ -25,6 +26,38 @@ const ONESHOT_FILE = "waba-campaign-completed-notify-oneshots.json";
 exports.VITORIA_COMPLETED_NOTIFY_TEST_ID = "vitoria-completed-notify-test-20260916-print3";
 exports.VITORIA_COMPLETED_NOTIFY_TEST_EMAIL = "walkup@walkuptec.com.br";
 exports.VITORIA_COMPLETED_NOTIFY_TEST_WHATSAPP = "51999666841";
+/** Ordem de chips EVO para o aviso de campanha finalizada. */
+exports.CAMPAIGN_COMPLETED_EVO_PHONE_HINTS = ["5181077770", "5198335401", "5197462102"];
+exports.CAMPAIGN_COMPLETED_EVO_INSTANCE_LABELS = {
+    "5181077770": "Drax Sistemas",
+    "5198335401": "drax-backup",
+    "5197462102": "walkup",
+};
+function resolveCampaignCompletedNotifyTarget(input) {
+    const intakeRepository = input.intakeRepository || new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
+    const subscriberRepository = input.subscriberRepository || new waba_subscriber_repository_1.WabaSubscriberRepository();
+    const campaignId = String(input.campaignId || input.intake?.id || "").trim();
+    const intake = input.intake || (campaignId ? intakeRepository.getById(campaignId) : null);
+    const ownerEmail = String(intake?.ownerEmail || input.ownerEmail || "")
+        .trim()
+        .toLowerCase();
+    const subscriber = ownerEmail ? subscriberRepository.getByEmail(ownerEmail) : null;
+    const email = String(input.toEmail || subscriber?.email || ownerEmail)
+        .trim()
+        .toLowerCase();
+    const whatsapp = String(input.toWhatsapp || subscriber?.whatsapp || subscriber?.phone || "").replace(/\D/g, "");
+    const recipientName = String(input.recipientName || subscriber?.fullName || "").trim();
+    const campaignName = String(intake?.campaignName || input.campaignName || "").trim();
+    return {
+        intake,
+        campaignId: campaignId || String(intake?.id || "").trim(),
+        campaignName,
+        ownerEmail,
+        email,
+        whatsapp,
+        recipientName,
+    };
+}
 const stubIntakeForSnapshot = (input, id = "snapshot") => ({
     id,
     ownerEmail: "",
@@ -60,22 +93,15 @@ async function captureReportImage(model, renderPng) {
     return null;
 }
 async function notifyCampaignCompleted(input) {
-    const intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
-    const subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository();
-    const intake = input.intake || intakeRepository.getById(input.campaignId);
-    const ownerEmail = String(input.toEmail || input.ownerEmail || intake?.ownerEmail || "")
-        .trim()
-        .toLowerCase();
-    const subscriber = ownerEmail ? subscriberRepository.getByEmail(ownerEmail) : null;
-    const recipientName = String(input.recipientName || "").trim() || String(subscriber?.fullName || "").trim();
-    const whatsapp = String(input.toWhatsapp || subscriber?.whatsapp || subscriber?.phone || "").replace(/\D/g, "");
+    const target = resolveCampaignCompletedNotifyTarget(input);
+    const intake = target.intake;
     const model = input.snapshot ||
         (intake
             ? (0, waba_campaign_report_snapshot_1.buildCampaignReportSnapshotModel)(intake)
             : {
-                campaignName: input.campaignName,
+                campaignName: target.campaignName,
                 timeline: (0, waba_campaign_report_timeline_1.collectIntakeReportTimeline)(stubIntakeForSnapshot({
-                    campaignName: input.campaignName,
+                    campaignName: target.campaignName,
                     timeline: { items: [], metaCollectionNote: "" },
                     totalLeads: 0,
                     sent: 0,
@@ -90,26 +116,31 @@ async function notifyCampaignCompleted(input) {
                 failed: 0,
             });
     const image = await captureReportImage(model, input.renderPng);
-    const reportUrl = (0, waba_app_url_1.buildCampaignReportDeepLink)(input.campaignId);
-    const email = await (0, waba_mail_delivery_1.deliverCampaignCompletedEmail)({
-        ownerEmail,
-        campaignId: input.campaignId,
-        campaignName: input.campaignName,
-        recipientName,
+    const reportUrl = (0, waba_app_url_1.buildCampaignReportDeepLink)(target.campaignId);
+    console.info(`[notify] campanha finalizada: id=${target.campaignId} campanha=${target.campaignName} assinante=${target.email} whatsapp=${target.whatsapp || "(sem)"} print=${model.campaignName} evo=${exports.CAMPAIGN_COMPLETED_EVO_PHONE_HINTS.join(" → ")}`);
+    const sendEmail = input.deliverEmail || waba_mail_delivery_1.deliverCampaignCompletedEmail;
+    const email = await sendEmail({
+        ownerEmail: target.email,
+        campaignId: target.campaignId,
+        campaignName: target.campaignName,
+        recipientName: target.recipientName,
         reportImage: image || undefined,
     });
     const text = (0, waba_mail_templates_1.buildCampaignCompletedWhatsAppText)({
-        recipientName,
-        recipientEmail: ownerEmail,
-        campaignName: input.campaignName,
+        recipientName: target.recipientName,
+        recipientEmail: target.email,
+        campaignName: target.campaignName,
     });
-    const whatsappDelivery = whatsapp
-        ? await (0, waba_evolution_whatsapp_delivery_service_1.deliverWabaEvolutionWhatsApp)({
-            targetWhatsapp: whatsapp,
-            recipientEmail: ownerEmail,
+    const sendWhatsApp = input.deliverWhatsApp || waba_evolution_whatsapp_delivery_service_1.deliverWabaEvolutionWhatsApp;
+    const whatsappDelivery = target.whatsapp
+        ? await sendWhatsApp({
+            targetWhatsapp: target.whatsapp,
+            recipientEmail: target.email,
             text,
-            logLabel: `campanha finalizada ${input.campaignId}`,
-            backgroundRetryKey: `campaign-done:${input.campaignId}:wa:${whatsapp.slice(-11)}`,
+            logLabel: `campanha finalizada ${target.campaignId}`,
+            backgroundRetryKey: `campaign-done:${target.campaignId}:wa:${target.whatsapp.slice(-11)}`,
+            phoneHints: [...exports.CAMPAIGN_COMPLETED_EVO_PHONE_HINTS],
+            verifyLiveIfCatalogClosed: true,
             image: image
                 ? {
                     mediaBase64: image.toString("base64"),
