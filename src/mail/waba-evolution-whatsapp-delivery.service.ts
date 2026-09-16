@@ -5,7 +5,7 @@ import {
   isEvoLiveStateOpen,
 } from "../instances/evo-connection-state.service";
 import { expandBrazilWhatsAppNumberVariants } from "../instances/evo-instance-phone.service";
-import { sendEvoImageAlert, sendEvoTextAlert } from "../monitoring/evo-text-alert.client";
+import { sendEvoImageAlert, sendEvoTextAlert, sendEvoUrlButtonAlert } from "../monitoring/evo-text-alert.client";
 import {
   resolveConnectedEvoInstanceByPhoneHint,
   resolveConnectedEvoOutboundInstance,
@@ -295,6 +295,15 @@ const trySendViaSlot = async (input: {
   ignoreAquecedorLifecycle?: boolean;
   linkPreview?: boolean;
   sendWelcomeCover?: boolean;
+  image?: {
+    mediaBase64: string;
+    mimetype?: string;
+    fileName?: string;
+  };
+  urlButton?: {
+    label: string;
+    url: string;
+  };
 }): Promise<TrySendViaSlotOutcome> => {
   const { slot, targetWhatsapp, text, recipientLabel, timeoutMs } = input;
   const liveState = await fetchEvoInstanceLiveState(slot.instanceName, { fresh: true });
@@ -317,14 +326,36 @@ const trySendViaSlot = async (input: {
     : [targetWhatsapp];
 
   for (const destination of destinations) {
-    const result = await sendEvoTextAlert({
-      instanceName: slot.instanceName,
-      targetNumber: destination,
-      text,
-      timeoutMs,
-      retries: 2,
-      linkPreview: input.linkPreview,
-    });
+    const imageBase64 = String(input.image?.mediaBase64 || "").replace(/\s+/g, "");
+    let result = imageBase64
+      ? await sendEvoImageAlert({
+          instanceName: slot.instanceName,
+          targetNumber: destination,
+          mediaBase64: imageBase64,
+          mimetype: input.image?.mimetype || "image/png",
+          fileName: input.image?.fileName || "relatorio-campanha.png",
+          caption: text,
+          timeoutMs,
+        })
+      : await sendEvoTextAlert({
+          instanceName: slot.instanceName,
+          targetNumber: destination,
+          text,
+          timeoutMs,
+          retries: 2,
+          linkPreview: input.linkPreview,
+        });
+
+    if (!result.ok && imageBase64) {
+      result = await sendEvoTextAlert({
+        instanceName: slot.instanceName,
+        targetNumber: destination,
+        text,
+        timeoutMs,
+        retries: 2,
+        linkPreview: input.linkPreview,
+      });
+    }
 
     if (!result.ok) {
       const detail = String(result.detail || "Falha no envio via Evolution.").slice(0, 300);
@@ -351,12 +382,34 @@ const trySendViaSlot = async (input: {
       remoteJid: result.remoteJid,
     });
 
-    if (ack.outcome === "delivered") {
+    if (ack.outcome === "delivered" || (imageBase64 && result.ok && ack.outcome !== "error")) {
       console.log(
         `[whatsapp] entregue no aparelho para ${destination} (${recipientLabel}) via ${slot.instanceName} (${slot.phoneHint}) ack=${ack.status}.`,
       );
       if (input.sendWelcomeCover) {
         await sendWelcomeCoverBestEffort(slot.instanceName, destination, input.logLabel || "whatsapp");
+      }
+      const button = input.urlButton;
+      const buttonUrl = String(button?.url || "").trim();
+      if (buttonUrl) {
+        const buttonResult = await sendEvoUrlButtonAlert({
+          instanceName: slot.instanceName,
+          targetNumber: destination,
+          buttonLabel: button?.label || "Relatório",
+          buttonUrl,
+          messageText: "Toque para abrir o relatório da campanha no seu painel.",
+          timeoutMs,
+        });
+        if (!buttonResult.ok) {
+          await sendEvoTextAlert({
+            instanceName: slot.instanceName,
+            targetNumber: destination,
+            text: `Relatório: ${buttonUrl}`,
+            timeoutMs,
+            retries: 1,
+            linkPreview: true,
+          });
+        }
       }
       return {
         result: { status: "sent", message: "WhatsApp enviado.", instanceName: slot.instanceName },
@@ -386,6 +439,15 @@ export type WabaEvolutionWhatsAppDeliveryInput = {
   linkPreview?: boolean;
   /** Após ACK do texto, envia JPEG de capa (não bloqueia o status sent). */
   sendWelcomeCover?: boolean;
+  image?: {
+    mediaBase64: string;
+    mimetype?: string;
+    fileName?: string;
+  };
+  urlButton?: {
+    label: string;
+    url: string;
+  };
 };
 
 type BackgroundRetryState = {
@@ -461,6 +523,8 @@ const runWabaEvolutionWhatsAppDelivery = async (
         ignoreAquecedorLifecycle,
         linkPreview: input.linkPreview,
         sendWelcomeCover: input.sendWelcomeCover,
+        image: input.image,
+        urlButton: input.urlButton,
       });
       const outcome = sendOutcome.result;
       if (outcome?.status === "sent") return outcome;
