@@ -107,6 +107,20 @@ function isCatalogAdminBusiness(businessId: string): boolean {
   return catalogAdminBusinessIds().some((id) => metaBusinessIdsMatch(id, bm));
 }
 
+/** ID numérico de Business Manager (não é UUID de conexão). */
+function isMetaBusinessManagerId(value: string): boolean {
+  const id = String(value || "").trim();
+  return /^\d{6,}$/.test(id);
+}
+
+function emptyPortfolioSyncResult(): {
+  templates: MetaTemplatePublic[];
+  pages: number;
+  removed: number;
+} {
+  return { templates: [], pages: 0, removed: 0 };
+}
+
 async function resolveSyncFallbackWabaIds(input: {
   token: string;
   businessId: string;
@@ -577,11 +591,29 @@ export class MetaWhatsappTemplateService {
     skippedUnmanaged?: boolean;
   }> {
     const tenant = requireTenant(auth);
-    const connection = await this.requireConnectedWaba(
-      tenant.tenantId,
-      connectionId,
-      tenant.ownerEmail,
-    );
+    const requested = String(connectionId || "").trim();
+    let connection: MetaWhatsappConnectionRecord;
+    try {
+      connection = await this.requireConnectedWaba(
+        tenant.tenantId,
+        requested,
+        tenant.ownerEmail,
+      );
+    } catch (error) {
+      if (
+        error instanceof MetaWhatsappError &&
+        error.code === "not_connected" &&
+        (isMetaBusinessManagerId(requested) || isCatalogAdminBusiness(requested))
+      ) {
+        logMetaTemplate("SYNC", {
+          reason: "empty_portfolio_no_waba",
+          tenantId: tenant.tenantId,
+          connectionId: requested,
+        });
+        return emptyPortfolioSyncResult();
+      }
+      throw error;
+    }
     if (isMetaGraphUploadCooldown()) {
       const limited = new MetaWhatsappError("graph_rate_limited");
       limited.message = metaGraphUploadCooldownMessage();
