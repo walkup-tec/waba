@@ -101,6 +101,21 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
       dispatchFinishedAt: "2026-09-11T20:22:00.000Z",
     },
   },
+  {
+    name: "VITORIA DA CONQUISTA",
+    matchExactName: true,
+    sent: 907,
+    delivered: 782,
+    read: 484,
+    failed: 86,
+    timeline: {
+      createdAt: "2026-09-08T21:01:00.000Z",
+      attendanceStartedAt: "2026-09-09T18:34:00.000Z",
+      templateApprovedAt: "2026-09-10T21:01:00.000Z",
+      dispatchStartedAt: "2026-09-14T15:01:00.000Z",
+      dispatchFinishedAt: "2026-09-14T15:17:00.000Z",
+    },
+  },
 ];
 
 const normalizeCampaignName = (value: string): string =>
