@@ -4,7 +4,7 @@ import {
   normalizeCampaignCreditFunding,
 } from "../billing/waba-campaign-credit-funding";
 import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.service";
-import { notifyCampaignCompletedEmail } from "../mail/waba-mail-delivery";
+import { notifyCampaignCompletedAsync } from "../mail/waba-campaign-completed-notify.service";
 import { resolveIntakeApiKindFromIntake } from "./waba-dispatches-api-kind";
 import {
   WabaCampaignIntakeRepository,
@@ -82,7 +82,7 @@ export function finalizeIntakePerformanceReport(input: {
       resolveIntakeApiKindFromIntake(intake),
     );
   }
-  notifyCampaignCompletedEmail({
+  notifyCampaignCompletedAsync({
     ownerEmail: intake.ownerEmail,
     campaignId: input.campaignId,
     campaignName: intake.campaignName,
