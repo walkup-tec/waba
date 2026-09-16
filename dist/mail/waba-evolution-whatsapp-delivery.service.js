@@ -339,8 +339,18 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
     if (!text) {
         return { status: "skipped", message: `${logLabel}: mensagem vazia.` };
     }
-    const phoneHints = resolveWabaWhatsAppPhoneHints();
+    const explicitHints = (input.phoneHints || [])
+        .map((hint) => String(hint || "").replace(/\D/g, ""))
+        .filter(Boolean);
+    const seenHints = new Set();
+    const phoneHints = (explicitHints.length ? explicitHints : resolveWabaWhatsAppPhoneHints()).filter((hint) => {
+        if (seenHints.has(hint))
+            return false;
+        seenHints.add(hint);
+        return true;
+    });
     const ignoreAquecedorLifecycle = Boolean(input.ignoreAquecedorLifecycle);
+    const verifyLiveIfCatalogClosed = Boolean(input.verifyLiveIfCatalogClosed || ignoreAquecedorLifecycle);
     const maxRounds = Math.max(1, options.maxRounds);
     const roundDelayMs = ignoreAquecedorLifecycle
         ? resolveWelcomeBackgroundDelayMs()
@@ -352,7 +362,7 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
             ? await resolveWelcomeEvoSendSlots(phoneHints, logLabel)
             : await resolveEvoSendSlots(phoneHints, {
                 allowAnyOpenFallback: false,
-                verifyLiveIfCatalogClosed: false,
+                verifyLiveIfCatalogClosed,
                 logLabel,
             });
         if (!slots.length) {
