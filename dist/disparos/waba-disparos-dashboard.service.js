@@ -2,11 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.filterIntakesBySubscriberEmails = exports.buildMasterSubscribersDisparosDashboardOverview = exports.buildDisparosDashboardOverview = exports.buildCompareSubscribersFromIntakes = exports.buildCampaignComparisonFromIntakes = void 0;
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
-const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
 const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 const waba_campaign_laboratorio_attended_1 = require("./waba-campaign-laboratorio-attended");
 const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
-const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
 const roundMetric = (value) => {
     const parsed = Math.round(Number(value));
     if (!Number.isFinite(parsed) || parsed < 0)
@@ -37,8 +35,9 @@ const buildCampaignComparisonFromIntakes = (intakes, options) => {
         if ((0, waba_campaign_report_read_overrides_1.campaignHoldsSubscriberInProgress)(intake.campaignName, intake.createdAt, intake.id)) {
             return false;
         }
-        const status = normalizeStoredStatus(intake.status);
-        return status === "completed" && Boolean(intake.performanceReport);
+        const status = (0, waba_campaign_report_read_overrides_1.resolveOverriddenCampaignStatus)(intake.campaignName, intake.createdAt, intake.status, intake.id);
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+        return status === "completed" && Boolean(report);
     })
         .map((intake) => {
         const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
@@ -127,19 +126,19 @@ const aggregateDisparosDashboardFromIntakes = (intakes, comparisonOptions) => {
     };
     for (const intake of intakes) {
         const holdInProgress = (0, waba_campaign_report_read_overrides_1.campaignHoldsSubscriberInProgress)(intake.campaignName, intake.createdAt, intake.id);
-        const status = holdInProgress ? "in_progress" : normalizeStoredStatus(intake.status);
+        const status = (0, waba_campaign_report_read_overrides_1.resolveOverriddenCampaignStatus)(intake.campaignName, intake.createdAt, intake.status, intake.id);
         if (status === "completed" || status === "error_reported")
             completed += 1;
         else if (status === "in_progress")
             inProgress += 1;
         else if (status === "generated")
             awaiting += 1;
-        if (holdInProgress || status !== "completed" || !intake.performanceReport)
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+        if (holdInProgress || status !== "completed" || !report)
             continue;
         withReport += 1;
         const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
         withReportByApi[apiKind] += 1;
-        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         const addLeads = roundMetric(report.totalLeads);
         const addSent = roundMetric(report.sent);
         const addDelivered = roundMetric(report.delivered);
