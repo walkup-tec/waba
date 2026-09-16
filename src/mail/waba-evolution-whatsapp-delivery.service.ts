@@ -431,6 +431,10 @@ export type WabaEvolutionWhatsAppDeliveryInput = {
   text: string;
   logLabel: string;
   backgroundRetryKey?: string;
+  /** Ordem explícita de chips EVO. Se vazio, usa a sequência padrão do WABA. */
+  phoneHints?: string[];
+  /** Confere connectionState ao vivo quando o catálogo marca o chip como fechado. */
+  verifyLiveIfCatalogClosed?: boolean;
   /**
    * Envios críticos (ex.: boas-vindas): ignora Preparando / pausa humana.
    * Percorre a fila inteira e, se preciso, qualquer instância open.
@@ -480,8 +484,19 @@ const runWabaEvolutionWhatsAppDelivery = async (
     return { status: "skipped", message: `${logLabel}: mensagem vazia.` };
   }
 
-  const phoneHints = resolveWabaWhatsAppPhoneHints();
+  const explicitHints = (input.phoneHints || [])
+    .map((hint) => String(hint || "").replace(/\D/g, ""))
+    .filter(Boolean);
+  const seenHints = new Set<string>();
+  const phoneHints = (explicitHints.length ? explicitHints : resolveWabaWhatsAppPhoneHints()).filter(
+    (hint) => {
+      if (seenHints.has(hint)) return false;
+      seenHints.add(hint);
+      return true;
+    },
+  );
   const ignoreAquecedorLifecycle = Boolean(input.ignoreAquecedorLifecycle);
+  const verifyLiveIfCatalogClosed = Boolean(input.verifyLiveIfCatalogClosed || ignoreAquecedorLifecycle);
   const maxRounds = Math.max(1, options.maxRounds);
   const roundDelayMs = ignoreAquecedorLifecycle
     ? resolveWelcomeBackgroundDelayMs()
@@ -494,7 +509,7 @@ const runWabaEvolutionWhatsAppDelivery = async (
       ? await resolveWelcomeEvoSendSlots(phoneHints, logLabel)
       : await resolveEvoSendSlots(phoneHints, {
           allowAnyOpenFallback: false,
-          verifyLiveIfCatalogClosed: false,
+          verifyLiveIfCatalogClosed,
           logLabel,
         });
     if (!slots.length) {
