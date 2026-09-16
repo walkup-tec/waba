@@ -8,6 +8,12 @@ type MailPayload = {
   subject: string;
   html: string;
   text?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+    cid?: string;
+  }>;
 };
 
 export type WabaMailDeliveryResult = {
@@ -95,6 +101,14 @@ export const wabaMailService = {
       subject: payload.subject,
       html: payload.html,
       text: payload.text?.trim() || buildTextFromHtml(payload.html),
+      attachments: Array.isArray(payload.attachments)
+        ? payload.attachments.map((item) => ({
+            filename: item.filename,
+            content: item.content,
+            contentType: item.contentType,
+            cid: item.cid,
+          }))
+        : undefined,
     });
 
     return {
