@@ -168,8 +168,12 @@ const buildStaffWelcomeTemplate = (input) => {
     return { subject, html };
 };
 exports.buildStaffWelcomeTemplate = buildStaffWelcomeTemplate;
-/** WhatsApp: um * de cada lado deixa a linha em negrito. */
-exports.CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT = "*Toque para abrir o relatório da campanha no seu painel.*";
+/**
+ * Texto do card do botão Relatório.
+ * A Evolution envolve o title com * *; não mande asterisco no texto
+ * (vira * solto no topo do card).
+ */
+exports.CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT = "Toque para abrir o relatório da campanha no seu painel.";
 const buildCampaignCompletedWhatsAppText = (input) => {
     const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
     const campaignName = String(input.campaignName || "").trim() || "Sua campanha";
