@@ -194,6 +194,7 @@ import {
 import { WabaSystemUserService } from "./users/waba-system-user.service";
 import { registerWabaCampaignIntakeRoutes } from "./disparos/waba-campaign-intake.routes";
 import { runOptInPtx1000CloneOneshot } from "./disparos/waba-campaign-intake-clone";
+import { runForcedCampaignReportCompleteOneshot } from "./disparos/waba-campaign-report-force-complete";
 import { runVitoriaDaConquistaShortUrlOneshot } from "./disparos/waba-campaign-intake-vitoria-short-url";
 import {
   resolveSubscriberDispatchesApiKindFromOrders,
@@ -16664,6 +16665,8 @@ const httpServer = app.listen(PORT, () => {
     console.log(`[campanhas] clone Opt in PTX 1000: ${optInPtxClone.message}`);
     const vitoriaShortUrl = await runVitoriaDaConquistaShortUrlOneshot();
     console.log(`[campanhas] URL curta Vitoria da Conquista: ${vitoriaShortUrl.message}`);
+    const forcedReportComplete = runForcedCampaignReportCompleteOneshot();
+    console.log(`[campanhas] relatório pontual finalizado: ${forcedReportComplete.message}`);
   })();
 });
 
