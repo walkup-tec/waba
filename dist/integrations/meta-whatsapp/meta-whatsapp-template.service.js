@@ -23,6 +23,7 @@ const meta_whatsapp_broadcast_template_1 = require("./meta-whatsapp-broadcast-te
 const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
 const meta_whatsapp_header_handle_cache_1 = require("./meta-whatsapp-header-handle-cache");
 const meta_whatsapp_graph_cooldown_1 = require("./meta-whatsapp-graph-cooldown");
+const meta_whatsapp_template_route_id_1 = require("./meta-whatsapp-template-route-id");
 /** Traefik/EasyPanel devolve 502 HTML se o POST de sync passar de ~30s. Devolver JSON antes. */
 const META_TEMPLATE_SYNC_BUDGET_MS = 12000;
 const META_TEMPLATE_SYNC_LIST_TIMEOUT_MS = 3500;
@@ -143,9 +144,21 @@ class MetaWhatsappTemplateService {
     }
     async requireConnectedWaba(tenantId, connectionId) {
         const requested = String(connectionId || "").trim();
-        let row = requested
-            ? await this.connections.findByIdForTenant(tenantId, requested)
-            : await this.connections.findConnectedByTenant(tenantId);
+        let row = null;
+        if (!requested) {
+            row = await this.connections.findConnectedByTenant(tenantId);
+        }
+        else if ((0, meta_whatsapp_template_route_id_1.isPostgresUuid)(requested)) {
+            try {
+                row = await this.connections.findByIdForTenant(tenantId, requested);
+            }
+            catch (error) {
+                const text = String(error?.message || error || "");
+                if (!/invalid input syntax for type uuid/i.test(text))
+                    throw error;
+                row = null;
+            }
+        }
         if (!row && requested) {
             const open = await this.listOpenConnections(tenantId);
             row =
