@@ -1560,6 +1560,47 @@ describe("fase 7 sync", () => {
     assert.equal(listed.some((row) => row.name === "andre_antigo"), false);
   });
 
+  it("Atualizar da Meta aceita connectionId numérico do Business Manager", async () => {
+    class ThrowingUuidConnections extends FakeConnections {
+      async findByIdForTenant(tenantId: string, id: string) {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+          throw new Error(`invalid input syntax for type uuid: "${id}"`);
+        }
+        return super.findByIdForTenant(tenantId, id);
+      }
+    }
+    const connections = new ThrowingUuidConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "4557df49-7de8-4f24-906c-7e58cb21facf",
+        metaBusinessId: "4681844838758316",
+      }),
+    );
+    const templates = new FakeTemplates();
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async () =>
+        graphJson({
+          data: [
+            {
+              id: "tpl-marilza",
+              name: "marilza_ok",
+              language: "pt_BR",
+              category: "UTILITY",
+              status: "APPROVED",
+              components: [{ type: "BODY", text: "Oi" }],
+            },
+          ],
+        }),
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A), "4681844838758316");
+    assert.equal(templates.rows.some((row) => row.name === "marilza_ok"), true);
+    assert.equal(result.pages >= 1, true);
+    assert.equal(result.skippedUnmanaged, undefined);
+  });
+
   it("WABA antiga recusada não desconecta o BM que o token ainda administra", async () => {
     const connections = new FakeConnections();
     connections.rows.push(
