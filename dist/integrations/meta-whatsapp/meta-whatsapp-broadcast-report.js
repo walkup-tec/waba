@@ -106,6 +106,8 @@ function refreshCompletedLabIntakeReport(intakeCampaignId) {
         return false;
     if ((0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status) !== "completed")
         return false;
+    if ((0, waba_campaign_report_read_overrides_1.campaignForcesCompleted)(intake.campaignName, intake.createdAt, intake.id))
+        return false;
     if (intake.performanceReport?.source !== "meta_lab")
         return false;
     const metrics = computeMetaLabCampaignMetrics(campaign, Number(intake.plannedSendCount || campaign.total || 0));
@@ -151,6 +153,9 @@ function tryFinalizeLabIntakeReport(intakeCampaignId, nowMs = Date.now()) {
     if (!(0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake))
         return false;
     if ((0, waba_campaign_report_read_overrides_1.campaignHoldsSubscriberInProgress)(intake.campaignName, intake.createdAt, intake.id)) {
+        return false;
+    }
+    if ((0, waba_campaign_report_read_overrides_1.campaignForcesCompleted)(intake.campaignName, intake.createdAt, intake.id)) {
         return false;
     }
     const status = (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(intake.status);
