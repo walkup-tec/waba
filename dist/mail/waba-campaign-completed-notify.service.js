@@ -22,7 +22,7 @@ const waba_mail_delivery_1 = require("./waba-mail-delivery");
 const waba_mail_templates_1 = require("./waba-mail.templates");
 const waba_evolution_whatsapp_delivery_service_1 = require("./waba-evolution-whatsapp-delivery.service");
 const ONESHOT_FILE = "waba-campaign-completed-notify-oneshots.json";
-exports.VITORIA_COMPLETED_NOTIFY_TEST_ID = "vitoria-completed-notify-test-20260916";
+exports.VITORIA_COMPLETED_NOTIFY_TEST_ID = "vitoria-completed-notify-test-20260916-print2";
 exports.VITORIA_COMPLETED_NOTIFY_TEST_EMAIL = "walkup@walkuptec.com.br";
 exports.VITORIA_COMPLETED_NOTIFY_TEST_WHATSAPP = "51999666841";
 const stubIntakeForSnapshot = (input, id = "snapshot") => ({
@@ -179,6 +179,7 @@ function buildVitoriaCompletedNotifySnapshot(intake) {
         failed: 86,
         clicks: 0,
         showClicks: true,
+        reportSource: "meta_lab",
     };
 }
 async function runVitoriaCompletedNotifyTestOneshot(input) {
