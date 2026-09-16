@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendEvoTextAlert = sendEvoTextAlert;
 exports.sendEvoImageAlert = sendEvoImageAlert;
+exports.sendEvoUrlButtonAlert = sendEvoUrlButtonAlert;
 const evo_http_client_1 = require("../evo-http.client");
 const evo_api_config_1 = require("../evo-api-config");
 const evo_send_recovery_service_1 = require("../services/evo-send-recovery.service");
@@ -219,4 +220,61 @@ async function sendEvoImageAlert(input) {
                 lastDetail;
     }
     return toSendResult(false, String(lastDetail).slice(0, 300), lastStatus, lastJson);
+}
+function isGhostButtonsPayload(raw) {
+    try {
+        const serialized = JSON.stringify(raw ?? "");
+        if (!serialized.includes("viewOnceMessage"))
+            return false;
+        if (serialized.includes("nativeFlowMessage") ||
+            serialized.includes("interactiveMessage") ||
+            serialized.includes("cta_url")) {
+            return false;
+        }
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+async function sendEvoUrlButtonAlert(input) {
+    const instanceName = String(input.instanceName || "").trim();
+    const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
+    const buttonUrl = String(input.buttonUrl || "").trim();
+    const buttonLabel = String(input.buttonLabel || "Relatório").trim() || "Relatório";
+    const description = String(input.messageText || "").trim() || "Relatório da campanha";
+    if (!instanceName || !targetNumber || !buttonUrl) {
+        return { ok: false, detail: "Dados insuficientes para sendButtons.", status: 0 };
+    }
+    const base = (0, evo_api_config_2.resolvePrimaryEvoApiBase)();
+    const url = `${base}/message/sendButtons/${encodeURIComponent(instanceName)}`;
+    const timeoutMs = typeof input.timeoutMs === "number" && input.timeoutMs >= 10000
+        ? Math.round(input.timeoutMs)
+        : Math.max(30000, (0, evo_http_client_1.defaultEvoHttpTimeoutMs)());
+    const result = await (0, evo_api_config_1.evoHttpRequestWithBaseFailover)(url, "POST", {
+        apiKey: resolveEvoApiKey(),
+        body: {
+            number: targetNumber,
+            title: "\u00A0",
+            description,
+            footer: "",
+            buttons: [{ type: "url", displayText: buttonLabel, url: buttonUrl }],
+        },
+        timeoutMs,
+        retries: 1,
+    });
+    const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
+    if (accepted && !isGhostButtonsPayload(result.json ?? result.body)) {
+        return toSendResult(true, "sendButtons OK.", result.status, result.json);
+    }
+    if (accepted && isGhostButtonsPayload(result.json ?? result.body)) {
+        return { ok: false, detail: "Evolution retornou botões fantasma (viewOnce).", status: result.status };
+    }
+    const detail = result.error ||
+        result.body ||
+        (result.json && typeof result.json === "object"
+            ? String(result.json.message ?? "")
+            : "") ||
+        "Falha no sendButtons via Evolution.";
+    return toSendResult(false, String(detail).slice(0, 300), result.status, result.json);
 }
