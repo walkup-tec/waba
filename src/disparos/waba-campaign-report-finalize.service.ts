@@ -82,12 +82,13 @@ export function finalizeIntakePerformanceReport(input: {
       resolveIntakeApiKindFromIntake(intake),
     );
   }
-  notifyCampaignCompletedAsync({
-    ownerEmail: intake.ownerEmail,
-    campaignId: input.campaignId,
-    campaignName: intake.campaignName,
-  });
   const completedIntake = intakeRepository.getById(input.campaignId) ?? updated;
+  notifyCampaignCompletedAsync({
+    ownerEmail: completedIntake.ownerEmail,
+    campaignId: input.campaignId,
+    campaignName: completedIntake.campaignName,
+    intake: completedIntake,
+  });
   void splitService.payoutSupplierForCompletedCampaign(completedIntake).then((settlement) => {
     if (settlement?.id) {
       intakeRepository.updateById(input.campaignId, {
