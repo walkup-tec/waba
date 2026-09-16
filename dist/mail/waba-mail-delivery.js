@@ -32,6 +32,7 @@ const deliverEmail = async (input) => {
                     to: toEmail,
                     subject: input.subject,
                     html: input.html,
+                    attachments: input.attachments,
                 });
                 console.log(`[mail] ${input.logLabel} enviado para ${toEmail} (${delivery.messageId || "ok"}).`);
                 return {
@@ -85,18 +86,31 @@ const deliverCampaignCompletedEmail = async (input) => {
     const ownerEmail = String(input.ownerEmail || "")
         .trim()
         .toLowerCase();
-    const ownerName = resolveSubscriberName(ownerEmail);
+    const ownerName = String(input.recipientName || "").trim() || resolveSubscriberName(ownerEmail);
     const reportUrl = (0, waba_app_url_1.buildCampaignReportDeepLink)(input.campaignId);
+    const reportImage = input.reportImage && input.reportImage.length > 32 ? input.reportImage : null;
+    const reportImageCid = reportImage ? "campaign-report.png" : "";
     const mail = (0, waba_mail_templates_1.buildCampaignCompletedTemplate)({
         recipientName: ownerName,
         recipientEmail: ownerEmail,
         campaignName: input.campaignName,
         reportUrl,
+        reportImageCid,
     });
     return deliverEmail({
         toEmail: ownerEmail,
         subject: mail.subject,
         html: mail.html,
+        attachments: reportImage
+            ? [
+                {
+                    filename: "relatorio-campanha.png",
+                    content: reportImage,
+                    contentType: "image/png",
+                    cid: reportImageCid,
+                },
+            ]
+            : undefined,
         logLabel: `campanha ${input.campaignId}`,
     });
 };
