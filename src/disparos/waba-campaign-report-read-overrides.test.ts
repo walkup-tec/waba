@@ -4,10 +4,12 @@ import { computeCampaignPerformanceMetrics } from "./waba-campaign-performance-m
 import type { WabaCampaignPerformanceReport } from "./waba-campaign-intake.repository";
 import {
   applyCampaignReportReadOverride,
+  campaignForcesCompleted,
   campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
   campaignReportShowsClicks,
   resolveCampaignReportReadOverride,
+  resolveOverriddenCampaignStatus,
 } from "./waba-campaign-report-read-overrides";
 
 const augustStamp = "2026-08-14T18:54:00.000Z";
@@ -174,11 +176,29 @@ describe("override pontual do relatório", () => {
     assert.equal(got?.clicks, 33);
     assert.equal(got?.totalLeads, 1000);
     assert.equal(campaignReportHidesClicks("VITORIA DA CONQUISTA", "2026-09-08T21:01:00.000Z", stored), false);
-    assert.equal(campaignReportShowsClicks("VITORIA DA CONQUISTA", "2026-09-08T21:01:00.000Z", stored), false);
+    assert.equal(campaignReportShowsClicks("VITORIA DA CONQUISTA", "2026-09-08T21:01:00.000Z", stored), true);
+    assert.equal(campaignForcesCompleted("VITORIA DA CONQUISTA", "2026-09-08T21:01:00.000Z"), true);
+    assert.equal(
+      resolveOverriddenCampaignStatus(
+        "VITORIA DA CONQUISTA",
+        "2026-09-08T21:01:00.000Z",
+        "in_progress",
+      ),
+      "completed",
+    );
 
     const other = applyCampaignReportReadOverride("VITORIA DA CONQUISTA 2", "2026-09-08T21:01:00.000Z", stored);
     assert.equal(other?.sent, 1);
     assert.equal(other?.clicks, 33);
+    assert.equal(campaignForcesCompleted("VITORIA DA CONQUISTA 2", "2026-09-08T21:01:00.000Z"), false);
+    assert.equal(
+      resolveOverriddenCampaignStatus(
+        "VITORIA DA CONQUISTA 2",
+        "2026-09-08T21:01:00.000Z",
+        "in_progress",
+      ),
+      "in_progress",
+    );
   });
 
   it("Convite para base Jandira recebe indicadores manuais com cliques", () => {
