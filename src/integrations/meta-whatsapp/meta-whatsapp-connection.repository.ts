@@ -3,6 +3,7 @@ import type {
   MetaWhatsappConnectionRecord,
   MetaWhatsappConnectionStatus,
 } from "./meta-whatsapp-connection.types";
+import { isPostgresUuid } from "./meta-whatsapp-template-route-id";
 
 const TABLE = "meta_whatsapp_connections";
 
@@ -164,11 +165,14 @@ export class MetaWhatsappConnectionRepository {
   }
 
   async findByIdForTenant(tenantId: string, id: string): Promise<MetaWhatsappConnectionRecord | null> {
+    const tenant = String(tenantId || "").trim();
+    const connectionId = String(id || "").trim();
+    if (!tenant || !connectionId || !isPostgresUuid(connectionId)) return null;
     const { data, error } = await this.client()
       .from(TABLE)
       .select(COLUMNS)
-      .eq("tenant_id", tenantId)
-      .eq("id", id)
+      .eq("tenant_id", tenant)
+      .eq("id", connectionId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     return data ? mapRow(asRow(data)) : null;
