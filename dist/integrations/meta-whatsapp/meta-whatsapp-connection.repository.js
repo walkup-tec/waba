@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetaWhatsappConnectionRepository = void 0;
 const supabase_js_1 = require("@supabase/supabase-js");
+const meta_whatsapp_template_route_id_1 = require("./meta-whatsapp-template-route-id");
 const TABLE = "meta_whatsapp_connections";
 const COLUMNS = [
     "id",
@@ -134,11 +135,15 @@ class MetaWhatsappConnectionRepository {
         return data ? mapRow(asRow(data)) : null;
     }
     async findByIdForTenant(tenantId, id) {
+        const tenant = String(tenantId || "").trim();
+        const connectionId = String(id || "").trim();
+        if (!tenant || !connectionId || !(0, meta_whatsapp_template_route_id_1.isPostgresUuid)(connectionId))
+            return null;
         const { data, error } = await this.client()
             .from(TABLE)
             .select(COLUMNS)
-            .eq("tenant_id", tenantId)
-            .eq("id", id)
+            .eq("tenant_id", tenant)
+            .eq("id", connectionId)
             .maybeSingle();
         if (error)
             throw new Error(error.message);
