@@ -30,6 +30,7 @@ import {
   applyCampaignReportReadOverride,
   campaignReportHidesClicks,
   campaignReportShowsClicks,
+  resolveOverriddenCampaignStatus,
 } from "../disparos/waba-campaign-report-read-overrides";
 import { collectIntakeReportTimeline } from "../disparos/waba-campaign-report-timeline";
 import { campaignAttendedByLaboratorioStaff } from "../disparos/waba-campaign-laboratorio-attended";
@@ -357,7 +358,12 @@ export class WabaOperacionalCampanhasService {
   ): OperacionalCampaignListItem {
     const email = normalizeEmail(intake.ownerEmail);
     const subscriber = this.subscriberRepository.getByEmail(email);
-    const status = normalizeStoredStatus(intake.status);
+    const status = resolveOverriddenCampaignStatus(
+      intake.campaignName,
+      intake.createdAt,
+      intake.status,
+      intake.id,
+    );
     const importedLineCount = Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
     const plannedSendCount = resolvePlannedSendCount(intake);
     const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
@@ -509,7 +515,12 @@ export class WabaOperacionalCampanhasService {
     await ensureVitoriaDaConquistaIntakeShortUrlByCampaignId(campaignId);
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
 
-    const status = normalizeStoredStatus(intake.status);
+    const status = resolveOverriddenCampaignStatus(
+      intake.campaignName,
+      intake.createdAt,
+      intake.status,
+      intake.id,
+    );
     if (status !== "in_progress" && status !== "completed" && status !== "error_reported") {
       throw new Error("O relatório fica disponível após iniciar a campanha.");
     }
