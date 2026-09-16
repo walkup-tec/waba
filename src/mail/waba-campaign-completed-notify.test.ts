@@ -39,9 +39,9 @@ describe("aviso de campanha finalizada", () => {
     assert.doesNotMatch(text, /dúvidas sobre os números/);
     assert.equal(
       CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT,
-      "*Toque para abrir o relatório da campanha no seu painel.*",
+      "Toque para abrir o relatório da campanha no seu painel.",
     );
-    assert.doesNotMatch(CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT, /\*\*/);
+    assert.doesNotMatch(CAMPAIGN_COMPLETED_WHATSAPP_REPORT_HINT, /\*/);
   });
 
   it("o print de VITORIA DA CONQUISTA usa o modal que o assinante vê", () => {
