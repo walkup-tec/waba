@@ -174,7 +174,7 @@ class WabaOperacionalCampanhasService {
     toListItem(intake, staff, broadcastProgress) {
         const email = normalizeEmail(intake.ownerEmail);
         const subscriber = this.subscriberRepository.getByEmail(email);
-        const status = normalizeStoredStatus(intake.status);
+        const status = (0, waba_campaign_report_read_overrides_1.resolveOverriddenCampaignStatus)(intake.campaignName, intake.createdAt, intake.status, intake.id);
         const importedLineCount = Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
         const plannedSendCount = resolvePlannedSendCount(intake);
         const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
@@ -300,7 +300,7 @@ class WabaOperacionalCampanhasService {
     async getCampaignReport(campaignId, staff) {
         await (0, waba_campaign_intake_vitoria_short_url_1.ensureVitoriaDaConquistaIntakeShortUrlByCampaignId)(campaignId);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
-        const status = normalizeStoredStatus(intake.status);
+        const status = (0, waba_campaign_report_read_overrides_1.resolveOverriddenCampaignStatus)(intake.campaignName, intake.createdAt, intake.status, intake.id);
         if (status !== "in_progress" && status !== "completed" && status !== "error_reported") {
             throw new Error("O relatório fica disponível após iniciar a campanha.");
         }
