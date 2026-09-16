@@ -1,6 +1,10 @@
-import type { WabaCampaignPerformanceReport } from "./waba-campaign-intake.repository";
+import type {
+  WabaCampaignIntakeStatus,
+  WabaCampaignPerformanceReport,
+} from "./waba-campaign-intake.repository";
 import { findBroadcastByIntakeCampaignId } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 import { isCloudBroadcastInactiveForRetry } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-void";
+import { normalizeCampaignIntakeStatus } from "./waba-campaign-intake-status";
 
 type CampaignReportFingerprint = {
   totalLeads: number;
@@ -35,6 +39,8 @@ type CampaignReportOverride = {
   };
   /** Assinante vê Em andamento; o fechamento automático do relatório Meta não roda. */
   holdSubscriberInProgress?: boolean;
+  /** Assinante/operacional veem Finalizado e o oneshot persiste o fechamento só desta campanha. */
+  forceCompleted?: boolean;
   intakeId?: string;
 };
 
@@ -104,10 +110,12 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
   {
     name: "VITORIA DA CONQUISTA",
     matchExactName: true,
+    forceCompleted: true,
     sent: 907,
     delivered: 782,
     read: 484,
     failed: 86,
+    showClicks: true,
     timeline: {
       createdAt: "2026-09-08T21:01:00.000Z",
       attendanceStartedAt: "2026-09-09T18:34:00.000Z",
@@ -236,6 +244,24 @@ export const campaignHoldsSubscriberInProgress = (
     : null;
   if (active && !isCloudBroadcastInactiveForRetry(active)) return false;
   return true;
+};
+
+export const campaignForcesCompleted = (
+  campaignName: string,
+  createdAt: string,
+  intakeId?: string,
+): boolean =>
+  Boolean(resolveCampaignReportOverride(campaignName, createdAt, null, intakeId)?.forceCompleted);
+
+export const resolveOverriddenCampaignStatus = (
+  campaignName: string,
+  createdAt: string,
+  storedStatus: string,
+  intakeId?: string,
+): WabaCampaignIntakeStatus => {
+  if (campaignHoldsSubscriberInProgress(campaignName, createdAt, intakeId)) return "in_progress";
+  if (campaignForcesCompleted(campaignName, createdAt, intakeId)) return "completed";
+  return normalizeCampaignIntakeStatus(storedStatus);
 };
 
 export const resolveCampaignReportReadOverride = (
