@@ -9,7 +9,10 @@ import { WabaCampaignIntakeRepository } from "../../disparos/waba-campaign-intak
 import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
 import { campaignAttendedByLaboratorioStaff } from "../../disparos/waba-campaign-laboratorio-attended";
 import { finalizeIntakePerformanceReport } from "../../disparos/waba-campaign-report-finalize.service";
-import { campaignHoldsSubscriberInProgress } from "../../disparos/waba-campaign-report-read-overrides";
+import {
+  campaignForcesCompleted,
+  campaignHoldsSubscriberInProgress,
+} from "../../disparos/waba-campaign-report-read-overrides";
 
 /** Sem webhook novo após o envio, fecha o relatório. */
 export const META_LAB_REPORT_QUIET_MS = 15 * 60 * 1000;
@@ -107,6 +110,7 @@ export function refreshCompletedLabIntakeReport(intakeCampaignId: string): boole
   if (!intake) return false;
   if (!campaignAttendedByLaboratorioStaff(intake)) return false;
   if (normalizeCampaignIntakeStatus(intake.status) !== "completed") return false;
+  if (campaignForcesCompleted(intake.campaignName, intake.createdAt, intake.id)) return false;
   if (intake.performanceReport?.source !== "meta_lab") return false;
   const metrics = computeMetaLabCampaignMetrics(campaign, Number(intake.plannedSendCount || campaign.total || 0));
   if (!performanceChanged(intake.performanceReport, metrics)) return false;
@@ -146,6 +150,9 @@ export function tryFinalizeLabIntakeReport(intakeCampaignId: string, nowMs = Dat
   if (!intake) return false;
   if (!campaignAttendedByLaboratorioStaff(intake)) return false;
   if (campaignHoldsSubscriberInProgress(intake.campaignName, intake.createdAt, intake.id)) {
+    return false;
+  }
+  if (campaignForcesCompleted(intake.campaignName, intake.createdAt, intake.id)) {
     return false;
   }
   const status = normalizeCampaignIntakeStatus(intake.status);
