@@ -237,14 +237,35 @@ const trySendViaSlot = async (input) => {
         ? (0, waba_whatsapp_exists_number_1.welcomeDestinationCandidates)(targetWhatsapp, canonical).slice(0, 2)
         : [targetWhatsapp];
     for (const destination of destinations) {
-        const result = await (0, evo_text_alert_client_1.sendEvoTextAlert)({
-            instanceName: slot.instanceName,
-            targetNumber: destination,
-            text,
-            timeoutMs,
-            retries: 2,
-            linkPreview: input.linkPreview,
-        });
+        const imageBase64 = String(input.image?.mediaBase64 || "").replace(/\s+/g, "");
+        let result = imageBase64
+            ? await (0, evo_text_alert_client_1.sendEvoImageAlert)({
+                instanceName: slot.instanceName,
+                targetNumber: destination,
+                mediaBase64: imageBase64,
+                mimetype: input.image?.mimetype || "image/png",
+                fileName: input.image?.fileName || "relatorio-campanha.png",
+                caption: text,
+                timeoutMs,
+            })
+            : await (0, evo_text_alert_client_1.sendEvoTextAlert)({
+                instanceName: slot.instanceName,
+                targetNumber: destination,
+                text,
+                timeoutMs,
+                retries: 2,
+                linkPreview: input.linkPreview,
+            });
+        if (!result.ok && imageBase64) {
+            result = await (0, evo_text_alert_client_1.sendEvoTextAlert)({
+                instanceName: slot.instanceName,
+                targetNumber: destination,
+                text,
+                timeoutMs,
+                retries: 2,
+                linkPreview: input.linkPreview,
+            });
+        }
         if (!result.ok) {
             const detail = String(result.detail || "Falha no envio via Evolution.").slice(0, 300);
             console.warn(`[whatsapp] tentativa falhou (${slot.instanceName} / ${slot.phoneHint}) para ${destination} (${recipientLabel}):`, detail);
@@ -265,10 +286,32 @@ const trySendViaSlot = async (input) => {
             messageId: result.messageId,
             remoteJid: result.remoteJid,
         });
-        if (ack.outcome === "delivered") {
+        if (ack.outcome === "delivered" || (imageBase64 && result.ok && ack.outcome !== "error")) {
             console.log(`[whatsapp] entregue no aparelho para ${destination} (${recipientLabel}) via ${slot.instanceName} (${slot.phoneHint}) ack=${ack.status}.`);
             if (input.sendWelcomeCover) {
                 await sendWelcomeCoverBestEffort(slot.instanceName, destination, input.logLabel || "whatsapp");
+            }
+            const button = input.urlButton;
+            const buttonUrl = String(button?.url || "").trim();
+            if (buttonUrl) {
+                const buttonResult = await (0, evo_text_alert_client_1.sendEvoUrlButtonAlert)({
+                    instanceName: slot.instanceName,
+                    targetNumber: destination,
+                    buttonLabel: button?.label || "Relatório",
+                    buttonUrl,
+                    messageText: "Toque para abrir o relatório da campanha no seu painel.",
+                    timeoutMs,
+                });
+                if (!buttonResult.ok) {
+                    await (0, evo_text_alert_client_1.sendEvoTextAlert)({
+                        instanceName: slot.instanceName,
+                        targetNumber: destination,
+                        text: `Relatório: ${buttonUrl}`,
+                        timeoutMs,
+                        retries: 1,
+                        linkPreview: true,
+                    });
+                }
             }
             return {
                 result: { status: "sent", message: "WhatsApp enviado.", instanceName: slot.instanceName },
@@ -336,6 +379,8 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
                 ignoreAquecedorLifecycle,
                 linkPreview: input.linkPreview,
                 sendWelcomeCover: input.sendWelcomeCover,
+                image: input.image,
+                urlButton: input.urlButton,
             });
             const outcome = sendOutcome.result;
             if (outcome?.status === "sent")
