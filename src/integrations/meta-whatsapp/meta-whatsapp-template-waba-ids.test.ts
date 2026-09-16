@@ -871,6 +871,30 @@ describe("listSyncTargetWabaIds", () => {
     assert.equal(paths.includes("1398783195605765/client_whatsapp_business_accounts"), false);
     assert.equal(paths.filter((path) => path.includes("owned_whatsapp")).length, 1);
   });
+
+  it("BM de cliente sem catálogo: no máximo uma WABA extra do snapshot owned", async () => {
+    const ids = await listSyncTargetWabaIds({
+      token: "tok",
+      connection: { wabaId: "waba-a", metaBusinessId: "4681844838758316" },
+      graph: async (input) => {
+        if (input.path === "4681844838758316") {
+          return graphOk({
+            owned_whatsapp_business_accounts: {
+              data: [
+                { id: "waba-a", name: "Marilza 1" },
+                { id: "waba-b", name: "Marilza 2" },
+                { id: "waba-c", name: "Marilza 3" },
+                { id: "waba-d", name: "Marilza 4" },
+              ],
+            },
+          });
+        }
+        return graphOk({ data: [] });
+      },
+    });
+    assert.equal(ids.includes("waba-a"), true);
+    assert.equal(ids.length, 2);
+  });
 });
 
 describe("listTemplatePickerWabas", () => {
