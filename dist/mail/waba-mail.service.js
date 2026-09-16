@@ -66,6 +66,14 @@ exports.wabaMailService = {
             subject: payload.subject,
             html: payload.html,
             text: payload.text?.trim() || buildTextFromHtml(payload.html),
+            attachments: Array.isArray(payload.attachments)
+                ? payload.attachments.map((item) => ({
+                    filename: item.filename,
+                    content: item.content,
+                    contentType: item.contentType,
+                    cid: item.cid,
+                }))
+                : undefined,
         });
         return {
             messageId: String(info.messageId ?? ""),
