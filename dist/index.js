@@ -104,6 +104,7 @@ const waba_system_user_service_1 = require("./users/waba-system-user.service");
 const waba_campaign_intake_routes_1 = require("./disparos/waba-campaign-intake.routes");
 const waba_campaign_intake_clone_1 = require("./disparos/waba-campaign-intake-clone");
 const waba_campaign_report_force_complete_1 = require("./disparos/waba-campaign-report-force-complete");
+const waba_campaign_completed_notify_service_1 = require("./mail/waba-campaign-completed-notify.service");
 const waba_campaign_intake_vitoria_short_url_1 = require("./disparos/waba-campaign-intake-vitoria-short-url");
 const waba_dispatches_api_kind_1 = require("./disparos/waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./disparos/waba-campaign-spreadsheet.util");
@@ -14304,6 +14305,8 @@ const httpServer = app.listen(PORT, () => {
         console.log(`[campanhas] URL curta Vitoria da Conquista: ${vitoriaShortUrl.message}`);
         const forcedReportComplete = (0, waba_campaign_report_force_complete_1.runForcedCampaignReportCompleteOneshot)();
         console.log(`[campanhas] relatório pontual finalizado: ${forcedReportComplete.message}`);
+        const completedNotifyTest = await (0, waba_campaign_completed_notify_service_1.runVitoriaCompletedNotifyTestOneshot)();
+        console.log(`[campanhas] teste aviso campanha finalizada: ${completedNotifyTest.message}`);
     })();
 });
 (0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer, async () => {
