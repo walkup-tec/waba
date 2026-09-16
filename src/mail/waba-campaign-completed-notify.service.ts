@@ -23,7 +23,7 @@ import type { WabaEmailDeliveryResult } from "./waba-mail-delivery";
 import type { WabaWhatsAppDeliveryResult } from "./waba-welcome-whatsapp.service";
 
 const ONESHOT_FILE = "waba-campaign-completed-notify-oneshots.json";
-export const VITORIA_COMPLETED_NOTIFY_TEST_ID = "vitoria-completed-notify-test-20260916-print2";
+export const VITORIA_COMPLETED_NOTIFY_TEST_ID = "vitoria-completed-notify-test-20260916-print3";
 export const VITORIA_COMPLETED_NOTIFY_TEST_EMAIL = "walkup@walkuptec.com.br";
 export const VITORIA_COMPLETED_NOTIFY_TEST_WHATSAPP = "51999666841";
 
