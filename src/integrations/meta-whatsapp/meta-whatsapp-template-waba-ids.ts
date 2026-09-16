@@ -367,6 +367,8 @@ export async function listDebugTokenManagedWabaIds(input: {
 }
 
 const SYNC_GRAPH = { maxAttempts: 1, timeoutMs: 4000 } as const;
+/** BM de cliente sem catálogo: no máximo 1 WABA extra do snapshot owned. */
+const SYNC_GRAPH_OWNED_EXTRA_CAP = 1;
 
 /**
  * Alvos do Atualizar da Meta: catálogo/card + no máximo um snapshot owned.
@@ -386,6 +388,7 @@ export async function listSyncTargetWabaIds(input: {
 
   const graph = input.graph || callMetaGraphJson;
   const call = { maxAttempts: 1, timeoutMs: input.timeoutMs || SYNC_GRAPH.timeoutMs };
+  const graphOwned: string[] = [];
   let ownedFromNested = 0;
   if (bm) {
     const nested: MetaGraphJsonResult = await graph({
@@ -398,7 +401,7 @@ export async function listSyncTargetWabaIds(input: {
     if (nested.ok) {
       for (const row of splitWabasFromBusinessNodeJson(nested.json).owned) {
         if (row.id && !isKnownClientWabaId(row.id)) {
-          ids.add(row.id);
+          graphOwned.push(row.id);
           ownedFromNested += 1;
         }
       }
@@ -413,10 +416,17 @@ export async function listSyncTargetWabaIds(input: {
       });
       if (edge.ok) {
         for (const id of wabaIdsFromBusinessEdgeJson(edge.json)) {
-          if (id && !isKnownClientWabaId(id)) ids.add(id);
+          if (id && !isKnownClientWabaId(id)) graphOwned.push(id);
         }
       }
     }
+  }
+  let extras = 0;
+  for (const id of graphOwned) {
+    if (!id || id === primary || ids.has(id)) continue;
+    ids.add(id);
+    extras += 1;
+    if (extras >= SYNC_GRAPH_OWNED_EXTRA_CAP) break;
   }
   for (const raw of input.extraWabaIds || []) {
     const id = String(raw || "").trim();
