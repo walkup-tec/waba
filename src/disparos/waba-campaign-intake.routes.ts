@@ -37,6 +37,7 @@ import {
   campaignReportHidesClicks,
   campaignReportShowsClicks,
   campaignHoldsSubscriberInProgress,
+  resolveOverriddenCampaignStatus,
 } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
 import {
@@ -180,7 +181,12 @@ const resolvePlannedSendCount = (
 };
 
 const resolveReportedSentCount = (intake: WabaCampaignIntake): number => {
-  const status = normalizeStoredStatus(intake.status);
+  const status = resolveOverriddenCampaignStatus(
+    intake.campaignName,
+    intake.createdAt,
+    intake.status,
+    intake.id,
+  );
   if (status !== "completed") return 0;
   const report = applyCampaignReportReadOverride(
     intake.campaignName,
@@ -197,13 +203,17 @@ const toPublicIntake = (
   intake: WabaCampaignIntake,
   broadcastProgress?: CloudBroadcastProgressHint | null,
 ) => {
-  const storedStatus = normalizeStoredStatus(intake.status);
   const holdInProgress = campaignHoldsSubscriberInProgress(
     intake.campaignName,
     intake.createdAt,
     intake.id,
   );
-  const status = holdInProgress ? "in_progress" : storedStatus;
+  const status = resolveOverriddenCampaignStatus(
+    intake.campaignName,
+    intake.createdAt,
+    intake.status,
+    intake.id,
+  );
   const importedLineCount = Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
   const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
   const apiKind = resolveIntakeApiKindFromIntake(intake);
@@ -728,12 +738,12 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
     if (!intake || intake.ownerEmail !== auth.email) {
       return res.status(404).json({ error: "Campanha não encontrada." });
     }
-    const holdInProgress = campaignHoldsSubscriberInProgress(
+    const status = resolveOverriddenCampaignStatus(
       intake.campaignName,
       intake.createdAt,
+      intake.status,
       intake.id,
     );
-    const status = holdInProgress ? "in_progress" : normalizeStoredStatus(intake.status);
     if (status === "error_reported") {
       return res.status(400).json({
         error: "Esta campanha foi finalizada com erro reportado. Consulte o motivo na lista de campanhas.",
