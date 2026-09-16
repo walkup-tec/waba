@@ -1635,6 +1635,24 @@ describe("fase 7 sync", () => {
     assert.equal(result.skippedUnmanaged, undefined);
   });
 
+  it("BM válida sem WABA e sem template sincroniza vazio, sem not_connected", async () => {
+    const connections = new FakeConnections();
+    const templates = new FakeTemplates();
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async () => {
+        throw new Error("Graph não deve ser chamada sem WABA");
+      },
+      () => "tok",
+    );
+    const result = await service.syncFromAuth(auth(EMAIL_A), "4681844838758316");
+    assert.deepEqual(result.templates, []);
+    assert.equal(result.pages, 0);
+    assert.equal(result.removed, 0);
+    assert.equal(result.skippedUnmanaged, undefined);
+  });
+
   it("Atualizar da Meta ignora pending_token sem WABA e usa a conexão do mesmo BM", async () => {
     const connections = new FakeConnections();
     connections.rows.push(
