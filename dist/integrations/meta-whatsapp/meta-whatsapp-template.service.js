@@ -54,6 +54,14 @@ function isCatalogAdminBusiness(businessId) {
         return false;
     return (0, meta_whatsapp_known_owned_wabas_1.catalogAdminBusinessIds)().some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, bm));
 }
+/** ID numérico de Business Manager (não é UUID de conexão). */
+function isMetaBusinessManagerId(value) {
+    const id = String(value || "").trim();
+    return /^\d{6,}$/.test(id);
+}
+function emptyPortfolioSyncResult() {
+    return { templates: [], pages: 0, removed: 0 };
+}
 async function resolveSyncFallbackWabaIds(input) {
     const tried = new Set([...input.alreadyTried].map((id) => String(id || "").trim()).filter(Boolean));
     const debugIds = await (0, meta_whatsapp_template_waba_ids_1.listDebugTokenManagedWabaIds)({
@@ -437,7 +445,24 @@ class MetaWhatsappTemplateService {
     }
     async syncFromAuth(auth, connectionId) {
         const tenant = requireTenant(auth);
-        const connection = await this.requireConnectedWaba(tenant.tenantId, connectionId, tenant.ownerEmail);
+        const requested = String(connectionId || "").trim();
+        let connection;
+        try {
+            connection = await this.requireConnectedWaba(tenant.tenantId, requested, tenant.ownerEmail);
+        }
+        catch (error) {
+            if (error instanceof meta_whatsapp_errors_1.MetaWhatsappError &&
+                error.code === "not_connected" &&
+                (isMetaBusinessManagerId(requested) || isCatalogAdminBusiness(requested))) {
+                (0, meta_whatsapp_template_log_1.logMetaTemplate)("SYNC", {
+                    reason: "empty_portfolio_no_waba",
+                    tenantId: tenant.tenantId,
+                    connectionId: requested,
+                });
+                return emptyPortfolioSyncResult();
+            }
+            throw error;
+        }
         if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
             const limited = new meta_whatsapp_errors_1.MetaWhatsappError("graph_rate_limited");
             limited.message = (0, meta_whatsapp_graph_cooldown_1.metaGraphUploadCooldownMessage)();
