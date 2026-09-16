@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildPushAnnouncementTemplate = exports.buildCampaignErrorReportedTemplate = exports.buildMasterBmInoperanteCampaignWhatsAppText = exports.buildOperacionalCampaignReassignedWhatsAppText = exports.buildMasterCampaignReassignedWhatsAppText = exports.buildMasterNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignTemplate = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS = exports.buildCampaignCompletedTemplate = exports.buildStaffWelcomeTemplate = exports.buildSubscriberWelcomeTemplate = exports.buildSupportTicketClosedTemplate = void 0;
+exports.buildPushAnnouncementTemplate = exports.buildCampaignErrorReportedTemplate = exports.buildMasterBmInoperanteCampaignWhatsAppText = exports.buildOperacionalCampaignReassignedWhatsAppText = exports.buildMasterCampaignReassignedWhatsAppText = exports.buildMasterNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignTemplate = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS = exports.buildCampaignCompletedTemplate = exports.buildCampaignCompletedWhatsAppText = exports.buildStaffWelcomeTemplate = exports.buildSubscriberWelcomeTemplate = exports.buildSupportTicketClosedTemplate = void 0;
 const escapeHtml = (value) => String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -168,9 +168,33 @@ const buildStaffWelcomeTemplate = (input) => {
     return { subject, html };
 };
 exports.buildStaffWelcomeTemplate = buildStaffWelcomeTemplate;
+const buildCampaignCompletedWhatsAppText = (input) => {
+    const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
+    const campaignName = String(input.campaignName || "").trim() || "Sua campanha";
+    return [
+        `Olá, ${recipient}.`,
+        "",
+        `Informamos que sua campanha ${campaignName} foi concluída e o relatório de desempenho já está disponível para consulta.`,
+        "",
+        "Agradecemos pela confiança em nossos serviços. Toque em Relatório para acessar os resultados da campanha diretamente no seu painel.",
+        "",
+        "Se tiver dúvidas sobre os números ou quiser iniciar um novo disparo, nossa equipe está pronta para ajudar.",
+        "",
+        "Atenciosamente,",
+        "Equipe Drax Sistemas",
+    ].join("\n");
+};
+exports.buildCampaignCompletedWhatsAppText = buildCampaignCompletedWhatsAppText;
 const buildCampaignCompletedTemplate = (input) => {
     const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
     const campaignName = String(input.campaignName || "").trim() || "Sua campanha";
+    const imageCid = String(input.reportImageCid || "").trim();
+    const imageBlock = imageCid
+        ? `<p style="margin:16px 0;">
+      <img src="cid:${escapeHtml(imageCid)}" alt="Relatório da campanha ${escapeHtml(campaignName)}"
+           style="display:block;max-width:100%;border-radius:12px;border:1px solid #e2e8f0;" />
+    </p>`
+        : "";
     const subject = `Campanha "${campaignName}" finalizada — relatório disponível`;
     const html = baseEmailShell("Sua campanha foi finalizada", `
     <p style="margin:0 0 12px;color:#1e293b;">Olá, <strong>${escapeHtml(recipient)}</strong>.</p>
@@ -178,6 +202,7 @@ const buildCampaignCompletedTemplate = (input) => {
       Informamos que sua campanha <strong>${escapeHtml(campaignName)}</strong> foi concluída
       e o relatório de desempenho já está disponível para consulta.
     </p>
+    ${imageBlock}
     <p style="margin:0 0 12px;color:#1e293b;">
       Agradecemos pela confiança em nossos serviços. Clique no botão abaixo para acessar
       os resultados da campanha diretamente no seu painel.
