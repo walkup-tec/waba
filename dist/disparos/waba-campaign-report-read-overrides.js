@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.applyCampaignReportReadOverride = exports.campaignReportShowsClicks = exports.campaignReportHidesClicks = exports.resolveCampaignReportReadOverride = exports.campaignHoldsSubscriberInProgress = exports.resolveCampaignReportOverride = void 0;
+exports.applyCampaignReportReadOverride = exports.campaignReportShowsClicks = exports.campaignReportHidesClicks = exports.resolveCampaignReportReadOverride = exports.resolveOverriddenCampaignStatus = exports.campaignForcesCompleted = exports.campaignHoldsSubscriberInProgress = exports.resolveCampaignReportOverride = void 0;
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 const meta_whatsapp_broadcast_void_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-void");
+const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
 const CAMPAIGN_REPORT_OVERRIDES = [
     {
         name: "SQUARE RESIDENCIAL",
@@ -69,10 +70,12 @@ const CAMPAIGN_REPORT_OVERRIDES = [
     {
         name: "VITORIA DA CONQUISTA",
         matchExactName: true,
+        forceCompleted: true,
         sent: 907,
         delivered: 782,
         read: 484,
         failed: 86,
+        showClicks: true,
         timeline: {
             createdAt: "2026-09-08T21:01:00.000Z",
             attendanceStartedAt: "2026-09-09T18:34:00.000Z",
@@ -190,6 +193,16 @@ const campaignHoldsSubscriberInProgress = (campaignName, createdAt, intakeId) =>
     return true;
 };
 exports.campaignHoldsSubscriberInProgress = campaignHoldsSubscriberInProgress;
+const campaignForcesCompleted = (campaignName, createdAt, intakeId) => Boolean((0, exports.resolveCampaignReportOverride)(campaignName, createdAt, null, intakeId)?.forceCompleted);
+exports.campaignForcesCompleted = campaignForcesCompleted;
+const resolveOverriddenCampaignStatus = (campaignName, createdAt, storedStatus, intakeId) => {
+    if ((0, exports.campaignHoldsSubscriberInProgress)(campaignName, createdAt, intakeId))
+        return "in_progress";
+    if ((0, exports.campaignForcesCompleted)(campaignName, createdAt, intakeId))
+        return "completed";
+    return (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(storedStatus);
+};
+exports.resolveOverriddenCampaignStatus = resolveOverriddenCampaignStatus;
 const resolveCampaignReportReadOverride = (campaignName, createdAt, report) => {
     const rule = (0, exports.resolveCampaignReportOverride)(campaignName, createdAt, report);
     return rule?.read ?? null;
