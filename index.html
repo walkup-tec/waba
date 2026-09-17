@@ -21193,12 +21193,12 @@
                         <div class="disparos-pricing-lane-action-row">
                           <div class="disparos-pricing-lane-action-pricing">
                             <p class="disparos-api-price">
-                              <span class="disparos-api-price-outros">De R$ 0,25 a R$ 0,32</span>
-                              <span class="disparos-api-price-bets" hidden>De R$ 0,33 a R$ 0,40</span>
+                              <span class="disparos-api-price-outros">De R$ 0,29 a R$ 0,36</span>
+                              <span class="disparos-api-price-bets" hidden>De R$ 0,38 a R$ 0,45</span>
                             </p>
                             <p class="disparos-api-min-creditos">
                               <span class="disparos-api-min-outros">
-                                Valor mínimo de créditos: <strong>R$ 320,00</strong>
+                                Valor mínimo de créditos: <strong>R$ 360,00</strong>
                               </span>
                               <span class="disparos-api-min-bets" hidden>Escolha o melhor pacote para você</span>
                             </p>
@@ -31756,21 +31756,21 @@
 
       const DISPAROS_PRICING_TIERS = {
         oficial: [
-          { shipments: 1000, pricePerSend: 0.32, totalCents: 32000 },
-          { shipments: 3000, pricePerSend: 0.31, totalCents: 93000 },
-          { shipments: 5000, pricePerSend: 0.3, totalCents: 150000 },
-          { shipments: 8000, pricePerSend: 0.29, totalCents: 232000 },
-          { shipments: 10000, pricePerSend: 0.27, totalCents: 270000 },
-          { shipments: 20000, pricePerSend: 0.26, totalCents: 520000 },
-          { shipments: 30000, pricePerSend: 0.25, totalCents: 750000 },
+          { shipments: 1000, pricePerSend: 0.36, totalCents: 36000 },
+          { shipments: 3000, pricePerSend: 0.35, totalCents: 105000 },
+          { shipments: 5000, pricePerSend: 0.34, totalCents: 170000 },
+          { shipments: 8000, pricePerSend: 0.33, totalCents: 264000 },
+          { shipments: 10000, pricePerSend: 0.31, totalCents: 310000 },
+          { shipments: 20000, pricePerSend: 0.3, totalCents: 600000 },
+          { shipments: 30000, pricePerSend: 0.29, totalCents: 870000 },
         ],
         betsOficial: [
-          { shipments: 5000, pricePerSend: 0.4, totalCents: 200000 },
-          { shipments: 10000, pricePerSend: 0.38, totalCents: 380000 },
-          { shipments: 20000, pricePerSend: 0.37, totalCents: 740000 },
-          { shipments: 30000, pricePerSend: 0.36, totalCents: 1080000 },
-          { shipments: 40000, pricePerSend: 0.35, totalCents: 1400000 },
-          { shipments: 50000, pricePerSend: 0.33, totalCents: 1650000 },
+          { shipments: 5000, pricePerSend: 0.45, totalCents: 225000 },
+          { shipments: 10000, pricePerSend: 0.43, totalCents: 430000 },
+          { shipments: 20000, pricePerSend: 0.42, totalCents: 840000 },
+          { shipments: 30000, pricePerSend: 0.41, totalCents: 1230000 },
+          { shipments: 40000, pricePerSend: 0.4, totalCents: 1600000 },
+          { shipments: 50000, pricePerSend: 0.38, totalCents: 1900000 },
         ],
         alternativa: [
           { shipments: 1000, pricePerSend: 0.2, totalCents: 20000 },
@@ -31866,7 +31866,7 @@
         const first = resolveDisparosSaleTiersForDisplay(tiers)[0];
         const minCredits = first?.totalCents
           ? formatDisparosMoneyFromCents(first.totalCents)
-          : "R$ 320,00";
+          : "R$ 360,00";
         return {
           priceLabel,
           subLabel: `Valor mínimo de créditos: <strong>${minCredits}</strong>`,

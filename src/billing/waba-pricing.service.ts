@@ -25,23 +25,23 @@ export type WabaPricingQuote = {
 
 /** Tabela de venda API Oficial (envios × valor total em centavos). */
 export const DISPAROS_OFICIAL_SALE_PACKAGES: ReadonlyArray<WabaSalePackage> = [
-  { shipments: 1000, valueCents: 32000 },
-  { shipments: 3000, valueCents: 93000 },
-  { shipments: 5000, valueCents: 150000 },
-  { shipments: 8000, valueCents: 232000 },
-  { shipments: 10000, valueCents: 270000 },
-  { shipments: 20000, valueCents: 520000 },
-  { shipments: 30000, valueCents: 750000 },
+  { shipments: 1000, valueCents: 36000 },
+  { shipments: 3000, valueCents: 105000 },
+  { shipments: 5000, valueCents: 170000 },
+  { shipments: 8000, valueCents: 264000 },
+  { shipments: 10000, valueCents: 310000 },
+  { shipments: 20000, valueCents: 600000 },
+  { shipments: 30000, valueCents: 870000 },
 ];
 
 /** Tabela de venda API Oficial — segmento Bets. */
 export const DISPAROS_BETS_OFICIAL_SALE_PACKAGES: ReadonlyArray<WabaSalePackage> = [
-  { shipments: 5000, valueCents: 200000 },
-  { shipments: 10000, valueCents: 380000 },
-  { shipments: 20000, valueCents: 740000 },
-  { shipments: 30000, valueCents: 1080000 },
-  { shipments: 40000, valueCents: 1400000 },
-  { shipments: 50000, valueCents: 1650000 },
+  { shipments: 5000, valueCents: 225000 },
+  { shipments: 10000, valueCents: 430000 },
+  { shipments: 20000, valueCents: 840000 },
+  { shipments: 30000, valueCents: 1230000 },
+  { shipments: 40000, valueCents: 1600000 },
+  { shipments: 50000, valueCents: 1900000 },
 ];
 
 /** Tabela de venda API Alternativa. */

@@ -109,10 +109,10 @@ describe("WabaPricingService — spread do indicador", () => {
       shipmentCount: 1000,
       ownerEmail: "livre@test.com",
     });
-    assert.equal(quote?.baseAmountCents, 32000);
+    assert.equal(quote?.baseAmountCents, 36000);
     assert.equal(quote?.spreadAmountCents, 0);
-    assert.equal(quote?.totalAmountCents, 32000);
-    assert.equal(quote?.customerUnitPriceCents, 32);
+    assert.equal(quote?.totalAmountCents, 36000);
+    assert.equal(quote?.customerUnitPriceCents, 36);
     assert.equal(quote?.indicatorUserId, "");
   });
 
@@ -124,18 +124,18 @@ describe("WabaPricingService — spread do indicador", () => {
       shipmentCount: 1000,
       ownerEmail: "revenda@test.com",
     });
-    assert.equal(quote?.baseAmountCents, 32000);
+    assert.equal(quote?.baseAmountCents, 36000);
     assert.equal(quote?.spreadUnitPriceCents, 3);
     assert.equal(quote?.spreadAmountCents, 3000);
-    assert.equal(quote?.totalAmountCents, 35000);
-    assert.equal(quote?.customerUnitPriceCents, 35);
+    assert.equal(quote?.totalAmountCents, 39000);
+    assert.equal(quote?.customerUnitPriceCents, 39);
     const packs = wabaPricingService.listCustomerPackages({
       apiKind: "oficial",
       ownerEmail: "revenda@test.com",
     });
     const pack1000 = packs.find((item) => item.shipments === 1000);
-    assert.equal(pack1000?.valueCents, 35000);
-    assert.equal(pack1000?.unitPriceCents, 35);
+    assert.equal(pack1000?.valueCents, 39000);
+    assert.equal(pack1000?.unitPriceCents, 39);
   });
 
   it("outro assinante não herda o spread de um indicador alheio", async () => {
@@ -147,26 +147,26 @@ describe("WabaPricingService — spread do indicador", () => {
       ownerEmail: "outro@test.com",
     });
     assert.equal(quote?.spreadUnitPriceCents, 9);
-    assert.equal(quote?.totalAmountCents, 41000);
+    assert.equal(quote?.totalAmountCents, 45000);
     const plain = wabaPricingService.quote({
       apiKind: "oficial",
       shipmentCount: 1000,
       ownerEmail: "livre@test.com",
     });
-    assert.equal(plain?.totalAmountCents, 32000);
+    assert.equal(plain?.totalAmountCents, 36000);
   });
 
   it("todas as faixas oficiais somam spread fixo por envio", async () => {
     seedStores({ indicatorSpreadCents: 3 });
     const { wabaPricingService } = await import("./waba-pricing.service");
     const expected: Array<[number, number, number]> = [
-      [1000, 32000, 3000],
-      [3000, 93000, 9000],
-      [5000, 150000, 15000],
-      [8000, 232000, 24000],
-      [10000, 270000, 30000],
-      [20000, 520000, 60000],
-      [30000, 750000, 90000],
+      [1000, 36000, 3000],
+      [3000, 105000, 9000],
+      [5000, 170000, 15000],
+      [8000, 264000, 24000],
+      [10000, 310000, 30000],
+      [20000, 600000, 60000],
+      [30000, 870000, 90000],
     ];
     for (const [qty, base, spread] of expected) {
       const quote = wabaPricingService.quote({
@@ -180,6 +180,35 @@ describe("WabaPricingService — spread do indicador", () => {
     }
   });
 
+  it("tabela Oficial Bets acrescenta R$ 0,05 por envio em todas as faixas", async () => {
+    seedStores();
+    const { wabaPricingService } = await import("./waba-pricing.service");
+    const quote = wabaPricingService.quote({
+      apiKind: "oficial",
+      shipmentCount: 5000,
+      ownerEmail: "livre@test.com",
+      segment: "bets",
+    });
+    assert.equal(quote?.baseAmountCents, 225000);
+    assert.equal(quote?.customerUnitPriceCents, 45);
+    const packs = wabaPricingService.listCustomerPackages({
+      apiKind: "oficial",
+      ownerEmail: "livre@test.com",
+      segment: "bets",
+    });
+    assert.deepEqual(
+      packs.map((item) => [item.shipments, item.valueCents]),
+      [
+        [5000, 225000],
+        [10000, 430000],
+        [20000, 840000],
+        [30000, 1230000],
+        [40000, 1600000],
+        [50000, 1900000],
+      ],
+    );
+  });
+
   it("indicador inativo não aplica spread em novas cotações", async () => {
     seedStores({ indicatorSpreadCents: 3, indicatorStatus: "inactive" });
     const { wabaPricingService } = await import("./waba-pricing.service");
@@ -189,6 +218,6 @@ describe("WabaPricingService — spread do indicador", () => {
       ownerEmail: "revenda@test.com",
     });
     assert.equal(quote?.spreadAmountCents, 0);
-    assert.equal(quote?.totalAmountCents, 32000);
+    assert.equal(quote?.totalAmountCents, 36000);
   });
 });

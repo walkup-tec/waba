@@ -6,8 +6,11 @@ const waba_disparos_order_shipments_1 = require("./waba-disparos-order-shipments
 const normalizeEmail = (value) => value.trim().toLowerCase();
 /** Preços de pacote vendido (centavos), com e sem acréscimo Cleison. */
 const CATALOG_PACK_VALUE_CENTS = new Set([
-    20000, 32000, 34000, 35000, 57000, 85000, 93000, 99000, 128000, 150000, 160000, 200000, 232000,
-    270000, 280000, 380000, 390000, 520000, 740000, 750000, 1080000, 1400000, 1650000,
+    20000, 32000, 34000, 35000, 36000, 38000, 39000, 57000, 85000, 93000, 99000, 105000, 111000,
+    128000, 150000, 160000, 170000, 180000, 200000, 225000, 232000, 235000, 264000, 270000, 280000,
+    310000, 330000, 380000, 390000, 430000, 450000, 520000, 600000, 640000, 740000, 750000, 840000,
+    870000, 880000, 930000, 1080000, 1230000, 1290000, 1400000, 1600000, 1650000, 1680000, 1900000,
+    2000000,
 ]);
 const isOperationalBalanceRepairOrder = (order) => String(order.asaasExternalReference ?? "").trim() === waba_cleison_oficial_balance_repair_1.CLEISON_OFICIAL_FORCE_REF ||
     order.grantCreatedByEmail === "system-balance-repair";
@@ -75,20 +78,56 @@ const catalogQtyFromValueCents = (valueCents, apiKind) => {
             return 30000;
         return 0;
     }
-    if (valueCents === 32000 || valueCents === 34000 || valueCents === 35000)
+    if (valueCents === 32000 ||
+        valueCents === 34000 ||
+        valueCents === 35000 ||
+        valueCents === 36000 ||
+        valueCents === 38000 ||
+        valueCents === 39000) {
         return 1000;
-    if (valueCents === 93000 || valueCents === 99000)
+    }
+    if (valueCents === 93000 || valueCents === 99000 || valueCents === 105000 || valueCents === 111000) {
         return 3000;
-    if (valueCents === 150000 || valueCents === 160000 || valueCents === 200000)
+    }
+    if (valueCents === 150000 ||
+        valueCents === 160000 ||
+        valueCents === 170000 ||
+        valueCents === 180000 ||
+        valueCents === 200000 ||
+        valueCents === 225000 ||
+        valueCents === 235000) {
         return 5000;
-    if (valueCents === 232000)
+    }
+    if (valueCents === 232000 || valueCents === 264000 || valueCents === 280000)
         return 8000;
-    if (valueCents === 270000 || valueCents === 380000)
+    if (valueCents === 270000 ||
+        valueCents === 310000 ||
+        valueCents === 330000 ||
+        valueCents === 380000 ||
+        valueCents === 430000 ||
+        valueCents === 450000) {
         return 10000;
-    if (valueCents === 520000 || valueCents === 740000)
+    }
+    if (valueCents === 520000 ||
+        valueCents === 600000 ||
+        valueCents === 640000 ||
+        valueCents === 740000 ||
+        valueCents === 840000 ||
+        valueCents === 880000) {
         return 20000;
-    if (valueCents === 750000 || valueCents === 1080000)
+    }
+    if (valueCents === 750000 ||
+        valueCents === 870000 ||
+        valueCents === 930000 ||
+        valueCents === 1080000 ||
+        valueCents === 1230000 ||
+        valueCents === 1290000) {
         return 30000;
+    }
+    if (valueCents === 1400000 || valueCents === 1600000 || valueCents === 1680000)
+        return 40000;
+    if (valueCents === 1650000 || valueCents === 1900000 || valueCents === 2000000)
+        return 50000;
     return 0;
 };
 /**
