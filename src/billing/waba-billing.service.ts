@@ -374,6 +374,8 @@ export class WabaBillingService {
       customerUnitPriceCents: quote?.customerUnitPriceCents,
       baseAmountCents: quote?.baseAmountCents,
       spreadAmountCents: quote?.spreadAmountCents,
+      commissionUnitPriceCents: quote?.commissionUnitPriceCents,
+      commissionAmountCents: quote?.commissionAmountCents,
     };
   }
 
@@ -475,6 +477,8 @@ export class WabaBillingService {
       customerUnitPriceCents: validated.customerUnitPriceCents,
       baseAmountCents: validated.baseAmountCents,
       spreadAmountCents: validated.spreadAmountCents,
+      commissionUnitPriceCents: validated.commissionUnitPriceCents,
+      commissionAmountCents: validated.commissionAmountCents,
       status: "pending_payment",
       asaasExternalReference,
       createdAt: now,

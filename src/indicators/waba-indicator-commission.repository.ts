@@ -21,6 +21,7 @@ export type WabaIndicatorCommission = {
   quantity: number;
   baseUnitPriceCents: number;
   spreadUnitPriceCents: number;
+  commissionUnitPriceCents?: number;
   customerUnitPriceCents: number;
   baseAmountCents: number;
   commissionAmountCents: number;
@@ -118,6 +119,7 @@ export class WabaIndicatorCommissionRepository {
       quantity: Math.max(0, Math.round(Number(commission.quantity ?? 0))),
       baseUnitPriceCents: toNonNegativeCents(commission.baseUnitPriceCents),
       spreadUnitPriceCents: toNonNegativeCents(commission.spreadUnitPriceCents),
+      commissionUnitPriceCents: toNonNegativeCents(commission.commissionUnitPriceCents),
       customerUnitPriceCents: toNonNegativeCents(commission.customerUnitPriceCents),
       baseAmountCents: toNonNegativeCents(commission.baseAmountCents),
       commissionAmountCents: toNonNegativeCents(commission.commissionAmountCents),

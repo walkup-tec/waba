@@ -8,6 +8,12 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const data_path_1 = require("../data-path");
 const waba_money_cents_1 = require("../billing/waba-money-cents");
+const waba_indicator_remuneration_1 = require("./waba-indicator-remuneration");
+const normalizeProfile = (profile) => ({
+    ...profile,
+    spreadCentsPerSend: (0, waba_money_cents_1.toNonNegativeCents)(profile.spreadCentsPerSend),
+    commissionCentsPerSend: (0, waba_indicator_remuneration_1.resolveIndicatorCommissionCentsPerSend)(profile.commissionCentsPerSend),
+});
 const FILE_NAME = "waba-indicator-profiles.json";
 const emptyStore = () => ({ version: 1, profiles: [] });
 const normalizeStatus = (value) => String(value ?? "").trim().toLowerCase() === "inactive" ? "inactive" : "active";
@@ -39,7 +45,7 @@ class WabaIndicatorProfileRepository {
         (0, node_fs_1.renameSync)(tmp, filePath);
     }
     list() {
-        return this.readStore().profiles.slice();
+        return this.readStore().profiles.map(normalizeProfile);
     }
     getById(id) {
         const normalized = String(id ?? "").trim();
@@ -58,13 +64,15 @@ class WabaIndicatorProfileRepository {
         if (store.profiles.some((item) => item.userId === profile.userId)) {
             throw new Error("Já existe um perfil de indicador para este usuário.");
         }
-        store.profiles.push({
+        const created = normalizeProfile({
             ...profile,
             spreadCentsPerSend: (0, waba_money_cents_1.toNonNegativeCents)(profile.spreadCentsPerSend),
+            commissionCentsPerSend: (0, waba_indicator_remuneration_1.resolveIndicatorCommissionCentsPerSend)(profile.commissionCentsPerSend),
             status: normalizeStatus(profile.status),
         });
+        store.profiles.push(created);
         this.writeStore(store);
-        return profile;
+        return created;
     }
     updateByUserId(userId, patch) {
         const store = this.readStore();
@@ -72,13 +80,14 @@ class WabaIndicatorProfileRepository {
         if (index < 0)
             return null;
         const current = store.profiles[index];
-        const next = {
+        const next = normalizeProfile({
             ...current,
             ...patch,
             spreadCentsPerSend: (0, waba_money_cents_1.toNonNegativeCents)(patch.spreadCentsPerSend ?? current.spreadCentsPerSend),
+            commissionCentsPerSend: (0, waba_indicator_remuneration_1.resolveIndicatorCommissionCentsPerSend)(patch.commissionCentsPerSend ?? current.commissionCentsPerSend),
             status: normalizeStatus(patch.status ?? current.status),
             updatedAt: String(patch.updatedAt ?? new Date().toISOString()),
-        };
+        });
         store.profiles[index] = next;
         this.writeStore(store);
         return next;

@@ -7,14 +7,35 @@ const waba_money_cents_1 = require("../billing/waba-money-cents");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_indicator_audit_repository_1 = require("./waba-indicator-audit.repository");
 const waba_indicator_commission_repository_1 = require("./waba-indicator-commission.repository");
+const waba_indicator_profile_repository_1 = require("./waba-indicator-profile.repository");
+const waba_indicator_remuneration_1 = require("./waba-indicator-remuneration");
 class WabaIndicatorCommissionService {
-    constructor(commissionRepository = new waba_indicator_commission_repository_1.WabaIndicatorCommissionRepository(), subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository(), auditRepository = new waba_indicator_audit_repository_1.WabaIndicatorAuditRepository()) {
+    constructor(commissionRepository = new waba_indicator_commission_repository_1.WabaIndicatorCommissionRepository(), subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository(), auditRepository = new waba_indicator_audit_repository_1.WabaIndicatorAuditRepository(), indicatorProfileRepository = new waba_indicator_profile_repository_1.WabaIndicatorProfileRepository()) {
         this.commissionRepository = commissionRepository;
         this.subscriberRepository = subscriberRepository;
         this.auditRepository = auditRepository;
+        this.indicatorProfileRepository = indicatorProfileRepository;
     }
     getByOrderId(orderId) {
         return this.commissionRepository.getByOrderId(orderId);
+    }
+    resolveCommissionFeeFromOrder(order, indicatorUserId, quantity) {
+        const hasUnitSnapshot = order.commissionUnitPriceCents !== undefined && order.commissionUnitPriceCents !== null;
+        const hasAmountSnapshot = order.commissionAmountCents !== undefined && order.commissionAmountCents !== null;
+        if (hasUnitSnapshot || hasAmountSnapshot) {
+            const unitCents = hasUnitSnapshot
+                ? (0, waba_money_cents_1.toNonNegativeCents)(order.commissionUnitPriceCents)
+                : quantity > 0
+                    ? Math.round((0, waba_money_cents_1.toNonNegativeCents)(order.commissionAmountCents) / quantity)
+                    : 0;
+            const amountCents = hasAmountSnapshot
+                ? (0, waba_money_cents_1.toNonNegativeCents)(order.commissionAmountCents)
+                : (0, waba_money_cents_1.multiplyCents)(unitCents, quantity);
+            return { unitCents, amountCents };
+        }
+        const profile = this.indicatorProfileRepository.getByUserId(indicatorUserId);
+        const unitCents = (0, waba_indicator_remuneration_1.resolveIndicatorCommissionCentsPerSend)(profile?.commissionCentsPerSend);
+        return { unitCents, amountCents: (0, waba_money_cents_1.multiplyCents)(unitCents, quantity) };
     }
     ensureForPaidOrder(order) {
         if (order.product !== "waba-disparos" || order.status !== "paid")
@@ -27,7 +48,9 @@ class WabaIndicatorCommissionService {
         const total = Math.max(0, Math.round(Number(order.shipmentCount ?? 0)));
         const quantity = Math.max(0, Math.round(Number(order.purchasedShipmentCount ??
             (bonus > 0 && total > bonus ? total - bonus : total))));
-        if (!indicatorUserId || spreadAmountCents <= 0 || quantity <= 0)
+        const commissionFee = this.resolveCommissionFeeFromOrder(order, indicatorUserId, quantity);
+        const payoutAmountCents = spreadAmountCents + commissionFee.amountCents;
+        if (!indicatorUserId || payoutAmountCents <= 0 || quantity <= 0)
             return null;
         const subscriber = this.subscriberRepository.getByEmail(String(order.ownerEmail ?? "").trim().toLowerCase()) ||
             this.subscriberRepository.list().find((item) => item.indicatorUserId === indicatorUserId) ||
@@ -44,9 +67,10 @@ class WabaIndicatorCommissionService {
             quantity,
             baseUnitPriceCents: (0, waba_money_cents_1.toNonNegativeCents)(order.baseUnitPriceCents),
             spreadUnitPriceCents: (0, waba_money_cents_1.toNonNegativeCents)(order.spreadUnitPriceCents),
+            commissionUnitPriceCents: commissionFee.unitCents,
             customerUnitPriceCents: (0, waba_money_cents_1.toNonNegativeCents)(order.customerUnitPriceCents),
             baseAmountCents: (0, waba_money_cents_1.toNonNegativeCents)(order.baseAmountCents),
-            commissionAmountCents: spreadAmountCents,
+            commissionAmountCents: payoutAmountCents,
             totalAmountCents: (0, waba_money_cents_1.toNonNegativeCents)(order.listValueCents ?? order.valueCents),
             status: "pending",
             payoutExternalReference: (0, asaas_identifiers_1.buildSplitLineAsaasExternalReference)({
@@ -74,6 +98,7 @@ class WabaIndicatorCommissionService {
                     orderId: order.id,
                     commissionAmountCents: commission.commissionAmountCents,
                     spreadUnitPriceCents: commission.spreadUnitPriceCents,
+                    commissionUnitPriceCents: commission.commissionUnitPriceCents,
                 },
             });
         }

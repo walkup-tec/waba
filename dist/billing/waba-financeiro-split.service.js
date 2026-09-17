@@ -41,6 +41,7 @@ const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
+const waba_money_cents_1 = require("./waba-money-cents");
 const waba_disparos_order_shipments_1 = require("./waba-disparos-order-shipments");
 const waba_financeiro_split_repository_1 = require("./waba-financeiro-split.repository");
 const waba_financeiro_split_settlement_repository_1 = require("./waba-financeiro-split-settlement.repository");
@@ -439,7 +440,8 @@ class WabaFinanceiroSplitService {
                 sharePercent: 0,
                 amountCents: indicatorCommissionCents,
                 shipmentCount: indicatorCommission.quantity,
-                costPerShipmentCents: indicatorCommission.spreadUnitPriceCents,
+                costPerShipmentCents: (0, waba_money_cents_1.toNonNegativeCents)(indicatorCommission.spreadUnitPriceCents) +
+                    (0, waba_money_cents_1.toNonNegativeCents)(indicatorCommission.commissionUnitPriceCents),
                 payoutStatus: profile?.pixKey ? "pending" : "failed",
                 failureReason: profile?.pixKey ? undefined : "Chave PIX do indicador ausente.",
             });

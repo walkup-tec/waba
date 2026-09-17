@@ -91,6 +91,7 @@ const registerWabaIndicatorRoutes = (app) => {
                 pixKey: String(body.pixKey ?? ""),
                 pixKeyType: body.pixKeyType,
                 spreadCentsPerSend: body.spreadCentsPerSend ?? body.spread,
+                commissionCentsPerSend: body.commissionCentsPerSend ?? body.commission,
                 status: body.status,
             }, actorFromAuth(auth.email));
             return res.status(201).json({ ok: true, indicator });
@@ -116,6 +117,7 @@ const registerWabaIndicatorRoutes = (app) => {
                 pixKey: body.pixKey !== undefined ? String(body.pixKey) : undefined,
                 pixKeyType: body.pixKeyType,
                 spreadCentsPerSend: body.spreadCentsPerSend ?? body.spread,
+                commissionCentsPerSend: body.commissionCentsPerSend ?? body.commission,
                 status: body.status,
             }, actorFromAuth(auth.email));
             return res.status(200).json({ ok: true, indicator });

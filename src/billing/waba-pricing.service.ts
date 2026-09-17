@@ -4,6 +4,7 @@ import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segme
 import { getSubscriberSegmentByEmail } from "../subscribers/waba-subscriber-segment";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import { WabaIndicatorProfileRepository } from "../indicators/waba-indicator-profile.repository";
+import { resolveIndicatorCommissionCentsPerSend } from "../indicators/waba-indicator-remuneration";
 
 export type DisparosApiKind = "oficial" | "alternativa";
 
@@ -16,9 +17,11 @@ export type WabaPricingQuote = {
   quantity: number;
   baseUnitPriceCents: number;
   spreadUnitPriceCents: number;
+  commissionUnitPriceCents: number;
   customerUnitPriceCents: number;
   baseAmountCents: number;
   spreadAmountCents: number;
+  commissionAmountCents: number;
   totalAmountCents: number;
   indicatorUserId: string;
 };
@@ -63,9 +66,11 @@ const emptyQuote = (quantity: number): WabaPricingQuote => ({
   quantity: Math.max(0, Math.round(Number(quantity ?? 0))),
   baseUnitPriceCents: 0,
   spreadUnitPriceCents: 0,
+  commissionUnitPriceCents: 0,
   customerUnitPriceCents: 0,
   baseAmountCents: 0,
   spreadAmountCents: 0,
+  commissionAmountCents: 0,
   totalAmountCents: 0,
   indicatorUserId: "",
 });
@@ -111,19 +116,20 @@ export class WabaPricingService {
   resolveActiveSpreadCentsForOwnerEmail(ownerEmail: string): {
     indicatorUserId: string;
     spreadCentsPerSend: number;
+    commissionCentsPerSend: number;
   } {
+    const empty = { indicatorUserId: "", spreadCentsPerSend: 0, commissionCentsPerSend: 0 };
     const email = String(ownerEmail ?? "").trim().toLowerCase();
-    if (!email.includes("@")) return { indicatorUserId: "", spreadCentsPerSend: 0 };
+    if (!email.includes("@")) return empty;
     const subscriber = this.subscriberRepository.getByEmail(email);
     const indicatorUserId = String(subscriber?.indicatorUserId ?? "").trim();
-    if (!indicatorUserId) return { indicatorUserId: "", spreadCentsPerSend: 0 };
+    if (!indicatorUserId) return empty;
     const profile = this.indicatorProfileRepository.getByUserId(indicatorUserId);
-    if (!profile || profile.status !== "active") {
-      return { indicatorUserId: "", spreadCentsPerSend: 0 };
-    }
+    if (!profile || profile.status !== "active") return empty;
     return {
       indicatorUserId,
       spreadCentsPerSend: toNonNegativeCents(profile.spreadCentsPerSend),
+      commissionCentsPerSend: resolveIndicatorCommissionCentsPerSend(profile.commissionCentsPerSend),
     };
   }
 
@@ -140,16 +146,20 @@ export class WabaPricingService {
     const quantity = Math.round(Number(input.shipmentCount ?? 0));
     const baseAmountCents = resolveBaseAmountCents(apiKind, quantity, segment, ownerEmail);
     if (baseAmountCents == null) return null;
-    const { indicatorUserId, spreadCentsPerSend } = this.resolveActiveSpreadCentsForOwnerEmail(ownerEmail);
+    const { indicatorUserId, spreadCentsPerSend, commissionCentsPerSend } =
+      this.resolveActiveSpreadCentsForOwnerEmail(ownerEmail);
     const spreadAmountCents = multiplyCents(spreadCentsPerSend, quantity);
+    const commissionAmountCents = multiplyCents(commissionCentsPerSend, quantity);
     const totalAmountCents = baseAmountCents + spreadAmountCents;
     return {
       quantity,
       baseUnitPriceCents: unitCentsFromTotal(baseAmountCents, quantity),
       spreadUnitPriceCents: spreadCentsPerSend,
+      commissionUnitPriceCents: commissionCentsPerSend,
       customerUnitPriceCents: unitCentsFromTotal(totalAmountCents, quantity),
       baseAmountCents,
       spreadAmountCents,
+      commissionAmountCents,
       totalAmountCents,
       indicatorUserId,
     };

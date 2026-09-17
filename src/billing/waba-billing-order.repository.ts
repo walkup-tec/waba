@@ -54,6 +54,9 @@ export type WabaBillingOrder = {
   customerUnitPriceCents?: number;
   baseAmountCents?: number;
   spreadAmountCents?: number;
+  /** Comissão Drax → indicador (sem o spread). Snapshot do checkout. */
+  commissionUnitPriceCents?: number;
+  commissionAmountCents?: number;
 };
 
 const ORDERS_FILE = resolveDataFile("waba-billing-orders.json");

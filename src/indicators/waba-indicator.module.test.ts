@@ -39,6 +39,8 @@ function paidOrder(overrides: Partial<WabaBillingOrder> = {}): WabaBillingOrder 
     customerUnitPriceCents: 35,
     baseAmountCents: 32000,
     spreadAmountCents: 3000,
+    commissionUnitPriceCents: 2,
+    commissionAmountCents: 2000,
     ...overrides,
   };
 }
@@ -156,6 +158,8 @@ describe("Módulo Indicador — comissão, bônus, IDOR e snapshot", () => {
           valueCents: number;
           listValueCents: number;
           spreadAmountCents?: number;
+          commissionUnitPriceCents?: number;
+          commissionAmountCents?: number;
         };
       }
     ).validateCheckoutInput({
@@ -170,6 +174,8 @@ describe("Módulo Indicador — comissão, bônus, IDOR e snapshot", () => {
     assert.equal(validated.listValueCents, 39000);
     assert.equal(validated.valueCents, 39000);
     assert.equal(validated.spreadAmountCents, 3000);
+    assert.equal(validated.commissionUnitPriceCents, 2);
+    assert.equal(validated.commissionAmountCents, 2000);
   });
 
   it("pagamento confirmado gera comissão uma única vez mesmo com webhook duplicado", async () => {
@@ -190,9 +196,10 @@ describe("Módulo Indicador — comissão, bônus, IDOR e snapshot", () => {
     await billing.handleAsaasWebhook("PAYMENT_CONFIRMED", payload);
     const commissions = new WabaIndicatorCommissionRepository().list();
     assert.equal(commissions.length, 1);
-    assert.equal(commissions[0]?.commissionAmountCents, 3000);
+    assert.equal(commissions[0]?.commissionAmountCents, 5000);
     assert.notEqual(commissions[0]?.status, "paid");
     assert.equal(commissions[0]?.spreadUnitPriceCents, 3);
+    assert.equal(commissions[0]?.commissionUnitPriceCents, 2);
   });
 
   it("bônus administrativo não gera comissão", async () => {
@@ -223,9 +230,15 @@ describe("Módulo Indicador — comissão, bônus, IDOR e snapshot", () => {
       updatedAt: new Date().toISOString(),
     });
     commissionService.ensureForPaidOrder(paidOrder());
+    new WabaIndicatorProfileRepository().updateByUserId("ind-1", {
+      commissionCentsPerSend: 9,
+      updatedAt: new Date().toISOString(),
+    });
+    commissionService.ensureForPaidOrder(paidOrder());
     const stored = new (await import("./waba-indicator-commission.repository")).WabaIndicatorCommissionRepository().getByOrderId("order-1");
     assert.equal(stored?.spreadUnitPriceCents, 3);
-    assert.equal(stored?.commissionAmountCents, 3000);
+    assert.equal(stored?.commissionUnitPriceCents, 2);
+    assert.equal(stored?.commissionAmountCents, 5000);
   });
 
   it("estorno/chargeback cancela a comissão sem apagar o histórico", async () => {
@@ -404,6 +417,32 @@ describe("Módulo Indicador — comissão, bônus, IDOR e snapshot", () => {
     const finance = new WabaIndicatorService().financeSummary("ind-1", {});
     assert.equal(finance.items.length, 1);
     assert.equal(finance.items[0]?.orderId, "order-1");
-    assert.equal(finance.generatedCents, 3000);
+    assert.equal(finance.generatedCents, 5000);
+  });
+
+  it("perfil legado sem comissão gravada assume R$ 0,02", async () => {
+    seedBase();
+    const { WabaIndicatorProfileRepository } = await import("./waba-indicator-profile.repository");
+    const profile = new WabaIndicatorProfileRepository().getByUserId("ind-1");
+    assert.equal(profile?.commissionCentsPerSend, 2);
+  });
+
+  it("pedido sem spread ainda gera comissão padrão de R$ 0,02", async () => {
+    seedBase();
+    const { WabaIndicatorCommissionService } = await import("./waba-indicator-commission.service");
+    const created = new WabaIndicatorCommissionService().ensureForPaidOrder(
+      paidOrder({
+        spreadUnitPriceCents: 0,
+        spreadAmountCents: 0,
+        commissionUnitPriceCents: 2,
+        commissionAmountCents: 2000,
+        customerUnitPriceCents: 32,
+        valueCents: 32000,
+        listValueCents: 32000,
+      }),
+    );
+    assert.equal(created?.commissionAmountCents, 2000);
+    assert.equal(created?.spreadUnitPriceCents, 0);
+    assert.equal(created?.commissionUnitPriceCents, 2);
   });
 });

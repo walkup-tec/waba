@@ -81,6 +81,7 @@ class WabaIndicatorCommissionRepository {
             quantity: Math.max(0, Math.round(Number(commission.quantity ?? 0))),
             baseUnitPriceCents: (0, waba_money_cents_1.toNonNegativeCents)(commission.baseUnitPriceCents),
             spreadUnitPriceCents: (0, waba_money_cents_1.toNonNegativeCents)(commission.spreadUnitPriceCents),
+            commissionUnitPriceCents: (0, waba_money_cents_1.toNonNegativeCents)(commission.commissionUnitPriceCents),
             customerUnitPriceCents: (0, waba_money_cents_1.toNonNegativeCents)(commission.customerUnitPriceCents),
             baseAmountCents: (0, waba_money_cents_1.toNonNegativeCents)(commission.baseAmountCents),
             commissionAmountCents: (0, waba_money_cents_1.toNonNegativeCents)(commission.commissionAmountCents),

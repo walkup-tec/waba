@@ -25083,6 +25083,10 @@
                         <input id="admin-indicador-spread" type="text" inputmode="decimal" placeholder="0,03" />
                       </div>
                       <div class="aquecedor-field">
+                        <label for="admin-indicador-commission">Comissão (R$)</label>
+                        <input id="admin-indicador-commission" type="text" inputmode="decimal" placeholder="0,02" value="0,02" />
+                      </div>
+                      <div class="aquecedor-field">
                         <label for="admin-indicador-pix">Chave PIX</label>
                         <input id="admin-indicador-pix" type="text" required placeholder="e-mail, CPF, celular ou aleatória" />
                       </div>
@@ -25120,6 +25124,7 @@
                         <tr>
                           <th>Nome</th>
                           <th>Spread</th>
+                          <th>Comissão</th>
                           <th>PIX</th>
                           <th>Status</th>
                           <th class="admin-subscribers-num">Assinantes</th>
@@ -25127,7 +25132,7 @@
                           <th>Ações</th>
                         </tr>
                       </thead>
-                      <tbody id="admin-indicadores-tbody"><tr><td colspan="7" class="muted">Carregando…</td></tr></tbody>
+                      <tbody id="admin-indicadores-tbody"><tr><td colspan="8" class="muted">Carregando…</td></tr></tbody>
                     </table>
                   </div>
                 </div>
@@ -68291,7 +68296,7 @@
           }
           if (!tbody) return;
           if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="muted">Nenhum indicador cadastrado.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="muted">Nenhum indicador cadastrado.</td></tr>';
             return;
           }
           tbody.innerHTML = items
@@ -68302,6 +68307,7 @@
                 item.email || ""
               )}</div></td>
                 <td>${escapeAdminHtml(item.spreadLabel || formatSpreadInputFromCents(item.spreadCentsPerSend))}</td>
+                <td>${escapeAdminHtml(item.commissionLabel || formatSpreadInputFromCents(item.commissionCentsPerSend ?? 2))}</td>
                 <td>${escapeAdminHtml(item.pixKey || "—")}</td>
                 <td>${escapeAdminHtml(item.statusLabel || item.status || "—")}</td>
                 <td class="admin-subscribers-num">${escapeAdminHtml(String(item.subscriberCount ?? 0))}</td>
@@ -68314,7 +68320,7 @@
             .join("");
         } catch (error) {
           if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="7" class="muted">${escapeAdminHtml(
+            tbody.innerHTML = `<tr><td colspan="8" class="muted">${escapeAdminHtml(
               error?.message || "Falha ao carregar."
             )}</td></tr>`;
           }
@@ -68398,6 +68404,9 @@
         document.getElementById("admin-indicador-whatsapp").value = item?.whatsapp || "";
         document.getElementById("admin-indicador-cpf").value = item?.cpfCnpj || "";
         document.getElementById("admin-indicador-spread").value = formatSpreadInputFromCents(item?.spreadCentsPerSend || 0);
+        document.getElementById("admin-indicador-commission").value = formatSpreadInputFromCents(
+          item?.id ? item.commissionCentsPerSend ?? 2 : 2
+        );
         document.getElementById("admin-indicador-pix").value = item?.pixKey || "";
         document.getElementById("admin-indicador-pix-type").value = item?.pixKeyType || "";
         document.getElementById("admin-indicador-status").value = item?.status || "active";
@@ -68616,10 +68625,18 @@
           const errorEl = document.getElementById("admin-indicador-form-error");
           const id = String(document.getElementById("admin-indicador-id")?.value || "").trim();
           const spreadCents = parseSpreadInputToCents(document.getElementById("admin-indicador-spread")?.value);
+          const commissionCents = parseSpreadInputToCents(document.getElementById("admin-indicador-commission")?.value);
           if (!Number.isFinite(spreadCents)) {
             if (errorEl) {
               errorEl.hidden = false;
               errorEl.textContent = "Informe o spread em reais, por envio.";
+            }
+            return;
+          }
+          if (!Number.isFinite(commissionCents)) {
+            if (errorEl) {
+              errorEl.hidden = false;
+              errorEl.textContent = "Informe a comissão em reais, por envio.";
             }
             return;
           }
@@ -68632,6 +68649,7 @@
             pixKey: document.getElementById("admin-indicador-pix")?.value,
             pixKeyType: document.getElementById("admin-indicador-pix-type")?.value,
             spreadCentsPerSend: spreadCents,
+            commissionCentsPerSend: commissionCents,
             status: document.getElementById("admin-indicador-status")?.value,
           };
           try {

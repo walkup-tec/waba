@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { resolveAsaasPixKeyType, type AsaasPixAddressKeyType } from "../billing/asaas-pix-key";
 import { toNonNegativeCents } from "../billing/waba-money-cents";
+import { resolveIndicatorCommissionCentsPerSend } from "./waba-indicator-remuneration";
 import { WabaBillingOrderRepository } from "../billing/waba-billing-order.repository";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import {
@@ -64,6 +65,7 @@ export type CreateIndicatorInput = {
   pixKey: string;
   pixKeyType?: unknown;
   spreadCentsPerSend: unknown;
+  commissionCentsPerSend?: unknown;
   status?: unknown;
 };
 
@@ -76,6 +78,7 @@ export type UpdateIndicatorInput = {
   pixKey?: string;
   pixKeyType?: unknown;
   spreadCentsPerSend?: unknown;
+  commissionCentsPerSend?: unknown;
   status?: unknown;
 };
 
@@ -170,6 +173,10 @@ export class WabaIndicatorService {
         pixKeyType: profile?.pixKeyType ?? "",
         spreadCentsPerSend: profile?.spreadCentsPerSend ?? 0,
         spreadLabel: formatMoneyFromCents(profile?.spreadCentsPerSend ?? 0),
+        commissionCentsPerSend: resolveIndicatorCommissionCentsPerSend(profile?.commissionCentsPerSend),
+        commissionLabel: formatMoneyFromCents(
+          resolveIndicatorCommissionCentsPerSend(profile?.commissionCentsPerSend),
+        ),
         status: profile?.status ?? "inactive",
         statusLabel: (profile?.status ?? "inactive") === "active" ? "Ativo" : "Inativo",
         subscriberCount: linked.length,
@@ -200,6 +207,7 @@ export class WabaIndicatorService {
     const pixKey = String(input.pixKey ?? "").trim();
     if (pixKey.length < 5) throw new Error("Informe a chave PIX do indicador.");
     const spreadCentsPerSend = toNonNegativeCents(input.spreadCentsPerSend);
+    const commissionCentsPerSend = resolveIndicatorCommissionCentsPerSend(input.commissionCentsPerSend);
     const user = this.systemUserService.create({
       fullName: input.fullName,
       email: input.email,
@@ -215,6 +223,7 @@ export class WabaIndicatorService {
       pixKey,
       pixKeyType: this.parsePixKeyType(pixKey, input.pixKeyType),
       spreadCentsPerSend,
+      commissionCentsPerSend,
       status: this.parseStatus(input.status, "active"),
       createdAt: now,
       updatedAt: now,
@@ -226,7 +235,12 @@ export class WabaIndicatorService {
       entityType: "indicator",
       entityId: user.id,
       previousValue: null,
-      nextValue: { spreadCentsPerSend: profile.spreadCentsPerSend, pixKey: profile.pixKey, status: profile.status },
+      nextValue: {
+        spreadCentsPerSend: profile.spreadCentsPerSend,
+        commissionCentsPerSend: profile.commissionCentsPerSend,
+        pixKey: profile.pixKey,
+        status: profile.status,
+      },
     });
     return this.getForMaster(user.id);
   }
@@ -260,6 +274,10 @@ export class WabaIndicatorService {
         input.spreadCentsPerSend !== undefined
           ? toNonNegativeCents(input.spreadCentsPerSend)
           : previous?.spreadCentsPerSend,
+      commissionCentsPerSend:
+        input.commissionCentsPerSend !== undefined
+          ? toNonNegativeCents(input.commissionCentsPerSend)
+          : resolveIndicatorCommissionCentsPerSend(previous?.commissionCentsPerSend),
       status: input.status !== undefined ? this.parseStatus(input.status, previous?.status) : previous?.status,
       updatedAt: new Date().toISOString(),
     };
@@ -271,10 +289,16 @@ export class WabaIndicatorService {
       entityType: "indicator",
       entityId: userId,
       previousValue: previous
-        ? { spreadCentsPerSend: previous.spreadCentsPerSend, pixKey: previous.pixKey, status: previous.status }
+        ? {
+            spreadCentsPerSend: previous.spreadCentsPerSend,
+            commissionCentsPerSend: previous.commissionCentsPerSend,
+            pixKey: previous.pixKey,
+            status: previous.status,
+          }
         : null,
       nextValue: {
         spreadCentsPerSend: patch.spreadCentsPerSend,
+        commissionCentsPerSend: patch.commissionCentsPerSend,
         pixKey: patch.pixKey,
         status: patch.status,
       },
@@ -521,6 +545,8 @@ export class WabaIndicatorService {
       quantity: item.quantity,
       spreadUnitPriceCents: item.spreadUnitPriceCents,
       spreadUnitPriceLabel: formatMoneyFromCents(item.spreadUnitPriceCents),
+      commissionUnitPriceCents: toNonNegativeCents(item.commissionUnitPriceCents),
+      commissionUnitPriceLabel: formatMoneyFromCents(toNonNegativeCents(item.commissionUnitPriceCents)),
       commissionAmountCents: item.commissionAmountCents,
       commissionAmountLabel: formatMoneyFromCents(item.commissionAmountCents),
       status: item.status,

@@ -111,6 +111,7 @@ describe("WabaPricingService — spread do indicador", () => {
     });
     assert.equal(quote?.baseAmountCents, 36000);
     assert.equal(quote?.spreadAmountCents, 0);
+    assert.equal(quote?.commissionAmountCents, 0);
     assert.equal(quote?.totalAmountCents, 36000);
     assert.equal(quote?.customerUnitPriceCents, 36);
     assert.equal(quote?.indicatorUserId, "");
@@ -127,6 +128,8 @@ describe("WabaPricingService — spread do indicador", () => {
     assert.equal(quote?.baseAmountCents, 36000);
     assert.equal(quote?.spreadUnitPriceCents, 3);
     assert.equal(quote?.spreadAmountCents, 3000);
+    assert.equal(quote?.commissionUnitPriceCents, 2);
+    assert.equal(quote?.commissionAmountCents, 2000);
     assert.equal(quote?.totalAmountCents, 39000);
     assert.equal(quote?.customerUnitPriceCents, 39);
     const packs = wabaPricingService.listCustomerPackages({
@@ -218,6 +221,30 @@ describe("WabaPricingService — spread do indicador", () => {
       ownerEmail: "revenda@test.com",
     });
     assert.equal(quote?.spreadAmountCents, 0);
+    assert.equal(quote?.commissionAmountCents, 0);
     assert.equal(quote?.totalAmountCents, 36000);
+  });
+
+  it("comissão do indicador não entra no preço de venda do assinante", async () => {
+    seedStores({ indicatorSpreadCents: 3 });
+    const { WabaIndicatorProfileRepository } = await import("../indicators/waba-indicator-profile.repository");
+    new WabaIndicatorProfileRepository().updateByUserId("ind-1", {
+      commissionCentsPerSend: 9,
+      updatedAt: new Date().toISOString(),
+    });
+    const { wabaPricingService } = await import("./waba-pricing.service");
+    const quote = wabaPricingService.quote({
+      apiKind: "oficial",
+      shipmentCount: 1000,
+      ownerEmail: "revenda@test.com",
+    });
+    assert.equal(quote?.commissionUnitPriceCents, 9);
+    assert.equal(quote?.commissionAmountCents, 9000);
+    assert.equal(quote?.totalAmountCents, 39000);
+    const packs = wabaPricingService.listCustomerPackages({
+      apiKind: "oficial",
+      ownerEmail: "revenda@test.com",
+    });
+    assert.equal(packs.find((item) => item.shipments === 1000)?.valueCents, 39000);
   });
 });

@@ -8,6 +8,7 @@ import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.reposit
 import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
+import { toNonNegativeCents } from "./waba-money-cents";
 import { resolveOrderShipmentCount } from "./waba-disparos-order-shipments";
 import {
   WabaFinanceiroSplitRepository,
@@ -544,7 +545,9 @@ export class WabaFinanceiroSplitService {
         sharePercent: 0,
         amountCents: indicatorCommissionCents,
         shipmentCount: indicatorCommission.quantity,
-        costPerShipmentCents: indicatorCommission.spreadUnitPriceCents,
+        costPerShipmentCents:
+          toNonNegativeCents(indicatorCommission.spreadUnitPriceCents) +
+          toNonNegativeCents(indicatorCommission.commissionUnitPriceCents),
         payoutStatus: profile?.pixKey ? "pending" : "failed",
         failureReason: profile?.pixKey ? undefined : "Chave PIX do indicador ausente.",
       });

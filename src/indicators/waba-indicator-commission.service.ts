@@ -1,20 +1,46 @@
 import { randomUUID } from "node:crypto";
 import { buildSplitLineAsaasExternalReference } from "../billing/asaas-identifiers";
-import { toNonNegativeCents } from "../billing/waba-money-cents";
+import { multiplyCents, toNonNegativeCents } from "../billing/waba-money-cents";
 import type { WabaBillingOrder } from "../billing/waba-billing-order.repository";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import { WabaIndicatorAuditRepository } from "./waba-indicator-audit.repository";
 import { WabaIndicatorCommissionRepository } from "./waba-indicator-commission.repository";
+import { WabaIndicatorProfileRepository } from "./waba-indicator-profile.repository";
+import { resolveIndicatorCommissionCentsPerSend } from "./waba-indicator-remuneration";
 
 export class WabaIndicatorCommissionService {
   constructor(
     private readonly commissionRepository = new WabaIndicatorCommissionRepository(),
     private readonly subscriberRepository = new WabaSubscriberRepository(),
     private readonly auditRepository = new WabaIndicatorAuditRepository(),
+    private readonly indicatorProfileRepository = new WabaIndicatorProfileRepository(),
   ) {}
 
   getByOrderId(orderId: string) {
     return this.commissionRepository.getByOrderId(orderId);
+  }
+
+  private resolveCommissionFeeFromOrder(
+    order: WabaBillingOrder,
+    indicatorUserId: string,
+    quantity: number,
+  ): { unitCents: number; amountCents: number } {
+    const hasUnitSnapshot = order.commissionUnitPriceCents !== undefined && order.commissionUnitPriceCents !== null;
+    const hasAmountSnapshot = order.commissionAmountCents !== undefined && order.commissionAmountCents !== null;
+    if (hasUnitSnapshot || hasAmountSnapshot) {
+      const unitCents = hasUnitSnapshot
+        ? toNonNegativeCents(order.commissionUnitPriceCents)
+        : quantity > 0
+          ? Math.round(toNonNegativeCents(order.commissionAmountCents) / quantity)
+          : 0;
+      const amountCents = hasAmountSnapshot
+        ? toNonNegativeCents(order.commissionAmountCents)
+        : multiplyCents(unitCents, quantity);
+      return { unitCents, amountCents };
+    }
+    const profile = this.indicatorProfileRepository.getByUserId(indicatorUserId);
+    const unitCents = resolveIndicatorCommissionCentsPerSend(profile?.commissionCentsPerSend);
+    return { unitCents, amountCents: multiplyCents(unitCents, quantity) };
   }
 
   ensureForPaidOrder(order: WabaBillingOrder) {
@@ -33,7 +59,9 @@ export class WabaIndicatorCommissionService {
         ),
       ),
     );
-    if (!indicatorUserId || spreadAmountCents <= 0 || quantity <= 0) return null;
+    const commissionFee = this.resolveCommissionFeeFromOrder(order, indicatorUserId, quantity);
+    const payoutAmountCents = spreadAmountCents + commissionFee.amountCents;
+    if (!indicatorUserId || payoutAmountCents <= 0 || quantity <= 0) return null;
 
     const subscriber =
       this.subscriberRepository.getByEmail(String(order.ownerEmail ?? "").trim().toLowerCase()) ||
@@ -52,9 +80,10 @@ export class WabaIndicatorCommissionService {
       quantity,
       baseUnitPriceCents: toNonNegativeCents(order.baseUnitPriceCents),
       spreadUnitPriceCents: toNonNegativeCents(order.spreadUnitPriceCents),
+      commissionUnitPriceCents: commissionFee.unitCents,
       customerUnitPriceCents: toNonNegativeCents(order.customerUnitPriceCents),
       baseAmountCents: toNonNegativeCents(order.baseAmountCents),
-      commissionAmountCents: spreadAmountCents,
+      commissionAmountCents: payoutAmountCents,
       totalAmountCents: toNonNegativeCents(order.listValueCents ?? order.valueCents),
       status: "pending",
       payoutExternalReference: buildSplitLineAsaasExternalReference({
@@ -82,6 +111,7 @@ export class WabaIndicatorCommissionService {
           orderId: order.id,
           commissionAmountCents: commission.commissionAmountCents,
           spreadUnitPriceCents: commission.spreadUnitPriceCents,
+          commissionUnitPriceCents: commission.commissionUnitPriceCents,
         },
       });
     }

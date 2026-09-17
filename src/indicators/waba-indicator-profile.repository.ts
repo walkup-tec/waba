@@ -3,6 +3,7 @@ import path from "node:path";
 import { resolveDataFile } from "../data-path";
 import { toNonNegativeCents } from "../billing/waba-money-cents";
 import type { AsaasPixAddressKeyType } from "../billing/asaas-pix-key";
+import { resolveIndicatorCommissionCentsPerSend } from "./waba-indicator-remuneration";
 
 export type IndicatorProfileStatus = "active" | "inactive";
 
@@ -13,10 +14,18 @@ export type WabaIndicatorProfile = {
   pixKey: string;
   pixKeyType: AsaasPixAddressKeyType;
   spreadCentsPerSend: number;
+  /** Comissão Drax → indicador, em centavos por envio. Não entra no preço de venda. */
+  commissionCentsPerSend: number;
   status: IndicatorProfileStatus;
   createdAt: string;
   updatedAt: string;
 };
+
+const normalizeProfile = (profile: WabaIndicatorProfile): WabaIndicatorProfile => ({
+  ...profile,
+  spreadCentsPerSend: toNonNegativeCents(profile.spreadCentsPerSend),
+  commissionCentsPerSend: resolveIndicatorCommissionCentsPerSend(profile.commissionCentsPerSend),
+});
 
 type Store = {
   version: 1;
@@ -55,7 +64,7 @@ export class WabaIndicatorProfileRepository {
   }
 
   list(): WabaIndicatorProfile[] {
-    return this.readStore().profiles.slice();
+    return this.readStore().profiles.map(normalizeProfile);
   }
 
   getById(id: string): WabaIndicatorProfile | null {
@@ -75,13 +84,15 @@ export class WabaIndicatorProfileRepository {
     if (store.profiles.some((item) => item.userId === profile.userId)) {
       throw new Error("Já existe um perfil de indicador para este usuário.");
     }
-    store.profiles.push({
+    const created = normalizeProfile({
       ...profile,
       spreadCentsPerSend: toNonNegativeCents(profile.spreadCentsPerSend),
+      commissionCentsPerSend: resolveIndicatorCommissionCentsPerSend(profile.commissionCentsPerSend),
       status: normalizeStatus(profile.status),
     });
+    store.profiles.push(created);
     this.writeStore(store);
-    return profile;
+    return created;
   }
 
   updateByUserId(
@@ -92,13 +103,16 @@ export class WabaIndicatorProfileRepository {
     const index = store.profiles.findIndex((item) => item.userId === String(userId ?? "").trim());
     if (index < 0) return null;
     const current = store.profiles[index];
-    const next: WabaIndicatorProfile = {
+    const next: WabaIndicatorProfile = normalizeProfile({
       ...current,
       ...patch,
       spreadCentsPerSend: toNonNegativeCents(patch.spreadCentsPerSend ?? current.spreadCentsPerSend),
+      commissionCentsPerSend: resolveIndicatorCommissionCentsPerSend(
+        patch.commissionCentsPerSend ?? current.commissionCentsPerSend,
+      ),
       status: normalizeStatus(patch.status ?? current.status),
       updatedAt: String(patch.updatedAt ?? new Date().toISOString()),
-    };
+    });
     store.profiles[index] = next;
     this.writeStore(store);
     return next;
