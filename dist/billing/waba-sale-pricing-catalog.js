@@ -67,7 +67,7 @@ const applySalePricingCopyToHtml = (html, options) => {
     for (const [key, value] of Object.entries(labels)) {
         if (!value)
             continue;
-        out = out.replace(new RegExp(`(data-sale-price="${key}"[^>]*>)([^<]*)`, "g"), `$1${value}`);
+        out = out.replace(new RegExp(`(<[^>]*\\bdata-sale-price="${key}"[^>]*>)([^<]*)`, "g"), `$1${value}`);
     }
     const fromLane = options?.segment === "bets" ? catalog.bets.oficial : catalog.outros.oficial;
     out = out.replace(/a partir de R\$ \d{1,3}(?:\.\d{3})*,\d{2}/gi, `a partir de ${fromLane.fromLabel}`);

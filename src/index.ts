@@ -5292,14 +5292,12 @@ function resolveUiProfile(): WabaUiProfile {
 function sendIndexHtml(res: express.Response) {
   const uiProfile = resolveUiProfile();
   const html = injectPublicPricingBootstrap(
-    applySalePricingCopyToHtml(
-      injectRuntimeIntoIndexHtml(loadIndexHtmlTemplate(), {
-        basePath: BASE_PATH,
-        uiProfile,
-        featureFlags: getWabaFeatureFlagsForClient(),
-        deployResilienceEnabled: resolveDeployResilienceForClient(),
-      }),
-    ),
+    injectRuntimeIntoIndexHtml(loadIndexHtmlTemplate(), {
+      basePath: BASE_PATH,
+      uiProfile,
+      featureFlags: getWabaFeatureFlagsForClient(),
+      deployResilienceEnabled: resolveDeployResilienceForClient(),
+    }),
   );
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.setHeader("Pragma", "no-cache");

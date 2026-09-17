@@ -59,6 +59,19 @@ describe("catálogo público de preço de venda", () => {
     assert.match(html, new RegExp(catalog.bets.oficial.fromLabel.replace("$", "\\$")));
   });
 
+  it("não corrompe JavaScript que consulta data-sale-price", () => {
+    const source = [
+      "scope.querySelectorAll('[data-sale-price=\"alternativa-range\"]').forEach((el) => {",
+      "  el.textContent = altRange;",
+      "});",
+      '<span data-sale-price="alternativa-range">R$ 0,00</span>',
+    ].join("\n");
+    const html = applySalePricingCopyToHtml(source, { segment: "outros" });
+    assert.match(html, /forEach\(\(el\) => \{/);
+    assert.doesNotMatch(html, /forEach\(\(el\) =>De R\$/);
+    assert.match(html, /<span data-sale-price="alternativa-range">De R\$ 0,13 a R\$ 0,20<\/span>/);
+  });
+
   it("tela de créditos e páginas públicas já têm âncoras da rotina", () => {
     const indexHtml = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
     assert.match(indexHtml, /data-sale-price="outros-oficial-range"/);

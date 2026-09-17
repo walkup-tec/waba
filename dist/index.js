@@ -4204,12 +4204,12 @@ function resolveUiProfile() {
 }
 function sendIndexHtml(res) {
     const uiProfile = resolveUiProfile();
-    const html = (0, waba_sale_pricing_catalog_1.injectPublicPricingBootstrap)((0, waba_sale_pricing_catalog_1.applySalePricingCopyToHtml)((0, base_path_1.injectRuntimeIntoIndexHtml)(loadIndexHtmlTemplate(), {
+    const html = (0, waba_sale_pricing_catalog_1.injectPublicPricingBootstrap)((0, base_path_1.injectRuntimeIntoIndexHtml)(loadIndexHtmlTemplate(), {
         basePath: base_path_1.BASE_PATH,
         uiProfile,
         featureFlags: (0, waba_feature_flags_1.getWabaFeatureFlagsForClient)(),
         deployResilienceEnabled: (0, base_path_1.resolveDeployResilienceForClient)(),
-    })));
+    }));
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("X-Waba-Shell-Cache-Key", (0, base_path_1.resolveShellCacheKey)(uiProfile, base_path_1.BASE_PATH));
