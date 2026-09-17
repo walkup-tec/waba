@@ -51,6 +51,7 @@ const load_env_1 = require("./load-env");
 const data_path_1 = require("./data-path");
 const aquecedor_owner_runtime_registry_1 = require("./services/aquecedor-owner-runtime.registry");
 const base_path_1 = require("./base-path");
+const waba_sale_pricing_catalog_1 = require("./billing/waba-sale-pricing-catalog");
 const conversation_graph_service_1 = require("./aquecedor/conversation-graph.service");
 const delivery_verify_helpers_1 = require("./aquecedor/delivery-verify.helpers");
 const outbound_ack_health_service_1 = require("./aquecedor/outbound-ack-health.service");
@@ -4203,12 +4204,12 @@ function resolveUiProfile() {
 }
 function sendIndexHtml(res) {
     const uiProfile = resolveUiProfile();
-    const html = (0, base_path_1.injectRuntimeIntoIndexHtml)(loadIndexHtmlTemplate(), {
+    const html = (0, waba_sale_pricing_catalog_1.injectPublicPricingBootstrap)((0, waba_sale_pricing_catalog_1.applySalePricingCopyToHtml)((0, base_path_1.injectRuntimeIntoIndexHtml)(loadIndexHtmlTemplate(), {
         basePath: base_path_1.BASE_PATH,
         uiProfile,
         featureFlags: (0, waba_feature_flags_1.getWabaFeatureFlagsForClient)(),
         deployResilienceEnabled: (0, base_path_1.resolveDeployResilienceForClient)(),
-    });
+    })));
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("X-Waba-Shell-Cache-Key", (0, base_path_1.resolveShellCacheKey)(uiProfile, base_path_1.BASE_PATH));
@@ -4244,10 +4245,10 @@ const sendVendasPage = (res) => {
     if (!sourcePath) {
         return res.status(404).type("html").send("<p>Página de vendas indisponível.</p>");
     }
-    const html = (0, base_path_1.injectRuntimeIntoIndexHtml)((0, fs_1.readFileSync)(sourcePath, "utf8"), {
+    const html = (0, waba_sale_pricing_catalog_1.applySalePricingCopyToHtml)((0, base_path_1.injectRuntimeIntoIndexHtml)((0, fs_1.readFileSync)(sourcePath, "utf8"), {
         basePath: base_path_1.BASE_PATH,
         uiProfile: "full",
-    });
+    }), { segment: "outros" });
     return res.type("html").send(html);
 };
 const sendBetsLandingPage = (res) => {
@@ -4255,10 +4256,10 @@ const sendBetsLandingPage = (res) => {
     if (!(0, fs_1.existsSync)(betsPath)) {
         return res.status(404).type("html").send("<p>Landing Bet Waba indisponível.</p>");
     }
-    const html = (0, base_path_1.injectRuntimeIntoIndexHtml)((0, fs_1.readFileSync)(betsPath, "utf8"), {
+    const html = (0, waba_sale_pricing_catalog_1.applySalePricingCopyToHtml)((0, base_path_1.injectRuntimeIntoIndexHtml)((0, fs_1.readFileSync)(betsPath, "utf8"), {
         basePath: base_path_1.BASE_PATH,
         uiProfile: "production",
-    });
+    }), { segment: "bets" });
     return res.type("html").send(html);
 };
 app.get("/cadastro", (_req, res) => sendVendasPage(res));

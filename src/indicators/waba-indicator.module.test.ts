@@ -167,8 +167,8 @@ describe("Módulo Indicador — comissão, bônus, IDOR e snapshot", () => {
       shipmentCount: 1000,
       valueCents: 1,
     });
-    assert.equal(validated.listValueCents, 35000);
-    assert.equal(validated.valueCents, 35000);
+    assert.equal(validated.listValueCents, 39000);
+    assert.equal(validated.valueCents, 39000);
     assert.equal(validated.spreadAmountCents, 3000);
   });
 

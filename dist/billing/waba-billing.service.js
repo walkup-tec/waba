@@ -13,7 +13,6 @@ const waba_billing_order_repository_1 = require("./waba-billing-order.repository
 const waba_alternativa_numbers_service_1 = require("./waba-alternativa-numbers.service");
 const waba_coupon_service_1 = require("./waba-coupon.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
-const waba_oficial_pricing_overrides_1 = require("./waba-oficial-pricing-overrides");
 const waba_pricing_service_1 = require("./waba-pricing.service");
 const waba_indicator_commission_service_1 = require("../indicators/waba-indicator-commission.service");
 const normalizeEmail = (value) => value.trim().toLowerCase();
@@ -37,48 +36,9 @@ const resolveMinCreditCents = (apiKind = "oficial") => {
     }
     return parsePositiveCentsEnv(process.env.WABA_DISPAROS_MIN_CREDIT_CENTS ?? DEFAULT_MIN_CREDIT_CENTS_OFICIAL, DEFAULT_MIN_CREDIT_CENTS_OFICIAL);
 };
-/** Tabela de venda API Oficial (envios × valor total em centavos). */
-const DISPAROS_OFICIAL_SALE_PACKAGES = [
-    { shipments: 1000, valueCents: 36000 },
-    { shipments: 3000, valueCents: 105000 },
-    { shipments: 5000, valueCents: 170000 },
-    { shipments: 8000, valueCents: 264000 },
-    { shipments: 10000, valueCents: 310000 },
-    { shipments: 20000, valueCents: 600000 },
-    { shipments: 30000, valueCents: 870000 },
-];
-/** Tabela de venda API Oficial — segmento Bets (envios × valor total em centavos). */
-const DISPAROS_BETS_OFICIAL_SALE_PACKAGES = [
-    { shipments: 5000, valueCents: 225000 },
-    { shipments: 10000, valueCents: 430000 },
-    { shipments: 20000, valueCents: 840000 },
-    { shipments: 30000, valueCents: 1230000 },
-    { shipments: 40000, valueCents: 1600000 },
-    { shipments: 50000, valueCents: 1900000 },
-];
-/** Tabela de venda API Alternativa (envios × valor total em centavos). */
-const DISPAROS_ALTERNATIVA_SALE_PACKAGES = [
-    { shipments: 1000, valueCents: 20000 },
-    { shipments: 3000, valueCents: 57000 },
-    { shipments: 5000, valueCents: 85000 },
-    { shipments: 8000, valueCents: 128000 },
-    { shipments: 10000, valueCents: 150000 },
-    { shipments: 20000, valueCents: 280000 },
-    { shipments: 30000, valueCents: 390000 },
-];
-const isDisparosOficialSalePackage = (shipmentCount, valueCents) => DISPAROS_OFICIAL_SALE_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
-const isDisparosAlternativaSalePackage = (shipmentCount, valueCents) => DISPAROS_ALTERNATIVA_SALE_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
-const getDisparosSalePackages = (apiKind, segment = "outros", ownerEmail = "") => {
-    if (segment === "bets") {
-        if (apiKind === "alternativa")
-            return [];
-        return (0, waba_oficial_pricing_overrides_1.applyOficialPerSendSurchargeToPackages)(DISPAROS_BETS_OFICIAL_SALE_PACKAGES, ownerEmail);
-    }
-    if (apiKind === "oficial") {
-        return (0, waba_oficial_pricing_overrides_1.applyOficialPerSendSurchargeToPackages)(DISPAROS_OFICIAL_SALE_PACKAGES, ownerEmail);
-    }
-    return DISPAROS_ALTERNATIVA_SALE_PACKAGES;
-};
+const isDisparosOficialSalePackage = (shipmentCount, valueCents) => waba_pricing_service_1.DISPAROS_OFICIAL_SALE_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
+const isDisparosAlternativaSalePackage = (shipmentCount, valueCents) => waba_pricing_service_1.DISPAROS_ALTERNATIVA_SALE_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
+const getDisparosSalePackages = (apiKind, segment = "outros", ownerEmail = "") => (0, waba_pricing_service_1.getBaseDisparosSalePackages)(apiKind, segment, ownerEmail);
 const resolveDisparosCustomListValueCents = (apiKind, shipmentCount, segment = "outros", ownerEmail = "") => {
     const salePackages = getDisparosSalePackages(apiKind, segment, ownerEmail);
     const lastTier = salePackages[salePackages.length - 1];

@@ -21193,12 +21193,12 @@
                         <div class="disparos-pricing-lane-action-row">
                           <div class="disparos-pricing-lane-action-pricing">
                             <p class="disparos-api-price">
-                              <span class="disparos-api-price-outros">De R$ 0,29 a R$ 0,36</span>
-                              <span class="disparos-api-price-bets" hidden>De R$ 0,38 a R$ 0,45</span>
+                              <span class="disparos-api-price-outros" data-sale-price="outros-oficial-range">De R$ 0,29 a R$ 0,36</span>
+                              <span class="disparos-api-price-bets" hidden data-sale-price="bets-oficial-range">De R$ 0,38 a R$ 0,45</span>
                             </p>
                             <p class="disparos-api-min-creditos">
                               <span class="disparos-api-min-outros">
-                                Valor mínimo de créditos: <strong>R$ 360,00</strong>
+                                Valor mínimo de créditos: <strong data-sale-price="outros-oficial-min">R$ 360,00</strong>
                               </span>
                               <span class="disparos-api-min-bets" hidden>Escolha o melhor pacote para você</span>
                             </p>
@@ -21247,9 +21247,9 @@
                         </div>
                         <div class="disparos-pricing-lane-action-row">
                           <div class="disparos-pricing-lane-action-pricing">
-                            <p class="disparos-api-price">De R$ 0,13 a R$ 0,20</p>
+                            <p class="disparos-api-price" data-sale-price="alternativa-range">De R$ 0,13 a R$ 0,20</p>
                             <p class="disparos-api-min-creditos">
-                              Valor mínimo de créditos: <strong>R$ 200,00</strong>
+                              Valor mínimo de créditos: <strong data-sale-price="alternativa-min">R$ 200,00</strong>
                             </p>
                           </div>
                           <button
@@ -31749,8 +31749,42 @@
         applyIntegrationEnvironment(saved);
         enhanceWabaProductLabelElements(document);
         syncDisparosPricingBoardForSegment();
+        void loadPublicSalePricingCatalog();
         if (isBetsSubscriberAccount()) {
           enforceBetsSubscriberIntegrationEnv();
+        }
+      }
+
+      function mapPublicPricingLaneToTiers(lane) {
+        return (Array.isArray(lane?.packages) ? lane.packages : []).map((pack) => ({
+          shipments: Number(pack.shipments) || 0,
+          totalCents: Number(pack.valueCents) || 0,
+          pricePerSend: Number(pack.unitPriceCents || 0) / 100,
+        }));
+      }
+
+      function applyPublicPricingCatalog(catalog) {
+        if (!catalog || !catalog.outros) return;
+        if (catalog.outros.oficial) {
+          DISPAROS_PRICING_TIERS.oficial = mapPublicPricingLaneToTiers(catalog.outros.oficial);
+        }
+        if (catalog.bets && catalog.bets.oficial) {
+          DISPAROS_PRICING_TIERS.betsOficial = mapPublicPricingLaneToTiers(catalog.bets.oficial);
+        }
+        if (catalog.outros.alternativa) {
+          DISPAROS_PRICING_TIERS.alternativa = mapPublicPricingLaneToTiers(catalog.outros.alternativa);
+        }
+        applyDisparosOficialCardPricingCopy(document);
+      }
+
+      async function loadPublicSalePricingCatalog() {
+        try {
+          const response = await fetch("/public/pricing", { cache: "no-store" });
+          if (!response.ok) return;
+          applyPublicPricingCatalog(await response.json());
+          syncDisparosPricingBoardForSegment();
+        } catch {
+          /* fallback na tabela-base local */
         }
       }
 
@@ -31782,6 +31816,10 @@
           { shipments: 30000, pricePerSend: 0.13, totalCents: 390000 },
         ],
       };
+
+      if (window.WABA_PUBLIC_PRICING) {
+        applyPublicPricingCatalog(window.WABA_PUBLIC_PRICING);
+      }
 
       function getSubscriberSegment() {
         const raw = String(wabaSubscriberProfile?.segment || "outros").trim().toLowerCase();
@@ -31908,6 +31946,19 @@
             if (legacyMin && copy.subHtml) legacyMin.innerHTML = copy.subLabel;
           }
         });
+        const altRange = formatDisparosPriceRangeFromTiers(DISPAROS_PRICING_TIERS.alternativa);
+        if (altRange) {
+          scope.querySelectorAll('[data-sale-price="alternativa-range"]').forEach((el) => {
+            el.textContent = altRange;
+          });
+        }
+        const altFirst = resolveDisparosSaleTiersForDisplay(DISPAROS_PRICING_TIERS.alternativa)[0];
+        if (altFirst?.totalCents) {
+          const altMin = formatDisparosMoneyFromCents(altFirst.totalCents);
+          scope.querySelectorAll('[data-sale-price="alternativa-min"]').forEach((el) => {
+            el.textContent = altMin;
+          });
+        }
       }
 
       const DISPAROS_HEX_CLUSTER_ART_DEFAULT = {
@@ -52674,7 +52725,7 @@
           renderDisparosCreditsPanel(disparosCreditsCache);
           syncDisparosResumoSide();
           syncAquecedorSectionVisual();
-          void loadDisparosCustomerPackages();
+          void loadPublicSalePricingCatalog().then(() => loadDisparosCustomerPackages());
           if (disCampaignWizardStep === DIS_CAMPAIGN_WIZARD_TOTAL_STEPS) {
             updateDisCampaignWizardLeadsCountUi();
           }

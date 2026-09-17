@@ -23,7 +23,11 @@ export type WabaPricingQuote = {
   indicatorUserId: string;
 };
 
-/** Tabela de venda API Oficial (envios × valor total em centavos). */
+/**
+ * Única tabela de venda. Modal, tela de Créditos e LPs leem
+ * GET /public/pricing (e o checkout autenticado) a partir daqui.
+ * Depois de alterar, rode `npm run sync:pricing`.
+ */
 export const DISPAROS_OFICIAL_SALE_PACKAGES: ReadonlyArray<WabaSalePackage> = [
   { shipments: 1000, valueCents: 36000 },
   { shipments: 3000, valueCents: 105000 },

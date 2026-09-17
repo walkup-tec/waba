@@ -10,6 +10,7 @@ import { WabaDisparosCreditsService } from "./waba-disparos-credits.service";
 import { applyCleisonOficialSummaryOverride } from "./waba-cleison-oficial-balance-repair";
 import { getAlternativaDispatchRulesMeta } from "../disparos/alternativa-dispatch-rules";
 import { isBetsSubscriberEmail } from "../subscribers/waba-subscriber-segment";
+import { buildPublicSalePricingCatalog } from "./waba-sale-pricing-catalog";
 
 const orderRepository = new WabaBillingOrderRepository();
 const billingService = new WabaBillingService(orderRepository);
@@ -70,6 +71,11 @@ const isAlternativaNumbersSimulationEnabled = (): boolean => {
 };
 
 export const registerWabaBillingRoutes = (app: Express) => {
+  app.get("/public/pricing", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    return res.status(200).json(buildPublicSalePricingCatalog());
+  });
+
   app.get("/billing/disparos/config", (_req, res) => {
     return res.status(200).json(billingService.getDisparosConfig());
   });

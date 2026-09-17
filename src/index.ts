@@ -46,6 +46,10 @@ import {
   type WabaUiProfile,
 } from "./base-path";
 import {
+  applySalePricingCopyToHtml,
+  injectPublicPricingBootstrap,
+} from "./billing/waba-sale-pricing-catalog";
+import {
   bootstrapOwnerGraphFromEvents,
   ensureCompletePairGraph,
   getOwnerConversationGraph,
@@ -5287,12 +5291,16 @@ function resolveUiProfile(): WabaUiProfile {
 
 function sendIndexHtml(res: express.Response) {
   const uiProfile = resolveUiProfile();
-  const html = injectRuntimeIntoIndexHtml(loadIndexHtmlTemplate(), {
-    basePath: BASE_PATH,
-    uiProfile,
-    featureFlags: getWabaFeatureFlagsForClient(),
-    deployResilienceEnabled: resolveDeployResilienceForClient(),
-  });
+  const html = injectPublicPricingBootstrap(
+    applySalePricingCopyToHtml(
+      injectRuntimeIntoIndexHtml(loadIndexHtmlTemplate(), {
+        basePath: BASE_PATH,
+        uiProfile,
+        featureFlags: getWabaFeatureFlagsForClient(),
+        deployResilienceEnabled: resolveDeployResilienceForClient(),
+      }),
+    ),
+  );
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("X-Waba-Shell-Cache-Key", resolveShellCacheKey(uiProfile, BASE_PATH));
@@ -5333,10 +5341,13 @@ const sendVendasPage = (res: express.Response) => {
   if (!sourcePath) {
     return res.status(404).type("html").send("<p>Página de vendas indisponível.</p>");
   }
-  const html = injectRuntimeIntoIndexHtml(readFileSync(sourcePath, "utf8"), {
-    basePath: BASE_PATH,
-    uiProfile: "full",
-  });
+  const html = applySalePricingCopyToHtml(
+    injectRuntimeIntoIndexHtml(readFileSync(sourcePath, "utf8"), {
+      basePath: BASE_PATH,
+      uiProfile: "full",
+    }),
+    { segment: "outros" },
+  );
   return res.type("html").send(html);
 };
 
@@ -5345,10 +5356,13 @@ const sendBetsLandingPage = (res: express.Response) => {
   if (!existsSync(betsPath)) {
     return res.status(404).type("html").send("<p>Landing Bet Waba indisponível.</p>");
   }
-  const html = injectRuntimeIntoIndexHtml(readFileSync(betsPath, "utf8"), {
-    basePath: BASE_PATH,
-    uiProfile: "production",
-  });
+  const html = applySalePricingCopyToHtml(
+    injectRuntimeIntoIndexHtml(readFileSync(betsPath, "utf8"), {
+      basePath: BASE_PATH,
+      uiProfile: "production",
+    }),
+    { segment: "bets" },
+  );
   return res.type("html").send(html);
 };
 

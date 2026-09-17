@@ -6,7 +6,11 @@ const waba_money_cents_1 = require("./waba-money-cents");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_indicator_profile_repository_1 = require("../indicators/waba-indicator-profile.repository");
-/** Tabela de venda API Oficial (envios × valor total em centavos). */
+/**
+ * Única tabela de venda. Modal, tela de Créditos e LPs leem
+ * GET /public/pricing (e o checkout autenticado) a partir daqui.
+ * Depois de alterar, rode `npm run sync:pricing`.
+ */
 exports.DISPAROS_OFICIAL_SALE_PACKAGES = [
     { shipments: 1000, valueCents: 36000 },
     { shipments: 3000, valueCents: 105000 },

@@ -8,6 +8,8 @@ const resolveAllowedOrigins = () => {
         "https://wabadisparos.com.br",
         "https://www.wabadisparos.com.br",
         "https://bet.waba.info",
+        "https://waba-paginadevendas.achpyp.easypanel.host",
+        "https://waba-bets-pv.achpyp.easypanel.host",
     ];
     const raw = String(process.env.WABA_CORS_ORIGINS ?? "").trim();
     const items = raw

@@ -128,6 +128,9 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
   if (p === "/health" || p === "/ready" || p === "/service/maintenance" || p === "/maintenance") {
     return true;
   }
+  if (p === "/public/pricing") {
+    return true;
+  }
 
   if (
     p === "/" ||

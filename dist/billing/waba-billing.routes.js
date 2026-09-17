@@ -12,6 +12,7 @@ const waba_disparos_credits_service_1 = require("./waba-disparos-credits.service
 const waba_cleison_oficial_balance_repair_1 = require("./waba-cleison-oficial-balance-repair");
 const alternativa_dispatch_rules_1 = require("../disparos/alternativa-dispatch-rules");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
+const waba_sale_pricing_catalog_1 = require("./waba-sale-pricing-catalog");
 const orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository();
 const billingService = new waba_billing_service_1.WabaBillingService(orderRepository);
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
@@ -58,6 +59,10 @@ const isAlternativaNumbersSimulationEnabled = () => {
     return load_env_1.WABA_ENV === "v02" || runtime === "development";
 };
 const registerWabaBillingRoutes = (app) => {
+    app.get("/public/pricing", (_req, res) => {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        return res.status(200).json((0, waba_sale_pricing_catalog_1.buildPublicSalePricingCatalog)());
+    });
     app.get("/billing/disparos/config", (_req, res) => {
         return res.status(200).json(billingService.getDisparosConfig());
     });
