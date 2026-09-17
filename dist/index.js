@@ -4231,7 +4231,13 @@ app.get("/", (req, res) => {
     }
     sendIndexHtml(res);
 });
+app.post("/", (_req, res) => {
+    sendIndexHtml(res);
+});
 app.get("/index.html", (_req, res) => {
+    sendIndexHtml(res);
+});
+app.post("/index.html", (_req, res) => {
     sendIndexHtml(res);
 });
 const sendVendasPage = (res) => {

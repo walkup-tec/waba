@@ -122,6 +122,7 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
   if (p === "/integrations/meta/whatsapp/config" && (method === "GET" || method === "HEAD")) return true;
 
   if (method === "OPTIONS") return true;
+  if ((p === "/" || p === "/index.html") && method === "POST") return true;
 
   if (method !== "GET" && method !== "HEAD") return false;
 

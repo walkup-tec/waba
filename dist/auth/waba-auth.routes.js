@@ -116,6 +116,8 @@ const isAuthBypassPath = (method, reqPath) => {
         return true;
     if (method === "OPTIONS")
         return true;
+    if ((p === "/" || p === "/index.html") && method === "POST")
+        return true;
     if (method !== "GET" && method !== "HEAD")
         return false;
     if (p === "/health" || p === "/ready" || p === "/service/maintenance" || p === "/maintenance") {

@@ -18996,7 +18996,14 @@
           <h1 id="waba-login-title" class="waba-login-title">Acesso WABA</h1>
           <p class="waba-login-sub">Entre com sua conta de assinante ou master para continuar.</p>
         </div>
-        <form id="waba-login-form" class="waba-login-form" method="post" action="#" autocomplete="on">
+        <form
+          id="waba-login-form"
+          class="waba-login-form"
+          method="post"
+          action="/"
+          onsubmit="return false;"
+          autocomplete="on"
+        >
           <label class="waba-login-label" for="waba-login-email">E-mail</label>
           <input
             id="waba-login-email"
@@ -31764,17 +31771,21 @@
       }
 
       function applyPublicPricingCatalog(catalog) {
-        if (!catalog || !catalog.outros) return;
-        if (catalog.outros.oficial) {
-          DISPAROS_PRICING_TIERS.oficial = mapPublicPricingLaneToTiers(catalog.outros.oficial);
+        try {
+          if (!catalog || !catalog.outros) return;
+          if (catalog.outros.oficial) {
+            DISPAROS_PRICING_TIERS.oficial = mapPublicPricingLaneToTiers(catalog.outros.oficial);
+          }
+          if (catalog.bets && catalog.bets.oficial) {
+            DISPAROS_PRICING_TIERS.betsOficial = mapPublicPricingLaneToTiers(catalog.bets.oficial);
+          }
+          if (catalog.outros.alternativa) {
+            DISPAROS_PRICING_TIERS.alternativa = mapPublicPricingLaneToTiers(catalog.outros.alternativa);
+          }
+          applyDisparosOficialCardPricingCopy(document);
+        } catch {
+          /* catálogo público não pode impedir o login */
         }
-        if (catalog.bets && catalog.bets.oficial) {
-          DISPAROS_PRICING_TIERS.betsOficial = mapPublicPricingLaneToTiers(catalog.bets.oficial);
-        }
-        if (catalog.outros.alternativa) {
-          DISPAROS_PRICING_TIERS.alternativa = mapPublicPricingLaneToTiers(catalog.outros.alternativa);
-        }
-        applyDisparosOficialCardPricingCopy(document);
       }
 
       async function loadPublicSalePricingCatalog() {
@@ -31816,10 +31827,6 @@
           { shipments: 30000, pricePerSend: 0.13, totalCents: 390000 },
         ],
       };
-
-      if (window.WABA_PUBLIC_PRICING) {
-        applyPublicPricingCatalog(window.WABA_PUBLIC_PRICING);
-      }
 
       function getSubscriberSegment() {
         const raw = String(wabaSubscriberProfile?.segment || "outros").trim().toLowerCase();
@@ -68741,6 +68748,9 @@
         });
       }
 
+      if (window.WABA_PUBLIC_PRICING) {
+        applyPublicPricingCatalog(window.WABA_PUBLIC_PRICING);
+      }
       initWabaAuthUi();
       applyAlternativaNumbersPurchaseUi();
       initAdminSubscribersUi();
