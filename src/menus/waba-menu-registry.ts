@@ -23,7 +23,7 @@ export type WabaMenuDefinition = {
 export const WABA_MENU_SECTION_LABELS: Record<WabaMenuSection, string> = {
   "nao-oficial": "Aquecedor",
   oficial: "Disparos",
-  "lab-api-oficial": "Laboratório",
+  "lab-api-oficial": "CLOUD META",
   "farm-bm": "FARM BM",
   admin: "Admin",
   indicador: "Indicador",
@@ -290,7 +290,7 @@ export const WABA_SUBSCRIBER_DISPAROS_MENU_IDS = [
 
 /**
  * Menus Meta Tech Provider (Embedded Signup / Cloud API).
- * Conexão/Templates/Disparo/Automação ficam no Laboratório.
+ * Conexão/Templates/Disparo/Automação ficam na seção CLOUD META.
  * Atendimento fica na seção FARM BM (`farm-bm`).
  */
 export const WABA_TECH_PROVIDER_MENU_IDS = [
