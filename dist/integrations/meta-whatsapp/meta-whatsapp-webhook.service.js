@@ -11,6 +11,7 @@ const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-iden
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
 const meta_whatsapp_broadcast_report_1 = require("./meta-whatsapp-broadcast-report");
 const meta_whatsapp_messaging_types_1 = require("./meta-whatsapp-messaging.types");
+const soma_chatbot_cloud_relay_1 = require("../soma/soma-chatbot-cloud-relay");
 const NOOP_INBOX = {
     persistInbound: async () => undefined,
     applyStatus: async () => undefined,
@@ -105,6 +106,7 @@ class MetaWhatsappWebhookService {
                 });
             }
         }
+        void (0, soma_chatbot_cloud_relay_1.relaySomaChatbotCloudWebhook)(payload);
         return { httpStatus: 200, accepted: true };
     }
     async resolveConnection(event) {

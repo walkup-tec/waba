@@ -61,6 +61,7 @@ const network_health_service_1 = require("./aquecedor/network-health.service");
 const aquecedor_chip_identity_1 = require("./aquecedor/aquecedor-chip-identity");
 const waba_container_service_1 = require("./waba-container-service");
 const waba_auth_routes_1 = require("./auth/waba-auth.routes");
+const soma_chatbot_cloud_relay_1 = require("./integrations/soma/soma-chatbot-cloud-relay");
 const meta_whatsapp_routes_1 = require("./integrations/meta-whatsapp/meta-whatsapp.routes");
 const meta_whatsapp_automation_bootstrap_1 = require("./integrations/meta-whatsapp/meta-whatsapp-automation.bootstrap");
 const meta_whatsapp_broadcast_report_1 = require("./integrations/meta-whatsapp/meta-whatsapp-broadcast-report");
@@ -588,6 +589,7 @@ app.get("/maintenance", (_req, res) => {
 (0, waba_cors_1.registerWabaCors)(app);
 (0, waba_auth_routes_1.registerWabaAuthRoutes)(app);
 (0, meta_whatsapp_webhook_routes_1.registerMetaWhatsappWebhookRoutes)(app);
+(0, soma_chatbot_cloud_relay_1.registerSomaChatbotCloudRelayRoutes)(app);
 (0, waba_subscriber_routes_1.registerWabaSubscriberRoutes)(app);
 (0, waba_entitlement_routes_1.registerWabaEntitlementRoutes)(app);
 app.use(waba_auth_routes_1.wabaRequireAuthMiddleware);

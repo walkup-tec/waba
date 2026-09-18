@@ -15,6 +15,7 @@ import { syncInboxChannelNameFromMeta } from "./meta-whatsapp-phone-identity.sto
 import { applyMetaStatusToBroadcastByWamid } from "./meta-whatsapp-broadcast.store";
 import { refreshCompletedLabIntakeReport, scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
 import { mapWebhookStatus } from "./meta-whatsapp-messaging.types";
+import { relaySomaChatbotCloudWebhook } from "../soma/soma-chatbot-cloud-relay";
 
 const NOOP_INBOX: MetaWhatsappWebhookInboxPort = {
   persistInbound: async () => undefined,
@@ -131,6 +132,8 @@ export class MetaWhatsappWebhookService {
         });
       }
     }
+
+    void relaySomaChatbotCloudWebhook(payload);
 
     return { httpStatus: 200, accepted: true };
   }

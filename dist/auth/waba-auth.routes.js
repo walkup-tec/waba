@@ -114,6 +114,11 @@ const isAuthBypassPath = (method, reqPath) => {
         return true;
     if (p === "/integrations/meta/whatsapp/config" && (method === "GET" || method === "HEAD"))
         return true;
+    if (p === "/integrations/soma/aquecedor-instances" ||
+        p === "/integrations/soma/alternativa-campaigns" ||
+        p === "/integrations/soma/chatbot-cloud-numbers") {
+        return true;
+    }
     if (method === "OPTIONS")
         return true;
     if ((p === "/" || p === "/index.html") && method === "POST")
@@ -142,7 +147,8 @@ const isAuthBypassPath = (method, reqPath) => {
         /^\/disparos\/messenger-images\/[^/]+\/file$/.test(p) ||
         p === "/instancias/avatar" ||
         p === "/integrations/soma/aquecedor-instances" ||
-        p === "/integrations/soma/alternativa-campaigns") {
+        p === "/integrations/soma/alternativa-campaigns" ||
+        p === "/integrations/soma/chatbot-cloud-numbers") {
         return true;
     }
     return /\.(js|mjs|css|png|jpg|jpeg|gif|webp|svg|ico|woff2?|ttf|map)$/i.test(p);

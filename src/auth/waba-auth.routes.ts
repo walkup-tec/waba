@@ -120,6 +120,13 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
   if (p === "/webhooks/asaas/transfer-authorization") return true;
   if (p === "/webhooks/meta/whatsapp") return true;
   if (p === "/integrations/meta/whatsapp/config" && (method === "GET" || method === "HEAD")) return true;
+  if (
+    p === "/integrations/soma/aquecedor-instances" ||
+    p === "/integrations/soma/alternativa-campaigns" ||
+    p === "/integrations/soma/chatbot-cloud-numbers"
+  ) {
+    return true;
+  }
 
   if (method === "OPTIONS") return true;
   if ((p === "/" || p === "/index.html") && method === "POST") return true;
@@ -150,7 +157,8 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
     /^\/disparos\/messenger-images\/[^/]+\/file$/.test(p) ||
     p === "/instancias/avatar" ||
     p === "/integrations/soma/aquecedor-instances" ||
-    p === "/integrations/soma/alternativa-campaigns"
+    p === "/integrations/soma/alternativa-campaigns" ||
+    p === "/integrations/soma/chatbot-cloud-numbers"
   ) {
     return true;
   }

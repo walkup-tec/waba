@@ -91,6 +91,7 @@ import {
 } from "./aquecedor/aquecedor-chip-identity";
 import { resolveWabaContainerServiceId } from "./waba-container-service";
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
+import { registerSomaChatbotCloudRelayRoutes } from "./integrations/soma/soma-chatbot-cloud-relay";
 import { registerMetaWhatsappIntegrationRoutes } from "./integrations/meta-whatsapp/meta-whatsapp.routes";
 import { startMetaWhatsappAutomation } from "./integrations/meta-whatsapp/meta-whatsapp-automation.bootstrap";
 import { ensureLabReportFinalizeSweep } from "./integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
@@ -819,6 +820,7 @@ app.get("/maintenance", (_req, res) => {
 registerWabaCors(app);
 registerWabaAuthRoutes(app);
 registerMetaWhatsappWebhookRoutes(app);
+registerSomaChatbotCloudRelayRoutes(app);
 registerWabaSubscriberRoutes(app);
 registerWabaEntitlementRoutes(app);
 app.use(wabaRequireAuthMiddleware);
