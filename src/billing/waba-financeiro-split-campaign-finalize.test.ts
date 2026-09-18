@@ -214,7 +214,7 @@ describe("Split inicia só após finalizar campanha nova", () => {
     assert.equal(settlement?.supplierCostCents, 19000);
   });
 
-  it("campanha nova finalizada paga fornecedor pelas entregues e rateia o lucro", async () => {
+  it("campanha nova finalizada paga fornecedor pelos enviados e rateia o lucro", async () => {
     seedFinanceiro();
     const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
     const { WabaFinanceiroSplitService } = await import("./waba-financeiro-split.service");
@@ -229,19 +229,19 @@ describe("Split inicia só após finalizar campanha nova", () => {
     );
     assert.ok(settlement);
     assert.equal(settlement?.campaignIntakeId, "camp-nova");
-    assert.equal(settlement?.purchasedShipmentCount, 800);
-    assert.equal(settlement?.supplierCostCents, 15200);
+    assert.equal(settlement?.purchasedShipmentCount, 1000);
+    assert.equal(settlement?.supplierCostCents, 19000);
     assert.equal(settlement?.cetCents, 298);
-    assert.equal(settlement?.distributableCents, 14502);
+    assert.equal(settlement?.distributableCents, 10702);
     const supplierLine = settlement?.lines.find((line) => line.lineKind === "supplier");
-    assert.equal(supplierLine?.shipmentCount, 800);
-    assert.equal(supplierLine?.amountCents, 15200);
+    assert.equal(supplierLine?.shipmentCount, 1000);
+    assert.equal(supplierLine?.amountCents, 19000);
     assert.equal(supplierLine?.payoutStatus, "pending");
     const partners = settlement?.lines.filter((line) => line.lineKind === "partner") ?? [];
     assert.equal(partners.length, 2);
     assert.equal(
       partners.reduce((sum, line) => sum + line.amountCents, 0),
-      14502,
+      10702,
     );
   });
 

@@ -595,7 +595,7 @@ export class WabaFinanceiroSplitService {
 
   async settleAndPayoutPaidOrder(order: WabaBillingOrder) {
     if (shouldDeferSplitUntilCampaignFinalize(order)) {
-      this.logSettlementSkip(order, "split adiado até finalizar a campanha (entregues)");
+      this.logSettlementSkip(order, "split adiado até finalizar a campanha (enviados)");
       await this.payoutStandaloneIndicatorCommission(order.id);
       return null;
     }
@@ -1048,7 +1048,7 @@ export class WabaFinanceiroSplitService {
   private prepareDeferredSupplierLine(
     settlement: FinanceiroSplitSettlement,
     supplier: SplitSupplier,
-    deliveredCount: number,
+    billableCount: number,
     campaignIntakeId: string,
   ): FinanceiroSplitSettlement {
     const aligned = this.applyElectedSupplierToSettlement(settlement, supplier) ?? settlement;
@@ -1064,7 +1064,7 @@ export class WabaFinanceiroSplitService {
         ),
       ),
     );
-    const supplierCostCents = Math.max(0, Math.round(deliveredCount * costPerShipmentCents));
+    const supplierCostCents = Math.max(0, Math.round(billableCount * costPerShipmentCents));
     const lines = aligned.lines.map((line) => {
       if (line.lineKind !== "supplier") return line;
       if (line.payoutStatus === "paid" || line.payoutStatus === "processing") return line;
@@ -1075,7 +1075,7 @@ export class WabaFinanceiroSplitService {
         participantEmail: line.participantEmail || supplier.systemUserEmail || "",
         pixKey: supplier.pixKey,
         amountCents: supplierCostCents || line.amountCents,
-        shipmentCount: deliveredCount || line.shipmentCount,
+        shipmentCount: billableCount || line.shipmentCount,
         costPerShipmentCents,
         payoutStatus: line.payoutStatus === "skipped" ? "pending" : line.payoutStatus,
       };
@@ -1093,13 +1093,13 @@ export class WabaFinanceiroSplitService {
   private async ensureSupplierPayoutOnSettlement(
     settlement: FinanceiroSplitSettlement,
     supplier: SplitSupplier,
-    deliveredCount: number,
+    billableCount: number,
     campaignIntakeId: string,
   ): Promise<FinanceiroSplitSettlement> {
     const prepared = this.prepareDeferredSupplierLine(
       settlement,
       supplier,
-      deliveredCount,
+      billableCount,
       campaignIntakeId,
     );
     const supplierLine = this.findSupplierLine(prepared);

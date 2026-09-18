@@ -12,7 +12,7 @@ const normalizeCampaignCreditFunding = (value) => {
     return { fromPaid, fromBonus };
 };
 exports.normalizeCampaignCreditFunding = normalizeCampaignCreditFunding;
-/** Campanhas criadas neste dia civil (Brasília) em diante usam entregues no split. */
+/** Pedidos/campanhas deste dia civil (Brasília) em diante adiám o split até finalizar. */
 exports.DELIVERED_SUPPLIER_SPLIT_RULE_START_YMD = "2026-09-17";
 const calendarDateYmdInSaoPaulo = (value) => {
     if (value == null || value === "")
@@ -44,25 +44,12 @@ const applyPaidFundingCap = (count, funding) => {
     return Math.min(count, normalized.fromPaid);
 };
 /**
- * Envios elegíveis a repasse do fornecedor (mensagens entregues).
+ * Envios elegíveis a repasse do fornecedor (mensagens enviadas).
  * Campanha 100% bônus → 0 (sem pagamento do cliente → sem split).
  * Mista → no máximo a parcela paga (crédito pago é consumido primeiro).
- * Sem funding gravado (legado / master ilimitado) → todas as entregues (limitadas por enviados/planejado).
+ * Sem funding gravado (legado / master ilimitado) → todos os enviados (limitados pelo planejado).
  */
 const resolveBillableSentForSupplierSplit = (intake) => {
-    const sent = Math.max(0, Math.round(Number(intake.performanceReport?.sent ?? 0)));
-    const delivered = Math.max(0, Math.round(Number(intake.performanceReport?.delivered ?? 0)));
-    const planned = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
-    let count = delivered;
-    if (sent > 0)
-        count = Math.min(count, sent);
-    if (planned > 0)
-        count = Math.min(count, planned);
-    return applyPaidFundingCap(count, intake.creditFunding);
-};
-exports.resolveBillableSentForSupplierSplit = resolveBillableSentForSupplierSplit;
-/** Regra antiga: quantidade do fornecedor = enviados (não entregues). */
-const resolveBillableSentLegacyForSupplierSplit = (intake) => {
     const sent = Math.max(0, Math.round(Number(intake.performanceReport?.sent ?? 0)));
     const planned = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
     let count = sent;
@@ -70,13 +57,10 @@ const resolveBillableSentLegacyForSupplierSplit = (intake) => {
         count = Math.min(count, planned);
     return applyPaidFundingCap(count, intake.creditFunding);
 };
-exports.resolveBillableSentLegacyForSupplierSplit = resolveBillableSentLegacyForSupplierSplit;
-const resolveBillableCountForSupplierSplit = (intake) => {
-    if ((0, exports.campaignUsesDeliveredSupplierSplitRule)(intake.createdAt)) {
-        return (0, exports.resolveBillableSentForSupplierSplit)(intake);
-    }
-    return (0, exports.resolveBillableSentLegacyForSupplierSplit)(intake);
-};
+exports.resolveBillableSentForSupplierSplit = resolveBillableSentForSupplierSplit;
+/** Alias estável: quantidade do fornecedor = enviados. */
+exports.resolveBillableSentLegacyForSupplierSplit = exports.resolveBillableSentForSupplierSplit;
+const resolveBillableCountForSupplierSplit = (intake) => (0, exports.resolveBillableSentForSupplierSplit)(intake);
 exports.resolveBillableCountForSupplierSplit = resolveBillableCountForSupplierSplit;
 const isBonusOnlyCampaignFunding = (funding) => {
     const normalized = (0, exports.normalizeCampaignCreditFunding)(funding);

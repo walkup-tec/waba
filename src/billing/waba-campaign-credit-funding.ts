@@ -18,7 +18,7 @@ export const normalizeCampaignCreditFunding = (
   return { fromPaid, fromBonus };
 };
 
-/** Campanhas criadas neste dia civil (Brasília) em diante usam entregues no split. */
+/** Pedidos/campanhas deste dia civil (Brasília) em diante adiám o split até finalizar. */
 export const DELIVERED_SUPPLIER_SPLIT_RULE_START_YMD = "2026-09-17";
 
 export const calendarDateYmdInSaoPaulo = (value: string | Date | null | undefined): string => {
@@ -61,23 +61,12 @@ const applyPaidFundingCap = (
 };
 
 /**
- * Envios elegíveis a repasse do fornecedor (mensagens entregues).
+ * Envios elegíveis a repasse do fornecedor (mensagens enviadas).
  * Campanha 100% bônus → 0 (sem pagamento do cliente → sem split).
  * Mista → no máximo a parcela paga (crédito pago é consumido primeiro).
- * Sem funding gravado (legado / master ilimitado) → todas as entregues (limitadas por enviados/planejado).
+ * Sem funding gravado (legado / master ilimitado) → todos os enviados (limitados pelo planejado).
  */
 export const resolveBillableSentForSupplierSplit = (intake: SupplierSplitIntake): number => {
-  const sent = Math.max(0, Math.round(Number(intake.performanceReport?.sent ?? 0)));
-  const delivered = Math.max(0, Math.round(Number(intake.performanceReport?.delivered ?? 0)));
-  const planned = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
-  let count = delivered;
-  if (sent > 0) count = Math.min(count, sent);
-  if (planned > 0) count = Math.min(count, planned);
-  return applyPaidFundingCap(count, intake.creditFunding);
-};
-
-/** Regra antiga: quantidade do fornecedor = enviados (não entregues). */
-export const resolveBillableSentLegacyForSupplierSplit = (intake: SupplierSplitIntake): number => {
   const sent = Math.max(0, Math.round(Number(intake.performanceReport?.sent ?? 0)));
   const planned = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
   let count = sent;
@@ -85,12 +74,11 @@ export const resolveBillableSentLegacyForSupplierSplit = (intake: SupplierSplitI
   return applyPaidFundingCap(count, intake.creditFunding);
 };
 
-export const resolveBillableCountForSupplierSplit = (intake: SupplierSplitIntake): number => {
-  if (campaignUsesDeliveredSupplierSplitRule(intake.createdAt)) {
-    return resolveBillableSentForSupplierSplit(intake);
-  }
-  return resolveBillableSentLegacyForSupplierSplit(intake);
-};
+/** Alias estável: quantidade do fornecedor = enviados. */
+export const resolveBillableSentLegacyForSupplierSplit = resolveBillableSentForSupplierSplit;
+
+export const resolveBillableCountForSupplierSplit = (intake: SupplierSplitIntake): number =>
+  resolveBillableSentForSupplierSplit(intake);
 
 export const isBonusOnlyCampaignFunding = (
   funding: WabaCampaignCreditFunding | null | undefined,

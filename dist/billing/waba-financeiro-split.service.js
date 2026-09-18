@@ -486,7 +486,7 @@ class WabaFinanceiroSplitService {
     }
     async settleAndPayoutPaidOrder(order) {
         if ((0, waba_campaign_credit_funding_1.shouldDeferSplitUntilCampaignFinalize)(order)) {
-            this.logSettlementSkip(order, "split adiado até finalizar a campanha (entregues)");
+            this.logSettlementSkip(order, "split adiado até finalizar a campanha (enviados)");
             await this.payoutStandaloneIndicatorCommission(order.id);
             return null;
         }
@@ -871,14 +871,14 @@ class WabaFinanceiroSplitService {
         }
         return absorbed;
     }
-    prepareDeferredSupplierLine(settlement, supplier, deliveredCount, campaignIntakeId) {
+    prepareDeferredSupplierLine(settlement, supplier, billableCount, campaignIntakeId) {
         const aligned = this.applyElectedSupplierToSettlement(settlement, supplier) ?? settlement;
         const existingLine = this.findSupplierLine(aligned);
         const costPerShipmentCents = Math.max(0, Math.round(Number(existingLine?.costPerShipmentCents ??
             aligned.costPerShipmentCents ??
             supplier.costPerShipmentCents ??
             0)));
-        const supplierCostCents = Math.max(0, Math.round(deliveredCount * costPerShipmentCents));
+        const supplierCostCents = Math.max(0, Math.round(billableCount * costPerShipmentCents));
         const lines = aligned.lines.map((line) => {
             if (line.lineKind !== "supplier")
                 return line;
@@ -891,7 +891,7 @@ class WabaFinanceiroSplitService {
                 participantEmail: line.participantEmail || supplier.systemUserEmail || "",
                 pixKey: supplier.pixKey,
                 amountCents: supplierCostCents || line.amountCents,
-                shipmentCount: deliveredCount || line.shipmentCount,
+                shipmentCount: billableCount || line.shipmentCount,
                 costPerShipmentCents,
                 payoutStatus: line.payoutStatus === "skipped" ? "pending" : line.payoutStatus,
             };
@@ -905,8 +905,8 @@ class WabaFinanceiroSplitService {
             payoutStatus: (0, waba_financeiro_split_settlement_repository_1.deriveSettlementPayoutStatus)(lines),
         });
     }
-    async ensureSupplierPayoutOnSettlement(settlement, supplier, deliveredCount, campaignIntakeId) {
-        const prepared = this.prepareDeferredSupplierLine(settlement, supplier, deliveredCount, campaignIntakeId);
+    async ensureSupplierPayoutOnSettlement(settlement, supplier, billableCount, campaignIntakeId) {
+        const prepared = this.prepareDeferredSupplierLine(settlement, supplier, billableCount, campaignIntakeId);
         const supplierLine = this.findSupplierLine(prepared);
         if (!supplierLine)
             return prepared;
