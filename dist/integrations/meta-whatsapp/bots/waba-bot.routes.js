@@ -27,7 +27,7 @@ function warnClientTenantClaim(req) {
 function registerWabaBotRoutes(app) {
     app.get("/integrations/meta/whatsapp/bots", async (req, res) => {
         try {
-            const result = service.list((0, waba_request_auth_1.resolveWabaRequestAuth)(req));
+            const result = await service.list((0, waba_request_auth_1.resolveWabaRequestAuth)(req));
             return sendPublic(res, 200, { ok: true, ...result });
         }
         catch (error) {
@@ -91,7 +91,7 @@ function registerWabaBotRoutes(app) {
     app.post("/integrations/meta/whatsapp/bots/phone-link", async (req, res) => {
         try {
             warnClientTenantClaim(req);
-            const result = service.linkPhone((0, waba_request_auth_1.resolveWabaRequestAuth)(req), req.body && typeof req.body === "object" ? req.body : {});
+            const result = await service.linkPhone((0, waba_request_auth_1.resolveWabaRequestAuth)(req), req.body && typeof req.body === "object" ? req.body : {});
             return sendPublic(res, 200, result);
         }
         catch (error) {

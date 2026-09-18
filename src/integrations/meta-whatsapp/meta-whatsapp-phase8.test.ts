@@ -403,14 +403,16 @@ describe("fase 8 listagem e isolamento", () => {
     );
   });
 
-  it("sem conexão connected recusa a Inbox", async () => {
+  it("sem conexão connected não derruba a listagem do Inbox", async () => {
+    purgePhoneIdentities(TENANT_A);
     const connections = new FakeConnections();
     connections.rows.push(connectedRow({ status: "pending_token" }));
     const service = inboxOf(connections, new FakeConversations(), new FakeMessages());
-    await assert.rejects(
-      () => service.listConversations(auth(EMAIL_A), {}),
-      (error: unknown) => error instanceof MetaWhatsappError && error.code === "not_connected",
-    );
+    const listed = await service.listConversations(auth(EMAIL_A), {});
+    assert.equal(listed.connected, true);
+    assert.equal(listed.channels.length, 0);
+    assert.equal(listed.conversations.length, 0);
+    purgePhoneIdentities(TENANT_A);
   });
 });
 
@@ -648,6 +650,58 @@ describe("fase 8 canais do Inbox", () => {
     const listed = await service.listConversations(auth(EMAIL_A), {});
     assert.equal(listed.channels.length, 0);
     assert.equal(listed.conversations.length, 0);
+    unhideBusiness(TENANT_A, businessId);
+    purgePhoneIdentities(TENANT_A);
+  });
+
+  it("Relacionamento 92636-1688 aparece mesmo com a conexão Drax restrita aberta", async () => {
+    const businessId = "1041827648719609";
+    purgePhoneIdentities(TENANT_A);
+    unhideBusiness(TENANT_A, businessId);
+    writePhoneIdentity(TENANT_A, "phone-rel", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Relacionamento e Atendimento",
+      displayPhoneNumber: "+55 51 92636-1688",
+    });
+    writePhoneIdentity(TENANT_A, "phone-drax", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    hideBusiness(TENANT_A, businessId, "BAN Drax Sistemas");
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "conn-drax",
+        phoneNumberId: "phone-drax",
+        metaBusinessId: businessId,
+        wabaId: "1988957871663919",
+        displayPhoneNumber: "+55 51 8200-1279",
+        verifiedName: "Drax Sistema",
+      }),
+    );
+    const conversations = new FakeConversations();
+    conversations.listForInbox = async () => {
+      throw new Error("fetch failed");
+    };
+    const service = inboxOf(connections, conversations, new FakeMessages());
+    const listed = await service.listConversations(auth(EMAIL_A), { phoneNumberId: "phone-rel" });
+    assert.equal(
+      listed.channels.some((item: { phoneNumberId: string }) => item.phoneNumberId === "phone-rel"),
+      true,
+    );
+    assert.equal(listed.channels[0]?.name, "Relacionamento e Atendimento");
+    assert.equal(
+      listed.channels.some((item: { phoneNumberId: string }) => item.phoneNumberId === "phone-drax"),
+      false,
+    );
+    const missed = await service.listConversations(auth(EMAIL_A), { phoneNumberId: "phone-outro" });
+    assert.equal(
+      missed.channels.some((item: { phoneNumberId: string }) => item.phoneNumberId === "phone-rel"),
+      true,
+    );
     unhideBusiness(TENANT_A, businessId);
     purgePhoneIdentities(TENANT_A);
   });

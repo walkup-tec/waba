@@ -39639,7 +39639,11 @@
               }
               metaTpSetStatus("");
               if (enabled) {
-                if (typeof metaInbox !== "undefined") metaInbox.channelId = phoneNumberId;
+                if (typeof metaInbox !== "undefined") {
+                  metaInbox.pendingChannelId = phoneNumberId;
+                  metaInbox.channelId = "";
+                  metaInbox.listFp = "";
+                }
                 if (typeof window.wabaOpenLabTab === "function") window.wabaOpenLabTab("whatsapp-inbox");
                 else if (typeof window.wabaStartMetaInbox === "function") window.wabaStartMetaInbox();
               } else if (typeof window.wabaRefreshMetaInbox === "function") {
@@ -44419,6 +44423,7 @@
         previewData: null,
         filter: "all",
         channelId: "",
+        pendingChannelId: "",
         channels: [],
         offset: 0,
         hasMore: false,
@@ -44826,9 +44831,9 @@
       function wabaBotsRenderPhones() {
         const box = document.getElementById("waba-bots-phones");
         if (!box) return;
-        const channels = (wabaBotsUi.channels || []).filter((row) => row.inboxEnabled === true);
+        const channels = (wabaBotsUi.channels || []).filter((row) => row.inboxEligible === true);
         if (!channels.length) {
-          box.innerHTML = "<p class=\"muted\">Nenhum número com Inbox. Ligue o Inbox em CLOUD META → Conexão.</p>";
+          box.innerHTML = "<p class=\"muted\">Nenhum Inbox elegível. O chip precisa estar marcado Inbox, em conta sem restrição e no portfólio ATIVAS.</p>";
           return;
         }
         box.innerHTML = channels
@@ -45135,7 +45140,17 @@
           metaInbox.threadMs = Number(payload.poll && payload.poll.threadMs) || metaInbox.threadMs;
           metaInbox.hasMore = Boolean(payload.page && payload.page.hasMore);
           metaInbox.offset = offset + (payload.conversations || []).length;
-          if (!append) metaInboxRenderChannels(payload.channels || []);
+          if (!append) {
+            const pending = String(metaInbox.pendingChannelId || "").trim();
+            if (pending) {
+              const found = (payload.channels || []).some(
+                (item) => String(item.phoneNumberId || "") === pending,
+              );
+              if (found) metaInbox.channelId = pending;
+              metaInbox.pendingChannelId = "";
+            }
+            metaInboxRenderChannels(payload.channels || []);
+          }
           const fp = (payload.conversations || [])
             .map((item) => `${item.id}:${item.unreadCount}:${item.lastMessageAt}:${item.status}:${item.phoneNumberId}`)
             .join("|") + `|ch:${metaInbox.channelId}`;

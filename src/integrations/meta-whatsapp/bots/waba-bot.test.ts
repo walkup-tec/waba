@@ -486,6 +486,25 @@ describe("WABA bots — números Inbox", () => {
     assert.equal(rows[0]?.inboxEligible, true);
   });
 
+  it("omite 5182001279 mesmo sem display na identidade, se a conexão estiver restrita", () => {
+    writePhoneIdentity(TENANT_A, "phone-drax", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Drax Sistema",
+    });
+    const rows = listBotAssignableChannels(TENANT_A, [
+      {
+        phoneNumberId: "phone-drax",
+        displayPhoneNumber: "+55 51 8200-1279",
+        metaBusinessId: "1041827648719609",
+      },
+    ]);
+    assert.deepEqual(
+      rows.map((row) => row.phoneNumberId),
+      [],
+    );
+  });
+
   it("omite 5182001279 mesmo com Inbox ligado", () => {
     writePhoneIdentity(TENANT_A, "phone-drax", {
       inboxEnabled: true,

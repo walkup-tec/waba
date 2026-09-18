@@ -86,11 +86,16 @@ class MetaWhatsappInboxService {
         if (all.some((row) => canServeInbox(row, tenantId))) {
             return { all, serving: [] };
         }
-        const fallback = await this.requireConnected(tenantId);
-        if ((0, meta_whatsapp_phone_identity_store_1.isConnectionAccountRestricted)(tenantId, fallback)) {
-            return { all: all.length ? all : [fallback], serving: [] };
+        try {
+            const fallback = await this.requireConnected(tenantId);
+            if ((0, meta_whatsapp_phone_identity_store_1.isConnectionAccountRestricted)(tenantId, fallback)) {
+                return { all: all.length ? all : [fallback], serving: [] };
+            }
+            return { all: all.length ? all : [fallback], serving: [fallback] };
         }
-        return { all: all.length ? all : [fallback], serving: [fallback] };
+        catch {
+            return { all, serving: [] };
+        }
     }
     async inboxConnections(tenantId) {
         const { serving } = await this.inboxConnectionSets(tenantId);
@@ -154,66 +159,80 @@ class MetaWhatsappInboxService {
         const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
         const enabledIds = snapshots.filter((row) => row.inboxEligible).map((row) => row.phoneNumberId);
         const connPhones = open.map((row) => row.phoneNumberId).filter((id) => Boolean(id));
-        const listIds = (0, meta_whatsapp_phone_identity_store_1.inboxQueryPhoneIds)(tenant.tenantId, connPhones, selectedPhone, hints);
-        if (!enabledIds.length || !open.length || (selectedPhone && !listIds.length)) {
-            return {
-                connected: true,
-                poll: (0, meta_config_1.readMetaInboxPollMs)(),
-                conversations: [],
-                channels: [],
-                selectedPhoneNumberId: selectedPhone || null,
-                unreadCount: 0,
-                page: { limit, offset, hasMore: false },
-            };
-        }
-        const rows = await this.conversations.listForInbox({
-            tenantId: tenant.tenantId,
-            filter,
-            assignedTo: auth.email,
-            phoneNumberId: null,
-            includePhoneNumberIds: listIds,
-            limit: limit + 1,
-            offset,
-        });
-        const hasMore = rows.length > limit;
-        const page = hasMore ? rows.slice(0, limit) : rows;
-        const unreadRows = await this.conversations.listUnreadByPhone(tenant.tenantId);
+        const requestedIds = (0, meta_whatsapp_phone_identity_store_1.inboxQueryPhoneIds)(tenant.tenantId, connPhones, selectedPhone, hints);
+        const conversationIds = requestedIds.length ? requestedIds : enabledIds;
         const unreadByPhone = new Map();
-        let unreadAll = 0;
-        for (const item of unreadRows) {
-            if (!item.phoneNumberId || !listIds.includes(item.phoneNumberId))
-                continue;
-            unreadAll += item.unreadCount;
-            unreadByPhone.set(item.phoneNumberId, (unreadByPhone.get(item.phoneNumberId) || 0) + item.unreadCount);
-        }
-        const channelIds = new Set(enabledIds);
-        const channels = Array.from(channelIds).map((id) => {
+        const channels = enabledIds.map((id) => {
             const snap = channelsById.get(id);
             const matching = open.find((row) => String(row.phoneNumberId || "") === id) || connection;
-            const isConnection = id === String(matching.phoneNumberId || "");
+            const isConnection = Boolean(matching && id === String(matching.phoneNumberId || ""));
             return {
                 phoneNumberId: id,
-                name: channelLabel(snap, verifiedByPhone.get(id) || (isConnection ? matching.verifiedName : null)),
-                displayPhoneNumber: snap?.displayPhoneNumber || (isConnection ? matching.displayPhoneNumber : null),
+                name: channelLabel(snap, verifiedByPhone.get(id) || (isConnection ? matching?.verifiedName : null)),
+                displayPhoneNumber: snap?.displayPhoneNumber || (isConnection ? matching?.displayPhoneNumber || null : null),
                 profilePictureUrl: snap?.profilePictureUrl || null,
                 unreadCount: unreadByPhone.get(id) || 0,
             };
         });
-        const poll = (0, meta_config_1.readMetaInboxPollMs)();
-        const byConn = new Map(open.map((row) => [row.id, row]));
-        (0, meta_whatsapp_inbox_log_1.logMetaInbox)("LIST", { tenantId: tenant.tenantId, filter, count: page.length });
-        return {
+        const empty = {
             connected: true,
-            poll,
-            conversations: page.map((row) => {
-                const origin = byConn.get(row.connectionId) || connection;
-                return withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName, verifiedByPhone);
-            }),
+            poll: (0, meta_config_1.readMetaInboxPollMs)(),
+            conversations: [],
             channels,
             selectedPhoneNumberId: selectedPhone || null,
-            unreadCount: unreadAll,
-            page: { limit, offset, hasMore },
+            unreadCount: 0,
+            page: { limit, offset, hasMore: false },
         };
+        if (!enabledIds.length || !conversationIds.length) {
+            return empty;
+        }
+        try {
+            const rows = await this.conversations.listForInbox({
+                tenantId: tenant.tenantId,
+                filter,
+                assignedTo: auth.email,
+                phoneNumberId: null,
+                includePhoneNumberIds: conversationIds,
+                limit: limit + 1,
+                offset,
+            });
+            const hasMore = rows.length > limit;
+            const page = hasMore ? rows.slice(0, limit) : rows;
+            const unreadRows = await this.conversations.listUnreadByPhone(tenant.tenantId);
+            let unreadAll = 0;
+            for (const item of unreadRows) {
+                if (!item.phoneNumberId || !enabledIds.includes(item.phoneNumberId))
+                    continue;
+                unreadAll += item.unreadCount;
+                unreadByPhone.set(item.phoneNumberId, (unreadByPhone.get(item.phoneNumberId) || 0) + item.unreadCount);
+            }
+            for (const channel of channels) {
+                channel.unreadCount = unreadByPhone.get(channel.phoneNumberId) || 0;
+            }
+            const poll = (0, meta_config_1.readMetaInboxPollMs)();
+            const byConn = new Map(open.map((row) => [row.id, row]));
+            (0, meta_whatsapp_inbox_log_1.logMetaInbox)("LIST", { tenantId: tenant.tenantId, filter, count: page.length });
+            return {
+                connected: true,
+                poll,
+                conversations: page.map((row) => {
+                    const origin = byConn.get(row.connectionId) || connection;
+                    return withChannel(row, channelsById, origin?.displayPhoneNumber || null, origin?.verifiedName || null, verifiedByPhone);
+                }),
+                channels,
+                selectedPhoneNumberId: selectedPhone || null,
+                unreadCount: unreadAll,
+                page: { limit, offset, hasMore },
+            };
+        }
+        catch (error) {
+            (0, meta_whatsapp_inbox_log_1.logMetaInbox)("ERROR", {
+                tenantId: tenant.tenantId,
+                reason: "list_conversations_failed",
+                detail: error instanceof Error ? error.message.slice(0, 120) : "unknown",
+            });
+            return empty;
+        }
     }
     async listMessages(auth, conversationId, query) {
         const tenant = requireTenant(auth);

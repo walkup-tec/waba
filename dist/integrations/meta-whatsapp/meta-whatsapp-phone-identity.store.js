@@ -287,6 +287,9 @@ function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
         return false;
     if ((0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(identity.displayPhoneNumber))
         return false;
+    const hinted = (connections || []).find((row) => String(row.phoneNumberId || "").trim() === String(phoneNumberId || "").trim());
+    if (hinted && (0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(hinted.displayPhoneNumber))
+        return false;
     const tenant = String(tenantId || "").trim();
     const phone = String(phoneNumberId || "").trim();
     if (tenant && accountIsRestricted(tenant, phone, identity, connections))

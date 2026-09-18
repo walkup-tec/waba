@@ -114,6 +114,7 @@ import {
   purgePhoneIdentities,
   localPhonePhotoUrl,
   markPhoneIdentitiesRestrictedForBusiness,
+  isConnectionAccountRestricted,
 } from "./meta-whatsapp-phone-identity.store";
 import {
   mapWhatsappBusinessProfile,
@@ -1454,6 +1455,45 @@ async function requestOfficialPhoneDisplayName(
   logMetaWhatsappSafe("phone-default-name-requested", { tenantId: input.tenantId });
 }
 
+function inboxPhoneDigits(value: string | null | undefined): string {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function inboxPhonesMatch(left: string | null | undefined, right: string | null | undefined): boolean {
+  const a = inboxPhoneDigits(left);
+  const b = inboxPhoneDigits(right);
+  if (!a || !b) return false;
+  return a === b || a.endsWith(b) || b.endsWith(a);
+}
+
+function pickInboxOpenConnection(input: {
+  tenantId: string;
+  rows: MetaWhatsappConnectionRecord[];
+  preferredId: string;
+  phoneNumberId: string;
+  displayPhoneNumber: string | null;
+}): MetaWhatsappConnectionRecord | null {
+  const preferred = input.preferredId
+    ? input.rows.find((row) => row.id === input.preferredId)
+    : undefined;
+  if (preferred) {
+    const preferredMatches =
+      String(preferred.phoneNumberId || "").trim() === input.phoneNumberId ||
+      inboxPhonesMatch(preferred.displayPhoneNumber, input.displayPhoneNumber);
+    if (preferredMatches || !isConnectionAccountRestricted(input.tenantId, preferred)) {
+      return preferred;
+    }
+  }
+  const byPhone =
+    input.rows.find((row) => String(row.phoneNumberId || "").trim() === input.phoneNumberId) ||
+    input.rows.find((row) => inboxPhonesMatch(row.displayPhoneNumber, input.displayPhoneNumber));
+  if (byPhone) return byPhone;
+  const unrestricted = input.rows.filter(
+    (row) => !isConnectionAccountRestricted(input.tenantId, row),
+  );
+  return unrestricted.length === 1 ? unrestricted[0] : null;
+}
+
 export class MetaWhatsappConnectionService {
   constructor(
     private readonly repository = new MetaWhatsappConnectionRepository(),
@@ -2436,15 +2476,19 @@ export class MetaWhatsappConnectionService {
     if (!phoneNumberId || typeof input.enabled !== "boolean") {
       throw new MetaWhatsappError("invalid_payload");
     }
+    const current = readPhoneIdentity(tenant.tenantId, phoneNumberId);
     const openRows = await this.repository.listOpenByTenant(tenant.tenantId);
     const preferredId = String(input.connectionId || "").trim();
-    const open =
-      (preferredId ? openRows.find((row) => row.id === preferredId) : undefined) ||
-      openRows.find((row) => String(row.phoneNumberId || "").trim() === phoneNumberId) ||
-      openRows[0] ||
-      null;
+    const requestedDisplay =
+      String(input.displayPhoneNumber || "").trim() || current?.displayPhoneNumber || null;
+    const open = pickInboxOpenConnection({
+      tenantId: tenant.tenantId,
+      rows: openRows,
+      preferredId,
+      phoneNumberId,
+      displayPhoneNumber: requestedDisplay,
+    });
     if (!open) throw new MetaWhatsappError("no_pending_connection");
-    const current = readPhoneIdentity(tenant.tenantId, phoneNumberId);
     if (input.enabled) {
       const linkedBusinessId = String(open.metaBusinessId || current?.businessId || "").replace(/\D/g, "");
       if (
@@ -2482,11 +2526,18 @@ export class MetaWhatsappConnectionService {
       current?.channelName ||
       open.verifiedName ||
       null;
+    const rawBusinessId = String(open.metaBusinessId || "").replace(/\D/g, "") || null;
+    const stampBusinessId =
+      rawBusinessId &&
+      !isHiddenBusiness(tenant.tenantId, rawBusinessId) &&
+      !isConnectionAccountRestricted(tenant.tenantId, open)
+        ? rawBusinessId
+        : null;
     const saved = writePhoneIdentity(tenant.tenantId, phoneNumberId, {
       inboxEnabled: input.enabled,
       displayPhoneNumber,
       channelName,
-      businessId: String(open.metaBusinessId || current?.businessId || "").replace(/\D/g, "") || null,
+      businessId: stampBusinessId,
       ...(input.enabled && !current?.uiStatus ? { uiStatus: "ativo" as const } : {}),
     });
     logMetaWhatsappSafe("phone-inbox-updated", { tenantId: tenant.tenantId, enabled: input.enabled });

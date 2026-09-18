@@ -359,6 +359,10 @@ export function isPhoneInboxEligible(
   if (!isPhoneInboxEnabled(identity) || !identity) return false;
   if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito") return false;
   if (isWithdrawnInboxDisplayPhone(identity.displayPhoneNumber)) return false;
+  const hinted = (connections || []).find(
+    (row) => String(row.phoneNumberId || "").trim() === String(phoneNumberId || "").trim(),
+  );
+  if (hinted && isWithdrawnInboxDisplayPhone(hinted.displayPhoneNumber)) return false;
   const tenant = String(tenantId || "").trim();
   const phone = String(phoneNumberId || "").trim();
   if (tenant && accountIsRestricted(tenant, phone, identity, connections)) return false;
