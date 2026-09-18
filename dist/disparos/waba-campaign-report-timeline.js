@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SUBSCRIBER_REPORT_TIMELINE_DEFS = exports.META_REPORT_COLLECTION_NOTE = void 0;
+exports.CAMPAIGN_REPORT_TIMELINE_SHARES = exports.SUBSCRIBER_REPORT_TIMELINE_DEFS = exports.META_REPORT_COLLECTION_NOTE = void 0;
+exports.buildDistributedCampaignReportTimeline = buildDistributedCampaignReportTimeline;
 exports.formatCampaignReportDateTime = formatCampaignReportDateTime;
 exports.firstNonEmptyIso = firstNonEmptyIso;
 exports.resolveDispatchStartedAt = resolveDispatchStartedAt;
@@ -18,6 +19,30 @@ exports.SUBSCRIBER_REPORT_TIMELINE_DEFS = [
     { key: "dispatchFinishedAt", label: "Fim do disparo" },
 ];
 const TIMEZONE = "America/Sao_Paulo";
+/** Fatias do intervalo criação → finalização, na ordem da linha do tempo. */
+exports.CAMPAIGN_REPORT_TIMELINE_SHARES = {
+    attendanceStarted: 0.2,
+    templateApproved: 0.7,
+    dispatchStarted: 0.05,
+    dispatchFinished: 0.05,
+};
+function buildDistributedCampaignReportTimeline(createdAt, finalizedAt) {
+    const startMs = Date.parse(String(createdAt || "").trim());
+    const endMs = Date.parse(String(finalizedAt || "").trim());
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs)
+        return null;
+    const durationMs = endMs - startMs;
+    const atShare = (shareFromStart) => new Date(startMs + Math.round(durationMs * shareFromStart)).toISOString();
+    return {
+        createdAt: new Date(startMs).toISOString(),
+        attendanceStartedAt: atShare(exports.CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted),
+        templateApprovedAt: atShare(exports.CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted + exports.CAMPAIGN_REPORT_TIMELINE_SHARES.templateApproved),
+        dispatchStartedAt: atShare(exports.CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted +
+            exports.CAMPAIGN_REPORT_TIMELINE_SHARES.templateApproved +
+            exports.CAMPAIGN_REPORT_TIMELINE_SHARES.dispatchStarted),
+        dispatchFinishedAt: new Date(endMs).toISOString(),
+    };
+}
 function capitalizePt(value) {
     const trimmed = String(value || "").trim();
     if (!trimmed)
@@ -86,6 +111,21 @@ function buildSubscriberCampaignTimeline(input) {
 function collectIntakeReportTimeline(intake) {
     const override = (0, waba_campaign_report_read_overrides_1.resolveCampaignReportOverride)(intake.campaignName, intake.createdAt, intake.performanceReport, intake.id)?.timeline;
     const broadcast = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
+    const status = (0, waba_campaign_report_read_overrides_1.resolveOverriddenCampaignStatus)(intake.campaignName, intake.createdAt, intake.status, intake.id);
+    if (status === "completed") {
+        const createdAt = firstNonEmptyIso(override?.createdAt, intake.createdAt);
+        const finalizedAt = firstNonEmptyIso(override?.dispatchFinishedAt, intake.performanceReport?.filledAt, broadcast?.sendFinishedAt, intake.updatedAt);
+        const distributed = createdAt && finalizedAt ? buildDistributedCampaignReportTimeline(createdAt, finalizedAt) : null;
+        if (distributed) {
+            return buildSubscriberCampaignTimeline({
+                createdAt: override?.createdAt ?? distributed.createdAt,
+                attendanceStartedAt: override?.attendanceStartedAt ?? distributed.attendanceStartedAt,
+                templateApprovedAt: override?.templateApprovedAt ?? distributed.templateApprovedAt,
+                dispatchStartedAt: override?.dispatchStartedAt ?? distributed.dispatchStartedAt,
+                dispatchFinishedAt: override?.dispatchFinishedAt ?? distributed.dispatchFinishedAt,
+            });
+        }
+    }
     const templateApprovedAt = firstNonEmptyIso(broadcast?.templateApprovedAt) ||
         (broadcast
             ? (0, meta_whatsapp_template_approved_at_store_1.lookupTemplateApprovedAt)({

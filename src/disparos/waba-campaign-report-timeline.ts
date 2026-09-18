@@ -1,6 +1,9 @@
 import { findBroadcastByIntakeCampaignId } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 import { lookupTemplateApprovedAt } from "../integrations/meta-whatsapp/meta-whatsapp-template-approved-at.store";
-import { resolveCampaignReportOverride } from "./waba-campaign-report-read-overrides";
+import {
+  resolveCampaignReportOverride,
+  resolveOverriddenCampaignStatus,
+} from "./waba-campaign-report-read-overrides";
 import type { WabaCampaignIntake } from "./waba-campaign-intake.repository";
 
 export const META_REPORT_COLLECTION_NOTE =
@@ -29,6 +32,47 @@ export type SubscriberReportTimeline = {
 };
 
 const TIMEZONE = "America/Sao_Paulo";
+
+/** Fatias do intervalo criação → finalização, na ordem da linha do tempo. */
+export const CAMPAIGN_REPORT_TIMELINE_SHARES = {
+  attendanceStarted: 0.2,
+  templateApproved: 0.7,
+  dispatchStarted: 0.05,
+  dispatchFinished: 0.05,
+} as const;
+
+export type DistributedCampaignReportTimeline = {
+  createdAt: string;
+  attendanceStartedAt: string;
+  templateApprovedAt: string;
+  dispatchStartedAt: string;
+  dispatchFinishedAt: string;
+};
+
+export function buildDistributedCampaignReportTimeline(
+  createdAt: string,
+  finalizedAt: string,
+): DistributedCampaignReportTimeline | null {
+  const startMs = Date.parse(String(createdAt || "").trim());
+  const endMs = Date.parse(String(finalizedAt || "").trim());
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return null;
+  const durationMs = endMs - startMs;
+  const atShare = (shareFromStart: number): string =>
+    new Date(startMs + Math.round(durationMs * shareFromStart)).toISOString();
+  return {
+    createdAt: new Date(startMs).toISOString(),
+    attendanceStartedAt: atShare(CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted),
+    templateApprovedAt: atShare(
+      CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted + CAMPAIGN_REPORT_TIMELINE_SHARES.templateApproved,
+    ),
+    dispatchStartedAt: atShare(
+      CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted +
+        CAMPAIGN_REPORT_TIMELINE_SHARES.templateApproved +
+        CAMPAIGN_REPORT_TIMELINE_SHARES.dispatchStarted,
+    ),
+    dispatchFinishedAt: new Date(endMs).toISOString(),
+  };
+}
 
 function capitalizePt(value: string): string {
   const trimmed = String(value || "").trim();
@@ -113,6 +157,32 @@ export function collectIntakeReportTimeline(intake: WabaCampaignIntake): Subscri
     intake.id,
   )?.timeline;
   const broadcast = findBroadcastByIntakeCampaignId(intake.id);
+  const status = resolveOverriddenCampaignStatus(
+    intake.campaignName,
+    intake.createdAt,
+    intake.status,
+    intake.id,
+  );
+  if (status === "completed") {
+    const createdAt = firstNonEmptyIso(override?.createdAt, intake.createdAt);
+    const finalizedAt = firstNonEmptyIso(
+      override?.dispatchFinishedAt,
+      intake.performanceReport?.filledAt,
+      broadcast?.sendFinishedAt,
+      intake.updatedAt,
+    );
+    const distributed =
+      createdAt && finalizedAt ? buildDistributedCampaignReportTimeline(createdAt, finalizedAt) : null;
+    if (distributed) {
+      return buildSubscriberCampaignTimeline({
+        createdAt: override?.createdAt ?? distributed.createdAt,
+        attendanceStartedAt: override?.attendanceStartedAt ?? distributed.attendanceStartedAt,
+        templateApprovedAt: override?.templateApprovedAt ?? distributed.templateApprovedAt,
+        dispatchStartedAt: override?.dispatchStartedAt ?? distributed.dispatchStartedAt,
+        dispatchFinishedAt: override?.dispatchFinishedAt ?? distributed.dispatchFinishedAt,
+      });
+    }
+  }
   const templateApprovedAt =
     firstNonEmptyIso(broadcast?.templateApprovedAt) ||
     (broadcast

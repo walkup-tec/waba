@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { WabaCampaignIntake } from "./waba-campaign-intake.repository";
 import {
   META_REPORT_COLLECTION_NOTE,
+  buildDistributedCampaignReportTimeline,
   buildSubscriberCampaignTimeline,
   collectIntakeReportTimeline,
   formatCampaignReportDateTime,
@@ -143,13 +144,68 @@ describe("linha do tempo do relatório do assinante", () => {
     assert.equal(finished?.display, "Sexta-feira, 18 de setembro de 2026 - 10:30:00");
   });
 
+  it("distribui 20/70/5/5 entre criação 08:00 e finalização 18:00 em Brasília", () => {
+    const distributed = buildDistributedCampaignReportTimeline(
+      "2026-09-18T11:00:00.000Z",
+      "2026-09-18T21:00:00.000Z",
+    );
+    assert.deepEqual(distributed, {
+      createdAt: "2026-09-18T11:00:00.000Z",
+      attendanceStartedAt: "2026-09-18T13:00:00.000Z",
+      templateApprovedAt: "2026-09-18T20:00:00.000Z",
+      dispatchStartedAt: "2026-09-18T20:30:00.000Z",
+      dispatchFinishedAt: "2026-09-18T21:00:00.000Z",
+    });
+    const timeline = collectIntakeReportTimeline({
+      ...stubIntake("Campanha exemplo distribuida"),
+      startedAt: "2026-09-18T12:00:00.000Z",
+      createdAt: "2026-09-18T11:00:00.000Z",
+      updatedAt: "2026-09-18T21:00:00.000Z",
+    });
+    assert.deepEqual(
+      timeline.items.map((item) => item.display),
+      [
+        "Sexta-feira, 18 de setembro de 2026 - 08:00:00",
+        "Sexta-feira, 18 de setembro de 2026 - 10:00:00",
+        "Sexta-feira, 18 de setembro de 2026 - 17:00:00",
+        "Sexta-feira, 18 de setembro de 2026 - 17:30:00",
+        "Sexta-feira, 18 de setembro de 2026 - 18:00:00",
+      ],
+    );
+  });
+
+  it("campanha em andamento não recebe a distribuição calculada", () => {
+    const timeline = collectIntakeReportTimeline({
+      ...stubIntake("Campanha ainda aberta"),
+      status: "in_progress",
+      startedAt: "2026-09-18T12:10:00.000Z",
+      createdAt: "2026-09-18T11:00:00.000Z",
+      updatedAt: "2026-09-18T21:00:00.000Z",
+    });
+    assert.deepEqual(
+      timeline.items.map((item) => item.key),
+      ["createdAt", "attendanceStartedAt"],
+    );
+    assert.equal(timeline.items[0]?.display, "Sexta-feira, 18 de setembro de 2026 - 08:00:00");
+    assert.equal(timeline.items[1]?.display, "Sexta-feira, 18 de setembro de 2026 - 09:10:00");
+  });
+
   it("outra campanha não recebe a linha do tempo da PTX nem da Jandira", () => {
     const timeline = collectIntakeReportTimeline({
       ...stubIntake("Outra campanha"),
       startedAt: undefined,
     });
-    assert.equal(timeline.items.length, 1);
-    assert.equal(timeline.items[0]?.key, "createdAt");
+    assert.equal(timeline.items.length, 5);
+    assert.deepEqual(
+      timeline.items.map((item) => item.at),
+      [
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      ],
+    );
     assert.equal(
       timeline.items.some((item) => item.display.includes("7 de setembro de 2026")),
       false,
