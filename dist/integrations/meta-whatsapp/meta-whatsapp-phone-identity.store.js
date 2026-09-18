@@ -259,8 +259,6 @@ function isConnectionAccountRestricted(tenantId, row) {
     return false;
 }
 function accountIsRestricted(_tenantId, phoneNumberId, identity, connections) {
-    if ((0, meta_whatsapp_known_owned_wabas_1.isRelacionamentoInboxDisplayPhone)(identity?.displayPhoneNumber))
-        return false;
     if (identity?.portfolioHidden === true)
         return true;
     const ownDisplay = String(identity?.displayPhoneNumber || "").trim();
@@ -271,14 +269,12 @@ function accountIsRestricted(_tenantId, phoneNumberId, identity, connections) {
     const hinted = (connections || []).find((row) => String(row.phoneNumberId || "").trim() === String(phoneNumberId || "").trim());
     return (0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(hinted?.displayPhoneNumber);
 }
-/** Atendimento: Inbox ligado, chip Ativo e conta/WABA fora de Restritas. */
+/** Inbox ligado, chip Ativo, portfólio ATIVAS. A restrição é do chip, não da conexão. */
 function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
     if (!isPhoneInboxEnabled(identity) || !identity)
         return false;
     if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito")
         return false;
-    if ((0, meta_whatsapp_known_owned_wabas_1.isRelacionamentoInboxDisplayPhone)(identity.displayPhoneNumber))
-        return true;
     if ((0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(identity.displayPhoneNumber))
         return false;
     const tenant = String(tenantId || "").trim();

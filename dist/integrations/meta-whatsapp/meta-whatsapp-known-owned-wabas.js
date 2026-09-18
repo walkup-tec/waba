@@ -9,7 +9,7 @@
  * não inventa pendente já excluído do Business Manager.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KNOWN_OWNED_BUSINESS_WABAS = exports.NATALLY_CARISSIA_MUNIZ_BEZERRA_BUSINESS_IDS = exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = exports.MARILZA_DE_CASTRO_BUSINESS_IDS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.RELACIONAMENTO_INBOX_DISPLAY_PHONE_DIGITS = exports.DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS = exports.DRAX_SISTEMAS_STALE_WABA_ID = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.KNOWN_OWNED_BUSINESS_WABAS = exports.NATALLY_CARISSIA_MUNIZ_BEZERRA_BUSINESS_IDS = exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = exports.MARILZA_DE_CASTRO_BUSINESS_IDS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS = exports.DRAX_SISTEMAS_STALE_WABA_ID = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
 exports.catalogBackfillBusinessIds = catalogBackfillBusinessIds;
 exports.catalogBusinessLabel = catalogBusinessLabel;
 exports.catalogAgencyBusinessIds = catalogAgencyBusinessIds;
@@ -28,7 +28,6 @@ exports.isKnownClientWabaId = isKnownClientWabaId;
 exports.knownWabaIdForPendingPhone = knownWabaIdForPendingPhone;
 exports.knownBusinessIdsForWaba = knownBusinessIdsForWaba;
 exports.isWithdrawnInboxDisplayPhone = isWithdrawnInboxDisplayPhone;
-exports.isRelacionamentoInboxDisplayPhone = isRelacionamentoInboxDisplayPhone;
 exports.knownBusinessIdsForDisplayPhone = knownBusinessIdsForDisplayPhone;
 exports.knownWabaNameForId = knownWabaNameForId;
 exports.knownPendingPhonesForBusiness = knownPendingPhonesForBusiness;
@@ -48,8 +47,6 @@ exports.DRAX_SISTEMAS_WABA_ID = "1636793994538054";
 exports.DRAX_SISTEMAS_STALE_WABA_ID = "1988957871663919";
 /** Chip oficial Drax Sistema. A conta WhatsApp foi restrita — fora do Atendimento. */
 exports.DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS = ["5182001279"];
-/** Chip Relacionamento e Atendimento (Drax Waba) — Inbox/Bots. */
-exports.RELACIONAMENTO_INBOX_DISPLAY_PHONE_DIGITS = ["51926361688"];
 exports.WALKUP_BUSINESS_IDS = ["4141369862822598"];
 exports.WALKUP_WABA01_ID = "1014470201624992";
 /** Card Grupo Walkup App — WABA gravada no banco já veio misturada (Drax). */
@@ -241,29 +238,7 @@ function isWithdrawnInboxDisplayPhone(displayPhoneNumber) {
     const raw = String(displayPhoneNumber || "").trim();
     if (!raw)
         return false;
-    if (isRelacionamentoInboxDisplayPhone(raw))
-        return false;
     return exports.DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS.some((digits) => displayPhonesMatch(raw, digits));
-}
-function nationalPhoneDigits(value) {
-    let digits = displayPhoneDigits(value);
-    if (digits.startsWith("55") && digits.length >= 12)
-        digits = digits.slice(2);
-    return digits;
-}
-/** 51926361688 — Relacionamento e Atendimento no Drax Waba. */
-function isRelacionamentoInboxDisplayPhone(displayPhoneNumber) {
-    const raw = String(displayPhoneNumber || "").trim();
-    if (!raw)
-        return false;
-    const national = nationalPhoneDigits(raw);
-    return exports.RELACIONAMENTO_INBOX_DISPLAY_PHONE_DIGITS.some((digits) => {
-        if (national === digits)
-            return true;
-        if (national.length < 10 || digits.length < 10)
-            return false;
-        return national.endsWith(digits) || digits.endsWith(national);
-    });
 }
 /** BM catalogado do número de exibição (ex.: 5182001279 → Drax Sistemas). */
 function knownBusinessIdsForDisplayPhone(displayPhoneNumber) {

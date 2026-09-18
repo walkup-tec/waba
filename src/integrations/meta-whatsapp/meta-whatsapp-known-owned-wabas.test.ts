@@ -11,7 +11,6 @@ import {
   knownBusinessIdsForDisplayPhone,
   knownBusinessIdsForWaba,
   isWithdrawnInboxDisplayPhone,
-  isRelacionamentoInboxDisplayPhone,
   isKnownClientWabaForBusiness,
   knownClientWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
@@ -66,9 +65,6 @@ describe("known owned WABAs", () => {
     assert.equal(isWithdrawnInboxDisplayPhone("+55 51 8200-1279"), true);
     assert.equal(isWithdrawnInboxDisplayPhone("5182001279"), true);
     assert.equal(isWithdrawnInboxDisplayPhone("+55 11 95213-7761"), false);
-    assert.equal(isRelacionamentoInboxDisplayPhone("51926361688"), true);
-    assert.equal(isRelacionamentoInboxDisplayPhone("+55 51 92636-1688"), true);
-    assert.equal(isRelacionamentoInboxDisplayPhone("5551926361688"), true);
     assert.equal(isWithdrawnInboxDisplayPhone("51926361688"), false);
   });
 

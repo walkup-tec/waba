@@ -12,7 +12,6 @@ import { namesEqual, resolvePhoneNameSync, resolveMetaPhoneUiStatus, canActivate
 import { isHiddenBusiness, listHiddenBusinessIds } from "./meta-whatsapp-hidden-business.store";
 import {
   equivalentOwnedWabaIdsForBusiness,
-  isRelacionamentoInboxDisplayPhone,
   isWithdrawnInboxDisplayPhone,
   knownBusinessIdsForDisplayPhone,
   knownBusinessIdsForWaba,
@@ -336,7 +335,6 @@ function accountIsRestricted(
   identity: MetaPhoneIdentity | null,
   connections?: InboxAccountHint[] | null,
 ): boolean {
-  if (isRelacionamentoInboxDisplayPhone(identity?.displayPhoneNumber)) return false;
   if (identity?.portfolioHidden === true) return true;
   const ownDisplay = String(identity?.displayPhoneNumber || "").trim();
   if (isWithdrawnInboxDisplayPhone(ownDisplay)) return true;
@@ -347,7 +345,7 @@ function accountIsRestricted(
   return isWithdrawnInboxDisplayPhone(hinted?.displayPhoneNumber);
 }
 
-/** Atendimento: Inbox ligado, chip Ativo e conta/WABA fora de Restritas. */
+/** Inbox ligado, chip Ativo, portfólio ATIVAS. A restrição é do chip, não da conexão. */
 export function isPhoneInboxEligible(
   identity: MetaPhoneIdentity | null,
   tenantId?: string,
@@ -356,7 +354,6 @@ export function isPhoneInboxEligible(
 ): boolean {
   if (!isPhoneInboxEnabled(identity) || !identity) return false;
   if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito") return false;
-  if (isRelacionamentoInboxDisplayPhone(identity.displayPhoneNumber)) return true;
   if (isWithdrawnInboxDisplayPhone(identity.displayPhoneNumber)) return false;
   const tenant = String(tenantId || "").trim();
   const phone = String(phoneNumberId || "").trim();

@@ -44,8 +44,6 @@ export const DRAX_SISTEMAS_WABA_ID = "1636793994538054";
 export const DRAX_SISTEMAS_STALE_WABA_ID = "1988957871663919";
 /** Chip oficial Drax Sistema. A conta WhatsApp foi restrita — fora do Atendimento. */
 export const DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS = ["5182001279"] as const;
-/** Chip Relacionamento e Atendimento (Drax Waba) — Inbox/Bots. */
-export const RELACIONAMENTO_INBOX_DISPLAY_PHONE_DIGITS = ["51926361688"] as const;
 
 export const WALKUP_BUSINESS_IDS = ["4141369862822598"] as const;
 export const WALKUP_WABA01_ID = "1014470201624992";
@@ -255,28 +253,7 @@ export function knownBusinessIdsForWaba(wabaId: string): string[] {
 export function isWithdrawnInboxDisplayPhone(displayPhoneNumber: string | null | undefined): boolean {
   const raw = String(displayPhoneNumber || "").trim();
   if (!raw) return false;
-  if (isRelacionamentoInboxDisplayPhone(raw)) return false;
   return DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS.some((digits) => displayPhonesMatch(raw, digits));
-}
-
-function nationalPhoneDigits(value: string | null | undefined): string {
-  let digits = displayPhoneDigits(value);
-  if (digits.startsWith("55") && digits.length >= 12) digits = digits.slice(2);
-  return digits;
-}
-
-/** 51926361688 — Relacionamento e Atendimento no Drax Waba. */
-export function isRelacionamentoInboxDisplayPhone(
-  displayPhoneNumber: string | null | undefined,
-): boolean {
-  const raw = String(displayPhoneNumber || "").trim();
-  if (!raw) return false;
-  const national = nationalPhoneDigits(raw);
-  return RELACIONAMENTO_INBOX_DISPLAY_PHONE_DIGITS.some((digits) => {
-    if (national === digits) return true;
-    if (national.length < 10 || digits.length < 10) return false;
-    return national.endsWith(digits) || digits.endsWith(national);
-  });
 }
 
 /** BM catalogado do número de exibição (ex.: 5182001279 → Drax Sistemas). */
