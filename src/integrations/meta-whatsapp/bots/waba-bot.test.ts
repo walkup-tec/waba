@@ -486,6 +486,35 @@ describe("WABA bots — números Inbox", () => {
     assert.equal(rows[0]?.inboxEligible, true);
   });
 
+  it("lista Relacionamento do Drax Waba mesmo se a conexão ainda tiver o 5182001279", () => {
+    writePhoneIdentity(TENANT_A, "phone-rel", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      portfolioHidden: false,
+      businessId: "1041827648719609",
+      channelName: "Relacionamento e Atendimento",
+      displayPhoneNumber: "+55 51 92636-16888",
+    });
+    writePhoneIdentity(TENANT_A, "phone-drax", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    const rows = listBotAssignableChannels(TENANT_A, [
+      {
+        phoneNumberId: "phone-rel",
+        displayPhoneNumber: "+55 51 8200-1279",
+        metaBusinessId: "1041827648719609",
+        wabaId: "1636793994538054",
+      },
+    ]);
+    assert.deepEqual(
+      rows.map((row) => row.phoneNumberId),
+      ["phone-rel"],
+    );
+  });
+
   it("omite 5182001279 mesmo sem display na identidade, se a conexão estiver restrita", () => {
     writePhoneIdentity(TENANT_A, "phone-drax", {
       inboxEnabled: true,

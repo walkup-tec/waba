@@ -236,8 +236,6 @@ function hiddenIdMatches(tenantId, value) {
 }
 /** Conexão cuja BM/WABA está em Restritas — não serve o Atendimento. */
 function isConnectionAccountRestricted(tenantId, row) {
-    if ((0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(row.displayPhoneNumber))
-        return true;
     const tenant = String(tenantId || "").trim();
     if (!tenant)
         return false;
@@ -260,24 +258,16 @@ function isConnectionAccountRestricted(tenantId, row) {
     }
     return false;
 }
-function accountIsRestricted(tenantId, phoneNumberId, identity, connections) {
+function accountIsRestricted(_tenantId, phoneNumberId, identity, connections) {
     if (identity?.portfolioHidden === true)
         return true;
-    if ((0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(identity?.displayPhoneNumber))
+    const ownDisplay = String(identity?.displayPhoneNumber || "").trim();
+    if ((0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(ownDisplay))
         return true;
-    if (hiddenIdMatches(tenantId, identity?.businessId))
-        return true;
-    for (const businessId of (0, meta_whatsapp_known_owned_wabas_1.knownBusinessIdsForDisplayPhone)(identity?.displayPhoneNumber)) {
-        if (hiddenIdMatches(tenantId, businessId))
-            return true;
-    }
-    for (const row of connections || []) {
-        if (!connectionMatchesPhone(row, phoneNumberId, identity))
-            continue;
-        if (isConnectionAccountRestricted(tenantId, row))
-            return true;
-    }
-    return false;
+    if (ownDisplay)
+        return false;
+    const hinted = (connections || []).find((row) => String(row.phoneNumberId || "").trim() === String(phoneNumberId || "").trim());
+    return (0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(hinted?.displayPhoneNumber);
 }
 /** Atendimento: Inbox ligado, chip Ativo e conta/WABA fora de Restritas. */
 function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
@@ -286,9 +276,6 @@ function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
     if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito")
         return false;
     if ((0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(identity.displayPhoneNumber))
-        return false;
-    const hinted = (connections || []).find((row) => String(row.phoneNumberId || "").trim() === String(phoneNumberId || "").trim());
-    if (hinted && (0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(hinted.displayPhoneNumber))
         return false;
     const tenant = String(tenantId || "").trim();
     const phone = String(phoneNumberId || "").trim();

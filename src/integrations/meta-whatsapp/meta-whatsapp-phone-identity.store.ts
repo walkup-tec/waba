@@ -311,7 +311,6 @@ function hiddenIdMatches(tenantId: string, value: string | null | undefined): bo
 
 /** Conexão cuja BM/WABA está em Restritas — não serve o Atendimento. */
 export function isConnectionAccountRestricted(tenantId: string, row: InboxAccountHint): boolean {
-  if (isWithdrawnInboxDisplayPhone(row.displayPhoneNumber)) return true;
   const tenant = String(tenantId || "").trim();
   if (!tenant) return false;
   if (hiddenIdMatches(tenant, row.metaBusinessId) || hiddenIdMatches(tenant, row.wabaId)) return true;
@@ -331,22 +330,19 @@ export function isConnectionAccountRestricted(tenantId: string, row: InboxAccoun
 }
 
 function accountIsRestricted(
-  tenantId: string,
+  _tenantId: string,
   phoneNumberId: string,
   identity: MetaPhoneIdentity | null,
   connections?: InboxAccountHint[] | null,
 ): boolean {
   if (identity?.portfolioHidden === true) return true;
-  if (isWithdrawnInboxDisplayPhone(identity?.displayPhoneNumber)) return true;
-  if (hiddenIdMatches(tenantId, identity?.businessId)) return true;
-  for (const businessId of knownBusinessIdsForDisplayPhone(identity?.displayPhoneNumber)) {
-    if (hiddenIdMatches(tenantId, businessId)) return true;
-  }
-  for (const row of connections || []) {
-    if (!connectionMatchesPhone(row, phoneNumberId, identity)) continue;
-    if (isConnectionAccountRestricted(tenantId, row)) return true;
-  }
-  return false;
+  const ownDisplay = String(identity?.displayPhoneNumber || "").trim();
+  if (isWithdrawnInboxDisplayPhone(ownDisplay)) return true;
+  if (ownDisplay) return false;
+  const hinted = (connections || []).find(
+    (row) => String(row.phoneNumberId || "").trim() === String(phoneNumberId || "").trim(),
+  );
+  return isWithdrawnInboxDisplayPhone(hinted?.displayPhoneNumber);
 }
 
 /** Atendimento: Inbox ligado, chip Ativo e conta/WABA fora de Restritas. */
@@ -359,10 +355,6 @@ export function isPhoneInboxEligible(
   if (!isPhoneInboxEnabled(identity) || !identity) return false;
   if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito") return false;
   if (isWithdrawnInboxDisplayPhone(identity.displayPhoneNumber)) return false;
-  const hinted = (connections || []).find(
-    (row) => String(row.phoneNumberId || "").trim() === String(phoneNumberId || "").trim(),
-  );
-  if (hinted && isWithdrawnInboxDisplayPhone(hinted.displayPhoneNumber)) return false;
   const tenant = String(tenantId || "").trim();
   const phone = String(phoneNumberId || "").trim();
   if (tenant && accountIsRestricted(tenant, phone, identity, connections)) return false;
