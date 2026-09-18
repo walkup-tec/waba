@@ -1,7 +1,11 @@
 import type { WabaRequestAuth } from "../../../auth/waba-request-auth";
 import { MetaWhatsappError } from "../meta-whatsapp-errors";
 import { resolveMetaWhatsappTenant } from "../meta-whatsapp-tenant";
-import { listPhoneInboxChannels } from "../meta-whatsapp-phone-identity.store";
+import {
+  isPhoneInboxEnabled,
+  listPhoneInboxChannels,
+  readPhoneIdentity,
+} from "../meta-whatsapp-phone-identity.store";
 import { BOT_NODE_REGISTRY, createBotNodeData } from "./waba-bot-node.registry";
 import { createDefaultBotDraft, normalizeBotDraft } from "./waba-bot-flow.normalize";
 import {
@@ -22,6 +26,11 @@ import {
 import type { BotFlowDraft, BotFlowNode, BotJson, BotRunState } from "./waba-bot.types";
 
 const testRuns = new Map<string, BotRunState>();
+
+/** Só chips com Inbox ligado em CLOUD META → Conexão. */
+export function listBotAssignableChannels(tenantId: string) {
+  return listPhoneInboxChannels(tenantId).filter((row) => row.inboxEnabled === true);
+}
 
 function requireTenant(auth: WabaRequestAuth) {
   try {
@@ -49,7 +58,7 @@ export class WabaBotService {
     const tenant = requireTenant(auth);
     const flows = listBotFlows(tenant.tenantId);
     const links = listBotPhoneLinks(tenant.tenantId);
-    const channels = listPhoneInboxChannels(tenant.tenantId);
+    const channels = listBotAssignableChannels(tenant.tenantId);
     return {
       tenantId: tenant.tenantId,
       flows,
@@ -91,6 +100,9 @@ export class WabaBotService {
     const botIdRaw = body?.botId ?? body?.bot_id;
     const botId = botIdRaw == null || botIdRaw === "" ? null : String(botIdRaw).trim();
     if (!phoneNumberId) throw new MetaWhatsappError("invalid_payload");
+    if (botId && !isPhoneInboxEnabled(readPhoneIdentity(tenant.tenantId, phoneNumberId))) {
+      throw new MetaWhatsappError("invalid_payload");
+    }
     const links = setBotPhoneLink({
       tenantId: tenant.tenantId,
       phoneNumberId,

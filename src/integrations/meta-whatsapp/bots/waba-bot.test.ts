@@ -21,6 +21,8 @@ import {
   upsertBotFlow,
   wasBotMessageClaimed,
 } from "./waba-bot.store";
+import { listBotAssignableChannels } from "./waba-bot.service";
+import { purgePhoneIdentities, writePhoneIdentity } from "../meta-whatsapp-phone-identity.store";
 import { startWabaBots, stopWabaBotsForTests } from "./waba-bot.bootstrap";
 import { resetWabaBotLocksForTests, WabaBotInboundService } from "./waba-bot-inbound.service";
 import type { BotFlowDraft, BotFlowNode } from "./waba-bot.types";
@@ -124,6 +126,7 @@ afterEach(() => {
   resetWabaBotLocksForTests();
   resetWabaBotStoreForTests(TENANT_A);
   resetWabaBotStoreForTests(TENANT_B);
+  purgePhoneIdentities(TENANT_A);
 });
 
 describe("WABA bots — motor", () => {
@@ -453,6 +456,27 @@ describe("WABA bots — inbound 1 a 9", () => {
       occurredAt: new Date().toISOString(),
     });
     assert.equal(wasBotMessageClaimed(TENANT_A, "msg-1"), true);
+  });
+});
+
+describe("WABA bots — números Inbox", () => {
+  it("lista só chips com Inbox ligado em Conexão", () => {
+    writePhoneIdentity(TENANT_A, "phone-on", {
+      inboxEnabled: true,
+      channelName: "Atendimento",
+      displayPhoneNumber: "+55 11 90000-0001",
+    });
+    writePhoneIdentity(TENANT_A, "phone-off", {
+      inboxEnabled: false,
+      channelName: "Sem inbox",
+      displayPhoneNumber: "+55 11 90000-0002",
+    });
+    const rows = listBotAssignableChannels(TENANT_A);
+    assert.deepEqual(
+      rows.map((row) => row.phoneNumberId),
+      ["phone-on"],
+    );
+    assert.equal(rows[0]?.inboxEnabled, true);
   });
 });
 

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaBotService = void 0;
+exports.listBotAssignableChannels = listBotAssignableChannels;
 exports.resetWabaBotTestRunsForTests = resetWabaBotTestRunsForTests;
 const meta_whatsapp_errors_1 = require("../meta-whatsapp-errors");
 const meta_whatsapp_tenant_1 = require("../meta-whatsapp-tenant");
@@ -10,6 +11,10 @@ const waba_bot_flow_normalize_1 = require("./waba-bot-flow.normalize");
 const waba_bot_runtime_engine_1 = require("./waba-bot-runtime.engine");
 const waba_bot_store_1 = require("./waba-bot.store");
 const testRuns = new Map();
+/** Só chips com Inbox ligado em CLOUD META → Conexão. */
+function listBotAssignableChannels(tenantId) {
+    return (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenantId).filter((row) => row.inboxEnabled === true);
+}
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -35,7 +40,7 @@ class WabaBotService {
         const tenant = requireTenant(auth);
         const flows = (0, waba_bot_store_1.listBotFlows)(tenant.tenantId);
         const links = (0, waba_bot_store_1.listBotPhoneLinks)(tenant.tenantId);
-        const channels = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId);
+        const channels = listBotAssignableChannels(tenant.tenantId);
         return {
             tenantId: tenant.tenantId,
             flows,
@@ -76,6 +81,9 @@ class WabaBotService {
         const botId = botIdRaw == null || botIdRaw === "" ? null : String(botIdRaw).trim();
         if (!phoneNumberId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        if (botId && !(0, meta_whatsapp_phone_identity_store_1.isPhoneInboxEnabled)((0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenant.tenantId, phoneNumberId))) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        }
         const links = (0, waba_bot_store_1.setBotPhoneLink)({
             tenantId: tenant.tenantId,
             phoneNumberId,

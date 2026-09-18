@@ -44826,7 +44826,7 @@
       function wabaBotsRenderPhones() {
         const box = document.getElementById("waba-bots-phones");
         if (!box) return;
-        const channels = wabaBotsUi.channels || [];
+        const channels = (wabaBotsUi.channels || []).filter((row) => row.inboxEnabled === true);
         if (!channels.length) {
           box.innerHTML = "<p class=\"muted\">Nenhum número com Inbox. Ligue o Inbox em CLOUD META → Conexão.</p>";
           return;
@@ -44834,11 +44834,12 @@
         box.innerHTML = channels
           .map((row) => {
             const label = row.name || row.displayPhoneNumber || row.phoneNumberId;
+            const phone = row.displayPhoneNumber || row.phoneNumberId;
             const linked = row.botId === wabaBotsUi.selectedId;
             return (
               `<label class="waba-bots-phone">` +
               `<span>${escapeAdminHtml(label)}</span>` +
-              `<small>${row.inboxEligible ? "Inbox ligado" : "Inbox off"}</small>` +
+              `<small>${escapeAdminHtml(phone)}</small>` +
               `<button type="button" class="instance-action-btn btn-refresh enabled" data-bot-phone="${escapeAdminHtml(row.phoneNumberId)}" data-bot-link="${linked ? "off" : "on"}">${linked ? "Desassociar" : "Associar a este bot"}</button>` +
               `</label>`
             );
