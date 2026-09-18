@@ -48193,7 +48193,12 @@
             const campaignId = escapeAdminHtml(item?.id || "");
             const status = String(item?.status || "").trim().toLowerCase();
             const isErrorReported = status === "error_reported";
-            const showDetails = status === "generated" || status === "in_progress";
+            const showDetails =
+              status === "generated" ||
+              status === "in_progress" ||
+              status === "completed" ||
+              status === "error_reported" ||
+              status === "cancelled";
             const showReport = status === "in_progress" || status === "completed";
             const labAttended = Boolean(item?.laboratorioAttended);
             const reportReadOnly = status === "completed" || isErrorReported || labAttended;
