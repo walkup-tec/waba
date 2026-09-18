@@ -108,6 +108,12 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
     },
   },
   {
+    name: "NOSSO CONSIG 1",
+    fingerprint: { totalLeads: 2504, sent: 2203, delivered: 2064, failed: 301 },
+    clicks: 144,
+    showClicks: true,
+  },
+  {
     name: "VITORIA DA CONQUISTA",
     matchExactName: true,
     forceCompleted: true,

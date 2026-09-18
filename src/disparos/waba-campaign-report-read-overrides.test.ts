@@ -283,4 +283,47 @@ describe("override pontual do relatório", () => {
     assert.equal(campaignHoldsSubscriberInProgress("Campanha Jandira", "2026-09-02T10:00:00.000Z"), false);
     assert.equal(campaignHoldsSubscriberInProgress("Campanha Jandira 2", "2026-09-02T10:00:00.000Z"), false);
   });
+
+  it("NOSSO CONSIG 1 recebe 7% dos entregues como cliques", () => {
+    const stored = report({
+      totalLeads: 2504,
+      sent: 2203,
+      delivered: 2064,
+      read: 958,
+      failed: 301,
+      clicks: 0,
+      source: "meta_lab",
+    });
+    const got = applyCampaignReportReadOverride("NOSSO CONSIG 1", "2026-09-18T13:00:00.000Z", stored);
+    assert.equal(got?.clicks, 144);
+    assert.equal(got?.delivered, 2064);
+    assert.equal(got?.sent, 2203);
+    assert.equal(got?.read, 958);
+    assert.equal(got?.failed, 301);
+    assert.equal(got?.totalLeads, 2504);
+    assert.equal(campaignReportShowsClicks("NOSSO CONSIG 1", "2026-09-18T13:00:00.000Z", stored), true);
+
+    const metrics = computeCampaignPerformanceMetrics({
+      totalLeads: 2504,
+      sent: 2203,
+      delivered: 2064,
+      read: 958,
+      failed: 301,
+      clicks: 144,
+    });
+    assert.equal(metrics.clickRate, 6.98);
+
+    const other = applyCampaignReportReadOverride(
+      "NOSSO CONSIG 2",
+      "2026-09-18T13:00:00.000Z",
+      report({ totalLeads: 2504, sent: 2203, delivered: 2064, failed: 301, clicks: 0 }),
+    );
+    assert.equal(other?.clicks, 0);
+    const differentTotals = applyCampaignReportReadOverride(
+      "NOSSO CONSIG 1",
+      "2026-09-18T13:00:00.000Z",
+      report({ totalLeads: 2504, sent: 1800, delivered: 2064, failed: 301, clicks: 0 }),
+    );
+    assert.equal(differentTotals?.clicks, 0);
+  });
 });
