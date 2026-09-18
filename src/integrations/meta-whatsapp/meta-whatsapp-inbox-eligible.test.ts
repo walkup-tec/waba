@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import {
   applyLocalPhoneIdentities,
+  isInboxPhoneAllowed,
   isPhoneInboxEligible,
   listEnabledInboxPhoneIds,
   listPhoneInboxChannels,
   purgePhoneIdentities,
   writePhoneIdentity,
 } from "./meta-whatsapp-phone-identity.store";
+import { hideBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
 import type { MetaPortfolioNumberPublic } from "./meta-whatsapp-portfolio.types";
 
 const tenantId = deriveStableMetaTenantId("inbox-eligible@exemplo.com");
@@ -95,6 +97,57 @@ describe("Atendimento só lista chip Ativo com Inbox", () => {
       { hidden: true },
     );
     assert.deepEqual(listEnabledInboxPhoneIds(tenantId), []);
+    purgePhoneIdentities(tenantId);
+  });
+
+  it("conta WhatsApp em Restritas tira o 5182001279 do Atendimento na hora", () => {
+    const businessId = "1041827648719609";
+    const restrictedConn = {
+      phoneNumberId: "phone-1",
+      displayPhoneNumber: "+55 51 8200-1279",
+      metaBusinessId: businessId,
+    };
+    purgePhoneIdentities(tenantId);
+    unhideBusiness(tenantId, businessId);
+    writePhoneIdentity(tenantId, "phone-1", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Drax Sistema",
+    });
+    assert.deepEqual(listEnabledInboxPhoneIds(tenantId, [restrictedConn]), ["phone-1"]);
+    hideBusiness(tenantId, businessId, "BAN Drax Sistemas");
+    assert.deepEqual(listEnabledInboxPhoneIds(tenantId, [restrictedConn]), []);
+    assert.equal(listPhoneInboxChannels(tenantId, undefined, [restrictedConn])[0]?.inboxEligible, false);
+    assert.equal(isInboxPhoneAllowed(tenantId, "phone-1", ["phone-1"], [restrictedConn]), false);
+    assert.deepEqual(
+      listEnabledInboxPhoneIds(tenantId, [
+        {
+          phoneNumberId: "outro-chip",
+          displayPhoneNumber: "5182001279",
+          metaBusinessId: businessId,
+        },
+      ]),
+      [],
+    );
+    unhideBusiness(tenantId, businessId);
+    assert.deepEqual(listEnabledInboxPhoneIds(tenantId, [restrictedConn]), ["phone-1"]);
+    purgePhoneIdentities(tenantId);
+  });
+
+  it("identidade com businessId em Restritas some sem esperar o Laboratório", () => {
+    const businessId = "1041827648719609";
+    purgePhoneIdentities(tenantId);
+    unhideBusiness(tenantId, businessId);
+    writePhoneIdentity(tenantId, "phone-1", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      businessId,
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    hideBusiness(tenantId, businessId, "BAN Drax Sistemas");
+    assert.deepEqual(listEnabledInboxPhoneIds(tenantId), []);
+    unhideBusiness(tenantId, businessId);
     purgePhoneIdentities(tenantId);
   });
 });

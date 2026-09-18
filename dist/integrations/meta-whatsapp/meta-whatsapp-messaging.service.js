@@ -93,6 +93,7 @@ class MetaWhatsappMessagingService {
                 connectionPhoneNumberId: connection.phoneNumberId,
                 requestedPhoneNumberId: requestedPhone,
                 conversationPhoneNumberId: existingConversation?.phoneNumberId,
+                connections: [connection],
             }) || String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
         const botSend = body?.source === "bot";
         const atIso = new Date().toISOString();

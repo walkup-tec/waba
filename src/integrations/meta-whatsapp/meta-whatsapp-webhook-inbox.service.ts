@@ -39,7 +39,7 @@ export class MetaWhatsappWebhookInboxService implements MetaWhatsappWebhookInbox
     const wamid = String(input.event.messageId || "").trim();
     if (!from || !wamid) return;
     const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim() || null;
-    if (!phoneNumberId || !listEnabledInboxPhoneIds(input.connection.tenantId).includes(phoneNumberId)) {
+    if (!phoneNumberId || !listEnabledInboxPhoneIds(input.connection.tenantId, [input.connection]).includes(phoneNumberId)) {
       logMetaWebhook("PROCESSED", { eventType: "messages", reason: "inbox_disabled" });
       return;
     }
@@ -115,7 +115,7 @@ export class MetaWhatsappWebhookInboxService implements MetaWhatsappWebhookInbox
     const recipient = String(input.event.recipientId || "").trim();
     const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim();
     if (!recipient || !phoneNumberId) return;
-    if (!listEnabledInboxPhoneIds(input.connection.tenantId).includes(phoneNumberId)) {
+    if (!listEnabledInboxPhoneIds(input.connection.tenantId, [input.connection]).includes(phoneNumberId)) {
       return;
     }
     await this.conversations.upsertForContact({

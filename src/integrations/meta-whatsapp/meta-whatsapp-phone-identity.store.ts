@@ -9,6 +9,8 @@ import type {
 } from "./meta-whatsapp-portfolio.types";
 import { META_WHATSAPP_DEFAULT_DISPLAY_NAME } from "./meta-whatsapp-phone-profile";
 import { namesEqual, resolvePhoneNameSync, resolveMetaPhoneUiStatus, canActivateMetaPhoneNumber } from "./meta-whatsapp-portfolio.map";
+import { isHiddenBusiness } from "./meta-whatsapp-hidden-business.store";
+import { metaBusinessIdsMatch } from "./meta-whatsapp-known-owned-wabas";
 
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
@@ -26,6 +28,7 @@ export type MetaPhoneIdentity = {
   inboxEnabled: boolean | null;
   uiStatus: MetaPortfolioNumberUiStatus | null;
   portfolioHidden: boolean | null;
+  businessId: string | null;
   displayPhoneNumber: string | null;
   channelName: string | null;
   updatedAt: string;
@@ -39,6 +42,23 @@ export type MetaPhoneInboxChannel = {
   inboxEnabled: boolean;
   inboxEligible: boolean;
 };
+
+export type InboxAccountHint = {
+  phoneNumberId?: string | null;
+  displayPhoneNumber?: string | null;
+  metaBusinessId?: string | null;
+};
+
+function phoneDigits(value: string | null | undefined): string {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function phonesMatch(left: string | null | undefined, right: string | null | undefined): boolean {
+  const a = phoneDigits(left);
+  const b = phoneDigits(right);
+  if (!a || !b) return false;
+  return a === b || a.endsWith(b) || b.endsWith(a);
+}
 
 function parseStoredUiStatus(value: unknown): MetaPortfolioNumberUiStatus | null {
   const raw = String(value || "").trim().toLowerCase();
@@ -92,6 +112,7 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
     const inboxEnabled = row.inboxEnabled === false ? false : row.inboxEnabled === true ? true : null;
     const uiStatus = parseStoredUiStatus(row.uiStatus);
     const portfolioHidden = row.portfolioHidden === true ? true : row.portfolioHidden === false ? false : null;
+    const businessId = String(row.businessId || "").replace(/\D/g, "") || null;
     const displayPhoneNumber = String(row.displayPhoneNumber || "").trim() || null;
     const channelName = String(row.channelName || "").trim() || null;
     const updatedAt = String(row.updatedAt || "").trim() || new Date().toISOString();
@@ -108,6 +129,7 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
       inboxEnabled,
       uiStatus,
       portfolioHidden,
+      businessId,
       displayPhoneNumber,
       channelName,
       updatedAt,
@@ -133,6 +155,7 @@ export function writePhoneIdentity(
     inboxEnabled?: boolean;
     uiStatus?: MetaPortfolioNumberUiStatus | null;
     portfolioHidden?: boolean | null;
+    businessId?: string | null;
     displayPhoneNumber?: string | null;
     channelName?: string | null;
   },
@@ -151,6 +174,7 @@ export function writePhoneIdentity(
     inboxEnabled: null,
     uiStatus: null,
     portfolioHidden: null,
+    businessId: null,
     displayPhoneNumber: null,
     channelName: null,
     updatedAt: "",
@@ -184,6 +208,10 @@ export function writePhoneIdentity(
     uiStatus: input.uiStatus !== undefined ? input.uiStatus : current.uiStatus,
     portfolioHidden:
       input.portfolioHidden !== undefined ? input.portfolioHidden : current.portfolioHidden,
+    businessId:
+      input.businessId !== undefined
+        ? String(input.businessId || "").replace(/\D/g, "") || null
+        : current.businessId,
     displayPhoneNumber:
       input.displayPhoneNumber !== undefined ? input.displayPhoneNumber : current.displayPhoneNumber,
     channelName: input.channelName !== undefined ? input.channelName : current.channelName,
@@ -253,11 +281,44 @@ export function isPhoneInboxEnabled(identity: MetaPhoneIdentity | null): boolean
   return identity?.inboxEnabled === true;
 }
 
-/** Atendimento: Inbox ligado e chip Ativo, fora de Restritas/desativado. */
-export function isPhoneInboxEligible(identity: MetaPhoneIdentity | null): boolean {
+function connectionMatchesPhone(
+  row: InboxAccountHint,
+  phoneNumberId: string,
+  identity: MetaPhoneIdentity | null,
+): boolean {
+  const chip = String(row.phoneNumberId || "").trim();
+  if (chip && chip === phoneNumberId) return true;
+  if (phonesMatch(row.displayPhoneNumber, identity?.displayPhoneNumber)) return true;
+  return false;
+}
+
+function accountIsRestricted(
+  tenantId: string,
+  phoneNumberId: string,
+  identity: MetaPhoneIdentity | null,
+  connections?: InboxAccountHint[] | null,
+): boolean {
+  if (identity?.portfolioHidden === true) return true;
+  if (identity?.businessId && isHiddenBusiness(tenantId, identity.businessId)) return true;
+  for (const row of connections || []) {
+    if (!connectionMatchesPhone(row, phoneNumberId, identity)) continue;
+    if (row.metaBusinessId && isHiddenBusiness(tenantId, row.metaBusinessId)) return true;
+  }
+  return false;
+}
+
+/** Atendimento: Inbox ligado, chip Ativo e conta/WABA fora de Restritas. */
+export function isPhoneInboxEligible(
+  identity: MetaPhoneIdentity | null,
+  tenantId?: string,
+  connections?: InboxAccountHint[] | null,
+  phoneNumberId?: string,
+): boolean {
   if (!isPhoneInboxEnabled(identity) || !identity) return false;
-  if (identity.portfolioHidden === true) return false;
   if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito") return false;
+  const tenant = String(tenantId || "").trim();
+  const phone = String(phoneNumberId || "").trim();
+  if (tenant && accountIsRestricted(tenant, phone, identity, connections)) return false;
   return true;
 }
 
@@ -312,6 +373,7 @@ function lookupVerifiedName(
 export function listPhoneInboxChannels(
   tenantId: string,
   verifiedNameByPhone?: ReadonlyMap<string, string> | Record<string, string | null | undefined>,
+  connections?: InboxAccountHint[] | null,
 ): MetaPhoneInboxChannel[] {
   try {
     const dir = tenantDir(tenantId);
@@ -329,7 +391,7 @@ export function listPhoneInboxChannels(
         displayPhoneNumber: identity.displayPhoneNumber,
         profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
         inboxEnabled: isPhoneInboxEnabled(identity),
-        inboxEligible: isPhoneInboxEligible(identity),
+        inboxEligible: isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId),
       });
     }
     return out;
@@ -338,11 +400,48 @@ export function listPhoneInboxChannels(
   }
 }
 
-export function listEnabledInboxPhoneIds(tenantId: string): string[] {
-  return listPhoneInboxChannels(tenantId)
+export function listEnabledInboxPhoneIds(
+  tenantId: string,
+  connections?: InboxAccountHint[] | null,
+): string[] {
+  const id = String(tenantId || "").trim();
+  return listPhoneInboxChannels(id, undefined, connections)
     .filter((row) => row.inboxEligible)
     .map((row) => String(row.phoneNumberId || "").trim())
     .filter(Boolean);
+}
+
+export function markPhoneIdentitiesRestrictedForBusiness(
+  tenantId: string,
+  businessId: string,
+  connections?: InboxAccountHint[] | null,
+): number {
+  const id = String(tenantId || "").trim();
+  const business = String(businessId || "").replace(/\D/g, "");
+  if (!id || business.length < 6) return 0;
+  try {
+    const dir = tenantDir(id);
+    if (!existsSync(dir)) return 0;
+    let count = 0;
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith(".json")) continue;
+      const phoneNumberId = file.slice(0, -5);
+      const identity = readPhoneIdentity(id, phoneNumberId);
+      if (!identity) continue;
+      const byBusiness = Boolean(identity.businessId && metaBusinessIdsMatch(identity.businessId, business));
+      const byConnection = (connections || []).some(
+        (row) =>
+          metaBusinessIdsMatch(String(row.metaBusinessId || ""), business) &&
+          connectionMatchesPhone(row, phoneNumberId, identity),
+      );
+      if (!byBusiness && !byConnection) continue;
+      writePhoneIdentity(id, phoneNumberId, { portfolioHidden: true, businessId: business });
+      count += 1;
+    }
+    return count;
+  } catch {
+    return 0;
+  }
 }
 
 function asPhoneIds(value?: string | string[] | null): string[] {
@@ -362,8 +461,9 @@ export function inboxQueryPhoneIds(
   tenantId: string,
   connectionPhoneNumberId?: string | string[] | null,
   selectedPhoneNumberId?: string | null,
+  connections?: InboxAccountHint[] | null,
 ): string[] {
-  const enabled = listEnabledInboxPhoneIds(tenantId);
+  const enabled = listEnabledInboxPhoneIds(tenantId, connections);
   const conns = asPhoneIds(connectionPhoneNumberId);
   const selected = String(selectedPhoneNumberId || "").trim();
   const extras = enabled.length === 1 ? conns.filter((id) => !enabled.includes(id)) : [];
@@ -377,10 +477,11 @@ export function isInboxPhoneAllowed(
   tenantId: string,
   phoneNumberId: string | null | undefined,
   connectionPhoneNumberId?: string | string[] | null,
+  connections?: InboxAccountHint[] | null,
 ): boolean {
   const id = String(phoneNumberId || "").trim();
   if (!id) return false;
-  const enabled = listEnabledInboxPhoneIds(tenantId);
+  const enabled = listEnabledInboxPhoneIds(tenantId, connections);
   if (enabled.includes(id)) return true;
   const conns = asPhoneIds(connectionPhoneNumberId);
   return enabled.length === 1 && conns.includes(id) && enabled[0] !== id;
@@ -391,8 +492,9 @@ export function resolveInboxSendPhoneNumberId(input: {
   connectionPhoneNumberId?: string | null;
   requestedPhoneNumberId?: string | null;
   conversationPhoneNumberId?: string | null;
+  connections?: InboxAccountHint[] | null;
 }): string | null {
-  const enabled = listEnabledInboxPhoneIds(input.tenantId);
+  const enabled = listEnabledInboxPhoneIds(input.tenantId, input.connections);
   const conversation = String(input.conversationPhoneNumberId || "").trim();
   const requested = String(input.requestedPhoneNumberId || "").trim();
   const connection = String(input.connectionPhoneNumberId || "").trim();
@@ -408,7 +510,7 @@ export function applyLocalPhoneIdentities(
   tenantId: string,
   numbers: MetaPortfolioNumberPublic[],
   placeholderName?: string | null,
-  options?: { hidden?: boolean | null },
+  options?: { hidden?: boolean | null; businessId?: string | null },
 ): MetaPortfolioNumberPublic[] {
   return numbers.map((row) => {
     const identity = readPhoneIdentity(tenantId, row.phoneNumberId);
@@ -439,10 +541,12 @@ export function applyLocalPhoneIdentities(
     });
     const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
     const portfolioHidden = options?.hidden === true;
+    const businessId = String(options?.businessId || "").replace(/\D/g, "") || null;
     try {
       writePhoneIdentity(tenantId, row.phoneNumberId, {
         uiStatus,
         portfolioHidden,
+        ...(businessId ? { businessId } : {}),
       });
     } catch {
       // Identidade local não pode abortar a listagem.

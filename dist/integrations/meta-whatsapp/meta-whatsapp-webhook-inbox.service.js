@@ -25,7 +25,7 @@ class MetaWhatsappWebhookInboxService {
         if (!from || !wamid)
             return;
         const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim() || null;
-        if (!phoneNumberId || !(0, meta_whatsapp_phone_identity_store_1.listEnabledInboxPhoneIds)(input.connection.tenantId).includes(phoneNumberId)) {
+        if (!phoneNumberId || !(0, meta_whatsapp_phone_identity_store_1.listEnabledInboxPhoneIds)(input.connection.tenantId, [input.connection]).includes(phoneNumberId)) {
             (0, meta_whatsapp_webhook_log_1.logMetaWebhook)("PROCESSED", { eventType: "messages", reason: "inbox_disabled" });
             return;
         }
@@ -94,7 +94,7 @@ class MetaWhatsappWebhookInboxService {
         const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim();
         if (!recipient || !phoneNumberId)
             return;
-        if (!(0, meta_whatsapp_phone_identity_store_1.listEnabledInboxPhoneIds)(input.connection.tenantId).includes(phoneNumberId)) {
+        if (!(0, meta_whatsapp_phone_identity_store_1.listEnabledInboxPhoneIds)(input.connection.tenantId, [input.connection]).includes(phoneNumberId)) {
             return;
         }
         await this.conversations.upsertForContact({

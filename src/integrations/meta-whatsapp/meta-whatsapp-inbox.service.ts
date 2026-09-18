@@ -123,7 +123,7 @@ export class MetaWhatsappInboxService {
     }
     const open = await this.inboxConnections(tenantId);
     const connPhones = open.map((item) => item.phoneNumberId).filter((id): id is string => Boolean(id));
-    if (!isInboxPhoneAllowed(tenantId, row.phoneNumberId, connPhones)) {
+    if (!isInboxPhoneAllowed(tenantId, row.phoneNumberId, connPhones, open)) {
       throw new MetaWhatsappError("conversation_not_found");
     }
     return row;
@@ -168,11 +168,11 @@ export class MetaWhatsappInboxService {
     const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
     const offset = clampPage(query?.offset, 0, 10_000);
     const verifiedByPhone = verifiedNamesByPhone(open);
-    const snapshots = listPhoneInboxChannels(tenant.tenantId, verifiedByPhone);
+    const snapshots = listPhoneInboxChannels(tenant.tenantId, verifiedByPhone, open);
     const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
     const enabledIds = snapshots.filter((row) => row.inboxEligible).map((row) => row.phoneNumberId);
     const connPhones = open.map((row) => row.phoneNumberId).filter((id): id is string => Boolean(id));
-    const listIds = inboxQueryPhoneIds(tenant.tenantId, connPhones, selectedPhone);
+    const listIds = inboxQueryPhoneIds(tenant.tenantId, connPhones, selectedPhone, open);
     if (!enabledIds.length || (selectedPhone && !listIds.length)) {
       return {
         connected: true,
@@ -249,7 +249,7 @@ export class MetaWhatsappInboxService {
     const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
     logMetaInbox("THREAD", { tenantId: tenant.tenantId, count: messages.length });
     const verifiedByPhone = verifiedNamesByPhone(open);
-    const snapshots = listPhoneInboxChannels(tenant.tenantId, verifiedByPhone);
+    const snapshots = listPhoneInboxChannels(tenant.tenantId, verifiedByPhone, open);
     const channelsById = new Map(snapshots.map((item) => [item.phoneNumberId, item]));
     return {
       conversation: withChannel(

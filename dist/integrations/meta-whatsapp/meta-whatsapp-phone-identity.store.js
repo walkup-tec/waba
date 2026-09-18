@@ -14,6 +14,7 @@ exports.phoneInboxDisplayName = phoneInboxDisplayName;
 exports.syncInboxChannelNameFromMeta = syncInboxChannelNameFromMeta;
 exports.listPhoneInboxChannels = listPhoneInboxChannels;
 exports.listEnabledInboxPhoneIds = listEnabledInboxPhoneIds;
+exports.markPhoneIdentitiesRestrictedForBusiness = markPhoneIdentitiesRestrictedForBusiness;
 exports.inboxQueryPhoneIds = inboxQueryPhoneIds;
 exports.isInboxPhoneAllowed = isInboxPhoneAllowed;
 exports.resolveInboxSendPhoneNumberId = resolveInboxSendPhoneNumberId;
@@ -25,8 +26,20 @@ const node_path_1 = __importDefault(require("node:path"));
 const data_path_1 = require("../../data-path");
 const meta_whatsapp_phone_profile_1 = require("./meta-whatsapp-phone-profile");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
+const meta_whatsapp_hidden_business_store_1 = require("./meta-whatsapp-hidden-business.store");
+const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
+function phoneDigits(value) {
+    return String(value || "").replace(/\D/g, "");
+}
+function phonesMatch(left, right) {
+    const a = phoneDigits(left);
+    const b = phoneDigits(right);
+    if (!a || !b)
+        return false;
+    return a === b || a.endsWith(b) || b.endsWith(a);
+}
 function parseStoredUiStatus(value) {
     const raw = String(value || "").trim().toLowerCase();
     if (raw === "ativo" || raw === "pendente" || raw === "restrito")
@@ -77,6 +90,7 @@ function readPhoneIdentity(tenantId, phoneNumberId) {
         const inboxEnabled = row.inboxEnabled === false ? false : row.inboxEnabled === true ? true : null;
         const uiStatus = parseStoredUiStatus(row.uiStatus);
         const portfolioHidden = row.portfolioHidden === true ? true : row.portfolioHidden === false ? false : null;
+        const businessId = String(row.businessId || "").replace(/\D/g, "") || null;
         const displayPhoneNumber = String(row.displayPhoneNumber || "").trim() || null;
         const channelName = String(row.channelName || "").trim() || null;
         const updatedAt = String(row.updatedAt || "").trim() || new Date().toISOString();
@@ -93,6 +107,7 @@ function readPhoneIdentity(tenantId, phoneNumberId) {
             inboxEnabled,
             uiStatus,
             portfolioHidden,
+            businessId,
             displayPhoneNumber,
             channelName,
             updatedAt,
@@ -117,6 +132,7 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
         inboxEnabled: null,
         uiStatus: null,
         portfolioHidden: null,
+        businessId: null,
         displayPhoneNumber: null,
         channelName: null,
         updatedAt: "",
@@ -146,6 +162,9 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
         inboxEnabled: input.inboxEnabled !== undefined ? input.inboxEnabled : current.inboxEnabled,
         uiStatus: input.uiStatus !== undefined ? input.uiStatus : current.uiStatus,
         portfolioHidden: input.portfolioHidden !== undefined ? input.portfolioHidden : current.portfolioHidden,
+        businessId: input.businessId !== undefined
+            ? String(input.businessId || "").replace(/\D/g, "") || null
+            : current.businessId,
         displayPhoneNumber: input.displayPhoneNumber !== undefined ? input.displayPhoneNumber : current.displayPhoneNumber,
         channelName: input.channelName !== undefined ? input.channelName : current.channelName,
         updatedAt: new Date().toISOString(),
@@ -198,13 +217,36 @@ function phoneIdentitySyncStatus(input) {
 function isPhoneInboxEnabled(identity) {
     return identity?.inboxEnabled === true;
 }
-/** Atendimento: Inbox ligado e chip Ativo, fora de Restritas/desativado. */
-function isPhoneInboxEligible(identity) {
+function connectionMatchesPhone(row, phoneNumberId, identity) {
+    const chip = String(row.phoneNumberId || "").trim();
+    if (chip && chip === phoneNumberId)
+        return true;
+    if (phonesMatch(row.displayPhoneNumber, identity?.displayPhoneNumber))
+        return true;
+    return false;
+}
+function accountIsRestricted(tenantId, phoneNumberId, identity, connections) {
+    if (identity?.portfolioHidden === true)
+        return true;
+    if (identity?.businessId && (0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, identity.businessId))
+        return true;
+    for (const row of connections || []) {
+        if (!connectionMatchesPhone(row, phoneNumberId, identity))
+            continue;
+        if (row.metaBusinessId && (0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, row.metaBusinessId))
+            return true;
+    }
+    return false;
+}
+/** Atendimento: Inbox ligado, chip Ativo e conta/WABA fora de Restritas. */
+function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
     if (!isPhoneInboxEnabled(identity) || !identity)
         return false;
-    if (identity.portfolioHidden === true)
-        return false;
     if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito")
+        return false;
+    const tenant = String(tenantId || "").trim();
+    const phone = String(phoneNumberId || "").trim();
+    if (tenant && accountIsRestricted(tenant, phone, identity, connections))
         return false;
     return true;
 }
@@ -246,7 +288,7 @@ function lookupVerifiedName(verifiedNameByPhone, phoneNumberId) {
     const name = String(record[phoneNumberId] || "").trim();
     return name || undefined;
 }
-function listPhoneInboxChannels(tenantId, verifiedNameByPhone) {
+function listPhoneInboxChannels(tenantId, verifiedNameByPhone, connections) {
     try {
         const dir = tenantDir(tenantId);
         if (!(0, node_fs_1.existsSync)(dir))
@@ -266,7 +308,7 @@ function listPhoneInboxChannels(tenantId, verifiedNameByPhone) {
                 displayPhoneNumber: identity.displayPhoneNumber,
                 profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
                 inboxEnabled: isPhoneInboxEnabled(identity),
-                inboxEligible: isPhoneInboxEligible(identity),
+                inboxEligible: isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId),
             });
         }
         return out;
@@ -275,11 +317,43 @@ function listPhoneInboxChannels(tenantId, verifiedNameByPhone) {
         return [];
     }
 }
-function listEnabledInboxPhoneIds(tenantId) {
-    return listPhoneInboxChannels(tenantId)
+function listEnabledInboxPhoneIds(tenantId, connections) {
+    const id = String(tenantId || "").trim();
+    return listPhoneInboxChannels(id, undefined, connections)
         .filter((row) => row.inboxEligible)
         .map((row) => String(row.phoneNumberId || "").trim())
         .filter(Boolean);
+}
+function markPhoneIdentitiesRestrictedForBusiness(tenantId, businessId, connections) {
+    const id = String(tenantId || "").trim();
+    const business = String(businessId || "").replace(/\D/g, "");
+    if (!id || business.length < 6)
+        return 0;
+    try {
+        const dir = tenantDir(id);
+        if (!(0, node_fs_1.existsSync)(dir))
+            return 0;
+        let count = 0;
+        for (const file of (0, node_fs_1.readdirSync)(dir)) {
+            if (!file.endsWith(".json"))
+                continue;
+            const phoneNumberId = file.slice(0, -5);
+            const identity = readPhoneIdentity(id, phoneNumberId);
+            if (!identity)
+                continue;
+            const byBusiness = Boolean(identity.businessId && (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(identity.businessId, business));
+            const byConnection = (connections || []).some((row) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(row.metaBusinessId || ""), business) &&
+                connectionMatchesPhone(row, phoneNumberId, identity));
+            if (!byBusiness && !byConnection)
+                continue;
+            writePhoneIdentity(id, phoneNumberId, { portfolioHidden: true, businessId: business });
+            count += 1;
+        }
+        return count;
+    }
+    catch {
+        return 0;
+    }
 }
 function asPhoneIds(value) {
     const list = Array.isArray(value) ? value : [value];
@@ -294,8 +368,8 @@ function asPhoneIds(value) {
     }
     return out;
 }
-function inboxQueryPhoneIds(tenantId, connectionPhoneNumberId, selectedPhoneNumberId) {
-    const enabled = listEnabledInboxPhoneIds(tenantId);
+function inboxQueryPhoneIds(tenantId, connectionPhoneNumberId, selectedPhoneNumberId, connections) {
+    const enabled = listEnabledInboxPhoneIds(tenantId, connections);
     const conns = asPhoneIds(connectionPhoneNumberId);
     const selected = String(selectedPhoneNumberId || "").trim();
     const extras = enabled.length === 1 ? conns.filter((id) => !enabled.includes(id)) : [];
@@ -306,18 +380,18 @@ function inboxQueryPhoneIds(tenantId, connectionPhoneNumberId, selectedPhoneNumb
         return aliases;
     return enabled.includes(selected) ? [selected] : [];
 }
-function isInboxPhoneAllowed(tenantId, phoneNumberId, connectionPhoneNumberId) {
+function isInboxPhoneAllowed(tenantId, phoneNumberId, connectionPhoneNumberId, connections) {
     const id = String(phoneNumberId || "").trim();
     if (!id)
         return false;
-    const enabled = listEnabledInboxPhoneIds(tenantId);
+    const enabled = listEnabledInboxPhoneIds(tenantId, connections);
     if (enabled.includes(id))
         return true;
     const conns = asPhoneIds(connectionPhoneNumberId);
     return enabled.length === 1 && conns.includes(id) && enabled[0] !== id;
 }
 function resolveInboxSendPhoneNumberId(input) {
-    const enabled = listEnabledInboxPhoneIds(input.tenantId);
+    const enabled = listEnabledInboxPhoneIds(input.tenantId, input.connections);
     const conversation = String(input.conversationPhoneNumberId || "").trim();
     const requested = String(input.requestedPhoneNumberId || "").trim();
     const connection = String(input.connectionPhoneNumberId || "").trim();
@@ -362,10 +436,12 @@ function applyLocalPhoneIdentities(tenantId, numbers, placeholderName, options) 
         });
         const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
         const portfolioHidden = options?.hidden === true;
+        const businessId = String(options?.businessId || "").replace(/\D/g, "") || null;
         try {
             writePhoneIdentity(tenantId, row.phoneNumberId, {
                 uiStatus,
                 portfolioHidden,
+                ...(businessId ? { businessId } : {}),
             });
         }
         catch {

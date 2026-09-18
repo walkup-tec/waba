@@ -94,7 +94,7 @@ class MetaWhatsappInboxService {
         }
         const open = await this.inboxConnections(tenantId);
         const connPhones = open.map((item) => item.phoneNumberId).filter((id) => Boolean(id));
-        if (!(0, meta_whatsapp_phone_identity_store_1.isInboxPhoneAllowed)(tenantId, row.phoneNumberId, connPhones)) {
+        if (!(0, meta_whatsapp_phone_identity_store_1.isInboxPhoneAllowed)(tenantId, row.phoneNumberId, connPhones, open)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("conversation_not_found");
         }
         return row;
@@ -138,11 +138,11 @@ class MetaWhatsappInboxService {
         const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
         const offset = clampPage(query?.offset, 0, 10000);
         const verifiedByPhone = verifiedNamesByPhone(open);
-        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone);
+        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone, open);
         const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
         const enabledIds = snapshots.filter((row) => row.inboxEligible).map((row) => row.phoneNumberId);
         const connPhones = open.map((row) => row.phoneNumberId).filter((id) => Boolean(id));
-        const listIds = (0, meta_whatsapp_phone_identity_store_1.inboxQueryPhoneIds)(tenant.tenantId, connPhones, selectedPhone);
+        const listIds = (0, meta_whatsapp_phone_identity_store_1.inboxQueryPhoneIds)(tenant.tenantId, connPhones, selectedPhone, open);
         if (!enabledIds.length || (selectedPhone && !listIds.length)) {
             return {
                 connected: true,
@@ -212,7 +212,7 @@ class MetaWhatsappInboxService {
         const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
         (0, meta_whatsapp_inbox_log_1.logMetaInbox)("THREAD", { tenantId: tenant.tenantId, count: messages.length });
         const verifiedByPhone = verifiedNamesByPhone(open);
-        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone);
+        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone, open);
         const channelsById = new Map(snapshots.map((item) => [item.phoneNumberId, item]));
         return {
             conversation: withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName, verifiedByPhone),

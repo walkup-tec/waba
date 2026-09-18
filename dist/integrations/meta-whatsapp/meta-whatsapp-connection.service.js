@@ -95,18 +95,18 @@ function requireConfigured() {
 function withLocalIdentities(tenantId, assets) {
     const localizeCard = (item) => (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessPhoto)(tenantId, (0, meta_whatsapp_portfolio_identity_store_1.applyLocalPortfolioBusinessIdentity)(tenantId, item));
     const busyPhoneIds = (0, meta_whatsapp_phone_occupancy_1.listBusyCloudPhoneNumberIds)(tenantId);
-    const localizeNumbers = (numbers, placeholderName, hidden) => (0, meta_whatsapp_phone_occupancy_1.applyCloudPhoneOccupancy)(tenantId, (0, meta_whatsapp_phone_identity_store_1.applyLocalPhoneIdentities)(tenantId, numbers, placeholderName, { hidden }), busyPhoneIds);
+    const localizeNumbers = (numbers, placeholderName, hidden, businessId) => (0, meta_whatsapp_phone_occupancy_1.applyCloudPhoneOccupancy)(tenantId, (0, meta_whatsapp_phone_identity_store_1.applyLocalPhoneIdentities)(tenantId, numbers, placeholderName, { hidden, businessId }), busyPhoneIds);
     const portfolio = assets.portfolio ? localizeCard(assets.portfolio) : null;
     const portfolios = (assets.portfolios || []).map((item) => ({
         ...localizeCard(item),
-        numbers: localizeNumbers(item.numbers || [], item.name || item.primaryPageName, item.hidden === true),
+        numbers: localizeNumbers(item.numbers || [], item.name || item.primaryPageName, item.hidden === true, item.id),
     }));
     return {
         ...assets,
         portfolios,
         selectedConnectionId: assets.selectedConnectionId ?? null,
         portfolio: portfolio,
-        numbers: localizeNumbers(assets.numbers || [], assets.portfolio?.name || assets.portfolio?.primaryPageName, assets.portfolio?.hidden === true),
+        numbers: localizeNumbers(assets.numbers || [], assets.portfolio?.name || assets.portfolio?.primaryPageName, assets.portfolio?.hidden === true, assets.portfolio?.id),
     };
 }
 function markHiddenPortfolioAssets(tenantId, assets) {
@@ -1552,6 +1552,24 @@ class MetaWhatsappConnectionService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload", 400, "Informe o ID numérico do portfólio (Business Manager).");
         }
         (0, meta_whatsapp_hidden_business_store_1.hideBusiness)(tenant.tenantId, businessId);
+        const repo = this.repository;
+        const openRows = typeof repo.listOpenByTenant === "function" ? await repo.listOpenByTenant(tenant.tenantId) : [];
+        for (const row of openRows) {
+            const phoneNumberId = String(row.phoneNumberId || "").trim();
+            if (!phoneNumberId || !(0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(row.metaBusinessId || ""), businessId))
+                continue;
+            try {
+                (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {
+                    businessId,
+                    portfolioHidden: true,
+                    displayPhoneNumber: row.displayPhoneNumber || undefined,
+                });
+            }
+            catch {
+                // Ocultar o BM não pode falhar por identidade local.
+            }
+        }
+        (0, meta_whatsapp_phone_identity_store_1.markPhoneIdentitiesRestrictedForBusiness)(tenant.tenantId, businessId, openRows);
         const assets = await this.listPortfolioAssets(auth);
         const card = (assets.portfolios || []).find((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), businessId));
         if (card?.name)
@@ -2015,7 +2033,9 @@ class MetaWhatsappConnectionService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("no_pending_connection");
         const current = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenant.tenantId, phoneNumberId);
         if (input.enabled) {
-            if (current?.portfolioHidden === true) {
+            const linkedBusinessId = String(open.metaBusinessId || current?.businessId || "").replace(/\D/g, "");
+            if (current?.portfolioHidden === true ||
+                (linkedBusinessId && (0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenant.tenantId, linkedBusinessId))) {
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload", 400, "Este número está em Restritas. Só é possível ligar o Inbox em chip Ativo.");
             }
             if (current?.uiStatus === "pendente" || current?.uiStatus === "restrito") {
@@ -2034,6 +2054,7 @@ class MetaWhatsappConnectionService {
             inboxEnabled: input.enabled,
             displayPhoneNumber,
             channelName,
+            businessId: String(open.metaBusinessId || current?.businessId || "").replace(/\D/g, "") || null,
             ...(input.enabled && !current?.uiStatus ? { uiStatus: "ativo" } : {}),
         });
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-inbox-updated", { tenantId: tenant.tenantId, enabled: input.enabled });
