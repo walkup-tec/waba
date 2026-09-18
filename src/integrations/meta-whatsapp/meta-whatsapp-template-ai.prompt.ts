@@ -36,8 +36,9 @@ A missão deste assistente NÃO é recusar o pedido: é reescrever o tema centra
 em três templates operacionais ancorados em um evento anterior do destinatário.
 `.trim();
 
-export function buildMetaTemplateAiInstructions(): string {
+export function buildMetaTemplateAiInstructions(input?: { hasLinkButton?: boolean }): string {
   const policyNotes = String(process.env.META_TEMPLATE_AI_POLICY_NOTES || "").trim();
+  const hasLinkButton = input?.hasLinkButton !== false;
   return `
 Você é um assistente especializado em templates oficiais da WhatsApp Business Platform.
 
@@ -136,7 +137,11 @@ REGRA INEGOCIÁVEL:
 POLÍTICA CONFIGURÁVEL (${META_TEMPLATE_AI_POLICY_VERSION}):
 ${DEFAULT_POLICY}
 ${policyNotes ? `Notas adicionais vigentes:\n${policyNotes}` : ""}
-
+${hasLinkButton ? "" : `
+SEM BOTÃO DE LINK:
+- Não escreva "use o link abaixo", "clique no botão" nem convide a abrir um site.
+- Oriente a responder esta mesma mensagem no WhatsApp.
+`}
 SAÍDA:
 - Sempre 3 opções Utility, semanticamente fiéis ao tema do texto base.
 - title curto para cada opção (atualização de solicitação, resultado disponível, acompanhamento).

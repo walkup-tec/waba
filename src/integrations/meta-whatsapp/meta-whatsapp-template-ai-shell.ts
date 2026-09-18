@@ -16,6 +16,17 @@ export const META_TEMPLATE_AI_OPTION_BUTTONS = [
   "Saiba Mais",
 ] as const;
 
+/** Valor do select do laboratório: template sem botão de link. */
+export const META_TEMPLATE_AI_NO_BUTTON_VALUE = "sem_botao";
+
+const NO_BUTTON_ALIASES = new Set([
+  META_TEMPLATE_AI_NO_BUTTON_VALUE,
+  "sem botao",
+  "sem botão",
+  "none",
+  "no_button",
+]);
+
 export type MetaTemplateAiVariableType = "nenhuma" | "nome" | "numero";
 export type MetaTemplateAiMediaFormat = "NONE" | "IMAGE" | "VIDEO" | "DOCUMENT" | "LOCATION";
 
@@ -38,10 +49,23 @@ export type MetaTemplateAiShell = {
   variableType: MetaTemplateAiVariableType;
   mediaFormat: MetaTemplateAiMediaFormat;
   headerText: string;
+  hasLinkButton: boolean;
   buttonText: string;
   buttonUrl: string;
   headerHandle: string;
 };
+
+export function isMetaTemplateAiNoButton(raw: unknown): boolean {
+  return NO_BUTTON_ALIASES.has(String(raw ?? "").trim().toLowerCase());
+}
+
+export function parseMetaTemplateAiHasLinkButton(input: Record<string, unknown> | undefined): boolean {
+  const body = asRecord(input);
+  if (body.hasLinkButton === false || body.has_link_button === false) return false;
+  const rawButton = String(body.buttonText || body.button_text || "").trim();
+  if (rawButton && isMetaTemplateAiNoButton(rawButton)) return false;
+  return true;
+}
 
 export function sanitizeMetaTemplateName(raw: string): string {
   return String(raw || "")
@@ -159,13 +183,17 @@ export function parseMetaTemplateAiShell(input: Record<string, unknown> | undefi
     .trim()
     .toUpperCase() as MetaTemplateAiMediaFormat;
   const headerText = META_TEMPLATE_AI_FIXED_HEADER_TEXT;
-  const buttonText = String(body.buttonText || body.button_text || "").trim();
-  const buttonUrl = requireDestinationUrl(String(body.buttonUrl || body.button_url || ""));
+  const hasLinkButton = parseMetaTemplateAiHasLinkButton(body);
+  const rawButtonText = String(body.buttonText || body.button_text || "").trim();
+  const buttonText = hasLinkButton ? rawButtonText : "";
+  const buttonUrl = hasLinkButton
+    ? requireDestinationUrl(String(body.buttonUrl || body.button_url || ""))
+    : "";
   const headerHandle = String(body.headerHandle || body.header_handle || "").trim();
   if (!modelName || !VARIABLE_TYPES.has(variableType) || !MEDIA_FORMATS.has(mediaFormat)) {
     throw new MetaWhatsappError("template_invalid");
   }
-  if (!BUTTON_LABELS.has(buttonText) || buttonText.length > 25) {
+  if (hasLinkButton && (!BUTTON_LABELS.has(buttonText) || buttonText.length > 25)) {
     throw new MetaWhatsappError("template_invalid");
   }
   if (MEDIA_NEEDS_HANDLE.has(mediaFormat) && !headerHandle) {
@@ -176,6 +204,7 @@ export function parseMetaTemplateAiShell(input: Record<string, unknown> | undefi
     variableType,
     mediaFormat,
     headerText,
+    hasLinkButton,
     buttonText,
     buttonUrl,
     headerHandle: MEDIA_NEEDS_HANDLE.has(mediaFormat) ? headerHandle : "",
@@ -233,15 +262,17 @@ export function componentsFromAiOptionAndShell(
     text: bodyText,
     ...(examples.length ? { example: { body_text: [examples] } } : {}),
   });
-  components.push({
-    type: "BUTTONS",
-    buttons: [
-      {
-        type: "URL",
-        text: shell.buttonText,
-        url: shell.buttonUrl,
-      },
-    ],
-  });
+  if (shell.hasLinkButton && shell.buttonText && shell.buttonUrl) {
+    components.push({
+      type: "BUTTONS",
+      buttons: [
+        {
+          type: "URL",
+          text: shell.buttonText,
+          url: shell.buttonUrl,
+        },
+      ],
+    });
+  }
   return components;
 }

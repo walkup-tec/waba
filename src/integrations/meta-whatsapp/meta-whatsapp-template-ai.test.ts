@@ -817,6 +817,7 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(instructions, /TEMA CENTRAL/i);
     assert.match(instructions, /use o link abaixo/i);
     assert.doesNotMatch(instructions, /retorne options=\[\]/);
+    assert.match(buildMetaTemplateAiInstructions({ hasLinkButton: false }), /SEM BOTÃO DE LINK/);
   });
 
   it("envia à IA só templates do tenant aprovados como Utility", async () => {
@@ -942,6 +943,17 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(shaped, /Para ver os detalhes do resultado/i);
   });
 
+  it("sem botão de link pede resposta no mesmo canal e não cita link", () => {
+    const shaped = shapeMetaUtilityOptionBody(
+      "Há uma atualização referente à consulta de margem consignável solicitada anteriormente.",
+      "nome",
+      0,
+      false,
+    );
+    assert.match(shaped, /responda esta mensagem/i);
+    assert.doesNotMatch(shaped, /use o link abaixo/i);
+  });
+
   it("rejeita JSON sem as três opções ou com finalidade Marketing", () => {
     assert.throws(() => validateMetaTemplateAiOutput({ ...utilityOutput(), options: [] }));
     assert.throws(() =>
@@ -1054,6 +1066,44 @@ describe("Assistente IA de templates Utility", () => {
         ?.find((item) => item.type === "BUTTONS")?.buttons?.[0]?.url,
       "https://waba.draxsistemas.com.br/s/walkup1",
     );
+  });
+
+  it("não encurta URL nem envia botão de link quando o template é Sem botão", async () => {
+    const email = "ai-no-button@example.com";
+    const seen: string[] = [];
+    const calls: Array<Record<string, unknown>> = [];
+    const { service } = serviceFor(
+      email,
+      utilityOutput(),
+      {
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(input);
+          return { id: `local-${String(input.name)}`, status: "PENDING" };
+        },
+      },
+      {},
+      async (input) => {
+        seen.push(input.destinationUrl);
+        return "https://waba.draxsistemas.com.br/s/walkup1";
+      },
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-utility", baseText: "Atualização da proposta solicitada.", hasLinkButton: false },
+    );
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      submitShell({ buttonText: "sem_botao", buttonUrl: "", hasLinkButton: false }),
+    );
+    assert.deepEqual(seen, []);
+    assert.equal(result.submitted, 3);
+    assert.equal(calls.length, 3);
+    for (const call of calls) {
+      const buttons = (call.components as Array<Record<string, any>> | undefined)?.find(
+        (item) => item.type === "BUTTONS",
+      );
+      assert.equal(buttons, undefined);
+    }
   });
 
   it("grava o corpo editado da opção e envia esse texto à Graph", async () => {
@@ -1200,6 +1250,24 @@ describe("Assistente IA de templates Utility", () => {
       () => assertMetaReadyButtonShortUrl("https://wa.me/5511999999999"),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "template_url_restricted",
     );
+  });
+
+  it("aceita Sem botão sem URL e não monta botão de link no envelope", () => {
+    const shell = parseMetaTemplateAiShell({
+      modelName: "tocantins_sem_bt",
+      variableType: "nenhuma",
+      buttonText: "sem_botao",
+    });
+    assert.equal(shell.hasLinkButton, false);
+    assert.equal(shell.buttonText, "");
+    assert.equal(shell.buttonUrl, "");
+    const components = componentsFromAiOptionAndShell(utilityOutput().options[0], shell);
+    assert.equal(
+      components.some((item) => item.type === "BUTTONS"),
+      false,
+    );
+    const body = components.find((item) => item.type === "BODY") as { text?: string };
+    assert.ok(body?.text);
   });
 
   it("recusa URL inválida ou botão fora do select do Mensageiro", () => {

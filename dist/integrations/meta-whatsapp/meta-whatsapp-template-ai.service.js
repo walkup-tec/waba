@@ -199,6 +199,7 @@ class MetaWhatsappTemplateAiService {
         const baseText = String(input?.baseText || input?.base_text || "").trim();
         const language = String(input?.language || "pt_BR").trim() || "pt_BR";
         const variableType = String(input?.variableType || input?.variable_type || "nome").trim().toLowerCase();
+        const hasLinkButton = (0, meta_whatsapp_template_ai_shell_1.parseMetaTemplateAiHasLinkButton)(input);
         if (!baseText || baseText.length > 4000 || language.length > 20) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         }
@@ -221,11 +222,12 @@ class MetaWhatsappTemplateAiService {
         let ai;
         try {
             ai = await this.openAi({
-                instructions: (0, meta_whatsapp_template_ai_prompt_1.buildMetaTemplateAiInstructions)(),
+                instructions: (0, meta_whatsapp_template_ai_prompt_1.buildMetaTemplateAiInstructions)({ hasLinkButton }),
                 input: JSON.stringify({
                     requestedCategory: "UTILITY",
                     language,
                     variableType,
+                    hasLinkButton,
                     baseText,
                     approvedUtilityExamples,
                 }),
@@ -241,7 +243,7 @@ class MetaWhatsappTemplateAiService {
         }
         let result;
         try {
-            result = (0, meta_whatsapp_template_ai_utility_shape_1.shapeMetaUtilityAiOutput)((0, meta_whatsapp_template_ai_schema_1.validateMetaTemplateAiOutput)(ai.value), variableType);
+            result = (0, meta_whatsapp_template_ai_utility_shape_1.shapeMetaUtilityAiOutput)((0, meta_whatsapp_template_ai_schema_1.validateMetaTemplateAiOutput)(ai.value), variableType, hasLinkButton);
             const serialized = JSON.stringify(result);
             if (FORBIDDEN_APPROVAL_PROMISE.test(serialized)) {
                 throw new Error("A IA prometeu aprovação.");
@@ -467,7 +469,7 @@ class MetaWhatsappTemplateAiService {
             });
             return metaButtonUrl;
         };
-        if (anyPending.length)
+        if (anyPending.length && shell.hasLinkButton)
             await ensureMetaButtonUrl();
         for (const target of submitTargets) {
             const { connection, wabaId, portfolioName } = target;
@@ -492,7 +494,7 @@ class MetaWhatsappTemplateAiService {
                     continue;
                 }
                 try {
-                    const buttonUrl = await ensureMetaButtonUrl();
+                    const buttonUrl = shell.hasLinkButton ? await ensureMetaButtonUrl() : "";
                     const template = await this.templates.createFromAuth(auth, {
                         connectionId: connection.id,
                         wabaId,

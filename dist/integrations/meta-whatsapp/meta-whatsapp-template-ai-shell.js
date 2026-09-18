@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT = exports.META_TEMPLATE_AI_OPTION_BUTTONS = exports.META_TEMPLATE_AI_BUTTON_LABELS = void 0;
+exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT = exports.META_TEMPLATE_AI_NO_BUTTON_VALUE = exports.META_TEMPLATE_AI_OPTION_BUTTONS = exports.META_TEMPLATE_AI_BUTTON_LABELS = void 0;
+exports.isMetaTemplateAiNoButton = isMetaTemplateAiNoButton;
+exports.parseMetaTemplateAiHasLinkButton = parseMetaTemplateAiHasLinkButton;
 exports.sanitizeMetaTemplateName = sanitizeMetaTemplateName;
 exports.templateNameForOption = templateNameForOption;
 exports.parseTemplateAiConnectionIds = parseTemplateAiConnectionIds;
@@ -24,6 +26,15 @@ exports.META_TEMPLATE_AI_OPTION_BUTTONS = [
     "Ver Detalhes",
     "Saiba Mais",
 ];
+/** Valor do select do laboratório: template sem botão de link. */
+exports.META_TEMPLATE_AI_NO_BUTTON_VALUE = "sem_botao";
+const NO_BUTTON_ALIASES = new Set([
+    exports.META_TEMPLATE_AI_NO_BUTTON_VALUE,
+    "sem botao",
+    "sem botão",
+    "none",
+    "no_button",
+]);
 const VARIABLE_TYPES = new Set(["nenhuma", "nome", "numero"]);
 const MEDIA_FORMATS = new Set([
     "NONE",
@@ -36,6 +47,18 @@ const BUTTON_LABELS = new Set(exports.META_TEMPLATE_AI_BUTTON_LABELS);
 const MEDIA_NEEDS_HANDLE = new Set(["IMAGE", "VIDEO", "DOCUMENT"]);
 /** HEADER de texto fixo. A Meta aceita um HEADER: este texto, ou mídia. */
 exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT = "Informação de utilidade";
+function isMetaTemplateAiNoButton(raw) {
+    return NO_BUTTON_ALIASES.has(String(raw ?? "").trim().toLowerCase());
+}
+function parseMetaTemplateAiHasLinkButton(input) {
+    const body = asRecord(input);
+    if (body.hasLinkButton === false || body.has_link_button === false)
+        return false;
+    const rawButton = String(body.buttonText || body.button_text || "").trim();
+    if (rawButton && isMetaTemplateAiNoButton(rawButton))
+        return false;
+    return true;
+}
 function sanitizeMetaTemplateName(raw) {
     return String(raw || "")
         .normalize("NFD")
@@ -143,13 +166,17 @@ function parseMetaTemplateAiShell(input) {
         .trim()
         .toUpperCase();
     const headerText = exports.META_TEMPLATE_AI_FIXED_HEADER_TEXT;
-    const buttonText = String(body.buttonText || body.button_text || "").trim();
-    const buttonUrl = requireDestinationUrl(String(body.buttonUrl || body.button_url || ""));
+    const hasLinkButton = parseMetaTemplateAiHasLinkButton(body);
+    const rawButtonText = String(body.buttonText || body.button_text || "").trim();
+    const buttonText = hasLinkButton ? rawButtonText : "";
+    const buttonUrl = hasLinkButton
+        ? requireDestinationUrl(String(body.buttonUrl || body.button_url || ""))
+        : "";
     const headerHandle = String(body.headerHandle || body.header_handle || "").trim();
     if (!modelName || !VARIABLE_TYPES.has(variableType) || !MEDIA_FORMATS.has(mediaFormat)) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
     }
-    if (!BUTTON_LABELS.has(buttonText) || buttonText.length > 25) {
+    if (hasLinkButton && (!BUTTON_LABELS.has(buttonText) || buttonText.length > 25)) {
         throw new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
     }
     if (MEDIA_NEEDS_HANDLE.has(mediaFormat) && !headerHandle) {
@@ -160,6 +187,7 @@ function parseMetaTemplateAiShell(input) {
         variableType,
         mediaFormat,
         headerText,
+        hasLinkButton,
         buttonText,
         buttonUrl,
         headerHandle: MEDIA_NEEDS_HANDLE.has(mediaFormat) ? headerHandle : "",
@@ -214,15 +242,17 @@ function componentsFromAiOptionAndShell(option, shell) {
         text: bodyText,
         ...(examples.length ? { example: { body_text: [examples] } } : {}),
     });
-    components.push({
-        type: "BUTTONS",
-        buttons: [
-            {
-                type: "URL",
-                text: shell.buttonText,
-                url: shell.buttonUrl,
-            },
-        ],
-    });
+    if (shell.hasLinkButton && shell.buttonText && shell.buttonUrl) {
+        components.push({
+            type: "BUTTONS",
+            buttons: [
+                {
+                    type: "URL",
+                    text: shell.buttonText,
+                    url: shell.buttonUrl,
+                },
+            ],
+        });
+    }
     return components;
 }

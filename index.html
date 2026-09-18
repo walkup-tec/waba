@@ -22885,7 +22885,7 @@
                 </div>
                 <div class="meta-tpl-ai-shell">
                   <p class="meta-tpl-ai-shell-title">Dados do template</p>
-                  <p class="meta-tpl-ai-shell-hint">Valem para as três opções. O botão na Meta é sempre Acessar site, com URL estática.</p>
+                  <p class="meta-tpl-ai-shell-hint">Valem para as três opções. O botão de link é opcional. Sem botão, o destinatário responde pelo mesmo WhatsApp. O sistema continua enviando o botão Bloquear.</p>
                   <div class="disparos-grid disparos-grid-2">
                     <div class="aquecedor-field">
                       <label for="meta-tpl-ai-model-name">Nome do modelo</label>
@@ -22921,13 +22921,14 @@
                     <div class="aquecedor-field">
                       <label for="meta-tpl-ai-button-text">Texto do botão</label>
                       <select id="meta-tpl-ai-button-text">
-                        <option value="Ver Detalhes">Ver Detalhes</option>
+                        <option value="sem_botao">Sem botão</option>
+                        <option value="Ver Detalhes" selected>Ver Detalhes</option>
                         <option value="Saiba Mais">Saiba Mais</option>
                         <option value="Ver Atualizações">Ver Atualizações</option>
                       </select>
-                      <span class="muted">Rótulo informativo (biblioteca Utility). Evite CTA de venda.</span>
+                      <span class="muted">Sem botão: a pessoa responde pelo mesmo canal. Com link: rótulo informativo da biblioteca Utility. O Bloquear o sistema envia sozinho.</span>
                     </div>
-                    <div class="aquecedor-field">
+                    <div class="aquecedor-field" id="meta-tpl-ai-button-url-wrap">
                       <label for="meta-tpl-ai-button-url">URL do botão</label>
                       <input id="meta-tpl-ai-button-url" type="url" autocomplete="off" maxlength="2000" placeholder="https://seusite.com.br/retorno" />
                       <span class="muted">Informe o endereço que o botão deve abrir (http ou https).</span>
@@ -22957,7 +22958,7 @@
                   <div class="disparos-inline-actions">
                     <button id="meta-tpl-ai-submit-all" type="button" class="instance-action-btn btn-qrcode enabled">Enviar para META</button>
                   </div>
-                  <p class="meta-tpl-ai-shell-hint">Envia as três opções (como foram salvas), com nome, mídia, cabeçalho e botão URL, para análise da Meta.</p>
+                  <p class="meta-tpl-ai-shell-hint">Envia as três opções (como foram salvas), com nome, mídia, cabeçalho e o botão de link só se você não marcou Sem botão.</p>
                   <p id="meta-tpl-ai-submit-status" class="muted" role="status" aria-live="polite" style="margin:0;" hidden></p>
                   <div id="meta-tpl-ai-batch-result"></div>
                 </div>
@@ -39974,7 +39975,19 @@
       }
 
       function metaTplAiSelectedButtonText() {
-        return String((document.getElementById("meta-tpl-ai-button-text") || {}).value || "").trim();
+        const raw = String((document.getElementById("meta-tpl-ai-button-text") || {}).value || "").trim();
+        if (!raw || raw === "sem_botao") return "";
+        return raw;
+      }
+
+      function metaTplAiHasLinkButton() {
+        return Boolean(metaTplAiSelectedButtonText());
+      }
+
+      function metaTplAiSyncButtonFields() {
+        const hasLink = metaTplAiHasLinkButton();
+        const urlWrap = document.getElementById("meta-tpl-ai-button-url-wrap");
+        if (urlWrap) urlWrap.hidden = !hasLink;
       }
 
       function metaTplAiSyncMediaFields() {
@@ -39997,12 +40010,14 @@
       }
 
       function metaTplAiReadShell() {
+        const buttonText = metaTplAiSelectedButtonText();
         return {
           modelName: String((document.getElementById("meta-tpl-ai-model-name") || {}).value || "").trim(),
           variableType: String((document.getElementById("meta-tpl-ai-variable-type") || {}).value || "nome").trim(),
           mediaFormat: String((document.getElementById("meta-tpl-ai-media-format") || {}).value || "NONE").trim(),
-          buttonText: metaTplAiSelectedButtonText(),
-          buttonUrl: String((document.getElementById("meta-tpl-ai-button-url") || {}).value || "").trim(),
+          hasLinkButton: Boolean(buttonText),
+          buttonText: buttonText || "sem_botao",
+          buttonUrl: buttonText ? String((document.getElementById("meta-tpl-ai-button-url") || {}).value || "").trim() : "",
         };
       }
 
@@ -40578,7 +40593,13 @@
         try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/ai/generate", {
             method: "POST",
-            body: JSON.stringify({ connectionId, baseText, language, variableType }),
+            body: JSON.stringify({
+              connectionId,
+              baseText,
+              language,
+              variableType,
+              hasLinkButton: metaTplAiHasLinkButton(),
+            }),
           });
           metaTplAiRenderResult(payload);
           if (status) {
@@ -40647,11 +40668,13 @@
           metaTplAiSetSubmitStatus("");
           return;
         }
-        const urlError = metaTplAiValidateButtonUrl(shell.buttonUrl);
-        if (urlError) {
-          metaTplAiShowResult("error", "Não foi possível enviar", urlError);
-          metaTplAiSetSubmitStatus("");
-          return;
+        if (shell.hasLinkButton) {
+          const urlError = metaTplAiValidateButtonUrl(shell.buttonUrl);
+          if (urlError) {
+            metaTplAiShowResult("error", "Não foi possível enviar", urlError);
+            metaTplAiSetSubmitStatus("");
+            return;
+          }
         }
         if (needsMedia && !hasMediaFile) {
           const mediaError = "Selecione o arquivo da mídia. A Meta exige um exemplo via upload para cabeçalho de imagem, vídeo ou documento.";
@@ -40721,6 +40744,7 @@
               modelName: shell.modelName,
               variableType: shell.variableType,
               mediaFormat: shell.mediaFormat,
+              hasLinkButton: shell.hasLinkButton,
               buttonText: shell.buttonText,
               buttonUrl: shell.buttonUrl,
               headerHandle,
@@ -43859,6 +43883,7 @@
       document.getElementById("meta-tpl-ai-media-file")?.addEventListener("change", metaTplAiSyncMediaFileName);
       metaTplLabBindDebugUi();
       document.getElementById("meta-tpl-ai-button-text")?.addEventListener("change", function () {
+        metaTplAiSyncButtonFields();
         const text = metaTplAiSelectedButtonText();
         document.querySelectorAll(".meta-tpl-ai-option-btn").forEach((el) => {
           el.textContent = text;
@@ -43866,6 +43891,7 @@
         });
       });
       metaTplAiSyncMediaFields();
+      metaTplAiSyncButtonFields();
 
       let metaAutoLabFlowId = "";
       let metaAutoLabRules = [];

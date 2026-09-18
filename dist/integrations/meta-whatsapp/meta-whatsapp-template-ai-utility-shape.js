@@ -9,6 +9,11 @@ const PARA_LINES = [
     "Para ver os detalhes do resultado, use o link abaixo.",
     "Para acompanhar as informações atualizadas, use o link abaixo.",
 ];
+const REPLY_LINES = [
+    "Para consultar a atualização da sua solicitação, responda esta mensagem.",
+    "Para ver os detalhes do resultado, responda esta mensagem.",
+    "Para acompanhar as informações atualizadas, responda esta mensagem.",
+];
 const UTILITY_STATUS_RE = /\b(confirma[cç][aã]o|status\s+confirmado|confirmad|aprovad|conclu[ií]d|atualizad|atualiza[cç]|liberad)\b/i;
 const UTILITY_STATUS_INJECT = [
     "A solicitação foi atualizada.",
@@ -47,7 +52,7 @@ function ensureUtilityStatusAnchor(text, optionIndex) {
     }
     return `${text}\n${clause}`;
 }
-function shapeMetaUtilityOptionBody(body, variableType, optionIndex) {
+function shapeMetaUtilityOptionBody(body, variableType, optionIndex, hasLinkButton = true) {
     const greeting = variableType === "nenhuma" ? "Olá." : "Olá, {{1}}.";
     let text = compactSpaces(String(body || "").replace(MARKETING_LEAK, ""));
     text = stripLeadingGreeting(text);
@@ -55,20 +60,24 @@ function shapeMetaUtilityOptionBody(body, variableType, optionIndex) {
         text = compactSpaces(text.replace(/\{\{\d+\}\}/g, ""));
     }
     text = ensureInformamosQue(text);
+    if (!hasLinkButton) {
+        text = text.replace(/use o link abaixo/gi, "responda esta mensagem");
+    }
     if (!hasPurposePara(text)) {
-        const para = PARA_LINES[optionIndex] || PARA_LINES[0];
+        const lines = hasLinkButton ? PARA_LINES : REPLY_LINES;
+        const para = lines[optionIndex] || lines[0];
         text = `${text.replace(/[.!?]?$/, ".")}\n${para}`;
     }
     text = ensureUtilityStatusAnchor(text, optionIndex);
     return compactSpaces(`${greeting}\n${text}`);
 }
-function shapeMetaUtilityAiOutput(result, variableType) {
+function shapeMetaUtilityAiOutput(result, variableType, hasLinkButton = true) {
     return {
         ...result,
         options: result.options.map((option, index) => {
             const shaped = {
                 ...option,
-                body: shapeMetaUtilityOptionBody(option.body, variableType, index),
+                body: shapeMetaUtilityOptionBody(option.body, variableType, index, hasLinkButton),
                 buttonText: meta_whatsapp_template_ai_shell_1.META_TEMPLATE_AI_OPTION_BUTTONS[index] || meta_whatsapp_template_ai_shell_1.META_TEMPLATE_AI_OPTION_BUTTONS[0],
             };
             return shaped;
