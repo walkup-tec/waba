@@ -21,8 +21,11 @@ import {
   upsertBotFlow,
   wasBotMessageClaimed,
 } from "./waba-bot.store";
-import { listBotAssignableChannels } from "./waba-bot.service";
+import { listBotAssignableChannels, WabaBotService } from "./waba-bot.service";
+import { hideBusiness, unhideBusiness } from "../meta-whatsapp-hidden-business.store";
+import { MetaWhatsappError } from "../meta-whatsapp-errors";
 import { purgePhoneIdentities, writePhoneIdentity } from "../meta-whatsapp-phone-identity.store";
+import type { WabaRequestAuth } from "../../../auth/waba-request-auth";
 import { startWabaBots, stopWabaBotsForTests } from "./waba-bot.bootstrap";
 import { resetWabaBotLocksForTests, WabaBotInboundService } from "./waba-bot-inbound.service";
 import type { BotFlowDraft, BotFlowNode } from "./waba-bot.types";
@@ -127,6 +130,7 @@ afterEach(() => {
   resetWabaBotStoreForTests(TENANT_A);
   resetWabaBotStoreForTests(TENANT_B);
   purgePhoneIdentities(TENANT_A);
+  unhideBusiness(TENANT_A, "1041827648719609");
 });
 
 describe("WABA bots — motor", () => {
@@ -460,6 +464,8 @@ describe("WABA bots — inbound 1 a 9", () => {
 });
 
 describe("WABA bots — números Inbox", () => {
+  const authA: WabaRequestAuth = { email: EMAIL_A, role: "subscriber" };
+
   it("lista só chips com Inbox ligado em Conexão", () => {
     writePhoneIdentity(TENANT_A, "phone-on", {
       inboxEnabled: true,
@@ -477,6 +483,95 @@ describe("WABA bots — números Inbox", () => {
       ["phone-on"],
     );
     assert.equal(rows[0]?.inboxEnabled, true);
+    assert.equal(rows[0]?.inboxEligible, true);
+  });
+
+  it("omite 5182001279 mesmo com Inbox ligado", () => {
+    writePhoneIdentity(TENANT_A, "phone-drax", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    writePhoneIdentity(TENANT_A, "phone-ok", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Relacionamento e Atendimento",
+      displayPhoneNumber: "+55 51 92636-16888",
+    });
+    const rows = listBotAssignableChannels(TENANT_A);
+    assert.deepEqual(
+      rows.map((row) => row.phoneNumberId),
+      ["phone-ok"],
+    );
+  });
+
+  it("omite chip em Restritas e em conta restringida", () => {
+    const businessId = "1041827648719609";
+    unhideBusiness(TENANT_A, businessId);
+    writePhoneIdentity(TENANT_A, "phone-hidden", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      portfolioHidden: true,
+      channelName: "Portfólio restrito",
+      displayPhoneNumber: "+55 11 91111-1111",
+    });
+    writePhoneIdentity(TENANT_A, "phone-restrito", {
+      inboxEnabled: true,
+      uiStatus: "restrito",
+      channelName: "Chip restrito",
+      displayPhoneNumber: "+55 11 92222-2222",
+    });
+    writePhoneIdentity(TENANT_A, "phone-ok", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Relacionamento e Atendimento",
+      displayPhoneNumber: "+55 51 92636-16888",
+    });
+    hideBusiness(TENANT_A, businessId, "BAN Drax Sistemas");
+    const rows = listBotAssignableChannels(TENANT_A, [
+      {
+        phoneNumberId: "phone-hidden",
+        displayPhoneNumber: "+55 11 91111-1111",
+        metaBusinessId: businessId,
+      },
+    ]);
+    unhideBusiness(TENANT_A, businessId);
+    assert.deepEqual(
+      rows.map((row) => row.phoneNumberId),
+      ["phone-ok"],
+    );
+  });
+
+  it("recusa associar chip inelegível e aceita o Inbox válido", async () => {
+    writePhoneIdentity(TENANT_A, "phone-drax", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    writePhoneIdentity(TENANT_A, "phone-ok", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Relacionamento e Atendimento",
+      displayPhoneNumber: "+55 51 92636-16888",
+    });
+    const flow = upsertBotFlow(TENANT_A, createDefaultBotDraft("Associação"));
+    const service = new WabaBotService({
+      listInboxConnections: async () => [],
+    });
+    await assert.rejects(
+      () => service.linkPhone(authA, { phoneNumberId: "phone-drax", botId: flow.id }),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "invalid_payload",
+    );
+    const linked = await service.linkPhone(authA, { phoneNumberId: "phone-ok", botId: flow.id });
+    assert.equal(linked.ok, true);
+    const listed = await service.list(authA);
+    assert.deepEqual(
+      listed.channels.map((row) => row.phoneNumberId),
+      ["phone-ok"],
+    );
+    assert.equal(listed.channels[0]?.botId, flow.id);
   });
 });
 
@@ -488,6 +583,8 @@ describe("WABA bots — menu FARM BM", () => {
     assert.match(html, /data-menu-section="farm-bm"/);
     assert.match(html, /<span class="tab-label">Bots<\/span>/);
     assert.match(html, /id="tab-whatsapp-bots"/);
+    assert.match(html, /row\.inboxEligible === true/);
+    assert.doesNotMatch(html, /wabaBotsUi\.channels \|\| \[\]\)\.filter\(\(row\) => row\.inboxEnabled === true\)/);
   });
 });
 

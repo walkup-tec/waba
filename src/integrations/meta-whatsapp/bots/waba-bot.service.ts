@@ -1,10 +1,12 @@
 import type { WabaRequestAuth } from "../../../auth/waba-request-auth";
 import { MetaWhatsappError } from "../meta-whatsapp-errors";
 import { resolveMetaWhatsappTenant } from "../meta-whatsapp-tenant";
+import { MetaWhatsappConnectionRepository } from "../meta-whatsapp-connection.repository";
 import {
-  isPhoneInboxEnabled,
+  isPhoneInboxEligible,
   listPhoneInboxChannels,
   readPhoneIdentity,
+  type InboxAccountHint,
 } from "../meta-whatsapp-phone-identity.store";
 import { BOT_NODE_REGISTRY, createBotNodeData } from "./waba-bot-node.registry";
 import { createDefaultBotDraft, normalizeBotDraft } from "./waba-bot-flow.normalize";
@@ -27,9 +29,23 @@ import type { BotFlowDraft, BotFlowNode, BotJson, BotRunState } from "./waba-bot
 
 const testRuns = new Map<string, BotRunState>();
 
-/** Só chips com Inbox ligado em CLOUD META → Conexão. */
-export function listBotAssignableChannels(tenantId: string) {
-  return listPhoneInboxChannels(tenantId).filter((row) => row.inboxEnabled === true);
+/** Mesma regra do Atendimento: Inbox, conta sem restrição e portfólio ATIVAS. */
+export function listBotAssignableChannels(
+  tenantId: string,
+  connections?: InboxAccountHint[] | null,
+) {
+  return listPhoneInboxChannels(tenantId, undefined, connections).filter((row) => row.inboxEligible);
+}
+
+async function loadInboxHints(
+  connections: Pick<MetaWhatsappConnectionRepository, "listInboxConnections">,
+  tenantId: string,
+): Promise<InboxAccountHint[]> {
+  try {
+    return await connections.listInboxConnections(tenantId);
+  } catch {
+    return [];
+  }
 }
 
 function requireTenant(auth: WabaRequestAuth) {
@@ -41,6 +57,13 @@ function requireTenant(auth: WabaRequestAuth) {
 }
 
 export class WabaBotService {
+  constructor(
+    private readonly connections: Pick<
+      MetaWhatsappConnectionRepository,
+      "listInboxConnections"
+    > = new MetaWhatsappConnectionRepository(),
+  ) {}
+
   getCatalog() {
     return {
       nodes: BOT_NODE_REGISTRY.map((item) => ({
@@ -54,11 +77,12 @@ export class WabaBotService {
     };
   }
 
-  list(auth: WabaRequestAuth) {
+  async list(auth: WabaRequestAuth) {
     const tenant = requireTenant(auth);
     const flows = listBotFlows(tenant.tenantId);
     const links = listBotPhoneLinks(tenant.tenantId);
-    const channels = listBotAssignableChannels(tenant.tenantId);
+    const hints = await loadInboxHints(this.connections, tenant.tenantId);
+    const channels = listBotAssignableChannels(tenant.tenantId, hints);
     return {
       tenantId: tenant.tenantId,
       flows,
@@ -94,14 +118,18 @@ export class WabaBotService {
     return { ok: true };
   }
 
-  linkPhone(auth: WabaRequestAuth, body: Record<string, unknown> | undefined) {
+  async linkPhone(auth: WabaRequestAuth, body: Record<string, unknown> | undefined) {
     const tenant = requireTenant(auth);
     const phoneNumberId = String(body?.phoneNumberId || body?.phone_number_id || "").trim();
     const botIdRaw = body?.botId ?? body?.bot_id;
     const botId = botIdRaw == null || botIdRaw === "" ? null : String(botIdRaw).trim();
     if (!phoneNumberId) throw new MetaWhatsappError("invalid_payload");
-    if (botId && !isPhoneInboxEnabled(readPhoneIdentity(tenant.tenantId, phoneNumberId))) {
-      throw new MetaWhatsappError("invalid_payload");
+    if (botId) {
+      const identity = readPhoneIdentity(tenant.tenantId, phoneNumberId);
+      const hints = await loadInboxHints(this.connections, tenant.tenantId);
+      if (!isPhoneInboxEligible(identity, tenant.tenantId, hints, phoneNumberId)) {
+        throw new MetaWhatsappError("invalid_payload");
+      }
     }
     const links = setBotPhoneLink({
       tenantId: tenant.tenantId,

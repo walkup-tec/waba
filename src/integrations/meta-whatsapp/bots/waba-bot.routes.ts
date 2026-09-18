@@ -30,7 +30,7 @@ function warnClientTenantClaim(req: Request): void {
 export function registerWabaBotRoutes(app: Express): void {
   app.get("/integrations/meta/whatsapp/bots", async (req: Request, res: Response) => {
     try {
-      const result = service.list(resolveWabaRequestAuth(req));
+      const result = await service.list(resolveWabaRequestAuth(req));
       return sendPublic(res, 200, { ok: true, ...result });
     } catch (error) {
       return handleMetaError(res, error);
@@ -94,7 +94,7 @@ export function registerWabaBotRoutes(app: Express): void {
   app.post("/integrations/meta/whatsapp/bots/phone-link", async (req: Request, res: Response) => {
     try {
       warnClientTenantClaim(req);
-      const result = service.linkPhone(
+      const result = await service.linkPhone(
         resolveWabaRequestAuth(req),
         req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {},
       );

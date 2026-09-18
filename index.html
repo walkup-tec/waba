@@ -44826,9 +44826,9 @@
       function wabaBotsRenderPhones() {
         const box = document.getElementById("waba-bots-phones");
         if (!box) return;
-        const channels = (wabaBotsUi.channels || []).filter((row) => row.inboxEnabled === true);
+        const channels = (wabaBotsUi.channels || []).filter((row) => row.inboxEligible === true);
         if (!channels.length) {
-          box.innerHTML = "<p class=\"muted\">Nenhum número com Inbox. Ligue o Inbox em CLOUD META → Conexão.</p>";
+          box.innerHTML = "<p class=\"muted\">Nenhum Inbox elegível. O chip precisa estar marcado Inbox, em conta sem restrição e no portfólio ATIVAS.</p>";
           return;
         }
         box.innerHTML = channels
