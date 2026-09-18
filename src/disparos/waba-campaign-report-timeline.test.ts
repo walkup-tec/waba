@@ -124,6 +124,25 @@ describe("linha do tempo do relatório do assinante", () => {
     );
   });
 
+  it("NOSSO CONSIG 1 termina sexta 18/09/2026 às 10:30 em Brasília", () => {
+    const timeline = collectIntakeReportTimeline({
+      ...stubIntake("NOSSO CONSIG 1"),
+      performanceReport: {
+        totalLeads: 2504,
+        sent: 2203,
+        delivered: 2064,
+        read: 958,
+        failed: 301,
+        clicks: 0,
+        source: "meta_lab",
+        filledAt: "2026-09-18T13:22:00.000Z",
+        filledByEmail: "lab@example.com",
+      },
+    });
+    const finished = timeline.items.find((item) => item.key === "dispatchFinishedAt");
+    assert.equal(finished?.display, "Sexta-feira, 18 de setembro de 2026 - 10:30:00");
+  });
+
   it("outra campanha não recebe a linha do tempo da PTX nem da Jandira", () => {
     const timeline = collectIntakeReportTimeline({
       ...stubIntake("Outra campanha"),

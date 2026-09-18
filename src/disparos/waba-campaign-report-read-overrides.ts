@@ -112,6 +112,9 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
     fingerprint: { totalLeads: 2504, sent: 2203, delivered: 2064, failed: 301 },
     clicks: 144,
     showClicks: true,
+    timeline: {
+      dispatchFinishedAt: "2026-09-18T13:30:00.000Z",
+    },
   },
   {
     name: "VITORIA DA CONQUISTA",
