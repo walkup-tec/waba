@@ -175,6 +175,14 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
     profile: "production",
   },
   {
+    id: "whatsapp-bots",
+    label: "Bots",
+    tab: "whatsapp-bots",
+    section: "farm-bm",
+    sectionLabel: SECTION_LABELS["farm-bm"],
+    profile: "production",
+  },
+  {
     id: "admin-dashboard",
     label: "Dashboard",
     tab: "admin-dashboard",
@@ -291,7 +299,7 @@ export const WABA_SUBSCRIBER_DISPAROS_MENU_IDS = [
 /**
  * Menus Meta Tech Provider (Embedded Signup / Cloud API).
  * Conexão/Templates/Disparo/Automação ficam na seção CLOUD META.
- * Atendimento fica na seção FARM BM (`farm-bm`).
+ * Atendimento e Bots ficam na seção FARM BM (`farm-bm`).
  */
 export const WABA_TECH_PROVIDER_MENU_IDS = [
   "whatsapp-oficial",
@@ -299,6 +307,7 @@ export const WABA_TECH_PROVIDER_MENU_IDS = [
   "whatsapp-disparo-cloud",
   "whatsapp-automation",
   "whatsapp-inbox",
+  "whatsapp-bots",
 ] as const;
 
 export const listWabaMenuDefinitions = (): WabaMenuDefinition[] =>

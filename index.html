@@ -3045,6 +3045,7 @@
 
         #tab-btn-whatsapp-oficial,
         #tab-btn-whatsapp-inbox,
+        #tab-btn-whatsapp-bots,
         #tab-btn-whatsapp-templates,
         #tab-btn-whatsapp-disparo-cloud {
           border-color: rgba(37, 211, 102, 0.72);
@@ -3055,6 +3056,93 @@
         #tab-btn-whatsapp-automation,
         .tab-button[data-menu-key="whatsapp-automation"] {
           display: none !important;
+        }
+
+        .waba-bots-shell .panel-header {
+          align-items: flex-start;
+        }
+        .waba-bots-layout {
+          display: grid;
+          grid-template-columns: minmax(220px, 24%) minmax(0, 1fr) minmax(240px, 26%);
+          gap: 12px;
+          min-height: 62vh;
+        }
+        .waba-bots-col {
+          background: rgba(8, 18, 28, 0.55);
+          border: 1px solid rgba(94, 234, 212, 0.18);
+          border-radius: 12px;
+          padding: 12px;
+          min-width: 0;
+        }
+        .waba-bots-list,
+        .waba-bots-phones {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .waba-bots-item,
+        .waba-bots-phone {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          width: 100%;
+          text-align: left;
+          padding: 10px;
+          border-radius: 10px;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          background: rgba(15, 23, 42, 0.7);
+          color: #e2e8f0;
+        }
+        .waba-bots-item.is-active,
+        .waba-bots-node.is-active {
+          border-color: rgba(45, 212, 191, 0.85);
+          box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.35);
+        }
+        .waba-bots-toolbar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+        .waba-bots-canvas {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          min-height: 48vh;
+        }
+        .waba-bots-node {
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          background: rgba(2, 12, 20, 0.72);
+          border-radius: 12px;
+          padding: 10px 12px;
+          color: #f8fafc;
+        }
+        .waba-bots-node small {
+          color: #94a3b8;
+        }
+        .waba-bots-inspector label,
+        .waba-bots-phone label {
+          display: block;
+          font-size: 0.78rem;
+          color: #94a3b8;
+          margin-bottom: 4px;
+        }
+        .waba-bots-log {
+          margin-top: 10px;
+          min-height: 140px;
+          max-height: 240px;
+          overflow: auto;
+          padding: 10px;
+          border-radius: 10px;
+          background: rgba(2, 6, 12, 0.7);
+          color: #99f6e4;
+          font-size: 0.78rem;
+          white-space: pre-wrap;
+        }
+        @media (max-width: 980px) {
+          .waba-bots-layout {
+            grid-template-columns: 1fr;
+          }
         }
 
         .meta-inbox {
@@ -5024,6 +5112,7 @@
       body.waba-ui-production:not(.waba-laboratorio-visible) .tab-button[data-menu-section="farm-bm"],
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-oficial,
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-inbox,
+      body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-bots,
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-templates,
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-disparo-cloud,
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-automation {
@@ -18637,6 +18726,7 @@
 
       body.waba-preview-disparo-cloud #tab-whatsapp-oficial,
       body.waba-preview-disparo-cloud #tab-whatsapp-inbox,
+      body.waba-preview-disparo-cloud #tab-whatsapp-bots,
       body.waba-preview-disparo-cloud #tab-whatsapp-templates,
       body.waba-preview-disparo-cloud #tab-whatsapp-automation {
         display: none;
@@ -19652,6 +19742,28 @@
                   </span>
                   <span class="tab-label">Atendimento</span>
                 </button>
+                <button
+                  id="tab-btn-whatsapp-bots"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-whatsapp-bots"
+                  data-tab="whatsapp-bots"
+                  data-menu-key="whatsapp-bots"
+                  data-menu-section="farm-bm"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="5" y="8" width="14" height="10" rx="3"></rect>
+                      <path d="M9 8V6a3 3 0 0 1 6 0v2"></path>
+                      <circle cx="9.5" cy="13" r="1"></circle>
+                      <circle cx="14.5" cy="13" r="1"></circle>
+                      <path d="M9 16h6"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Bots</span>
+                </button>
               </div>
             </div>
 
@@ -20216,6 +20328,17 @@
               aria-checked="false"
             >
               Atendimento
+            </button>
+            <button
+              class="tab-button waba-prod-only"
+              type="button"
+              data-tab="whatsapp-bots"
+              data-menu-key="whatsapp-bots"
+              data-menu-section="farm-bm"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Bots
             </button>
             <div class="mobile-tabs-section-label" data-menu-section="admin">
               Admin
@@ -22810,6 +22933,56 @@
                   </div>
                 </div>
                 <aside class="meta-chat-side" id="meta-inbox-side" aria-label="Dados do contato" aria-hidden="true"></aside>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-whatsapp-bots" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12 waba-bots-shell">
+              <div class="panel-header">
+                <div>
+                  <div class="panel-title">Bots</div>
+                  <span class="muted">Fluxos do Inbox Cloud META — um bot reutilizável por número com Inbox ligado.</span>
+                </div>
+                <div class="disparos-inline-actions" style="flex-wrap:wrap;gap:8px;">
+                  <button type="button" class="instance-action-btn btn-qrcode enabled" id="waba-bots-new">Novo bot</button>
+                  <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-save">Salvar</button>
+                  <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-delete">Excluir</button>
+                </div>
+              </div>
+              <p id="waba-bots-banner" class="meta-inbox-banner" role="status">Carregando bots…</p>
+              <div class="waba-bots-layout">
+                <aside class="waba-bots-col" aria-label="Lista de bots">
+                  <div class="meta-chat-thread-title">Meus bots</div>
+                  <div id="waba-bots-list" class="waba-bots-list"></div>
+                  <div class="meta-chat-thread-title" style="margin-top:16px;">Números Inbox</div>
+                  <p class="muted" style="margin:6px 0 8px;">Associe o bot selecionado a um número com Inbox ligado. A mensagem do contato inicia o fluxo.</p>
+                  <div id="waba-bots-phones" class="waba-bots-phones"></div>
+                </aside>
+                <div class="waba-bots-col waba-bots-canvas-wrap">
+                  <div class="waba-bots-toolbar">
+                    <input id="waba-bots-name" type="text" class="form-control" placeholder="Nome do bot" maxlength="80" />
+                    <select id="waba-bots-add-kind" class="form-control" aria-label="Adicionar etapa">
+                      <option value="">Adicionar etapa…</option>
+                    </select>
+                    <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-add-node">Inserir</button>
+                  </div>
+                  <div id="waba-bots-canvas" class="waba-bots-canvas" role="list"></div>
+                </div>
+                <aside class="waba-bots-col" aria-label="Propriedades e teste">
+                  <div class="meta-chat-thread-title">Etapa</div>
+                  <div id="waba-bots-inspector" class="waba-bots-inspector"><p class="muted">Selecione uma etapa no fluxo.</p></div>
+                  <div class="meta-chat-thread-title" style="margin-top:16px;">Teste local</div>
+                  <p class="muted" style="margin:6px 0 8px;">Simula o inbound sem enviar para a Meta.</p>
+                  <input id="waba-bots-test-reply" type="text" class="form-control" placeholder="Resposta do contato" />
+                  <div class="disparos-inline-actions" style="margin-top:8px;flex-wrap:wrap;gap:8px;">
+                    <button type="button" class="instance-action-btn btn-qrcode enabled" id="waba-bots-test-start">Iniciar</button>
+                    <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-test-continue">Responder</button>
+                  </div>
+                  <pre id="waba-bots-test-log" class="waba-bots-log"></pre>
+                </aside>
               </div>
             </section>
           </div>
@@ -27632,6 +27805,7 @@
       const LABORATORIO_MENU_KEYS = [
         "whatsapp-oficial",
         "whatsapp-inbox",
+        "whatsapp-bots",
         "whatsapp-templates",
         "whatsapp-disparo-cloud",
         "whatsapp-automation",
@@ -30576,7 +30750,7 @@
       function getMenuSectionForTab(tabName) {
         if (String(tabName || "").startsWith("indicador-")) return "indicador";
         if (isMarketingTab(tabName)) return "marketing";
-        if (tabName === "whatsapp-inbox") return "farm-bm";
+        if (tabName === "whatsapp-inbox" || tabName === "whatsapp-bots") return "farm-bm";
         if (tabName === "whatsapp-oficial" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
@@ -44581,6 +44755,359 @@
         metaInbox.listFp = "";
         metaInboxLoadList(false);
         if (metaInbox.selectedId) metaInboxLoadThread();
+      };
+
+      const wabaBotsUi = {
+        bound: false,
+        flows: [],
+        channels: [],
+        catalog: { nodes: [] },
+        selectedId: "",
+        selectedNodeId: "",
+        draft: null,
+        runId: "",
+      };
+
+      function wabaBotsBanner(text, isError) {
+        const el = document.getElementById("waba-bots-banner");
+        if (!el) return;
+        el.textContent = text || "";
+        el.classList.toggle("is-error", Boolean(isError));
+      }
+
+      async function wabaBotsJson(path, options) {
+        const res = await fetch(path, {
+          credentials: "same-origin",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          ...options,
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || payload.ok === false) {
+          throw new Error(payload.error || "Não foi possível carregar os bots.");
+        }
+        return payload;
+      }
+
+      function wabaBotsDefaultNode(kind) {
+        const def = (wabaBotsUi.catalog.nodes || []).find((item) => item.kind === kind);
+        return {
+          id: "node-" + Math.random().toString(36).slice(2, 10),
+          type: "botStep",
+          position: { x: 40, y: 40 + (wabaBotsUi.draft?.nodes?.length || 0) * 16 },
+          deletable: kind !== "start",
+          data: {
+            kind,
+            category: def?.category || "chatbot",
+            executionKind: "flow",
+            title: def?.label || kind,
+            config: JSON.parse(JSON.stringify(def?.defaultConfig || {})),
+            variables: {},
+            logs: [],
+            status: "idle",
+          },
+        };
+      }
+
+      function wabaBotsRenderList() {
+        const box = document.getElementById("waba-bots-list");
+        if (!box) return;
+        if (!wabaBotsUi.flows.length) {
+          box.innerHTML = "<p class=\"muted\">Nenhum bot ainda. Crie o primeiro fluxo.</p>";
+          return;
+        }
+        box.innerHTML = wabaBotsUi.flows
+          .map((flow) => {
+            const active = flow.id === wabaBotsUi.selectedId ? " is-active" : "";
+            return `<button type="button" class="waba-bots-item${active}" data-bot-id="${escapeAdminHtml(flow.id)}"><strong>${escapeAdminHtml(flow.name)}</strong><small>${(flow.nodes || []).length} etapas</small></button>`;
+          })
+          .join("");
+      }
+
+      function wabaBotsRenderPhones() {
+        const box = document.getElementById("waba-bots-phones");
+        if (!box) return;
+        const channels = wabaBotsUi.channels || [];
+        if (!channels.length) {
+          box.innerHTML = "<p class=\"muted\">Nenhum número com Inbox. Ligue o Inbox em CLOUD META → Conexão.</p>";
+          return;
+        }
+        box.innerHTML = channels
+          .map((row) => {
+            const label = row.name || row.displayPhoneNumber || row.phoneNumberId;
+            const linked = row.botId === wabaBotsUi.selectedId;
+            return (
+              `<label class="waba-bots-phone">` +
+              `<span>${escapeAdminHtml(label)}</span>` +
+              `<small>${row.inboxEligible ? "Inbox ligado" : "Inbox off"}</small>` +
+              `<button type="button" class="instance-action-btn btn-refresh enabled" data-bot-phone="${escapeAdminHtml(row.phoneNumberId)}" data-bot-link="${linked ? "off" : "on"}">${linked ? "Desassociar" : "Associar a este bot"}</button>` +
+              `</label>`
+            );
+          })
+          .join("");
+      }
+
+      function wabaBotsRenderCanvas() {
+        const canvas = document.getElementById("waba-bots-canvas");
+        const nameInput = document.getElementById("waba-bots-name");
+        if (nameInput && wabaBotsUi.draft) nameInput.value = wabaBotsUi.draft.name || "";
+        if (!canvas) return;
+        const nodes = wabaBotsUi.draft?.nodes || [];
+        if (!nodes.length) {
+          canvas.innerHTML = "<p class=\"muted\">Este bot precisa de um Início.</p>";
+          return;
+        }
+        canvas.innerHTML = nodes
+          .map((node) => {
+            const active = node.id === wabaBotsUi.selectedNodeId ? " is-active" : "";
+            const preview = String(node.data?.config?.text || node.data?.title || node.data?.kind || "");
+            return (
+              `<button type="button" class="waba-bots-node${active}" data-bot-node="${escapeAdminHtml(node.id)}">` +
+              `<strong>${escapeAdminHtml(node.data?.title || node.data?.kind)}</strong>` +
+              `<small>${escapeAdminHtml(preview.slice(0, 120))}</small>` +
+              `</button>`
+            );
+          })
+          .join("");
+      }
+
+      function wabaBotsRenderInspector() {
+        const box = document.getElementById("waba-bots-inspector");
+        if (!box) return;
+        const node = (wabaBotsUi.draft?.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
+        if (!node) {
+          box.innerHTML = "<p class=\"muted\">Selecione uma etapa no fluxo.</p>";
+          return;
+        }
+        const options = (node.data.config.options || [])
+          .map((opt) => String(opt.label || ""))
+          .join("\n");
+        const canDelete = node.data.kind !== "start";
+        box.innerHTML =
+          `<label>Título</label><input id="waba-bots-node-title" class="form-control" value="${escapeAdminHtml(node.data.title || "")}" />` +
+          `<label style="margin-top:8px;">Texto</label><textarea id="waba-bots-node-text" class="form-control" rows="4">${escapeAdminHtml(node.data.config.text || "")}</textarea>` +
+          `<label style="margin-top:8px;">Opções (uma por linha)</label><textarea id="waba-bots-node-options" class="form-control" rows="4">${escapeAdminHtml(options)}</textarea>` +
+          `<label style="margin-top:8px;">Condição / expressão</label><input id="waba-bots-node-expr" class="form-control" value="${escapeAdminHtml(node.data.config.expression || "")}" />` +
+          (canDelete
+            ? `<button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-node-delete" style="margin-top:10px;">Remover etapa</button>`
+            : "");
+      }
+
+      function wabaBotsFillKinds() {
+        const select = document.getElementById("waba-bots-add-kind");
+        if (!select || select.options.length > 1) return;
+        (wabaBotsUi.catalog.nodes || []).forEach((item) => {
+          if (item.kind === "start") return;
+          const opt = document.createElement("option");
+          opt.value = item.kind;
+          opt.textContent = item.label;
+          select.appendChild(opt);
+        });
+      }
+
+      function wabaBotsApplyInspector() {
+        const node = (wabaBotsUi.draft?.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
+        if (!node) return;
+        const title = document.getElementById("waba-bots-node-title");
+        const text = document.getElementById("waba-bots-node-text");
+        const options = document.getElementById("waba-bots-node-options");
+        const expr = document.getElementById("waba-bots-node-expr");
+        if (title) node.data.title = title.value.trim() || node.data.title;
+        if (text) node.data.config.text = text.value;
+        if (expr) node.data.config.expression = expr.value;
+        if (options) {
+          node.data.config.options = String(options.value || "")
+            .split("\n")
+            .map((line, index) => {
+              const label = line.trim();
+              if (!label) return null;
+              return { id: "opt-" + (index + 1), label, value: String(index + 1) };
+            })
+            .filter(Boolean);
+        }
+      }
+
+      function wabaBotsSelect(id) {
+        wabaBotsUi.selectedId = id;
+        wabaBotsUi.draft = JSON.parse(JSON.stringify(wabaBotsUi.flows.find((item) => item.id === id) || null));
+        wabaBotsUi.selectedNodeId = wabaBotsUi.draft?.nodes?.[0]?.id || "";
+        wabaBotsUi.runId = "";
+        wabaBotsRenderList();
+        wabaBotsRenderPhones();
+        wabaBotsRenderCanvas();
+        wabaBotsRenderInspector();
+      }
+
+      async function wabaBotsLoad() {
+        try {
+          const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots");
+          wabaBotsUi.flows = payload.flows || [];
+          wabaBotsUi.channels = payload.channels || [];
+          wabaBotsUi.catalog = payload.catalog || { nodes: [] };
+          wabaBotsFillKinds();
+          if (!wabaBotsUi.selectedId || !wabaBotsUi.flows.some((item) => item.id === wabaBotsUi.selectedId)) {
+            wabaBotsUi.selectedId = wabaBotsUi.flows[0]?.id || "";
+          }
+          if (wabaBotsUi.selectedId) wabaBotsSelect(wabaBotsUi.selectedId);
+          else {
+            wabaBotsUi.draft = null;
+            wabaBotsRenderList();
+            wabaBotsRenderPhones();
+            wabaBotsRenderCanvas();
+            wabaBotsRenderInspector();
+          }
+          wabaBotsBanner(
+            wabaBotsUi.flows.length
+              ? "Associe o bot a um número Inbox. Quem escrever para esse número inicia o fluxo."
+              : "Crie um bot e associe a um número com Inbox ligado.",
+          );
+        } catch (error) {
+          wabaBotsBanner(error && error.message ? error.message : "Erro ao carregar bots.", true);
+        }
+      }
+
+      async function wabaBotsSave() {
+        if (!wabaBotsUi.draft) return;
+        wabaBotsApplyInspector();
+        const nameInput = document.getElementById("waba-bots-name");
+        if (nameInput) wabaBotsUi.draft.name = nameInput.value.trim() || wabaBotsUi.draft.name;
+        try {
+          const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots/" + encodeURIComponent(wabaBotsUi.draft.id), {
+            method: "PUT",
+            body: JSON.stringify(wabaBotsUi.draft),
+          });
+          wabaBotsUi.draft = payload.flow;
+          await wabaBotsLoad();
+          wabaBotsBanner("Bot salvo.");
+        } catch (error) {
+          wabaBotsBanner(error && error.message ? error.message : "Não foi possível salvar.", true);
+        }
+      }
+
+      function wabaBotsBind() {
+        if (wabaBotsUi.bound) return;
+        wabaBotsUi.bound = true;
+        const root = document.getElementById("tab-whatsapp-bots");
+        if (!root) return;
+        document.getElementById("waba-bots-new")?.addEventListener("click", async () => {
+          try {
+            const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots", {
+              method: "POST",
+              body: JSON.stringify({ name: "Novo bot" }),
+            });
+            wabaBotsUi.selectedId = payload.flow?.id || "";
+            await wabaBotsLoad();
+          } catch (error) {
+            wabaBotsBanner(error && error.message ? error.message : "Não foi possível criar.", true);
+          }
+        });
+        document.getElementById("waba-bots-save")?.addEventListener("click", () => wabaBotsSave());
+        document.getElementById("waba-bots-delete")?.addEventListener("click", async () => {
+          if (!wabaBotsUi.selectedId) return;
+          if (!window.confirm("Excluir este bot?")) return;
+          try {
+            await wabaBotsJson("/integrations/meta/whatsapp/bots/" + encodeURIComponent(wabaBotsUi.selectedId), {
+              method: "DELETE",
+            });
+            wabaBotsUi.selectedId = "";
+            await wabaBotsLoad();
+          } catch (error) {
+            wabaBotsBanner(error && error.message ? error.message : "Não foi possível excluir.", true);
+          }
+        });
+        document.getElementById("waba-bots-add-node")?.addEventListener("click", () => {
+          const kind = String(document.getElementById("waba-bots-add-kind")?.value || "").trim();
+          if (!kind || !wabaBotsUi.draft) return;
+          const created = wabaBotsDefaultNode(kind);
+          const last = wabaBotsUi.draft.nodes[wabaBotsUi.draft.nodes.length - 1];
+          wabaBotsUi.draft.nodes.push(created);
+          if (last) {
+            wabaBotsUi.draft.edges.push({
+              id: "e-" + created.id,
+              source: last.id,
+              target: created.id,
+              sourceHandle: "out",
+            });
+          }
+          wabaBotsUi.selectedNodeId = created.id;
+          wabaBotsRenderCanvas();
+          wabaBotsRenderInspector();
+        });
+        document.getElementById("waba-bots-test-start")?.addEventListener("click", async () => {
+          if (!wabaBotsUi.draft) return;
+          wabaBotsApplyInspector();
+          try {
+            const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots/test-run", {
+              method: "POST",
+              body: JSON.stringify({ flow: wabaBotsUi.draft, testPhone: "00000000000" }),
+            });
+            wabaBotsUi.runId = payload.run?.id || "";
+            const log = document.getElementById("waba-bots-test-log");
+            if (log) log.textContent = (payload.outboundTexts || []).join("\n\n") || payload.run?.phase || "ok";
+          } catch (error) {
+            wabaBotsBanner(error && error.message ? error.message : "Falha no teste.", true);
+          }
+        });
+        document.getElementById("waba-bots-test-continue")?.addEventListener("click", async () => {
+          if (!wabaBotsUi.draft || !wabaBotsUi.runId) return;
+          const inbound = String(document.getElementById("waba-bots-test-reply")?.value || "").trim();
+          try {
+            const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots/test-continue", {
+              method: "POST",
+              body: JSON.stringify({ flow: wabaBotsUi.draft, runId: wabaBotsUi.runId, inboundText: inbound }),
+            });
+            const log = document.getElementById("waba-bots-test-log");
+            if (log) log.textContent = (payload.outboundTexts || []).join("\n\n") || payload.run?.phase || "ok";
+          } catch (error) {
+            wabaBotsBanner(error && error.message ? error.message : "Falha ao continuar o teste.", true);
+          }
+        });
+        root.addEventListener("click", async (event) => {
+          const botBtn = event.target.closest("[data-bot-id]");
+          if (botBtn) {
+            wabaBotsSelect(botBtn.getAttribute("data-bot-id"));
+            return;
+          }
+          const nodeBtn = event.target.closest("[data-bot-node]");
+          if (nodeBtn) {
+            wabaBotsApplyInspector();
+            wabaBotsUi.selectedNodeId = nodeBtn.getAttribute("data-bot-node");
+            wabaBotsRenderCanvas();
+            wabaBotsRenderInspector();
+            return;
+          }
+          if (event.target.id === "waba-bots-node-delete" && wabaBotsUi.draft) {
+            wabaBotsUi.draft.nodes = wabaBotsUi.draft.nodes.filter((item) => item.id !== wabaBotsUi.selectedNodeId);
+            wabaBotsUi.draft.edges = wabaBotsUi.draft.edges.filter(
+              (item) => item.source !== wabaBotsUi.selectedNodeId && item.target !== wabaBotsUi.selectedNodeId,
+            );
+            wabaBotsUi.selectedNodeId = wabaBotsUi.draft.nodes[0]?.id || "";
+            wabaBotsRenderCanvas();
+            wabaBotsRenderInspector();
+            return;
+          }
+          const phoneBtn = event.target.closest("[data-bot-phone]");
+          if (phoneBtn && wabaBotsUi.selectedId) {
+            const link = phoneBtn.getAttribute("data-bot-link") === "on";
+            try {
+              await wabaBotsJson("/integrations/meta/whatsapp/bots/phone-link", {
+                method: "POST",
+                body: JSON.stringify({
+                  phoneNumberId: phoneBtn.getAttribute("data-bot-phone"),
+                  botId: link ? wabaBotsUi.selectedId : null,
+                }),
+              });
+              await wabaBotsLoad();
+              wabaBotsBanner(link ? "Número associado a este bot." : "Número desassociado.");
+            } catch (error) {
+              wabaBotsBanner(error && error.message ? error.message : "Não foi possível associar.", true);
+            }
+          }
+        });
+      }
+
+      window.wabaStartBots = function wabaStartBots() {
+        wabaBotsBind();
+        wabaBotsLoad();
       };
 
       window.wabaOpenMetaInboxConversation = function wabaOpenMetaInboxConversation(id) {
@@ -60912,6 +61439,7 @@
         const metaAtivosPanel = document.getElementById("tab-meta-ativos");
         const whatsappOficialPanel = document.getElementById("tab-whatsapp-oficial");
         const whatsappInboxPanel = document.getElementById("tab-whatsapp-inbox");
+        const whatsappBotsPanel = document.getElementById("tab-whatsapp-bots");
         const whatsappTemplatesPanel = document.getElementById("tab-whatsapp-templates");
         const whatsappDisparoCloudPanel = document.getElementById("tab-whatsapp-disparo-cloud");
         const whatsappAutomationPanel = document.getElementById("tab-whatsapp-automation");
@@ -61034,6 +61562,17 @@
             window.wabaStartMetaInbox();
           } else if (typeof window.wabaStopMetaInbox === "function") {
             window.wabaStopMetaInbox();
+          }
+        }
+
+        if (whatsappBotsPanel) {
+          whatsappBotsPanel.classList.toggle("tab-hidden", nextTab !== "whatsapp-bots");
+          whatsappBotsPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "whatsapp-bots" ? "true" : "false"
+          );
+          if (nextTab === "whatsapp-bots" && typeof window.wabaStartBots === "function") {
+            window.wabaStartBots();
           }
         }
 
@@ -65540,7 +66079,7 @@
       function resolveMenuGroupForTab(tabName) {
         if (String(tabName || "").startsWith("indicador-")) return "indicador";
         if (isMarketingTab(tabName)) return "marketing";
-        if (tabName === "whatsapp-inbox") return "farm-bm";
+        if (tabName === "whatsapp-inbox" || tabName === "whatsapp-bots") return "farm-bm";
         if (tabName === "whatsapp-oficial" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";

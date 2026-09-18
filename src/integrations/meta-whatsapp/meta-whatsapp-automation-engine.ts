@@ -6,6 +6,7 @@ import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 import { resolveCustomerCareWindow } from "./meta-whatsapp-customer-care-window";
 import { evaluateBusinessHours } from "./meta-whatsapp-automation-hours";
 import { logMetaAutomation } from "./meta-whatsapp-automation-log";
+import { wasBotMessageClaimed } from "./bots/waba-bot.store";
 import {
   RulesResponder,
   type AutomationResponder,
@@ -103,6 +104,15 @@ export class MetaWhatsappAutomationEngine {
         conversationId,
         messageId,
         reason: "outbound_ignored",
+      });
+      return;
+    }
+    if (wasBotMessageClaimed(tenantId, messageId)) {
+      logMetaAutomation("SKIP", {
+        tenantId,
+        conversationId,
+        messageId,
+        reason: "bot_claimed",
       });
       return;
     }

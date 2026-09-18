@@ -63,6 +63,8 @@ const waba_container_service_1 = require("./waba-container-service");
 const waba_auth_routes_1 = require("./auth/waba-auth.routes");
 const soma_chatbot_cloud_relay_1 = require("./integrations/soma/soma-chatbot-cloud-relay");
 const meta_whatsapp_routes_1 = require("./integrations/meta-whatsapp/meta-whatsapp.routes");
+const waba_bot_routes_1 = require("./integrations/meta-whatsapp/bots/waba-bot.routes");
+const waba_bot_bootstrap_1 = require("./integrations/meta-whatsapp/bots/waba-bot.bootstrap");
 const meta_whatsapp_automation_bootstrap_1 = require("./integrations/meta-whatsapp/meta-whatsapp-automation.bootstrap");
 const meta_whatsapp_broadcast_report_1 = require("./integrations/meta-whatsapp/meta-whatsapp-broadcast-report");
 const meta_whatsapp_broadcast_store_1 = require("./integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
@@ -594,6 +596,8 @@ app.get("/maintenance", (_req, res) => {
 (0, waba_entitlement_routes_1.registerWabaEntitlementRoutes)(app);
 app.use(waba_auth_routes_1.wabaRequireAuthMiddleware);
 (0, meta_whatsapp_routes_1.registerMetaWhatsappIntegrationRoutes)(app);
+(0, waba_bot_routes_1.registerWabaBotRoutes)(app);
+(0, waba_bot_bootstrap_1.startWabaBots)();
 (0, meta_whatsapp_automation_bootstrap_1.startMetaWhatsappAutomation)();
 (0, meta_whatsapp_broadcast_report_1.ensureLabReportFinalizeSweep)();
 (0, meta_whatsapp_broadcast_store_1.ensureVoidedFailedCloudBroadcasts)();

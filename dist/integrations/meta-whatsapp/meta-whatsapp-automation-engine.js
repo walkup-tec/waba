@@ -8,6 +8,7 @@ const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.servi
 const meta_whatsapp_customer_care_window_1 = require("./meta-whatsapp-customer-care-window");
 const meta_whatsapp_automation_hours_1 = require("./meta-whatsapp-automation-hours");
 const meta_whatsapp_automation_log_1 = require("./meta-whatsapp-automation-log");
+const waba_bot_store_1 = require("./bots/waba-bot.store");
 const meta_whatsapp_automation_responder_1 = require("./meta-whatsapp-automation-responder");
 const meta_whatsapp_automation_repository_1 = require("./meta-whatsapp-automation.repository");
 const MAX_DELAY_MS = 10000;
@@ -84,6 +85,15 @@ class MetaWhatsappAutomationEngine {
                 conversationId,
                 messageId,
                 reason: "outbound_ignored",
+            });
+            return;
+        }
+        if ((0, waba_bot_store_1.wasBotMessageClaimed)(tenantId, messageId)) {
+            (0, meta_whatsapp_automation_log_1.logMetaAutomation)("SKIP", {
+                tenantId,
+                conversationId,
+                messageId,
+                reason: "bot_claimed",
             });
             return;
         }
