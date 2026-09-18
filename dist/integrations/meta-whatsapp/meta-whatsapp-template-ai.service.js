@@ -124,7 +124,7 @@ function isEnabled() {
         return false;
     return Boolean(String(process.env.OPENAI_API_KEY || "").trim());
 }
-function componentsFromAiOption(option) {
+function componentsFromAiOption(option, hasLinkButton = true) {
     const placeholders = [...new Set([...option.body.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1])))].sort((a, b) => a - b);
     const maxPlaceholder = placeholders.length ? Math.max(...placeholders) : 0;
     if (placeholders.some((value, index) => value !== index + 1)) {
@@ -134,19 +134,22 @@ function componentsFromAiOption(option) {
         throw new Error("Exemplos incompatíveis com variáveis.");
     }
     const buttonText = String(option.buttonText || "").trim();
-    if (!buttonText)
+    if (hasLinkButton && !buttonText)
         throw new Error("Botão operacional ausente.");
-    return [
+    const components = [
         {
             type: "BODY",
             text: option.body,
             ...(maxPlaceholder ? { example: { body_text: [option.variableExamples] } } : {}),
         },
-        {
+    ];
+    if (hasLinkButton && buttonText) {
+        components.push({
             type: "BUTTONS",
             buttons: [{ type: "QUICK_REPLY", text: buttonText }],
-        },
-    ];
+        });
+    }
+    return components;
 }
 class MetaWhatsappTemplateAiService {
     constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), analyses = new meta_whatsapp_template_ai_repository_1.MetaWhatsappTemplateAiRepository(), openAi = waba_openai_responses_client_1.callOpenAiStructured, templates = new meta_whatsapp_template_service_1.MetaWhatsappTemplateService(), decrypt = meta_token_crypto_1.decryptMetaToken, uploadHeader = meta_whatsapp_resumable_upload_1.uploadMetaResumableImage, createButtonShortUrl = meta_whatsapp_template_ai_short_url_1.createMetaTemplateButtonShortUrl) {
@@ -257,11 +260,18 @@ class MetaWhatsappTemplateAiService {
                     name: option.name,
                     language,
                     category: "UTILITY",
-                    components: componentsFromAiOption(option),
+                    components: componentsFromAiOption(option, hasLinkButton),
                 });
             }
         }
-        catch {
+        catch (error) {
+            (0, meta_whatsapp_template_log_1.logMetaTemplate)("AI", {
+                tenantId: tenant.tenantId,
+                connectionId: connection.id,
+                invalidOutput: true,
+                hasLinkButton,
+                reason: error instanceof Error ? error.message : "invalid_output",
+            });
             throw new meta_whatsapp_errors_1.MetaWhatsappError("template_ai_invalid_output");
         }
         const analyzedAt = new Date().toISOString();

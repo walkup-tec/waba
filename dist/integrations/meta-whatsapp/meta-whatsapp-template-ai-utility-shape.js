@@ -71,14 +71,23 @@ function shapeMetaUtilityOptionBody(body, variableType, optionIndex, hasLinkButt
     text = ensureUtilityStatusAnchor(text, optionIndex);
     return compactSpaces(`${greeting}\n${text}`);
 }
+function syncVariableExamples(body, variableType, examples) {
+    if (variableType === "nenhuma")
+        return [];
+    const indexes = [...new Set([...String(body || "").matchAll(/\{\{(\d+)\}\}/g)].map((item) => Number(item[1])))].sort((a, b) => a - b);
+    const fallback = variableType === "numero" ? "11999999999" : "Maria";
+    return indexes.map((_, index) => String(examples[index] || "").trim() || fallback);
+}
 function shapeMetaUtilityAiOutput(result, variableType, hasLinkButton = true) {
     return {
         ...result,
         options: result.options.map((option, index) => {
+            const body = shapeMetaUtilityOptionBody(option.body, variableType, index, hasLinkButton);
             const shaped = {
                 ...option,
-                body: shapeMetaUtilityOptionBody(option.body, variableType, index, hasLinkButton),
+                body,
                 buttonText: meta_whatsapp_template_ai_shell_1.META_TEMPLATE_AI_OPTION_BUTTONS[index] || meta_whatsapp_template_ai_shell_1.META_TEMPLATE_AI_OPTION_BUTTONS[0],
+                variableExamples: syncVariableExamples(body, variableType, option.variableExamples),
             };
             return shaped;
         }),

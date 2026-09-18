@@ -84,6 +84,15 @@ export function shapeMetaUtilityOptionBody(
   return compactSpaces(`${greeting}\n${text}`);
 }
 
+function syncVariableExamples(body: string, variableType: string, examples: string[]): string[] {
+  if (variableType === "nenhuma") return [];
+  const indexes = [...new Set([...String(body || "").matchAll(/\{\{(\d+)\}\}/g)].map((item) => Number(item[1])))].sort(
+    (a, b) => a - b,
+  );
+  const fallback = variableType === "numero" ? "11999999999" : "Maria";
+  return indexes.map((_, index) => String(examples[index] || "").trim() || fallback);
+}
+
 export function shapeMetaUtilityAiOutput(
   result: MetaTemplateAiModelOutput,
   variableType: string,
@@ -92,10 +101,12 @@ export function shapeMetaUtilityAiOutput(
   return {
     ...result,
     options: result.options.map((option, index) => {
+      const body = shapeMetaUtilityOptionBody(option.body, variableType, index, hasLinkButton);
       const shaped: MetaTemplateAiOption = {
         ...option,
-        body: shapeMetaUtilityOptionBody(option.body, variableType, index, hasLinkButton),
+        body,
         buttonText: META_TEMPLATE_AI_OPTION_BUTTONS[index] || META_TEMPLATE_AI_OPTION_BUTTONS[0],
+        variableExamples: syncVariableExamples(body, variableType, option.variableExamples),
       };
       return shaped;
     }),

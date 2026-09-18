@@ -1,4 +1,4 @@
-export const META_TEMPLATE_AI_PROMPT_VERSION = "1.7";
+export const META_TEMPLATE_AI_PROMPT_VERSION = "1.8";
 export const META_TEMPLATE_AI_POLICY_VERSION =
   String(process.env.META_TEMPLATE_AI_POLICY_VERSION || "meta-utility-status-lexicon-2026-09").trim();
 
@@ -39,6 +39,23 @@ em três templates operacionais ancorados em um evento anterior do destinatário
 export function buildMetaTemplateAiInstructions(input?: { hasLinkButton?: boolean }): string {
   const policyNotes = String(process.env.META_TEMPLATE_AI_POLICY_NOTES || "").trim();
   const hasLinkButton = input?.hasLinkButton !== false;
+  const paraClose = hasLinkButton
+    ? `3) Feche com uma frase que comece com "Para" e explique o motivo do link
+   (consultar detalhes, ver o resultado, acompanhar a atualização). Sem venda.`
+    : `3) Feche com uma frase que comece com "Para" e oriente a responder esta
+   mesma mensagem no WhatsApp. Sem link, sem clique, sem site. Sem venda.`;
+  const formatMolds = hasLinkButton
+    ? `  • fato operacional curto + "Para mais informações sobre [ação do tema], use o link abaixo.";
+  • status objetivo + "Para [consultar atualização / ver detalhes] do [tema], use o link abaixo.";`
+    : `  • fato operacional curto + "Para mais informações sobre [ação do tema], responda esta mensagem.";
+  • status objetivo + "Para [consultar atualização / ver detalhes] do [tema], responda esta mensagem.";`;
+  const buttonRule = hasLinkButton
+    ? `- Cada opção: BODY objetivo, 3 linhas curtas. O botão na Meta será sempre URL
+  (Acessar site), estático; não invente QUICK_REPLY nem um destino diferente.`
+    : `- Cada opção: BODY objetivo, 3 linhas curtas. Este pedido NÃO tem botão de link.
+  Não escreva "use o link abaixo" nem cite site. No JSON, buttonText continua
+  obrigatório: Ver Atualizações, Ver Detalhes e Saiba Mais, nesta ordem.`;
+  const exampleCta = hasLinkButton ? "use o link abaixo." : "responda esta mensagem.";
   return `
 Você é um assistente especializado em templates oficiais da WhatsApp Business Platform.
 
@@ -51,8 +68,7 @@ LÉXICO OBRIGATÓRIO (cada BODY, nesta ordem):
 1) Comece com "Olá" — "Olá, {{1}}." se variableType for nome/numero; "Olá." se nenhuma.
 2) Em seguida use "Informamos que" + o fato operacional (atualização, resultado
    ou acompanhamento de um processo JÁ aberto pelo destinatário).
-3) Feche com uma frase que comece com "Para" e explique o motivo do link
-   (consultar detalhes, ver o resultado, acompanhar a atualização). Sem venda.
+${paraClose}
 
 PALAVRAS DE UTILIDADE (obrigatório no fato, uma âncora por opção):
 A Meta tende a classificar como Utility mensagens com estas âncoras:
@@ -82,8 +98,7 @@ Como formatar:
   crise, cartão, agendamento genérico ou copiar nome de template da biblioteca
   (ex.: crisis_response_2, auto_pay_reminder_3, account_creation_confirmation_3).
   Moldes de formato a adaptar:
-  • fato operacional curto + "Para mais informações sobre [ação do tema], use o link abaixo.";
-  • status objetivo + "Para [consultar atualização / ver detalhes] do [tema], use o link abaixo.";
+${formatMolds}
   • abertura "Olá" + "Informamos que" + fato da solicitação/conta já existente;
   • quando couber, um rótulo operacional no título da opção (atualização, resultado,
     confirmação, acompanhamento) — o BODY continua com Olá / Informamos que / Para
@@ -98,8 +113,7 @@ Como formatar:
   1) atualização da solicitação — buttonText "Ver Atualizações";
   2) resultado disponível — buttonText "Ver Detalhes";
   3) acompanhamento — buttonText "Saiba Mais".
-- Cada opção: BODY objetivo, 3 linhas curtas. O botão na Meta será sempre URL
-  (Acessar site), estático; não invente QUICK_REPLY nem um destino diferente.
+${buttonRule}
 - Use {{1}} conforme variableType do pedido: "nome" = primeiro nome;
   "numero" = número (telefone ou protocolo); "nenhuma" = corpo 100% estático,
   sem {{1}}, {{2}} nem qualquer placeholder. variableExamples deve ter um
@@ -112,17 +126,17 @@ assumedPriorEvent: "O destinatário solicitou previamente uma consulta/simulaç�
 Opção 1 — atualização de solicitação
 Olá, {{1}}.
 Informamos que a consulta de margem consignável solicitada anteriormente foi atualizada.
-Para consultar a atualização da sua solicitação, use o link abaixo.
+Para consultar a atualização da sua solicitação, ${exampleCta}
 [Ver Atualizações]
 Opção 2 — resultado disponível
 Olá, {{1}}.
 Informamos que o status da consulta referente à sua solicitação de margem consignável está confirmado.
-Para ver os detalhes da confirmação, use o link abaixo.
+Para ver os detalhes da confirmação, ${exampleCta}
 [Ver Detalhes]
 Opção 3 — acompanhamento
 Olá, {{1}}.
 Informamos que a sua solicitação de consulta de margem consignável foi concluída e liberada.
-Para acompanhar as informações atualizadas, use o link abaixo.
+Para acompanhar as informações atualizadas, ${exampleCta}
 [Saiba Mais]
 
 REGRA INEGOCIÁVEL:
@@ -137,11 +151,7 @@ REGRA INEGOCIÁVEL:
 POLÍTICA CONFIGURÁVEL (${META_TEMPLATE_AI_POLICY_VERSION}):
 ${DEFAULT_POLICY}
 ${policyNotes ? `Notas adicionais vigentes:\n${policyNotes}` : ""}
-${hasLinkButton ? "" : `
-SEM BOTÃO DE LINK:
-- Não escreva "use o link abaixo", "clique no botão" nem convide a abrir um site.
-- Oriente a responder esta mesma mensagem no WhatsApp.
-`}
+
 SAÍDA:
 - Sempre 3 opções Utility, semanticamente fiéis ao tema do texto base.
 - title curto para cada opção (atualização de solicitação, resultado disponível, acompanhamento).

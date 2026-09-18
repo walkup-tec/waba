@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.META_TEMPLATE_AI_OUTPUT_SCHEMA = exports.META_TEMPLATE_AI_SCHEMA_NAME = void 0;
+exports.coerceMetaTemplateAiOutput = coerceMetaTemplateAiOutput;
 exports.validateMetaTemplateAiOutput = validateMetaTemplateAiOutput;
 const ajv_1 = __importDefault(require("ajv"));
 exports.META_TEMPLATE_AI_SCHEMA_NAME = "meta_utility_template_assistant";
@@ -76,12 +77,59 @@ exports.META_TEMPLATE_AI_OUTPUT_SCHEMA = {
 };
 const ajv = new ajv_1.default({ allErrors: true, strict: true });
 const validate = ajv.compile(exports.META_TEMPLATE_AI_OUTPUT_SCHEMA);
+const FALLBACK_BUTTONS = ["Ver Atualizações", "Ver Detalhes", "Saiba Mais"];
+function asRecord(value) {
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : {};
+}
+/** Remove campos extras e preenche buttonText — a IA de Sem botão costuma omitir o rótulo. */
+function coerceMetaTemplateAiOutput(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+        return value;
+    const row = asRecord(value);
+    const rawOptions = Array.isArray(row.options) ? row.options : [];
+    return {
+        recommendedCategory: row.recommendedCategory ?? "UTILITY",
+        utilityCompatibility: row.utilityCompatibility,
+        riskLevel: row.riskLevel,
+        eligibleForUtility: row.eligibleForUtility ?? true,
+        assumedPriorEvent: row.assumedPriorEvent,
+        reason: row.reason,
+        issues: (Array.isArray(row.issues) ? row.issues : []).map((item) => {
+            const issue = asRecord(item);
+            return {
+                severity: issue.severity,
+                excerpt: issue.excerpt,
+                reason: issue.reason,
+                suggestion: issue.suggestion,
+            };
+        }),
+        suggestions: Array.isArray(row.suggestions) ? row.suggestions : [],
+        options: rawOptions.map((item, index) => {
+            const option = asRecord(item);
+            const examples = Array.isArray(option.variableExamples)
+                ? option.variableExamples.map((example) => String(example ?? "").trim()).filter(Boolean)
+                : [];
+            return {
+                name: option.name,
+                title: option.title,
+                body: option.body,
+                buttonText: String(option.buttonText || "").trim() || FALLBACK_BUTTONS[index] || FALLBACK_BUTTONS[0],
+                variableExamples: examples,
+                rationale: option.rationale,
+            };
+        }),
+        disclaimer: row.disclaimer,
+    };
+}
 function validateMetaTemplateAiOutput(value) {
-    if (validate(value)) {
-        if (value.recommendedCategory !== "UTILITY" || value.eligibleForUtility !== true || value.options.length !== 3) {
+    const normalized = coerceMetaTemplateAiOutput(value);
+    if (validate(normalized)) {
+        if (normalized.recommendedCategory !== "UTILITY" || normalized.eligibleForUtility !== true || normalized.options.length !== 3) {
             throw new Error("A IA deve devolver exatamente 3 opções Utility.");
         }
-        return value;
+        return normalized;
     }
     const detail = (validate.errors || [])
         .slice(0, 4)

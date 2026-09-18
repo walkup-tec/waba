@@ -256,6 +256,37 @@ describe("Assistente IA de templates Utility", () => {
     assert.equal(result.options[2]?.buttonText, "Saiba Mais");
   });
 
+  it("gera Sem botão mesmo se a IA omite buttonText, {{1}} ou manda campo extra", async () => {
+    const email = "ai-no-btn-messy@example.com";
+    const output = utilityOutput() as MetaTemplateAiModelOutput & { hasLinkButton?: boolean };
+    output.hasLinkButton = false;
+    output.options = output.options.map((option, index) => ({
+      ...option,
+      buttonText: "",
+      body:
+        index === 0
+          ? "Informamos que a solicitação de informações do cartão Benefício de Tocantins foi atualizada.\nPara consultar a atualização, responda esta mensagem."
+          : option.body.replace(/use o link abaixo/g, "responda esta mensagem"),
+      variableExamples: index === 0 ? [] : option.variableExamples,
+    }));
+    const { service } = serviceFor(email, output);
+    const result = await service.generateFromAuth(
+      { email, role: "subscriber" },
+      {
+        connectionId: "conn-utility",
+        baseText:
+          "Informamos que a sua solicitação de informações sobre o cartão Benefício dos funcionários públicos de Tocantins foi concluída e liberada.",
+        hasLinkButton: false,
+      },
+    );
+    assert.equal(result.options.length, 3);
+    assert.match(result.options[0]?.body || "", /^Olá, \{\{1\}\}\./);
+    assert.match(result.options[0]?.body || "", /responda esta mensagem/i);
+    assert.doesNotMatch(result.options[0]?.body || "", /use o link abaixo/i);
+    assert.equal(result.options[0]?.variableExamples.length, 1);
+    assert.equal(result.options[0]?.buttonText, "Ver Atualizações");
+  });
+
   it("rejeita resposta sem as três opções Utility", async () => {
     const email = "ai-invalid@example.com";
     const output = utilityOutput();
@@ -817,7 +848,10 @@ describe("Assistente IA de templates Utility", () => {
     assert.match(instructions, /TEMA CENTRAL/i);
     assert.match(instructions, /use o link abaixo/i);
     assert.doesNotMatch(instructions, /retorne options=\[\]/);
-    assert.match(buildMetaTemplateAiInstructions({ hasLinkButton: false }), /SEM BOTÃO DE LINK/);
+    const noButton = buildMetaTemplateAiInstructions({ hasLinkButton: false });
+    assert.match(noButton, /NÃO tem botão de link/);
+    assert.match(noButton, /responda esta mensagem/i);
+    assert.doesNotMatch(noButton, /O botão na Meta será sempre URL/);
   });
 
   it("envia à IA só templates do tenant aprovados como Utility", async () => {

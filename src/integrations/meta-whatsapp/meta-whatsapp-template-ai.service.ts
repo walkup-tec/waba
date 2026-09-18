@@ -175,7 +175,10 @@ function isEnabled(): boolean {
   return Boolean(String(process.env.OPENAI_API_KEY || "").trim());
 }
 
-function componentsFromAiOption(option: MetaTemplateAiOption): Record<string, unknown>[] {
+function componentsFromAiOption(
+  option: MetaTemplateAiOption,
+  hasLinkButton = true,
+): Record<string, unknown>[] {
   const placeholders = [...new Set(
     [...option.body.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1])),
   )].sort((a, b) => a - b);
@@ -187,18 +190,21 @@ function componentsFromAiOption(option: MetaTemplateAiOption): Record<string, un
     throw new Error("Exemplos incompatíveis com variáveis.");
   }
   const buttonText = String(option.buttonText || "").trim();
-  if (!buttonText) throw new Error("Botão operacional ausente.");
-  return [
+  if (hasLinkButton && !buttonText) throw new Error("Botão operacional ausente.");
+  const components: Record<string, unknown>[] = [
     {
       type: "BODY",
       text: option.body,
       ...(maxPlaceholder ? { example: { body_text: [option.variableExamples] } } : {}),
     },
-    {
+  ];
+  if (hasLinkButton && buttonText) {
+    components.push({
       type: "BUTTONS",
       buttons: [{ type: "QUICK_REPLY", text: buttonText }],
-    },
-  ];
+    });
+  }
+  return components;
 }
 
 export class MetaWhatsappTemplateAiService {
@@ -322,10 +328,17 @@ export class MetaWhatsappTemplateAiService {
           name: option.name,
           language,
           category: "UTILITY",
-          components: componentsFromAiOption(option),
+          components: componentsFromAiOption(option, hasLinkButton),
         });
       }
-    } catch {
+    } catch (error) {
+      logMetaTemplate("AI", {
+        tenantId: tenant.tenantId,
+        connectionId: connection.id,
+        invalidOutput: true,
+        hasLinkButton,
+        reason: error instanceof Error ? error.message : "invalid_output",
+      });
       throw new MetaWhatsappError("template_ai_invalid_output");
     }
 
