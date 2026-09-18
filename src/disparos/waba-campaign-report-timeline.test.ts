@@ -7,6 +7,7 @@ import {
   buildSubscriberCampaignTimeline,
   collectIntakeReportTimeline,
   formatCampaignReportDateTime,
+  isCampaignReportBusinessInstant,
   resolveDispatchStartedAt,
 } from "./waba-campaign-report-timeline";
 
@@ -125,9 +126,11 @@ describe("linha do tempo do relatório do assinante", () => {
     );
   });
 
-  it("NOSSO CONSIG 1 termina sexta 18/09/2026 às 10:30 em Brasília", () => {
+  it("NOSSO CONSIG 1 distribui no expediente e termina sexta 18/09/2026 às 10:30", () => {
     const timeline = collectIntakeReportTimeline({
       ...stubIntake("NOSSO CONSIG 1"),
+      createdAt: "2026-09-09T17:48:06.000Z",
+      updatedAt: "2026-09-18T13:22:00.000Z",
       performanceReport: {
         totalLeads: 2504,
         sent: 2203,
@@ -140,20 +143,32 @@ describe("linha do tempo do relatório do assinante", () => {
         filledByEmail: "lab@example.com",
       },
     });
-    const finished = timeline.items.find((item) => item.key === "dispatchFinishedAt");
-    assert.equal(finished?.display, "Sexta-feira, 18 de setembro de 2026 - 10:30:00");
+    assert.deepEqual(
+      timeline.items.map((item) => item.display),
+      [
+        "Quarta-feira, 9 de setembro de 2026 - 14:48:06",
+        "Quinta-feira, 10 de setembro de 2026 - 17:56:29",
+        "Quinta-feira, 17 de setembro de 2026 - 13:55:49",
+        "Quinta-feira, 17 de setembro de 2026 - 17:12:54",
+        "Sexta-feira, 18 de setembro de 2026 - 10:30:00",
+      ],
+    );
+    for (const item of timeline.items) {
+      if (item.key === "createdAt") continue;
+      assert.equal(isCampaignReportBusinessInstant(item.at), true, item.key);
+    }
   });
 
-  it("distribui 20/70/5/5 entre criação 08:00 e finalização 18:00 em Brasília", () => {
+  it("distribui 20/70/5/5 no expediente entre criação 08:00 e finalização 18:00", () => {
     const distributed = buildDistributedCampaignReportTimeline(
       "2026-09-18T11:00:00.000Z",
       "2026-09-18T21:00:00.000Z",
     );
     assert.deepEqual(distributed, {
       createdAt: "2026-09-18T11:00:00.000Z",
-      attendanceStartedAt: "2026-09-18T13:00:00.000Z",
-      templateApprovedAt: "2026-09-18T20:00:00.000Z",
-      dispatchStartedAt: "2026-09-18T20:30:00.000Z",
+      attendanceStartedAt: "2026-09-18T13:48:00.000Z",
+      templateApprovedAt: "2026-09-18T20:06:00.000Z",
+      dispatchStartedAt: "2026-09-18T20:33:00.000Z",
       dispatchFinishedAt: "2026-09-18T21:00:00.000Z",
     });
     const timeline = collectIntakeReportTimeline({
@@ -166,11 +181,30 @@ describe("linha do tempo do relatório do assinante", () => {
       timeline.items.map((item) => item.display),
       [
         "Sexta-feira, 18 de setembro de 2026 - 08:00:00",
-        "Sexta-feira, 18 de setembro de 2026 - 10:00:00",
-        "Sexta-feira, 18 de setembro de 2026 - 17:00:00",
-        "Sexta-feira, 18 de setembro de 2026 - 17:30:00",
+        "Sexta-feira, 18 de setembro de 2026 - 10:48:00",
+        "Sexta-feira, 18 de setembro de 2026 - 17:06:00",
+        "Sexta-feira, 18 de setembro de 2026 - 17:33:00",
         "Sexta-feira, 18 de setembro de 2026 - 18:00:00",
       ],
+    );
+  });
+
+  it("não posiciona marco calculado à noite nem no fim de semana", () => {
+    const distributed = buildDistributedCampaignReportTimeline(
+      "2026-09-11T21:00:00.000Z",
+      "2026-09-14T13:00:00.000Z",
+    );
+    assert.deepEqual(distributed, {
+      createdAt: "2026-09-11T21:00:00.000Z",
+      attendanceStartedAt: "2026-09-11T21:24:00.000Z",
+      templateApprovedAt: "2026-09-14T12:48:00.000Z",
+      dispatchStartedAt: "2026-09-14T12:54:00.000Z",
+      dispatchFinishedAt: "2026-09-14T13:00:00.000Z",
+    });
+    assert.equal(isCampaignReportBusinessInstant(distributed?.dispatchStartedAt), true);
+    assert.equal(
+      formatCampaignReportDateTime(distributed?.dispatchStartedAt),
+      "Segunda-feira, 14 de setembro de 2026 - 09:54:00",
     );
   });
 
@@ -191,20 +225,17 @@ describe("linha do tempo do relatório do assinante", () => {
   });
 
   it("outra campanha não recebe a linha do tempo da PTX nem da Jandira", () => {
+    const at = "2026-03-10T15:00:00.000Z";
     const timeline = collectIntakeReportTimeline({
       ...stubIntake("Outra campanha"),
       startedAt: undefined,
+      createdAt: at,
+      updatedAt: at,
     });
     assert.equal(timeline.items.length, 5);
     assert.deepEqual(
       timeline.items.map((item) => item.at),
-      [
-        "2026-01-01T00:00:00.000Z",
-        "2026-01-01T00:00:00.000Z",
-        "2026-01-01T00:00:00.000Z",
-        "2026-01-01T00:00:00.000Z",
-        "2026-01-01T00:00:00.000Z",
-      ],
+      [at, at, at, at, at],
     );
     assert.equal(
       timeline.items.some((item) => item.display.includes("7 de setembro de 2026")),
