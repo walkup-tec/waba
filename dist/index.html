@@ -25105,7 +25105,7 @@
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-indicador-email">E-mail</label>
-                        <input id="admin-indicador-email" type="email" required placeholder="joao@empresa.com" />
+                        <input id="admin-indicador-email" type="email" required placeholder="joao@empresa.com" autocomplete="off" />
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-indicador-password">Senha</label>
@@ -25113,19 +25113,19 @@
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-indicador-whatsapp">WhatsApp</label>
-                        <input id="admin-indicador-whatsapp" type="tel" placeholder="(11) 99999-9999" />
+                        <input id="admin-indicador-whatsapp" type="tel" required inputmode="numeric" maxlength="16" placeholder="(11) 99999-9999" autocomplete="off" />
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-indicador-cpf">CPF ou CNPJ</label>
-                        <input id="admin-indicador-cpf" type="text" placeholder="000.000.000-00" />
+                        <input id="admin-indicador-cpf" type="text" required inputmode="numeric" maxlength="18" placeholder="000.000.000-00" autocomplete="off" />
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-indicador-spread">Spread por envio (R$)</label>
-                        <input id="admin-indicador-spread" type="text" inputmode="decimal" placeholder="0,03" />
+                        <input id="admin-indicador-spread" type="text" required inputmode="numeric" placeholder="0,03" autocomplete="off" />
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-indicador-commission">Comissão (R$)</label>
-                        <input id="admin-indicador-commission" type="text" inputmode="decimal" placeholder="0,02" value="0,02" />
+                        <input id="admin-indicador-commission" type="text" required inputmode="numeric" placeholder="0,02" value="0,02" autocomplete="off" />
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-indicador-pix">Chave PIX</label>
@@ -68402,15 +68402,20 @@
       }
 
       function parseSpreadInputToCents(raw) {
-        const normalized = String(raw || "").trim().replace(/\s/g, "").replace(",", ".");
-        const value = Number(normalized);
-        if (!Number.isFinite(value) || value < 0) return NaN;
-        return Math.round(value * 100);
+        const text = String(raw || "").trim();
+        if (!text) return NaN;
+        const digits = text.replace(/\D/g, "");
+        if (!digits) return NaN;
+        return Number(digits);
       }
 
       function formatSpreadInputFromCents(cents) {
         const n = Math.max(0, Math.round(Number(cents || 0))) / 100;
-        return n.toFixed(2).replace(".", ",");
+        return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function formatIndicadorMoneyInput(raw) {
+        return formatSpreadInputFromCents(parseSpreadInputToCents(raw) || 0);
       }
 
       function renderIndicadorKpis(rootId, items) {
@@ -68546,8 +68551,8 @@
         document.getElementById("admin-indicador-name").value = item?.fullName || "";
         document.getElementById("admin-indicador-email").value = item?.email || "";
         document.getElementById("admin-indicador-password").value = "";
-        document.getElementById("admin-indicador-whatsapp").value = item?.whatsapp || "";
-        document.getElementById("admin-indicador-cpf").value = item?.cpfCnpj || "";
+        document.getElementById("admin-indicador-whatsapp").value = formatWhatsappTarget(item?.whatsapp || "");
+        document.getElementById("admin-indicador-cpf").value = formatAdminCpfCnpjInput(item?.cpfCnpj || "");
         document.getElementById("admin-indicador-spread").value = formatSpreadInputFromCents(item?.spreadCentsPerSend || 0);
         document.getElementById("admin-indicador-commission").value = formatSpreadInputFromCents(
           item?.id ? item.commissionCentsPerSend ?? 2 : 2
@@ -68748,6 +68753,50 @@
         }
       }
 
+      function bindAdminIndicadorMaskedInputs() {
+        const bindTextMask = (input, format) => {
+          if (!input || input.dataset.maskBound === "1") return;
+          const apply = () => {
+            input.value = format(input.value);
+          };
+          input.dataset.maskBound = "1";
+          input.addEventListener("input", apply);
+          input.addEventListener("blur", apply);
+          input.addEventListener("paste", () => {
+            window.setTimeout(apply, 0);
+          });
+        };
+        bindTextMask(document.getElementById("admin-indicador-whatsapp"), formatWhatsappTarget);
+        bindTextMask(document.getElementById("admin-indicador-cpf"), formatAdminCpfCnpjInput);
+        bindTextMask(document.getElementById("admin-indicador-spread"), formatIndicadorMoneyInput);
+        bindTextMask(document.getElementById("admin-indicador-commission"), formatIndicadorMoneyInput);
+      }
+
+      function validateAdminIndicadorForm() {
+        const email = String(document.getElementById("admin-indicador-email")?.value || "").trim();
+        const at = email.indexOf("@");
+        if (!email || at <= 0 || at >= email.length - 1 || email.includes(" ")) {
+          return "Informe um e-mail válido, com @.";
+        }
+        const whatsappDigits = String(document.getElementById("admin-indicador-whatsapp")?.value || "").replace(/\D/g, "");
+        if (whatsappDigits.length < 10 || whatsappDigits.length > 11) {
+          return "Informe um celular válido com DDD (ex.: (11) 99999-9999).";
+        }
+        const docDigits = String(document.getElementById("admin-indicador-cpf")?.value || "").replace(/\D/g, "");
+        if (docDigits.length !== 11 && docDigits.length !== 14) {
+          return "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).";
+        }
+        const spreadCents = parseSpreadInputToCents(document.getElementById("admin-indicador-spread")?.value);
+        if (!Number.isFinite(spreadCents)) {
+          return "Informe o spread em reais, por envio.";
+        }
+        const commissionCents = parseSpreadInputToCents(document.getElementById("admin-indicador-commission")?.value);
+        if (!Number.isFinite(commissionCents)) {
+          return "Informe a comissão em reais, por envio.";
+        }
+        return "";
+      }
+
       function bindIndicadorSubscriberMaskedInputs() {
         const cpfInput = document.getElementById("indicador-sub-cpf");
         const whatsappInput = document.getElementById("indicador-sub-whatsapp");
@@ -68795,6 +68844,7 @@
       }
 
       function initIndicadorModuleUi() {
+        bindAdminIndicadorMaskedInputs();
         bindIndicadorSubscriberMaskedInputs();
         document.querySelectorAll("[data-admin-indicadores-pane]").forEach((btn) => {
           btn.addEventListener("click", () => {
@@ -68815,22 +68865,16 @@
           event.preventDefault();
           const errorEl = document.getElementById("admin-indicador-form-error");
           const id = String(document.getElementById("admin-indicador-id")?.value || "").trim();
+          const formError = validateAdminIndicadorForm();
+          if (formError) {
+            if (errorEl) {
+              errorEl.hidden = false;
+              errorEl.textContent = formError;
+            }
+            return;
+          }
           const spreadCents = parseSpreadInputToCents(document.getElementById("admin-indicador-spread")?.value);
           const commissionCents = parseSpreadInputToCents(document.getElementById("admin-indicador-commission")?.value);
-          if (!Number.isFinite(spreadCents)) {
-            if (errorEl) {
-              errorEl.hidden = false;
-              errorEl.textContent = "Informe o spread em reais, por envio.";
-            }
-            return;
-          }
-          if (!Number.isFinite(commissionCents)) {
-            if (errorEl) {
-              errorEl.hidden = false;
-              errorEl.textContent = "Informe a comissão em reais, por envio.";
-            }
-            return;
-          }
           const body = {
             fullName: document.getElementById("admin-indicador-name")?.value,
             email: document.getElementById("admin-indicador-email")?.value,
