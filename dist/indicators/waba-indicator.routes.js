@@ -3,14 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaIndicatorRoutes = void 0;
 const waba_staff_menu_auth_1 = require("../auth/waba-staff-menu-auth");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
-const waba_admin_bonus_envios_service_1 = require("../admin/waba-admin-bonus-envios.service");
 const waba_operacional_campanhas_service_1 = require("../admin/waba-operacional-campanhas.service");
 const waba_campaign_intake_vitoria_short_url_1 = require("../disparos/waba-campaign-intake-vitoria-short-url");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_indicator_service_1 = require("./waba-indicator.service");
 const indicatorService = new waba_indicator_service_1.WabaIndicatorService();
 const systemUserService = new waba_system_user_service_1.WabaSystemUserService();
-const bonusService = new waba_admin_bonus_envios_service_1.WabaAdminBonusEnviosService();
 const campanhasService = new waba_operacional_campanhas_service_1.WabaOperacionalCampanhasService();
 const rejectMasterIndicadores = (req, res) => (0, waba_staff_menu_auth_1.rejectUnlessStaffMenu)(req, res, "admin-indicadores");
 const rejectIndicadorMenu = (req, res, menuId) => {
@@ -220,33 +218,6 @@ const registerWabaIndicatorRoutes = (app) => {
         catch (error) {
             return res.status(404).json({
                 error: error instanceof Error ? error.message : "Assinante não encontrado.",
-            });
-        }
-    });
-    app.post("/indicador/subscribers/:id/bonus-envios", (req, res) => {
-        const auth = rejectIndicadorMenu(req, res, "indicador-assinantes");
-        if (!auth)
-            return;
-        try {
-            const indicatorUserId = indicatorService.requireIndicatorUserIdByEmail(auth.email);
-            const subscriberId = String(req.params.id ?? "");
-            const body = (req.body ?? {});
-            const shipmentCount = Number(body.shipmentCount ?? body.quantity ?? 0);
-            indicatorService.assertIndicatorBonusGrant(indicatorUserId, subscriberId, shipmentCount);
-            const result = bonusService.grant({
-                subscriberId,
-                shipmentCount,
-                apiKind: String(body.apiKind ?? "oficial"),
-                validityMode: String(body.validityMode ?? "lifetime"),
-                validUntil: body.validUntil !== undefined ? String(body.validUntil) : undefined,
-                createdByEmail: auth.email,
-                applyIndicatorBonusCap: true,
-            });
-            return res.status(201).json(result);
-        }
-        catch (error) {
-            return res.status(400).json({
-                error: error instanceof Error ? error.message : "Não foi possível conceder o bônus.",
             });
         }
     });

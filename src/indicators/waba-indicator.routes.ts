@@ -2,7 +2,6 @@ import type { Express, Request, Response } from "express";
 import { rejectUnlessStaffMenu } from "../auth/waba-staff-menu-auth";
 import { resolveWabaRequestAuth } from "../auth/waba-request-auth";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
-import { WabaAdminBonusEnviosService, type BonusEnviosValidityMode } from "../admin/waba-admin-bonus-envios.service";
 import { WabaOperacionalCampanhasService } from "../admin/waba-operacional-campanhas.service";
 import { ensureVitoriaDaConquistaIntakeShortUrlByCampaignId } from "../disparos/waba-campaign-intake-vitoria-short-url";
 import { deliverSubscriberWelcomeNotifications } from "../mail/waba-mail-delivery";
@@ -10,7 +9,6 @@ import { WabaIndicatorService } from "./waba-indicator.service";
 
 const indicatorService = new WabaIndicatorService();
 const systemUserService = new WabaSystemUserService();
-const bonusService = new WabaAdminBonusEnviosService();
 const campanhasService = new WabaOperacionalCampanhasService();
 
 const rejectMasterIndicadores = (req: Request, res: Response) =>
@@ -231,32 +229,6 @@ export const registerWabaIndicatorRoutes = (app: Express) => {
     } catch (error) {
       return res.status(404).json({
         error: error instanceof Error ? error.message : "Assinante não encontrado.",
-      });
-    }
-  });
-
-  app.post("/indicador/subscribers/:id/bonus-envios", (req, res) => {
-    const auth = rejectIndicadorMenu(req, res, "indicador-assinantes");
-    if (!auth) return;
-    try {
-      const indicatorUserId = indicatorService.requireIndicatorUserIdByEmail(auth.email);
-      const subscriberId = String(req.params.id ?? "");
-      const body = (req.body ?? {}) as Record<string, unknown>;
-      const shipmentCount = Number(body.shipmentCount ?? body.quantity ?? 0);
-      indicatorService.assertIndicatorBonusGrant(indicatorUserId, subscriberId, shipmentCount);
-      const result = bonusService.grant({
-        subscriberId,
-        shipmentCount,
-        apiKind: String(body.apiKind ?? "oficial"),
-        validityMode: String(body.validityMode ?? "lifetime") as BonusEnviosValidityMode,
-        validUntil: body.validUntil !== undefined ? String(body.validUntil) : undefined,
-        createdByEmail: auth.email,
-        applyIndicatorBonusCap: true,
-      });
-      return res.status(201).json(result);
-    } catch (error) {
-      return res.status(400).json({
-        error: error instanceof Error ? error.message : "Não foi possível conceder o bônus.",
       });
     }
   });

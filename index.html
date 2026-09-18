@@ -25248,7 +25248,7 @@
                     </div>
                     <div class="aquecedor-field">
                       <label for="indicador-sub-email">E-mail</label>
-                      <input id="indicador-sub-email" type="email" required />
+                      <input id="indicador-sub-email" type="email" required placeholder="nome@empresa.com" autocomplete="off" />
                     </div>
                     <div class="aquecedor-field">
                       <label for="indicador-sub-password">Senha</label>
@@ -25256,15 +25256,11 @@
                     </div>
                     <div class="aquecedor-field">
                       <label for="indicador-sub-whatsapp">WhatsApp</label>
-                      <input id="indicador-sub-whatsapp" type="tel" required />
+                      <input id="indicador-sub-whatsapp" type="tel" required inputmode="numeric" maxlength="16" placeholder="(11) 99999-9999" autocomplete="off" />
                     </div>
                     <div class="aquecedor-field">
                       <label for="indicador-sub-cpf">CPF ou CNPJ</label>
-                      <input id="indicador-sub-cpf" type="text" required />
-                    </div>
-                    <div class="aquecedor-field">
-                      <label for="indicador-sub-bonus">Bônus de envios (máx. 100 no total)</label>
-                      <input id="indicador-sub-bonus" type="number" min="0" max="100" placeholder="Opcional" />
+                      <input id="indicador-sub-cpf" type="text" required inputmode="numeric" maxlength="18" placeholder="000.000.000-00" autocomplete="off" />
                     </div>
                   </div>
                   <p id="indicador-subscriber-form-error" class="admin-user-edit-error" hidden role="alert"></p>
@@ -25282,10 +25278,9 @@
                         <th class="admin-subscribers-num">Disponíveis</th>
                         <th class="admin-subscribers-num">Campanhas</th>
                         <th class="admin-subscribers-num">Comissão</th>
-                        <th>Bônus restante</th>
                       </tr>
                     </thead>
-                    <tbody id="indicador-subscribers-tbody"><tr><td colspan="7" class="muted">Carregando…</td></tr></tbody>
+                    <tbody id="indicador-subscribers-tbody"><tr><td colspan="6" class="muted">Carregando…</td></tr></tbody>
                   </table>
                 </div>
               </div>
@@ -68601,7 +68596,7 @@
           const items = Array.isArray(payload.items) ? payload.items : [];
           if (!tbody) return;
           if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
             return;
           }
           tbody.innerHTML = items
@@ -68615,13 +68610,12 @@
                 <td class="admin-subscribers-num">${escapeAdminHtml(String(item.remainingShipments ?? 0))}</td>
                 <td class="admin-subscribers-num">${escapeAdminHtml(String(item.campaigns ?? 0))}</td>
                 <td class="admin-subscribers-num">${escapeAdminHtml(item.commissionGeneratedLabel || "R$ 0,00")}</td>
-                <td>${escapeAdminHtml(String(item.remainingBonusQuota ?? 0))} envios</td>
               </tr>`
             )
             .join("");
         } catch (error) {
           if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="7" class="muted">${escapeAdminHtml(
+            tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeAdminHtml(
               error?.message || "Falha ao carregar."
             )}</td></tr>`;
           }
@@ -68754,7 +68748,54 @@
         }
       }
 
+      function bindIndicadorSubscriberMaskedInputs() {
+        const cpfInput = document.getElementById("indicador-sub-cpf");
+        const whatsappInput = document.getElementById("indicador-sub-whatsapp");
+        const applyCpfMask = () => {
+          if (!cpfInput) return;
+          cpfInput.value = formatAdminCpfCnpjInput(cpfInput.value);
+        };
+        const applyWhatsappMask = () => {
+          if (!whatsappInput) return;
+          whatsappInput.value = formatWhatsappTarget(whatsappInput.value);
+        };
+        if (cpfInput && cpfInput.dataset.maskBound !== "1") {
+          cpfInput.dataset.maskBound = "1";
+          cpfInput.addEventListener("input", applyCpfMask);
+          cpfInput.addEventListener("blur", applyCpfMask);
+          cpfInput.addEventListener("paste", () => {
+            window.setTimeout(applyCpfMask, 0);
+          });
+        }
+        if (whatsappInput && whatsappInput.dataset.maskBound !== "1") {
+          whatsappInput.dataset.maskBound = "1";
+          whatsappInput.addEventListener("input", applyWhatsappMask);
+          whatsappInput.addEventListener("blur", applyWhatsappMask);
+          whatsappInput.addEventListener("paste", () => {
+            window.setTimeout(applyWhatsappMask, 0);
+          });
+        }
+      }
+
+      function validateIndicadorSubscriberForm() {
+        const email = String(document.getElementById("indicador-sub-email")?.value || "").trim();
+        const at = email.indexOf("@");
+        if (!email || at <= 0 || at >= email.length - 1 || email.includes(" ")) {
+          return "Informe um e-mail válido, com @.";
+        }
+        const whatsappDigits = String(document.getElementById("indicador-sub-whatsapp")?.value || "").replace(/\D/g, "");
+        if (whatsappDigits.length < 10 || whatsappDigits.length > 11) {
+          return "Informe um celular válido com DDD (ex.: (11) 99999-9999).";
+        }
+        const docDigits = String(document.getElementById("indicador-sub-cpf")?.value || "").replace(/\D/g, "");
+        if (docDigits.length !== 11 && docDigits.length !== 14) {
+          return "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).";
+        }
+        return "";
+      }
+
       function initIndicadorModuleUi() {
+        bindIndicadorSubscriberMaskedInputs();
         document.querySelectorAll("[data-admin-indicadores-pane]").forEach((btn) => {
           btn.addEventListener("click", () => {
             const pane = btn.getAttribute("data-admin-indicadores-pane");
@@ -68843,6 +68884,14 @@
         document.getElementById("indicador-subscriber-form")?.addEventListener("submit", async (event) => {
           event.preventDefault();
           const errorEl = document.getElementById("indicador-subscriber-form-error");
+          const formError = validateIndicadorSubscriberForm();
+          if (formError) {
+            if (errorEl) {
+              errorEl.hidden = false;
+              errorEl.textContent = formError;
+            }
+            return;
+          }
           const body = {
             fullName: document.getElementById("indicador-sub-name")?.value,
             email: document.getElementById("indicador-sub-email")?.value,
@@ -68858,16 +68907,6 @@
             });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(payload.error || "Não foi possível cadastrar o assinante.");
-            const bonusQty = Math.max(0, Math.round(Number(document.getElementById("indicador-sub-bonus")?.value || 0)));
-            if (bonusQty > 0 && payload.subscriber?.id) {
-              const bonusRes = await fetch(`/indicador/subscribers/${encodeURIComponent(payload.subscriber.id)}/bonus-envios`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ shipmentCount: bonusQty, apiKind: "oficial", validityMode: "lifetime" }),
-              });
-              const bonusPayload = await bonusRes.json().catch(() => ({}));
-              if (!bonusRes.ok) throw new Error(bonusPayload.error || "Assinante criado, mas o bônus foi recusado.");
-            }
             event.target.reset();
             if (errorEl) errorEl.hidden = true;
             showToast("Assinante cadastrado.", "success");
