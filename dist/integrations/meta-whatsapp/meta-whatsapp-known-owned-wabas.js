@@ -27,6 +27,7 @@ exports.isKnownClientWabaForBusiness = isKnownClientWabaForBusiness;
 exports.isKnownClientWabaId = isKnownClientWabaId;
 exports.knownWabaIdForPendingPhone = knownWabaIdForPendingPhone;
 exports.knownBusinessIdsForWaba = knownBusinessIdsForWaba;
+exports.isWithdrawnInboxDisplayPhone = isWithdrawnInboxDisplayPhone;
 exports.knownBusinessIdsForDisplayPhone = knownBusinessIdsForDisplayPhone;
 exports.knownWabaNameForId = knownWabaNameForId;
 exports.knownPendingPhonesForBusiness = knownPendingPhonesForBusiness;
@@ -44,7 +45,7 @@ exports.DRAX_SISTEMAS_BUSINESS_IDS = ["1041827648719609"];
 exports.DRAX_SISTEMAS_WABA_ID = "1636793994538054";
 /** Conexão Embedded Signup antiga; a WABA01 do Manager é DRAX_SISTEMAS_WABA_ID. */
 exports.DRAX_SISTEMAS_STALE_WABA_ID = "1988957871663919";
-/** Chip oficial Drax Sistema — o card em Restritas às vezes vem sem numbers[]. */
+/** Chip oficial Drax Sistema. A conta WhatsApp foi restrita — fora do Atendimento. */
 exports.DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS = ["5182001279"];
 exports.WALKUP_BUSINESS_IDS = ["4141369862822598"];
 exports.WALKUP_WABA01_ID = "1014470201624992";
@@ -231,6 +232,13 @@ function knownBusinessIdsForWaba(wabaId) {
             out.add(businessId);
     }
     return [...out];
+}
+/** 5182001279 saiu do Atendimento: a conta WhatsApp integrada foi restrita. */
+function isWithdrawnInboxDisplayPhone(displayPhoneNumber) {
+    const raw = String(displayPhoneNumber || "").trim();
+    if (!raw)
+        return false;
+    return exports.DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS.some((digits) => displayPhonesMatch(raw, digits));
 }
 /** BM catalogado do número de exibição (ex.: 5182001279 → Drax Sistemas). */
 function knownBusinessIdsForDisplayPhone(displayPhoneNumber) {

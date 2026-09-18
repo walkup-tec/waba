@@ -10,6 +10,7 @@ import {
   equivalentOwnedWabaIdsForBusiness,
   knownBusinessIdsForDisplayPhone,
   knownBusinessIdsForWaba,
+  isWithdrawnInboxDisplayPhone,
   isKnownClientWabaForBusiness,
   knownClientWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
@@ -61,6 +62,9 @@ describe("known owned WABAs", () => {
     assert.deepEqual(knownBusinessIdsForDisplayPhone("5182001279"), ["1041827648719609"]);
     assert.deepEqual(knownBusinessIdsForWaba(DRAX_SISTEMAS_STALE_WABA_ID), ["1041827648719609"]);
     assert.deepEqual(knownBusinessIdsForWaba(DRAX_SISTEMAS_WABA_ID), ["1041827648719609"]);
+    assert.equal(isWithdrawnInboxDisplayPhone("+55 51 8200-1279"), true);
+    assert.equal(isWithdrawnInboxDisplayPhone("5182001279"), true);
+    assert.equal(isWithdrawnInboxDisplayPhone("+55 11 95213-7761"), false);
   });
 
   it("Drax Sistemas: só a WABA do Manager, não a conexão stale", () => {

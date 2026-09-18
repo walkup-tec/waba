@@ -12,6 +12,7 @@ import { namesEqual, resolvePhoneNameSync, resolveMetaPhoneUiStatus, canActivate
 import { isHiddenBusiness, listHiddenBusinessIds } from "./meta-whatsapp-hidden-business.store";
 import {
   equivalentOwnedWabaIdsForBusiness,
+  isWithdrawnInboxDisplayPhone,
   knownBusinessIdsForDisplayPhone,
   knownBusinessIdsForWaba,
   knownOwnedBusinessesMatch,
@@ -310,6 +311,7 @@ function hiddenIdMatches(tenantId: string, value: string | null | undefined): bo
 
 /** Conexão cuja BM/WABA está em Restritas — não serve o Atendimento. */
 export function isConnectionAccountRestricted(tenantId: string, row: InboxAccountHint): boolean {
+  if (isWithdrawnInboxDisplayPhone(row.displayPhoneNumber)) return true;
   const tenant = String(tenantId || "").trim();
   if (!tenant) return false;
   if (hiddenIdMatches(tenant, row.metaBusinessId) || hiddenIdMatches(tenant, row.wabaId)) return true;
@@ -335,6 +337,7 @@ function accountIsRestricted(
   connections?: InboxAccountHint[] | null,
 ): boolean {
   if (identity?.portfolioHidden === true) return true;
+  if (isWithdrawnInboxDisplayPhone(identity?.displayPhoneNumber)) return true;
   if (hiddenIdMatches(tenantId, identity?.businessId)) return true;
   for (const businessId of knownBusinessIdsForDisplayPhone(identity?.displayPhoneNumber)) {
     if (hiddenIdMatches(tenantId, businessId)) return true;
@@ -355,6 +358,7 @@ export function isPhoneInboxEligible(
 ): boolean {
   if (!isPhoneInboxEnabled(identity) || !identity) return false;
   if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito") return false;
+  if (isWithdrawnInboxDisplayPhone(identity.displayPhoneNumber)) return false;
   const tenant = String(tenantId || "").trim();
   const phone = String(phoneNumberId || "").trim();
   if (tenant && accountIsRestricted(tenant, phone, identity, connections)) return false;

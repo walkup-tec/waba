@@ -42,7 +42,7 @@ export const DRAX_SISTEMAS_BUSINESS_IDS = ["1041827648719609"] as const;
 export const DRAX_SISTEMAS_WABA_ID = "1636793994538054";
 /** Conexão Embedded Signup antiga; a WABA01 do Manager é DRAX_SISTEMAS_WABA_ID. */
 export const DRAX_SISTEMAS_STALE_WABA_ID = "1988957871663919";
-/** Chip oficial Drax Sistema — o card em Restritas às vezes vem sem numbers[]. */
+/** Chip oficial Drax Sistema. A conta WhatsApp foi restrita — fora do Atendimento. */
 export const DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS = ["5182001279"] as const;
 
 export const WALKUP_BUSINESS_IDS = ["4141369862822598"] as const;
@@ -247,6 +247,13 @@ export function knownBusinessIdsForWaba(wabaId: string): string[] {
     for (const businessId of ANDRE_AGUIAR_BUSINESS_IDS) out.add(businessId);
   }
   return [...out];
+}
+
+/** 5182001279 saiu do Atendimento: a conta WhatsApp integrada foi restrita. */
+export function isWithdrawnInboxDisplayPhone(displayPhoneNumber: string | null | undefined): boolean {
+  const raw = String(displayPhoneNumber || "").trim();
+  if (!raw) return false;
+  return DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS.some((digits) => displayPhonesMatch(raw, digits));
 }
 
 /** BM catalogado do número de exibição (ex.: 5182001279 → Drax Sistemas). */

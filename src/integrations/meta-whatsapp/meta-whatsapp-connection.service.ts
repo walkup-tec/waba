@@ -69,6 +69,7 @@ import {
   businessIdsToReopenAfterFalseLeftManager,
   catalogAgencyBusinessIds,
   catalogBackfillBusinessIds,
+  isWithdrawnInboxDisplayPhone,
 } from "./meta-whatsapp-known-owned-wabas";
 import {
   addManualBusiness,
@@ -2469,6 +2470,13 @@ export class MetaWhatsappConnectionService {
       current?.displayPhoneNumber ||
       open.displayPhoneNumber ||
       null;
+    if (input.enabled && isWithdrawnInboxDisplayPhone(displayPhoneNumber)) {
+      throw new MetaWhatsappError(
+        "invalid_payload",
+        400,
+        "Este número não entra no Atendimento: a conta WhatsApp integrada foi restrita.",
+      );
+    }
     const channelName =
       String(input.channelName || "").trim() ||
       current?.channelName ||

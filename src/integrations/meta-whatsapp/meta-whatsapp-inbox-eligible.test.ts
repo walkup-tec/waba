@@ -17,8 +17,8 @@ const tenantId = deriveStableMetaTenantId("inbox-eligible@exemplo.com");
 
 const number = (overrides: Partial<MetaPortfolioNumberPublic> = {}): MetaPortfolioNumberPublic => ({
   phoneNumberId: "phone-1",
-  displayPhoneNumber: "+55 51 8200-1279",
-  verifiedName: "Drax Sistema",
+  displayPhoneNumber: "+55 11 95213-7761",
+  verifiedName: "Grupo Walkup",
   qualityRating: null,
   metaStatus: "CONNECTED",
   codeVerificationStatus: "VERIFIED",
@@ -100,7 +100,7 @@ describe("Atendimento só lista chip Ativo com Inbox", () => {
     purgePhoneIdentities(tenantId);
   });
 
-  it("conta WhatsApp em Restritas tira o 5182001279 do Atendimento na hora", () => {
+  it("5182001279 não entra no Atendimento mesmo com Inbox ligado e conta ainda listada", () => {
     const businessId = "1041827648719609";
     const restrictedConn = {
       phoneNumberId: "phone-1",
@@ -115,24 +115,10 @@ describe("Atendimento só lista chip Ativo com Inbox", () => {
       displayPhoneNumber: "+55 51 8200-1279",
       channelName: "Drax Sistema",
     });
-    assert.deepEqual(listEnabledInboxPhoneIds(tenantId, [restrictedConn]), ["phone-1"]);
-    hideBusiness(tenantId, businessId, "BAN Drax Sistemas");
     assert.deepEqual(listEnabledInboxPhoneIds(tenantId), []);
     assert.deepEqual(listEnabledInboxPhoneIds(tenantId, [restrictedConn]), []);
-    assert.equal(listPhoneInboxChannels(tenantId, undefined, [restrictedConn])[0]?.inboxEligible, false);
+    assert.equal(listPhoneInboxChannels(tenantId)[0]?.inboxEligible, false);
     assert.equal(isInboxPhoneAllowed(tenantId, "phone-1", ["phone-1"], [restrictedConn]), false);
-    assert.deepEqual(
-      listEnabledInboxPhoneIds(tenantId, [
-        {
-          phoneNumberId: "outro-chip",
-          displayPhoneNumber: "5182001279",
-          metaBusinessId: businessId,
-        },
-      ]),
-      [],
-    );
-    unhideBusiness(tenantId, businessId);
-    assert.deepEqual(listEnabledInboxPhoneIds(tenantId, [restrictedConn]), ["phone-1"]);
     purgePhoneIdentities(tenantId);
   });
 

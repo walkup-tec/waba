@@ -643,7 +643,7 @@ describe("fase 8 canais do Inbox", () => {
     conversations.rows.push(conv());
     const service = inboxOf(connections, conversations, new FakeMessages());
     const before = await service.listConversations(auth(EMAIL_A), {});
-    assert.equal(before.channels.length, 1);
+    assert.equal(before.channels.length, 0);
     hideBusiness(TENANT_A, businessId, "BAN Drax Sistemas");
     const listed = await service.listConversations(auth(EMAIL_A), {});
     assert.equal(listed.channels.length, 0);
@@ -657,7 +657,7 @@ describe("fase 8 canais do Inbox", () => {
     writePhoneIdentity(TENANT_A, "phone-a", {
       inboxEnabled: true,
       channelName: "Drax",
-      displayPhoneNumber: "+55 51 8200-1279",
+      displayPhoneNumber: "+55 11 95213-7761",
     });
     const connections = new FakeConnections();
     connections.rows.push(connectedRow({ status: "pending_confirmation" }));
@@ -666,7 +666,7 @@ describe("fase 8 canais do Inbox", () => {
     const service = inboxOf(connections, conversations, new FakeMessages());
     const listed = await service.listConversations(auth(EMAIL_A), {});
     assert.equal(listed.connected, true);
-    assert.equal(listed.channels[0]?.displayPhoneNumber, "+55 51 8200-1279");
+    assert.equal(listed.channels[0]?.displayPhoneNumber, "+55 11 95213-7761");
     assert.equal(listed.conversations.length, 1);
     purgePhoneIdentities(TENANT_A);
   });
@@ -717,8 +717,8 @@ describe("fase 8 canais do Inbox", () => {
 
     writePhoneIdentity(TENANT_A, "phone-a", {
       inboxEnabled: true,
-      channelName: "Drax Sistema",
-      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Walkup",
+      displayPhoneNumber: "+55 11 95213-7761",
     });
 
     const labSend = await messaging.sendFromAuth(auth(EMAIL_A), {
@@ -729,10 +729,10 @@ describe("fase 8 canais do Inbox", () => {
     assert.ok(labSend.messageId);
     const afterSend = await inbox.listConversations(auth(EMAIL_A), {});
     assert.equal(afterSend.conversations.length, 1);
-    assert.equal(afterSend.channels[0]?.displayPhoneNumber, "+55 51 8200-1279");
+    assert.equal(afterSend.channels[0]?.displayPhoneNumber, "+55 11 95213-7761");
     // verified_name da conexão tem prioridade sobre channelName local do switch
     assert.equal(afterSend.channels[0]?.name, "Loja");
-    assert.match(String(afterSend.conversations[0]?.channelPhone || ""), /8200-1279/);
+    assert.match(String(afterSend.conversations[0]?.channelPhone || ""), /95213-7761/);
 
     await webhookInbox.persistInbound({
       connection: connectedRow(),
@@ -771,8 +771,8 @@ describe("fase 8 canais do Inbox", () => {
     purgePhoneIdentities(TENANT_A);
     writePhoneIdentity(TENANT_A, "phone-chip", {
       inboxEnabled: true,
-      channelName: "Drax Sistema",
-      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Walkup",
+      displayPhoneNumber: "+55 11 95213-7761",
     });
     const connections = new FakeConnections();
     connections.rows.push(connectedRow({ phoneNumberId: "phone-conn" }));
@@ -812,8 +812,8 @@ describe("fase 8 canais do Inbox", () => {
   it("lista e responde conversa gravada em outra conexão do mesmo tenant", async () => {
     writePhoneIdentity(TENANT_A, "phone-a", {
       inboxEnabled: true,
-      channelName: "Drax Sistema",
-      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Walkup",
+      displayPhoneNumber: "+55 11 95213-7761",
     });
     const connections = new FakeConnections();
     connections.rows.push(

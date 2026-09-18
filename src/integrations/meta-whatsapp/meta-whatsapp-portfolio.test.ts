@@ -3217,18 +3217,18 @@ describe("meta portfolio service", () => {
     const result = await service.setPhoneInboxFromAuth(auth, {
       phoneNumberId: "phone-1",
       enabled: true,
-      displayPhoneNumber: "+55 51 8200-1279",
-      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 11 95213-7761",
+      channelName: "Grupo Walkup",
     });
     assert.equal(result.inboxEnabled, true);
     assert.equal(result.phoneNumberId, "phone-1");
-    assert.equal(result.displayPhoneNumber, "+55 51 8200-1279");
-    assert.equal(result.channelName, "Drax Sistema");
+    assert.equal(result.displayPhoneNumber, "+55 11 95213-7761");
+    assert.equal(result.channelName, "Grupo Walkup");
     assert.equal(graphCalls, 0);
-    assert.equal(listPhoneInboxChannels(tenantId)[0]?.displayPhoneNumber, "+55 51 8200-1279");
+    assert.equal(listPhoneInboxChannels(tenantId)[0]?.displayPhoneNumber, "+55 11 95213-7761");
     assert.equal(applyLocalPhoneIdentities(tenantId, [{
       phoneNumberId: "phone-1",
-      displayPhoneNumber: "+55 51 8200-1279",
+      displayPhoneNumber: "+55 11 95213-7761",
       verifiedName: "Walkup",
       qualityRating: null,
       metaStatus: "CONNECTED",

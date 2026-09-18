@@ -2046,6 +2046,9 @@ class MetaWhatsappConnectionService {
             current?.displayPhoneNumber ||
             open.displayPhoneNumber ||
             null;
+        if (input.enabled && (0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(displayPhoneNumber)) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload", 400, "Este número não entra no Atendimento: a conta WhatsApp integrada foi restrita.");
+        }
         const channelName = String(input.channelName || "").trim() ||
             current?.channelName ||
             open.verifiedName ||

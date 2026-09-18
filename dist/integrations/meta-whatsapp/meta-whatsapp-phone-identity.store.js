@@ -236,6 +236,8 @@ function hiddenIdMatches(tenantId, value) {
 }
 /** Conexão cuja BM/WABA está em Restritas — não serve o Atendimento. */
 function isConnectionAccountRestricted(tenantId, row) {
+    if ((0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(row.displayPhoneNumber))
+        return true;
     const tenant = String(tenantId || "").trim();
     if (!tenant)
         return false;
@@ -261,6 +263,8 @@ function isConnectionAccountRestricted(tenantId, row) {
 function accountIsRestricted(tenantId, phoneNumberId, identity, connections) {
     if (identity?.portfolioHidden === true)
         return true;
+    if ((0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(identity?.displayPhoneNumber))
+        return true;
     if (hiddenIdMatches(tenantId, identity?.businessId))
         return true;
     for (const businessId of (0, meta_whatsapp_known_owned_wabas_1.knownBusinessIdsForDisplayPhone)(identity?.displayPhoneNumber)) {
@@ -280,6 +284,8 @@ function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
     if (!isPhoneInboxEnabled(identity) || !identity)
         return false;
     if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito")
+        return false;
+    if ((0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(identity.displayPhoneNumber))
         return false;
     const tenant = String(tenantId || "").trim();
     const phone = String(phoneNumberId || "").trim();
