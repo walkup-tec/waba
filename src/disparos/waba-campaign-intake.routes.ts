@@ -143,7 +143,7 @@ const resolvePlannedSendCount = (
       error: "Informe a quantidade de envios desejada.",
     };
   }
-  const minPlanned = campaignMinPlannedSendCountForEmail(ownerEmail);
+  const minPlanned = campaignMinPlannedSendCountForEmail(ownerEmail, apiKind);
   if (requestedSendCount < minPlanned) {
     return {
       plannedSendCount: 0,
@@ -535,7 +535,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       if (importedLineCount < 1) {
         return res.status(400).json({ error: "O arquivo não contém linhas de leads." });
       }
-      const minPlanned = campaignMinPlannedSendCountForEmail(auth.email);
+      const minPlanned = campaignMinPlannedSendCountForEmail(auth.email, apiKind);
       if (importedLineCount < minPlanned) {
         return res.status(400).json({
           error:

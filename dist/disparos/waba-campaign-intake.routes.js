@@ -84,7 +84,7 @@ const resolvePlannedSendCount = (ownerEmail, importedLineCount, requestedSendCou
             error: "Informe a quantidade de envios desejada.",
         };
     }
-    const minPlanned = (0, waba_campaign_intake_constants_1.campaignMinPlannedSendCountForEmail)(ownerEmail);
+    const minPlanned = (0, waba_campaign_intake_constants_1.campaignMinPlannedSendCountForEmail)(ownerEmail, apiKind);
     if (requestedSendCount < minPlanned) {
         return {
             plannedSendCount: 0,
@@ -407,7 +407,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             if (importedLineCount < 1) {
                 return res.status(400).json({ error: "O arquivo não contém linhas de leads." });
             }
-            const minPlanned = (0, waba_campaign_intake_constants_1.campaignMinPlannedSendCountForEmail)(auth.email);
+            const minPlanned = (0, waba_campaign_intake_constants_1.campaignMinPlannedSendCountForEmail)(auth.email, apiKind);
             if (importedLineCount < minPlanned) {
                 return res.status(400).json({
                     error: apiKind === "oficial"

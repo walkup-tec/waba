@@ -21889,10 +21889,10 @@
                             id="dis-wizard-planned-send-count"
                             class="register-input"
                             type="number"
-                            min="1000"
+                            min="5000"
                             step="1"
                             inputmode="numeric"
-                            placeholder="Ex.: 1000"
+                            placeholder="Ex.: 5000"
                             required
                           />
                           <p class="dis-wizard-leads-count-hint" id="dis-wizard-leads-count-hint"></p>
@@ -53606,7 +53606,7 @@
       let disCampaignWizardStep = 1;
       const DIS_CAMPAIGN_WIZARD_TOTAL_STEPS = 5;
       const DIS_CAMPAIGN_WHATSAPP_DISPLAY_NAME = "Atendimento e Relacionamento";
-      const DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT = 1000;
+      const DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT = 5000;
       const DIS_CAMPAIGN_NO_MIN_SEND_EMAIL = "mozart.pmo@gmail.com";
 
       function getDisCampaignMinPlannedSendCount() {
@@ -53838,7 +53838,7 @@
         return true;
       }
 
-      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 6;
+      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 7;
       let wabaCampaignIntakeBackendCache = null;
 
       function isCampaignIntakeGatewayStatus(status) {

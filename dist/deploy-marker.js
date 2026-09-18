@@ -2,4 +2,4 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WABA_DEPLOY_MARKER = void 0;
-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-18-141800-NOSSO-CONSIG-TIMELINE";
+exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-18-142200-OFICIAL-MIN-5000";
