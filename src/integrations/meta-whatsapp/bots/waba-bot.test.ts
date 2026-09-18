@@ -621,6 +621,28 @@ describe("WABA bots — números Inbox", () => {
     );
     assert.equal(listed.channels[0]?.botId, flow.id);
   });
+
+  it("trocar o bot do chip substitui o anterior e nunca deixa dois no mesmo número", async () => {
+    writePhoneIdentity(TENANT_A, "phone-ok", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Relacionamento e Atendimento",
+      displayPhoneNumber: "+55 51 92636-1688",
+    });
+    const first = upsertBotFlow(TENANT_A, createDefaultBotDraft("Link campanha A"));
+    const second = upsertBotFlow(TENANT_A, createDefaultBotDraft("Link campanha B"));
+    const service = new WabaBotService({
+      listInboxConnections: async () => [],
+    });
+    await service.linkPhone(authA, { phoneNumberId: "phone-ok", botId: first.id });
+    await service.linkPhone(authA, { phoneNumberId: "phone-ok", botId: second.id });
+    const listed = await service.list(authA);
+    const linksForPhone = listed.links.filter((row) => row.phoneNumberId === "phone-ok");
+    assert.equal(linksForPhone.length, 1);
+    assert.equal(linksForPhone[0]?.botId, second.id);
+    assert.equal(getBotIdForPhone(TENANT_A, "phone-ok"), second.id);
+    assert.notEqual(getBotIdForPhone(TENANT_A, "phone-ok"), first.id);
+  });
 });
 
 describe("WABA bots — menu FARM BM", () => {
@@ -632,6 +654,15 @@ describe("WABA bots — menu FARM BM", () => {
     assert.match(html, /<span class="tab-label">Bots<\/span>/);
     assert.match(html, /id="tab-whatsapp-bots"/);
     assert.match(html, /row\.inboxEligible === true/);
+    assert.match(html, /data-bot-chip-select/);
+    assert.match(html, /data-bot-edit-chip/);
+    assert.match(html, /data-bot-switch-open/);
+    assert.match(html, /data-bot-create-on-chip/);
+    assert.match(html, /Trocar bot/);
+    assert.match(html, /Editar bot/);
+    assert.match(html, /Criar bot neste chip/);
+    assert.match(html, /Um chip só pode ter um bot/);
+    assert.doesNotMatch(html, /Associar a este bot/);
     assert.doesNotMatch(html, /wabaBotsUi\.channels \|\| \[\]\)\.filter\(\(row\) => row\.inboxEnabled === true\)/);
   });
 });

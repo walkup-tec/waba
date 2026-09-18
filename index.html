@@ -3063,7 +3063,7 @@
         }
         .waba-bots-layout {
           display: grid;
-          grid-template-columns: minmax(220px, 24%) minmax(0, 1fr) minmax(240px, 26%);
+          grid-template-columns: minmax(260px, 28%) minmax(0, 1fr) minmax(240px, 24%);
           gap: 12px;
           min-height: 62vh;
         }
@@ -3084,19 +3084,90 @@
         .waba-bots-phone {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 6px;
           width: 100%;
           text-align: left;
-          padding: 10px;
-          border-radius: 10px;
+          padding: 12px;
+          border-radius: 12px;
           border: 1px solid rgba(148, 163, 184, 0.2);
           background: rgba(15, 23, 42, 0.7);
           color: #e2e8f0;
         }
         .waba-bots-item.is-active,
+        .waba-bots-phone.is-active,
         .waba-bots-node.is-active {
           border-color: rgba(45, 212, 191, 0.85);
           box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.35);
+        }
+        .waba-bots-chip-head {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          width: 100%;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: inherit;
+          text-align: left;
+          cursor: pointer;
+        }
+        .waba-bots-chip-head strong,
+        .waba-bots-item strong {
+          font-size: 0.92rem;
+        }
+        .waba-bots-chip-head small,
+        .waba-bots-item small {
+          color: #94a3b8;
+        }
+        .waba-bots-chip-status {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 4px;
+          padding: 4px 8px;
+          border-radius: 999px;
+          font-size: 0.72rem;
+          font-weight: 600;
+          width: fit-content;
+        }
+        .waba-bots-chip-status.is-on {
+          background: rgba(16, 185, 129, 0.16);
+          color: #6ee7b7;
+        }
+        .waba-bots-chip-status.is-off {
+          background: rgba(148, 163, 184, 0.14);
+          color: #cbd5e1;
+        }
+        .waba-bots-chip-actions,
+        .waba-bots-switch {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .waba-bots-switch {
+          margin-top: 4px;
+          padding-top: 8px;
+          border-top: 1px solid rgba(148, 163, 184, 0.16);
+        }
+        .waba-bots-switch .form-control {
+          width: 100%;
+        }
+        .waba-bots-chip-rule {
+          margin: 0;
+          font-size: 0.72rem;
+          color: #94a3b8;
+        }
+        .waba-bots-context {
+          margin-bottom: 10px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px solid rgba(45, 212, 191, 0.22);
+          background: rgba(6, 36, 24, 0.45);
+          color: #ccfbf1;
+          font-size: 0.82rem;
+        }
+        .waba-bots-context strong {
+          color: #f8fafc;
         }
         .waba-bots-toolbar {
           display: flex;
@@ -3138,6 +3209,12 @@
           color: #99f6e4;
           font-size: 0.78rem;
           white-space: pre-wrap;
+        }
+        .waba-bots-empty {
+          margin: 0;
+          color: #94a3b8;
+          font-size: 0.86rem;
+          line-height: 1.45;
         }
         @media (max-width: 980px) {
           .waba-bots-layout {
@@ -22944,7 +23021,7 @@
               <div class="panel-header">
                 <div>
                   <div class="panel-title">Bots</div>
-                  <span class="muted">Fluxos do Inbox Cloud META — um bot reutilizável por número com Inbox ligado.</span>
+                  <span class="muted">Cada número Inbox atende com um único bot. Quando o template mudar, troque o bot do chip — o anterior sai do número.</span>
                 </div>
                 <div class="disparos-inline-actions" style="flex-wrap:wrap;gap:8px;">
                   <button type="button" class="instance-action-btn btn-qrcode enabled" id="waba-bots-new">Novo bot</button>
@@ -22954,14 +23031,16 @@
               </div>
               <p id="waba-bots-banner" class="meta-inbox-banner" role="status">Carregando bots…</p>
               <div class="waba-bots-layout">
-                <aside class="waba-bots-col" aria-label="Lista de bots">
-                  <div class="meta-chat-thread-title">Meus bots</div>
-                  <div id="waba-bots-list" class="waba-bots-list"></div>
-                  <div class="meta-chat-thread-title" style="margin-top:16px;">Números Inbox</div>
-                  <p class="muted" style="margin:6px 0 8px;">Associe o bot selecionado a um número com Inbox ligado. A mensagem do contato inicia o fluxo.</p>
+                <aside class="waba-bots-col" aria-label="Chips Inbox e biblioteca de bots">
+                  <div class="meta-chat-thread-title">Números Inbox</div>
+                  <p class="muted" style="margin:6px 0 8px;">O chip é o ponto de partida. Veja o bot atual, edite ou troque para o próximo template. Nunca ficam dois bots no mesmo número.</p>
                   <div id="waba-bots-phones" class="waba-bots-phones"></div>
+                  <div class="meta-chat-thread-title" style="margin-top:16px;">Bots prontos</div>
+                  <p class="muted" style="margin:6px 0 8px;">Crie um bot novo quando o link ou o fluxo do template mudar. Depois coloque esse bot no chip.</p>
+                  <div id="waba-bots-list" class="waba-bots-list"></div>
                 </aside>
                 <div class="waba-bots-col waba-bots-canvas-wrap">
+                  <div id="waba-bots-context" class="waba-bots-context" hidden></div>
                   <div class="waba-bots-toolbar">
                     <input id="waba-bots-name" type="text" class="form-control" placeholder="Nome do bot" maxlength="80" />
                     <select id="waba-bots-add-kind" class="form-control" aria-label="Adicionar etapa">
@@ -44768,6 +44847,8 @@
         channels: [],
         catalog: { nodes: [] },
         selectedId: "",
+        selectedPhoneId: "",
+        switchingPhoneId: "",
         selectedNodeId: "",
         draft: null,
         runId: "",
@@ -44813,53 +44894,164 @@
         };
       }
 
+      function wabaBotsEligibleChannels() {
+        return (wabaBotsUi.channels || []).filter((row) => row.inboxEligible === true);
+      }
+
+      function wabaBotsFlowById(id) {
+        return wabaBotsUi.flows.find((item) => item.id === id) || null;
+      }
+
+      function wabaBotsChipById(phoneNumberId) {
+        return wabaBotsEligibleChannels().find((row) => row.phoneNumberId === phoneNumberId) || null;
+      }
+
+      function wabaBotsChipsForBot(botId) {
+        return wabaBotsEligibleChannels().filter((row) => row.botId === botId);
+      }
+
+      function wabaBotsChipLabel(row) {
+        return row?.name || row?.displayPhoneNumber || row?.phoneNumberId || "";
+      }
+
       function wabaBotsRenderList() {
         const box = document.getElementById("waba-bots-list");
         if (!box) return;
         if (!wabaBotsUi.flows.length) {
-          box.innerHTML = "<p class=\"muted\">Nenhum bot ainda. Crie o primeiro fluxo.</p>";
+          box.innerHTML = "<p class=\"waba-bots-empty\">Nenhum bot na biblioteca. Crie um fluxo para o template de hoje e depois coloque no chip.</p>";
           return;
         }
         box.innerHTML = wabaBotsUi.flows
           .map((flow) => {
+            const chips = wabaBotsChipsForBot(flow.id);
             const active = flow.id === wabaBotsUi.selectedId ? " is-active" : "";
-            return `<button type="button" class="waba-bots-item${active}" data-bot-id="${escapeAdminHtml(flow.id)}"><strong>${escapeAdminHtml(flow.name)}</strong><small>${(flow.nodes || []).length} etapas</small></button>`;
-          })
-          .join("");
-      }
-
-      function wabaBotsRenderPhones() {
-        const box = document.getElementById("waba-bots-phones");
-        if (!box) return;
-        const channels = (wabaBotsUi.channels || []).filter((row) => row.inboxEligible === true);
-        if (!channels.length) {
-          box.innerHTML = "<p class=\"muted\">Nenhum Inbox elegível. O chip precisa estar marcado Inbox, em conta sem restrição e no portfólio ATIVAS.</p>";
-          return;
-        }
-        box.innerHTML = channels
-          .map((row) => {
-            const label = row.name || row.displayPhoneNumber || row.phoneNumberId;
-            const phone = row.displayPhoneNumber || row.phoneNumberId;
-            const linked = row.botId === wabaBotsUi.selectedId;
+            const where = chips.length
+              ? "No chip: " + chips.map((row) => wabaBotsChipLabel(row)).join(", ")
+              : "Fora de um chip — pronto para o próximo template";
             return (
-              `<label class="waba-bots-phone">` +
-              `<span>${escapeAdminHtml(label)}</span>` +
-              `<small>${escapeAdminHtml(phone)}</small>` +
-              `<button type="button" class="instance-action-btn btn-refresh enabled" data-bot-phone="${escapeAdminHtml(row.phoneNumberId)}" data-bot-link="${linked ? "off" : "on"}">${linked ? "Desassociar" : "Associar a este bot"}</button>` +
-              `</label>`
+              `<button type="button" class="waba-bots-item${active}" data-bot-id="${escapeAdminHtml(flow.id)}">` +
+              `<strong>${escapeAdminHtml(flow.name)}</strong>` +
+              `<small>${(flow.nodes || []).length} etapas · ${escapeAdminHtml(where)}</small>` +
+              `</button>`
             );
           })
           .join("");
       }
 
+      function wabaBotsSwitchPanel(row) {
+        const currentId = row.botId || "";
+        const options = wabaBotsUi.flows
+          .filter((flow) => flow.id !== currentId)
+          .map((flow) => `<option value="${escapeAdminHtml(flow.id)}">${escapeAdminHtml(flow.name)}</option>`)
+          .join("");
+        const hasOthers = Boolean(options);
+        return (
+          `<div class="waba-bots-switch">` +
+          `<p class="waba-bots-chip-rule">Este chip fica com um bot só. O atual sai ao confirmar.</p>` +
+          (hasOthers
+            ? `<select class="form-control" data-bot-switch-select="${escapeAdminHtml(row.phoneNumberId)}" aria-label="Escolher bot para este chip"><option value="">Escolher um bot pronto…</option>${options}</select>` +
+              `<button type="button" class="instance-action-btn btn-refresh enabled" data-bot-switch-apply="${escapeAdminHtml(row.phoneNumberId)}">Colocar neste chip</button>`
+            : `<p class="muted">Ainda não há outro bot pronto. Crie um novo para este template.</p>`) +
+          `<button type="button" class="instance-action-btn btn-qrcode enabled" data-bot-create-on-chip="${escapeAdminHtml(row.phoneNumberId)}">Criar bot novo neste chip</button>` +
+          `<button type="button" class="instance-action-btn btn-refresh enabled" data-bot-switch-cancel="${escapeAdminHtml(row.phoneNumberId)}">Cancelar</button>` +
+          `</div>`
+        );
+      }
+
+      function wabaBotsRenderPhones() {
+        const box = document.getElementById("waba-bots-phones");
+        if (!box) return;
+        const channels = wabaBotsEligibleChannels();
+        if (!channels.length) {
+          box.innerHTML = "<p class=\"waba-bots-empty\">Nenhum Inbox elegível. O chip precisa estar marcado Inbox, em conta sem restrição e no portfólio ATIVAS.</p>";
+          return;
+        }
+        box.innerHTML = channels
+          .map((row) => {
+            const label = wabaBotsChipLabel(row);
+            const phone = row.displayPhoneNumber || row.phoneNumberId;
+            const flow = wabaBotsFlowById(row.botId);
+            const selected = row.phoneNumberId === wabaBotsUi.selectedPhoneId ? " is-active" : "";
+            const switching = row.phoneNumberId === wabaBotsUi.switchingPhoneId;
+            const status = flow
+              ? `<span class="waba-bots-chip-status is-on">Bot neste chip: ${escapeAdminHtml(flow.name)}</span>`
+              : `<span class="waba-bots-chip-status is-off">Sem bot neste chip</span>`;
+            let actions = "";
+            if (switching) {
+              actions = wabaBotsSwitchPanel(row);
+            } else if (flow) {
+              actions =
+                `<div class="waba-bots-chip-actions">` +
+                `<button type="button" class="instance-action-btn btn-qrcode enabled" data-bot-edit-chip="${escapeAdminHtml(row.phoneNumberId)}">Editar bot</button>` +
+                `<button type="button" class="instance-action-btn btn-refresh enabled" data-bot-switch-open="${escapeAdminHtml(row.phoneNumberId)}">Trocar bot</button>` +
+                `<button type="button" class="instance-action-btn btn-refresh enabled" data-bot-unlink="${escapeAdminHtml(row.phoneNumberId)}">Tirar do chip</button>` +
+                `</div>`;
+            } else {
+              actions =
+                `<div class="waba-bots-chip-actions">` +
+                `<button type="button" class="instance-action-btn btn-qrcode enabled" data-bot-create-on-chip="${escapeAdminHtml(row.phoneNumberId)}">Criar bot neste chip</button>` +
+                `<button type="button" class="instance-action-btn btn-refresh enabled" data-bot-switch-open="${escapeAdminHtml(row.phoneNumberId)}">Usar bot existente</button>` +
+                `</div>`;
+            }
+            return (
+              `<article class="waba-bots-phone${selected}" data-bot-chip="${escapeAdminHtml(row.phoneNumberId)}">` +
+              `<button type="button" class="waba-bots-chip-head" data-bot-chip-select="${escapeAdminHtml(row.phoneNumberId)}">` +
+              `<strong>${escapeAdminHtml(label)}</strong>` +
+              `<small>${escapeAdminHtml(phone)}</small>` +
+              `${status}` +
+              `</button>` +
+              actions +
+              `</article>`
+            );
+          })
+          .join("");
+      }
+
+      function wabaBotsRenderContext() {
+        const box = document.getElementById("waba-bots-context");
+        if (!box) return;
+        const chip = wabaBotsChipById(wabaBotsUi.selectedPhoneId);
+        const draft = wabaBotsUi.draft;
+        if (!draft && !chip) {
+          box.hidden = true;
+          box.textContent = "";
+          return;
+        }
+        box.hidden = false;
+        if (chip && draft && chip.botId === draft.id) {
+          box.innerHTML = `Editando o bot <strong>${escapeAdminHtml(draft.name)}</strong> do chip <strong>${escapeAdminHtml(wabaBotsChipLabel(chip))}</strong>. Este número só pode ter este bot.`;
+          return;
+        }
+        if (chip && !chip.botId) {
+          box.innerHTML = `Chip <strong>${escapeAdminHtml(wabaBotsChipLabel(chip))}</strong> sem bot. Crie um fluxo para o template de hoje ou escolha um bot pronto.`;
+          return;
+        }
+        if (draft) {
+          const chips = wabaBotsChipsForBot(draft.id);
+          box.innerHTML = chips.length
+            ? `Editando <strong>${escapeAdminHtml(draft.name)}</strong>, em uso no chip ${escapeAdminHtml(chips.map((row) => wabaBotsChipLabel(row)).join(", "))}.`
+            : `Editando <strong>${escapeAdminHtml(draft.name)}</strong> na biblioteca. Ainda não está em nenhum chip.`;
+          return;
+        }
+        box.hidden = true;
+      }
+
       function wabaBotsRenderCanvas() {
         const canvas = document.getElementById("waba-bots-canvas");
         const nameInput = document.getElementById("waba-bots-name");
-        if (nameInput && wabaBotsUi.draft) nameInput.value = wabaBotsUi.draft.name || "";
+        if (nameInput) nameInput.value = wabaBotsUi.draft?.name || "";
+        wabaBotsRenderContext();
         if (!canvas) return;
+        const chip = wabaBotsChipById(wabaBotsUi.selectedPhoneId);
+        if (!wabaBotsUi.draft) {
+          canvas.innerHTML = chip
+            ? "<p class=\"waba-bots-empty\">Este chip ainda não tem bot. Crie um para o template de hoje ou use um bot da biblioteca. Um número nunca fica com dois bots.</p>"
+            : "<p class=\"waba-bots-empty\">Selecione um chip para editar o bot dele, ou crie um bot novo para o próximo template.</p>";
+          return;
+        }
         const nodes = wabaBotsUi.draft?.nodes || [];
         if (!nodes.length) {
-          canvas.innerHTML = "<p class=\"muted\">Este bot precisa de um Início.</p>";
+          canvas.innerHTML = "<p class=\"waba-bots-empty\">Este bot precisa de um Início.</p>";
           return;
         }
         canvas.innerHTML = nodes
@@ -44932,15 +45124,30 @@
         }
       }
 
-      function wabaBotsSelect(id) {
-        wabaBotsUi.selectedId = id;
-        wabaBotsUi.draft = JSON.parse(JSON.stringify(wabaBotsUi.flows.find((item) => item.id === id) || null));
-        wabaBotsUi.selectedNodeId = wabaBotsUi.draft?.nodes?.[0]?.id || "";
-        wabaBotsUi.runId = "";
+      function wabaBotsRefresh() {
         wabaBotsRenderList();
         wabaBotsRenderPhones();
         wabaBotsRenderCanvas();
         wabaBotsRenderInspector();
+      }
+
+      function wabaBotsSelect(id, phoneId) {
+        wabaBotsUi.selectedId = id || "";
+        if (phoneId) wabaBotsUi.selectedPhoneId = phoneId;
+        wabaBotsUi.draft = wabaBotsUi.selectedId
+          ? JSON.parse(JSON.stringify(wabaBotsFlowById(wabaBotsUi.selectedId) || null))
+          : null;
+        wabaBotsUi.selectedNodeId = wabaBotsUi.draft?.nodes?.[0]?.id || "";
+        wabaBotsUi.runId = "";
+        wabaBotsRefresh();
+      }
+
+      function wabaBotsSelectChip(phoneNumberId) {
+        wabaBotsUi.selectedPhoneId = phoneNumberId || "";
+        wabaBotsUi.switchingPhoneId = "";
+        const chip = wabaBotsChipById(phoneNumberId);
+        if (chip?.botId) wabaBotsSelect(chip.botId, phoneNumberId);
+        else wabaBotsSelect("", phoneNumberId);
       }
 
       async function wabaBotsLoad() {
@@ -44950,21 +45157,33 @@
           wabaBotsUi.channels = payload.channels || [];
           wabaBotsUi.catalog = payload.catalog || { nodes: [] };
           wabaBotsFillKinds();
-          if (!wabaBotsUi.selectedId || !wabaBotsUi.flows.some((item) => item.id === wabaBotsUi.selectedId)) {
-            wabaBotsUi.selectedId = wabaBotsUi.flows[0]?.id || "";
+          const channels = wabaBotsEligibleChannels();
+          if (wabaBotsUi.selectedPhoneId && !channels.some((row) => row.phoneNumberId === wabaBotsUi.selectedPhoneId)) {
+            wabaBotsUi.selectedPhoneId = "";
           }
-          if (wabaBotsUi.selectedId) wabaBotsSelect(wabaBotsUi.selectedId);
+          if (!wabaBotsUi.selectedPhoneId && channels.length === 1) {
+            wabaBotsUi.selectedPhoneId = channels[0].phoneNumberId;
+          }
+          if (wabaBotsUi.selectedPhoneId) {
+            const chip = wabaBotsChipById(wabaBotsUi.selectedPhoneId);
+            if (chip?.botId) wabaBotsUi.selectedId = chip.botId;
+          }
+          if (!wabaBotsUi.selectedId || !wabaBotsUi.flows.some((item) => item.id === wabaBotsUi.selectedId)) {
+            const chip = wabaBotsChipById(wabaBotsUi.selectedPhoneId);
+            wabaBotsUi.selectedId = chip?.botId || "";
+          }
+          if (wabaBotsUi.selectedId) wabaBotsSelect(wabaBotsUi.selectedId, wabaBotsUi.selectedPhoneId);
           else {
             wabaBotsUi.draft = null;
-            wabaBotsRenderList();
-            wabaBotsRenderPhones();
-            wabaBotsRenderCanvas();
-            wabaBotsRenderInspector();
+            wabaBotsRefresh();
           }
+          const chip = wabaBotsChipById(wabaBotsUi.selectedPhoneId);
           wabaBotsBanner(
-            wabaBotsUi.flows.length
-              ? "Associe o bot a um número Inbox. Quem escrever para esse número inicia o fluxo."
-              : "Crie um bot e associe a um número com Inbox ligado.",
+            chip?.botId
+              ? "Este chip já tem um bot. Edite o fluxo ou troque quando o template mudar."
+              : chip
+                ? "Este chip está sem bot. Crie um fluxo ou escolha um bot pronto — um número só aceita um bot."
+                : "Selecione um chip Inbox para editar, trocar ou criar o bot dele.",
           );
         } catch (error) {
           wabaBotsBanner(error && error.message ? error.message : "Erro ao carregar bots.", true);
@@ -45002,6 +45221,7 @@
             });
             wabaBotsUi.selectedId = payload.flow?.id || "";
             await wabaBotsLoad();
+            wabaBotsBanner("Bot criado na biblioteca. Coloque-o em um chip quando for usar no template.");
           } catch (error) {
             wabaBotsBanner(error && error.message ? error.message : "Não foi possível criar.", true);
           }
@@ -45009,13 +45229,14 @@
         document.getElementById("waba-bots-save")?.addEventListener("click", () => wabaBotsSave());
         document.getElementById("waba-bots-delete")?.addEventListener("click", async () => {
           if (!wabaBotsUi.selectedId) return;
-          if (!window.confirm("Excluir este bot?")) return;
+          if (!window.confirm("Excluir este bot da biblioteca? Se ele estiver em um chip, o número fica sem bot.")) return;
           try {
             await wabaBotsJson("/integrations/meta/whatsapp/bots/" + encodeURIComponent(wabaBotsUi.selectedId), {
               method: "DELETE",
             });
             wabaBotsUi.selectedId = "";
             await wabaBotsLoad();
+            wabaBotsBanner("Bot excluído.");
           } catch (error) {
             wabaBotsBanner(error && error.message ? error.message : "Não foi possível excluir.", true);
           }
@@ -45067,10 +45288,109 @@
             wabaBotsBanner(error && error.message ? error.message : "Falha ao continuar o teste.", true);
           }
         });
+        async function wabaBotsLinkPhone(phoneNumberId, botId, message) {
+          await wabaBotsJson("/integrations/meta/whatsapp/bots/phone-link", {
+            method: "POST",
+            body: JSON.stringify({ phoneNumberId, botId }),
+          });
+          wabaBotsUi.selectedPhoneId = phoneNumberId;
+          wabaBotsUi.switchingPhoneId = "";
+          if (botId) wabaBotsUi.selectedId = botId;
+          await wabaBotsLoad();
+          wabaBotsBanner(message);
+        }
+
+        async function wabaBotsCreateOnChip(phoneNumberId) {
+          const chip = wabaBotsChipById(phoneNumberId);
+          const current = wabaBotsFlowById(chip?.botId);
+          if (current && !window.confirm(`Criar um bot novo neste chip? O bot «${current.name}» sai do número. Um chip só pode ter um bot.`)) {
+            return;
+          }
+          const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots", {
+            method: "POST",
+            body: JSON.stringify({ name: chip ? `Bot ${wabaBotsChipLabel(chip)}` : "Novo bot" }),
+          });
+          const createdId = payload.flow?.id || "";
+          if (!createdId) throw new Error("Não foi possível criar.");
+          await wabaBotsLinkPhone(phoneNumberId, createdId, "Bot novo colocado neste chip. Edite o fluxo para o template de hoje.");
+        }
+
         root.addEventListener("click", async (event) => {
+          const switchCancel = event.target.closest("[data-bot-switch-cancel]");
+          if (switchCancel) {
+            wabaBotsUi.switchingPhoneId = "";
+            wabaBotsRenderPhones();
+            return;
+          }
+          const switchOpen = event.target.closest("[data-bot-switch-open]");
+          if (switchOpen) {
+            wabaBotsUi.selectedPhoneId = switchOpen.getAttribute("data-bot-switch-open") || "";
+            wabaBotsUi.switchingPhoneId = wabaBotsUi.selectedPhoneId;
+            wabaBotsRenderPhones();
+            return;
+          }
+          const switchApply = event.target.closest("[data-bot-switch-apply]");
+          if (switchApply) {
+            const phoneNumberId = switchApply.getAttribute("data-bot-switch-apply") || "";
+            const select = root.querySelector(`[data-bot-switch-select="${phoneNumberId}"]`);
+            const nextId = String(select?.value || "").trim();
+            if (!nextId) {
+              wabaBotsBanner("Escolha um bot pronto para colocar neste chip.", true);
+              return;
+            }
+            const chip = wabaBotsChipById(phoneNumberId);
+            const current = wabaBotsFlowById(chip?.botId);
+            const next = wabaBotsFlowById(nextId);
+            if (current && !window.confirm(`Este chip vai passar a usar «${next?.name || "o bot escolhido"}». O bot «${current.name}» sai do número. Um chip só pode ter um bot.`)) {
+              return;
+            }
+            try {
+              await wabaBotsLinkPhone(phoneNumberId, nextId, `Chip atualizado. Agora atende com «${next?.name || "o bot escolhido"}».`);
+            } catch (error) {
+              wabaBotsBanner(error && error.message ? error.message : "Não foi possível trocar o bot.", true);
+            }
+            return;
+          }
+          const createOnChip = event.target.closest("[data-bot-create-on-chip]");
+          if (createOnChip) {
+            try {
+              await wabaBotsCreateOnChip(createOnChip.getAttribute("data-bot-create-on-chip") || "");
+            } catch (error) {
+              wabaBotsBanner(error && error.message ? error.message : "Não foi possível criar o bot neste chip.", true);
+            }
+            return;
+          }
+          const unlinkBtn = event.target.closest("[data-bot-unlink]");
+          if (unlinkBtn) {
+            const phoneNumberId = unlinkBtn.getAttribute("data-bot-unlink") || "";
+            const chip = wabaBotsChipById(phoneNumberId);
+            const current = wabaBotsFlowById(chip?.botId);
+            if (!window.confirm(`Tirar o bot${current ? ` «${current.name}»` : ""} deste chip? O fluxo fica na biblioteca e o número fica sem atendimento automático.`)) {
+              return;
+            }
+            try {
+              await wabaBotsLinkPhone(phoneNumberId, null, "Bot tirado deste chip. O fluxo continua na biblioteca.");
+            } catch (error) {
+              wabaBotsBanner(error && error.message ? error.message : "Não foi possível tirar o bot do chip.", true);
+            }
+            return;
+          }
+          const editChip = event.target.closest("[data-bot-edit-chip]");
+          if (editChip) {
+            wabaBotsSelectChip(editChip.getAttribute("data-bot-edit-chip") || "");
+            wabaBotsBanner("Editando o bot que está neste chip.");
+            return;
+          }
+          const chipSelect = event.target.closest("[data-bot-chip-select]");
+          if (chipSelect) {
+            wabaBotsSelectChip(chipSelect.getAttribute("data-bot-chip-select") || "");
+            return;
+          }
           const botBtn = event.target.closest("[data-bot-id]");
           if (botBtn) {
+            wabaBotsUi.switchingPhoneId = "";
             wabaBotsSelect(botBtn.getAttribute("data-bot-id"));
+            wabaBotsBanner("Editando um bot da biblioteca. Para usá-lo no atendimento, coloque-o em um chip.");
             return;
           }
           const nodeBtn = event.target.closest("[data-bot-node]");
@@ -45090,23 +45410,6 @@
             wabaBotsRenderCanvas();
             wabaBotsRenderInspector();
             return;
-          }
-          const phoneBtn = event.target.closest("[data-bot-phone]");
-          if (phoneBtn && wabaBotsUi.selectedId) {
-            const link = phoneBtn.getAttribute("data-bot-link") === "on";
-            try {
-              await wabaBotsJson("/integrations/meta/whatsapp/bots/phone-link", {
-                method: "POST",
-                body: JSON.stringify({
-                  phoneNumberId: phoneBtn.getAttribute("data-bot-phone"),
-                  botId: link ? wabaBotsUi.selectedId : null,
-                }),
-              });
-              await wabaBotsLoad();
-              wabaBotsBanner(link ? "Número associado a este bot." : "Número desassociado.");
-            } catch (error) {
-              wabaBotsBanner(error && error.message ? error.message : "Não foi possível associar.", true);
-            }
           }
         });
       }
