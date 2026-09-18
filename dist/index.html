@@ -10057,6 +10057,17 @@
         color: #e2e8f0;
         font-size: 0.84rem;
       }
+      @media (max-width: 860px) {
+        #tab-admin-campanhas .admin-campanhas-filters,
+        #tab-admin-campanhas .admin-campanhas-plan-filter-wrap {
+          width: 100%;
+        }
+        #tab-admin-campanhas .admin-campanhas-plan-filter-wrap select {
+          flex: 1;
+          min-width: 0;
+          width: 100%;
+        }
+      }
       body:not(.waba-master-visible) .admin-campanhas-master-only {
         display: none !important;
       }
@@ -44327,7 +44338,7 @@
       function metaInboxConnectedNumbersText(channels) {
         const rows = Array.isArray(channels) ? channels : [];
         if (!rows.length) {
-          return "Nenhum número no atendimento. No Laboratório, ligue Inbox (cinza → verde) em cada chip que deve receber conversa.";
+          return "Nenhum número no atendimento. No Laboratório, ligue Inbox só em chip Ativo — número restrito ou desativado não entra aqui.";
         }
         return (
           "Números no atendimento: " +

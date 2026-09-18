@@ -209,16 +209,20 @@ function withLocalIdentities(
   const localizeCard = (item: MetaPortfolioPublic) =>
     applyLocalPortfolioBusinessPhoto(tenantId, applyLocalPortfolioBusinessIdentity(tenantId, item));
   const busyPhoneIds = listBusyCloudPhoneNumberIds(tenantId);
-  const localizeNumbers = (numbers: MetaPortfolioNumberPublic[], placeholderName?: string | null) =>
+  const localizeNumbers = (
+    numbers: MetaPortfolioNumberPublic[],
+    placeholderName?: string | null,
+    hidden?: boolean | null,
+  ) =>
     applyCloudPhoneOccupancy(
       tenantId,
-      applyLocalPhoneIdentities(tenantId, numbers, placeholderName),
+      applyLocalPhoneIdentities(tenantId, numbers, placeholderName, { hidden }),
       busyPhoneIds,
     );
   const portfolio = assets.portfolio ? localizeCard(assets.portfolio) : null;
   const portfolios = (assets.portfolios || []).map((item) => ({
     ...localizeCard(item),
-    numbers: localizeNumbers(item.numbers || [], item.name || item.primaryPageName),
+    numbers: localizeNumbers(item.numbers || [], item.name || item.primaryPageName, item.hidden === true),
   }));
   return {
     ...assets,
@@ -228,6 +232,7 @@ function withLocalIdentities(
     numbers: localizeNumbers(
       assets.numbers || [],
       assets.portfolio?.name || assets.portfolio?.primaryPageName,
+      assets.portfolio?.hidden === true,
     ),
   };
 }
@@ -2413,6 +2418,22 @@ export class MetaWhatsappConnectionService {
       null;
     if (!open) throw new MetaWhatsappError("no_pending_connection");
     const current = readPhoneIdentity(tenant.tenantId, phoneNumberId);
+    if (input.enabled) {
+      if (current?.portfolioHidden === true) {
+        throw new MetaWhatsappError(
+          "invalid_payload",
+          400,
+          "Este número está em Restritas. Só é possível ligar o Inbox em chip Ativo.",
+        );
+      }
+      if (current?.uiStatus === "pendente" || current?.uiStatus === "restrito") {
+        throw new MetaWhatsappError(
+          "invalid_payload",
+          400,
+          "Só é possível ligar o Inbox em número Ativo, sem restrição ou desativado.",
+        );
+      }
+    }
     const displayPhoneNumber =
       String(input.displayPhoneNumber || "").trim() ||
       current?.displayPhoneNumber ||
@@ -2427,6 +2448,7 @@ export class MetaWhatsappConnectionService {
       inboxEnabled: input.enabled,
       displayPhoneNumber,
       channelName,
+      ...(input.enabled && !current?.uiStatus ? { uiStatus: "ativo" as const } : {}),
     });
     logMetaWhatsappSafe("phone-inbox-updated", { tenantId: tenant.tenantId, enabled: input.enabled });
     return {

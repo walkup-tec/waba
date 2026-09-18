@@ -170,7 +170,7 @@ export class MetaWhatsappInboxService {
     const verifiedByPhone = verifiedNamesByPhone(open);
     const snapshots = listPhoneInboxChannels(tenant.tenantId, verifiedByPhone);
     const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
-    const enabledIds = snapshots.filter((row) => row.inboxEnabled).map((row) => row.phoneNumberId);
+    const enabledIds = snapshots.filter((row) => row.inboxEligible).map((row) => row.phoneNumberId);
     const connPhones = open.map((row) => row.phoneNumberId).filter((id): id is string => Boolean(id));
     const listIds = inboxQueryPhoneIds(tenant.tenantId, connPhones, selectedPhone);
     if (!enabledIds.length || (selectedPhone && !listIds.length)) {

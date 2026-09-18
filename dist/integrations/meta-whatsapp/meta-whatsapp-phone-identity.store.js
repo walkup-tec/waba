@@ -9,6 +9,7 @@ exports.readPhonePhoto = readPhonePhoto;
 exports.localPhonePhotoUrl = localPhonePhotoUrl;
 exports.phoneIdentitySyncStatus = phoneIdentitySyncStatus;
 exports.isPhoneInboxEnabled = isPhoneInboxEnabled;
+exports.isPhoneInboxEligible = isPhoneInboxEligible;
 exports.phoneInboxDisplayName = phoneInboxDisplayName;
 exports.syncInboxChannelNameFromMeta = syncInboxChannelNameFromMeta;
 exports.listPhoneInboxChannels = listPhoneInboxChannels;
@@ -26,6 +27,12 @@ const meta_whatsapp_phone_profile_1 = require("./meta-whatsapp-phone-profile");
 const meta_whatsapp_portfolio_map_1 = require("./meta-whatsapp-portfolio.map");
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
+function parseStoredUiStatus(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (raw === "ativo" || raw === "pendente" || raw === "restrito")
+        return raw;
+    return null;
+}
 function safeTenantId(tenantId) {
     const id = String(tenantId || "").trim();
     if (!id)
@@ -68,6 +75,8 @@ function readPhoneIdentity(tenantId, phoneNumberId) {
         const photoMetaApplied = row.photoMetaApplied === true;
         const profileMetaApplied = row.profileMetaApplied === true;
         const inboxEnabled = row.inboxEnabled === false ? false : row.inboxEnabled === true ? true : null;
+        const uiStatus = parseStoredUiStatus(row.uiStatus);
+        const portfolioHidden = row.portfolioHidden === true ? true : row.portfolioHidden === false ? false : null;
         const displayPhoneNumber = String(row.displayPhoneNumber || "").trim() || null;
         const channelName = String(row.channelName || "").trim() || null;
         const updatedAt = String(row.updatedAt || "").trim() || new Date().toISOString();
@@ -82,6 +91,8 @@ function readPhoneIdentity(tenantId, phoneNumberId) {
             photoMetaApplied,
             profileMetaApplied,
             inboxEnabled,
+            uiStatus,
+            portfolioHidden,
             displayPhoneNumber,
             channelName,
             updatedAt,
@@ -104,6 +115,8 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
         photoMetaApplied: false,
         profileMetaApplied: false,
         inboxEnabled: null,
+        uiStatus: null,
+        portfolioHidden: null,
         displayPhoneNumber: null,
         channelName: null,
         updatedAt: "",
@@ -131,6 +144,8 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
                 ? false
                 : current.profileMetaApplied,
         inboxEnabled: input.inboxEnabled !== undefined ? input.inboxEnabled : current.inboxEnabled,
+        uiStatus: input.uiStatus !== undefined ? input.uiStatus : current.uiStatus,
+        portfolioHidden: input.portfolioHidden !== undefined ? input.portfolioHidden : current.portfolioHidden,
         displayPhoneNumber: input.displayPhoneNumber !== undefined ? input.displayPhoneNumber : current.displayPhoneNumber,
         channelName: input.channelName !== undefined ? input.channelName : current.channelName,
         updatedAt: new Date().toISOString(),
@@ -182,6 +197,16 @@ function phoneIdentitySyncStatus(input) {
 }
 function isPhoneInboxEnabled(identity) {
     return identity?.inboxEnabled === true;
+}
+/** Atendimento: Inbox ligado e chip Ativo, fora de Restritas/desativado. */
+function isPhoneInboxEligible(identity) {
+    if (!isPhoneInboxEnabled(identity) || !identity)
+        return false;
+    if (identity.portfolioHidden === true)
+        return false;
+    if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito")
+        return false;
+    return true;
 }
 function phoneInboxDisplayName(identity, verifiedNameFromMeta) {
     const meta = String(verifiedNameFromMeta || "").trim();
@@ -241,6 +266,7 @@ function listPhoneInboxChannels(tenantId, verifiedNameByPhone) {
                 displayPhoneNumber: identity.displayPhoneNumber,
                 profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
                 inboxEnabled: isPhoneInboxEnabled(identity),
+                inboxEligible: isPhoneInboxEligible(identity),
             });
         }
         return out;
@@ -251,7 +277,7 @@ function listPhoneInboxChannels(tenantId, verifiedNameByPhone) {
 }
 function listEnabledInboxPhoneIds(tenantId) {
     return listPhoneInboxChannels(tenantId)
-        .filter((row) => row.inboxEnabled)
+        .filter((row) => row.inboxEligible)
         .map((row) => String(row.phoneNumberId || "").trim())
         .filter(Boolean);
 }
@@ -307,7 +333,7 @@ function resolveInboxSendPhoneNumberId(input) {
         return enabled[0] || null;
     return connection || null;
 }
-function applyLocalPhoneIdentities(tenantId, numbers, placeholderName) {
+function applyLocalPhoneIdentities(tenantId, numbers, placeholderName, options) {
     return numbers.map((row) => {
         const identity = readPhoneIdentity(tenantId, row.phoneNumberId);
         const nameSync = (0, meta_whatsapp_portfolio_map_1.resolvePhoneNameSync)({
@@ -335,9 +361,20 @@ function applyLocalPhoneIdentities(tenantId, numbers, placeholderName) {
             healthCanSend: row.healthCanSend,
         });
         const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
+        const portfolioHidden = options?.hidden === true;
+        try {
+            writePhoneIdentity(tenantId, row.phoneNumberId, {
+                uiStatus,
+                portfolioHidden,
+            });
+        }
+        catch {
+            // Identidade local não pode abortar a listagem.
+        }
         if (isPhoneInboxEnabled(identity) && row.verifiedName) {
             syncInboxChannelNameFromMeta(tenantId, row.phoneNumberId, row.verifiedName, row.displayPhoneNumber);
         }
+        const stored = readPhoneIdentity(tenantId, row.phoneNumberId);
         return {
             ...row,
             requestedName: nameSync.requestedName,
@@ -346,7 +383,7 @@ function applyLocalPhoneIdentities(tenantId, numbers, placeholderName) {
             canActivate: (0, meta_whatsapp_portfolio_map_1.canActivateMetaPhoneNumber)(uiStatus, nameSync.nameNeedsRegister),
             uiStatus,
             profilePictureUrl: localPhoto || row.profilePictureUrl,
-            inboxEnabled: isPhoneInboxEnabled(identity),
+            inboxEnabled: isPhoneInboxEnabled(stored),
             photoSyncStatus: localPhoto ? "applied" : row.photoSyncStatus,
             profileSyncStatus: row.profileSyncStatus,
         };

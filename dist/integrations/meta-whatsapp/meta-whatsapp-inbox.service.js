@@ -140,7 +140,7 @@ class MetaWhatsappInboxService {
         const verifiedByPhone = verifiedNamesByPhone(open);
         const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone);
         const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
-        const enabledIds = snapshots.filter((row) => row.inboxEnabled).map((row) => row.phoneNumberId);
+        const enabledIds = snapshots.filter((row) => row.inboxEligible).map((row) => row.phoneNumberId);
         const connPhones = open.map((row) => row.phoneNumberId).filter((id) => Boolean(id));
         const listIds = (0, meta_whatsapp_phone_identity_store_1.inboxQueryPhoneIds)(tenant.tenantId, connPhones, selectedPhone);
         if (!enabledIds.length || (selectedPhone && !listIds.length)) {
