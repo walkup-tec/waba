@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaOperacionalCampanhasService = exports.CAMPAIGN_START_DEADLINE_MS = void 0;
+exports.resolveOperacionalCampaignEndedAt = resolveOperacionalCampaignEndedAt;
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
@@ -52,6 +53,20 @@ const formatDateLabel = (iso) => {
         minute: "2-digit",
     });
 };
+function resolveOperacionalCampaignEndedAt(intake, sendFinishedAt) {
+    const status = (0, waba_campaign_report_read_overrides_1.resolveOverriddenCampaignStatus)(intake.campaignName, intake.createdAt, intake.status, intake.id);
+    if (status !== "completed" && status !== "error_reported" && status !== "cancelled") {
+        return null;
+    }
+    const overrideFinished = (0, waba_campaign_report_read_overrides_2.resolveCampaignReportOverride)(intake.campaignName, intake.createdAt, intake.performanceReport, intake.id)?.timeline?.dispatchFinishedAt;
+    if (status === "error_reported") {
+        return (0, waba_campaign_report_timeline_1.firstNonEmptyIso)(intake.errorReport?.reportedAt, intake.updatedAt);
+    }
+    if (status === "cancelled") {
+        return (0, waba_campaign_report_timeline_1.firstNonEmptyIso)(intake.updatedAt);
+    }
+    return (0, waba_campaign_report_timeline_1.firstNonEmptyIso)(overrideFinished, intake.performanceReport?.filledAt, sendFinishedAt, intake.updatedAt);
+}
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
 const toDisplayStatus = (status, laboratorioAttended = false, broadcastProgress) => (0, waba_campaign_intake_status_1.toCampaignIntakeDisplayStatus)(status, "operacional", (0, waba_campaign_intake_status_1.campaignIntakeDisplayOptionsFromBroadcast)(laboratorioAttended, broadcastProgress));
 const isCampaignAwaitingConfiguration = (status) => status === "generated" || status === "in_progress";
@@ -189,6 +204,7 @@ class WabaOperacionalCampanhasService {
             (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email));
         const canTransferOperacional = isMaster && (status === "generated" || status === "in_progress");
         const readOnly = staff?.role === "indicador";
+        const endedAt = resolveOperacionalCampaignEndedAt(intake, broadcastProgress?.sendFinishedAt);
         return {
             id: intake.id,
             subscriberId: subscriber?.id ?? "—",
@@ -218,6 +234,8 @@ class WabaOperacionalCampanhasService {
             readOnly,
             createdAt: intake.createdAt,
             createdAtLabel: formatDateLabel(intake.createdAt),
+            endedAt,
+            endedAtLabel: formatDateLabel(endedAt || ""),
         };
     }
     listCampaigns(staff) {

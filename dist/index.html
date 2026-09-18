@@ -10031,11 +10031,17 @@
         pointer-events: none;
       }
 
+      .admin-campanhas-filters {
+        display: flex;
+        align-items: center;
+        gap: 10px 14px;
+        flex-wrap: wrap;
+        margin-right: auto;
+      }
       .admin-campanhas-plan-filter-wrap {
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-right: auto;
       }
       .admin-campanhas-plan-filter-wrap label {
         font-size: 0.82rem;
@@ -24621,16 +24627,38 @@
               <div class="aquecedor-section">
                 <div class="admin-subscribers-toolbar">
                   <span id="admin-campanhas-summary" class="admin-subscribers-summary">Carregando campanhas…</span>
-                  <div
-                    id="admin-campanhas-plan-filter-wrap"
-                    class="admin-campanhas-plan-filter-wrap admin-campanhas-master-only"
-                  >
-                    <label for="admin-campanhas-plan-filter">Plano</label>
-                    <select id="admin-campanhas-plan-filter" aria-label="Filtrar campanhas por tipo de plano">
-                      <option value="all">Todos os planos</option>
-                      <option value="oficial">API Oficial</option>
-                      <option value="alternativa">API Alternativa</option>
-                    </select>
+                  <div class="admin-campanhas-filters">
+                    <div
+                      id="admin-campanhas-plan-filter-wrap"
+                      class="admin-campanhas-plan-filter-wrap admin-campanhas-master-only"
+                    >
+                      <label for="admin-campanhas-plan-filter">Plano</label>
+                      <select id="admin-campanhas-plan-filter" aria-label="Filtrar campanhas por tipo de plano">
+                        <option value="all">Todos os planos</option>
+                        <option value="oficial">API Oficial</option>
+                        <option value="alternativa">API Alternativa</option>
+                      </select>
+                    </div>
+                    <div class="admin-campanhas-plan-filter-wrap">
+                      <label for="admin-campanhas-status-filter">Status</label>
+                      <select id="admin-campanhas-status-filter" aria-label="Filtrar campanhas por status">
+                        <option value="all">Todos os status</option>
+                        <option value="generated">Aguardando configuração</option>
+                        <option value="in_progress">Em andamento</option>
+                        <option value="completed">Finalizado</option>
+                        <option value="error_reported">Erro reportado</option>
+                        <option value="cancelled">Cancelada</option>
+                      </select>
+                    </div>
+                    <div class="admin-campanhas-plan-filter-wrap">
+                      <label for="admin-campanhas-sort">Ordenar</label>
+                      <select id="admin-campanhas-sort" aria-label="Ordenar campanhas">
+                        <option value="created-desc">Criação (mais recente)</option>
+                        <option value="created-asc">Criação (mais antiga)</option>
+                        <option value="ended-desc">Término (mais recente)</option>
+                        <option value="ended-asc">Término (mais antigo)</option>
+                      </select>
+                    </div>
                   </div>
                   <div class="admin-campanhas-buckets" role="tablist" aria-label="Filtrar campanhas">
                     <button
@@ -24696,12 +24724,13 @@
                         <th scope="col" class="admin-subscribers-num">Envios</th>
                         <th scope="col">Status</th>
                         <th scope="col">Criada em</th>
+                        <th scope="col">Término</th>
                         <th scope="col">Ações</th>
                       </tr>
                     </thead>
                     <tbody id="admin-campanhas-tbody">
                       <tr>
-                        <td colspan="8" class="muted">Carregando…</td>
+                        <td colspan="10" class="muted">Carregando…</td>
                       </tr>
                     </tbody>
                   </table>
@@ -47703,8 +47732,10 @@
       let adminCampanhasReportSource = "";
       let adminCampanhasActiveBucket = "open";
       let adminCampanhasPlanFilter = "all";
-      const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 10;
-      const ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT = 9;
+      let adminCampanhasStatusFilter = "all";
+      let adminCampanhasSort = "created-desc";
+      const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 11;
+      const ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT = 10;
       const ADMIN_CAMPANHAS_START_BTN_LABEL = "Confirmar início";
       const ADMIN_CAMPANHAS_STARTING_BTN_LABEL = "Iniciando…";
       const ADMIN_CAMPANHAS_BM_INOPERANTE_BTN_LABEL = "BM inoperante";
@@ -47823,10 +47854,15 @@
         }
       }
 
-      function setAdminCampanhasBucket(bucket) {
+      function setAdminCampanhasBucket(bucket, options = {}) {
         let nextBucket = bucket === "finalized" || bucket === "all" ? bucket : "open";
         if (nextBucket === "all" && !isAdminCampanhasPlanBucketAvailable()) {
           nextBucket = "open";
+        }
+        if (!options.keepStatusFilter) {
+          adminCampanhasStatusFilter = "all";
+          const statusSelect = document.getElementById("admin-campanhas-status-filter");
+          if (statusSelect) statusSelect.value = "all";
         }
         adminCampanhasActiveBucket = nextBucket;
         document.querySelectorAll("[data-campanhas-bucket]").forEach((btn) => {
@@ -47978,32 +48014,60 @@
         )}</span>`;
       }
 
-      function getFilteredAdminCampanhasItems() {
-        let items;
-        if (adminCampanhasActiveBucket === "all" && isAdminCampanhasPlanBucketAvailable()) {
-          items = adminCampanhasCache.filter((item) => itemMatchesAdminCampanhasPlanFilter(item));
-        } else if (adminCampanhasActiveBucket === "finalized") {
-          items = adminCampanhasCache.filter((item) => isAdminCampanhaFinalized(item));
-          if (isAdminCampanhasPlanBucketAvailable()) {
-            items = items.filter((item) => itemMatchesAdminCampanhasPlanFilter(item));
-          }
-        } else {
-          items = adminCampanhasCache.filter((item) => !isAdminCampanhaFinalized(item));
-          if (isAdminCampanhasPlanBucketAvailable()) {
-            items = items.filter((item) => itemMatchesAdminCampanhasPlanFilter(item));
-          }
-        }
+      function itemMatchesAdminCampanhasStatusFilter(item) {
+        if (adminCampanhasStatusFilter === "all") return true;
+        return String(item?.status || "").trim().toLowerCase() === adminCampanhasStatusFilter;
+      }
 
-        if (hasMasterAccess() && adminCampanhasActiveBucket !== "finalized") {
-          items = items.slice().sort((a, b) => {
+      function parseAdminCampanhasSortTime(iso) {
+        const ms = Date.parse(String(iso || "").trim());
+        return Number.isFinite(ms) ? ms : null;
+      }
+
+      function compareAdminCampanhasByDate(aIso, bIso, direction) {
+        const a = parseAdminCampanhasSortTime(aIso);
+        const b = parseAdminCampanhasSortTime(bIso);
+        if (a == null && b == null) return 0;
+        if (a == null) return 1;
+        if (b == null) return -1;
+        return direction === "asc" ? a - b : b - a;
+      }
+
+      function sortAdminCampanhasItems(items) {
+        const [field, direction] = String(adminCampanhasSort || "created-desc").split("-");
+        const dir = direction === "asc" ? "asc" : "desc";
+        const useEnded = field === "ended";
+        const keepOverdueFirst =
+          hasMasterAccess() &&
+          adminCampanhasActiveBucket !== "finalized" &&
+          adminCampanhasSort === "created-desc";
+        return items.slice().sort((a, b) => {
+          if (keepOverdueFirst) {
             const aOverdue = !isAdminCampanhaFinalized(a) && Boolean(a?.isStartOverdue);
             const bOverdue = !isAdminCampanhaFinalized(b) && Boolean(b?.isStartOverdue);
             const overdueDiff = Number(bOverdue) - Number(aOverdue);
             if (overdueDiff !== 0) return overdueDiff;
-            return new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime();
-          });
-        }
-        return items;
+          }
+          const aIso = useEnded ? a?.endedAt : a?.createdAt;
+          const bIso = useEnded ? b?.endedAt : b?.createdAt;
+          const byDate = compareAdminCampanhasByDate(aIso, bIso, dir);
+          if (byDate !== 0) return byDate;
+          return compareAdminCampanhasByDate(a?.createdAt, b?.createdAt, "desc");
+        });
+      }
+
+      function getFilteredAdminCampanhasItems() {
+        const items = adminCampanhasCache.filter((item) => {
+          if (isAdminCampanhasPlanBucketAvailable() && !itemMatchesAdminCampanhasPlanFilter(item)) {
+            return false;
+          }
+          if (!itemMatchesAdminCampanhasStatusFilter(item)) return false;
+          if (adminCampanhasStatusFilter !== "all") return true;
+          if (adminCampanhasActiveBucket === "all" && isAdminCampanhasPlanBucketAvailable()) return true;
+          if (adminCampanhasActiveBucket === "finalized") return isAdminCampanhaFinalized(item);
+          return !isAdminCampanhaFinalized(item);
+        });
+        return sortAdminCampanhasItems(items);
       }
 
       function formatAdminCampanhasDeadlineLabel(iso) {
@@ -48055,6 +48119,7 @@
 
         const colSpan = getAdminCampanhasTableColspan();
         const planFilterActive = hasMasterAccess() && adminCampanhasPlanFilter !== "all";
+        const statusFilterActive = adminCampanhasStatusFilter !== "all";
         const allPlanBucketActive = adminCampanhasActiveBucket === "all" && isAdminCampanhasPlanBucketAvailable();
         const overdueOpenCount = hasMasterAccess()
           ? adminCampanhasCache.filter(
@@ -48070,8 +48135,10 @@
                 ? `${list.length} campanha(s) do plano (abertas e finalizadas)`
               : `${openCount} campanha(s) em aberto`;
           if (allPlanBucketActive) {
-            summary.textContent = bucketLabel;
-          } else if (planFilterActive) {
+            summary.textContent = statusFilterActive
+              ? `${list.length} exibida(s) · ${bucketLabel}`
+              : bucketLabel;
+          } else if (planFilterActive || statusFilterActive) {
             summary.textContent = `${list.length} exibida(s) · ${bucketLabel}`;
           } else if (hasMasterAccess() && overdueOpenCount > 0 && adminCampanhasActiveBucket !== "finalized") {
             summary.textContent = `${bucketLabel} · ${overdueOpenCount} atrasada(s) (+6h sem início)`;
@@ -48084,7 +48151,9 @@
 
         if (!list.length) {
           const emptyMessage =
-            adminCampanhasActiveBucket === "all"
+            statusFilterActive
+              ? "Nenhuma campanha com este status no filtro atual."
+              : adminCampanhasActiveBucket === "all"
               ? "Nenhuma campanha deste plano."
               : adminCampanhasActiveBucket === "finalized"
               ? "Nenhuma campanha finalizada ainda."
@@ -48109,6 +48178,7 @@
             const envios = Number(item?.plannedSendCount || 0);
             const statusBadge = renderAdminCampanhasStatusBadge(item?.status, item?.displayStatus);
             const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
+            const endedAt = escapeAdminHtml(item?.endedAtLabel || "—");
             const campaignId = escapeAdminHtml(item?.id || "");
             const status = String(item?.status || "").trim().toLowerCase();
             const isErrorReported = status === "error_reported";
@@ -48177,6 +48247,7 @@
                 <td class="admin-subscribers-num">${envios}</td>
                 <td>${statusBadge}</td>
                 <td>${createdAt}</td>
+                <td>${endedAt}</td>
                 <td>
                   <div class="admin-campanhas-actions">
                     ${actions.join("") || '<span class="muted">—</span>'}
@@ -48337,6 +48408,7 @@
             "Registro",
             [
               renderAdminCampanhasDetailField("Criada em", escapeAdminHtml(campaign.createdAtLabel || "—")),
+              renderAdminCampanhasDetailField("Término", escapeAdminHtml(campaign.endedAtLabel || "—")),
               renderAdminCampanhasDetailField(
                 "Atualizada em",
                 escapeAdminHtml(campaign.updatedAtLabel || "—")
@@ -49574,6 +49646,42 @@
             setAdminCampanhasBucket("open");
             return;
           }
+          renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+        });
+
+        document.getElementById("admin-campanhas-status-filter")?.addEventListener("change", (event) => {
+          const next = String(event.target?.value || "all").trim().toLowerCase();
+          adminCampanhasStatusFilter = [
+            "all",
+            "generated",
+            "in_progress",
+            "completed",
+            "error_reported",
+            "cancelled",
+          ].includes(next)
+            ? next
+            : "all";
+          const nextBucket =
+            adminCampanhasStatusFilter === "completed" ||
+            adminCampanhasStatusFilter === "error_reported" ||
+            adminCampanhasStatusFilter === "cancelled"
+              ? "finalized"
+              : adminCampanhasStatusFilter === "generated" ||
+                  adminCampanhasStatusFilter === "in_progress"
+                ? "open"
+                : null;
+          if (nextBucket && adminCampanhasActiveBucket !== "all") {
+            setAdminCampanhasBucket(nextBucket, { keepStatusFilter: true });
+            return;
+          }
+          renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+        });
+
+        document.getElementById("admin-campanhas-sort")?.addEventListener("change", (event) => {
+          const next = String(event.target?.value || "created-desc").trim().toLowerCase();
+          adminCampanhasSort = ["created-desc", "created-asc", "ended-desc", "ended-asc"].includes(next)
+            ? next
+            : "created-desc";
           renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
         });
 

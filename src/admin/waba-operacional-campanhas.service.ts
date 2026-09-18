@@ -32,7 +32,10 @@ import {
   campaignReportShowsClicks,
   resolveOverriddenCampaignStatus,
 } from "../disparos/waba-campaign-report-read-overrides";
-import { collectIntakeReportTimeline } from "../disparos/waba-campaign-report-timeline";
+import {
+  collectIntakeReportTimeline,
+  firstNonEmptyIso,
+} from "../disparos/waba-campaign-report-timeline";
 import { campaignAttendedByLaboratorioStaff } from "../disparos/waba-campaign-laboratorio-attended";
 import {
   resolveCampaignCardResponseLink,
@@ -111,6 +114,8 @@ export type OperacionalCampaignListItem = {
   readOnly: boolean;
   createdAt: string;
   createdAtLabel: string;
+  endedAt: string | null;
+  endedAtLabel: string;
 };
 
 export type OperacionalCampaignReportInput = {
@@ -180,6 +185,42 @@ const formatDateLabel = (iso: string): string => {
     minute: "2-digit",
   });
 };
+
+export function resolveOperacionalCampaignEndedAt(
+  intake: Pick<
+    WabaCampaignIntake,
+    "id" | "campaignName" | "createdAt" | "status" | "updatedAt" | "performanceReport" | "errorReport"
+  >,
+  sendFinishedAt?: string | null,
+): string | null {
+  const status = resolveOverriddenCampaignStatus(
+    intake.campaignName,
+    intake.createdAt,
+    intake.status,
+    intake.id,
+  );
+  if (status !== "completed" && status !== "error_reported" && status !== "cancelled") {
+    return null;
+  }
+  const overrideFinished = resolveCampaignReportOverride(
+    intake.campaignName,
+    intake.createdAt,
+    intake.performanceReport,
+    intake.id,
+  )?.timeline?.dispatchFinishedAt;
+  if (status === "error_reported") {
+    return firstNonEmptyIso(intake.errorReport?.reportedAt, intake.updatedAt);
+  }
+  if (status === "cancelled") {
+    return firstNonEmptyIso(intake.updatedAt);
+  }
+  return firstNonEmptyIso(
+    overrideFinished,
+    intake.performanceReport?.filledAt,
+    sendFinishedAt,
+    intake.updatedAt,
+  );
+}
 
 const normalizeStoredStatus = (status: string): WabaCampaignIntakeStatus =>
   normalizeCampaignIntakeStatus(status);
@@ -382,6 +423,7 @@ export class WabaOperacionalCampanhasService {
     const canTransferOperacional =
       isMaster && (status === "generated" || status === "in_progress");
     const readOnly = staff?.role === "indicador";
+    const endedAt = resolveOperacionalCampaignEndedAt(intake, broadcastProgress?.sendFinishedAt);
 
     return {
       id: intake.id,
@@ -413,6 +455,8 @@ export class WabaOperacionalCampanhasService {
       readOnly,
       createdAt: intake.createdAt,
       createdAtLabel: formatDateLabel(intake.createdAt),
+      endedAt,
+      endedAtLabel: formatDateLabel(endedAt || ""),
     };
   }
 
