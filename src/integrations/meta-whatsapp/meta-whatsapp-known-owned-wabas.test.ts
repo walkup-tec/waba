@@ -8,6 +8,8 @@ import {
   DRAX_SISTEMAS_WABA_ID,
   RIO_DE_JANEIRO_01_WABA_ID,
   equivalentOwnedWabaIdsForBusiness,
+  knownBusinessIdsForDisplayPhone,
+  knownBusinessIdsForWaba,
   isKnownClientWabaForBusiness,
   knownClientWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
@@ -52,6 +54,13 @@ describe("known owned WABAs", () => {
 
   it("Walkup: WABA 01 do Manager, sem a conta fantasma", () => {
     assert.deepEqual(knownOwnedWabaIdsForBusiness("4141369862822598"), ["1014470201624992"]);
+  });
+
+  it("5182001279 e WABA stale apontam para o BM Drax Sistemas", () => {
+    assert.deepEqual(knownBusinessIdsForDisplayPhone("+55 51 8200-1279"), ["1041827648719609"]);
+    assert.deepEqual(knownBusinessIdsForDisplayPhone("5182001279"), ["1041827648719609"]);
+    assert.deepEqual(knownBusinessIdsForWaba(DRAX_SISTEMAS_STALE_WABA_ID), ["1041827648719609"]);
+    assert.deepEqual(knownBusinessIdsForWaba(DRAX_SISTEMAS_WABA_ID), ["1041827648719609"]);
   });
 
   it("Drax Sistemas: só a WABA do Manager, não a conexão stale", () => {

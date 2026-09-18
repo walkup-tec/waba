@@ -9,7 +9,13 @@ import { MetaWhatsappWebhookSubscriptionService } from "./meta-whatsapp-webhook-
 import { logMetaInbox } from "./meta-whatsapp-inbox-log";
 import { readMetaInboxPollMs } from "./meta-config";
 import { resolveCustomerCareWindow } from "./meta-whatsapp-customer-care-window";
-import { listPhoneInboxChannels, inboxQueryPhoneIds, isInboxPhoneAllowed, type MetaPhoneInboxChannel } from "./meta-whatsapp-phone-identity.store";
+import {
+  listPhoneInboxChannels,
+  inboxQueryPhoneIds,
+  isInboxPhoneAllowed,
+  isConnectionAccountRestricted,
+  type MetaPhoneInboxChannel,
+} from "./meta-whatsapp-phone-identity.store";
 import {
   toPublicInboxConversation,
   toPublicInboxMessage,
@@ -103,14 +109,28 @@ export class MetaWhatsappInboxService {
     private readonly messaging = new MetaWhatsappMessagingService(),
   ) {}
 
-  private async inboxConnections(tenantId: string) {
-    const open = await this.connections.listInboxConnections(tenantId);
-    const usable = open.filter((row) => canServeInbox(row, tenantId));
-    if (!usable.length) {
-      const fallback = await this.requireConnected(tenantId);
-      return [fallback];
+  private async inboxConnectionSets(tenantId: string): Promise<{
+    all: MetaWhatsappConnectionRecord[];
+    serving: MetaWhatsappConnectionRecord[];
+  }> {
+    const all = await this.connections.listInboxConnections(tenantId);
+    const serving = all.filter(
+      (row) => canServeInbox(row, tenantId) && !isConnectionAccountRestricted(tenantId, row),
+    );
+    if (serving.length) return { all, serving };
+    if (all.some((row) => canServeInbox(row, tenantId))) {
+      return { all, serving: [] };
     }
-    return usable;
+    const fallback = await this.requireConnected(tenantId);
+    if (isConnectionAccountRestricted(tenantId, fallback)) {
+      return { all: all.length ? all : [fallback], serving: [] };
+    }
+    return { all: all.length ? all : [fallback], serving: [fallback] };
+  }
+
+  private async inboxConnections(tenantId: string) {
+    const { serving } = await this.inboxConnectionSets(tenantId);
+    return serving;
   }
 
   private async requireOwnedConversation(
@@ -121,9 +141,10 @@ export class MetaWhatsappInboxService {
     if (!row || row.tenantId !== tenantId) {
       throw new MetaWhatsappError("conversation_not_found");
     }
-    const open = await this.inboxConnections(tenantId);
-    const connPhones = open.map((item) => item.phoneNumberId).filter((id): id is string => Boolean(id));
-    if (!isInboxPhoneAllowed(tenantId, row.phoneNumberId, connPhones, open)) {
+    const { all, serving } = await this.inboxConnectionSets(tenantId);
+    const hints = all.length ? all : serving;
+    const connPhones = serving.map((item) => item.phoneNumberId).filter((id): id is string => Boolean(id));
+    if (!isInboxPhoneAllowed(tenantId, row.phoneNumberId, connPhones, hints)) {
       throw new MetaWhatsappError("conversation_not_found");
     }
     return row;
@@ -160,20 +181,22 @@ export class MetaWhatsappInboxService {
 
   async listConversations(auth: WabaRequestAuth, query: Record<string, unknown> | undefined) {
     const tenant = requireTenant(auth);
-    const open = await this.inboxConnections(tenant.tenantId);
+    const { all, serving } = await this.inboxConnectionSets(tenant.tenantId);
+    const open = serving;
     void this.ensureWebhooksForOpenConnections(tenant.tenantId, open);
     const connection = open[0];
     const filter = parseFilter(query?.filter);
     const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();
     const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
     const offset = clampPage(query?.offset, 0, 10_000);
-    const verifiedByPhone = verifiedNamesByPhone(open);
-    const snapshots = listPhoneInboxChannels(tenant.tenantId, verifiedByPhone, open);
+    const hints = all.length ? all : open;
+    const verifiedByPhone = verifiedNamesByPhone(hints);
+    const snapshots = listPhoneInboxChannels(tenant.tenantId, verifiedByPhone, hints);
     const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
     const enabledIds = snapshots.filter((row) => row.inboxEligible).map((row) => row.phoneNumberId);
     const connPhones = open.map((row) => row.phoneNumberId).filter((id): id is string => Boolean(id));
-    const listIds = inboxQueryPhoneIds(tenant.tenantId, connPhones, selectedPhone, open);
-    if (!enabledIds.length || (selectedPhone && !listIds.length)) {
+    const listIds = inboxQueryPhoneIds(tenant.tenantId, connPhones, selectedPhone, hints);
+    if (!enabledIds.length || !open.length || (selectedPhone && !listIds.length)) {
       return {
         connected: true,
         poll: readMetaInboxPollMs(),

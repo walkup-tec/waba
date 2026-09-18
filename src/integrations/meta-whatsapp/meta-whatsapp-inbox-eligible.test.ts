@@ -117,6 +117,7 @@ describe("Atendimento só lista chip Ativo com Inbox", () => {
     });
     assert.deepEqual(listEnabledInboxPhoneIds(tenantId, [restrictedConn]), ["phone-1"]);
     hideBusiness(tenantId, businessId, "BAN Drax Sistemas");
+    assert.deepEqual(listEnabledInboxPhoneIds(tenantId), []);
     assert.deepEqual(listEnabledInboxPhoneIds(tenantId, [restrictedConn]), []);
     assert.equal(listPhoneInboxChannels(tenantId, undefined, [restrictedConn])[0]?.inboxEligible, false);
     assert.equal(isInboxPhoneAllowed(tenantId, "phone-1", ["phone-1"], [restrictedConn]), false);
@@ -147,6 +148,84 @@ describe("Atendimento só lista chip Ativo com Inbox", () => {
     });
     hideBusiness(tenantId, businessId, "BAN Drax Sistemas");
     assert.deepEqual(listEnabledInboxPhoneIds(tenantId), []);
+    unhideBusiness(tenantId, businessId);
+    purgePhoneIdentities(tenantId);
+  });
+
+  it("5182001279 some só com a conta Drax em Restritas, sem conexão aberta", () => {
+    const businessId = "1041827648719609";
+    purgePhoneIdentities(tenantId);
+    unhideBusiness(tenantId, businessId);
+    writePhoneIdentity(tenantId, "1350439411479507", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Drax Sistema",
+    });
+    hideBusiness(tenantId, businessId, "BAN Drax Sistemas");
+    assert.deepEqual(listEnabledInboxPhoneIds(tenantId), []);
+    assert.deepEqual(
+      listEnabledInboxPhoneIds(tenantId, [
+        {
+          phoneNumberId: "1350439411479507",
+          displayPhoneNumber: "+55 51 8200-1279",
+          metaBusinessId: "1247508354180311",
+          wabaId: "1988957871663919",
+        },
+      ]),
+      [],
+    );
+    unhideBusiness(tenantId, businessId);
+    purgePhoneIdentities(tenantId);
+  });
+
+  it("conexão sem BM, só WABA Drax stale, some quando a conta vai para Restritas", () => {
+    const businessId = "1041827648719609";
+    purgePhoneIdentities(tenantId);
+    unhideBusiness(tenantId, businessId);
+    writePhoneIdentity(tenantId, "phone-1", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Drax Sistema",
+    });
+    hideBusiness(tenantId, businessId, "BAN Drax Sistemas");
+    assert.deepEqual(
+      listEnabledInboxPhoneIds(tenantId, [
+        {
+          phoneNumberId: "phone-1",
+          displayPhoneNumber: "+55 51 8200-1279",
+          metaBusinessId: null,
+          wabaId: "1988957871663919",
+        },
+      ]),
+      [],
+    );
+    unhideBusiness(tenantId, businessId);
+    purgePhoneIdentities(tenantId);
+  });
+
+  it("chip Drax some mesmo se a conexão aberta for de outro portfólio", () => {
+    const businessId = "1041827648719609";
+    purgePhoneIdentities(tenantId);
+    unhideBusiness(tenantId, businessId);
+    writePhoneIdentity(tenantId, "phone-drax", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Drax Sistema",
+    });
+    hideBusiness(tenantId, businessId, "BAN Drax Sistemas");
+    assert.deepEqual(
+      listEnabledInboxPhoneIds(tenantId, [
+        {
+          phoneNumberId: "phone-walkup",
+          displayPhoneNumber: "+55 11 95213-7761",
+          metaBusinessId: "4141369862822598",
+        },
+      ]),
+      [],
+    );
     unhideBusiness(tenantId, businessId);
     purgePhoneIdentities(tenantId);
   });

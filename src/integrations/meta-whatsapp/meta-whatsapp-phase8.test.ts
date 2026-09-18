@@ -14,6 +14,7 @@ import { resolveCustomerCareWindow } from "./meta-whatsapp-customer-care-window"
 import { windowStateFromCare, toPublicInboxConversation, toPublicInboxMessage } from "./meta-whatsapp-inbox.types";
 import type { MetaGraphMessagesResult } from "./meta-whatsapp-graph-messages.client";
 import { purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
+import { hideBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
 
 const EMAIL_A = "phase8-a@example.com";
 const EMAIL_B = "phase8-b@example.com";
@@ -617,6 +618,37 @@ describe("fase 8 canais do Inbox", () => {
     const hidden = await service.listConversations(auth(EMAIL_A), {});
     assert.equal(hidden.conversations.length, 0);
     assert.equal(hidden.channels.length, 0);
+    purgePhoneIdentities(TENANT_A);
+  });
+
+  it("conta Drax em Restritas tira o 5182001279 da lista mesmo com a conexão ainda aberta", async () => {
+    const businessId = "1041827648719609";
+    purgePhoneIdentities(TENANT_A);
+    unhideBusiness(TENANT_A, businessId);
+    writePhoneIdentity(TENANT_A, "phone-a", {
+      inboxEnabled: true,
+      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 51 8200-1279",
+    });
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        metaBusinessId: "1247508354180311",
+        wabaId: "1988957871663919",
+        displayPhoneNumber: "+55 51 8200-1279",
+        verifiedName: "Drax Sistema",
+      }),
+    );
+    const conversations = new FakeConversations();
+    conversations.rows.push(conv());
+    const service = inboxOf(connections, conversations, new FakeMessages());
+    const before = await service.listConversations(auth(EMAIL_A), {});
+    assert.equal(before.channels.length, 1);
+    hideBusiness(TENANT_A, businessId, "BAN Drax Sistemas");
+    const listed = await service.listConversations(auth(EMAIL_A), {});
+    assert.equal(listed.channels.length, 0);
+    assert.equal(listed.conversations.length, 0);
+    unhideBusiness(TENANT_A, businessId);
     purgePhoneIdentities(TENANT_A);
   });
 

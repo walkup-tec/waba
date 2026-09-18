@@ -9,8 +9,14 @@ import type {
 } from "./meta-whatsapp-portfolio.types";
 import { META_WHATSAPP_DEFAULT_DISPLAY_NAME } from "./meta-whatsapp-phone-profile";
 import { namesEqual, resolvePhoneNameSync, resolveMetaPhoneUiStatus, canActivateMetaPhoneNumber } from "./meta-whatsapp-portfolio.map";
-import { isHiddenBusiness } from "./meta-whatsapp-hidden-business.store";
-import { metaBusinessIdsMatch } from "./meta-whatsapp-known-owned-wabas";
+import { isHiddenBusiness, listHiddenBusinessIds } from "./meta-whatsapp-hidden-business.store";
+import {
+  equivalentOwnedWabaIdsForBusiness,
+  knownBusinessIdsForDisplayPhone,
+  knownBusinessIdsForWaba,
+  knownOwnedBusinessesMatch,
+  metaBusinessIdsMatch,
+} from "./meta-whatsapp-known-owned-wabas";
 
 const TENANT_ID_RE = /^[a-zA-Z0-9._-]{8,80}$/;
 const PHONE_ID_RE = /^[a-zA-Z0-9._-]{4,80}$/;
@@ -47,6 +53,7 @@ export type InboxAccountHint = {
   phoneNumberId?: string | null;
   displayPhoneNumber?: string | null;
   metaBusinessId?: string | null;
+  wabaId?: string | null;
 };
 
 function phoneDigits(value: string | null | undefined): string {
@@ -292,6 +299,35 @@ function connectionMatchesPhone(
   return false;
 }
 
+function hiddenIdMatches(tenantId: string, value: string | null | undefined): boolean {
+  const id = String(value || "").trim();
+  if (!id) return false;
+  if (isHiddenBusiness(tenantId, id)) return true;
+  return listHiddenBusinessIds(tenantId).some(
+    (hidden) => knownOwnedBusinessesMatch(id, hidden) || metaBusinessIdsMatch(id, hidden),
+  );
+}
+
+/** Conexão cuja BM/WABA está em Restritas — não serve o Atendimento. */
+export function isConnectionAccountRestricted(tenantId: string, row: InboxAccountHint): boolean {
+  const tenant = String(tenantId || "").trim();
+  if (!tenant) return false;
+  if (hiddenIdMatches(tenant, row.metaBusinessId) || hiddenIdMatches(tenant, row.wabaId)) return true;
+  for (const businessId of knownBusinessIdsForWaba(String(row.wabaId || ""))) {
+    if (hiddenIdMatches(tenant, businessId)) return true;
+  }
+  for (const businessId of knownBusinessIdsForDisplayPhone(row.displayPhoneNumber)) {
+    if (hiddenIdMatches(tenant, businessId)) return true;
+  }
+  const waba = String(row.wabaId || "").trim();
+  if (waba) {
+    for (const hidden of listHiddenBusinessIds(tenant)) {
+      if (equivalentOwnedWabaIdsForBusiness(hidden, waba).includes(waba)) return true;
+    }
+  }
+  return false;
+}
+
 function accountIsRestricted(
   tenantId: string,
   phoneNumberId: string,
@@ -299,10 +335,13 @@ function accountIsRestricted(
   connections?: InboxAccountHint[] | null,
 ): boolean {
   if (identity?.portfolioHidden === true) return true;
-  if (identity?.businessId && isHiddenBusiness(tenantId, identity.businessId)) return true;
+  if (hiddenIdMatches(tenantId, identity?.businessId)) return true;
+  for (const businessId of knownBusinessIdsForDisplayPhone(identity?.displayPhoneNumber)) {
+    if (hiddenIdMatches(tenantId, businessId)) return true;
+  }
   for (const row of connections || []) {
     if (!connectionMatchesPhone(row, phoneNumberId, identity)) continue;
-    if (row.metaBusinessId && isHiddenBusiness(tenantId, row.metaBusinessId)) return true;
+    if (isConnectionAccountRestricted(tenantId, row)) return true;
   }
   return false;
 }
@@ -429,12 +468,16 @@ export function markPhoneIdentitiesRestrictedForBusiness(
       const identity = readPhoneIdentity(id, phoneNumberId);
       if (!identity) continue;
       const byBusiness = Boolean(identity.businessId && metaBusinessIdsMatch(identity.businessId, business));
+      const byDisplay = knownBusinessIdsForDisplayPhone(identity.displayPhoneNumber).some((id) =>
+        metaBusinessIdsMatch(id, business),
+      );
       const byConnection = (connections || []).some(
         (row) =>
-          metaBusinessIdsMatch(String(row.metaBusinessId || ""), business) &&
+          (metaBusinessIdsMatch(String(row.metaBusinessId || ""), business) ||
+            knownBusinessIdsForWaba(String(row.wabaId || "")).some((id) => metaBusinessIdsMatch(id, business))) &&
           connectionMatchesPhone(row, phoneNumberId, identity),
       );
-      if (!byBusiness && !byConnection) continue;
+      if (!byBusiness && !byDisplay && !byConnection) continue;
       writePhoneIdentity(id, phoneNumberId, { portfolioHidden: true, businessId: business });
       count += 1;
     }

@@ -78,23 +78,33 @@ class MetaWhatsappInboxService {
         this.messages = messages;
         this.messaging = messaging;
     }
-    async inboxConnections(tenantId) {
-        const open = await this.connections.listInboxConnections(tenantId);
-        const usable = open.filter((row) => canServeInbox(row, tenantId));
-        if (!usable.length) {
-            const fallback = await this.requireConnected(tenantId);
-            return [fallback];
+    async inboxConnectionSets(tenantId) {
+        const all = await this.connections.listInboxConnections(tenantId);
+        const serving = all.filter((row) => canServeInbox(row, tenantId) && !(0, meta_whatsapp_phone_identity_store_1.isConnectionAccountRestricted)(tenantId, row));
+        if (serving.length)
+            return { all, serving };
+        if (all.some((row) => canServeInbox(row, tenantId))) {
+            return { all, serving: [] };
         }
-        return usable;
+        const fallback = await this.requireConnected(tenantId);
+        if ((0, meta_whatsapp_phone_identity_store_1.isConnectionAccountRestricted)(tenantId, fallback)) {
+            return { all: all.length ? all : [fallback], serving: [] };
+        }
+        return { all: all.length ? all : [fallback], serving: [fallback] };
+    }
+    async inboxConnections(tenantId) {
+        const { serving } = await this.inboxConnectionSets(tenantId);
+        return serving;
     }
     async requireOwnedConversation(tenantId, conversationId) {
         const row = await this.conversations.findByIdForTenant(tenantId, conversationId);
         if (!row || row.tenantId !== tenantId) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("conversation_not_found");
         }
-        const open = await this.inboxConnections(tenantId);
-        const connPhones = open.map((item) => item.phoneNumberId).filter((id) => Boolean(id));
-        if (!(0, meta_whatsapp_phone_identity_store_1.isInboxPhoneAllowed)(tenantId, row.phoneNumberId, connPhones, open)) {
+        const { all, serving } = await this.inboxConnectionSets(tenantId);
+        const hints = all.length ? all : serving;
+        const connPhones = serving.map((item) => item.phoneNumberId).filter((id) => Boolean(id));
+        if (!(0, meta_whatsapp_phone_identity_store_1.isInboxPhoneAllowed)(tenantId, row.phoneNumberId, connPhones, hints)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("conversation_not_found");
         }
         return row;
@@ -130,20 +140,22 @@ class MetaWhatsappInboxService {
     }
     async listConversations(auth, query) {
         const tenant = requireTenant(auth);
-        const open = await this.inboxConnections(tenant.tenantId);
+        const { all, serving } = await this.inboxConnectionSets(tenant.tenantId);
+        const open = serving;
         void this.ensureWebhooksForOpenConnections(tenant.tenantId, open);
         const connection = open[0];
         const filter = parseFilter(query?.filter);
         const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();
         const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
         const offset = clampPage(query?.offset, 0, 10000);
-        const verifiedByPhone = verifiedNamesByPhone(open);
-        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone, open);
+        const hints = all.length ? all : open;
+        const verifiedByPhone = verifiedNamesByPhone(hints);
+        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone, hints);
         const channelsById = new Map(snapshots.map((row) => [row.phoneNumberId, row]));
         const enabledIds = snapshots.filter((row) => row.inboxEligible).map((row) => row.phoneNumberId);
         const connPhones = open.map((row) => row.phoneNumberId).filter((id) => Boolean(id));
-        const listIds = (0, meta_whatsapp_phone_identity_store_1.inboxQueryPhoneIds)(tenant.tenantId, connPhones, selectedPhone, open);
-        if (!enabledIds.length || (selectedPhone && !listIds.length)) {
+        const listIds = (0, meta_whatsapp_phone_identity_store_1.inboxQueryPhoneIds)(tenant.tenantId, connPhones, selectedPhone, hints);
+        if (!enabledIds.length || !open.length || (selectedPhone && !listIds.length)) {
             return {
                 connected: true,
                 poll: (0, meta_config_1.readMetaInboxPollMs)(),

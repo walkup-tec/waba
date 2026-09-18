@@ -9,6 +9,7 @@ exports.readPhonePhoto = readPhonePhoto;
 exports.localPhonePhotoUrl = localPhonePhotoUrl;
 exports.phoneIdentitySyncStatus = phoneIdentitySyncStatus;
 exports.isPhoneInboxEnabled = isPhoneInboxEnabled;
+exports.isConnectionAccountRestricted = isConnectionAccountRestricted;
 exports.isPhoneInboxEligible = isPhoneInboxEligible;
 exports.phoneInboxDisplayName = phoneInboxDisplayName;
 exports.syncInboxChannelNameFromMeta = syncInboxChannelNameFromMeta;
@@ -225,15 +226,51 @@ function connectionMatchesPhone(row, phoneNumberId, identity) {
         return true;
     return false;
 }
+function hiddenIdMatches(tenantId, value) {
+    const id = String(value || "").trim();
+    if (!id)
+        return false;
+    if ((0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, id))
+        return true;
+    return (0, meta_whatsapp_hidden_business_store_1.listHiddenBusinessIds)(tenantId).some((hidden) => (0, meta_whatsapp_known_owned_wabas_1.knownOwnedBusinessesMatch)(id, hidden) || (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, hidden));
+}
+/** Conexão cuja BM/WABA está em Restritas — não serve o Atendimento. */
+function isConnectionAccountRestricted(tenantId, row) {
+    const tenant = String(tenantId || "").trim();
+    if (!tenant)
+        return false;
+    if (hiddenIdMatches(tenant, row.metaBusinessId) || hiddenIdMatches(tenant, row.wabaId))
+        return true;
+    for (const businessId of (0, meta_whatsapp_known_owned_wabas_1.knownBusinessIdsForWaba)(String(row.wabaId || ""))) {
+        if (hiddenIdMatches(tenant, businessId))
+            return true;
+    }
+    for (const businessId of (0, meta_whatsapp_known_owned_wabas_1.knownBusinessIdsForDisplayPhone)(row.displayPhoneNumber)) {
+        if (hiddenIdMatches(tenant, businessId))
+            return true;
+    }
+    const waba = String(row.wabaId || "").trim();
+    if (waba) {
+        for (const hidden of (0, meta_whatsapp_hidden_business_store_1.listHiddenBusinessIds)(tenant)) {
+            if ((0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)(hidden, waba).includes(waba))
+                return true;
+        }
+    }
+    return false;
+}
 function accountIsRestricted(tenantId, phoneNumberId, identity, connections) {
     if (identity?.portfolioHidden === true)
         return true;
-    if (identity?.businessId && (0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, identity.businessId))
+    if (hiddenIdMatches(tenantId, identity?.businessId))
         return true;
+    for (const businessId of (0, meta_whatsapp_known_owned_wabas_1.knownBusinessIdsForDisplayPhone)(identity?.displayPhoneNumber)) {
+        if (hiddenIdMatches(tenantId, businessId))
+            return true;
+    }
     for (const row of connections || []) {
         if (!connectionMatchesPhone(row, phoneNumberId, identity))
             continue;
-        if (row.metaBusinessId && (0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, row.metaBusinessId))
+        if (isConnectionAccountRestricted(tenantId, row))
             return true;
     }
     return false;
@@ -342,9 +379,11 @@ function markPhoneIdentitiesRestrictedForBusiness(tenantId, businessId, connecti
             if (!identity)
                 continue;
             const byBusiness = Boolean(identity.businessId && (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(identity.businessId, business));
-            const byConnection = (connections || []).some((row) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(row.metaBusinessId || ""), business) &&
+            const byDisplay = (0, meta_whatsapp_known_owned_wabas_1.knownBusinessIdsForDisplayPhone)(identity.displayPhoneNumber).some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, business));
+            const byConnection = (connections || []).some((row) => ((0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(row.metaBusinessId || ""), business) ||
+                (0, meta_whatsapp_known_owned_wabas_1.knownBusinessIdsForWaba)(String(row.wabaId || "")).some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, business))) &&
                 connectionMatchesPhone(row, phoneNumberId, identity));
-            if (!byBusiness && !byConnection)
+            if (!byBusiness && !byDisplay && !byConnection)
                 continue;
             writePhoneIdentity(id, phoneNumberId, { portfolioHidden: true, businessId: business });
             count += 1;
