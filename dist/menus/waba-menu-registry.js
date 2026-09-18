@@ -5,6 +5,7 @@ exports.WABA_MENU_SECTION_LABELS = {
     "nao-oficial": "Aquecedor",
     oficial: "Disparos",
     "lab-api-oficial": "Laboratório",
+    "farm-bm": "FARM BM",
     admin: "Admin",
     indicador: "Indicador",
     suporte: "Suporte",
@@ -121,14 +122,6 @@ exports.WABA_MENU_REGISTRY = [
         profile: "production",
     },
     {
-        id: "whatsapp-inbox",
-        label: "Atendimento",
-        tab: "whatsapp-inbox",
-        section: "lab-api-oficial",
-        sectionLabel: SECTION_LABELS["lab-api-oficial"],
-        profile: "production",
-    },
-    {
         id: "whatsapp-templates",
         label: "Templates",
         tab: "whatsapp-templates",
@@ -150,6 +143,14 @@ exports.WABA_MENU_REGISTRY = [
         tab: "whatsapp-automation",
         section: "lab-api-oficial",
         sectionLabel: SECTION_LABELS["lab-api-oficial"],
+        profile: "production",
+    },
+    {
+        id: "whatsapp-inbox",
+        label: "Atendimento",
+        tab: "whatsapp-inbox",
+        section: "farm-bm",
+        sectionLabel: SECTION_LABELS["farm-bm"],
         profile: "production",
     },
     {
@@ -266,14 +267,15 @@ exports.WABA_SUBSCRIBER_DISPAROS_MENU_IDS = [
 ];
 /**
  * Menus Meta Tech Provider (Embedded Signup / Cloud API).
- * Novos itens desta função devem ir na seção Laboratório (`lab-api-oficial`).
+ * Conexão/Templates/Disparo/Automação ficam no Laboratório.
+ * Atendimento fica na seção FARM BM (`farm-bm`).
  */
 exports.WABA_TECH_PROVIDER_MENU_IDS = [
     "whatsapp-oficial",
-    "whatsapp-inbox",
     "whatsapp-templates",
     "whatsapp-disparo-cloud",
     "whatsapp-automation",
+    "whatsapp-inbox",
 ];
 const listWabaMenuDefinitions = () => exports.WABA_MENU_REGISTRY.map((item) => ({ ...item }));
 exports.listWabaMenuDefinitions = listWabaMenuDefinitions;

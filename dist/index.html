@@ -2125,6 +2125,11 @@
         color: #93c5fd;
       }
 
+      .tab-button.active[data-menu-section="farm-bm"] {
+        border-bottom-color: rgba(45, 212, 191, 0.9);
+        color: #5eead4;
+      }
+
       .tab-button.active[data-menu-section="admin"] {
         border-bottom-color: rgba(250, 204, 21, 0.85);
         color: #fde68a;
@@ -2146,6 +2151,10 @@
 
       .mobile-tabs-section-label[data-menu-section="lab-api-oficial"] {
         color: #93c5fd;
+      }
+
+      .mobile-tabs-section-label[data-menu-section="farm-bm"] {
+        color: #5eead4;
       }
 
       .mobile-tabs-section-label[data-menu-section="admin"] {
@@ -3142,6 +3151,10 @@
           --menu-section-accent-rgb: 59, 130, 246;
         }
 
+        .menu-group[data-menu-group="farm-bm"] {
+          --menu-section-accent-rgb: 45, 212, 191;
+        }
+
         .menu-group[data-menu-group="admin"] {
           --menu-section-accent-rgb: 250, 204, 21;
         }
@@ -3171,6 +3184,11 @@
         .menu-group[data-menu-group="lab-api-oficial"] .menu-group-toggle {
           background: rgba(15, 40, 80, 0.9);
           color: #93c5fd;
+        }
+
+        .menu-group[data-menu-group="farm-bm"] .menu-group-toggle {
+          background: rgba(4, 47, 46, 0.9);
+          color: #5eead4;
         }
 
         .meta-onboard { max-width: none; margin: 0; }
@@ -4992,13 +5010,18 @@
       }
 
       body:not(.waba-ui-production):not(.waba-subscriber-disparos-menus) .menu-group[data-menu-group="lab-api-oficial"],
-      body:not(.waba-ui-production):not(.waba-subscriber-disparos-menus) .mobile-tabs-section-label[data-menu-section="lab-api-oficial"] {
+      body:not(.waba-ui-production):not(.waba-subscriber-disparos-menus) .mobile-tabs-section-label[data-menu-section="lab-api-oficial"],
+      body:not(.waba-ui-production):not(.waba-subscriber-disparos-menus) .menu-group[data-menu-group="farm-bm"],
+      body:not(.waba-ui-production):not(.waba-subscriber-disparos-menus) .mobile-tabs-section-label[data-menu-section="farm-bm"] {
         display: none !important;
       }
 
       body.waba-ui-production:not(.waba-laboratorio-visible) .menu-group[data-menu-group="lab-api-oficial"],
       body.waba-ui-production:not(.waba-laboratorio-visible) .mobile-tabs-section-label[data-menu-section="lab-api-oficial"],
       body.waba-ui-production:not(.waba-laboratorio-visible) .tab-button[data-menu-section="lab-api-oficial"],
+      body.waba-ui-production:not(.waba-laboratorio-visible) .menu-group[data-menu-group="farm-bm"],
+      body.waba-ui-production:not(.waba-laboratorio-visible) .mobile-tabs-section-label[data-menu-section="farm-bm"],
+      body.waba-ui-production:not(.waba-laboratorio-visible) .tab-button[data-menu-section="farm-bm"],
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-oficial,
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-inbox,
       body.waba-ui-production:not(.waba-laboratorio-visible) #tab-whatsapp-templates,
@@ -19578,24 +19601,6 @@
                   <span class="tab-label">Templates</span>
                 </button>
                 <button
-                  id="tab-btn-whatsapp-inbox"
-                  class="tab-button waba-prod-only"
-                  type="button"
-                  role="tab"
-                  aria-selected="false"
-                  aria-controls="tab-whatsapp-inbox"
-                  data-tab="whatsapp-inbox"
-                  data-menu-key="whatsapp-inbox"
-                  data-menu-section="lab-api-oficial"
-                >
-                  <span class="tab-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                  </span>
-                  <span class="tab-label">Atendimento</span>
-                </button>
-                <button
                   id="tab-btn-whatsapp-disparo-cloud"
                   class="tab-button waba-prod-only"
                   type="button"
@@ -19614,6 +19619,38 @@
                     </svg>
                   </span>
                   <span class="tab-label">Disparo Cloud</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="menu-group" data-menu-group="farm-bm">
+              <button
+                type="button"
+                class="menu-group-toggle"
+                data-menu-group-toggle="farm-bm"
+                aria-expanded="false"
+              >
+                <span class="menu-group-title">FARM BM</span>
+                <span class="menu-group-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="menu-group-items">
+                <button
+                  id="tab-btn-whatsapp-inbox"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-whatsapp-inbox"
+                  data-tab="whatsapp-inbox"
+                  data-menu-key="whatsapp-inbox"
+                  data-menu-section="farm-bm"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Atendimento</span>
                 </button>
               </div>
             </div>
@@ -20158,17 +20195,6 @@
             <button
               class="tab-button waba-prod-only"
               type="button"
-              data-tab="whatsapp-inbox"
-              data-menu-key="whatsapp-inbox"
-              data-menu-section="lab-api-oficial"
-              role="menuitemradio"
-              aria-checked="false"
-            >
-              Atendimento
-            </button>
-            <button
-              class="tab-button waba-prod-only"
-              type="button"
               data-tab="whatsapp-disparo-cloud"
               data-menu-key="whatsapp-disparo-cloud"
               data-menu-section="lab-api-oficial"
@@ -20176,6 +20202,20 @@
               aria-checked="false"
             >
               Disparo Cloud
+            </button>
+            <div class="mobile-tabs-section-label" data-menu-section="farm-bm">
+              FARM BM
+            </div>
+            <button
+              class="tab-button waba-prod-only"
+              type="button"
+              data-tab="whatsapp-inbox"
+              data-menu-key="whatsapp-inbox"
+              data-menu-section="farm-bm"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Atendimento
             </button>
             <div class="mobile-tabs-section-label" data-menu-section="admin">
               Admin
@@ -30536,7 +30576,8 @@
       function getMenuSectionForTab(tabName) {
         if (String(tabName || "").startsWith("indicador-")) return "indicador";
         if (isMarketingTab(tabName)) return "marketing";
-        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
+        if (tabName === "whatsapp-inbox") return "farm-bm";
+        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
         if (tabName === "disparos" || tabName === "disparo-evo" || isOfficialTab(tabName)) return "disparos";
@@ -30568,7 +30609,7 @@
         }
         if (String(tabName).startsWith("indicador-")) return true;
         if (tabName === "dispositivos" && !canAccessDeviceCloudMenu()) return true;
-        if (getMenuSectionForTab(tabName) === "lab-api-oficial" && !canAccessLaboratorioMenu()) return true;
+        if (["lab-api-oficial", "farm-bm"].includes(getMenuSectionForTab(tabName)) && !canAccessLaboratorioMenu()) return true;
         if (tabName === "admin-usuarios") return !hasMasterAccess();
         if (tabName === "admin-assinantes") return !hasMasterAccess();
         if (tabName === "admin-chamados") return !hasMasterAccess();
@@ -46554,6 +46595,7 @@
         "nao-oficial": "Aquecedor",
         oficial: "Disparos",
         "lab-api-oficial": "Laboratório",
+        "farm-bm": "FARM BM",
         admin: "Admin",
         suporte: "Suporte",
         marketing: "Marketing",
@@ -65498,7 +65540,8 @@
       function resolveMenuGroupForTab(tabName) {
         if (String(tabName || "").startsWith("indicador-")) return "indicador";
         if (isMarketingTab(tabName)) return "marketing";
-        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
+        if (tabName === "whatsapp-inbox") return "farm-bm";
+        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-templates" || tabName === "whatsapp-disparo-cloud" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
         if (isOfficialTab(tabName)) return "oficial";
@@ -65508,7 +65551,7 @@
       /** Ao expandir a sidebar, abre só o grupo da aba ativa (evita menu maior que a tela). */
       function focusDesktopMenuGroupForActiveTab() {
         const activeGroup = resolveMenuGroupForTab(activeTab);
-        ["nao-oficial", "oficial", "lab-api-oficial", "admin", "indicador", "suporte", "marketing"].forEach((groupName) => {
+        ["nao-oficial", "oficial", "lab-api-oficial", "farm-bm", "admin", "indicador", "suporte", "marketing"].forEach((groupName) => {
           setDesktopMenuGroupOpen(groupName, groupName === activeGroup);
         });
       }

@@ -1,4 +1,11 @@
-export type WabaMenuSection = "nao-oficial" | "oficial" | "lab-api-oficial" | "admin" | "indicador" | "suporte";
+export type WabaMenuSection =
+  | "nao-oficial"
+  | "oficial"
+  | "lab-api-oficial"
+  | "farm-bm"
+  | "admin"
+  | "indicador"
+  | "suporte";
 
 export type WabaMenuProfile = "all" | "production" | "full";
 
@@ -17,6 +24,7 @@ export const WABA_MENU_SECTION_LABELS: Record<WabaMenuSection, string> = {
   "nao-oficial": "Aquecedor",
   oficial: "Disparos",
   "lab-api-oficial": "Laboratório",
+  "farm-bm": "FARM BM",
   admin: "Admin",
   indicador: "Indicador",
   suporte: "Suporte",
@@ -135,14 +143,6 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
     profile: "production",
   },
   {
-    id: "whatsapp-inbox",
-    label: "Atendimento",
-    tab: "whatsapp-inbox",
-    section: "lab-api-oficial",
-    sectionLabel: SECTION_LABELS["lab-api-oficial"],
-    profile: "production",
-  },
-  {
     id: "whatsapp-templates",
     label: "Templates",
     tab: "whatsapp-templates",
@@ -164,6 +164,14 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
     tab: "whatsapp-automation",
     section: "lab-api-oficial",
     sectionLabel: SECTION_LABELS["lab-api-oficial"],
+    profile: "production",
+  },
+  {
+    id: "whatsapp-inbox",
+    label: "Atendimento",
+    tab: "whatsapp-inbox",
+    section: "farm-bm",
+    sectionLabel: SECTION_LABELS["farm-bm"],
     profile: "production",
   },
   {
@@ -282,14 +290,15 @@ export const WABA_SUBSCRIBER_DISPAROS_MENU_IDS = [
 
 /**
  * Menus Meta Tech Provider (Embedded Signup / Cloud API).
- * Novos itens desta função devem ir na seção Laboratório (`lab-api-oficial`).
+ * Conexão/Templates/Disparo/Automação ficam no Laboratório.
+ * Atendimento fica na seção FARM BM (`farm-bm`).
  */
 export const WABA_TECH_PROVIDER_MENU_IDS = [
   "whatsapp-oficial",
-  "whatsapp-inbox",
   "whatsapp-templates",
   "whatsapp-disparo-cloud",
   "whatsapp-automation",
+  "whatsapp-inbox",
 ] as const;
 
 export const listWabaMenuDefinitions = (): WabaMenuDefinition[] =>
