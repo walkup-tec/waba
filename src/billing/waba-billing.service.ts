@@ -239,7 +239,7 @@ export class WabaBillingService {
     }
     const segment = getSubscriberSegmentByEmail(String(input.ownerEmail ?? ""));
     if (segment === "bets" && apiKind === "alternativa") {
-      throw new Error("Assinantes do segmento Bets contratam créditos apenas na API Oficial.");
+      throw new Error("Assinantes do segmento Black contratam créditos apenas na API Oficial.");
     }
     const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
     const ownerEmail = String(input.ownerEmail ?? "").trim().toLowerCase();
@@ -284,7 +284,7 @@ export class WabaBillingService {
 
     const segment = getSubscriberSegmentByEmail(ownerEmail);
     if (segment === "bets" && apiKind === "alternativa") {
-      throw new Error("Assinantes do segmento Bets contratam créditos apenas na API Oficial.");
+      throw new Error("Assinantes do segmento Black contratam créditos apenas na API Oficial.");
     }
 
     const cpfCnpj = normalizeDigits(String(input.cpfCnpj ?? ""));

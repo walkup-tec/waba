@@ -251,7 +251,7 @@ const parseRequestedApiKind = (body, ownerEmail) => {
     if ((0, waba_subscriber_segment_1.isBetsSubscriberEmail)(email) && requested === "alternativa") {
         return {
             apiKind: "oficial",
-            error: "Assinantes do segmento Bets geram campanhas apenas na API Oficial.",
+            error: "Assinantes do segmento Black geram campanhas apenas na API Oficial.",
         };
     }
     if (masterPolicyService.hasUnlimitedCredits(email)) {

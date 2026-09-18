@@ -140,7 +140,7 @@ export class WabaAdminFinanceiroService {
         apiKinds,
         segment,
         segments,
-        segmentLabel: String(user.operacionalSegmentLabel || (segment === "bets" ? "Bets" : "Outros")),
+        segmentLabel: String(user.operacionalSegmentLabel || (segment === "bets" ? "Black" : "White")),
         apiKindLabel: String(user.operacionalDispatchesApiLabel || "—"),
       });
     }

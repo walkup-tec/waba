@@ -131,7 +131,7 @@ class WabaAdminBonusEnviosService {
         }
         const segment = String(subscriber.segment ?? "outros").trim().toLowerCase();
         if (segment === "bets" && apiKind === "alternativa") {
-            throw new Error("Assinantes do segmento Bets recebem créditos apenas na API Oficial.");
+            throw new Error("Assinantes do segmento Black recebem créditos apenas na API Oficial.");
         }
         const validityMode = input.validityMode;
         if (!["12h", "24h", "custom", "lifetime"].includes(validityMode)) {

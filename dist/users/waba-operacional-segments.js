@@ -2,22 +2,24 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseOperacionalSegmentsInput = exports.formatOperacionalSegmentsLabel = exports.resolveOperacionalSegments = exports.OPERACIONAL_SEGMENT_LABELS = void 0;
 exports.OPERACIONAL_SEGMENT_LABELS = {
-    bets: "Bets",
-    outros: "Outros",
+    bets: "Black",
+    outros: "White",
 };
 const normalizeSegment = (value) => {
     const raw = String(value ?? "")
         .trim()
         .toLowerCase();
-    if (raw === "todos")
+    if (raw === "todos" || raw === "white")
         return "outros";
+    if (raw === "black")
+        return "bets";
     if (raw === "bets" || raw === "outros")
         return raw;
     return null;
 };
 /**
  * Resolve a lista efetiva de segmentos atendidos (array novo ou campo legado singular).
- * Legado `bets` → Bets + Outros (preserva a regra antiga de escalonamento na migração).
+ * Legado `bets` → Black + White (preserva a regra antiga de escalonamento na migração).
  */
 const resolveOperacionalSegments = (user) => {
     const fromArray = Array.isArray(user.operacionalSegments)
@@ -65,7 +67,7 @@ const parseOperacionalSegmentsInput = (value, options = {}) => {
         push(value);
     }
     if (!collected.length && options.required) {
-        throw new Error("Selecione ao menos um segmento que este operacional atende (Bets e/ou Outros).");
+        throw new Error("Selecione ao menos um segmento que este operacional atende (Black e/ou White).");
     }
     return collected;
 };

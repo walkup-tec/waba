@@ -41,7 +41,7 @@ export const DISPAROS_OFICIAL_SALE_PACKAGES: ReadonlyArray<WabaSalePackage> = [
   { shipments: 30000, valueCents: 870000 },
 ];
 
-/** Tabela de venda API Oficial — segmento Bets. */
+/** Tabela de venda API Oficial — segmento Black. */
 export const DISPAROS_BETS_OFICIAL_SALE_PACKAGES: ReadonlyArray<WabaSalePackage> = [
   { shipments: 5000, valueCents: 225000 },
   { shipments: 10000, valueCents: 430000 },

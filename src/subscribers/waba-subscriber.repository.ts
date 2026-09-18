@@ -11,7 +11,7 @@ export type WabaSubscriber = {
   whatsapp: string;
   phone: string;
   cpfCnpj: string;
-  /** Segmento comercial: Bets (bet.waba.info) ou Outros (wabadisparos / demais). */
+  /** Segmento comercial: Black (bet.waba.info) ou White (wabadisparos / demais). */
   segment?: WabaSubscriberSegment;
   /** Liberado pelo master sem exigir compra de envios (parceiros). */
   aquecedorGranted?: boolean;

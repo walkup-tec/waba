@@ -95,7 +95,7 @@ const notifyAssignedOperacionalAndMasters = async (intake) => {
     }
     const subscriber = new waba_subscriber_repository_1.WabaSubscriberRepository().getByEmail(intake.ownerEmail);
     const subscriberId = String(subscriber?.id ?? "").trim() || "—";
-    const segmentLabel = waba_subscriber_segment_1.WABA_SUBSCRIBER_SEGMENT_LABELS[subscriber?.segment ?? "outros"] ?? "Outros";
+    const segmentLabel = waba_subscriber_segment_1.WABA_SUBSCRIBER_SEGMENT_LABELS[subscriber?.segment ?? "outros"] ?? "White";
     const createdAtLabel = formatCreatedAtLabel(intake.createdAt);
     const plannedSendCount = resolvePlannedSendCount(intake);
     const assignedOperacionalName = String(operacional.fullName || "").trim() || assignedEmail;

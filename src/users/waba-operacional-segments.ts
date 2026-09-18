@@ -1,22 +1,23 @@
 import type { WabaSystemUserOperacionalSegment } from "./waba-system-user.repository";
 
 export const OPERACIONAL_SEGMENT_LABELS: Record<WabaSystemUserOperacionalSegment, string> = {
-  bets: "Bets",
-  outros: "Outros",
+  bets: "Black",
+  outros: "White",
 };
 
 const normalizeSegment = (value: unknown): WabaSystemUserOperacionalSegment | null => {
   const raw = String(value ?? "")
     .trim()
     .toLowerCase();
-  if (raw === "todos") return "outros";
+  if (raw === "todos" || raw === "white") return "outros";
+  if (raw === "black") return "bets";
   if (raw === "bets" || raw === "outros") return raw;
   return null;
 };
 
 /**
  * Resolve a lista efetiva de segmentos atendidos (array novo ou campo legado singular).
- * Legado `bets` → Bets + Outros (preserva a regra antiga de escalonamento na migração).
+ * Legado `bets` → Black + White (preserva a regra antiga de escalonamento na migração).
  */
 export const resolveOperacionalSegments = (user: {
   operacionalSegment?: WabaSystemUserOperacionalSegment | null;
@@ -67,7 +68,7 @@ export const parseOperacionalSegmentsInput = (
   }
 
   if (!collected.length && options.required) {
-    throw new Error("Selecione ao menos um segmento que este operacional atende (Bets e/ou Outros).");
+    throw new Error("Selecione ao menos um segmento que este operacional atende (Black e/ou White).");
   }
   return collected;
 };

@@ -20,7 +20,7 @@ describe("catálogo público de preço de venda", () => {
     assert.equal(formatBrlFromCents(1900000), "R$ 19.000,00");
   });
 
-  it("Outros Oficial usa o menor unitário como 'a partir de' e o primeiro pacote como mínimo", () => {
+  it("White Oficial usa o menor unitário como 'a partir de' e o primeiro pacote como mínimo", () => {
     const catalog = buildPublicSalePricingCatalog();
     assert.equal(catalog.outros.oficial.packages.length, DISPAROS_OFICIAL_SALE_PACKAGES.length);
     assert.equal(catalog.outros.oficial.fromLabel, "R$ 0,29");
@@ -32,7 +32,7 @@ describe("catálogo público de preço de venda", () => {
     );
   });
 
-  it("Bets Oficial e Alternativa saem da mesma tabela", () => {
+  it("Black Oficial e Alternativa saem da mesma tabela", () => {
     const catalog = buildPublicSalePricingCatalog();
     assert.equal(catalog.bets.oficial.fromLabel, "R$ 0,38");
     assert.equal(catalog.bets.oficial.rangeLabel, "De R$ 0,38 a R$ 0,45");

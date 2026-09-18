@@ -32,7 +32,7 @@ const toSegmentList = (
 /**
  * Regra da fila / painel operacional:
  * o operacional atende campanhas cujo segmento do assinante está na lista marcada.
- * (Migração de legado `bets` inclui Outros via resolveOperacionalSegments.)
+ * (Migração de legado `bets` inclui White via resolveOperacionalSegments.)
  */
 export const operacionalCanServeSubscriberCampaign = (
   subscriberSegment: WabaSubscriberSegment,

@@ -52,6 +52,7 @@ const waba_campaign_credit_funding_1 = require("./waba-campaign-credit-funding")
 const waba_indicator_commission_service_1 = require("../indicators/waba-indicator-commission.service");
 const waba_indicator_profile_repository_1 = require("../indicators/waba-indicator-profile.repository");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
+const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const PERCENT_SUM_TOLERANCE = 0.01;
 const roundPercent = (value) => Math.round(value * 100) / 100;
 function resolveSplitSettlementSubscriberName(input) {
@@ -249,12 +250,12 @@ class WabaFinanceiroSplitService {
             const groupKey = `${supplier.apiKind}:${supplier.segment}`;
             const priorityKey = `${groupKey}:${supplier.priority}`;
             if (priorityKeys.has(priorityKey)) {
-                throw new Error(`Já existe fornecedor ativo com prioridade ${supplier.priority} para ${supplier.apiKind === "oficial" ? "API Oficial" : "API Alternativa"} / ${supplier.segment === "bets" ? "Bets" : "Outros"}.`);
+                throw new Error(`Já existe fornecedor ativo com prioridade ${supplier.priority} para ${supplier.apiKind === "oficial" ? "API Oficial" : "API Alternativa"} / ${waba_subscriber_segment_1.WABA_SUBSCRIBER_SEGMENT_LABELS[supplier.segment === "bets" ? "bets" : "outros"]}.`);
             }
             priorityKeys.add(priorityKey);
             const operacionalKey = `${supplier.systemUserEmail}:${supplier.apiKind}:${supplier.segment}`;
             if (operacionalEmails.has(operacionalKey)) {
-                throw new Error("Cada usuário operacional só pode ser fornecedor uma vez por plano + segmento (ex.: Oficial/Bets).");
+                throw new Error("Cada usuário operacional só pode ser fornecedor uma vez por plano + segmento (ex.: Oficial/Black).");
             }
             operacionalEmails.add(operacionalKey);
         }

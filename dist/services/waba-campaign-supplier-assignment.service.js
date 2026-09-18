@@ -35,7 +35,7 @@ class WabaCampaignSupplierAssignmentService {
         if (subscriberSegment === "bets") {
             return this.splitService.listActiveSuppliersForPlanSegment(apiKind, "bets");
         }
-        // Assinante Outros: fila primária (fornecedores Outros) + escalonamento para operadores Bets.
+        // Assinante White: fila primária (fornecedores White) + escalonamento para operadores Black.
         const outrosSuppliers = this.splitService.listActiveSuppliersForPlanSegment(apiKind, "outros");
         const betsSuppliers = this.splitService.listActiveSuppliersForPlanSegment(apiKind, "bets");
         return [...outrosSuppliers, ...betsSuppliers];

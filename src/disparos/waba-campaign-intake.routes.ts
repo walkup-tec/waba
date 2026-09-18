@@ -357,7 +357,7 @@ const parseRequestedApiKind = (
   if (isBetsSubscriberEmail(email) && requested === "alternativa") {
     return {
       apiKind: "oficial",
-      error: "Assinantes do segmento Bets geram campanhas apenas na API Oficial.",
+      error: "Assinantes do segmento Black geram campanhas apenas na API Oficial.",
     };
   }
 

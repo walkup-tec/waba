@@ -280,7 +280,7 @@ export const registerWabaBillingRoutes = (app: Express) => {
       }
       if (isBetsSubscriberEmail(auth.email)) {
         return res.status(403).json({
-          error: "Assinantes do segmento Bets utilizam apenas a API Oficial.",
+          error: "Assinantes do segmento Black utilizam apenas a API Oficial.",
         });
       }
       const body = req.body as Record<string, unknown>;

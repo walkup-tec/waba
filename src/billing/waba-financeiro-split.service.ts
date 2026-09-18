@@ -43,6 +43,7 @@ import {
 import { WabaIndicatorCommissionService } from "../indicators/waba-indicator-commission.service";
 import { WabaIndicatorProfileRepository } from "../indicators/waba-indicator-profile.repository";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
+import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
 
 const PERCENT_SUM_TOLERANCE = 0.01;
 
@@ -304,14 +305,14 @@ export class WabaFinanceiroSplitService {
       const priorityKey = `${groupKey}:${supplier.priority}`;
       if (priorityKeys.has(priorityKey)) {
         throw new Error(
-          `Já existe fornecedor ativo com prioridade ${supplier.priority} para ${supplier.apiKind === "oficial" ? "API Oficial" : "API Alternativa"} / ${supplier.segment === "bets" ? "Bets" : "Outros"}.`,
+          `Já existe fornecedor ativo com prioridade ${supplier.priority} para ${supplier.apiKind === "oficial" ? "API Oficial" : "API Alternativa"} / ${WABA_SUBSCRIBER_SEGMENT_LABELS[supplier.segment === "bets" ? "bets" : "outros"]}.`,
         );
       }
       priorityKeys.add(priorityKey);
       const operacionalKey = `${supplier.systemUserEmail}:${supplier.apiKind}:${supplier.segment}`;
       if (operacionalEmails.has(operacionalKey)) {
         throw new Error(
-          "Cada usuário operacional só pode ser fornecedor uma vez por plano + segmento (ex.: Oficial/Bets).",
+          "Cada usuário operacional só pode ser fornecedor uma vez por plano + segmento (ex.: Oficial/Black).",
         );
       }
       operacionalEmails.add(operacionalKey);

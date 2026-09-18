@@ -23710,8 +23710,8 @@
                       <div class="aquecedor-field">
                         <label for="admin-subscriber-segment">Segmento</label>
                         <select id="admin-subscriber-segment" required>
-                          <option value="outros" selected>Outros</option>
-                          <option value="bets">Bets</option>
+                          <option value="outros" selected>White</option>
+                          <option value="bets">Black</option>
                         </select>
                       </div>
                       <div class="admin-subscriber-options">
@@ -24785,15 +24785,15 @@
                         <label class="admin-user-api-toggle">
                           <input type="checkbox" name="admin-user-operacional-segment" value="bets" />
                           <span class="admin-user-api-toggle-card">
-                            <span class="admin-user-api-toggle-title">Bets</span>
-                            <span class="admin-user-api-toggle-hint">Assinantes Bets</span>
+                            <span class="admin-user-api-toggle-title">Black</span>
+                            <span class="admin-user-api-toggle-hint">Assinantes Black</span>
                           </span>
                         </label>
                         <label class="admin-user-api-toggle">
                           <input type="checkbox" name="admin-user-operacional-segment" value="outros" checked />
                           <span class="admin-user-api-toggle-card">
-                            <span class="admin-user-api-toggle-title">Outros</span>
-                            <span class="admin-user-api-toggle-hint">Assinantes Outros</span>
+                            <span class="admin-user-api-toggle-title">White</span>
+                            <span class="admin-user-api-toggle-hint">Assinantes White</span>
                           </span>
                         </label>
                       </div>
@@ -26180,15 +26180,15 @@
                 <label class="admin-user-api-toggle">
                   <input type="checkbox" name="admin-user-edit-operacional-segment" value="bets" />
                   <span class="admin-user-api-toggle-card">
-                    <span class="admin-user-api-toggle-title">Bets</span>
-                    <span class="admin-user-api-toggle-hint">Assinantes Bets</span>
+                    <span class="admin-user-api-toggle-title">Black</span>
+                    <span class="admin-user-api-toggle-hint">Assinantes Black</span>
                   </span>
                 </label>
                 <label class="admin-user-api-toggle">
                   <input type="checkbox" name="admin-user-edit-operacional-segment" value="outros" />
                   <span class="admin-user-api-toggle-card">
-                    <span class="admin-user-api-toggle-title">Outros</span>
-                    <span class="admin-user-api-toggle-hint">Assinantes Outros</span>
+                    <span class="admin-user-api-toggle-title">White</span>
+                    <span class="admin-user-api-toggle-hint">Assinantes White</span>
                   </span>
                 </label>
               </div>
@@ -31981,7 +31981,7 @@
       };
       const DISPAROS_HEX_CLUSTER_ART_BETS = {
         src: "/media/creditBet_02.png",
-        alt: "API Oficial Meta Business para assinantes Bets",
+        alt: "API Oficial Meta Business para assinantes Black",
         width: 1024,
         height: 1024,
       };
@@ -33238,7 +33238,7 @@
         const name = escapeAdminHtml(item?.fullName || "—");
         const email = subscriberEmail;
         const cpf = escapeAdminHtml(item?.cpfCnpjFormatted || item?.cpfCnpj || "—");
-        const segment = escapeAdminHtml(item?.segmentLabel || item?.segment || "Outros");
+        const segment = escapeAdminHtml(item?.segmentLabel || item?.segment || "White");
         const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
         const credits = escapeAdminHtml(item?.creditsValueLabel || formatDisparosMoneyFromCents(0));
         const disparos = escapeAdminHtml(formatDisparosQty(item?.contractedShipments));
@@ -33508,8 +33508,8 @@
                 <div class="aquecedor-field">
                   <label for="admin-subscriber-detail-segment">Segmento</label>
                   <select id="admin-subscriber-detail-segment" required>
-                    <option value="outros" ${profile.segment === "outros" || !profile.segment ? "selected" : ""}>Outros</option>
-                    <option value="bets" ${profile.segment === "bets" ? "selected" : ""}>Bets</option>
+                    <option value="outros" ${profile.segment === "outros" || !profile.segment ? "selected" : ""}>White</option>
+                    <option value="bets" ${profile.segment === "bets" ? "selected" : ""}>Black</option>
                   </select>
                 </div>
                 <div class="aquecedor-field">
@@ -33815,7 +33815,7 @@
       }
 
       function formatSupplierSegmentLabel(segment) {
-        return segment === "bets" ? "Bets" : "Outros";
+        return segment === "bets" ? "Black" : "White";
       }
 
       function formatSupplierPlanLabel(apiKind) {
@@ -33825,8 +33825,8 @@
       function buildSupplierSegmentSelectOptions(selectedSegment) {
         const selected = selectedSegment === "bets" ? "bets" : "outros";
         return [
-          `<option value="outros" ${selected === "outros" ? "selected" : ""}>Outros</option>`,
-          `<option value="bets" ${selected === "bets" ? "selected" : ""}>Bets</option>`,
+          `<option value="outros" ${selected === "outros" ? "selected" : ""}>White</option>`,
+          `<option value="bets" ${selected === "bets" ? "selected" : ""}>Black</option>`,
         ].join("");
       }
 
@@ -46767,7 +46767,7 @@
           return;
         }
         if (wabaAuthRole === "operacional") {
-          const segmentLabel = wabaOperacionalSegment === "bets" ? "Bets" : "Outros";
+          const segmentLabel = wabaOperacionalSegment === "bets" ? "Black" : "White";
           const apis = Array.isArray(wabaOperacionalDispatchesApis)
             ? wabaOperacionalDispatchesApis
             : wabaOperacionalDispatchesApi
@@ -47089,7 +47089,7 @@
           body.operacionalDispatchesApi = operacionalDispatchesApis[0];
           const operacionalSegments = readAdminUserOperacionalSegmentValues("edit");
           if (!operacionalSegments.length) {
-            const msg = "Selecione ao menos um segmento (Bets e/ou Outros).";
+            const msg = "Selecione ao menos um segmento (Black e/ou White).";
             setAdminUserEditError(msg);
             showToast(msg, "warning");
             return;
@@ -47199,7 +47199,7 @@
           return;
         }
         if (role === "operacional" && !operacionalSegments.length) {
-          showToast("Selecione ao menos um segmento (Bets e/ou Outros).", "warning");
+          showToast("Selecione ao menos um segmento (Black e/ou White).", "warning");
           return;
         }
 
@@ -48075,7 +48075,7 @@
             const subscriberId = escapeAdminHtml(item?.subscriberId || "—");
             const planTypeKind = resolveAdminCampanhaApiKind(item);
             const planType = renderWabaApiKindLabelHtml(planTypeKind);
-            const segmentLabel = escapeAdminHtml(item?.subscriberSegmentLabel || "Outros");
+            const segmentLabel = escapeAdminHtml(item?.subscriberSegmentLabel || "White");
             const operadorLabel = escapeAdminHtml(
               item?.assignedOperacionalName || item?.assignedOperacionalEmail || "—"
             );
@@ -48267,7 +48267,7 @@
               ),
               renderAdminCampanhasDetailField(
                 "Segmento",
-                escapeAdminHtml(campaign.subscriberSegmentLabel || "Outros")
+                escapeAdminHtml(campaign.subscriberSegmentLabel || "White")
               ),
             ].join("")
           ),
@@ -52938,7 +52938,7 @@
 
       function openDisparosPricingModal(apiKind) {
         if (isBetsSubscriberAccount() && apiKind === "alternativa") {
-          showToast("Assinantes do segmento Bets contratam créditos apenas na API Oficial.", "warning", 5200);
+          showToast("Assinantes do segmento Black contratam créditos apenas na API Oficial.", "warning", 5200);
           apiKind = "oficial";
         }
         disparosBillingSelectedKind = apiKind;
@@ -65519,7 +65519,7 @@
             );
             if (isBetsSubscriberAccount() && env === "alternativa") {
               showToast(
-                "Assinantes do segmento Bets utilizam apenas a API Oficial.",
+                "Assinantes do segmento Black utilizam apenas a API Oficial.",
                 "warning",
                 5200
               );

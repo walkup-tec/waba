@@ -108,7 +108,7 @@
         <a href="#cadastro" class="btn">Criar Conta →</a>
         <a href="#como-funciona" class="btn btn-ghost" style="margin-left:.5rem">Ver como funciona</a>
       </div>
-      <p class="env-pill" id="env-hint">Cadastro com segmento Bets · ambiente local V02</p>
+      <p class="env-pill" id="env-hint">Cadastro com segmento Black · ambiente local V02</p>
     </div>
   </section>
 
@@ -132,7 +132,7 @@
         <div class="cell"><h3>Larga escala</h3><p>Envios massivos com alta capacidade de processamento.</p></div>
         <div class="cell"><h3>Alta estabilidade</h3><p>Arquitetura robusta para campanhas sem interrupções.</p></div>
         <div class="cell"><h3>Cadastro rápido</h3><p>Crie sua conta em minutos e comece no mesmo dia.</p></div>
-        <div class="cell"><h3>API Oficial</h3><p>Plano exclusivo API Oficial Meta para o segmento Bets.</p></div>
+        <div class="cell"><h3>API Oficial</h3><p>Plano exclusivo API Oficial Meta para o segmento Black.</p></div>
         <div class="cell"><h3>Interface simples</h3><p>Painel moderno para times de marketing.</p></div>
         <div class="cell"><h3>Operação contínua</h3><p>Monitoramento e alta disponibilidade 24/7.</p></div>
       </div>
@@ -168,7 +168,7 @@
     <div class="wrap" style="max-width:40rem">
       <div class="label">Cadastro Bet Waba</div>
       <h2 style="margin-top:1rem">Crie sua conta</h2>
-      <p class="sub">Seu cadastro será criado no segmento <strong>Bets</strong> com acesso à API Oficial.</p>
+      <p class="sub">Seu cadastro será criado no segmento <strong>Black</strong> com acesso à API Oficial.</p>
       <form id="register-form">
         <div class="form-grid">
           <div><label for="fullName">Nome completo</label><input id="fullName" required autocomplete="name" /></div>
@@ -210,7 +210,7 @@
     document.getElementById("login-link").href = loginUrl;
     const envHint = document.getElementById("env-hint");
     if (envHint && apiBase) {
-      envHint.textContent = "Cadastro segmento Bets · " + apiBase;
+      envHint.textContent = "Cadastro segmento Black · " + apiBase;
     }
     const pw = document.getElementById("password");
     const onlyDigits = (value) => String(value || "").replace(/\D/g, "");
@@ -294,7 +294,7 @@
         msg.className = "msg ok";
         msg.textContent =
           data.message ||
-          "Conta criada no segmento Bets. Você receberá e-mail e WhatsApp de boas-vindas. Redirecionando para o login…";
+          "Conta criada no segmento Black. Você receberá e-mail e WhatsApp de boas-vindas. Redirecionando para o login…";
         msg.hidden = false;
         setTimeout(() => {
           window.location.href = targetLogin;

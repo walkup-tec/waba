@@ -3,8 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isBetsSubscriberEmail = exports.getSubscriberSegmentByEmail = exports.resolveSignupSegmentFromRequest = exports.parseWabaSubscriberSegment = exports.WABA_SUBSCRIBER_SEGMENT_LABELS = void 0;
 const waba_subscriber_repository_1 = require("./waba-subscriber.repository");
 exports.WABA_SUBSCRIBER_SEGMENT_LABELS = {
-    bets: "Bets",
-    outros: "Outros",
+    bets: "Black",
+    outros: "White",
 };
 const normalizeRaw = (value) => String(value ?? "")
     .trim()
@@ -13,14 +13,15 @@ const parseWabaSubscriberSegment = (raw, options) => {
     const value = normalizeRaw(raw);
     if (!value) {
         if (options?.required) {
-            throw new Error("Selecione o segmento do assinante (Bets ou Outros).");
+            throw new Error("Selecione o segmento do assinante (Black ou White).");
         }
         return options?.defaultValue ?? "outros";
     }
-    if (value === "bets" || value === "bet")
+    if (value === "bets" || value === "bet" || value === "black")
         return "bets";
     if (value === "outros" ||
         value === "outro" ||
+        value === "white" ||
         value === "todos" ||
         value === "wabadisparos" ||
         value === "waba-disparos" ||
@@ -34,7 +35,7 @@ const parseWabaSubscriberSegment = (raw, options) => {
         value === "bet_waba") {
         return "bets";
     }
-    throw new Error("Segmento inválido. Use Bets ou Outros.");
+    throw new Error("Segmento inválido. Use Black ou White.");
 };
 exports.parseWabaSubscriberSegment = parseWabaSubscriberSegment;
 const resolveSignupSegmentFromRequest = (body, headers) => {

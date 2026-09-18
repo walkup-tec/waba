@@ -183,7 +183,7 @@ describe("WabaPricingService — spread do indicador", () => {
     }
   });
 
-  it("tabela Oficial Bets acrescenta R$ 0,05 por envio em todas as faixas", async () => {
+  it("tabela Oficial Black acrescenta R$ 0,05 por envio em todas as faixas", async () => {
     seedStores();
     const { wabaPricingService } = await import("./waba-pricing.service");
     const quote = wabaPricingService.quote({

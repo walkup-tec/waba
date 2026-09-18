@@ -21,7 +21,7 @@ exports.DISPAROS_OFICIAL_SALE_PACKAGES = [
     { shipments: 20000, valueCents: 600000 },
     { shipments: 30000, valueCents: 870000 },
 ];
-/** Tabela de venda API Oficial — segmento Bets. */
+/** Tabela de venda API Oficial — segmento Black. */
 exports.DISPAROS_BETS_OFICIAL_SALE_PACKAGES = [
     { shipments: 5000, valueCents: 225000 },
     { shipments: 10000, valueCents: 430000 },

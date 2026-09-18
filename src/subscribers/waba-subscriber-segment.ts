@@ -3,8 +3,8 @@ import { WabaSubscriberRepository } from "./waba-subscriber.repository";
 export type WabaSubscriberSegment = "bets" | "outros";
 
 export const WABA_SUBSCRIBER_SEGMENT_LABELS: Record<WabaSubscriberSegment, string> = {
-  bets: "Bets",
-  outros: "Outros",
+  bets: "Black",
+  outros: "White",
 };
 
 const normalizeRaw = (value: unknown): string =>
@@ -19,14 +19,15 @@ export const parseWabaSubscriberSegment = (
   const value = normalizeRaw(raw);
   if (!value) {
     if (options?.required) {
-      throw new Error("Selecione o segmento do assinante (Bets ou Outros).");
+      throw new Error("Selecione o segmento do assinante (Black ou White).");
     }
     return options?.defaultValue ?? "outros";
   }
-  if (value === "bets" || value === "bet") return "bets";
+  if (value === "bets" || value === "bet" || value === "black") return "bets";
   if (
     value === "outros" ||
     value === "outro" ||
+    value === "white" ||
     value === "todos" ||
     value === "wabadisparos" ||
     value === "waba-disparos" ||
@@ -43,7 +44,7 @@ export const parseWabaSubscriberSegment = (
   ) {
     return "bets";
   }
-  throw new Error("Segmento inválido. Use Bets ou Outros.");
+  throw new Error("Segmento inválido. Use Black ou White.");
 };
 
 export const resolveSignupSegmentFromRequest = (
