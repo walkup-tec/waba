@@ -493,7 +493,7 @@ describe("WABA bots — números Inbox", () => {
       portfolioHidden: false,
       businessId: "1041827648719609",
       channelName: "Relacionamento e Atendimento",
-      displayPhoneNumber: "+55 51 92636-16888",
+      displayPhoneNumber: "+55 51 92636-1688",
     });
     writePhoneIdentity(TENANT_A, "phone-drax", {
       inboxEnabled: true,
@@ -545,7 +545,7 @@ describe("WABA bots — números Inbox", () => {
       inboxEnabled: true,
       uiStatus: "ativo",
       channelName: "Relacionamento e Atendimento",
-      displayPhoneNumber: "+55 51 92636-16888",
+      displayPhoneNumber: "+55 51 92636-1688",
     });
     const rows = listBotAssignableChannels(TENANT_A);
     assert.deepEqual(
@@ -574,7 +574,7 @@ describe("WABA bots — números Inbox", () => {
       inboxEnabled: true,
       uiStatus: "ativo",
       channelName: "Relacionamento e Atendimento",
-      displayPhoneNumber: "+55 51 92636-16888",
+      displayPhoneNumber: "+55 51 92636-1688",
     });
     hideBusiness(TENANT_A, businessId, "BAN Drax Sistemas");
     const rows = listBotAssignableChannels(TENANT_A, [
@@ -602,7 +602,7 @@ describe("WABA bots — números Inbox", () => {
       inboxEnabled: true,
       uiStatus: "ativo",
       channelName: "Relacionamento e Atendimento",
-      displayPhoneNumber: "+55 51 92636-16888",
+      displayPhoneNumber: "+55 51 92636-1688",
     });
     const flow = upsertBotFlow(TENANT_A, createDefaultBotDraft("Associação"));
     const service = new WabaBotService({

@@ -12,6 +12,7 @@ import { namesEqual, resolvePhoneNameSync, resolveMetaPhoneUiStatus, canActivate
 import { isHiddenBusiness, listHiddenBusinessIds } from "./meta-whatsapp-hidden-business.store";
 import {
   equivalentOwnedWabaIdsForBusiness,
+  isRelacionamentoInboxDisplayPhone,
   isWithdrawnInboxDisplayPhone,
   knownBusinessIdsForDisplayPhone,
   knownBusinessIdsForWaba,
@@ -335,6 +336,7 @@ function accountIsRestricted(
   identity: MetaPhoneIdentity | null,
   connections?: InboxAccountHint[] | null,
 ): boolean {
+  if (isRelacionamentoInboxDisplayPhone(identity?.displayPhoneNumber)) return false;
   if (identity?.portfolioHidden === true) return true;
   const ownDisplay = String(identity?.displayPhoneNumber || "").trim();
   if (isWithdrawnInboxDisplayPhone(ownDisplay)) return true;
@@ -354,6 +356,7 @@ export function isPhoneInboxEligible(
 ): boolean {
   if (!isPhoneInboxEnabled(identity) || !identity) return false;
   if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito") return false;
+  if (isRelacionamentoInboxDisplayPhone(identity.displayPhoneNumber)) return true;
   if (isWithdrawnInboxDisplayPhone(identity.displayPhoneNumber)) return false;
   const tenant = String(tenantId || "").trim();
   const phone = String(phoneNumberId || "").trim();

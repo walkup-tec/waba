@@ -662,7 +662,7 @@ describe("fase 8 canais do Inbox", () => {
       inboxEnabled: true,
       uiStatus: "ativo",
       channelName: "Relacionamento e Atendimento",
-      displayPhoneNumber: "+55 51 92636-1688",
+      displayPhoneNumber: "51926361688",
     });
     writePhoneIdentity(TENANT_A, "phone-drax", {
       inboxEnabled: true,

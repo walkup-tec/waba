@@ -100,16 +100,16 @@ describe("Atendimento só lista chip Ativo com Inbox", () => {
     purgePhoneIdentities(tenantId);
   });
 
-  it("Relacionamento no Drax Waba ATIVAS entra mesmo se a conexão ainda tiver o 5182001279", () => {
+  it("51926361688 com Inbox ligado entra no Atendimento e nos Bots", () => {
     const draxBm = "1041827648719609";
     purgePhoneIdentities(tenantId);
     unhideBusiness(tenantId, draxBm);
     writePhoneIdentity(tenantId, "phone-rel", {
       inboxEnabled: true,
       uiStatus: "ativo",
-      portfolioHidden: false,
+      portfolioHidden: true,
       businessId: draxBm,
-      displayPhoneNumber: "+55 51 92636-16888",
+      displayPhoneNumber: "+55 51 92636-1688",
       channelName: "Relacionamento e Atendimento",
     });
     hideBusiness(tenantId, draxBm, "BAN Drax Sistemas");
