@@ -296,28 +296,34 @@ export function buildDistributedCampaignReportTimeline(
         : businessStartMs <= endMs
           ? businessStartMs
           : previousBusinessInstant(endMs);
-  const atShare = (shareFromStart: number): string => {
-    if (collapsedMs != null) return new Date(Math.round(collapsedMs / 1000) * 1000).toISOString();
-    return new Date(
-      Math.round(addBusinessMs(businessStartMs, Math.round(durationMs * shareFromStart)) / 1000) * 1000,
-    ).toISOString();
+  const toIsoSeconds = (ms: number): string => new Date(Math.round(ms / 1000) * 1000).toISOString();
+  const atBusinessShare = (shareFromStart: number): string => {
+    if (collapsedMs != null) return toIsoSeconds(collapsedMs);
+    return toIsoSeconds(addBusinessMs(businessStartMs, Math.round(durationMs * shareFromStart)));
   };
   const finishedMs = isCampaignReportBusinessInstant(new Date(endMs).toISOString())
     ? endMs
     : businessEndMs >= startMs
       ? businessEndMs
       : collapsedMs ?? businessStartMs;
+  const attendanceStartedAt = atBusinessShare(CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted);
+  const dispatchStartedAt = atBusinessShare(
+    CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted +
+      CAMPAIGN_REPORT_TIMELINE_SHARES.templateApproved +
+      CAMPAIGN_REPORT_TIMELINE_SHARES.dispatchStarted,
+  );
+  const attendanceMs = Date.parse(attendanceStartedAt);
+  const dispatchStartMs = Date.parse(dispatchStartedAt);
+  const templateShare =
+    CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted + CAMPAIGN_REPORT_TIMELINE_SHARES.templateApproved;
+  /** A Meta pode aprovar fora do expediente; os demais marcos calculados não. */
+  const templateWallMs = startMs + Math.round((endMs - startMs) * templateShare);
+  const templateMs = Math.min(dispatchStartMs, Math.max(attendanceMs, templateWallMs));
   return {
     createdAt: new Date(startMs).toISOString(),
-    attendanceStartedAt: atShare(CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted),
-    templateApprovedAt: atShare(
-      CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted + CAMPAIGN_REPORT_TIMELINE_SHARES.templateApproved,
-    ),
-    dispatchStartedAt: atShare(
-      CAMPAIGN_REPORT_TIMELINE_SHARES.attendanceStarted +
-        CAMPAIGN_REPORT_TIMELINE_SHARES.templateApproved +
-        CAMPAIGN_REPORT_TIMELINE_SHARES.dispatchStarted,
-    ),
+    attendanceStartedAt,
+    templateApprovedAt: toIsoSeconds(templateMs),
+    dispatchStartedAt,
     dispatchFinishedAt: new Date(finishedMs).toISOString(),
   };
 }

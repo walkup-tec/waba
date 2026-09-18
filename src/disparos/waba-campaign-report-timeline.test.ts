@@ -148,13 +148,13 @@ describe("linha do tempo do relatório do assinante", () => {
       [
         "Quarta-feira, 9 de setembro de 2026 - 14:48:06",
         "Quinta-feira, 10 de setembro de 2026 - 17:56:29",
-        "Quinta-feira, 17 de setembro de 2026 - 13:55:49",
+        "Quinta-feira, 17 de setembro de 2026 - 13:19:49",
         "Quinta-feira, 17 de setembro de 2026 - 17:12:54",
         "Sexta-feira, 18 de setembro de 2026 - 10:30:00",
       ],
     );
     for (const item of timeline.items) {
-      if (item.key === "createdAt") continue;
+      if (item.key === "createdAt" || item.key === "templateApprovedAt") continue;
       assert.equal(isCampaignReportBusinessInstant(item.at), true, item.key);
     }
   });
@@ -167,7 +167,7 @@ describe("linha do tempo do relatório do assinante", () => {
     assert.deepEqual(distributed, {
       createdAt: "2026-09-18T11:00:00.000Z",
       attendanceStartedAt: "2026-09-18T13:48:00.000Z",
-      templateApprovedAt: "2026-09-18T20:06:00.000Z",
+      templateApprovedAt: "2026-09-18T20:00:00.000Z",
       dispatchStartedAt: "2026-09-18T20:33:00.000Z",
       dispatchFinishedAt: "2026-09-18T21:00:00.000Z",
     });
@@ -182,14 +182,14 @@ describe("linha do tempo do relatório do assinante", () => {
       [
         "Sexta-feira, 18 de setembro de 2026 - 08:00:00",
         "Sexta-feira, 18 de setembro de 2026 - 10:48:00",
-        "Sexta-feira, 18 de setembro de 2026 - 17:06:00",
+        "Sexta-feira, 18 de setembro de 2026 - 17:00:00",
         "Sexta-feira, 18 de setembro de 2026 - 17:33:00",
         "Sexta-feira, 18 de setembro de 2026 - 18:00:00",
       ],
     );
   });
 
-  it("não posiciona marco calculado à noite nem no fim de semana", () => {
+  it("aprovação do template pode cair fora do expediente; os outros marcos não", () => {
     const distributed = buildDistributedCampaignReportTimeline(
       "2026-09-11T21:00:00.000Z",
       "2026-09-14T13:00:00.000Z",
@@ -197,11 +197,17 @@ describe("linha do tempo do relatório do assinante", () => {
     assert.deepEqual(distributed, {
       createdAt: "2026-09-11T21:00:00.000Z",
       attendanceStartedAt: "2026-09-11T21:24:00.000Z",
-      templateApprovedAt: "2026-09-14T12:48:00.000Z",
+      templateApprovedAt: "2026-09-14T06:36:00.000Z",
       dispatchStartedAt: "2026-09-14T12:54:00.000Z",
       dispatchFinishedAt: "2026-09-14T13:00:00.000Z",
     });
+    assert.equal(isCampaignReportBusinessInstant(distributed?.attendanceStartedAt), true);
+    assert.equal(isCampaignReportBusinessInstant(distributed?.templateApprovedAt), false);
     assert.equal(isCampaignReportBusinessInstant(distributed?.dispatchStartedAt), true);
+    assert.equal(
+      formatCampaignReportDateTime(distributed?.templateApprovedAt),
+      "Segunda-feira, 14 de setembro de 2026 - 03:36:00",
+    );
     assert.equal(
       formatCampaignReportDateTime(distributed?.dispatchStartedAt),
       "Segunda-feira, 14 de setembro de 2026 - 09:54:00",
