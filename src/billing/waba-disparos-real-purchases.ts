@@ -8,9 +8,9 @@ const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 const CATALOG_PACK_VALUE_CENTS = new Set([
   20000, 32000, 34000, 35000, 36000, 38000, 39000, 57000, 85000, 93000, 99000, 105000, 111000,
   128000, 150000, 160000, 170000, 180000, 200000, 225000, 232000, 235000, 264000, 270000, 280000,
-  310000, 330000, 380000, 390000, 430000, 450000, 520000, 600000, 640000, 740000, 750000, 840000,
-  870000, 880000, 930000, 1080000, 1230000, 1290000, 1400000, 1600000, 1650000, 1680000, 1900000,
-  2000000,
+  310000, 330000, 380000, 390000, 430000, 450000, 520000, 600000, 620000, 640000, 740000, 750000,
+  840000, 870000, 880000, 900000, 930000, 1080000, 1160000, 1230000, 1290000, 1400000, 1600000,
+  1650000, 1680000, 1900000, 2000000,
 ]);
 
 export const isOperationalBalanceRepairOrder = (order: {
@@ -115,6 +115,7 @@ const catalogQtyFromValueCents = (valueCents: number, apiKind?: string): number 
   if (
     valueCents === 520000 ||
     valueCents === 600000 ||
+    valueCents === 620000 ||
     valueCents === 640000 ||
     valueCents === 740000 ||
     valueCents === 840000 ||
@@ -125,6 +126,7 @@ const catalogQtyFromValueCents = (valueCents: number, apiKind?: string): number 
   if (
     valueCents === 750000 ||
     valueCents === 870000 ||
+    valueCents === 900000 ||
     valueCents === 930000 ||
     valueCents === 1080000 ||
     valueCents === 1230000 ||
@@ -132,7 +134,9 @@ const catalogQtyFromValueCents = (valueCents: number, apiKind?: string): number 
   ) {
     return 30000;
   }
-  if (valueCents === 1400000 || valueCents === 1600000 || valueCents === 1680000) return 40000;
+  if (valueCents === 1160000 || valueCents === 1400000 || valueCents === 1600000 || valueCents === 1680000) {
+    return 40000;
+  }
   if (valueCents === 1650000 || valueCents === 1900000 || valueCents === 2000000) return 50000;
   return 0;
 };

@@ -23,9 +23,9 @@ describe("catálogo público de preço de venda", () => {
   it("White Oficial usa o menor unitário como 'a partir de' e o primeiro pacote como mínimo", () => {
     const catalog = buildPublicSalePricingCatalog();
     assert.equal(catalog.outros.oficial.packages.length, DISPAROS_OFICIAL_SALE_PACKAGES.length);
-    assert.equal(catalog.outros.oficial.fromLabel, "R$ 0,29");
-    assert.equal(catalog.outros.oficial.rangeLabel, "De R$ 0,29 a R$ 0,36");
-    assert.equal(catalog.outros.oficial.minPackageLabel, "R$ 360,00");
+    assert.equal(catalog.outros.oficial.fromLabel, "R$ 0,28");
+    assert.equal(catalog.outros.oficial.rangeLabel, "De R$ 0,28 a R$ 0,36");
+    assert.equal(catalog.outros.oficial.minPackageLabel, "R$ 1.800,00");
     assert.deepEqual(
       catalog.outros.oficial.packages.map((pack) => [pack.shipments, pack.valueCents]),
       DISPAROS_OFICIAL_SALE_PACKAGES.map((pack) => [pack.shipments, pack.valueCents]),
@@ -53,9 +53,9 @@ describe("catálogo público de preço de venda", () => {
       ].join(""),
       { segment: "outros", catalog },
     );
-    assert.match(html, /De R\$ 0,29 a R\$ 0,36/);
-    assert.match(html, /R\$ 360,00/);
-    assert.match(html, /a partir de R\$ 0,29/);
+    assert.match(html, /De R\$ 0,28 a R\$ 0,36/);
+    assert.match(html, /R\$ 1\.800,00/);
+    assert.match(html, /a partir de R\$ 0,28/);
     assert.match(html, new RegExp(catalog.bets.oficial.fromLabel.replace("$", "\\$")));
   });
 

@@ -106,13 +106,13 @@ describe("WabaPricingService — spread do indicador", () => {
     const { wabaPricingService } = await import("./waba-pricing.service");
     const quote = wabaPricingService.quote({
       apiKind: "oficial",
-      shipmentCount: 1000,
+      shipmentCount: 5000,
       ownerEmail: "livre@test.com",
     });
-    assert.equal(quote?.baseAmountCents, 36000);
+    assert.equal(quote?.baseAmountCents, 180000);
     assert.equal(quote?.spreadAmountCents, 0);
     assert.equal(quote?.commissionAmountCents, 0);
-    assert.equal(quote?.totalAmountCents, 36000);
+    assert.equal(quote?.totalAmountCents, 180000);
     assert.equal(quote?.customerUnitPriceCents, 36);
     assert.equal(quote?.indicatorUserId, "");
   });
@@ -122,23 +122,23 @@ describe("WabaPricingService — spread do indicador", () => {
     const { wabaPricingService } = await import("./waba-pricing.service");
     const quote = wabaPricingService.quote({
       apiKind: "oficial",
-      shipmentCount: 1000,
+      shipmentCount: 5000,
       ownerEmail: "revenda@test.com",
     });
-    assert.equal(quote?.baseAmountCents, 36000);
+    assert.equal(quote?.baseAmountCents, 180000);
     assert.equal(quote?.spreadUnitPriceCents, 3);
-    assert.equal(quote?.spreadAmountCents, 3000);
+    assert.equal(quote?.spreadAmountCents, 15000);
     assert.equal(quote?.commissionUnitPriceCents, 2);
-    assert.equal(quote?.commissionAmountCents, 2000);
-    assert.equal(quote?.totalAmountCents, 39000);
+    assert.equal(quote?.commissionAmountCents, 10000);
+    assert.equal(quote?.totalAmountCents, 195000);
     assert.equal(quote?.customerUnitPriceCents, 39);
     const packs = wabaPricingService.listCustomerPackages({
       apiKind: "oficial",
       ownerEmail: "revenda@test.com",
     });
-    const pack1000 = packs.find((item) => item.shipments === 1000);
-    assert.equal(pack1000?.valueCents, 39000);
-    assert.equal(pack1000?.unitPriceCents, 39);
+    const pack5000 = packs.find((item) => item.shipments === 5000);
+    assert.equal(pack5000?.valueCents, 195000);
+    assert.equal(pack5000?.unitPriceCents, 39);
   });
 
   it("outro assinante não herda o spread de um indicador alheio", async () => {
@@ -146,30 +146,30 @@ describe("WabaPricingService — spread do indicador", () => {
     const { wabaPricingService } = await import("./waba-pricing.service");
     const quote = wabaPricingService.quote({
       apiKind: "oficial",
-      shipmentCount: 1000,
+      shipmentCount: 5000,
       ownerEmail: "outro@test.com",
     });
     assert.equal(quote?.spreadUnitPriceCents, 9);
-    assert.equal(quote?.totalAmountCents, 45000);
+    assert.equal(quote?.totalAmountCents, 225000);
     const plain = wabaPricingService.quote({
       apiKind: "oficial",
-      shipmentCount: 1000,
+      shipmentCount: 5000,
       ownerEmail: "livre@test.com",
     });
-    assert.equal(plain?.totalAmountCents, 36000);
+    assert.equal(plain?.totalAmountCents, 180000);
   });
 
   it("todas as faixas oficiais somam spread fixo por envio", async () => {
     seedStores({ indicatorSpreadCents: 3 });
     const { wabaPricingService } = await import("./waba-pricing.service");
     const expected: Array<[number, number, number]> = [
-      [1000, 36000, 3000],
-      [3000, 105000, 9000],
-      [5000, 170000, 15000],
-      [8000, 264000, 24000],
-      [10000, 310000, 30000],
-      [20000, 600000, 60000],
-      [30000, 870000, 90000],
+      [5000, 180000, 15000],
+      [8000, 280000, 24000],
+      [10000, 330000, 30000],
+      [20000, 620000, 60000],
+      [30000, 900000, 90000],
+      [40000, 1160000, 120000],
+      [50000, 1400000, 150000],
     ];
     for (const [qty, base, spread] of expected) {
       const quote = wabaPricingService.quote({
@@ -217,12 +217,12 @@ describe("WabaPricingService — spread do indicador", () => {
     const { wabaPricingService } = await import("./waba-pricing.service");
     const quote = wabaPricingService.quote({
       apiKind: "oficial",
-      shipmentCount: 1000,
+      shipmentCount: 5000,
       ownerEmail: "revenda@test.com",
     });
     assert.equal(quote?.spreadAmountCents, 0);
     assert.equal(quote?.commissionAmountCents, 0);
-    assert.equal(quote?.totalAmountCents, 36000);
+    assert.equal(quote?.totalAmountCents, 180000);
   });
 
   it("comissão do indicador não entra no preço de venda do assinante", async () => {
@@ -235,16 +235,16 @@ describe("WabaPricingService — spread do indicador", () => {
     const { wabaPricingService } = await import("./waba-pricing.service");
     const quote = wabaPricingService.quote({
       apiKind: "oficial",
-      shipmentCount: 1000,
+      shipmentCount: 5000,
       ownerEmail: "revenda@test.com",
     });
     assert.equal(quote?.commissionUnitPriceCents, 9);
-    assert.equal(quote?.commissionAmountCents, 9000);
-    assert.equal(quote?.totalAmountCents, 39000);
+    assert.equal(quote?.commissionAmountCents, 45000);
+    assert.equal(quote?.totalAmountCents, 195000);
     const packs = wabaPricingService.listCustomerPackages({
       apiKind: "oficial",
       ownerEmail: "revenda@test.com",
     });
-    assert.equal(packs.find((item) => item.shipments === 1000)?.valueCents, 39000);
+    assert.equal(packs.find((item) => item.shipments === 5000)?.valueCents, 195000);
   });
 });

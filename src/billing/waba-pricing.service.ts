@@ -32,13 +32,13 @@ export type WabaPricingQuote = {
  * Depois de alterar, rode `npm run sync:pricing`.
  */
 export const DISPAROS_OFICIAL_SALE_PACKAGES: ReadonlyArray<WabaSalePackage> = [
-  { shipments: 1000, valueCents: 36000 },
-  { shipments: 3000, valueCents: 105000 },
-  { shipments: 5000, valueCents: 170000 },
-  { shipments: 8000, valueCents: 264000 },
-  { shipments: 10000, valueCents: 310000 },
-  { shipments: 20000, valueCents: 600000 },
-  { shipments: 30000, valueCents: 870000 },
+  { shipments: 5000, valueCents: 180000 },
+  { shipments: 8000, valueCents: 280000 },
+  { shipments: 10000, valueCents: 330000 },
+  { shipments: 20000, valueCents: 620000 },
+  { shipments: 30000, valueCents: 900000 },
+  { shipments: 40000, valueCents: 1160000 },
+  { shipments: 50000, valueCents: 1400000 },
 ];
 
 /** Tabela de venda API Oficial — segmento Black. */

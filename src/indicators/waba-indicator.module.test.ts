@@ -168,14 +168,14 @@ describe("Módulo Indicador — comissão, bônus, IDOR e snapshot", () => {
       ownerEmail: "revenda@test.com",
       cpfCnpj: "00000000191",
       whatsapp: "11988888888",
-      shipmentCount: 1000,
+      shipmentCount: 5000,
       valueCents: 1,
     });
-    assert.equal(validated.listValueCents, 39000);
-    assert.equal(validated.valueCents, 39000);
-    assert.equal(validated.spreadAmountCents, 3000);
+    assert.equal(validated.listValueCents, 195000);
+    assert.equal(validated.valueCents, 195000);
+    assert.equal(validated.spreadAmountCents, 15000);
     assert.equal(validated.commissionUnitPriceCents, 2);
-    assert.equal(validated.commissionAmountCents, 2000);
+    assert.equal(validated.commissionAmountCents, 10000);
   });
 
   it("pagamento confirmado gera comissão uma única vez mesmo com webhook duplicado", async () => {
