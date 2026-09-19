@@ -3063,7 +3063,7 @@
         }
         .waba-bots-layout {
           display: grid;
-          grid-template-columns: minmax(260px, 28%) minmax(0, 1fr) minmax(240px, 24%);
+          grid-template-columns: minmax(300px, 46%) minmax(0, 1fr);
           gap: 12px;
           min-height: 62vh;
         }
@@ -3216,9 +3216,197 @@
           font-size: 0.86rem;
           line-height: 1.45;
         }
+        .waba-bots-open-builder {
+          margin-top: 12px;
+        }
+        .waba-bots-builder {
+          position: fixed;
+          inset: 0;
+          z-index: 12000;
+          display: flex;
+          flex-direction: column;
+          background: #071018;
+          color: #e2e8f0;
+        }
+        .waba-bots-builder[hidden] {
+          display: none !important;
+        }
+        .waba-bots-builder-head {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-height: 56px;
+          padding: 8px 16px;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+          background: rgba(8, 18, 28, 0.96);
+        }
+        .waba-bots-builder-head .form-control {
+          max-width: 360px;
+          background: transparent;
+          border: 0;
+          font-size: 1.05rem;
+          font-weight: 650;
+          color: #f8fafc;
+        }
+        .waba-bots-builder-main {
+          display: grid;
+          grid-template-columns: 220px minmax(0, 1fr) 320px;
+          min-height: 0;
+          flex: 1;
+        }
+        .waba-bots-palette,
+        .waba-bots-builder-inspector {
+          overflow: auto;
+          padding: 12px;
+          background: rgba(8, 18, 28, 0.72);
+        }
+        .waba-bots-palette {
+          border-right: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        .waba-bots-builder-inspector {
+          border-left: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        .waba-bots-palette-item {
+          display: block;
+          width: 100%;
+          margin-bottom: 6px;
+          padding: 8px 10px;
+          border-radius: 8px;
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          background: rgba(15, 23, 42, 0.8);
+          color: #e2e8f0;
+          text-align: left;
+          font-size: 0.8rem;
+          cursor: pointer;
+        }
+        .waba-bots-palette-item:hover {
+          border-color: rgba(45, 212, 191, 0.7);
+        }
+        .waba-bots-flow {
+          position: relative;
+          overflow: hidden;
+          background:
+            radial-gradient(circle, rgba(148, 163, 184, 0.28) 1px, transparent 1px) 0 0 / 18px 18px,
+            #061018;
+          cursor: grab;
+        }
+        .waba-bots-flow.is-panning {
+          cursor: grabbing;
+        }
+        .waba-bots-flow-world {
+          position: absolute;
+          inset: 0;
+          transform-origin: 0 0;
+        }
+        .waba-bots-edges {
+          position: absolute;
+          inset: 0;
+          width: 4000px;
+          height: 4000px;
+          overflow: visible;
+          pointer-events: none;
+        }
+        .waba-bots-edges path {
+          pointer-events: stroke;
+          fill: none;
+          stroke: #7c3aed;
+          stroke-width: 2.2;
+          cursor: pointer;
+        }
+        .waba-bots-edges path.is-active {
+          stroke: #2dd4bf;
+          stroke-width: 3;
+        }
+        .waba-bots-flow-node {
+          position: absolute;
+          width: 220px;
+          padding: 10px 12px 10px 16px;
+          border-radius: 12px;
+          border: 1px solid rgba(148, 163, 184, 0.28);
+          background: rgba(15, 23, 42, 0.96);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+          color: #f8fafc;
+          user-select: none;
+        }
+        .waba-bots-flow-node.is-active {
+          border-color: rgba(45, 212, 191, 0.9);
+          box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.4);
+        }
+        .waba-bots-flow-node small {
+          display: block;
+          color: #94a3b8;
+          font-size: 0.7rem;
+        }
+        .waba-bots-ports {
+          margin-top: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .waba-bots-port-row {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 6px;
+          font-size: 0.68rem;
+          color: #94a3b8;
+        }
+        .waba-bots-handle {
+          position: absolute;
+          width: 11px;
+          height: 11px;
+          border-radius: 50%;
+          border: 2px solid #071018;
+          cursor: crosshair;
+          z-index: 2;
+        }
+        .waba-bots-handle.is-target {
+          left: -6px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: #0ea5e9;
+        }
+        .waba-bots-handle.is-source {
+          position: static;
+          transform: none;
+          background: #8b5cf6;
+        }
+        .waba-bots-builder-test {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          align-items: center;
+          padding: 8px 16px 12px;
+          border-top: 1px solid rgba(148, 163, 184, 0.18);
+          background: rgba(8, 18, 28, 0.92);
+        }
+        .waba-bots-builder-test .form-control {
+          max-width: 280px;
+        }
+        .waba-bots-builder-test .waba-bots-log {
+          flex: 1 1 100%;
+          min-height: 72px;
+          max-height: 140px;
+          margin-top: 0;
+        }
+        .waba-bots-builder-hint {
+          position: absolute;
+          left: 12px;
+          bottom: 12px;
+          padding: 6px 8px;
+          border-radius: 8px;
+          background: rgba(7, 16, 24, 0.82);
+          color: #94a3b8;
+          font-size: 0.7rem;
+          pointer-events: none;
+        }
         @media (max-width: 980px) {
           .waba-bots-layout {
             grid-template-columns: 1fr;
+          }
+          .waba-bots-builder-main {
+            grid-template-columns: 1fr;
+            overflow: auto;
           }
         }
 
@@ -23025,7 +23213,6 @@
                 </div>
                 <div class="disparos-inline-actions" style="flex-wrap:wrap;gap:8px;">
                   <button type="button" class="instance-action-btn btn-qrcode enabled" id="waba-bots-new">Novo bot</button>
-                  <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-save">Salvar</button>
                   <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-delete">Excluir</button>
                 </div>
               </div>
@@ -23041,27 +23228,8 @@
                 </aside>
                 <div class="waba-bots-col waba-bots-canvas-wrap">
                   <div id="waba-bots-context" class="waba-bots-context" hidden></div>
-                  <div class="waba-bots-toolbar">
-                    <input id="waba-bots-name" type="text" class="form-control" placeholder="Nome do bot" maxlength="80" />
-                    <select id="waba-bots-add-kind" class="form-control" aria-label="Adicionar etapa">
-                      <option value="">Adicionar etapa…</option>
-                    </select>
-                    <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-add-node">Inserir</button>
-                  </div>
-                  <div id="waba-bots-canvas" class="waba-bots-canvas" role="list"></div>
+                  <div id="waba-bots-canvas" class="waba-bots-canvas"></div>
                 </div>
-                <aside class="waba-bots-col" aria-label="Propriedades e teste">
-                  <div class="meta-chat-thread-title">Etapa</div>
-                  <div id="waba-bots-inspector" class="waba-bots-inspector"><p class="muted">Selecione uma etapa no fluxo.</p></div>
-                  <div class="meta-chat-thread-title" style="margin-top:16px;">Teste local</div>
-                  <p class="muted" style="margin:6px 0 8px;">Simula o inbound sem enviar para a Meta.</p>
-                  <input id="waba-bots-test-reply" type="text" class="form-control" placeholder="Resposta do contato" />
-                  <div class="disparos-inline-actions" style="margin-top:8px;flex-wrap:wrap;gap:8px;">
-                    <button type="button" class="instance-action-btn btn-qrcode enabled" id="waba-bots-test-start">Iniciar</button>
-                    <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-test-continue">Responder</button>
-                  </div>
-                  <pre id="waba-bots-test-log" class="waba-bots-log"></pre>
-                </aside>
               </div>
             </section>
           </div>
@@ -44852,6 +45020,11 @@
         selectedNodeId: "",
         draft: null,
         runId: "",
+        builderOpen: false,
+        selectedEdgeId: "",
+        connectFrom: null,
+        pan: { x: 24, y: 24 },
+        zoom: 1,
       };
 
       function wabaBotsBanner(text, isError) {
@@ -44877,9 +45050,9 @@
       function wabaBotsDefaultNode(kind) {
         const def = (wabaBotsUi.catalog.nodes || []).find((item) => item.kind === kind);
         return {
-          id: "node-" + Math.random().toString(36).slice(2, 10),
+          id: kind === "start" ? "bot-start" : "node-" + Math.random().toString(36).slice(2, 10),
           type: "botStep",
-          position: { x: 40, y: 40 + (wabaBotsUi.draft?.nodes?.length || 0) * 16 },
+          position: { x: 80 + (wabaBotsUi.draft?.nodes?.length || 0) * 36, y: 80 + (wabaBotsUi.draft?.nodes?.length || 0) * 28 },
           deletable: kind !== "start",
           data: {
             kind,
@@ -45039,55 +45212,27 @@
       function wabaBotsRenderCanvas() {
         const canvas = document.getElementById("waba-bots-canvas");
         const nameInput = document.getElementById("waba-bots-name");
-        if (nameInput) nameInput.value = wabaBotsUi.draft?.name || "";
+        if (nameInput && wabaBotsUi.draft) nameInput.value = wabaBotsUi.draft.name || "";
         wabaBotsRenderContext();
         if (!canvas) return;
         const chip = wabaBotsChipById(wabaBotsUi.selectedPhoneId);
-        if (!wabaBotsUi.draft) {
+        const draft = wabaBotsUi.draft;
+        if (!draft) {
           canvas.innerHTML = chip
-            ? "<p class=\"waba-bots-empty\">Este chip ainda não tem bot. Crie um para o template de hoje ou use um bot da biblioteca. Um número nunca fica com dois bots.</p>"
-            : "<p class=\"waba-bots-empty\">Selecione um chip para editar o bot dele, ou crie um bot novo para o próximo template.</p>";
+            ? "<p class=\"waba-bots-empty\">Este chip ainda não tem bot. Crie um para o template de hoje ou use um bot da biblioteca.</p>"
+            : "<p class=\"waba-bots-empty\">Selecione um chip ou um bot da biblioteca. O fluxo abre no construtor em tela cheia, com nodes e ligações.</p>";
           return;
         }
-        const nodes = wabaBotsUi.draft?.nodes || [];
-        if (!nodes.length) {
-          canvas.innerHTML = "<p class=\"waba-bots-empty\">Este bot precisa de um Início.</p>";
-          return;
-        }
-        canvas.innerHTML = nodes
-          .map((node) => {
-            const active = node.id === wabaBotsUi.selectedNodeId ? " is-active" : "";
-            const preview = String(node.data?.config?.text || node.data?.title || node.data?.kind || "");
-            return (
-              `<button type="button" class="waba-bots-node${active}" data-bot-node="${escapeAdminHtml(node.id)}">` +
-              `<strong>${escapeAdminHtml(node.data?.title || node.data?.kind)}</strong>` +
-              `<small>${escapeAdminHtml(preview.slice(0, 120))}</small>` +
-              `</button>`
-            );
-          })
-          .join("");
+        const nodes = draft.nodes || [];
+        const edges = draft.edges || [];
+        canvas.innerHTML =
+          `<p class="waba-bots-empty"><strong>${escapeAdminHtml(draft.name || "Bot")}</strong><br>${nodes.length} node(s) · ${edges.length} ligação(ões). Clique em Editar bot para abrir o construtor em tela cheia, como no Soma.</p>` +
+          `<button type="button" class="instance-action-btn btn-qrcode enabled waba-bots-open-builder" id="waba-bots-open-builder">Abrir construtor</button>`;
+        if (wabaBotsUi.builderOpen) wabaBotsRenderBuilder();
       }
 
       function wabaBotsRenderInspector() {
-        const box = document.getElementById("waba-bots-inspector");
-        if (!box) return;
-        const node = (wabaBotsUi.draft?.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
-        if (!node) {
-          box.innerHTML = "<p class=\"muted\">Selecione uma etapa no fluxo.</p>";
-          return;
-        }
-        const options = (node.data.config.options || [])
-          .map((opt) => String(opt.label || ""))
-          .join("\n");
-        const canDelete = node.data.kind !== "start";
-        box.innerHTML =
-          `<label>Título</label><input id="waba-bots-node-title" class="form-control" value="${escapeAdminHtml(node.data.title || "")}" />` +
-          `<label style="margin-top:8px;">Texto</label><textarea id="waba-bots-node-text" class="form-control" rows="4">${escapeAdminHtml(node.data.config.text || "")}</textarea>` +
-          `<label style="margin-top:8px;">Opções (uma por linha)</label><textarea id="waba-bots-node-options" class="form-control" rows="4">${escapeAdminHtml(options)}</textarea>` +
-          `<label style="margin-top:8px;">Condição / expressão</label><input id="waba-bots-node-expr" class="form-control" value="${escapeAdminHtml(node.data.config.expression || "")}" />` +
-          (canDelete
-            ? `<button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-node-delete" style="margin-top:10px;">Remover etapa</button>`
-            : "");
+        if (wabaBotsUi.builderOpen) wabaBotsRenderBuilderInspector();
       }
 
       function wabaBotsFillKinds() {
@@ -45122,6 +45267,225 @@
             })
             .filter(Boolean);
         }
+        const timeout = document.getElementById("waba-bots-node-timeout");
+        const delay = document.getElementById("waba-bots-node-delay");
+        const maxIt = document.getElementById("waba-bots-node-maxit");
+        if (timeout) node.data.config.timeoutSeconds = Number(timeout.value) || 0;
+        if (delay) node.data.config.delaySeconds = Number(delay.value) || 0;
+        if (maxIt) node.data.config.maxIterations = Number(maxIt.value) || 1;
+      }
+
+      function wabaBotsResolveOutputs(node) {
+        const kind = node?.data?.kind;
+        const def = (wabaBotsUi.catalog.nodes || []).find((item) => item.kind === kind);
+        if (kind === "buttons" || kind === "list" || kind === "menu") {
+          const options = (node.data.config.options || []).filter((opt) => String(opt.label || "").trim());
+          if (!options.length) return [{ id: "out", label: "Saída" }];
+          return options.map((opt, index) => ({
+            id: String(opt.id || "opt-" + (index + 1)),
+            label: String(opt.label).trim(),
+          }));
+        }
+        return def?.outputs?.length ? def.outputs : [{ id: "out", label: "Saída" }];
+      }
+
+      function wabaBotsSpreadNodes(draft) {
+        const nodes = draft?.nodes || [];
+        if (nodes.length < 2) return;
+        const xs = new Set(nodes.map((node) => Math.round((node.position?.x || 0) / 24)));
+        const ys = nodes.map((node) => node.position?.y || 0);
+        const compact = xs.size <= 1 && Math.max(...ys) - Math.min(...ys) < nodes.length * 28;
+        if (!compact) return;
+        nodes.forEach((node, index) => {
+          node.position = { x: 80 + (index % 3) * 260, y: 80 + Math.floor(index / 3) * 150 };
+        });
+      }
+
+      function wabaBotsOpenBuilder() {
+        if (!wabaBotsUi.draft) return;
+        wabaBotsSpreadNodes(wabaBotsUi.draft);
+        wabaBotsUi.builderOpen = true;
+        wabaBotsUi.selectedEdgeId = "";
+        wabaBotsUi.connectFrom = null;
+        wabaBotsUi.pan = { x: 32, y: 32 };
+        wabaBotsUi.zoom = 1;
+        const overlay = document.getElementById("waba-bots-builder");
+        if (overlay) overlay.hidden = false;
+        document.body.style.overflow = "hidden";
+        wabaBotsRenderBuilder();
+      }
+
+      function wabaBotsCloseBuilder() {
+        wabaBotsApplyInspector();
+        wabaBotsUi.builderOpen = false;
+        wabaBotsUi.connectFrom = null;
+        const overlay = document.getElementById("waba-bots-builder");
+        if (overlay) overlay.hidden = true;
+        document.body.style.overflow = "";
+        wabaBotsRefresh();
+      }
+
+      function wabaBotsRenderPalette() {
+        const box = document.getElementById("waba-bots-palette");
+        if (!box) return;
+        const groups = { chatbot: [], sistema: [] };
+        (wabaBotsUi.catalog.nodes || []).forEach((item) => {
+          (groups[item.category] || groups.chatbot).push(item);
+        });
+        box.innerHTML =
+          `<p class="muted" style="margin:0 0 8px;font-size:0.7rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;">Nodes · ${(wabaBotsUi.catalog.nodes || []).length}</p>` +
+          Object.keys(groups)
+            .map((cat) => {
+              if (!groups[cat].length) return "";
+              return (
+                `<p class="muted" style="margin:10px 0 6px;font-size:0.68rem;font-weight:700;text-transform:uppercase;">${cat === "sistema" ? "Sistema" : "Chatbot"}</p>` +
+                groups[cat]
+                  .map(
+                    (item) =>
+                      `<button type="button" class="waba-bots-palette-item" data-bot-add-kind="${escapeAdminHtml(item.kind)}">${escapeAdminHtml(item.label)}</button>`,
+                  )
+                  .join("")
+              );
+            })
+            .join("");
+      }
+
+      function wabaBotsApplyWorldTransform() {
+        const world = document.getElementById("waba-bots-flow-world");
+        if (!world) return;
+        world.style.transform = `translate(${wabaBotsUi.pan.x}px, ${wabaBotsUi.pan.y}px) scale(${wabaBotsUi.zoom})`;
+      }
+
+      function wabaBotsRenderBuilderInspector() {
+        const box = document.getElementById("waba-bots-builder-inspector");
+        if (!box) return;
+        const node = (wabaBotsUi.draft?.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
+        if (!node) {
+          box.innerHTML = wabaBotsUi.selectedEdgeId
+            ? `<p class="muted">Ligação selecionada. Delete remove a conexão.</p><button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-edge-delete">Remover conexão</button>`
+            : `<p class="muted">Selecione um node para configurar. Clique num item à esquerda para criar e depois ligue as saídas.</p>`;
+          return;
+        }
+        const options = (node.data.config.options || []).map((opt) => String(opt.label || "")).join("\n");
+        const canDelete = node.data.kind !== "start";
+        const extra =
+          node.data.kind === "wait_reply"
+            ? `<label style="margin-top:8px;">Timeout (s)</label><input id="waba-bots-node-timeout" class="form-control" type="number" min="0" value="${escapeAdminHtml(String(node.data.config.timeoutSeconds || 0))}" />`
+            : node.data.kind === "delay"
+              ? `<label style="margin-top:8px;">Delay (s)</label><input id="waba-bots-node-delay" class="form-control" type="number" min="0" value="${escapeAdminHtml(String(node.data.config.delaySeconds || 0))}" />`
+              : node.data.kind === "loop"
+                ? `<label style="margin-top:8px;">Máximo de voltas</label><input id="waba-bots-node-maxit" class="form-control" type="number" min="1" value="${escapeAdminHtml(String(node.data.config.maxIterations || 1))}" />`
+                : "";
+        box.innerHTML =
+          `<p class="muted" style="margin:0 0 8px;">${escapeAdminHtml(node.data.kind)}</p>` +
+          `<label>Título</label><input id="waba-bots-node-title" class="form-control" value="${escapeAdminHtml(node.data.title || "")}" />` +
+          `<label style="margin-top:8px;">Texto</label><textarea id="waba-bots-node-text" class="form-control" rows="4">${escapeAdminHtml(node.data.config.text || "")}</textarea>` +
+          `<label style="margin-top:8px;">Opções (uma por linha)</label><textarea id="waba-bots-node-options" class="form-control" rows="4">${escapeAdminHtml(options)}</textarea>` +
+          `<label style="margin-top:8px;">Condição / expressão</label><input id="waba-bots-node-expr" class="form-control" value="${escapeAdminHtml(node.data.config.expression || "")}" />` +
+          extra +
+          (canDelete
+            ? `<button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-node-delete" style="margin-top:10px;">Remover node</button>`
+            : `<p class="muted" style="margin-top:10px;">O node Início é obrigatório.</p>`);
+      }
+
+      function wabaBotsDrawEdges() {
+        const svg = document.getElementById("waba-bots-edges");
+        const world = document.getElementById("waba-bots-flow-world");
+        if (!svg || !world || !wabaBotsUi.draft) return;
+        const wr = world.getBoundingClientRect();
+        const zoom = wabaBotsUi.zoom || 1;
+        const pointOf = (nodeId, handleId, type) => {
+          const sel = `[data-bot-node="${nodeId}"] [data-handle-type="${type}"][data-handle-id="${handleId}"]`;
+          const fallback = `[data-bot-node="${nodeId}"] [data-handle-type="${type}"]`;
+          const el = world.querySelector(sel) || world.querySelector(fallback);
+          if (!el) return null;
+          const hr = el.getBoundingClientRect();
+          return { x: (hr.left + hr.width / 2 - wr.left) / zoom, y: (hr.top + hr.height / 2 - wr.top) / zoom };
+        };
+        const parts = (wabaBotsUi.draft.edges || [])
+          .map((edge) => {
+            const a = pointOf(edge.source, edge.sourceHandle || "out", "source");
+            const b = pointOf(edge.target, edge.targetHandle || "in", "target");
+            if (!a || !b) return "";
+            const active = edge.id === wabaBotsUi.selectedEdgeId ? " is-active" : "";
+            const d = `M ${a.x} ${a.y} C ${a.x + 80} ${a.y}, ${b.x - 80} ${b.y}, ${b.x} ${b.y}`;
+            return `<path class="${active}" data-bot-edge="${escapeAdminHtml(edge.id)}" d="${d}"></path>`;
+          })
+          .join("");
+        svg.innerHTML = parts;
+      }
+
+      function wabaBotsRenderBuilder() {
+        const overlay = document.getElementById("waba-bots-builder");
+        const counts = document.getElementById("waba-bots-builder-counts");
+        const nameInput = document.getElementById("waba-bots-name");
+        const nodesBox = document.getElementById("waba-bots-nodes");
+        if (!overlay || !wabaBotsUi.draft || !nodesBox) return;
+        overlay.hidden = false;
+        if (nameInput) nameInput.value = wabaBotsUi.draft.name || "";
+        if (counts) {
+          counts.textContent = `${(wabaBotsUi.draft.nodes || []).length} node(s) · ${(wabaBotsUi.draft.edges || []).length} conexão(ões)`;
+        }
+        wabaBotsRenderPalette();
+        nodesBox.innerHTML = (wabaBotsUi.draft.nodes || [])
+          .map((node) => {
+            const outputs = wabaBotsResolveOutputs(node);
+            const active = node.id === wabaBotsUi.selectedNodeId ? " is-active" : "";
+            const x = Number(node.position?.x) || 0;
+            const y = Number(node.position?.y) || 0;
+            const ports = outputs
+              .map(
+                (port) =>
+                  `<div class="waba-bots-port-row"><span>${escapeAdminHtml(port.label)}</span><button type="button" class="waba-bots-handle is-source" data-handle-type="source" data-handle-id="${escapeAdminHtml(port.id)}" aria-label="Saída ${escapeAdminHtml(port.label)}"></button></div>`,
+              )
+              .join("");
+            return (
+              `<article class="waba-bots-flow-node${active}" data-bot-node="${escapeAdminHtml(node.id)}" style="left:${x}px;top:${y}px;">` +
+              `<button type="button" class="waba-bots-handle is-target" data-handle-type="target" data-handle-id="in" aria-label="Entrada"></button>` +
+              `<strong>${escapeAdminHtml(node.data?.title || node.data?.kind)}</strong>` +
+              `<small>${escapeAdminHtml((node.data?.category || "chatbot") + " · " + (node.data?.kind || ""))}</small>` +
+              `<div class="waba-bots-ports">${ports}</div>` +
+              `</article>`
+            );
+          })
+          .join("");
+        wabaBotsApplyWorldTransform();
+        wabaBotsRenderBuilderInspector();
+        requestAnimationFrame(() => wabaBotsDrawEdges());
+      }
+
+      function wabaBotsAddBuilderNode(kind) {
+        if (!kind || !wabaBotsUi.draft) return;
+        if (kind === "start" && (wabaBotsUi.draft.nodes || []).some((item) => item.data?.kind === "start")) {
+          wabaBotsBanner("O fluxo já tem Início.");
+          return;
+        }
+        const created = wabaBotsDefaultNode(kind);
+        created.position = {
+          x: 180 + (wabaBotsUi.draft.nodes.length % 4) * 40,
+          y: 120 + (wabaBotsUi.draft.nodes.length % 5) * 36,
+        };
+        wabaBotsUi.draft.nodes.push(created);
+        wabaBotsUi.selectedNodeId = created.id;
+        wabaBotsUi.selectedEdgeId = "";
+        wabaBotsRenderBuilder();
+      }
+
+      function wabaBotsConnectHandles(sourceId, sourceHandle, targetId) {
+        if (!wabaBotsUi.draft || !sourceId || !targetId || sourceId === targetId) return;
+        const id = "e-" + sourceId + "-" + (sourceHandle || "out") + "-" + targetId;
+        wabaBotsUi.draft.edges = (wabaBotsUi.draft.edges || []).filter(
+          (edge) => !(edge.source === sourceId && (edge.sourceHandle || "out") === (sourceHandle || "out")),
+        );
+        wabaBotsUi.draft.edges.push({
+          id,
+          source: sourceId,
+          target: targetId,
+          sourceHandle: sourceHandle || "out",
+          targetHandle: "in",
+        });
+        wabaBotsUi.connectFrom = null;
+        wabaBotsRenderBuilder();
       }
 
       function wabaBotsRefresh() {
@@ -45201,7 +45565,9 @@
             body: JSON.stringify(wabaBotsUi.draft),
           });
           wabaBotsUi.draft = payload.flow;
+          const keepBuilder = wabaBotsUi.builderOpen;
           await wabaBotsLoad();
+          if (keepBuilder) wabaBotsOpenBuilder();
           wabaBotsBanner("Bot salvo.");
         } catch (error) {
           wabaBotsBanner(error && error.message ? error.message : "Não foi possível salvar.", true);
@@ -45212,6 +45578,7 @@
         if (wabaBotsUi.bound) return;
         wabaBotsUi.bound = true;
         const root = document.getElementById("tab-whatsapp-bots");
+        const builder = document.getElementById("waba-bots-builder");
         if (!root) return;
         document.getElementById("waba-bots-new")?.addEventListener("click", async () => {
           try {
@@ -45221,7 +45588,8 @@
             });
             wabaBotsUi.selectedId = payload.flow?.id || "";
             await wabaBotsLoad();
-            wabaBotsBanner("Bot criado na biblioteca. Coloque-o em um chip quando for usar no template.");
+            wabaBotsOpenBuilder();
+            wabaBotsBanner("Bot criado. Monte o fluxo no construtor e depois coloque no chip.");
           } catch (error) {
             wabaBotsBanner(error && error.message ? error.message : "Não foi possível criar.", true);
           }
@@ -45241,23 +45609,133 @@
             wabaBotsBanner(error && error.message ? error.message : "Não foi possível excluir.", true);
           }
         });
-        document.getElementById("waba-bots-add-node")?.addEventListener("click", () => {
-          const kind = String(document.getElementById("waba-bots-add-kind")?.value || "").trim();
-          if (!kind || !wabaBotsUi.draft) return;
-          const created = wabaBotsDefaultNode(kind);
-          const last = wabaBotsUi.draft.nodes[wabaBotsUi.draft.nodes.length - 1];
-          wabaBotsUi.draft.nodes.push(created);
-          if (last) {
-            wabaBotsUi.draft.edges.push({
-              id: "e-" + created.id,
-              source: last.id,
-              target: created.id,
-              sourceHandle: "out",
-            });
+        document.getElementById("waba-bots-builder-close")?.addEventListener("click", () => wabaBotsCloseBuilder());
+        document.addEventListener("keydown", (event) => {
+          if (!wabaBotsUi.builderOpen) return;
+          const tag = String(event.target?.tagName || "").toLowerCase();
+          if (event.key === "Escape") {
+            if (wabaBotsUi.connectFrom) {
+              wabaBotsUi.connectFrom = null;
+              return;
+            }
+            wabaBotsCloseBuilder();
+            return;
           }
-          wabaBotsUi.selectedNodeId = created.id;
-          wabaBotsRenderCanvas();
-          wabaBotsRenderInspector();
+          if (tag === "input" || tag === "textarea") return;
+          if (event.key !== "Delete" && event.key !== "Backspace") return;
+          event.preventDefault();
+          if (wabaBotsUi.selectedEdgeId && wabaBotsUi.draft) {
+            wabaBotsUi.draft.edges = wabaBotsUi.draft.edges.filter((item) => item.id !== wabaBotsUi.selectedEdgeId);
+            wabaBotsUi.selectedEdgeId = "";
+            wabaBotsRenderBuilder();
+            return;
+          }
+          const node = (wabaBotsUi.draft?.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
+          if (!node || node.data.kind === "start") return;
+          wabaBotsUi.draft.nodes = wabaBotsUi.draft.nodes.filter((item) => item.id !== wabaBotsUi.selectedNodeId);
+          wabaBotsUi.draft.edges = wabaBotsUi.draft.edges.filter(
+            (item) => item.source !== wabaBotsUi.selectedNodeId && item.target !== wabaBotsUi.selectedNodeId,
+          );
+          wabaBotsUi.selectedNodeId = wabaBotsUi.draft.nodes[0]?.id || "";
+          wabaBotsRenderBuilder();
+        });
+        const flow = document.getElementById("waba-bots-flow");
+        let dragNode = null;
+        let dragOffset = { x: 0, y: 0 };
+        let panning = false;
+        let panStart = { x: 0, y: 0, px: 0, py: 0 };
+        flow?.addEventListener("mousedown", (event) => {
+          if (!wabaBotsUi.builderOpen || !wabaBotsUi.draft) return;
+          const handle = event.target.closest("[data-handle-type]");
+          if (handle) {
+            const nodeEl = handle.closest("[data-bot-node]");
+            const type = handle.getAttribute("data-handle-type");
+            const handleId = handle.getAttribute("data-handle-id") || "out";
+            const nodeId = nodeEl?.getAttribute("data-bot-node") || "";
+            if (type === "source") {
+              wabaBotsUi.connectFrom = { nodeId, handleId };
+              event.preventDefault();
+            } else if (type === "target" && wabaBotsUi.connectFrom) {
+              wabaBotsConnectHandles(wabaBotsUi.connectFrom.nodeId, wabaBotsUi.connectFrom.handleId, nodeId);
+              event.preventDefault();
+            }
+            return;
+          }
+          const nodeEl = event.target.closest("[data-bot-node]");
+          if (nodeEl) {
+            const id = nodeEl.getAttribute("data-bot-node");
+            wabaBotsApplyInspector();
+            wabaBotsUi.selectedNodeId = id;
+            wabaBotsUi.selectedEdgeId = "";
+            const node = wabaBotsUi.draft.nodes.find((item) => item.id === id);
+            const world = document.getElementById("waba-bots-flow-world");
+            const wr = world?.getBoundingClientRect();
+            const zoom = wabaBotsUi.zoom || 1;
+            dragNode = node;
+            dragOffset = {
+              x: (event.clientX - (wr?.left || 0)) / zoom - (node?.position?.x || 0),
+              y: (event.clientY - (wr?.top || 0)) / zoom - (node?.position?.y || 0),
+            };
+            wabaBotsRenderBuilder();
+            event.preventDefault();
+            return;
+          }
+          panning = true;
+          flow.classList.add("is-panning");
+          panStart = { x: event.clientX, y: event.clientY, px: wabaBotsUi.pan.x, py: wabaBotsUi.pan.y };
+        });
+        window.addEventListener("mousemove", (event) => {
+          if (dragNode) {
+            const world = document.getElementById("waba-bots-flow-world");
+            const wr = world?.getBoundingClientRect();
+            const zoom = wabaBotsUi.zoom || 1;
+            dragNode.position = {
+              x: (event.clientX - (wr?.left || 0)) / zoom - dragOffset.x,
+              y: (event.clientY - (wr?.top || 0)) / zoom - dragOffset.y,
+            };
+            const el = document.querySelector(`[data-bot-node="${dragNode.id}"]`);
+            if (el) {
+              el.style.left = dragNode.position.x + "px";
+              el.style.top = dragNode.position.y + "px";
+            }
+            wabaBotsDrawEdges();
+            return;
+          }
+          if (panning) {
+            wabaBotsUi.pan = {
+              x: panStart.px + (event.clientX - panStart.x),
+              y: panStart.py + (event.clientY - panStart.y),
+            };
+            wabaBotsApplyWorldTransform();
+          }
+        });
+        window.addEventListener("mouseup", (event) => {
+          if (wabaBotsUi.connectFrom) {
+            const handle = event.target.closest?.("[data-handle-type='target']");
+            const nodeEl = handle?.closest("[data-bot-node]");
+            if (nodeEl) {
+              wabaBotsConnectHandles(
+                wabaBotsUi.connectFrom.nodeId,
+                wabaBotsUi.connectFrom.handleId,
+                nodeEl.getAttribute("data-bot-node"),
+              );
+            }
+          }
+          dragNode = null;
+          panning = false;
+          flow?.classList.remove("is-panning");
+        });
+        flow?.addEventListener("click", (event) => {
+          const edge = event.target.closest("[data-bot-edge]");
+          if (edge) {
+            wabaBotsUi.selectedEdgeId = edge.getAttribute("data-bot-edge") || "";
+            wabaBotsUi.selectedNodeId = "";
+            wabaBotsRenderBuilder();
+          }
+        });
+        document.getElementById("waba-bots-palette")?.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-bot-add-kind]");
+          if (btn) wabaBotsAddBuilderNode(btn.getAttribute("data-bot-add-kind"));
         });
         document.getElementById("waba-bots-test-start")?.addEventListener("click", async () => {
           if (!wabaBotsUi.draft) return;
@@ -45312,9 +45790,32 @@
           });
           const createdId = payload.flow?.id || "";
           if (!createdId) throw new Error("Não foi possível criar.");
-          await wabaBotsLinkPhone(phoneNumberId, createdId, "Bot novo colocado neste chip. Edite o fluxo para o template de hoje.");
+          await wabaBotsLinkPhone(phoneNumberId, createdId, "Bot novo colocado neste chip. Monte o fluxo no construtor.");
+          wabaBotsOpenBuilder();
         }
 
+        builder?.addEventListener("change", () => {
+          wabaBotsApplyInspector();
+          if (wabaBotsUi.builderOpen) wabaBotsRenderBuilder();
+        });
+        builder?.addEventListener("click", (event) => {
+          if (event.target.id === "waba-bots-edge-delete" && wabaBotsUi.draft && wabaBotsUi.selectedEdgeId) {
+            wabaBotsUi.draft.edges = wabaBotsUi.draft.edges.filter((item) => item.id !== wabaBotsUi.selectedEdgeId);
+            wabaBotsUi.selectedEdgeId = "";
+            wabaBotsRenderBuilder();
+            return;
+          }
+          if (event.target.id === "waba-bots-node-delete" && wabaBotsUi.draft) {
+            const node = (wabaBotsUi.draft.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
+            if (!node || node.data.kind === "start") return;
+            wabaBotsUi.draft.nodes = wabaBotsUi.draft.nodes.filter((item) => item.id !== wabaBotsUi.selectedNodeId);
+            wabaBotsUi.draft.edges = wabaBotsUi.draft.edges.filter(
+              (item) => item.source !== wabaBotsUi.selectedNodeId && item.target !== wabaBotsUi.selectedNodeId,
+            );
+            wabaBotsUi.selectedNodeId = wabaBotsUi.draft.nodes[0]?.id || "";
+            wabaBotsRenderBuilder();
+          }
+        });
         root.addEventListener("click", async (event) => {
           const switchCancel = event.target.closest("[data-bot-switch-cancel]");
           if (switchCancel) {
@@ -45378,7 +45879,8 @@
           const editChip = event.target.closest("[data-bot-edit-chip]");
           if (editChip) {
             wabaBotsSelectChip(editChip.getAttribute("data-bot-edit-chip") || "");
-            wabaBotsBanner("Editando o bot que está neste chip.");
+            wabaBotsOpenBuilder();
+            wabaBotsBanner("Construtor aberto no bot deste chip.");
             return;
           }
           const chipSelect = event.target.closest("[data-bot-chip-select]");
@@ -45386,11 +45888,16 @@
             wabaBotsSelectChip(chipSelect.getAttribute("data-bot-chip-select") || "");
             return;
           }
+          if (event.target.id === "waba-bots-open-builder" || event.target.closest("#waba-bots-open-builder")) {
+            wabaBotsOpenBuilder();
+            return;
+          }
           const botBtn = event.target.closest("[data-bot-id]");
           if (botBtn) {
             wabaBotsUi.switchingPhoneId = "";
             wabaBotsSelect(botBtn.getAttribute("data-bot-id"));
-            wabaBotsBanner("Editando um bot da biblioteca. Para usá-lo no atendimento, coloque-o em um chip.");
+            wabaBotsOpenBuilder();
+            wabaBotsBanner("Construtor aberto. Para usar no atendimento, coloque este bot em um chip.");
             return;
           }
           const nodeBtn = event.target.closest("[data-bot-node]");
@@ -45401,14 +45908,25 @@
             wabaBotsRenderInspector();
             return;
           }
+          if (event.target.id === "waba-bots-edge-delete" && wabaBotsUi.draft && wabaBotsUi.selectedEdgeId) {
+            wabaBotsUi.draft.edges = wabaBotsUi.draft.edges.filter((item) => item.id !== wabaBotsUi.selectedEdgeId);
+            wabaBotsUi.selectedEdgeId = "";
+            wabaBotsRenderBuilder();
+            return;
+          }
           if (event.target.id === "waba-bots-node-delete" && wabaBotsUi.draft) {
+            const node = (wabaBotsUi.draft.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
+            if (node?.data?.kind === "start") return;
             wabaBotsUi.draft.nodes = wabaBotsUi.draft.nodes.filter((item) => item.id !== wabaBotsUi.selectedNodeId);
             wabaBotsUi.draft.edges = wabaBotsUi.draft.edges.filter(
               (item) => item.source !== wabaBotsUi.selectedNodeId && item.target !== wabaBotsUi.selectedNodeId,
             );
             wabaBotsUi.selectedNodeId = wabaBotsUi.draft.nodes[0]?.id || "";
-            wabaBotsRenderCanvas();
-            wabaBotsRenderInspector();
+            if (wabaBotsUi.builderOpen) wabaBotsRenderBuilder();
+            else {
+              wabaBotsRenderCanvas();
+              wabaBotsRenderInspector();
+            }
             return;
           }
         });
@@ -70208,6 +70726,34 @@
         console.error("[Waba] Falha ao inicializar após login:", error);
       });
     </script>
+    <div id="waba-bots-builder" class="waba-bots-builder" hidden role="dialog" aria-modal="true" aria-label="Construtor de bots">
+      <header class="waba-bots-builder-head">
+        <div style="min-width:0;flex:1;">
+          <p class="muted" style="margin:0;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;">Bots · construtor de fluxo</p>
+          <input id="waba-bots-name" type="text" class="form-control" placeholder="Nome do bot" maxlength="80" />
+        </div>
+        <p id="waba-bots-builder-counts" class="muted" style="margin:0;white-space:nowrap;"></p>
+        <button type="button" class="instance-action-btn btn-qrcode enabled" id="waba-bots-test-start">Execução de fluxo</button>
+        <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-save">Salvar</button>
+        <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-builder-close" aria-label="Fechar construtor">Fechar</button>
+      </header>
+      <div class="waba-bots-builder-main">
+        <aside id="waba-bots-palette" class="waba-bots-palette" aria-label="Nodes do fluxo"></aside>
+        <div id="waba-bots-flow" class="waba-bots-flow">
+          <div id="waba-bots-flow-world" class="waba-bots-flow-world">
+            <svg id="waba-bots-edges" class="waba-bots-edges" aria-hidden="true"></svg>
+            <div id="waba-bots-nodes"></div>
+          </div>
+          <p class="waba-bots-builder-hint">Arraste o node · puxe o ponto roxo até o azul para ligar · Delete remove · Escape fecha</p>
+        </div>
+        <aside id="waba-bots-builder-inspector" class="waba-bots-builder-inspector" aria-label="Propriedades do node"></aside>
+      </div>
+      <div class="waba-bots-builder-test">
+        <input id="waba-bots-test-reply" type="text" class="form-control" placeholder="Resposta do contato" />
+        <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-test-continue">Responder</button>
+        <pre id="waba-bots-test-log" class="waba-bots-log"></pre>
+      </div>
+    </div>
   </body>
 </html>
 
