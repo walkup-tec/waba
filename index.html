@@ -3225,69 +3225,101 @@
           z-index: 12000;
           display: flex;
           flex-direction: column;
-          background: #071018;
-          color: #e2e8f0;
+          background: var(--bg-deep);
+          color: var(--text);
         }
         .waba-bots-builder[hidden] {
           display: none !important;
         }
+        .waba-bots-builder .form-control {
+          background: var(--bg-card-alt);
+          border: 1px solid var(--border-subtle);
+          color: var(--text);
+          font-size: 0.8rem;
+          padding: 6px 8px;
+          box-shadow: none;
+        }
+        .waba-bots-builder .form-control:focus {
+          border-color: var(--accent);
+          box-shadow: 0 0 0 1px rgba(46, 228, 160, 0.28);
+          background: #0b1220;
+          color: var(--text);
+        }
         .waba-bots-builder-head {
           display: flex;
           align-items: center;
-          gap: 12px;
-          min-height: 56px;
-          padding: 8px 16px;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.22);
-          background: rgba(8, 18, 28, 0.96);
+          gap: 10px;
+          min-height: 48px;
+          padding: 6px 12px;
+          border-bottom: 1px solid var(--border-subtle);
+          background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(15, 23, 42, 0.92));
         }
         .waba-bots-builder-head .form-control {
-          max-width: 360px;
+          max-width: 320px;
           background: transparent;
           border: 0;
-          font-size: 1.05rem;
+          font-size: 0.95rem;
           font-weight: 650;
-          color: #f8fafc;
+          color: var(--text);
+          padding: 2px 0;
+        }
+        .waba-bots-builder-head .form-control:focus {
+          box-shadow: none;
+          border-color: transparent;
         }
         .waba-bots-builder-main {
           display: grid;
-          grid-template-columns: 220px minmax(0, 1fr) 320px;
+          grid-template-columns: 176px minmax(0, 1fr) minmax(200px, 22%);
           min-height: 0;
           flex: 1;
         }
         .waba-bots-palette,
         .waba-bots-builder-inspector {
           overflow: auto;
-          padding: 12px;
-          background: rgba(8, 18, 28, 0.72);
+          padding: 10px;
+          background: linear-gradient(180deg, rgba(17, 24, 39, 0.92), rgba(15, 23, 42, 0.88));
         }
         .waba-bots-palette {
-          border-right: 1px solid rgba(148, 163, 184, 0.18);
+          border-right: 1px solid var(--border-subtle);
         }
         .waba-bots-builder-inspector {
-          border-left: 1px solid rgba(148, 163, 184, 0.18);
+          border-left: 1px solid var(--border-subtle);
+        }
+        .waba-bots-builder-inspector label {
+          display: block;
+          margin-bottom: 4px;
+          font-size: 0.72rem;
+          color: var(--text-soft);
+        }
+        .waba-bots-builder-inspector textarea.form-control {
+          min-height: 58px;
+          max-height: 88px;
+          resize: vertical;
         }
         .waba-bots-palette-item {
           display: block;
           width: 100%;
-          margin-bottom: 6px;
-          padding: 8px 10px;
+          margin-bottom: 5px;
+          padding: 6px 8px;
           border-radius: 8px;
-          border: 1px solid rgba(148, 163, 184, 0.22);
-          background: rgba(15, 23, 42, 0.8);
-          color: #e2e8f0;
+          border: 1px solid var(--border-subtle);
+          background: var(--bg-card);
+          color: var(--text-secondary);
           text-align: left;
-          font-size: 0.8rem;
+          font-size: 0.76rem;
           cursor: pointer;
         }
         .waba-bots-palette-item:hover {
-          border-color: rgba(45, 212, 191, 0.7);
+          border-color: rgba(46, 228, 160, 0.55);
+          color: var(--text);
+          background: rgba(46, 228, 160, 0.08);
         }
         .waba-bots-flow {
           position: relative;
           overflow: hidden;
           background:
-            radial-gradient(circle, rgba(148, 163, 184, 0.28) 1px, transparent 1px) 0 0 / 18px 18px,
-            #061018;
+            radial-gradient(circle, rgba(148, 163, 184, 0.2) 1px, transparent 1px) 0 0 / 18px 18px,
+            var(--bg-deep);
           cursor: grab;
         }
         .waba-bots-flow.is-panning {
@@ -3309,33 +3341,33 @@
         .waba-bots-edges path {
           pointer-events: stroke;
           fill: none;
-          stroke: #7c3aed;
-          stroke-width: 2.2;
+          stroke: var(--cyan);
+          stroke-width: 2;
           cursor: pointer;
         }
         .waba-bots-edges path.is-active {
-          stroke: #2dd4bf;
-          stroke-width: 3;
+          stroke: var(--accent);
+          stroke-width: 2.6;
         }
         .waba-bots-flow-node {
           position: absolute;
-          width: 220px;
-          padding: 10px 12px 10px 16px;
+          width: 210px;
+          padding: 9px 10px 9px 14px;
           border-radius: 12px;
-          border: 1px solid rgba(148, 163, 184, 0.28);
-          background: rgba(15, 23, 42, 0.96);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-          color: #f8fafc;
+          border: 1px solid var(--border-subtle);
+          background: linear-gradient(180deg, rgba(19, 27, 46, 0.98), rgba(14, 21, 37, 0.96));
+          box-shadow: 0 8px 22px rgba(2, 6, 23, 0.28);
+          color: var(--text);
           user-select: none;
         }
         .waba-bots-flow-node.is-active {
-          border-color: rgba(45, 212, 191, 0.9);
-          box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.4);
+          border-color: rgba(46, 228, 160, 0.72);
+          box-shadow: 0 0 0 1px rgba(46, 228, 160, 0.28);
         }
         .waba-bots-flow-node small {
           display: block;
-          color: #94a3b8;
-          font-size: 0.7rem;
+          color: var(--text-soft);
+          font-size: 0.68rem;
         }
         .waba-bots-ports {
           margin-top: 8px;
@@ -3349,55 +3381,67 @@
           justify-content: flex-end;
           gap: 6px;
           font-size: 0.68rem;
-          color: #94a3b8;
+          color: var(--text-soft);
         }
         .waba-bots-handle {
           position: absolute;
-          width: 11px;
-          height: 11px;
+          width: 10px;
+          height: 10px;
           border-radius: 50%;
-          border: 2px solid #071018;
+          border: 2px solid var(--bg-deep);
           cursor: crosshair;
           z-index: 2;
         }
         .waba-bots-handle.is-target {
-          left: -6px;
+          left: -5px;
           top: 50%;
           transform: translateY(-50%);
-          background: #0ea5e9;
+          background: var(--cyan);
         }
         .waba-bots-handle.is-source {
           position: static;
           transform: none;
-          background: #8b5cf6;
+          background: var(--accent);
         }
         .waba-bots-builder-test {
           display: flex;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           gap: 8px;
           align-items: center;
-          padding: 8px 16px 12px;
-          border-top: 1px solid rgba(148, 163, 184, 0.18);
-          background: rgba(8, 18, 28, 0.92);
+          min-height: 42px;
+          padding: 6px 12px;
+          border-top: 1px solid var(--border-subtle);
+          background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(15, 23, 42, 0.94));
         }
         .waba-bots-builder-test .form-control {
-          max-width: 280px;
+          width: 220px;
+          max-width: 28vw;
         }
         .waba-bots-builder-test .waba-bots-log {
-          flex: 1 1 100%;
-          min-height: 72px;
-          max-height: 140px;
-          margin-top: 0;
+          flex: 1 1 auto;
+          min-height: 0;
+          max-height: 34px;
+          margin: 0;
+          padding: 4px 8px;
+          border: 1px solid var(--border-subtle);
+          background: var(--bg-card-alt);
+          color: var(--accent-bright);
+          font-size: 0.7rem;
+          overflow: auto;
+        }
+        .waba-bots-builder-test .waba-bots-log:empty {
+          display: none;
         }
         .waba-bots-builder-hint {
           position: absolute;
-          left: 12px;
-          bottom: 12px;
-          padding: 6px 8px;
+          left: 10px;
+          bottom: 10px;
+          padding: 4px 8px;
           border-radius: 8px;
-          background: rgba(7, 16, 24, 0.82);
-          color: #94a3b8;
-          font-size: 0.7rem;
+          border: 1px solid var(--border-subtle);
+          background: rgba(15, 23, 42, 0.88);
+          color: var(--text-soft);
+          font-size: 0.68rem;
           pointer-events: none;
         }
         @media (max-width: 980px) {
@@ -3407,6 +3451,9 @@
           .waba-bots-builder-main {
             grid-template-columns: 1fr;
             overflow: auto;
+          }
+          .waba-bots-builder-test {
+            flex-wrap: wrap;
           }
         }
 
@@ -45333,7 +45380,7 @@
           (groups[item.category] || groups.chatbot).push(item);
         });
         box.innerHTML =
-          `<p class="muted" style="margin:0 0 8px;font-size:0.7rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;">Nodes · ${(wabaBotsUi.catalog.nodes || []).length}</p>` +
+          `<div class="meta-chat-thread-title" style="margin-bottom:8px;">Nodes</div>` +
           Object.keys(groups)
             .map((cat) => {
               if (!groups[cat].length) return "";
@@ -45377,7 +45424,8 @@
                 ? `<label style="margin-top:8px;">Máximo de voltas</label><input id="waba-bots-node-maxit" class="form-control" type="number" min="1" value="${escapeAdminHtml(String(node.data.config.maxIterations || 1))}" />`
                 : "";
         box.innerHTML =
-          `<p class="muted" style="margin:0 0 8px;">${escapeAdminHtml(node.data.kind)}</p>` +
+          `<div class="meta-chat-thread-title" style="margin-bottom:8px;">Etapa</div>` +
+          `<p class="muted" style="margin:0 0 8px;font-size:0.72rem;">${escapeAdminHtml(node.data.kind)}</p>` +
           `<label>Título</label><input id="waba-bots-node-title" class="form-control" value="${escapeAdminHtml(node.data.title || "")}" />` +
           `<label style="margin-top:8px;">Texto</label><textarea id="waba-bots-node-text" class="form-control" rows="4">${escapeAdminHtml(node.data.config.text || "")}</textarea>` +
           `<label style="margin-top:8px;">Opções (uma por linha)</label><textarea id="waba-bots-node-options" class="form-control" rows="4">${escapeAdminHtml(options)}</textarea>` +
@@ -70729,7 +70777,7 @@
     <div id="waba-bots-builder" class="waba-bots-builder" hidden role="dialog" aria-modal="true" aria-label="Construtor de bots">
       <header class="waba-bots-builder-head">
         <div style="min-width:0;flex:1;">
-          <p class="muted" style="margin:0;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;">Bots · construtor de fluxo</p>
+          <p class="muted" style="margin:0;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em;">Bots · construtor</p>
           <input id="waba-bots-name" type="text" class="form-control" placeholder="Nome do bot" maxlength="80" />
         </div>
         <p id="waba-bots-builder-counts" class="muted" style="margin:0;white-space:nowrap;"></p>
