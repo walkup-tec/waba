@@ -22,6 +22,7 @@ import {
 import { resolveCustomerCareWindow } from "../meta-whatsapp-customer-care-window";
 import {
   getBotIdForPhone,
+  readBotFlow,
   resetWabaBotStoreForTests,
   setBotPhoneLink,
   upsertBotFlow,
@@ -720,6 +721,17 @@ describe("WABA bots — menu FARM BM", () => {
     assert.match(html, /waba-bots-node-button-url/);
     assert.match(html, /Nota de voz do WhatsApp/);
     assert.match(html, /botão CTA URL/);
+    assert.match(html, /function wabaBotsApplyName/);
+    assert.match(html, /event\.target\.id === "waba-bots-name"/);
+  });
+});
+
+describe("WABA bots — nome", () => {
+  it("upsert mantém o nome novo do bot", () => {
+    const created = upsertBotFlow(TENANT_A, createDefaultBotDraft("Bot Relacionamento e Atendimento"));
+    const saved = upsertBotFlow(TENANT_A, { ...created, name: "Bot campanha de hoje" });
+    assert.equal(saved.name, "Bot campanha de hoje");
+    assert.equal(readBotFlow(TENANT_A, created.id)?.name, "Bot campanha de hoje");
   });
 });
 

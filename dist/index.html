@@ -45240,7 +45240,9 @@
       function wabaBotsRenderCanvas() {
         const canvas = document.getElementById("waba-bots-canvas");
         const nameInput = document.getElementById("waba-bots-name");
-        if (nameInput && wabaBotsUi.draft) nameInput.value = wabaBotsUi.draft.name || "";
+        if (nameInput && wabaBotsUi.draft && document.activeElement !== nameInput) {
+          nameInput.value = wabaBotsUi.draft.name || "";
+        }
         wabaBotsRenderContext();
         if (!canvas) return;
         const chip = wabaBotsChipById(wabaBotsUi.selectedPhoneId);
@@ -45273,6 +45275,13 @@
           opt.textContent = item.label;
           select.appendChild(opt);
         });
+      }
+
+      function wabaBotsApplyName() {
+        const nameInput = document.getElementById("waba-bots-name");
+        if (!nameInput || !wabaBotsUi.draft) return;
+        const next = String(nameInput.value || "").trim();
+        if (next) wabaBotsUi.draft.name = next.slice(0, 80);
       }
 
       function wabaBotsApplyInspector() {
@@ -45540,7 +45549,9 @@
         const nodesBox = document.getElementById("waba-bots-nodes");
         if (!overlay || !wabaBotsUi.draft || !nodesBox) return;
         overlay.hidden = false;
-        if (nameInput) nameInput.value = wabaBotsUi.draft.name || "";
+        if (nameInput && document.activeElement !== nameInput) {
+          nameInput.value = wabaBotsUi.draft.name || "";
+        }
         if (counts) {
           counts.textContent = `${(wabaBotsUi.draft.nodes || []).length} node(s) · ${(wabaBotsUi.draft.edges || []).length} conexão(ões)`;
         }
@@ -45674,9 +45685,9 @@
 
       async function wabaBotsSave() {
         if (!wabaBotsUi.draft) return;
+        wabaBotsApplyName();
         wabaBotsApplyInspector();
-        const nameInput = document.getElementById("waba-bots-name");
-        if (nameInput) wabaBotsUi.draft.name = nameInput.value.trim() || wabaBotsUi.draft.name;
+        wabaBotsApplyName();
         try {
           const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots/" + encodeURIComponent(wabaBotsUi.draft.id), {
             method: "PUT",
@@ -45887,7 +45898,14 @@
           wabaBotsOpenBuilder();
         }
 
+        builder?.addEventListener("input", (event) => {
+          if (event.target && event.target.id === "waba-bots-name") wabaBotsApplyName();
+        });
         builder?.addEventListener("change", async (event) => {
+          if (event.target && event.target.id === "waba-bots-name") {
+            wabaBotsApplyName();
+            return;
+          }
           if (event.target && event.target.id === "waba-bots-node-file") {
             const input = event.target;
             const file = input.files && input.files[0];
