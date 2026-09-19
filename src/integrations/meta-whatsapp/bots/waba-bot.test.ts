@@ -723,6 +723,9 @@ describe("WABA bots — menu FARM BM", () => {
     assert.match(html, /botão CTA URL/);
     assert.match(html, /function wabaBotsApplyName/);
     assert.match(html, /event\.target\.id === "waba-bots-name"/);
+    assert.match(html, /id="waba-bots-phone-search"/);
+    assert.match(html, /wabaBotsChipMatchesPhoneQuery/);
+    assert.match(html, /Pesquisar número/);
   });
 });
 

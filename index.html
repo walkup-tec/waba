@@ -3080,6 +3080,12 @@
           flex-direction: column;
           gap: 8px;
         }
+        .waba-bots-phone-search {
+          margin: 0 0 10px;
+        }
+        .waba-bots-phone-search .form-control {
+          width: 100%;
+        }
         .waba-bots-item,
         .waba-bots-phone {
           display: flex;
@@ -23249,6 +23255,10 @@
                 <aside class="waba-bots-col" aria-label="Chips Inbox e biblioteca de bots">
                   <div class="meta-chat-thread-title">Números Inbox</div>
                   <p class="muted" style="margin:6px 0 8px;">O chip é o ponto de partida. Veja o bot atual, edite ou troque para o próximo template. Nunca ficam dois bots no mesmo número.</p>
+                  <div class="waba-bots-phone-search">
+                    <label class="visually-hidden" for="waba-bots-phone-search">Pesquisar número Inbox</label>
+                    <input id="waba-bots-phone-search" type="search" class="form-control" placeholder="Pesquisar número…" autocomplete="off" inputmode="tel" />
+                  </div>
                   <div id="waba-bots-phones" class="waba-bots-phones"></div>
                   <div class="meta-chat-thread-title" style="margin-top:16px;">Bots prontos</div>
                   <p class="muted" style="margin:6px 0 8px;">Crie um bot novo quando o link ou o fluxo do template mudar. Depois coloque esse bot no chip.</p>
@@ -45053,6 +45063,7 @@
         connectFrom: null,
         pan: { x: 24, y: 24 },
         zoom: 1,
+        phoneQuery: "",
       };
 
       function wabaBotsBanner(text, isError) {
@@ -45097,6 +45108,21 @@
 
       function wabaBotsEligibleChannels() {
         return (wabaBotsUi.channels || []).filter((row) => row.inboxEligible === true);
+      }
+
+      function wabaBotsDigits(value) {
+        return String(value || "").replace(/\D+/g, "");
+      }
+
+      function wabaBotsChipMatchesPhoneQuery(row, query) {
+        const raw = String(query || "").trim().toLowerCase();
+        if (!raw) return true;
+        const phone = String(row?.displayPhoneNumber || "");
+        const id = String(row?.phoneNumberId || "");
+        const digits = wabaBotsDigits(raw);
+        const hayDigits = wabaBotsDigits(phone + id);
+        if (digits && hayDigits.includes(digits)) return true;
+        return phone.toLowerCase().includes(raw) || id.toLowerCase().includes(raw);
       }
 
       function wabaBotsFlowById(id) {
@@ -45162,12 +45188,19 @@
       function wabaBotsRenderPhones() {
         const box = document.getElementById("waba-bots-phones");
         if (!box) return;
+        const search = document.getElementById("waba-bots-phone-search");
+        if (search && document.activeElement !== search) search.value = wabaBotsUi.phoneQuery || "";
         const channels = wabaBotsEligibleChannels();
         if (!channels.length) {
           box.innerHTML = "<p class=\"waba-bots-empty\">Nenhum Inbox elegível. O chip precisa estar marcado Inbox, em conta sem restrição e no portfólio ATIVAS.</p>";
           return;
         }
-        box.innerHTML = channels
+        const filtered = channels.filter((row) => wabaBotsChipMatchesPhoneQuery(row, wabaBotsUi.phoneQuery));
+        if (!filtered.length) {
+          box.innerHTML = `<p class="waba-bots-empty">Nenhum número Inbox corresponde a «${escapeAdminHtml(String(wabaBotsUi.phoneQuery || "").trim())}».</p>`;
+          return;
+        }
+        box.innerHTML = filtered
           .map((row) => {
             const label = wabaBotsChipLabel(row);
             const phone = row.displayPhoneNumber || row.phoneNumberId;
@@ -45722,6 +45755,10 @@
           } catch (error) {
             wabaBotsBanner(error && error.message ? error.message : "Não foi possível criar.", true);
           }
+        });
+        document.getElementById("waba-bots-phone-search")?.addEventListener("input", (event) => {
+          wabaBotsUi.phoneQuery = String(event.target.value || "");
+          wabaBotsRenderPhones();
         });
         document.getElementById("waba-bots-save")?.addEventListener("click", () => wabaBotsSave());
         document.getElementById("waba-bots-delete")?.addEventListener("click", async () => {

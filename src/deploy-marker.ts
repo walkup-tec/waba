@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-19-123500-BOTS-NOME-SALVAR";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-19-130100-BOTS-FILTRO-NUMERO";
