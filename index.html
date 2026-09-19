@@ -3083,32 +3083,6 @@
         .waba-bots-phone-search {
           margin: 0 0 10px;
         }
-        .waba-bots-phone-search .register-input {
-          width: 100%;
-          box-sizing: border-box;
-          height: 38px;
-          border-radius: 10px;
-          border: 1px solid rgba(148, 163, 184, 0.35);
-          background: rgba(2, 6, 23, 0.8);
-          color: #f8fafc;
-          padding: 8px 10px;
-          outline: none;
-          appearance: none;
-          -webkit-appearance: none;
-        }
-        .waba-bots-phone-search .register-input::placeholder {
-          color: #94a3b8;
-        }
-        .waba-bots-phone-search .register-input:focus {
-          border-color: rgba(45, 212, 191, 0.72);
-          box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.28);
-          background: rgba(2, 6, 23, 0.92);
-          color: #f8fafc;
-        }
-        .waba-bots-phone-search .register-input::-webkit-search-decoration,
-        .waba-bots-phone-search .register-input::-webkit-search-cancel-button {
-          -webkit-appearance: none;
-        }
         .waba-bots-item,
         .waba-bots-phone {
           display: flex;
@@ -13747,6 +13721,44 @@
         box-shadow: 0 0 0 1px var(--accent);
       }
 
+      #waba-bots-phone-search,
+      #tab-whatsapp-bots #waba-bots-phone-search.waba-bots-phone-search-input {
+        width: 100%;
+        box-sizing: border-box;
+        height: 38px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(2, 6, 23, 0.8) !important;
+        background-color: rgba(2, 6, 23, 0.8) !important;
+        color: #f8fafc !important;
+        padding: 8px 10px;
+        outline: none;
+        appearance: none;
+        -webkit-appearance: none;
+        color-scheme: dark;
+        font-size: 0.86rem;
+        font-weight: 500;
+        box-shadow: none;
+      }
+      #waba-bots-phone-search::placeholder {
+        color: #94a3b8;
+        opacity: 1;
+      }
+      #waba-bots-phone-search:hover {
+        border-color: rgba(148, 163, 184, 0.55);
+      }
+      #waba-bots-phone-search:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+        background: rgba(2, 6, 23, 0.92) !important;
+        background-color: rgba(2, 6, 23, 0.92) !important;
+        color: #f8fafc !important;
+      }
+      #waba-bots-phone-search::-webkit-search-decoration,
+      #waba-bots-phone-search::-webkit-search-cancel-button {
+        -webkit-appearance: none;
+      }
+
       .aquecedor-hint {
         font-size: 0.72rem;
         color: #94a3b8;
@@ -23278,9 +23290,9 @@
                 <aside class="waba-bots-col" aria-label="Chips Inbox e biblioteca de bots">
                   <div class="meta-chat-thread-title">Números Inbox</div>
                   <p class="muted" style="margin:6px 0 8px;">O chip é o ponto de partida. Veja o bot atual, edite ou troque para o próximo template. Nunca ficam dois bots no mesmo número.</p>
-                  <div class="waba-bots-phone-search">
+                  <div class="waba-bots-phone-search aquecedor-field">
                     <label class="visually-hidden" for="waba-bots-phone-search">Pesquisar número Inbox</label>
-                    <input id="waba-bots-phone-search" type="search" class="register-input" placeholder="Pesquisar número…" autocomplete="off" inputmode="tel" />
+                    <input id="waba-bots-phone-search" type="search" class="waba-bots-phone-search-input" placeholder="Pesquisar número…" autocomplete="off" inputmode="tel" />
                   </div>
                   <div id="waba-bots-phones" class="waba-bots-phones"></div>
                   <div class="meta-chat-thread-title" style="margin-top:16px;">Bots prontos</div>

@@ -724,6 +724,10 @@ describe("WABA bots — menu FARM BM", () => {
     assert.match(html, /function wabaBotsApplyName/);
     assert.match(html, /event\.target\.id === "waba-bots-name"/);
     assert.match(html, /id="waba-bots-phone-search"/);
+    assert.match(html, /waba-bots-phone-search-input/);
+    assert.match(html, /waba-bots-phone-search aquecedor-field/);
+    assert.doesNotMatch(html, /id="waba-bots-phone-search"[^>]*form-control/);
+    assert.match(html, /#waba-bots-phone-search/);
     assert.match(html, /wabaBotsChipMatchesPhoneQuery/);
     assert.match(html, /Pesquisar número/);
   });
