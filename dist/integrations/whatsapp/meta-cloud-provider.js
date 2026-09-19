@@ -7,6 +7,8 @@ const meta_whatsapp_graph_messages_client_1 = require("../meta-whatsapp/meta-wha
 const meta_whatsapp_errors_1 = require("../meta-whatsapp/meta-whatsapp-errors");
 const meta_whatsapp_graph_errors_1 = require("../meta-whatsapp/meta-whatsapp-graph-errors");
 const meta_whatsapp_recipient_1 = require("../meta-whatsapp/meta-whatsapp-recipient");
+const meta_whatsapp_broadcast_media_1 = require("../meta-whatsapp/meta-whatsapp-broadcast-media");
+const waba_bot_cloud_payload_1 = require("../meta-whatsapp/bots/waba-bot-cloud-payload");
 function sanitizeTemplateComponents(input) {
     if (!Array.isArray(input))
         return [];
@@ -48,6 +50,67 @@ class MetaCloudProvider {
             type: "text",
             text: { preview_url: false, body: text },
         }, input.phoneNumberId);
+    }
+    async sendCtaUrl(input) {
+        const text = String(input.text || "").trim();
+        const buttonLabel = (0, waba_bot_cloud_payload_1.normalizeBotButtonLabel)(input.buttonLabel);
+        const url = (0, waba_bot_cloud_payload_1.normalizeBotHttpsUrl)(input.url);
+        if (!text || !buttonLabel || !url)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        const recipient = (0, meta_whatsapp_recipient_1.normalizeCloudApiRecipient)(input.to);
+        if (!recipient.ok)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_recipient");
+        const connection = await this.requireConnected(input.tenantId, input.connectionId, input.phoneNumberId);
+        return this.dispatch(connection, (0, waba_bot_cloud_payload_1.buildCloudCtaUrlBody)({
+            to: recipient.waId,
+            text,
+            buttonLabel,
+            url,
+        }), input.phoneNumberId);
+    }
+    async sendMedia(input) {
+        const recipient = (0, meta_whatsapp_recipient_1.normalizeCloudApiRecipient)(input.to);
+        if (!recipient.ok)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_recipient");
+        const connection = await this.requireConnected(input.tenantId, input.connectionId, input.phoneNumberId);
+        const sendPhone = String(input.phoneNumberId || connection.phoneNumberId || "").trim();
+        let mediaId = "";
+        const link = String(input.link || "").trim();
+        if (input.bytes?.length) {
+            let token = "";
+            try {
+                token = this.decrypt(connection.accessTokenEncrypted);
+            }
+            catch {
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_token");
+            }
+            mediaId =
+                (await (0, meta_whatsapp_broadcast_media_1.uploadCloudApiMedia)({
+                    token,
+                    phoneNumberId: sendPhone,
+                    bytes: input.bytes,
+                    mime: String(input.mime || "application/octet-stream"),
+                    fileName: String(input.fileName || "midia.bin"),
+                })) || "";
+            if (!mediaId)
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("send_failed");
+        }
+        else if (!(0, waba_bot_cloud_payload_1.normalizeBotHttpsUrl)(link)) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        }
+        const voice = input.kind === "audio" &&
+            Boolean(input.voice) &&
+            (0, waba_bot_cloud_payload_1.isWhatsappVoiceFormat)(input.mime, input.fileName || input.link);
+        return this.dispatch(connection, (0, waba_bot_cloud_payload_1.buildCloudMediaBody)({
+            to: recipient.waId,
+            kind: input.kind,
+            mediaId: mediaId || undefined,
+            link: mediaId ? undefined : link,
+            caption: input.caption,
+            fileName: input.fileName,
+            mime: input.mime,
+            voice,
+        }), input.phoneNumberId);
     }
     async sendTemplate(input) {
         const name = String(input.templateName || "").trim();

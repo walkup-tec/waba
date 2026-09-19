@@ -12,6 +12,7 @@ const meta_whatsapp_recipient_1 = require("./meta-whatsapp-recipient");
 const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.service");
 const meta_whatsapp_inbox_types_1 = require("./meta-whatsapp-inbox.types");
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
+const waba_bot_media_store_1 = require("./bots/waba-bot-media.store");
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -105,7 +106,13 @@ class MetaWhatsappMessagingService {
             contactPhone: recipient.waId,
             outbound: true,
             lastMessagePreview: (0, meta_whatsapp_inbox_types_1.previewFromContent)({
-                text: type === "template" ? null : String(body?.text || "").trim(),
+                text: type === "template"
+                    ? null
+                    : type === "cta_url"
+                        ? String(body?.text || body?.buttonLabel || "Link").trim()
+                        : type === "video" || type === "document" || type === "audio"
+                            ? String(body?.caption || body?.text || `[${type}]`).trim()
+                            : String(body?.text || "").trim(),
                 type,
                 templateName: type === "template" ? sanitizeTemplateFromBody(body?.template).name : null,
             }),
@@ -119,9 +126,11 @@ class MetaWhatsappMessagingService {
             occurredAt: atIso,
         });
         const isTemplate = type === "template";
+        const isCta = type === "cta_url";
+        const isMedia = type === "video" || type === "document" || type === "audio";
         const template = isTemplate ? sanitizeTemplateFromBody(body?.template) : null;
-        const text = isTemplate ? null : String(body?.text || "").trim();
-        if (!isTemplate && !text)
+        const text = isTemplate ? null : String(body?.text || body?.caption || "").trim();
+        if (!isTemplate && !isCta && !isMedia && !text)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         if (isTemplate && template) {
             await this.templates.assertSendable({
@@ -131,16 +140,22 @@ class MetaWhatsappMessagingService {
                 language: template.language,
             });
         }
+        const persistType = isTemplate ? "template" : isCta ? "cta_url" : isMedia ? type : "text";
+        const persistText = isCta
+            ? `${String(body?.text || "").trim()} [${String(body?.buttonLabel || body?.button_label || "").trim()}]`.trim()
+            : isMedia
+                ? text || `[${type}]`
+                : text;
         const inserted = await this.messages.insert({
             tenantId,
             conversationId: upserted.record.id,
             connectionId: connection.id,
             direction: "outbound",
-            type: isTemplate ? "template" : "text",
+            type: persistType,
             status: "queued",
             fromWaId: sendPhoneNumberId,
             toWaId: recipient.waId,
-            textContent: text,
+            textContent: persistText,
             templateName: template?.name || null,
             templateLanguage: template?.language || null,
             provider: botSend ? "automation" : "meta-cloud",
@@ -150,8 +165,8 @@ class MetaWhatsappMessagingService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("persist_failed");
         let send;
         try {
-            send = isTemplate
-                ? await this.provider.sendTemplate({
+            if (isTemplate) {
+                send = await this.provider.sendTemplate({
                     tenantId,
                     to: recipient.waId,
                     templateName: template.name,
@@ -159,14 +174,46 @@ class MetaWhatsappMessagingService {
                     components: template.components,
                     connectionId: connection.id,
                     phoneNumberId: sendPhoneNumberId || undefined,
-                })
-                : await this.provider.sendText({
+                });
+            }
+            else if (isCta) {
+                send = await this.provider.sendCtaUrl({
+                    tenantId,
+                    to: recipient.waId,
+                    text: String(body?.text || "").trim(),
+                    buttonLabel: String(body?.buttonLabel || body?.button_label || "").trim(),
+                    url: String(body?.url || "").trim(),
+                    connectionId: connection.id,
+                    phoneNumberId: sendPhoneNumberId || undefined,
+                });
+            }
+            else if (isMedia) {
+                const mediaKind = type === "document" ? "pdf" : type === "audio" ? "audio" : "video";
+                const mediaRef = String(body?.mediaRef || body?.media_ref || "").trim();
+                const stored = mediaRef ? (0, waba_bot_media_store_1.readBotMedia)(tenantId, mediaRef) : null;
+                send = await this.provider.sendMedia({
+                    tenantId,
+                    to: recipient.waId,
+                    kind: stored?.mediaKind || mediaKind,
+                    link: String(body?.mediaUrl || body?.link || "").trim() || undefined,
+                    bytes: stored?.bytes,
+                    mime: stored?.mime || String(body?.mime || "").trim() || undefined,
+                    fileName: stored?.fileName || String(body?.fileName || body?.filename || "").trim() || undefined,
+                    caption: String(body?.caption || body?.text || "").trim() || undefined,
+                    voice: body?.voice === true || body?.voiceNote === true,
+                    connectionId: connection.id,
+                    phoneNumberId: sendPhoneNumberId || undefined,
+                });
+            }
+            else {
+                send = await this.provider.sendText({
                     tenantId,
                     to: recipient.waId,
                     text: text,
                     connectionId: connection.id,
                     phoneNumberId: sendPhoneNumberId || undefined,
                 });
+            }
         }
         catch (error) {
             await this.messages.updateAfterGraph(tenantId, localId, {

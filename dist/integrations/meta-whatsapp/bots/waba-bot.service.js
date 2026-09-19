@@ -9,6 +9,7 @@ const meta_whatsapp_connection_repository_1 = require("../meta-whatsapp-connecti
 const meta_whatsapp_phone_identity_store_1 = require("../meta-whatsapp-phone-identity.store");
 const waba_bot_node_registry_1 = require("./waba-bot-node.registry");
 const waba_bot_flow_normalize_1 = require("./waba-bot-flow.normalize");
+const waba_bot_media_store_1 = require("./waba-bot-media.store");
 const waba_bot_runtime_engine_1 = require("./waba-bot-runtime.engine");
 const waba_bot_store_1 = require("./waba-bot.store");
 const testRuns = new Map();
@@ -75,6 +76,22 @@ class WabaBotService {
         if (!(0, waba_bot_runtime_engine_1.findStartNode)(draft))
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         return (0, waba_bot_store_1.upsertBotFlow)(tenant.tenantId, draft);
+    }
+    saveMedia(auth, input) {
+        const tenant = requireTenant(auth);
+        const mediaKind = input.mediaKind === "pdf" || input.mediaKind === "audio" ? input.mediaKind : "video";
+        try {
+            return (0, waba_bot_media_store_1.saveBotMedia)({
+                tenantId: tenant.tenantId,
+                mediaKind: mediaKind,
+                fileName: String(input.fileName || ""),
+                mime: String(input.mime || ""),
+                bytes: input.bytes || Buffer.alloc(0),
+            });
+        }
+        catch {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        }
     }
     create(auth, name) {
         const tenant = requireTenant(auth);

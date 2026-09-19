@@ -53,10 +53,46 @@ function shouldRestartRun(run: BotRunState | null | undefined, botId: string): b
 
 function toSendText(payload: BotOutboundPayload): string {
   if (payload.type === "text") return String(payload.text || "").trim();
-  return formatNumberedMenu(
-    payload.interactive.text,
-    payload.interactive.options.map((opt) => ({ label: opt.label })),
-  );
+  if (payload.type === "interactive") {
+    return formatNumberedMenu(
+      payload.interactive.text,
+      payload.interactive.options.map((opt) => ({ label: opt.label })),
+    );
+  }
+  return "";
+}
+
+function toSendBody(payload: BotOutboundPayload): Record<string, unknown> | null {
+  if (payload.type === "text") {
+    const text = String(payload.text || "").trim();
+    return text ? { type: "text", text } : null;
+  }
+  if (payload.type === "interactive") {
+    const text = toSendText(payload);
+    return text ? { type: "text", text } : null;
+  }
+  if (payload.type === "media") {
+    const media = payload.media;
+    const type = media.mediaKind === "pdf" ? "document" : media.mediaKind;
+    return {
+      type,
+      mediaRef: media.mediaRef || "",
+      mediaUrl: media.mediaUrl || "",
+      caption: media.caption || "",
+      mime: media.mediaMime || "",
+      fileName: media.mediaFileName || String(media.mediaUrl || "").split("/").pop() || "",
+      voice: media.voiceNote === true,
+    };
+  }
+  if (payload.type === "cta_url") {
+    return {
+      type: "cta_url",
+      text: payload.cta.text,
+      buttonLabel: payload.cta.buttonLabel,
+      url: payload.cta.url,
+    };
+  }
+  return null;
 }
 
 export type WabaBotInboundDeps = {
@@ -172,12 +208,11 @@ export class WabaBotInboundService {
       writeConversationBotRun(tenantId, conversationId, run);
 
       for (const payload of advanced.outbound) {
-        const text = toSendText(payload);
-        if (!text) continue;
+        const sendBody = toSendBody(payload);
+        if (!sendBody) continue;
         await this.messaging().sendForTenant(tenantId, {
-          type: "text",
+          ...sendBody,
           to: conversation.contactWaId,
-          text,
           conversationId,
           phoneNumberId,
           connectionId: conversation.connectionId,

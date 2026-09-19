@@ -35,7 +35,42 @@ function shouldRestartRun(run, botId) {
 function toSendText(payload) {
     if (payload.type === "text")
         return String(payload.text || "").trim();
-    return (0, waba_bot_flow_normalize_1.formatNumberedMenu)(payload.interactive.text, payload.interactive.options.map((opt) => ({ label: opt.label })));
+    if (payload.type === "interactive") {
+        return (0, waba_bot_flow_normalize_1.formatNumberedMenu)(payload.interactive.text, payload.interactive.options.map((opt) => ({ label: opt.label })));
+    }
+    return "";
+}
+function toSendBody(payload) {
+    if (payload.type === "text") {
+        const text = String(payload.text || "").trim();
+        return text ? { type: "text", text } : null;
+    }
+    if (payload.type === "interactive") {
+        const text = toSendText(payload);
+        return text ? { type: "text", text } : null;
+    }
+    if (payload.type === "media") {
+        const media = payload.media;
+        const type = media.mediaKind === "pdf" ? "document" : media.mediaKind;
+        return {
+            type,
+            mediaRef: media.mediaRef || "",
+            mediaUrl: media.mediaUrl || "",
+            caption: media.caption || "",
+            mime: media.mediaMime || "",
+            fileName: media.mediaFileName || String(media.mediaUrl || "").split("/").pop() || "",
+            voice: media.voiceNote === true,
+        };
+    }
+    if (payload.type === "cta_url") {
+        return {
+            type: "cta_url",
+            text: payload.cta.text,
+            buttonLabel: payload.cta.buttonLabel,
+            url: payload.cta.url,
+        };
+    }
+    return null;
 }
 class WabaBotInboundService {
     constructor(deps = {}) {
@@ -132,13 +167,12 @@ class WabaBotInboundService {
             run = advanced.run;
             (0, waba_bot_store_1.writeConversationBotRun)(tenantId, conversationId, run);
             for (const payload of advanced.outbound) {
-                const text = toSendText(payload);
-                if (!text)
+                const sendBody = toSendBody(payload);
+                if (!sendBody)
                     continue;
                 await this.messaging().sendForTenant(tenantId, {
-                    type: "text",
+                    ...sendBody,
                     to: conversation.contactWaId,
-                    text,
                     conversationId,
                     phoneNumberId,
                     connectionId: conversation.connectionId,

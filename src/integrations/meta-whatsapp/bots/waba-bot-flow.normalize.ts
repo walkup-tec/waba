@@ -52,6 +52,8 @@ const KINDS = new Set<BotNodeKind>([
   "switch",
   "loop",
   "message",
+  "media",
+  "link",
   "buttons",
   "list",
   "menu",

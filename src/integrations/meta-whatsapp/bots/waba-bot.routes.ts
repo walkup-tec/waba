@@ -1,8 +1,14 @@
 import type { Express, Request, Response } from "express";
+import multer from "multer";
 import { resolveWabaRequestAuth } from "../../../auth/waba-request-auth";
 import { logMetaWhatsappSafe, toPublicMetaError } from "../meta-whatsapp-errors";
 import { stripMetaSecrets } from "../meta-whatsapp-connection.service";
 import { WabaBotService } from "./waba-bot.service";
+
+const uploadBotMedia = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 16 * 1024 * 1024, files: 1 },
+});
 
 const service = new WabaBotService();
 
@@ -89,6 +95,31 @@ export function registerWabaBotRoutes(app: Express): void {
     } catch (error) {
       return handleMetaError(res, error);
     }
+  });
+
+  app.post("/integrations/meta/whatsapp/bots/media", (req: Request, res: Response) => {
+    uploadBotMedia.single("file")(req, res, async (err) => {
+      if (err) {
+        return sendPublic(res, 400, {
+          ok: false,
+          error: "A mídia pode ter no máximo 16 MB.",
+          code: "invalid_payload",
+        });
+      }
+      try {
+        warnClientTenantClaim(req);
+        const file = req.file;
+        const saved = service.saveMedia(resolveWabaRequestAuth(req), {
+          mediaKind: String(req.body?.mediaKind || req.body?.media_kind || ""),
+          fileName: file?.originalname,
+          mime: file?.mimetype,
+          bytes: file?.buffer,
+        });
+        return sendPublic(res, 200, { ok: true, ...saved });
+      } catch (error) {
+        return handleMetaError(res, error);
+      }
+    });
   });
 
   app.post("/integrations/meta/whatsapp/bots/phone-link", async (req: Request, res: Response) => {

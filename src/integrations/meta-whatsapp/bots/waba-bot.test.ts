@@ -13,6 +13,12 @@ import {
   executeBotNode,
   matchMenuOption,
 } from "./waba-bot-runtime.engine";
+import {
+  buildCloudCtaUrlBody,
+  buildCloudMediaBody,
+  normalizeBotButtonLabel,
+  normalizeBotHttpsUrl,
+} from "./waba-bot-cloud-payload";
 import { resolveCustomerCareWindow } from "../meta-whatsapp-customer-care-window";
 import {
   getBotIdForPhone,
@@ -271,6 +277,42 @@ describe("WABA bots — inbound 1 a 9", () => {
       occurredAt: new Date().toISOString(),
     });
     assert.ok(sent.some((row) => String(row.text || "").includes("Ana")));
+  });
+
+  it("10) inbound envia mídia e CTA URL sem virar texto", async () => {
+    const start = node("start", "s");
+    const media = node("media", "m");
+    media.data.config.mediaKind = "video";
+    media.data.config.mediaUrl = "https://files.example.com/demo.mp4";
+    const link = node("link", "l");
+    link.data.config.buttonLabel = "Site";
+    link.data.config.url = "https://draxsistemas.com.br";
+    const flow = upsertBotFlow(
+      TENANT_A,
+      normalizeBotDraft({
+        id: "bot-cta",
+        name: "CTA",
+        nodes: [start, media, link],
+        edges: [
+          { id: "e1", source: "s", target: "m", sourceHandle: "out" },
+          { id: "e2", source: "m", target: "l", sourceHandle: "out" },
+        ],
+      }),
+    );
+    setBotPhoneLink({ tenantId: TENANT_A, phoneNumberId: "phone-a", botId: flow.id });
+    const { service, messages, sent } = setupInbound();
+    messages.set("msg-1", msg());
+    const handled = await service.handleInbound({
+      name: "inbound_message",
+      tenantId: TENANT_A,
+      conversationId: "conv-1",
+      messageId: "msg-1",
+      connectionId: "conn-a",
+      occurredAt: new Date().toISOString(),
+    });
+    assert.equal(handled, true);
+    assert.equal(sent.some((row) => row.type === "video" && row.mediaUrl === "https://files.example.com/demo.mp4"), true);
+    assert.equal(sent.some((row) => row.type === "cta_url" && row.buttonLabel === "Site"), true);
   });
 
   it("3) opção inválida de botão não avança o fluxo", async () => {
@@ -673,6 +715,90 @@ describe("WABA bots — menu FARM BM", () => {
     assert.doesNotMatch(html, /Resposta do contato/);
     assert.doesNotMatch(html, /id="waba-bots-test-continue"/);
     assert.doesNotMatch(html, /wabaBotsUi\.channels \|\| \[\]\)\.filter\(\(row\) => row\.inboxEnabled === true\)/);
+    assert.match(html, /waba-bots-node-media-kind/);
+    assert.match(html, /waba-bots-node-button-label/);
+    assert.match(html, /waba-bots-node-button-url/);
+    assert.match(html, /Nota de voz do WhatsApp/);
+    assert.match(html, /botão CTA URL/);
+  });
+});
+
+describe("WABA bots — mídia e link", () => {
+  it("monta o botão oficial CTA URL da Cloud API", () => {
+    const body = buildCloudCtaUrlBody({
+      to: "5551999887766",
+      text: "Abra o comprovante",
+      buttonLabel: "Ver detalhes agora mesmo",
+      url: "https://waba.draxsistemas.com.br/s/abc",
+    });
+    assert.equal(body.type, "interactive");
+    const interactive = body.interactive as {
+      type: string;
+      action: { name: string; parameters: { display_text: string; url: string } };
+    };
+    assert.equal(interactive.type, "cta_url");
+    assert.equal(interactive.action.name, "cta_url");
+    assert.equal(interactive.action.parameters.display_text, "Ver detalhes agora m");
+    assert.equal(interactive.action.parameters.url, "https://waba.draxsistemas.com.br/s/abc");
+    assert.equal(normalizeBotHttpsUrl("http://exemplo.com"), "");
+    assert.equal(normalizeBotButtonLabel("  Abrir  "), "Abrir");
+  });
+
+  it("envia áudio OGG como nota de voz nativa", () => {
+    const body = buildCloudMediaBody({
+      to: "5551999887766",
+      kind: "audio",
+      mediaId: "media-1",
+      fileName: "nota.ogg",
+      mime: "audio/ogg",
+      voice: true,
+    });
+    assert.equal(body.type, "audio");
+    assert.deepEqual(body.audio, { id: "media-1", voice: true });
+  });
+
+  it("prepara mídia e link no motor e segue o fluxo", async () => {
+    const start = node("start", "s");
+    const media = node("media", "m");
+    media.data.config.mediaKind = "pdf";
+    media.data.config.mediaUrl = "https://files.example.com/guia.pdf";
+    media.data.config.mediaCaption = "Guia";
+    const link = node("link", "l");
+    link.data.config.text = "Abra o portal";
+    link.data.config.buttonLabel = "Acessar";
+    link.data.config.url = "https://drax.example.com/portal";
+    const end = node("end", "e");
+    const flow = normalizeBotDraft({
+      id: "bot-media-link",
+      name: "Mídia e link",
+      nodes: [start, media, link, end],
+      edges: [
+        { id: "e1", source: "s", target: "m", sourceHandle: "out" },
+        { id: "e2", source: "m", target: "l", sourceHandle: "out" },
+        { id: "e3", source: "l", target: "e", sourceHandle: "out" },
+      ],
+    });
+    assert.equal(flow.nodes.some((item) => item.data.kind === "media"), true);
+    assert.equal(flow.nodes.some((item) => item.data.kind === "link"), true);
+    const advanced = await advanceBotRun({
+      flow,
+      run: createBotRunState({ flow, testPhone: "5551999000000" }),
+    });
+    assert.equal(advanced.outbound.some((item) => item.type === "media" && item.media.mediaKind === "pdf"), true);
+    assert.equal(
+      advanced.outbound.some((item) => item.type === "cta_url" && item.cta.buttonLabel === "Acessar"),
+      true,
+    );
+    assert.equal(advanced.run.phase, "finished");
+  });
+
+  it("recusa link sem https e mídia vazia", async () => {
+    const emptyMedia = await executeBotNode({ node: node("media", "m"), variables: {} });
+    assert.equal(emptyMedia.ok, false);
+    const badLink = node("link", "l");
+    badLink.data.config.url = "http://inseguro.example.com";
+    const emptyLink = await executeBotNode({ node: badLink, variables: {} });
+    assert.equal(emptyLink.ok, false);
   });
 });
 

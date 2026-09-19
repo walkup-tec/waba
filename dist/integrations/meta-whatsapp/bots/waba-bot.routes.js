@@ -1,10 +1,18 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaBotRoutes = registerWabaBotRoutes;
+const multer_1 = __importDefault(require("multer"));
 const waba_request_auth_1 = require("../../../auth/waba-request-auth");
 const meta_whatsapp_errors_1 = require("../meta-whatsapp-errors");
 const meta_whatsapp_connection_service_1 = require("../meta-whatsapp-connection.service");
 const waba_bot_service_1 = require("./waba-bot.service");
+const uploadBotMedia = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 16 * 1024 * 1024, files: 1 },
+});
 const service = new waba_bot_service_1.WabaBotService();
 function sendPublic(res, status, payload) {
     return res.status(status).json((0, meta_whatsapp_connection_service_1.stripMetaSecrets)(payload));
@@ -87,6 +95,31 @@ function registerWabaBotRoutes(app) {
         catch (error) {
             return handleMetaError(res, error);
         }
+    });
+    app.post("/integrations/meta/whatsapp/bots/media", (req, res) => {
+        uploadBotMedia.single("file")(req, res, async (err) => {
+            if (err) {
+                return sendPublic(res, 400, {
+                    ok: false,
+                    error: "A mídia pode ter no máximo 16 MB.",
+                    code: "invalid_payload",
+                });
+            }
+            try {
+                warnClientTenantClaim(req);
+                const file = req.file;
+                const saved = service.saveMedia((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
+                    mediaKind: String(req.body?.mediaKind || req.body?.media_kind || ""),
+                    fileName: file?.originalname,
+                    mime: file?.mimetype,
+                    bytes: file?.buffer,
+                });
+                return sendPublic(res, 200, { ok: true, ...saved });
+            }
+            catch (error) {
+                return handleMetaError(res, error);
+            }
+        });
     });
     app.post("/integrations/meta/whatsapp/bots/phone-link", async (req, res) => {
         try {

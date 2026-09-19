@@ -10,6 +10,8 @@ import {
 } from "../meta-whatsapp-phone-identity.store";
 import { BOT_NODE_REGISTRY, createBotNodeData } from "./waba-bot-node.registry";
 import { createDefaultBotDraft, normalizeBotDraft } from "./waba-bot-flow.normalize";
+import { saveBotMedia, type SavedBotMedia } from "./waba-bot-media.store";
+import type { BotMediaKind } from "./waba-bot.types";
 import {
   advanceBotRun,
   createBotRunState,
@@ -104,6 +106,25 @@ export class WabaBotService {
     const draft = normalizeBotDraft(body);
     if (!findStartNode(draft)) throw new MetaWhatsappError("invalid_payload");
     return upsertBotFlow(tenant.tenantId, draft);
+  }
+
+  saveMedia(
+    auth: WabaRequestAuth,
+    input: { mediaKind?: string; fileName?: string; mime?: string; bytes?: Buffer },
+  ): SavedBotMedia {
+    const tenant = requireTenant(auth);
+    const mediaKind = input.mediaKind === "pdf" || input.mediaKind === "audio" ? input.mediaKind : "video";
+    try {
+      return saveBotMedia({
+        tenantId: tenant.tenantId,
+        mediaKind: mediaKind as BotMediaKind,
+        fileName: String(input.fileName || ""),
+        mime: String(input.mime || ""),
+        bytes: input.bytes || Buffer.alloc(0),
+      });
+    } catch {
+      throw new MetaWhatsappError("invalid_payload");
+    }
   }
 
   create(auth: WabaRequestAuth, name?: string) {

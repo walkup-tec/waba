@@ -17,6 +17,8 @@ import type { WhatsAppSendResult, WhatsAppTemplateComponent } from "../whatsapp/
 import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 import { previewFromContent } from "./meta-whatsapp-inbox.types";
 import { resolveInboxSendPhoneNumberId } from "./meta-whatsapp-phone-identity.store";
+import { readBotMedia } from "./bots/waba-bot-media.store";
+import type { BotMediaKind } from "./bots/waba-bot.types";
 
 export type MetaSendPublicResult = WhatsAppSendResult & {
   conversationId: string;
@@ -143,7 +145,14 @@ export class MetaWhatsappMessagingService {
       contactPhone: recipient.waId,
       outbound: true,
       lastMessagePreview: previewFromContent({
-        text: type === "template" ? null : String(body?.text || "").trim(),
+        text:
+          type === "template"
+            ? null
+            : type === "cta_url"
+              ? String(body?.text || body?.buttonLabel || "Link").trim()
+              : type === "video" || type === "document" || type === "audio"
+                ? String(body?.caption || body?.text || `[${type}]`).trim()
+                : String(body?.text || "").trim(),
         type,
         templateName: type === "template" ? sanitizeTemplateFromBody(body?.template).name : null,
       }),
@@ -158,9 +167,11 @@ export class MetaWhatsappMessagingService {
     });
 
     const isTemplate = type === "template";
+    const isCta = type === "cta_url";
+    const isMedia = type === "video" || type === "document" || type === "audio";
     const template = isTemplate ? sanitizeTemplateFromBody(body?.template) : null;
-    const text = isTemplate ? null : String(body?.text || "").trim();
-    if (!isTemplate && !text) throw new MetaWhatsappError("invalid_payload");
+    const text = isTemplate ? null : String(body?.text || body?.caption || "").trim();
+    if (!isTemplate && !isCta && !isMedia && !text) throw new MetaWhatsappError("invalid_payload");
     if (isTemplate && template) {
       await this.templates.assertSendable({
         tenantId,
@@ -170,16 +181,24 @@ export class MetaWhatsappMessagingService {
       });
     }
 
+    const persistType = isTemplate ? "template" : isCta ? "cta_url" : isMedia ? type : "text";
+    const persistText =
+      isCta
+        ? `${String(body?.text || "").trim()} [${String(body?.buttonLabel || body?.button_label || "").trim()}]`.trim()
+        : isMedia
+          ? text || `[${type}]`
+          : text;
+
     const inserted = await this.messages.insert({
       tenantId,
       conversationId: upserted.record.id,
       connectionId: connection.id,
       direction: "outbound",
-      type: isTemplate ? "template" : "text",
+      type: persistType,
       status: "queued",
       fromWaId: sendPhoneNumberId,
       toWaId: recipient.waId,
-      textContent: text,
+      textContent: persistText,
       templateName: template?.name || null,
       templateLanguage: template?.language || null,
       provider: botSend ? "automation" : "meta-cloud",
@@ -189,23 +208,53 @@ export class MetaWhatsappMessagingService {
 
     let send: WhatsAppSendResult;
     try {
-      send = isTemplate
-        ? await this.provider.sendTemplate({
-            tenantId,
-            to: recipient.waId,
-            templateName: template!.name,
-            language: template!.language,
-            components: template!.components,
-            connectionId: connection.id,
-            phoneNumberId: sendPhoneNumberId || undefined,
-          })
-        : await this.provider.sendText({
-            tenantId,
-            to: recipient.waId,
-            text: text!,
-            connectionId: connection.id,
-            phoneNumberId: sendPhoneNumberId || undefined,
-          });
+      if (isTemplate) {
+        send = await this.provider.sendTemplate({
+          tenantId,
+          to: recipient.waId,
+          templateName: template!.name,
+          language: template!.language,
+          components: template!.components,
+          connectionId: connection.id,
+          phoneNumberId: sendPhoneNumberId || undefined,
+        });
+      } else if (isCta) {
+        send = await this.provider.sendCtaUrl({
+          tenantId,
+          to: recipient.waId,
+          text: String(body?.text || "").trim(),
+          buttonLabel: String(body?.buttonLabel || body?.button_label || "").trim(),
+          url: String(body?.url || "").trim(),
+          connectionId: connection.id,
+          phoneNumberId: sendPhoneNumberId || undefined,
+        });
+      } else if (isMedia) {
+        const mediaKind: BotMediaKind =
+          type === "document" ? "pdf" : type === "audio" ? "audio" : "video";
+        const mediaRef = String(body?.mediaRef || body?.media_ref || "").trim();
+        const stored = mediaRef ? readBotMedia(tenantId, mediaRef) : null;
+        send = await this.provider.sendMedia({
+          tenantId,
+          to: recipient.waId,
+          kind: stored?.mediaKind || mediaKind,
+          link: String(body?.mediaUrl || body?.link || "").trim() || undefined,
+          bytes: stored?.bytes,
+          mime: stored?.mime || String(body?.mime || "").trim() || undefined,
+          fileName: stored?.fileName || String(body?.fileName || body?.filename || "").trim() || undefined,
+          caption: String(body?.caption || body?.text || "").trim() || undefined,
+          voice: body?.voice === true || body?.voiceNote === true,
+          connectionId: connection.id,
+          phoneNumberId: sendPhoneNumberId || undefined,
+        });
+      } else {
+        send = await this.provider.sendText({
+          tenantId,
+          to: recipient.waId,
+          text: text!,
+          connectionId: connection.id,
+          phoneNumberId: sendPhoneNumberId || undefined,
+        });
+      }
     } catch (error) {
       await this.messages.updateAfterGraph(tenantId, localId, {
         status: "failed",

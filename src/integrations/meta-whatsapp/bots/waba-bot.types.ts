@@ -15,11 +15,15 @@ export type BotNodeKind =
   | "switch"
   | "loop"
   | "message"
+  | "media"
+  | "link"
   | "buttons"
   | "list"
   | "menu"
   | "expediente"
   | "transfer_agent";
+
+export type BotMediaKind = "video" | "pdf" | "audio";
 
 export type BotPortDef = {
   id: string;
@@ -61,6 +65,15 @@ export type BotNodeConfig = {
   maxIterations?: number;
   options?: Array<{ id: string; label: string; value?: string }>;
   outputVariable?: string;
+  mediaKind?: BotMediaKind;
+  mediaUrl?: string;
+  mediaCaption?: string;
+  mediaFileName?: string;
+  mediaMime?: string;
+  mediaRef?: string;
+  voiceNote?: boolean;
+  buttonLabel?: string;
+  url?: string;
 };
 
 export type BotNodeData = {
@@ -137,6 +150,22 @@ export type BotOutboundInteractive = {
   options: Array<{ id: string; label: string; value?: string }>;
 };
 
+export type BotOutboundMedia = {
+  mediaKind: BotMediaKind;
+  mediaUrl?: string;
+  mediaRef?: string;
+  mediaMime?: string;
+  mediaFileName?: string;
+  caption?: string;
+  voiceNote?: boolean;
+};
+
+export type BotOutboundCtaUrl = {
+  text: string;
+  buttonLabel: string;
+  url: string;
+};
+
 export type BotNodeExecuteResult = {
   ok: boolean;
   status: BotNodeStatus;
@@ -145,6 +174,8 @@ export type BotNodeExecuteResult = {
   variables?: Record<string, BotJson>;
   outboundText?: string;
   outboundInteractive?: BotOutboundInteractive;
+  outboundMedia?: BotOutboundMedia;
+  outboundCtaUrl?: BotOutboundCtaUrl;
   waitForReply?: boolean;
   transferHuman?: boolean;
   data?: Record<string, BotJson>;
@@ -152,7 +183,9 @@ export type BotNodeExecuteResult = {
 
 export type BotOutboundPayload =
   | { type: "text"; text: string }
-  | { type: "interactive"; interactive: BotOutboundInteractive };
+  | { type: "interactive"; interactive: BotOutboundInteractive }
+  | { type: "media"; media: BotOutboundMedia }
+  | { type: "cta_url"; cta: BotOutboundCtaUrl };
 
 export type BotPhoneLink = {
   tenantId: string;

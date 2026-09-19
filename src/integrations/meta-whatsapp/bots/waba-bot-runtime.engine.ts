@@ -1,6 +1,7 @@
 import { getBotNodeDefinition } from "./waba-bot-node.registry";
 import { resolveBrasiliaExpedienteTurno } from "./waba-bot-expediente";
 import { formatNumberedMenu } from "./waba-bot-flow.normalize";
+import { normalizeBotButtonLabel, normalizeBotHttpsUrl } from "./waba-bot-cloud-payload";
 import type {
   BotFlowDraft,
   BotFlowNode,
@@ -94,6 +95,47 @@ export async function executeBotNode(ctx: BotNodeExecuteContext): Promise<BotNod
           message: dryRun ? `Simulado: ${text}` : "Mensagem preparada",
           nextHandle: "out",
           outboundText: text,
+        };
+      }
+
+      case "media": {
+        const mediaKind = config.mediaKind === "pdf" || config.mediaKind === "audio" ? config.mediaKind : "video";
+        const mediaUrl = resolveTemplate(config.mediaUrl || "", variables).trim();
+        const mediaRef = String(config.mediaRef || "").trim();
+        if (!mediaUrl && !mediaRef) {
+          return { ok: false, status: "error", message: "Mídia sem arquivo nem URL https" };
+        }
+        const caption = resolveTemplate(config.mediaCaption || "", variables).trim();
+        return {
+          ok: true,
+          status: "success",
+          message: dryRun ? `Simulado: mídia ${mediaKind}` : `Mídia ${mediaKind} preparada`,
+          nextHandle: "out",
+          outboundMedia: {
+            mediaKind,
+            mediaUrl: mediaUrl || undefined,
+            mediaRef: mediaRef || undefined,
+            mediaMime: config.mediaMime || undefined,
+            mediaFileName: config.mediaFileName || undefined,
+            caption: caption || undefined,
+            voiceNote: mediaKind === "audio" ? config.voiceNote !== false : false,
+          },
+        };
+      }
+
+      case "link": {
+        const text = resolveTemplate(config.text || "Toque no botão para abrir o link.", variables).trim();
+        const buttonLabel = normalizeBotButtonLabel(resolveTemplate(config.buttonLabel || "Abrir link", variables));
+        const url = normalizeBotHttpsUrl(resolveTemplate(config.url || "", variables));
+        if (!buttonLabel || !url) {
+          return { ok: false, status: "error", message: "Link exige rótulo e URL https" };
+        }
+        return {
+          ok: true,
+          status: "success",
+          message: dryRun ? `Simulado: ${buttonLabel}` : "Botão de link preparado",
+          nextHandle: "out",
+          outboundCtaUrl: { text: text || buttonLabel, buttonLabel, url },
         };
       }
 
@@ -368,6 +410,12 @@ export async function advanceBotRun(input: {
     if (result.outboundInteractive) {
       outbound.push({ type: "interactive", interactive: result.outboundInteractive });
       outboundTexts.push(result.outboundInteractive.text);
+    } else if (result.outboundMedia) {
+      outbound.push({ type: "media", media: result.outboundMedia });
+      outboundTexts.push(result.outboundMedia.caption || `[${result.outboundMedia.mediaKind}]`);
+    } else if (result.outboundCtaUrl) {
+      outbound.push({ type: "cta_url", cta: result.outboundCtaUrl });
+      outboundTexts.push(result.outboundCtaUrl.text);
     } else if (result.outboundText) {
       outbound.push({ type: "text", text: result.outboundText });
       outboundTexts.push(result.outboundText);

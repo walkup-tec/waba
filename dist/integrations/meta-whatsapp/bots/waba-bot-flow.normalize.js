@@ -47,6 +47,8 @@ const KINDS = new Set([
     "switch",
     "loop",
     "message",
+    "media",
+    "link",
     "buttons",
     "list",
     "menu",

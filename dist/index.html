@@ -45301,6 +45301,18 @@
         if (timeout) node.data.config.timeoutSeconds = Number(timeout.value) || 0;
         if (delay) node.data.config.delaySeconds = Number(delay.value) || 0;
         if (maxIt) node.data.config.maxIterations = Number(maxIt.value) || 1;
+        const mediaKind = document.getElementById("waba-bots-node-media-kind");
+        const mediaUrl = document.getElementById("waba-bots-node-media-url");
+        const mediaCaption = document.getElementById("waba-bots-node-media-caption");
+        const voiceNote = document.getElementById("waba-bots-node-voice");
+        if (mediaKind) node.data.config.mediaKind = mediaKind.value;
+        if (mediaUrl) node.data.config.mediaUrl = mediaUrl.value.trim();
+        if (mediaCaption) node.data.config.mediaCaption = mediaCaption.value;
+        if (voiceNote) node.data.config.voiceNote = voiceNote.checked;
+        const buttonLabel = document.getElementById("waba-bots-node-button-label");
+        const buttonUrl = document.getElementById("waba-bots-node-button-url");
+        if (buttonLabel) node.data.config.buttonLabel = String(buttonLabel.value || "").trim().slice(0, 20);
+        if (buttonUrl) node.data.config.url = buttonUrl.value.trim();
       }
 
       function wabaBotsResolveOutputs(node) {
@@ -45396,6 +45408,57 @@
         }
         const options = (node.data.config.options || []).map((opt) => String(opt.label || "")).join("\n");
         const canDelete = node.data.kind !== "start";
+        const titleBlock =
+          `<div class="meta-chat-thread-title" style="margin-bottom:8px;">Etapa</div>` +
+          `<p class="muted" style="margin:0 0 8px;font-size:0.72rem;">${escapeAdminHtml(node.data.kind)}</p>` +
+          `<label>Título</label><input id="waba-bots-node-title" class="form-control" value="${escapeAdminHtml(node.data.title || "")}" />`;
+        const deleteBlock = canDelete
+          ? `<button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-node-delete" style="margin-top:10px;">Remover node</button>`
+          : `<p class="muted" style="margin-top:10px;">O node Início é obrigatório.</p>`;
+        if (node.data.kind === "media") {
+          const kind = node.data.config.mediaKind === "pdf" || node.data.config.mediaKind === "audio" ? node.data.config.mediaKind : "video";
+          const accept =
+            kind === "pdf"
+              ? "application/pdf,.pdf"
+              : kind === "audio"
+                ? "audio/ogg,audio/opus,audio/mpeg,audio/mp4,audio/aac,audio/amr,.ogg,.opus,.mp3,.m4a,.aac,.amr"
+                : "video/mp4,video/3gpp,.mp4,.3gp";
+          const fileHint = node.data.config.mediaFileName
+            ? `Arquivo: ${node.data.config.mediaFileName}`
+            : "Nenhum arquivo enviado.";
+          box.innerHTML =
+            titleBlock +
+            `<p class="muted" style="margin:8px 0;">Vídeo MP4, PDF ou áudio. Nota de voz nativa do WhatsApp exige OGG/OPUS.</p>` +
+            `<label style="margin-top:8px;">Tipo</label>` +
+            `<select id="waba-bots-node-media-kind" class="form-control">` +
+            `<option value="video"${kind === "video" ? " selected" : ""}>Vídeo</option>` +
+            `<option value="pdf"${kind === "pdf" ? " selected" : ""}>PDF</option>` +
+            `<option value="audio"${kind === "audio" ? " selected" : ""}>Áudio</option>` +
+            `</select>` +
+            `<label style="margin-top:8px;">Arquivo</label>` +
+            `<input id="waba-bots-node-file" class="form-control" type="file" accept="${accept}" />` +
+            `<p class="muted" id="waba-bots-node-file-hint" style="margin:6px 0 0;">${escapeAdminHtml(fileHint)}</p>` +
+            `<label style="margin-top:8px;">URL https (opcional)</label>` +
+            `<input id="waba-bots-node-media-url" class="form-control" type="url" placeholder="https://…" value="${escapeAdminHtml(node.data.config.mediaUrl || "")}" />` +
+            (kind === "audio"
+              ? `<label style="margin-top:10px;display:flex;gap:8px;align-items:center;"><input id="waba-bots-node-voice" type="checkbox"${node.data.config.voiceNote === false ? "" : " checked"} /> Nota de voz do WhatsApp (OGG/OPUS)</label>`
+              : `<label style="margin-top:8px;">Legenda</label><textarea id="waba-bots-node-media-caption" class="form-control" rows="3">${escapeAdminHtml(node.data.config.mediaCaption || "")}</textarea>`) +
+            deleteBlock;
+          return;
+        }
+        if (node.data.kind === "link") {
+          box.innerHTML =
+            titleBlock +
+            `<p class="muted" style="margin:8px 0;">A API oficial envia um botão CTA URL. O contato toca e abre o site. Rótulo até 20 caracteres.</p>` +
+            `<label style="margin-top:8px;">Texto da mensagem</label>` +
+            `<textarea id="waba-bots-node-text" class="form-control" rows="4">${escapeAdminHtml(node.data.config.text || "")}</textarea>` +
+            `<label style="margin-top:8px;">Rótulo do botão</label>` +
+            `<input id="waba-bots-node-button-label" class="form-control" maxlength="20" value="${escapeAdminHtml(node.data.config.buttonLabel || "")}" />` +
+            `<label style="margin-top:8px;">Link</label>` +
+            `<input id="waba-bots-node-button-url" class="form-control" type="url" placeholder="https://…" value="${escapeAdminHtml(node.data.config.url || "")}" />` +
+            deleteBlock;
+          return;
+        }
         const extra =
           node.data.kind === "wait_reply"
             ? `<label style="margin-top:8px;">Timeout (s)</label><input id="waba-bots-node-timeout" class="form-control" type="number" min="0" value="${escapeAdminHtml(String(node.data.config.timeoutSeconds || 0))}" />`
@@ -45405,16 +45468,12 @@
                 ? `<label style="margin-top:8px;">Máximo de voltas</label><input id="waba-bots-node-maxit" class="form-control" type="number" min="1" value="${escapeAdminHtml(String(node.data.config.maxIterations || 1))}" />`
                 : "";
         box.innerHTML =
-          `<div class="meta-chat-thread-title" style="margin-bottom:8px;">Etapa</div>` +
-          `<p class="muted" style="margin:0 0 8px;font-size:0.72rem;">${escapeAdminHtml(node.data.kind)}</p>` +
-          `<label>Título</label><input id="waba-bots-node-title" class="form-control" value="${escapeAdminHtml(node.data.title || "")}" />` +
+          titleBlock +
           `<label style="margin-top:8px;">Texto</label><textarea id="waba-bots-node-text" class="form-control" rows="4">${escapeAdminHtml(node.data.config.text || "")}</textarea>` +
           `<label style="margin-top:8px;">Opções (uma por linha)</label><textarea id="waba-bots-node-options" class="form-control" rows="4">${escapeAdminHtml(options)}</textarea>` +
           `<label style="margin-top:8px;">Condição / expressão</label><input id="waba-bots-node-expr" class="form-control" value="${escapeAdminHtml(node.data.config.expression || "")}" />` +
           extra +
-          (canDelete
-            ? `<button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-node-delete" style="margin-top:10px;">Remover node</button>`
-            : `<p class="muted" style="margin-top:10px;">O node Início é obrigatório.</p>`);
+          deleteBlock;
       }
 
       function wabaBotsFlowPoint(clientX, clientY) {
@@ -45828,7 +45887,38 @@
           wabaBotsOpenBuilder();
         }
 
-        builder?.addEventListener("change", () => {
+        builder?.addEventListener("change", async (event) => {
+          if (event.target && event.target.id === "waba-bots-node-file") {
+            const input = event.target;
+            const file = input.files && input.files[0];
+            const node = (wabaBotsUi.draft?.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
+            if (!file || !node) return;
+            wabaBotsApplyInspector();
+            const kind = node.data.config.mediaKind || "video";
+            const form = new FormData();
+            form.append("file", file);
+            form.append("mediaKind", kind);
+            try {
+              const res = await fetch("/integrations/meta/whatsapp/bots/media", {
+                method: "POST",
+                credentials: "same-origin",
+                body: form,
+              });
+              const payload = await res.json().catch(() => ({}));
+              if (!res.ok || payload.ok === false) {
+                throw new Error(payload.error || "Não foi possível enviar a mídia.");
+              }
+              node.data.config.mediaRef = payload.mediaRef || "";
+              node.data.config.mediaFileName = payload.fileName || file.name;
+              node.data.config.mediaMime = payload.mime || file.type;
+              node.data.config.mediaKind = payload.mediaKind || kind;
+              wabaBotsBanner("Arquivo anexado a este node.");
+            } catch (error) {
+              wabaBotsBanner(error && error.message ? error.message : "Falha no upload da mídia.", true);
+            }
+            if (wabaBotsUi.builderOpen) wabaBotsRenderBuilder();
+            return;
+          }
           wabaBotsApplyInspector();
           if (wabaBotsUi.builderOpen) wabaBotsRenderBuilder();
         });
