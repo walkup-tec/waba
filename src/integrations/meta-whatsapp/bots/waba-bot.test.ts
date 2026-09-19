@@ -666,8 +666,12 @@ describe("WABA bots — menu FARM BM", () => {
     assert.match(html, /Construtor de bots/);
     assert.match(html, /wabaBotsOpenBuilder/);
     assert.match(html, /data-bot-add-kind/);
+    assert.match(html, /wabaBotsNodeFromPoint/);
     assert.doesNotMatch(html, /Adicionar etapa…/);
     assert.doesNotMatch(html, /Associar a este bot/);
+    assert.doesNotMatch(html, /id="waba-bots-test-reply"/);
+    assert.doesNotMatch(html, /Resposta do contato/);
+    assert.doesNotMatch(html, /id="waba-bots-test-continue"/);
     assert.doesNotMatch(html, /wabaBotsUi\.channels \|\| \[\]\)\.filter\(\(row\) => row\.inboxEnabled === true\)/);
   });
 });

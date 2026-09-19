@@ -3385,52 +3385,33 @@
         }
         .waba-bots-handle {
           position: absolute;
-          width: 10px;
-          height: 10px;
+          width: 14px;
+          height: 14px;
           border-radius: 50%;
           border: 2px solid var(--bg-deep);
           cursor: crosshair;
-          z-index: 2;
+          z-index: 3;
+        }
+        .waba-bots-handle::after {
+          content: "";
+          position: absolute;
+          inset: -10px;
         }
         .waba-bots-handle.is-target {
-          left: -5px;
+          left: -7px;
           top: 50%;
           transform: translateY(-50%);
           background: var(--cyan);
         }
         .waba-bots-handle.is-source {
-          position: static;
+          position: relative;
           transform: none;
           background: var(--accent);
         }
-        .waba-bots-builder-test {
-          display: flex;
-          flex-wrap: nowrap;
-          gap: 8px;
-          align-items: center;
-          min-height: 42px;
-          padding: 6px 12px;
-          border-top: 1px solid var(--border-subtle);
-          background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(15, 23, 42, 0.94));
-        }
-        .waba-bots-builder-test .form-control {
-          width: 220px;
-          max-width: 28vw;
-        }
-        .waba-bots-builder-test .waba-bots-log {
-          flex: 1 1 auto;
-          min-height: 0;
-          max-height: 34px;
-          margin: 0;
-          padding: 4px 8px;
-          border: 1px solid var(--border-subtle);
-          background: var(--bg-card-alt);
-          color: var(--accent-bright);
-          font-size: 0.7rem;
-          overflow: auto;
-        }
-        .waba-bots-builder-test .waba-bots-log:empty {
-          display: none;
+        .waba-bots-edges path.is-preview {
+          stroke: var(--accent);
+          stroke-dasharray: 6 4;
+          pointer-events: none;
         }
         .waba-bots-builder-hint {
           position: absolute;
@@ -3444,6 +3425,9 @@
           font-size: 0.68rem;
           pointer-events: none;
         }
+        .waba-bots-flow.is-connecting {
+          cursor: crosshair;
+        }
         @media (max-width: 980px) {
           .waba-bots-layout {
             grid-template-columns: 1fr;
@@ -3451,9 +3435,6 @@
           .waba-bots-builder-main {
             grid-template-columns: 1fr;
             overflow: auto;
-          }
-          .waba-bots-builder-test {
-            flex-wrap: wrap;
           }
         }
 
@@ -45436,31 +45417,61 @@
             : `<p class="muted" style="margin-top:10px;">O node Início é obrigatório.</p>`);
       }
 
-      function wabaBotsDrawEdges() {
+      function wabaBotsFlowPoint(clientX, clientY) {
+        const world = document.getElementById("waba-bots-flow-world");
+        if (!world) return { x: 0, y: 0 };
+        const wr = world.getBoundingClientRect();
+        const zoom = wabaBotsUi.zoom || 1;
+        return { x: (clientX - wr.left) / zoom, y: (clientY - wr.top) / zoom };
+      }
+
+      function wabaBotsNodeFromPoint(clientX, clientY) {
+        const stack = typeof document.elementsFromPoint === "function" ? document.elementsFromPoint(clientX, clientY) : [];
+        for (let i = 0; i < stack.length; i += 1) {
+          const nodeEl = stack[i].closest ? stack[i].closest("[data-bot-node]") : null;
+          if (nodeEl) return nodeEl.getAttribute("data-bot-node") || "";
+        }
+        return "";
+      }
+
+      function wabaBotsDrawEdges(preview) {
         const svg = document.getElementById("waba-bots-edges");
         const world = document.getElementById("waba-bots-flow-world");
         if (!svg || !world || !wabaBotsUi.draft) return;
         const wr = world.getBoundingClientRect();
         const zoom = wabaBotsUi.zoom || 1;
         const pointOf = (nodeId, handleId, type) => {
-          const sel = `[data-bot-node="${nodeId}"] [data-handle-type="${type}"][data-handle-id="${handleId}"]`;
-          const fallback = `[data-bot-node="${nodeId}"] [data-handle-type="${type}"]`;
+          const sel = `[data-bot-node="${CSS && CSS.escape ? CSS.escape(nodeId) : nodeId}"] [data-handle-type="${type}"][data-handle-id="${handleId}"]`;
+          const fallback = `[data-bot-node="${CSS && CSS.escape ? CSS.escape(nodeId) : nodeId}"] [data-handle-type="${type}"]`;
           const el = world.querySelector(sel) || world.querySelector(fallback);
-          if (!el) return null;
-          const hr = el.getBoundingClientRect();
-          return { x: (hr.left + hr.width / 2 - wr.left) / zoom, y: (hr.top + hr.height / 2 - wr.top) / zoom };
+          if (el) {
+            const hr = el.getBoundingClientRect();
+            return { x: (hr.left + hr.width / 2 - wr.left) / zoom, y: (hr.top + hr.height / 2 - wr.top) / zoom };
+          }
+          const nodeEl = world.querySelector(`[data-bot-node="${CSS && CSS.escape ? CSS.escape(nodeId) : nodeId}"]`);
+          if (!nodeEl) return null;
+          const nr = nodeEl.getBoundingClientRect();
+          return {
+            x: ((type === "source" ? nr.right : nr.left) - wr.left) / zoom,
+            y: (nr.top + nr.height / 2 - wr.top) / zoom,
+          };
         };
+        const curve = (a, b) => `M ${a.x} ${a.y} C ${a.x + 80} ${a.y}, ${b.x - 80} ${b.y}, ${b.x} ${b.y}`;
         const parts = (wabaBotsUi.draft.edges || [])
           .map((edge) => {
             const a = pointOf(edge.source, edge.sourceHandle || "out", "source");
             const b = pointOf(edge.target, edge.targetHandle || "in", "target");
             if (!a || !b) return "";
             const active = edge.id === wabaBotsUi.selectedEdgeId ? " is-active" : "";
-            const d = `M ${a.x} ${a.y} C ${a.x + 80} ${a.y}, ${b.x - 80} ${b.y}, ${b.x} ${b.y}`;
-            return `<path class="${active}" data-bot-edge="${escapeAdminHtml(edge.id)}" d="${d}"></path>`;
+            return `<path class="${active}" data-bot-edge="${escapeAdminHtml(edge.id)}" d="${curve(a, b)}"></path>`;
           })
           .join("");
-        svg.innerHTML = parts;
+        let previewPath = "";
+        if (preview && wabaBotsUi.connectFrom) {
+          const a = pointOf(wabaBotsUi.connectFrom.nodeId, wabaBotsUi.connectFrom.handleId || "out", "source");
+          if (a) previewPath = `<path class="is-preview" d="${curve(a, preview)}"></path>`;
+        }
+        svg.innerHTML = parts + previewPath;
       }
 
       function wabaBotsRenderBuilder() {
@@ -45484,12 +45495,12 @@
             const ports = outputs
               .map(
                 (port) =>
-                  `<div class="waba-bots-port-row"><span>${escapeAdminHtml(port.label)}</span><button type="button" class="waba-bots-handle is-source" data-handle-type="source" data-handle-id="${escapeAdminHtml(port.id)}" aria-label="Saída ${escapeAdminHtml(port.label)}"></button></div>`,
+                  `<div class="waba-bots-port-row"><span>${escapeAdminHtml(port.label)}</span><span class="waba-bots-handle is-source" data-handle-type="source" data-handle-id="${escapeAdminHtml(port.id)}" aria-label="Saída ${escapeAdminHtml(port.label)}"></span></div>`,
               )
               .join("");
             return (
               `<article class="waba-bots-flow-node${active}" data-bot-node="${escapeAdminHtml(node.id)}" style="left:${x}px;top:${y}px;">` +
-              `<button type="button" class="waba-bots-handle is-target" data-handle-type="target" data-handle-id="in" aria-label="Entrada"></button>` +
+              `<span class="waba-bots-handle is-target" data-handle-type="target" data-handle-id="in" aria-label="Entrada"></span>` +
               `<strong>${escapeAdminHtml(node.data?.title || node.data?.kind)}</strong>` +
               `<small>${escapeAdminHtml((node.data?.category || "chatbot") + " · " + (node.data?.kind || ""))}</small>` +
               `<div class="waba-bots-ports">${ports}</div>` +
@@ -45664,6 +45675,8 @@
           if (event.key === "Escape") {
             if (wabaBotsUi.connectFrom) {
               wabaBotsUi.connectFrom = null;
+              flow?.classList.remove("is-connecting");
+              wabaBotsDrawEdges();
               return;
             }
             wabaBotsCloseBuilder();
@@ -45700,12 +45713,11 @@
             const type = handle.getAttribute("data-handle-type");
             const handleId = handle.getAttribute("data-handle-id") || "out";
             const nodeId = nodeEl?.getAttribute("data-bot-node") || "";
-            if (type === "source") {
+            if (type === "source" && nodeId) {
               wabaBotsUi.connectFrom = { nodeId, handleId };
+              flow.classList.add("is-connecting");
               event.preventDefault();
-            } else if (type === "target" && wabaBotsUi.connectFrom) {
-              wabaBotsConnectHandles(wabaBotsUi.connectFrom.nodeId, wabaBotsUi.connectFrom.handleId, nodeId);
-              event.preventDefault();
+              event.stopPropagation();
             }
             return;
           }
@@ -45733,6 +45745,10 @@
           panStart = { x: event.clientX, y: event.clientY, px: wabaBotsUi.pan.x, py: wabaBotsUi.pan.y };
         });
         window.addEventListener("mousemove", (event) => {
+          if (wabaBotsUi.connectFrom) {
+            wabaBotsDrawEdges(wabaBotsFlowPoint(event.clientX, event.clientY));
+            return;
+          }
           if (dragNode) {
             const world = document.getElementById("waba-bots-flow-world");
             const wr = world?.getBoundingClientRect();
@@ -45759,15 +45775,14 @@
         });
         window.addEventListener("mouseup", (event) => {
           if (wabaBotsUi.connectFrom) {
-            const handle = event.target.closest?.("[data-handle-type='target']");
-            const nodeEl = handle?.closest("[data-bot-node]");
-            if (nodeEl) {
-              wabaBotsConnectHandles(
-                wabaBotsUi.connectFrom.nodeId,
-                wabaBotsUi.connectFrom.handleId,
-                nodeEl.getAttribute("data-bot-node"),
-              );
+            const targetId = wabaBotsNodeFromPoint(event.clientX, event.clientY);
+            if (targetId && targetId !== wabaBotsUi.connectFrom.nodeId) {
+              wabaBotsConnectHandles(wabaBotsUi.connectFrom.nodeId, wabaBotsUi.connectFrom.handleId, targetId);
+            } else {
+              wabaBotsUi.connectFrom = null;
+              wabaBotsDrawEdges();
             }
+            flow?.classList.remove("is-connecting");
           }
           dragNode = null;
           panning = false;
@@ -45784,35 +45799,6 @@
         document.getElementById("waba-bots-palette")?.addEventListener("click", (event) => {
           const btn = event.target.closest("[data-bot-add-kind]");
           if (btn) wabaBotsAddBuilderNode(btn.getAttribute("data-bot-add-kind"));
-        });
-        document.getElementById("waba-bots-test-start")?.addEventListener("click", async () => {
-          if (!wabaBotsUi.draft) return;
-          wabaBotsApplyInspector();
-          try {
-            const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots/test-run", {
-              method: "POST",
-              body: JSON.stringify({ flow: wabaBotsUi.draft, testPhone: "00000000000" }),
-            });
-            wabaBotsUi.runId = payload.run?.id || "";
-            const log = document.getElementById("waba-bots-test-log");
-            if (log) log.textContent = (payload.outboundTexts || []).join("\n\n") || payload.run?.phase || "ok";
-          } catch (error) {
-            wabaBotsBanner(error && error.message ? error.message : "Falha no teste.", true);
-          }
-        });
-        document.getElementById("waba-bots-test-continue")?.addEventListener("click", async () => {
-          if (!wabaBotsUi.draft || !wabaBotsUi.runId) return;
-          const inbound = String(document.getElementById("waba-bots-test-reply")?.value || "").trim();
-          try {
-            const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots/test-continue", {
-              method: "POST",
-              body: JSON.stringify({ flow: wabaBotsUi.draft, runId: wabaBotsUi.runId, inboundText: inbound }),
-            });
-            const log = document.getElementById("waba-bots-test-log");
-            if (log) log.textContent = (payload.outboundTexts || []).join("\n\n") || payload.run?.phase || "ok";
-          } catch (error) {
-            wabaBotsBanner(error && error.message ? error.message : "Falha ao continuar o teste.", true);
-          }
         });
         async function wabaBotsLinkPhone(phoneNumberId, botId, message) {
           await wabaBotsJson("/integrations/meta/whatsapp/bots/phone-link", {
@@ -70781,7 +70767,6 @@
           <input id="waba-bots-name" type="text" class="form-control" placeholder="Nome do bot" maxlength="80" />
         </div>
         <p id="waba-bots-builder-counts" class="muted" style="margin:0;white-space:nowrap;"></p>
-        <button type="button" class="instance-action-btn btn-qrcode enabled" id="waba-bots-test-start">Execução de fluxo</button>
         <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-save">Salvar</button>
         <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-builder-close" aria-label="Fechar construtor">Fechar</button>
       </header>
@@ -70792,14 +70777,9 @@
             <svg id="waba-bots-edges" class="waba-bots-edges" aria-hidden="true"></svg>
             <div id="waba-bots-nodes"></div>
           </div>
-          <p class="waba-bots-builder-hint">Arraste o node · puxe o ponto roxo até o azul para ligar · Delete remove · Escape fecha</p>
+          <p class="waba-bots-builder-hint">Arraste o ponto verde até o outro card para ligar · Delete remove · Escape fecha</p>
         </div>
         <aside id="waba-bots-builder-inspector" class="waba-bots-builder-inspector" aria-label="Propriedades do node"></aside>
-      </div>
-      <div class="waba-bots-builder-test">
-        <input id="waba-bots-test-reply" type="text" class="form-control" placeholder="Resposta do contato" />
-        <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-test-continue">Responder</button>
-        <pre id="waba-bots-test-log" class="waba-bots-log"></pre>
       </div>
     </div>
   </body>
