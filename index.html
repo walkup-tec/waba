@@ -17518,6 +17518,40 @@
       .dis-campaign-wizard-submit-error[hidden] {
         display: none !important;
       }
+      .dis-campaign-edit-overlay.confirm-overlay {
+        z-index: 2300;
+        align-items: flex-start;
+      }
+      .dis-campaign-edit-modal {
+        width: min(96vw, 880px);
+        max-height: calc(100vh - 32px);
+        overflow: auto;
+        text-align: left;
+        padding: 16px 16px 18px;
+      }
+      .dis-campaign-edit-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .dis-campaign-edit-head h3 {
+        margin: 0;
+        font-size: 1rem;
+        color: #f8fafc;
+      }
+      .dis-campaign-wizard-home:empty {
+        min-height: 0;
+      }
+      .dis-campaign-file-current {
+        margin: 6px 0 0;
+        font-size: 0.75rem;
+        color: #94a3b8;
+      }
+      .dis-campaign-file-current[hidden] {
+        display: none !important;
+      }
       .dis-campaign-wizard-nav.is-invalid {
         animation: disWizardNavShake 0.42s ease;
       }
@@ -22229,6 +22263,7 @@
               </div>
               <div class="disparos-config-panel disparos-saas-only">
                 <div class="disparos-config-panel-title">Nova campanha</div>
+                <div id="dis-campaign-wizard-home" class="dis-campaign-wizard-home">
                 <div id="dis-campaign-wizard" class="dis-campaign-wizard">
                   <div class="dis-campaign-wizard-steps" id="dis-campaign-wizard-steps" aria-label="Etapas da campanha">
                     <div class="dis-campaign-wizard-step is-active" data-wizard-step-indicator="1">1. Nome</div>
@@ -22283,6 +22318,7 @@
                         required
                       />
                       <span class="aquecedor-hint">Informe a logo do seu negócio. A imagem precisa ter exatamente 500 px de largura e 500 px de altura (PNG ou JPG).</span>
+                      <p id="dis-wizard-whatsapp-logo-current" class="dis-campaign-file-current" hidden></p>
                       <span id="dis-wizard-whatsapp-logo-error" class="field-error hidden"></span>
                     </div>
                     <div id="dis-wizard-whatsapp-logo-preview" class="dis-campaign-wizard-image-preview" aria-hidden="true">
@@ -22325,6 +22361,7 @@
                         required
                       />
                       <span id="dis-wizard-image-error" class="field-error hidden"></span>
+                      <p id="dis-wizard-image-current" class="dis-campaign-file-current" hidden></p>
                     </div>
                     <div id="dis-wizard-image-preview" class="dis-campaign-wizard-image-preview" aria-hidden="true">
                       <img id="dis-wizard-image-preview-img" alt="Prévia da imagem da campanha" />
@@ -22392,6 +22429,7 @@
                               Formatos aceitos: Excel (.xlsx, .xls) ou TXT (.txt). Números repetidos (com ou sem o 9º dígito) entram uma só vez.
                             </span>
                             <div class="dis-campaign-file-meta" id="dis-wizard-leads-file-label">Nenhum arquivo carregado.</div>
+                            <p id="dis-wizard-leads-current" class="dis-campaign-file-current" hidden></p>
                           </div>
                         </div>
                       </div>
@@ -22449,6 +22487,7 @@
                     role="alert"
                     aria-live="assertive"
                   ></div>
+                </div>
                 </div>
 
                 <div id="dis-campaign-wizard-success" class="dis-campaign-wizard-success" hidden>
@@ -26016,6 +26055,15 @@
       </div>
     </div>
 
+    <div id="dis-campaign-edit-overlay" class="confirm-overlay dis-campaign-edit-overlay" aria-hidden="true">
+      <div class="confirm-modal dis-campaign-edit-modal" role="dialog" aria-modal="true" aria-labelledby="dis-campaign-edit-title">
+        <div class="dis-campaign-edit-head">
+          <h3 id="dis-campaign-edit-title">Editar campanha</h3>
+          <button id="dis-campaign-edit-close" class="instance-action-btn enabled" type="button">Fechar</button>
+        </div>
+        <div id="dis-campaign-edit-host"></div>
+      </div>
+    </div>
     <div id="confirm-delete-overlay" class="confirm-overlay" aria-hidden="true">
       <div class="confirm-modal" role="dialog" aria-modal="true">
         <div class="confirm-delete-form">
@@ -55371,6 +55419,12 @@
       let disCampaignWizardSubmitInFlight = false;
       let disCampaignWizardSubmitRequestId = "";
       let disCampaignWizardScheduledSendAt = "";
+      let disCampaignWizardEditId = "";
+      let disCampaignWizardEditReservedShipments = 0;
+      let disCampaignWizardKeepExistingLogo = false;
+      let disCampaignWizardKeepExistingMedia = false;
+      let disCampaignWizardKeepExistingLeads = false;
+      let disCampaignWizardScheduleTouched = false;
 
       function renderDisCampaignWizardStep() {
         const step = disCampaignWizardStep;
@@ -55390,7 +55444,12 @@
         const scheduleBtn = document.getElementById("dis-wizard-schedule-btn");
         if (prevBtn) prevBtn.hidden = step <= 1;
         if (nextBtn) nextBtn.hidden = step >= DIS_CAMPAIGN_WIZARD_TOTAL_STEPS;
-        if (generateBtn) generateBtn.hidden = step !== DIS_CAMPAIGN_WIZARD_TOTAL_STEPS;
+        if (generateBtn) {
+          generateBtn.hidden = step !== DIS_CAMPAIGN_WIZARD_TOTAL_STEPS;
+          if (!disCampaignWizardSubmitInFlight) {
+            generateBtn.textContent = disCampaignWizardEditId ? "Salvar campanha" : "Gerar Campanha";
+          }
+        }
         if (scheduleBtn) scheduleBtn.hidden = step !== DIS_CAMPAIGN_WIZARD_TOTAL_STEPS;
         if (step === DIS_CAMPAIGN_WIZARD_TOTAL_STEPS) {
           updateDisCampaignWizardLeadsCountUi();
@@ -55448,7 +55507,7 @@
           if (ddd.length !== 2 || Number(ddd) < 11 || Number(ddd) > 99) {
             return "Informe um DDD válido com 2 dígitos.";
           }
-          if (!disCampaignWizardWhatsappLogoFile) {
+          if (!disCampaignWizardWhatsappLogoFile && !disCampaignWizardKeepExistingLogo) {
             const logoFromInput = document.getElementById("dis-wizard-whatsapp-logo")?.files?.[0] || null;
             if (!logoFromInput) {
               return "Envie a logo do WhatsApp (500×500 px).";
@@ -55459,7 +55518,7 @@
         }
         if (step === 3) {
           const kind = getDisCampaignWizardMediaKind();
-          if (!disCampaignWizardImageFile) {
+          if (!disCampaignWizardImageFile && !disCampaignWizardKeepExistingMedia) {
             const imageFromInput = document.getElementById("dis-wizard-campaign-image")?.files?.[0] || null;
             if (!imageFromInput) {
               return kind === "video"
@@ -55494,7 +55553,7 @@
               return `É necessário ter no mínimo ${formatDisparosQty(minPlanned)} envios disponíveis para gerar a campanha.`;
             }
           }
-          if (!disCampaignWizardLeadsFile) {
+          if (!disCampaignWizardLeadsFile && !disCampaignWizardKeepExistingLeads) {
             return "Envie o arquivo de leads em Excel (.xlsx, .xls) ou TXT (.txt).";
           }
           const imported = Math.max(0, Math.floor(Number(disCampaignWizardImportedLineCount) || 0));
@@ -55540,7 +55599,7 @@
 
       async function validateDisCampaignWizardForSubmit() {
         await ensureDisCampaignWizardArtifacts();
-        if (!disCampaignWizardWhatsappLogoFile) {
+        if (!disCampaignWizardWhatsappLogoFile && !disCampaignWizardKeepExistingLogo) {
           const logoFromInput = document.getElementById("dis-wizard-whatsapp-logo")?.files?.[0] || null;
           const logoOk = logoFromInput
             ? await validateDisCampaignWizardWhatsappLogoFile(logoFromInput)
@@ -55553,7 +55612,7 @@
             return false;
           }
         }
-        if (!disCampaignWizardImageFile) {
+        if (!disCampaignWizardImageFile && !disCampaignWizardKeepExistingMedia) {
           const imageFromInput = document.getElementById("dis-wizard-campaign-image")?.files?.[0] || null;
           const imageOk = imageFromInput
             ? await validateDisCampaignWizardImageFile(imageFromInput)
@@ -55577,7 +55636,7 @@
         return true;
       }
 
-      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 7;
+      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 8;
       let wabaCampaignIntakeBackendCache = null;
 
       function isCampaignIntakeGatewayStatus(status) {
@@ -55737,11 +55796,11 @@
         formData.append("responseLink", responseLink);
         formData.append("apiKind", apiKind);
         formData.append("mediaKind", getDisCampaignWizardMediaKind());
-        formData.append("image", disCampaignWizardImageFile);
-        formData.append("whatsappLogo", disCampaignWizardWhatsappLogoFile);
-        formData.append("spreadsheet", disCampaignWizardLeadsFile);
+        if (disCampaignWizardImageFile) formData.append("image", disCampaignWizardImageFile);
+        if (disCampaignWizardWhatsappLogoFile) formData.append("whatsappLogo", disCampaignWizardWhatsappLogoFile);
+        if (disCampaignWizardLeadsFile) formData.append("spreadsheet", disCampaignWizardLeadsFile);
         formData.append("plannedSendCount", String(getDisCampaignWizardPlannedSendCountValue()));
-        if (disCampaignWizardScheduledSendAt) {
+        if (disCampaignWizardScheduledSendAt && (!disCampaignWizardEditId || disCampaignWizardScheduleTouched)) {
           formData.append("scheduledSendAt", disCampaignWizardScheduledSendAt);
         }
         if (disCampaignWizardSubmitRequestId) {
@@ -55755,6 +55814,21 @@
           return crypto.randomUUID();
         }
         return `camp-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+      }
+
+      async function fetchDisCampaignWizardIntakeUpdate(buildFormData, timeoutMs = 180000) {
+        const campaignId = String(disCampaignWizardEditId || "").trim();
+        if (!campaignId) throw new Error("Campanha para edição não encontrada.");
+        const url = resolveWabaPublicPath(`/disparos/campanhas/intake/${encodeURIComponent(campaignId)}`);
+        return fetchWithTimeout(
+          url,
+          {
+            method: "PUT",
+            body: buildFormData(),
+            credentials: "same-origin",
+          },
+          timeoutMs
+        );
       }
 
       function resolveDisCampaignWizardSubmitTimeoutMs() {
@@ -56076,7 +56150,9 @@
       function getDisCampaignWizardRemainingShipments() {
         if (hasMasterAccess()) return Number.MAX_SAFE_INTEGER;
         const bucket = resolveDisparosCreditsApiBucket("oficial");
-        return Math.max(0, Math.floor(Number(bucket.remainingShipments) || 0));
+        const remaining = Math.max(0, Math.floor(Number(bucket.remainingShipments) || 0));
+        if (!disCampaignWizardEditId) return remaining;
+        return remaining + Math.max(0, Math.floor(Number(disCampaignWizardEditReservedShipments) || 0));
       }
 
       async function ensureDisCampaignWizardArtifacts() {
@@ -56334,8 +56410,24 @@
         }
       }
 
+      function setDisCampaignWizardCurrentFileHint(elementId, fileName) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const name = String(fileName || "").trim();
+        el.textContent = name ? `Arquivo atual: ${name}. Envie outro só se quiser substituir.` : "";
+        el.hidden = !name;
+      }
+
       function resetDisCampaignWizard() {
         disCampaignWizardStep = 1;
+        disCampaignWizardEditId = "";
+        disCampaignWizardEditReservedShipments = 0;
+        disCampaignWizardKeepExistingLogo = false;
+        disCampaignWizardKeepExistingMedia = false;
+        disCampaignWizardKeepExistingLeads = false;
+        setDisCampaignWizardCurrentFileHint("dis-wizard-whatsapp-logo-current", "");
+        setDisCampaignWizardCurrentFileHint("dis-wizard-image-current", "");
+        setDisCampaignWizardCurrentFileHint("dis-wizard-leads-current", "");
         disCampaignWizardImageFile = null;
         disCampaignWizardMediaKind = "image";
         document.querySelectorAll('input[name="dis-wizard-media-kind"]').forEach((input) => {
@@ -56347,6 +56439,7 @@
         disCampaignWizardSubmitInFlight = false;
         disCampaignWizardSubmitRequestId = "";
         disCampaignWizardScheduledSendAt = "";
+        disCampaignWizardScheduleTouched = false;
         closeDisCampaignWizardScheduleOverlay();
         clearDisCampaignWizardSubmitError();
         const wizard = document.getElementById("dis-campaign-wizard");
@@ -56430,6 +56523,7 @@
           return;
         }
         disCampaignWizardScheduledSendAt = parsed.toISOString();
+        disCampaignWizardScheduleTouched = true;
         closeDisCampaignWizardScheduleOverlay();
         void submitDisCampaignWizard();
       }
@@ -56448,12 +56542,153 @@
         showToast("Campanha enviada com sucesso.", "success", 4200);
       }
 
+      function moveDisCampaignWizardTo(hostId) {
+        const wizard = document.getElementById("dis-campaign-wizard");
+        const host = document.getElementById(hostId);
+        if (!wizard || !host || wizard.parentElement === host) return;
+        host.appendChild(wizard);
+      }
+
+      function closeDisCampaignIntakeEditModal(options = {}) {
+        const overlay = document.getElementById("dis-campaign-edit-overlay");
+        if (overlay) {
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+        moveDisCampaignWizardTo("dis-campaign-wizard-home");
+        if (options.restoreHome !== false) {
+          resetDisCampaignWizard();
+        }
+      }
+
+      async function duplicateDisparosIntakeCampaign(campaignId, campaignName) {
+        const id = String(campaignId || "").trim();
+        if (!id) return;
+        try {
+          const response = await fetch(resolveWabaPublicPath(`/disparos/campanhas/intake/${encodeURIComponent(id)}/duplicar`), {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível duplicar a campanha.");
+          }
+          showToast(
+            `Campanha duplicada${payload.campaignName || payload.name ? `: ${payload.campaignName || payload.name}` : ""}.`,
+            "success",
+            4200
+          );
+          void refreshDisparosCampaignsAndResumo();
+        } catch (error) {
+          showToast(error?.message || "Não foi possível duplicar a campanha.", "error", 5200);
+        }
+      }
+
+      async function openDisCampaignIntakeEditModal(campaignId) {
+        const id = String(campaignId || "").trim();
+        if (!id) return;
+        try {
+          const response = await fetch(resolveWabaPublicPath(`/disparos/campanhas/intake/${encodeURIComponent(id)}`), {
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+          });
+          const detail = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(detail.error || "Não foi possível abrir a campanha.");
+          }
+          if (detail.canEdit === false) {
+            throw new Error("Só é possível editar campanhas com status Gerada.");
+          }
+          resetDisCampaignWizard();
+          disCampaignWizardEditId = id;
+          disCampaignWizardEditReservedShipments = Math.max(
+            0,
+            Math.floor(Number(detail.plannedSendCount || 0))
+          );
+          const nameInput = document.getElementById("dis-wizard-campaign-name");
+          const dddInput = document.getElementById("dis-wizard-region-ddd");
+          if (nameInput) nameInput.value = String(detail.campaignName || detail.name || "");
+          if (dddInput) dddInput.value = String(detail.regionDdd || "").replace(/\D/g, "").slice(0, 2);
+          const texts = Array.isArray(detail.textOptions) ? detail.textOptions : [];
+          [1, 2, 3].forEach((n) => {
+            const el = document.getElementById(`dis-wizard-text-${n}`);
+            if (el) el.value = String(texts[n - 1] || "");
+          });
+          const responseLinkInput = document.getElementById("dis-wizard-response-link");
+          if (responseLinkInput) responseLinkInput.value = String(detail.responseLink || "");
+          const mediaKind = String(detail.campaignMediaKind || "image") === "video" ? "video" : "image";
+          disCampaignWizardMediaKind = mediaKind;
+          document.querySelectorAll('input[name="dis-wizard-media-kind"]').forEach((input) => {
+            input.checked = input.value === mediaKind;
+          });
+          syncDisCampaignWizardMediaKindUi();
+          disCampaignWizardKeepExistingLogo = true;
+          disCampaignWizardKeepExistingMedia = true;
+          disCampaignWizardKeepExistingLeads = true;
+          setDisCampaignWizardCurrentFileHint("dis-wizard-whatsapp-logo-current", detail.whatsappLogoFileName);
+          setDisCampaignWizardCurrentFileHint("dis-wizard-image-current", detail.imageFileName);
+          setDisCampaignWizardCurrentFileHint("dis-wizard-leads-current", detail.spreadsheetFileName);
+          const logoPreview = document.getElementById("dis-wizard-whatsapp-logo-preview-img");
+          const logoWrap = document.getElementById("dis-wizard-whatsapp-logo-preview");
+          if (logoPreview && logoWrap) {
+            logoPreview.src = resolveWabaPublicPath(
+              `/disparos/campanhas/intake/${encodeURIComponent(id)}/arquivo/logo`
+            );
+            logoWrap.classList.add("is-visible", "is-image");
+            logoWrap.setAttribute("aria-hidden", "false");
+          }
+          const mediaPreview = document.getElementById("dis-wizard-image-preview");
+          const mediaImg = document.getElementById("dis-wizard-image-preview-img");
+          const mediaVideo = document.getElementById("dis-wizard-image-preview-video");
+          const mediaUrl = resolveWabaPublicPath(
+            `/disparos/campanhas/intake/${encodeURIComponent(id)}/arquivo/image`
+          );
+          if (mediaPreview) {
+            mediaPreview.classList.remove("is-image", "is-video");
+            if (mediaKind === "video" && mediaVideo) {
+              mediaVideo.src = mediaUrl;
+              mediaPreview.classList.add("is-visible", "is-video");
+            } else if (mediaImg) {
+              mediaImg.src = mediaUrl;
+              mediaPreview.classList.add("is-visible", "is-image");
+            }
+            mediaPreview.setAttribute("aria-hidden", "false");
+          }
+          disCampaignWizardImportedLineCount = Math.max(0, Math.floor(Number(detail.importedLineCount || 0)));
+          const leadsLabel = document.getElementById("dis-wizard-leads-file-label");
+          if (leadsLabel) {
+            leadsLabel.textContent = detail.spreadsheetFileName
+              ? String(detail.spreadsheetFileName)
+              : "Arquivo atual mantido.";
+          }
+          updateDisCampaignWizardLeadsCountUi();
+          const plannedInput = document.getElementById("dis-wizard-planned-send-count");
+          if (plannedInput && detail.plannedSendCount) {
+            plannedInput.value = String(Math.floor(Number(detail.plannedSendCount)));
+          }
+          disCampaignWizardScheduledSendAt = String(detail.scheduledSendAt || "");
+          updateDisCampaignWizardLeadsCountUi();
+          const overlay = document.getElementById("dis-campaign-edit-overlay");
+          moveDisCampaignWizardTo("dis-campaign-edit-host");
+          renderDisCampaignWizardStep();
+          if (overlay) {
+            overlay.classList.add("open");
+            overlay.setAttribute("aria-hidden", "false");
+          }
+        } catch (error) {
+          closeDisCampaignIntakeEditModal();
+          showToast(error?.message || "Não foi possível abrir a campanha para edição.", "error", 5200);
+        }
+      }
+
       async function submitDisCampaignWizard() {
         if (disCampaignWizardSubmitInFlight) {
           showToast("Aguarde, a campanha já está sendo enviada…", "warning", 3200);
           return;
         }
-        if (!canCreateDisparosCampaignWithCredits()) {
+        if (!disCampaignWizardEditId && !canCreateDisparosCampaignWithCredits()) {
           promptDisparosCreateRequiresCredits();
           return;
         }
@@ -56500,21 +56735,23 @@
           if (!apiKind) {
             throw new Error("Selecione o plano de envio (API Oficial ou API Alternativa).");
           }
-          if (!disCampaignWizardWhatsappLogoFile) {
+          if (!disCampaignWizardWhatsappLogoFile && !disCampaignWizardKeepExistingLogo) {
             throw new Error("Envie a logo do WhatsApp (500×500 px).");
           }
-          if (!disCampaignWizardImageFile) {
+          if (!disCampaignWizardImageFile && !disCampaignWizardKeepExistingMedia) {
             throw new Error(getDisCampaignWizardMediaMissingMessage());
           }
-          if (!disCampaignWizardLeadsFile) {
+          if (!disCampaignWizardLeadsFile && !disCampaignWizardKeepExistingLeads) {
             throw new Error("Envie o arquivo de leads em Excel (.xlsx, .xls) ou TXT (.txt).");
           }
 
           const timeoutMs = resolveDisCampaignWizardSubmitTimeoutMs();
-          submitResponse = await fetchDisCampaignWizardIntakeWithRetry(
-            buildDisCampaignWizardFormData,
-            timeoutMs
-          );
+          submitResponse = disCampaignWizardEditId
+            ? await fetchDisCampaignWizardIntakeUpdate(buildDisCampaignWizardFormData, timeoutMs)
+            : await fetchDisCampaignWizardIntakeWithRetry(
+                buildDisCampaignWizardFormData,
+                timeoutMs
+              );
           const payload = await submitResponse.json().catch(() => ({}));
           if (!submitResponse.ok) {
             if (submitResponse.status === 404) {
@@ -56538,7 +56775,12 @@
             showToast("Campanha já estava registrada (sem duplicata).", "info", 5200);
           }
           submitSucceeded = true;
-          showDisCampaignWizardSuccess(successMessage);
+          if (disCampaignWizardEditId) {
+            closeDisCampaignIntakeEditModal({ restoreHome: true });
+            showToast("Campanha salva com o status Gerada.", "success", 4200);
+          } else {
+            showDisCampaignWizardSuccess(successMessage);
+          }
           const notify = payload?.operacionalNotify;
           const notifySent = Array.isArray(notify?.recipients)
             ? notify.recipients.some((item) => item?.status === "sent")
@@ -56592,7 +56834,7 @@
           }
           if (generateBtn) {
             generateBtn.disabled = false;
-            generateBtn.textContent = "Gerar Campanha";
+            generateBtn.textContent = disCampaignWizardEditId ? "Salvar campanha" : "Gerar Campanha";
           }
           if (scheduleBtn) {
             scheduleBtn.disabled = false;
@@ -56624,8 +56866,19 @@
         });
 
         document.getElementById("dis-wizard-generate-btn")?.addEventListener("click", () => {
-          disCampaignWizardScheduledSendAt = "";
+          if (!disCampaignWizardEditId) {
+            disCampaignWizardScheduledSendAt = "";
+            disCampaignWizardScheduleTouched = false;
+          }
           void submitDisCampaignWizard();
+        });
+        document.getElementById("dis-campaign-edit-close")?.addEventListener("click", () => {
+          closeDisCampaignIntakeEditModal();
+        });
+        document.getElementById("dis-campaign-edit-overlay")?.addEventListener("click", (event) => {
+          if (event.target && event.target.id === "dis-campaign-edit-overlay") {
+            closeDisCampaignIntakeEditModal();
+          }
         });
         document.getElementById("dis-wizard-schedule-btn")?.addEventListener("click", () => {
           openDisCampaignWizardScheduleOverlay();
@@ -56654,17 +56907,20 @@
 
         document.getElementById("dis-wizard-whatsapp-logo")?.addEventListener("change", async (event) => {
           const file = event.target?.files?.[0] || null;
+          if (file) disCampaignWizardKeepExistingLogo = false;
           await validateDisCampaignWizardWhatsappLogoFile(file);
         });
 
         document.getElementById("dis-wizard-campaign-image")?.addEventListener("change", async (event) => {
           const file = event.target?.files?.[0] || null;
+          if (file) disCampaignWizardKeepExistingMedia = false;
           await validateDisCampaignWizardImageFile(file);
         });
         document.querySelectorAll('input[name="dis-wizard-media-kind"]').forEach((input) => {
           input.addEventListener("change", () => {
             const fileInput = document.getElementById("dis-wizard-campaign-image");
             if (fileInput) fileInput.value = "";
+            disCampaignWizardKeepExistingMedia = false;
             syncDisCampaignWizardMediaKindUi();
             void validateDisCampaignWizardImageFile(null);
           });
@@ -56675,6 +56931,7 @@
         const leadsDropzone = document.getElementById("dis-wizard-leads-dropzone");
         if (leadsInput) {
           leadsInput.addEventListener("change", () => {
+            if (leadsInput.files?.[0]) disCampaignWizardKeepExistingLeads = false;
             void setDisCampaignWizardLeadsFile(leadsInput.files?.[0] || null);
           });
         }
@@ -60442,6 +60699,11 @@
           actions.classList.add("dis-campaign-intake-actions--finalized");
         }
 
+        const canDuplicate =
+          item?.canDuplicate === true ||
+          (planTag.apiKind === "oficial" && (status === "generated" || isErrorReported));
+        const canEdit = item?.canEdit === true || (planTag.apiKind === "oficial" && status === "generated");
+
         if (isErrorReported) {
           const errorBtn = document.createElement("button");
           errorBtn.type = "button";
@@ -60466,6 +60728,30 @@
             reportBtn.title = "Disponível quando a campanha estiver Finalizada.";
           }
           actions.appendChild(reportBtn);
+        }
+        if (canEdit) {
+          const editBtn = document.createElement("button");
+          editBtn.type = "button";
+          editBtn.className = "instance-action-btn enabled btn-campaign-secondary btn-campaign-intake-edit";
+          editBtn.dataset.campaignId = campaignId;
+          editBtn.dataset.campaignName = campaignName;
+          editBtn.textContent = "Editar";
+          actions.appendChild(editBtn);
+        }
+        if (canDuplicate) {
+          const iconActions = document.createElement("div");
+          iconActions.className = "disparos-campaign-icon-actions";
+          const duplicateBtn = document.createElement("button");
+          duplicateBtn.type = "button";
+          duplicateBtn.className = "instance-action-btn disparos-campaign-icon-btn btn-campaign-intake-duplicate";
+          duplicateBtn.dataset.campaignId = campaignId;
+          duplicateBtn.dataset.campaignName = campaignName;
+          duplicateBtn.title = "Duplicar campanha";
+          duplicateBtn.setAttribute("aria-label", "Duplicar campanha");
+          duplicateBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+          iconActions.appendChild(duplicateBtn);
+          actions.appendChild(iconActions);
         }
         row.appendChild(actions);
         return row;
@@ -69509,6 +69795,31 @@
               reportBtn.dataset.campaignName ?? reportBtn.getAttribute("data-campaign-name") ?? "";
             const source = reportBtn.dataset.campaignSource || "disparos";
             if (id) void openDisCampaignReportModal(id, nm, source);
+            return;
+          }
+          const intakeDuplicateBtn =
+            e.target && e.target.closest ? e.target.closest(".btn-campaign-intake-duplicate") : null;
+          if (intakeDuplicateBtn && disparosListEl.contains(intakeDuplicateBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id =
+              intakeDuplicateBtn.dataset.campaignId ||
+              intakeDuplicateBtn.getAttribute("data-campaign-id");
+            const nm =
+              intakeDuplicateBtn.dataset.campaignName ??
+              intakeDuplicateBtn.getAttribute("data-campaign-name") ??
+              "";
+            if (id) void duplicateDisparosIntakeCampaign(id, nm);
+            return;
+          }
+          const intakeEditBtn =
+            e.target && e.target.closest ? e.target.closest(".btn-campaign-intake-edit") : null;
+          if (intakeEditBtn && disparosListEl.contains(intakeEditBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id =
+              intakeEditBtn.dataset.campaignId || intakeEditBtn.getAttribute("data-campaign-id");
+            if (id) void openDisCampaignIntakeEditModal(id);
             return;
           }
           const errorBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-error") : null;

@@ -4,7 +4,7 @@ exports.WABA_MOZART_FORCED_OPERACIONAL_EMAIL = exports.WABA_CAMPAIGN_NO_MIN_SEND
 exports.campaignMinPlannedSendCountForEmail = campaignMinPlannedSendCountForEmail;
 exports.forcedOperacionalEmailForCampaignOwner = forcedOperacionalEmailForCampaignOwner;
 /** Versão exposta em GET /health — o frontend valida antes do POST intake. */
-exports.WABA_CAMPAIGN_INTAKE_API_VERSION = 7;
+exports.WABA_CAMPAIGN_INTAKE_API_VERSION = 8;
 /** Indica que json/urlencoded não consomem o body do POST /disparos/campanhas/intake. */
 exports.WABA_CAMPAIGN_INTAKE_SAFE_PARSER = true;
 /** Mínimo de envios por campanha (wizard API Oficial). */

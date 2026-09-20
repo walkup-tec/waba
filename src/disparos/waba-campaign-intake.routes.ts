@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Express, NextFunction, Request, Response } from "express";
 import multer from "multer";
@@ -76,6 +76,15 @@ import {
   createCampaignIntakeTrackedShortUrl,
   shouldCreateIntakeTrackedShortUrl,
 } from "./waba-campaign-intake-short-url";
+import {
+  OfficialCampaignCopyError,
+  assertCanDuplicateOfficialCampaign,
+  assertCanEditOfficialCampaign,
+  buildOfficialCampaignDuplicate,
+  canDuplicateOfficialCampaign,
+  canEditOfficialCampaign,
+  toOfficialCampaignEditDetail,
+} from "./waba-campaign-intake-oficial-copy";
 
 const intakeRepository = new WabaCampaignIntakeRepository();
 const disparosCreditsService = new WabaDisparosCreditsService();
@@ -245,6 +254,8 @@ const toPublicIntake = (
     laboratorioAttended,
     reportSource: holdInProgress ? null : intake.performanceReport?.source || null,
     source: "intake" as const,
+    canDuplicate: canDuplicateOfficialCampaign({ ...intake, status }, intake.ownerEmail),
+    canEdit: canEditOfficialCampaign({ ...intake, status }, intake.ownerEmail),
   };
 };
 
@@ -835,6 +846,349 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       justification: intake.errorReport.justification,
       reportedAt: intake.errorReport.reportedAt,
     });
+  });
+
+  app.post("/disparos/campanhas/intake/:id/duplicar", async (req, res) => {
+    try {
+      const auth = resolveRequestAuth(req);
+      if (!auth.email) {
+        return res.status(401).json({ error: "Faça login para duplicar a campanha." });
+      }
+      const source = assertCanDuplicateOfficialCampaign(
+        intakeRepository.getById(req.params.id),
+        auth.email,
+      );
+      const { plannedSendCount, isMaster, error: plannedSendError } = resolvePlannedSendCount(
+        auth.email,
+        Math.max(0, Math.round(Number(source.importedLineCount || 0))),
+        Math.max(0, Math.round(Number(source.plannedSendCount || 0))),
+        "oficial",
+      );
+      if (plannedSendError) {
+        return res.status(400).json({ error: plannedSendError });
+      }
+
+      const clone = buildOfficialCampaignDuplicate(source);
+      clone.plannedSendCount = plannedSendCount;
+      if (source.responseLink && shouldCreateIntakeTrackedShortUrl("oficial")) {
+        try {
+          const tracked = await createCampaignIntakeTrackedShortUrl({
+            destinationUrl: source.responseLink,
+            campaignId: clone.id,
+            ownerEmail: auth.email,
+            publicBaseHints: publicBaseHintsFromExpressRequest(req),
+          });
+          clone.responseShortUrl = tracked.shortUrl;
+          clone.responseShortSlug = tracked.shortSlug;
+        } catch (error) {
+          console.warn("[disparos/campanhas/intake] short url na cópia:", error);
+        }
+      }
+
+      const created = intakeRepository.create(clone);
+      let persisted = created;
+      if (!isMaster && plannedSendCount > 0) {
+        const creditFunding = disparosCreditsService.consumeShipments(
+          auth.email,
+          plannedSendCount,
+          "oficial",
+        );
+        persisted =
+          intakeRepository.updateById(created.id, {
+            creditFunding,
+            updatedAt: new Date().toISOString(),
+          }) ?? created;
+      }
+      const finalized = finalizeIntakeAfterCreate(persisted);
+      return res.status(201).json(buildIntakeSuccessPayload(finalized));
+    } catch (error) {
+      if (error instanceof OfficialCampaignCopyError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
+      console.error("[disparos/campanhas/intake] duplicar erro:", error);
+      return res.status(500).json({ error: "Não foi possível duplicar a campanha. Tente novamente." });
+    }
+  });
+
+  app.get("/disparos/campanhas/intake/:id/arquivo/:kind", (req, res) => {
+    const auth = resolveRequestAuth(req);
+    if (!auth.email) {
+      return res.status(401).json({ error: "Faça login para ver o arquivo." });
+    }
+    const intake = intakeRepository.getById(req.params.id);
+    if (!intake || intake.ownerEmail !== auth.email) {
+      return res.status(404).json({ error: "Arquivo não encontrado." });
+    }
+    const kind = String(req.params.kind || "").trim().toLowerCase();
+    const filePath =
+      kind === "logo"
+        ? String(intake.whatsappLogoStoredPath || "").trim()
+        : kind === "spreadsheet"
+          ? String(intake.spreadsheetStoredPath || intake.spreadsheetTrimmedPath || "").trim()
+          : String(intake.imageStoredPath || "").trim();
+    if (!filePath || !existsSync(filePath)) {
+      return res.status(404).json({ error: "Arquivo não encontrado." });
+    }
+    return res.sendFile(path.resolve(filePath));
+  });
+
+  app.get("/disparos/campanhas/intake/:id", (req, res) => {
+    const auth = resolveRequestAuth(req);
+    if (!auth.email) {
+      return res.status(401).json({ error: "Faça login para ver a campanha." });
+    }
+    const intake = intakeRepository.getById(req.params.id);
+    if (!intake || intake.ownerEmail !== auth.email) {
+      return res.status(404).json({ error: "Campanha não encontrada." });
+    }
+    return res.status(200).json(toOfficialCampaignEditDetail(intake));
+  });
+
+  app.put("/disparos/campanhas/intake/:id", handleCampaignIntakeUpload, async (req, res) => {
+    try {
+      const auth = resolveRequestAuth(req);
+      if (!auth.email) {
+        return res.status(401).json({ error: "Faça login para editar a campanha." });
+      }
+      const current = assertCanEditOfficialCampaign(
+        intakeRepository.getById(req.params.id),
+        auth.email,
+      );
+
+      const body = req.body as Record<string, unknown>;
+      const campaignName = String(body.campaignName ?? current.campaignName).trim();
+      const regionDdd = normalizeDdd(String(body.regionDdd ?? current.regionDdd));
+      const whatsappName = parseWhatsappName(body);
+      const hasTextBody = [1, 2, 3].some((n) => String(body[`textOption${n}`] ?? "").trim());
+      const textOptions = hasTextBody ? parseTextOptions(body) : current.textOptions;
+      const responseLink = parseResponseLink(body) || current.responseLink || "";
+
+      if (campaignName.length < 2) {
+        return res.status(400).json({ error: "Informe o nome da campanha." });
+      }
+      if (!regionDdd) {
+        return res.status(400).json({ error: "Informe um DDD válido (2 dígitos)." });
+      }
+      if (!textOptions || textOptions.some((text) => text.length < 8)) {
+        return res.status(400).json({ error: "Preencha as 3 opções de texto (mínimo 8 caracteres cada)." });
+      }
+      if (!responseLink) {
+        return res.status(400).json({ error: "Informe um link de resposta válido (http ou https)." });
+      }
+
+      const files = req.files as {
+        image?: Express.Multer.File[];
+        whatsappLogo?: Express.Multer.File[];
+        spreadsheet?: Express.Multer.File[];
+      };
+      const imageFile = files?.image?.[0];
+      const whatsappLogoFile = files?.whatsappLogo?.[0];
+      const spreadsheetFile = files?.spreadsheet?.[0];
+      const storageDir = resolveCampaignIntakeStorageDir(current.id);
+
+      const mediaKind = Object.prototype.hasOwnProperty.call(body, "mediaKind")
+        ? parseCampaignMediaKind(body.mediaKind)
+        : current.campaignMediaKind === "video"
+          ? "video"
+          : "image";
+      let imageStoredPath = current.imageStoredPath;
+      let imageFileName = current.imageFileName;
+      if (imageFile) {
+        const mediaCheck = validateCampaignIntakeMedia({
+          kind: mediaKind,
+          buffer: imageFile.buffer,
+          mime: imageFile.mimetype,
+          fileName: imageFile.originalname,
+        });
+        if (!mediaCheck.ok) {
+          return res.status(400).json({ error: mediaCheck.error });
+        }
+        imageStoredPath = path.join(
+          storageDir,
+          mediaKind === "video" ? `campaign-media${mediaCheck.extension}` : `campaign-image${mediaCheck.extension}`,
+        );
+        imageFileName = imageFile.originalname || path.basename(imageStoredPath);
+        writeFileSync(imageStoredPath, imageFile.buffer);
+      } else if (!imageStoredPath || !existsSync(imageStoredPath)) {
+        return res.status(400).json({
+          error: "Envie a imagem (PNG ou JPG, 1200×628) ou o vídeo MP4 da campanha.",
+        });
+      }
+
+      let whatsappLogoStoredPath = current.whatsappLogoStoredPath;
+      let whatsappLogoFileName = current.whatsappLogoFileName;
+      if (whatsappLogoFile) {
+        const logoMime = String(whatsappLogoFile.mimetype || "").toLowerCase();
+        if (!logoMime.startsWith("image/")) {
+          return res.status(400).json({ error: "A logo do WhatsApp deve ser PNG ou JPG." });
+        }
+        const logoExt = logoMime.includes("png") ? ".png" : ".jpg";
+        whatsappLogoStoredPath = path.join(storageDir, `whatsapp-logo${logoExt}`);
+        whatsappLogoFileName = whatsappLogoFile.originalname || `whatsapp-logo${logoExt}`;
+        writeFileSync(whatsappLogoStoredPath, whatsappLogoFile.buffer);
+      } else if (!whatsappLogoStoredPath || !existsSync(whatsappLogoStoredPath)) {
+        return res.status(400).json({ error: "Envie a logo do WhatsApp (500×500 px)." });
+      }
+
+      let importedLineCount = Math.max(0, Math.round(Number(current.importedLineCount || 0)));
+      let spreadsheetStoredPath = current.spreadsheetStoredPath;
+      let spreadsheetFileName = current.spreadsheetFileName;
+      let spreadsheetBuffer: Buffer | null = null;
+      let sheetName = String(spreadsheetFileName || "").toLowerCase();
+      let officialUniqueSheet: ReturnType<typeof parseOfficialCampaignLeadsUnique>["sheet"] | null =
+        null;
+      let phoneDuplicatesRemoved = 0;
+
+      if (spreadsheetFile) {
+        sheetName = String(spreadsheetFile.originalname || "").toLowerCase();
+        if (!isCampaignLeadsFileName(sheetName)) {
+          return res.status(400).json({
+            error: "A lista de clientes deve ser Excel (.xlsx ou .xls) ou TXT (.txt).",
+          });
+        }
+        try {
+          const deduped = parseOfficialCampaignLeadsUnique(spreadsheetFile.buffer, sheetName);
+          importedLineCount = deduped.uniqueCount;
+          officialUniqueSheet = deduped.sheet;
+          phoneDuplicatesRemoved = deduped.duplicatesRemoved;
+          spreadsheetBuffer = spreadsheetFile.buffer;
+          spreadsheetFileName = spreadsheetFile.originalname || spreadsheetFileName;
+        } catch {
+          return res.status(400).json({ error: "Não foi possível ler o arquivo de leads." });
+        }
+      } else if (spreadsheetStoredPath && existsSync(spreadsheetStoredPath)) {
+        spreadsheetBuffer = readFileSync(spreadsheetStoredPath);
+      }
+
+      if (importedLineCount < 1) {
+        return res.status(400).json({ error: "O arquivo não contém linhas de leads." });
+      }
+
+      const currentPlanned = Math.max(0, Math.round(Number(current.plannedSendCount || 0)));
+      const remaining = disparosCreditsService.getRemainingShipmentsForApi(auth.email, "oficial");
+      const unlimitedCredits = masterPolicyService.hasUnlimitedCredits(auth.email);
+      const requestedSendCount = parseRequestedPlannedSendCount(body);
+      const availableForEdit = unlimitedCredits
+        ? Number.MAX_SAFE_INTEGER
+        : remaining + currentPlanned;
+      const { isMaster, error: plannedSendError } = resolvePlannedSendCount(
+        auth.email,
+        importedLineCount,
+        requestedSendCount,
+        "oficial",
+      );
+      if (plannedSendError && requestedSendCount != null && requestedSendCount > importedLineCount) {
+        return res.status(400).json({ error: plannedSendError });
+      }
+      if (requestedSendCount == null) {
+        return res.status(400).json({ error: "Informe a quantidade de envios desejada." });
+      }
+      const minPlanned = campaignMinPlannedSendCountForEmail(auth.email, "oficial");
+      if (requestedSendCount < minPlanned) {
+        return res.status(400).json({ error: `A campanha deve ter no mínimo ${minPlanned} envios.` });
+      }
+      if (!unlimitedCredits && requestedSendCount > availableForEdit) {
+        return res.status(400).json({
+          error: `No plano API Oficial, você possui apenas ${availableForEdit} envio(s) disponível(is).`,
+        });
+      }
+      const nextPlanned = unlimitedCredits || isMaster ? requestedSendCount : requestedSendCount;
+
+      let spreadsheetTrimmedPath = current.spreadsheetTrimmedPath;
+      let spreadsheetTrimmedFileName = current.spreadsheetTrimmedFileName;
+      if (spreadsheetBuffer) {
+        const originalLeadsName =
+          spreadsheetFileName ||
+          (isCampaignLeadsTxtFileName(sheetName) ? "leads.txt" : "leads.xlsx");
+        spreadsheetStoredPath = path.join(storageDir, path.basename(originalLeadsName));
+        const trimmedExt = isCampaignLeadsTxtFileName(sheetName) ? "txt" : "xlsx";
+        spreadsheetTrimmedFileName = `leads-${nextPlanned}-envios.${trimmedExt}`;
+        spreadsheetTrimmedPath = path.join(storageDir, spreadsheetTrimmedFileName);
+        try {
+          const trimmedSpreadsheetBuffer = officialUniqueSheet
+            ? writeOfficialCampaignLeadsFile(officialUniqueSheet, sheetName, nextPlanned)
+            : trimLeadsBufferToRowCount(spreadsheetBuffer, nextPlanned, sheetName);
+          writeFileSync(spreadsheetStoredPath, spreadsheetBuffer);
+          writeFileSync(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
+        } catch {
+          return res.status(400).json({ error: "Não foi possível preparar o arquivo de leads para envio." });
+        }
+      }
+
+      let scheduledSendAt = current.scheduledSendAt || "";
+      if (Object.prototype.hasOwnProperty.call(body, "scheduledSendAt")) {
+        try {
+          scheduledSendAt = parseScheduledSendAt(body.scheduledSendAt, { requireFuture: true });
+        } catch (error) {
+          return res.status(400).json({
+            error: error instanceof Error ? error.message : "Data de agendamento inválida.",
+          });
+        }
+      }
+
+      let responseShortUrl = current.responseShortUrl || "";
+      let responseShortSlug = current.responseShortSlug || "";
+      if (responseLink !== (current.responseLink || "") || !responseShortUrl) {
+        try {
+          const tracked = await createCampaignIntakeTrackedShortUrl({
+            destinationUrl: responseLink,
+            campaignId: current.id,
+            ownerEmail: auth.email,
+            publicBaseHints: publicBaseHintsFromExpressRequest(req),
+          });
+          responseShortUrl = tracked.shortUrl;
+          responseShortSlug = tracked.shortSlug;
+        } catch (error) {
+          console.warn("[disparos/campanhas/intake] short url na edição:", error);
+        }
+      }
+
+      const now = new Date().toISOString();
+      const patch: Partial<WabaCampaignIntake> = {
+        campaignName,
+        regionDdd,
+        whatsappName,
+        textOptions,
+        responseLink,
+        campaignMediaKind: mediaKind,
+        imageFileName,
+        imageStoredPath,
+        whatsappLogoFileName,
+        whatsappLogoStoredPath,
+        spreadsheetFileName,
+        spreadsheetStoredPath,
+        spreadsheetTrimmedPath,
+        spreadsheetTrimmedFileName,
+        importedLineCount,
+        plannedSendCount: nextPlanned,
+        status: "generated",
+        updatedAt: now,
+      };
+      if (responseShortUrl) patch.responseShortUrl = responseShortUrl;
+      if (responseShortSlug) patch.responseShortSlug = responseShortSlug;
+      if (scheduledSendAt) patch.scheduledSendAt = scheduledSendAt;
+      else if (Object.prototype.hasOwnProperty.call(body, "scheduledSendAt")) {
+        delete current.scheduledSendAt;
+        patch.scheduledSendAt = "";
+      }
+
+      const updated = intakeRepository.updateById(current.id, patch);
+      if (!updated) {
+        return res.status(404).json({ error: "Campanha não encontrada." });
+      }
+      if (!unlimitedCredits) {
+        disparosCreditsService.refreshConsumedFromIntakes(auth.email);
+      }
+      return res.status(200).json(
+        buildIntakeSuccessPayload(updated, { duplicatesRemoved: phoneDuplicatesRemoved }),
+      );
+    } catch (error) {
+      if (error instanceof OfficialCampaignCopyError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
+      console.error("[disparos/campanhas/intake] editar erro:", error);
+      return res.status(500).json({ error: "Não foi possível salvar a campanha. Tente novamente." });
+    }
   });
 
   app.get("/disparos/dashboard/overview", (req, res) => {

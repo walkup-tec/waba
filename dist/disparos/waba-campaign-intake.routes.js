@@ -33,6 +33,7 @@ const waba_campaign_intake_media_1 = require("./waba-campaign-intake-media");
 const waba_campaign_schedule_1 = require("./waba-campaign-schedule");
 const waba_public_base_url_1 = require("../lib/waba-public-base-url");
 const waba_campaign_intake_short_url_1 = require("./waba-campaign-intake-short-url");
+const waba_campaign_intake_oficial_copy_1 = require("./waba-campaign-intake-oficial-copy");
 const intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
 const masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService();
@@ -161,6 +162,8 @@ const toPublicIntake = (intake, broadcastProgress) => {
         laboratorioAttended,
         reportSource: holdInProgress ? null : intake.performanceReport?.source || null,
         source: "intake",
+        canDuplicate: (0, waba_campaign_intake_oficial_copy_1.canDuplicateOfficialCampaign)({ ...intake, status }, intake.ownerEmail),
+        canEdit: (0, waba_campaign_intake_oficial_copy_1.canEditOfficialCampaign)({ ...intake, status }, intake.ownerEmail),
     };
 };
 const parseClientRequestId = (body) => {
@@ -660,6 +663,310 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             justification: intake.errorReport.justification,
             reportedAt: intake.errorReport.reportedAt,
         });
+    });
+    app.post("/disparos/campanhas/intake/:id/duplicar", async (req, res) => {
+        try {
+            const auth = resolveRequestAuth(req);
+            if (!auth.email) {
+                return res.status(401).json({ error: "Faça login para duplicar a campanha." });
+            }
+            const source = (0, waba_campaign_intake_oficial_copy_1.assertCanDuplicateOfficialCampaign)(intakeRepository.getById(req.params.id), auth.email);
+            const { plannedSendCount, isMaster, error: plannedSendError } = resolvePlannedSendCount(auth.email, Math.max(0, Math.round(Number(source.importedLineCount || 0))), Math.max(0, Math.round(Number(source.plannedSendCount || 0))), "oficial");
+            if (plannedSendError) {
+                return res.status(400).json({ error: plannedSendError });
+            }
+            const clone = (0, waba_campaign_intake_oficial_copy_1.buildOfficialCampaignDuplicate)(source);
+            clone.plannedSendCount = plannedSendCount;
+            if (source.responseLink && (0, waba_campaign_intake_short_url_1.shouldCreateIntakeTrackedShortUrl)("oficial")) {
+                try {
+                    const tracked = await (0, waba_campaign_intake_short_url_1.createCampaignIntakeTrackedShortUrl)({
+                        destinationUrl: source.responseLink,
+                        campaignId: clone.id,
+                        ownerEmail: auth.email,
+                        publicBaseHints: (0, waba_public_base_url_1.publicBaseHintsFromExpressRequest)(req),
+                    });
+                    clone.responseShortUrl = tracked.shortUrl;
+                    clone.responseShortSlug = tracked.shortSlug;
+                }
+                catch (error) {
+                    console.warn("[disparos/campanhas/intake] short url na cópia:", error);
+                }
+            }
+            const created = intakeRepository.create(clone);
+            let persisted = created;
+            if (!isMaster && plannedSendCount > 0) {
+                const creditFunding = disparosCreditsService.consumeShipments(auth.email, plannedSendCount, "oficial");
+                persisted =
+                    intakeRepository.updateById(created.id, {
+                        creditFunding,
+                        updatedAt: new Date().toISOString(),
+                    }) ?? created;
+            }
+            const finalized = finalizeIntakeAfterCreate(persisted);
+            return res.status(201).json(buildIntakeSuccessPayload(finalized));
+        }
+        catch (error) {
+            if (error instanceof waba_campaign_intake_oficial_copy_1.OfficialCampaignCopyError) {
+                return res.status(error.statusCode).json({ error: error.message });
+            }
+            console.error("[disparos/campanhas/intake] duplicar erro:", error);
+            return res.status(500).json({ error: "Não foi possível duplicar a campanha. Tente novamente." });
+        }
+    });
+    app.get("/disparos/campanhas/intake/:id/arquivo/:kind", (req, res) => {
+        const auth = resolveRequestAuth(req);
+        if (!auth.email) {
+            return res.status(401).json({ error: "Faça login para ver o arquivo." });
+        }
+        const intake = intakeRepository.getById(req.params.id);
+        if (!intake || intake.ownerEmail !== auth.email) {
+            return res.status(404).json({ error: "Arquivo não encontrado." });
+        }
+        const kind = String(req.params.kind || "").trim().toLowerCase();
+        const filePath = kind === "logo"
+            ? String(intake.whatsappLogoStoredPath || "").trim()
+            : kind === "spreadsheet"
+                ? String(intake.spreadsheetStoredPath || intake.spreadsheetTrimmedPath || "").trim()
+                : String(intake.imageStoredPath || "").trim();
+        if (!filePath || !(0, node_fs_1.existsSync)(filePath)) {
+            return res.status(404).json({ error: "Arquivo não encontrado." });
+        }
+        return res.sendFile(node_path_1.default.resolve(filePath));
+    });
+    app.get("/disparos/campanhas/intake/:id", (req, res) => {
+        const auth = resolveRequestAuth(req);
+        if (!auth.email) {
+            return res.status(401).json({ error: "Faça login para ver a campanha." });
+        }
+        const intake = intakeRepository.getById(req.params.id);
+        if (!intake || intake.ownerEmail !== auth.email) {
+            return res.status(404).json({ error: "Campanha não encontrada." });
+        }
+        return res.status(200).json((0, waba_campaign_intake_oficial_copy_1.toOfficialCampaignEditDetail)(intake));
+    });
+    app.put("/disparos/campanhas/intake/:id", handleCampaignIntakeUpload, async (req, res) => {
+        try {
+            const auth = resolveRequestAuth(req);
+            if (!auth.email) {
+                return res.status(401).json({ error: "Faça login para editar a campanha." });
+            }
+            const current = (0, waba_campaign_intake_oficial_copy_1.assertCanEditOfficialCampaign)(intakeRepository.getById(req.params.id), auth.email);
+            const body = req.body;
+            const campaignName = String(body.campaignName ?? current.campaignName).trim();
+            const regionDdd = normalizeDdd(String(body.regionDdd ?? current.regionDdd));
+            const whatsappName = parseWhatsappName(body);
+            const hasTextBody = [1, 2, 3].some((n) => String(body[`textOption${n}`] ?? "").trim());
+            const textOptions = hasTextBody ? parseTextOptions(body) : current.textOptions;
+            const responseLink = parseResponseLink(body) || current.responseLink || "";
+            if (campaignName.length < 2) {
+                return res.status(400).json({ error: "Informe o nome da campanha." });
+            }
+            if (!regionDdd) {
+                return res.status(400).json({ error: "Informe um DDD válido (2 dígitos)." });
+            }
+            if (!textOptions || textOptions.some((text) => text.length < 8)) {
+                return res.status(400).json({ error: "Preencha as 3 opções de texto (mínimo 8 caracteres cada)." });
+            }
+            if (!responseLink) {
+                return res.status(400).json({ error: "Informe um link de resposta válido (http ou https)." });
+            }
+            const files = req.files;
+            const imageFile = files?.image?.[0];
+            const whatsappLogoFile = files?.whatsappLogo?.[0];
+            const spreadsheetFile = files?.spreadsheet?.[0];
+            const storageDir = (0, waba_campaign_intake_repository_1.resolveCampaignIntakeStorageDir)(current.id);
+            const mediaKind = Object.prototype.hasOwnProperty.call(body, "mediaKind")
+                ? (0, waba_campaign_intake_media_1.parseCampaignMediaKind)(body.mediaKind)
+                : current.campaignMediaKind === "video"
+                    ? "video"
+                    : "image";
+            let imageStoredPath = current.imageStoredPath;
+            let imageFileName = current.imageFileName;
+            if (imageFile) {
+                const mediaCheck = (0, waba_campaign_intake_media_1.validateCampaignIntakeMedia)({
+                    kind: mediaKind,
+                    buffer: imageFile.buffer,
+                    mime: imageFile.mimetype,
+                    fileName: imageFile.originalname,
+                });
+                if (!mediaCheck.ok) {
+                    return res.status(400).json({ error: mediaCheck.error });
+                }
+                imageStoredPath = node_path_1.default.join(storageDir, mediaKind === "video" ? `campaign-media${mediaCheck.extension}` : `campaign-image${mediaCheck.extension}`);
+                imageFileName = imageFile.originalname || node_path_1.default.basename(imageStoredPath);
+                (0, node_fs_1.writeFileSync)(imageStoredPath, imageFile.buffer);
+            }
+            else if (!imageStoredPath || !(0, node_fs_1.existsSync)(imageStoredPath)) {
+                return res.status(400).json({
+                    error: "Envie a imagem (PNG ou JPG, 1200×628) ou o vídeo MP4 da campanha.",
+                });
+            }
+            let whatsappLogoStoredPath = current.whatsappLogoStoredPath;
+            let whatsappLogoFileName = current.whatsappLogoFileName;
+            if (whatsappLogoFile) {
+                const logoMime = String(whatsappLogoFile.mimetype || "").toLowerCase();
+                if (!logoMime.startsWith("image/")) {
+                    return res.status(400).json({ error: "A logo do WhatsApp deve ser PNG ou JPG." });
+                }
+                const logoExt = logoMime.includes("png") ? ".png" : ".jpg";
+                whatsappLogoStoredPath = node_path_1.default.join(storageDir, `whatsapp-logo${logoExt}`);
+                whatsappLogoFileName = whatsappLogoFile.originalname || `whatsapp-logo${logoExt}`;
+                (0, node_fs_1.writeFileSync)(whatsappLogoStoredPath, whatsappLogoFile.buffer);
+            }
+            else if (!whatsappLogoStoredPath || !(0, node_fs_1.existsSync)(whatsappLogoStoredPath)) {
+                return res.status(400).json({ error: "Envie a logo do WhatsApp (500×500 px)." });
+            }
+            let importedLineCount = Math.max(0, Math.round(Number(current.importedLineCount || 0)));
+            let spreadsheetStoredPath = current.spreadsheetStoredPath;
+            let spreadsheetFileName = current.spreadsheetFileName;
+            let spreadsheetBuffer = null;
+            let sheetName = String(spreadsheetFileName || "").toLowerCase();
+            let officialUniqueSheet = null;
+            let phoneDuplicatesRemoved = 0;
+            if (spreadsheetFile) {
+                sheetName = String(spreadsheetFile.originalname || "").toLowerCase();
+                if (!(0, waba_campaign_spreadsheet_util_1.isCampaignLeadsFileName)(sheetName)) {
+                    return res.status(400).json({
+                        error: "A lista de clientes deve ser Excel (.xlsx ou .xls) ou TXT (.txt).",
+                    });
+                }
+                try {
+                    const deduped = (0, waba_campaign_intake_oficial_dedupe_1.parseOfficialCampaignLeadsUnique)(spreadsheetFile.buffer, sheetName);
+                    importedLineCount = deduped.uniqueCount;
+                    officialUniqueSheet = deduped.sheet;
+                    phoneDuplicatesRemoved = deduped.duplicatesRemoved;
+                    spreadsheetBuffer = spreadsheetFile.buffer;
+                    spreadsheetFileName = spreadsheetFile.originalname || spreadsheetFileName;
+                }
+                catch {
+                    return res.status(400).json({ error: "Não foi possível ler o arquivo de leads." });
+                }
+            }
+            else if (spreadsheetStoredPath && (0, node_fs_1.existsSync)(spreadsheetStoredPath)) {
+                spreadsheetBuffer = (0, node_fs_1.readFileSync)(spreadsheetStoredPath);
+            }
+            if (importedLineCount < 1) {
+                return res.status(400).json({ error: "O arquivo não contém linhas de leads." });
+            }
+            const currentPlanned = Math.max(0, Math.round(Number(current.plannedSendCount || 0)));
+            const remaining = disparosCreditsService.getRemainingShipmentsForApi(auth.email, "oficial");
+            const unlimitedCredits = masterPolicyService.hasUnlimitedCredits(auth.email);
+            const requestedSendCount = parseRequestedPlannedSendCount(body);
+            const availableForEdit = unlimitedCredits
+                ? Number.MAX_SAFE_INTEGER
+                : remaining + currentPlanned;
+            const { isMaster, error: plannedSendError } = resolvePlannedSendCount(auth.email, importedLineCount, requestedSendCount, "oficial");
+            if (plannedSendError && requestedSendCount != null && requestedSendCount > importedLineCount) {
+                return res.status(400).json({ error: plannedSendError });
+            }
+            if (requestedSendCount == null) {
+                return res.status(400).json({ error: "Informe a quantidade de envios desejada." });
+            }
+            const minPlanned = (0, waba_campaign_intake_constants_1.campaignMinPlannedSendCountForEmail)(auth.email, "oficial");
+            if (requestedSendCount < minPlanned) {
+                return res.status(400).json({ error: `A campanha deve ter no mínimo ${minPlanned} envios.` });
+            }
+            if (!unlimitedCredits && requestedSendCount > availableForEdit) {
+                return res.status(400).json({
+                    error: `No plano API Oficial, você possui apenas ${availableForEdit} envio(s) disponível(is).`,
+                });
+            }
+            const nextPlanned = unlimitedCredits || isMaster ? requestedSendCount : requestedSendCount;
+            let spreadsheetTrimmedPath = current.spreadsheetTrimmedPath;
+            let spreadsheetTrimmedFileName = current.spreadsheetTrimmedFileName;
+            if (spreadsheetBuffer) {
+                const originalLeadsName = spreadsheetFileName ||
+                    ((0, waba_campaign_spreadsheet_util_1.isCampaignLeadsTxtFileName)(sheetName) ? "leads.txt" : "leads.xlsx");
+                spreadsheetStoredPath = node_path_1.default.join(storageDir, node_path_1.default.basename(originalLeadsName));
+                const trimmedExt = (0, waba_campaign_spreadsheet_util_1.isCampaignLeadsTxtFileName)(sheetName) ? "txt" : "xlsx";
+                spreadsheetTrimmedFileName = `leads-${nextPlanned}-envios.${trimmedExt}`;
+                spreadsheetTrimmedPath = node_path_1.default.join(storageDir, spreadsheetTrimmedFileName);
+                try {
+                    const trimmedSpreadsheetBuffer = officialUniqueSheet
+                        ? (0, waba_campaign_intake_oficial_dedupe_1.writeOfficialCampaignLeadsFile)(officialUniqueSheet, sheetName, nextPlanned)
+                        : (0, waba_campaign_spreadsheet_util_1.trimLeadsBufferToRowCount)(spreadsheetBuffer, nextPlanned, sheetName);
+                    (0, node_fs_1.writeFileSync)(spreadsheetStoredPath, spreadsheetBuffer);
+                    (0, node_fs_1.writeFileSync)(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
+                }
+                catch {
+                    return res.status(400).json({ error: "Não foi possível preparar o arquivo de leads para envio." });
+                }
+            }
+            let scheduledSendAt = current.scheduledSendAt || "";
+            if (Object.prototype.hasOwnProperty.call(body, "scheduledSendAt")) {
+                try {
+                    scheduledSendAt = (0, waba_campaign_schedule_1.parseScheduledSendAt)(body.scheduledSendAt, { requireFuture: true });
+                }
+                catch (error) {
+                    return res.status(400).json({
+                        error: error instanceof Error ? error.message : "Data de agendamento inválida.",
+                    });
+                }
+            }
+            let responseShortUrl = current.responseShortUrl || "";
+            let responseShortSlug = current.responseShortSlug || "";
+            if (responseLink !== (current.responseLink || "") || !responseShortUrl) {
+                try {
+                    const tracked = await (0, waba_campaign_intake_short_url_1.createCampaignIntakeTrackedShortUrl)({
+                        destinationUrl: responseLink,
+                        campaignId: current.id,
+                        ownerEmail: auth.email,
+                        publicBaseHints: (0, waba_public_base_url_1.publicBaseHintsFromExpressRequest)(req),
+                    });
+                    responseShortUrl = tracked.shortUrl;
+                    responseShortSlug = tracked.shortSlug;
+                }
+                catch (error) {
+                    console.warn("[disparos/campanhas/intake] short url na edição:", error);
+                }
+            }
+            const now = new Date().toISOString();
+            const patch = {
+                campaignName,
+                regionDdd,
+                whatsappName,
+                textOptions,
+                responseLink,
+                campaignMediaKind: mediaKind,
+                imageFileName,
+                imageStoredPath,
+                whatsappLogoFileName,
+                whatsappLogoStoredPath,
+                spreadsheetFileName,
+                spreadsheetStoredPath,
+                spreadsheetTrimmedPath,
+                spreadsheetTrimmedFileName,
+                importedLineCount,
+                plannedSendCount: nextPlanned,
+                status: "generated",
+                updatedAt: now,
+            };
+            if (responseShortUrl)
+                patch.responseShortUrl = responseShortUrl;
+            if (responseShortSlug)
+                patch.responseShortSlug = responseShortSlug;
+            if (scheduledSendAt)
+                patch.scheduledSendAt = scheduledSendAt;
+            else if (Object.prototype.hasOwnProperty.call(body, "scheduledSendAt")) {
+                delete current.scheduledSendAt;
+                patch.scheduledSendAt = "";
+            }
+            const updated = intakeRepository.updateById(current.id, patch);
+            if (!updated) {
+                return res.status(404).json({ error: "Campanha não encontrada." });
+            }
+            if (!unlimitedCredits) {
+                disparosCreditsService.refreshConsumedFromIntakes(auth.email);
+            }
+            return res.status(200).json(buildIntakeSuccessPayload(updated, { duplicatesRemoved: phoneDuplicatesRemoved }));
+        }
+        catch (error) {
+            if (error instanceof waba_campaign_intake_oficial_copy_1.OfficialCampaignCopyError) {
+                return res.status(error.statusCode).json({ error: error.message });
+            }
+            console.error("[disparos/campanhas/intake] editar erro:", error);
+            return res.status(500).json({ error: "Não foi possível salvar a campanha. Tente novamente." });
+        }
     });
     app.get("/disparos/dashboard/overview", (req, res) => {
         const auth = resolveRequestAuth(req);
