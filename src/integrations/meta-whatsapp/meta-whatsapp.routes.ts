@@ -421,6 +421,30 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
     }
   });
 
+  app.post("/integrations/meta/whatsapp/phone-numbers/bot", async (req: Request, res: Response) => {
+    try {
+      if (!isMetaOfficialPortfolioLabEnabled()) {
+        return sendPublic(res, 404, {
+          ok: false,
+          error: "Recurso indisponível neste ambiente.",
+          code: "config_invalid",
+        });
+      }
+      warnClientTenantClaim(req);
+      const enabledRaw = (req.body as { enabled?: unknown } | undefined)?.enabled;
+      const auth = resolveWabaRequestAuth(req);
+      const result = await service.setPhoneBotFromAuth(auth, {
+        phoneNumberId: String(req.body?.phoneNumberId || req.body?.phone_number_id || "").trim(),
+        enabled: enabledRaw === true || enabledRaw === false ? enabledRaw : undefined,
+        displayPhoneNumber: String(req.body?.displayPhoneNumber || req.body?.display_phone_number || "").trim(),
+        channelName: String(req.body?.channelName || req.body?.channel_name || "").trim(),
+      });
+      return sendPublic(res, 200, { ok: true, ...result });
+    } catch (error) {
+      return handleMetaError(res, error);
+    }
+  });
+
   app.get("/integrations/meta/whatsapp/phone-numbers/photo", async (req: Request, res: Response) => {
     try {
       if (!isMetaOfficialPortfolioLabEnabled()) {

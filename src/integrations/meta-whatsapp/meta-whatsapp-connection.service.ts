@@ -2549,6 +2549,43 @@ export class MetaWhatsappConnectionService {
     };
   }
 
+  async setPhoneBotFromAuth(
+    auth: WabaRequestAuth,
+    input: {
+      phoneNumberId?: string;
+      enabled?: boolean;
+      displayPhoneNumber?: string;
+      channelName?: string;
+    },
+  ): Promise<{
+    phoneNumberId: string;
+    botEnabled: boolean;
+    displayPhoneNumber: string | null;
+    channelName: string | null;
+  }> {
+    const tenant = requireTenant(auth);
+    const phoneNumberId = String(input.phoneNumberId || "").trim();
+    if (!phoneNumberId || typeof input.enabled !== "boolean") {
+      throw new MetaWhatsappError("invalid_payload");
+    }
+    const current = readPhoneIdentity(tenant.tenantId, phoneNumberId);
+    const displayPhoneNumber =
+      String(input.displayPhoneNumber || "").trim() || current?.displayPhoneNumber || null;
+    const channelName = String(input.channelName || "").trim() || current?.channelName || null;
+    const saved = writePhoneIdentity(tenant.tenantId, phoneNumberId, {
+      botEnabled: input.enabled,
+      displayPhoneNumber,
+      channelName,
+    });
+    logMetaWhatsappSafe("phone-bot-updated", { tenantId: tenant.tenantId, enabled: input.enabled });
+    return {
+      phoneNumberId,
+      botEnabled: input.enabled,
+      displayPhoneNumber: saved.displayPhoneNumber,
+      channelName: saved.channelName,
+    };
+  }
+
   async subscribeWebhooksFromAuth(
     auth: WabaRequestAuth,
     opts?: { connectionId?: string | null; phoneNumberId?: string | null },

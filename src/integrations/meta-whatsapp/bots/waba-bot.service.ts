@@ -31,7 +31,7 @@ import type { BotFlowDraft, BotFlowNode, BotJson, BotRunState } from "./waba-bot
 
 const testRuns = new Map<string, BotRunState>();
 
-/** Chip ativo em ATIVAS, sem restrição. Inbox não é obrigatório. */
+/** Só entra no Bots o chip marcado BOT. */
 export function listBotAssignableChannels(
   tenantId: string,
   connections?: InboxAccountHint[] | null,
@@ -94,6 +94,7 @@ export class WabaBotService {
         name: row.name,
         displayPhoneNumber: row.displayPhoneNumber,
         inboxEnabled: row.inboxEnabled,
+        botEnabled: row.botEnabled,
         inboxEligible: row.inboxEligible,
         botEligible: row.botEligible,
         botId: getBotIdForPhone(tenant.tenantId, row.phoneNumberId),
@@ -148,8 +149,7 @@ export class WabaBotService {
     if (!phoneNumberId) throw new MetaWhatsappError("invalid_payload");
     if (botId) {
       const identity = readPhoneIdentity(tenant.tenantId, phoneNumberId);
-      const hints = await loadInboxHints(this.connections, tenant.tenantId);
-      if (!isPhoneBotEligible(identity, tenant.tenantId, hints, phoneNumberId)) {
+      if (!isPhoneBotEligible(identity)) {
         throw new MetaWhatsappError("invalid_payload");
       }
     }

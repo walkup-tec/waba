@@ -2106,6 +2106,28 @@ class MetaWhatsappConnectionService {
             channelName: saved.channelName,
         };
     }
+    async setPhoneBotFromAuth(auth, input) {
+        const tenant = requireTenant(auth);
+        const phoneNumberId = String(input.phoneNumberId || "").trim();
+        if (!phoneNumberId || typeof input.enabled !== "boolean") {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        }
+        const current = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenant.tenantId, phoneNumberId);
+        const displayPhoneNumber = String(input.displayPhoneNumber || "").trim() || current?.displayPhoneNumber || null;
+        const channelName = String(input.channelName || "").trim() || current?.channelName || null;
+        const saved = (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, {
+            botEnabled: input.enabled,
+            displayPhoneNumber,
+            channelName,
+        });
+        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-bot-updated", { tenantId: tenant.tenantId, enabled: input.enabled });
+        return {
+            phoneNumberId,
+            botEnabled: input.enabled,
+            displayPhoneNumber: saved.displayPhoneNumber,
+            channelName: saved.channelName,
+        };
+    }
     async subscribeWebhooksFromAuth(auth, opts) {
         const tenant = requireTenant(auth);
         const openRows = await this.repository.listOpenByTenant(tenant.tenantId);

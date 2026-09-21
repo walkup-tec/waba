@@ -605,6 +605,7 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
         photoSyncStatus: null,
         profileSyncStatus: null,
         inboxEnabled: false,
+        botEnabled: false,
         wabaId: text(row._portfolio_waba_id) ||
             text(row.waba_id) ||
             text(asRecord(row.whatsapp_business_account).id) ||

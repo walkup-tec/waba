@@ -13,7 +13,7 @@ const waba_bot_media_store_1 = require("./waba-bot-media.store");
 const waba_bot_runtime_engine_1 = require("./waba-bot-runtime.engine");
 const waba_bot_store_1 = require("./waba-bot.store");
 const testRuns = new Map();
-/** Chip ativo em ATIVAS, sem restrição. Inbox não é obrigatório. */
+/** Só entra no Bots o chip marcado BOT. */
 function listBotAssignableChannels(tenantId, connections) {
     return (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenantId, undefined, connections).filter((row) => row.botEligible);
 }
@@ -64,6 +64,7 @@ class WabaBotService {
                 name: row.name,
                 displayPhoneNumber: row.displayPhoneNumber,
                 inboxEnabled: row.inboxEnabled,
+                botEnabled: row.botEnabled,
                 inboxEligible: row.inboxEligible,
                 botEligible: row.botEligible,
                 botId: (0, waba_bot_store_1.getBotIdForPhone)(tenant.tenantId, row.phoneNumberId),
@@ -114,8 +115,7 @@ class WabaBotService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         if (botId) {
             const identity = (0, meta_whatsapp_phone_identity_store_1.readPhoneIdentity)(tenant.tenantId, phoneNumberId);
-            const hints = await loadInboxHints(this.connections, tenant.tenantId);
-            if (!(0, meta_whatsapp_phone_identity_store_1.isPhoneBotEligible)(identity, tenant.tenantId, hints, phoneNumberId)) {
+            if (!(0, meta_whatsapp_phone_identity_store_1.isPhoneBotEligible)(identity)) {
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
             }
         }

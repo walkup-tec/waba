@@ -4254,6 +4254,16 @@
           text-transform: uppercase;
           color: rgba(148, 163, 184, 0.82);
         }
+        .meta-number-inbox-pair {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .meta-number-inbox-pair + .meta-number-inbox-pair {
+          margin-left: 2px;
+          padding-left: 10px;
+          border-left: 1px solid rgba(148, 163, 184, 0.14);
+        }
         .meta-number-switch {
           width: 36px;
           height: 20px;
@@ -23317,7 +23327,7 @@
               <div class="panel-header">
                 <div>
                   <div class="panel-title">Bots</div>
-                  <span class="muted">Cada número Inbox atende com um único bot. Quando o template mudar, troque o bot do chip — o anterior sai do número.</span>
+                  <span class="muted">Cada número marcado como BOT atende com um único bot. Quando o template mudar, troque o bot do chip — o anterior sai do número.</span>
                 </div>
                 <div class="disparos-inline-actions" style="flex-wrap:wrap;gap:8px;">
                   <button type="button" class="instance-action-btn btn-qrcode enabled" id="waba-bots-new">Novo bot</button>
@@ -23326,11 +23336,11 @@
               </div>
               <p id="waba-bots-banner" class="meta-inbox-banner" role="status">Carregando bots…</p>
               <div class="waba-bots-layout">
-                <aside class="waba-bots-col" aria-label="Chips Inbox e biblioteca de bots">
+                <aside class="waba-bots-col" aria-label="Chips com BOT e biblioteca de bots">
                   <div class="meta-chat-thread-title">Números</div>
-                  <p class="muted" style="margin:6px 0 8px;">O chip é o ponto de partida, com ou sem Inbox. Veja o bot atual, edite ou troque. Nunca ficam dois bots no mesmo número.</p>
+                  <p class="muted" style="margin:6px 0 8px;">Só entra o chip com BOT ligado na Conexão. Veja o bot atual, edite ou troque. Nunca ficam dois bots no mesmo número.</p>
                   <div class="waba-bots-phone-search aquecedor-field">
-                    <label class="visually-hidden" for="waba-bots-phone-search">Pesquisar número Inbox</label>
+                    <label class="visually-hidden" for="waba-bots-phone-search">Pesquisar número</label>
                     <input id="waba-bots-phone-search" type="search" class="waba-bots-phone-search-input" placeholder="Pesquisar número…" autocomplete="off" inputmode="tel" />
                   </div>
                   <div id="waba-bots-phones" class="waba-bots-phones"></div>
@@ -38494,6 +38504,7 @@
           return (
             el.hasAttribute("data-meta-activate") ||
             el.hasAttribute("data-meta-inbox-toggle") ||
+            el.hasAttribute("data-meta-bot-toggle") ||
             el.hasAttribute("data-meta-inbox-status") ||
             el.hasAttribute("data-meta-inbox-assign")
           );
@@ -39188,6 +39199,7 @@
               ? '<span class="meta-number-chip is-busy">Em disparo</span>'
               : '<span class="meta-number-chip is-idle">Disponível</span>';
             const inboxOn = item.inboxEnabled === true;
+            const botOn = item.botEnabled === true;
             const showActivate = Boolean(id) && !restrito && (item.canActivate || !ativo);
             const activate = showActivate
               ? '<div class="meta-number-activate">' +
@@ -39259,6 +39271,7 @@
               dispatchChip +
               editBtn +
               '<div class="meta-number-inbox">' +
+              '<span class="meta-number-inbox-pair">' +
               '<span class="meta-number-inbox-label">Inbox</span>' +
               '<button type="button" class="meta-number-switch' +
               (inboxOn ? " is-on" : "") +
@@ -39276,7 +39289,24 @@
               metaTpEsc(phone) +
               '" data-meta-inbox-name="' +
               metaTpEsc(item.verifiedName || requested || "") +
-              '"></button></div>' +
+              '"></button></span>' +
+              '<span class="meta-number-inbox-pair">' +
+              '<span class="meta-number-inbox-label">BOT</span>' +
+              '<button type="button" class="meta-number-switch' +
+              (botOn ? " is-on" : "") +
+              '" role="switch" aria-checked="' +
+              (botOn ? "true" : "false") +
+              '" aria-label="' +
+              (botOn ? "Desligar BOT deste número" : "Ligar BOT deste número") +
+              '" data-meta-bot-toggle="' +
+              id +
+              '" data-meta-bot-enabled="' +
+              (botOn ? "1" : "0") +
+              '" data-meta-bot-phone="' +
+              metaTpEsc(phone) +
+              '" data-meta-bot-name="' +
+              metaTpEsc(item.verifiedName || requested || "") +
+              '"></button></span></div>' +
               "</div>" +
               activate +
               "</article>"
@@ -40023,6 +40053,46 @@
               inboxToggle.setAttribute("data-meta-inbox-enabled", previous ? "1" : "0");
               inboxToggle.setAttribute("aria-checked", previous ? "true" : "false");
               metaTpSetStatus("Não foi possível alterar o Inbox deste número.");
+            });
+          return;
+        }
+        const botToggle = target.closest("[data-meta-bot-toggle]");
+        if (botToggle && portfolioRoot && portfolioRoot.contains(botToggle)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const phoneNumberId = String(botToggle.getAttribute("data-meta-bot-toggle") || "").trim();
+          const enabled = botToggle.getAttribute("data-meta-bot-enabled") !== "1";
+          if (!phoneNumberId) return;
+          const previous = botToggle.getAttribute("data-meta-bot-enabled") === "1";
+          const displayPhoneNumber = String(botToggle.getAttribute("data-meta-bot-phone") || "").trim();
+          const channelName = String(botToggle.getAttribute("data-meta-bot-name") || "").trim();
+          botToggle.classList.toggle("is-on", enabled);
+          botToggle.setAttribute("data-meta-bot-enabled", enabled ? "1" : "0");
+          botToggle.setAttribute("aria-checked", enabled ? "true" : "false");
+          botToggle.setAttribute(
+            "aria-label",
+            enabled ? "Desligar BOT deste número" : "Ligar BOT deste número",
+          );
+          metaTpFetchJson("/integrations/meta/whatsapp/phone-numbers/bot", {
+            method: "POST",
+            body: JSON.stringify({ phoneNumberId, enabled, displayPhoneNumber, channelName }),
+          })
+            .then(({ response, payload }) => {
+              if (!response.ok || payload.ok === false) {
+                botToggle.classList.toggle("is-on", previous);
+                botToggle.setAttribute("data-meta-bot-enabled", previous ? "1" : "0");
+                botToggle.setAttribute("aria-checked", previous ? "true" : "false");
+                metaTpSetStatus(String(payload.error || "Não foi possível alterar o BOT deste número."));
+                return;
+              }
+              metaTpSetStatus("");
+              if (typeof window.wabaStartBots === "function") window.wabaStartBots();
+            })
+            .catch(() => {
+              botToggle.classList.toggle("is-on", previous);
+              botToggle.setAttribute("data-meta-bot-enabled", previous ? "1" : "0");
+              botToggle.setAttribute("aria-checked", previous ? "true" : "false");
+              metaTpSetStatus("Não foi possível alterar o BOT deste número.");
             });
           return;
         }
@@ -45275,12 +45345,12 @@
         if (search && document.activeElement !== search) search.value = wabaBotsUi.phoneQuery || "";
         const channels = wabaBotsEligibleChannels();
         if (!channels.length) {
-          box.innerHTML = "<p class=\"waba-bots-empty\">Nenhum Inbox elegível. O chip precisa estar marcado Inbox, em conta sem restrição e no portfólio ATIVAS.</p>";
+          box.innerHTML = "<p class=\"waba-bots-empty\">Nenhum número com BOT ligado. No Laboratório, ligue BOT no chip.</p>";
           return;
         }
         const filtered = channels.filter((row) => wabaBotsChipMatchesPhoneQuery(row, wabaBotsUi.phoneQuery));
         if (!filtered.length) {
-          box.innerHTML = `<p class="waba-bots-empty">Nenhum número Inbox corresponde a «${escapeAdminHtml(String(wabaBotsUi.phoneQuery || "").trim())}».</p>`;
+          box.innerHTML = `<p class="waba-bots-empty">Nenhum número corresponde a «${escapeAdminHtml(String(wabaBotsUi.phoneQuery || "").trim())}».</p>`;
           return;
         }
         box.innerHTML = filtered

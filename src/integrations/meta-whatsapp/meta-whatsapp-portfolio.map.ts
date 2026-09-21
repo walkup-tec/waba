@@ -676,6 +676,7 @@ export function mapMetaPhoneToPortfolioNumber(
     photoSyncStatus: null,
     profileSyncStatus: null,
     inboxEnabled: false,
+    botEnabled: false,
     wabaId:
       text(row._portfolio_waba_id) ||
       text(row.waba_id) ||

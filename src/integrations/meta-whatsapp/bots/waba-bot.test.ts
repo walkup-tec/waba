@@ -29,7 +29,7 @@ import {
   wasBotMessageClaimed,
 } from "./waba-bot.store";
 import { listBotAssignableChannels, WabaBotService } from "./waba-bot.service";
-import { hideBusiness, unhideBusiness } from "../meta-whatsapp-hidden-business.store";
+import { unhideBusiness } from "../meta-whatsapp-hidden-business.store";
 import { MetaWhatsappError } from "../meta-whatsapp-errors";
 import { purgePhoneIdentities, writePhoneIdentity } from "../meta-whatsapp-phone-identity.store";
 import type { WabaRequestAuth } from "../../../auth/waba-request-auth";
@@ -509,44 +509,39 @@ describe("WABA bots — inbound 1 a 9", () => {
 describe("WABA bots — números", () => {
   const authA: WabaRequestAuth = { email: EMAIL_A, role: "subscriber" };
 
-  it("lista chip ativo mesmo sem Inbox ligado", () => {
-    writePhoneIdentity(TENANT_A, "phone-on", {
-      inboxEnabled: true,
-      uiStatus: "ativo",
-      channelName: "Atendimento",
-      displayPhoneNumber: "+55 11 90000-0001",
-    });
-    writePhoneIdentity(TENANT_A, "phone-off", {
+  it("lista só o chip marcado BOT", () => {
+    writePhoneIdentity(TENANT_A, "phone-bot", {
+      botEnabled: true,
       inboxEnabled: false,
-      uiStatus: "ativo",
-      channelName: "Sem inbox",
-      displayPhoneNumber: "+55 11 90000-0002",
+      uiStatus: "restrito",
+      portfolioHidden: true,
+      channelName: "Drax Sistema",
+      displayPhoneNumber: "+55 51 8200-1279",
     });
-    const rows = listBotAssignableChannels(TENANT_A);
-    assert.deepEqual(
-      rows.map((row) => row.phoneNumberId).sort(),
-      ["phone-off", "phone-on"],
-    );
-    const off = rows.find((row) => row.phoneNumberId === "phone-off");
-    assert.equal(off?.inboxEnabled, false);
-    assert.equal(off?.inboxEligible, false);
-    assert.equal(off?.botEligible, true);
-  });
-
-  it("lista Relacionamento do Drax Waba mesmo se a conexão ainda tiver o 5182001279", () => {
-    writePhoneIdentity(TENANT_A, "phone-rel", {
+    writePhoneIdentity(TENANT_A, "phone-inbox", {
+      botEnabled: false,
       inboxEnabled: true,
       uiStatus: "ativo",
-      portfolioHidden: false,
-      businessId: "1041827648719609",
       channelName: "Relacionamento e Atendimento",
       displayPhoneNumber: "+55 51 92636-1688",
     });
-    writePhoneIdentity(TENANT_A, "phone-drax", {
+    const rows = listBotAssignableChannels(TENANT_A);
+    assert.deepEqual(
+      rows.map((row) => row.phoneNumberId),
+      ["phone-bot"],
+    );
+    assert.equal(rows[0]?.botEnabled, true);
+    assert.equal(rows[0]?.botEligible, true);
+    assert.equal(rows[0]?.inboxEligible, false);
+  });
+
+  it("omite chip ativo com Inbox se BOT estiver desligado", () => {
+    writePhoneIdentity(TENANT_A, "phone-rel", {
+      botEnabled: false,
       inboxEnabled: true,
       uiStatus: "ativo",
-      channelName: "Drax Sistema",
-      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Relacionamento e Atendimento",
+      displayPhoneNumber: "+55 51 92636-1688",
     });
     const rows = listBotAssignableChannels(TENANT_A, [
       {
@@ -558,119 +553,45 @@ describe("WABA bots — números", () => {
     ]);
     assert.deepEqual(
       rows.map((row) => row.phoneNumberId),
-      ["phone-rel"],
-    );
-  });
-
-  it("omite 5182001279 mesmo sem display na identidade, se a conexão estiver restrita", () => {
-    writePhoneIdentity(TENANT_A, "phone-drax", {
-      inboxEnabled: true,
-      uiStatus: "ativo",
-      channelName: "Drax Sistema",
-    });
-    const rows = listBotAssignableChannels(TENANT_A, [
-      {
-        phoneNumberId: "phone-drax",
-        displayPhoneNumber: "+55 51 8200-1279",
-        metaBusinessId: "1041827648719609",
-      },
-    ]);
-    assert.deepEqual(
-      rows.map((row) => row.phoneNumberId),
       [],
     );
   });
 
-  it("omite 5182001279 mesmo com Inbox ligado", () => {
-    writePhoneIdentity(TENANT_A, "phone-drax", {
+  it("recusa associar chip sem BOT e aceita chip só com BOT", async () => {
+    writePhoneIdentity(TENANT_A, "phone-off", {
       inboxEnabled: true,
       uiStatus: "ativo",
-      channelName: "Drax Sistema",
-      displayPhoneNumber: "+55 51 8200-1279",
+      channelName: "Sem bot",
+      displayPhoneNumber: "+55 11 90000-0001",
     });
-    writePhoneIdentity(TENANT_A, "phone-ok", {
-      inboxEnabled: true,
-      uiStatus: "ativo",
-      channelName: "Relacionamento e Atendimento",
-      displayPhoneNumber: "+55 51 92636-1688",
-    });
-    const rows = listBotAssignableChannels(TENANT_A);
-    assert.deepEqual(
-      rows.map((row) => row.phoneNumberId),
-      ["phone-ok"],
-    );
-  });
-
-  it("omite chip em Restritas e em conta restringida", () => {
-    const businessId = "1041827648719609";
-    unhideBusiness(TENANT_A, businessId);
-    writePhoneIdentity(TENANT_A, "phone-hidden", {
-      inboxEnabled: true,
-      uiStatus: "ativo",
-      portfolioHidden: true,
-      channelName: "Portfólio restrito",
-      displayPhoneNumber: "+55 11 91111-1111",
-    });
-    writePhoneIdentity(TENANT_A, "phone-restrito", {
-      inboxEnabled: true,
-      uiStatus: "restrito",
-      channelName: "Chip restrito",
-      displayPhoneNumber: "+55 11 92222-2222",
-    });
-    writePhoneIdentity(TENANT_A, "phone-ok", {
-      inboxEnabled: true,
-      uiStatus: "ativo",
-      channelName: "Relacionamento e Atendimento",
-      displayPhoneNumber: "+55 51 92636-1688",
-    });
-    hideBusiness(TENANT_A, businessId, "BAN Drax Sistemas");
-    const rows = listBotAssignableChannels(TENANT_A, [
-      {
-        phoneNumberId: "phone-hidden",
-        displayPhoneNumber: "+55 11 91111-1111",
-        metaBusinessId: businessId,
-      },
-    ]);
-    unhideBusiness(TENANT_A, businessId);
-    assert.deepEqual(
-      rows.map((row) => row.phoneNumberId),
-      ["phone-ok"],
-    );
-  });
-
-  it("recusa associar chip inelegível e aceita chip ativo sem Inbox", async () => {
-    writePhoneIdentity(TENANT_A, "phone-drax", {
-      inboxEnabled: true,
-      uiStatus: "ativo",
-      channelName: "Drax Sistema",
-      displayPhoneNumber: "+55 51 8200-1279",
-    });
-    writePhoneIdentity(TENANT_A, "phone-ok", {
+    writePhoneIdentity(TENANT_A, "phone-on", {
+      botEnabled: true,
       inboxEnabled: false,
-      uiStatus: "ativo",
-      channelName: "Relacionamento e Atendimento",
-      displayPhoneNumber: "+55 51 92636-1688",
+      uiStatus: "pendente",
+      channelName: "Com bot",
+      displayPhoneNumber: "+55 51 8200-1279",
     });
     const flow = upsertBotFlow(TENANT_A, createDefaultBotDraft("Associação"));
     const service = new WabaBotService({
       listInboxConnections: async () => [],
     });
     await assert.rejects(
-      () => service.linkPhone(authA, { phoneNumberId: "phone-drax", botId: flow.id }),
+      () => service.linkPhone(authA, { phoneNumberId: "phone-off", botId: flow.id }),
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "invalid_payload",
     );
-    const linked = await service.linkPhone(authA, { phoneNumberId: "phone-ok", botId: flow.id });
+    const linked = await service.linkPhone(authA, { phoneNumberId: "phone-on", botId: flow.id });
     assert.equal(linked.ok, true);
     const listed = await service.list(authA);
     assert.deepEqual(
       listed.channels.map((row) => row.phoneNumberId),
-      ["phone-ok"],
+      ["phone-on"],
     );
     assert.equal(listed.channels[0]?.botId, flow.id);
   });
 
   it("trocar o bot do chip substitui o anterior e nunca deixa dois no mesmo número", async () => {
     writePhoneIdentity(TENANT_A, "phone-ok", {
+      botEnabled: true,
       inboxEnabled: true,
       uiStatus: "ativo",
       channelName: "Relacionamento e Atendimento",
@@ -701,6 +622,10 @@ describe("WABA bots — menu FARM BM", () => {
     assert.match(html, /<span class="tab-label">Bots<\/span>/);
     assert.match(html, /id="tab-whatsapp-bots"/);
     assert.match(html, /row\.botEligible === true/);
+    assert.match(html, /data-meta-bot-toggle/);
+    assert.match(html, /meta-number-inbox-label">BOT/);
+    assert.match(html, /phone-numbers\/bot/);
+    assert.match(html, /Nenhum número com BOT ligado/);
     assert.doesNotMatch(html, /Números Inbox/);
     assert.match(html, /data-bot-chip-select/);
     assert.match(html, /data-bot-edit-chip/);

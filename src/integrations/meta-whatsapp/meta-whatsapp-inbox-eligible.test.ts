@@ -79,6 +79,16 @@ describe("Atendimento só lista chip Ativo com Inbox", () => {
     purgePhoneIdentities(tenantId);
   });
 
+  it("BOT ligado entra na lista de Bots mesmo sem Inbox", () => {
+    purgePhoneIdentities(tenantId);
+    writePhoneIdentity(tenantId, "phone-1", { botEnabled: true, inboxEnabled: false });
+    const channel = listPhoneInboxChannels(tenantId)[0];
+    assert.equal(channel?.botEnabled, true);
+    assert.equal(channel?.botEligible, true);
+    assert.equal(channel?.inboxEligible, false);
+    purgePhoneIdentities(tenantId);
+  });
+
   it("chip Ativo sem Inbox não entra no Atendimento", () => {
     purgePhoneIdentities(tenantId);
     writePhoneIdentity(tenantId, "phone-1", { inboxEnabled: false });
@@ -86,7 +96,7 @@ describe("Atendimento só lista chip Ativo com Inbox", () => {
     assert.deepEqual(listEnabledInboxPhoneIds(tenantId), []);
     const channel = listPhoneInboxChannels(tenantId)[0];
     assert.equal(channel?.inboxEligible, false);
-    assert.equal(channel?.botEligible, true);
+    assert.equal(channel?.botEligible, false);
     purgePhoneIdentities(tenantId);
   });
 

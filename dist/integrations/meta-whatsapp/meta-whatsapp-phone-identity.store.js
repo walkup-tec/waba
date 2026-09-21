@@ -9,6 +9,7 @@ exports.readPhonePhoto = readPhonePhoto;
 exports.localPhonePhotoUrl = localPhonePhotoUrl;
 exports.phoneIdentitySyncStatus = phoneIdentitySyncStatus;
 exports.isPhoneInboxEnabled = isPhoneInboxEnabled;
+exports.isPhoneBotEnabled = isPhoneBotEnabled;
 exports.isConnectionAccountRestricted = isConnectionAccountRestricted;
 exports.isPhoneAutomationEligible = isPhoneAutomationEligible;
 exports.isPhoneInboxEligible = isPhoneInboxEligible;
@@ -91,6 +92,7 @@ function readPhoneIdentity(tenantId, phoneNumberId) {
         const photoMetaApplied = row.photoMetaApplied === true;
         const profileMetaApplied = row.profileMetaApplied === true;
         const inboxEnabled = row.inboxEnabled === false ? false : row.inboxEnabled === true ? true : null;
+        const botEnabled = row.botEnabled === false ? false : row.botEnabled === true ? true : null;
         const uiStatus = parseStoredUiStatus(row.uiStatus);
         const portfolioHidden = row.portfolioHidden === true ? true : row.portfolioHidden === false ? false : null;
         const businessId = String(row.businessId || "").replace(/\D/g, "") || null;
@@ -108,6 +110,7 @@ function readPhoneIdentity(tenantId, phoneNumberId) {
             photoMetaApplied,
             profileMetaApplied,
             inboxEnabled,
+            botEnabled,
             uiStatus,
             portfolioHidden,
             businessId,
@@ -133,6 +136,7 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
         photoMetaApplied: false,
         profileMetaApplied: false,
         inboxEnabled: null,
+        botEnabled: null,
         uiStatus: null,
         portfolioHidden: null,
         businessId: null,
@@ -163,6 +167,7 @@ function writePhoneIdentity(tenantId, phoneNumberId, input) {
                 ? false
                 : current.profileMetaApplied,
         inboxEnabled: input.inboxEnabled !== undefined ? input.inboxEnabled : current.inboxEnabled,
+        botEnabled: input.botEnabled !== undefined ? input.botEnabled : current.botEnabled,
         uiStatus: input.uiStatus !== undefined ? input.uiStatus : current.uiStatus,
         portfolioHidden: input.portfolioHidden !== undefined ? input.portfolioHidden : current.portfolioHidden,
         businessId: input.businessId !== undefined
@@ -219,6 +224,9 @@ function phoneIdentitySyncStatus(input) {
 }
 function isPhoneInboxEnabled(identity) {
     return identity?.inboxEnabled === true;
+}
+function isPhoneBotEnabled(identity) {
+    return identity?.botEnabled === true;
 }
 function connectionMatchesPhone(row, phoneNumberId, identity) {
     const chip = String(row.phoneNumberId || "").trim();
@@ -291,9 +299,9 @@ function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
         return false;
     return isPhoneAutomationEligible(identity, tenantId, connections, phoneNumberId);
 }
-/** Mesma regra do chip ativo, sem exigir Inbox — usado pelos Bots. */
-function isPhoneBotEligible(identity, tenantId, connections, phoneNumberId) {
-    return isPhoneAutomationEligible(identity, tenantId, connections, phoneNumberId);
+/** Única regra do Bots: o chip precisa estar marcado BOT. */
+function isPhoneBotEligible(identity) {
+    return isPhoneBotEnabled(identity);
 }
 function phoneInboxDisplayName(identity, verifiedNameFromMeta) {
     const meta = String(verifiedNameFromMeta || "").trim();
@@ -353,8 +361,9 @@ function listPhoneInboxChannels(tenantId, verifiedNameByPhone, connections) {
                 displayPhoneNumber: identity.displayPhoneNumber,
                 profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
                 inboxEnabled: isPhoneInboxEnabled(identity),
+                botEnabled: isPhoneBotEnabled(identity),
                 inboxEligible: isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId),
-                botEligible: isPhoneBotEligible(identity, tenantId, connections, phoneNumberId),
+                botEligible: isPhoneBotEligible(identity),
             });
         }
         return out;
@@ -508,6 +517,7 @@ function applyLocalPhoneIdentities(tenantId, numbers, placeholderName, options) 
             uiStatus,
             profilePictureUrl: localPhoto || row.profilePictureUrl,
             inboxEnabled: isPhoneInboxEnabled(stored),
+            botEnabled: isPhoneBotEnabled(stored),
             photoSyncStatus: localPhoto ? "applied" : row.photoSyncStatus,
             profileSyncStatus: row.profileSyncStatus,
         };

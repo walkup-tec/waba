@@ -33,6 +33,7 @@ export type MetaPhoneIdentity = {
   photoMetaApplied: boolean;
   profileMetaApplied: boolean;
   inboxEnabled: boolean | null;
+  botEnabled: boolean | null;
   uiStatus: MetaPortfolioNumberUiStatus | null;
   portfolioHidden: boolean | null;
   businessId: string | null;
@@ -47,6 +48,7 @@ export type MetaPhoneInboxChannel = {
   displayPhoneNumber: string | null;
   profilePictureUrl: string | null;
   inboxEnabled: boolean;
+  botEnabled: boolean;
   inboxEligible: boolean;
   botEligible: boolean;
 };
@@ -119,6 +121,7 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
     const photoMetaApplied = row.photoMetaApplied === true;
     const profileMetaApplied = row.profileMetaApplied === true;
     const inboxEnabled = row.inboxEnabled === false ? false : row.inboxEnabled === true ? true : null;
+    const botEnabled = row.botEnabled === false ? false : row.botEnabled === true ? true : null;
     const uiStatus = parseStoredUiStatus(row.uiStatus);
     const portfolioHidden = row.portfolioHidden === true ? true : row.portfolioHidden === false ? false : null;
     const businessId = String(row.businessId || "").replace(/\D/g, "") || null;
@@ -136,6 +139,7 @@ export function readPhoneIdentity(tenantId: string, phoneNumberId: string): Meta
       photoMetaApplied,
       profileMetaApplied,
       inboxEnabled,
+      botEnabled,
       uiStatus,
       portfolioHidden,
       businessId,
@@ -162,6 +166,7 @@ export function writePhoneIdentity(
     photoMetaApplied?: boolean;
     profileMetaApplied?: boolean;
     inboxEnabled?: boolean;
+    botEnabled?: boolean;
     uiStatus?: MetaPortfolioNumberUiStatus | null;
     portfolioHidden?: boolean | null;
     businessId?: string | null;
@@ -181,6 +186,7 @@ export function writePhoneIdentity(
     photoMetaApplied: false,
     profileMetaApplied: false,
     inboxEnabled: null,
+    botEnabled: null,
     uiStatus: null,
     portfolioHidden: null,
     businessId: null,
@@ -214,6 +220,7 @@ export function writePhoneIdentity(
           ? false
           : current.profileMetaApplied,
     inboxEnabled: input.inboxEnabled !== undefined ? input.inboxEnabled : current.inboxEnabled,
+    botEnabled: input.botEnabled !== undefined ? input.botEnabled : current.botEnabled,
     uiStatus: input.uiStatus !== undefined ? input.uiStatus : current.uiStatus,
     portfolioHidden:
       input.portfolioHidden !== undefined ? input.portfolioHidden : current.portfolioHidden,
@@ -288,6 +295,10 @@ export function phoneIdentitySyncStatus(input: {
 
 export function isPhoneInboxEnabled(identity: MetaPhoneIdentity | null): boolean {
   return identity?.inboxEnabled === true;
+}
+
+export function isPhoneBotEnabled(identity: MetaPhoneIdentity | null): boolean {
+  return identity?.botEnabled === true;
 }
 
 function connectionMatchesPhone(
@@ -373,14 +384,9 @@ export function isPhoneInboxEligible(
   return isPhoneAutomationEligible(identity, tenantId, connections, phoneNumberId);
 }
 
-/** Mesma regra do chip ativo, sem exigir Inbox — usado pelos Bots. */
-export function isPhoneBotEligible(
-  identity: MetaPhoneIdentity | null,
-  tenantId?: string,
-  connections?: InboxAccountHint[] | null,
-  phoneNumberId?: string,
-): boolean {
-  return isPhoneAutomationEligible(identity, tenantId, connections, phoneNumberId);
+/** Única regra do Bots: o chip precisa estar marcado BOT. */
+export function isPhoneBotEligible(identity: MetaPhoneIdentity | null): boolean {
+  return isPhoneBotEnabled(identity);
 }
 
 export function phoneInboxDisplayName(
@@ -452,8 +458,9 @@ export function listPhoneInboxChannels(
         displayPhoneNumber: identity.displayPhoneNumber,
         profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
         inboxEnabled: isPhoneInboxEnabled(identity),
+        botEnabled: isPhoneBotEnabled(identity),
         inboxEligible: isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId),
-        botEligible: isPhoneBotEligible(identity, tenantId, connections, phoneNumberId),
+        botEligible: isPhoneBotEligible(identity),
       });
     }
     return out;
@@ -635,6 +642,7 @@ export function applyLocalPhoneIdentities(
       uiStatus,
       profilePictureUrl: localPhoto || row.profilePictureUrl,
       inboxEnabled: isPhoneInboxEnabled(stored),
+      botEnabled: isPhoneBotEnabled(stored),
       photoSyncStatus: localPhoto ? "applied" : row.photoSyncStatus,
       profileSyncStatus: row.profileSyncStatus,
     };
