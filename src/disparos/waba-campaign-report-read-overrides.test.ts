@@ -326,4 +326,30 @@ describe("override pontual do relatório", () => {
     );
     assert.equal(differentTotals?.clicks, 0);
   });
+
+  it("Tocantins_V01 de 21/09 recebe 3 cliques do /s/n9730691", () => {
+    const created = "2026-09-21T14:20:00.000Z";
+    const stored = report({
+      totalLeads: 150,
+      sent: 150,
+      delivered: 0,
+      read: 0,
+      failed: 0,
+      clicks: 0,
+      source: "meta_lab",
+    });
+    const got = applyCampaignReportReadOverride("Tocantins_V01 API OFC", created, stored);
+    assert.equal(got?.clicks, 3);
+    assert.equal(got?.sent, 150);
+    assert.equal(campaignReportShowsClicks("Tocantins_V01", created, stored), true);
+
+    const otherDay = applyCampaignReportReadOverride(
+      "Tocantins_V01",
+      "2026-09-20T14:20:00.000Z",
+      stored,
+    );
+    assert.equal(otherDay?.clicks, 0);
+    const otherName = applyCampaignReportReadOverride("Tocantins_V02", created, stored);
+    assert.equal(otherName?.clicks, 0);
+  });
 });

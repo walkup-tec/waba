@@ -77,6 +77,13 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         },
     },
     {
+        name: "Tocantins_V01",
+        createdLocalDate: "2026-09-21",
+        timezone: "America/Sao_Paulo",
+        clicks: 3,
+        showClicks: true,
+    },
+    {
         name: "VITORIA DA CONQUISTA",
         matchExactName: true,
         forceCompleted: true,
