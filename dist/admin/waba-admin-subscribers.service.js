@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaAdminSubscribersService = void 0;
+exports.resolveSubscriberOriginIndicator = resolveSubscriberOriginIndicator;
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
@@ -8,8 +9,20 @@ const waba_disparos_order_shipments_1 = require("../billing/waba-disparos-order-
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_subscriber_service_1 = require("../subscribers/waba-subscriber.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
+const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_welcome_whatsapp_service_1 = require("../mail/waba-welcome-whatsapp.service");
+function resolveSubscriberOriginIndicator(indicatorUserId, indicator) {
+    const id = String(indicatorUserId || "").trim();
+    if (!id)
+        return null;
+    return {
+        kind: "indicator",
+        indicatorUserId: id,
+        indicatorName: String(indicator?.fullName || "").trim() || "Indicador",
+        indicatorEmail: String(indicator?.email || "").trim(),
+    };
+}
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const formatCpfCnpj = (raw) => {
     const digits = String(raw ?? "").replace(/\D/g, "");
@@ -106,12 +119,13 @@ const summarizePaidDisparosOrders = (orders) => {
     return { contractedValueCents, contractedShipments };
 };
 class WabaAdminSubscribersService {
-    constructor(subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository(), subscriberService = new waba_subscriber_service_1.WabaSubscriberService(), creditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService(), intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository()) {
+    constructor(subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository(), subscriberService = new waba_subscriber_service_1.WabaSubscriberService(), creditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService(), intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), systemUserService = new waba_system_user_service_1.WabaSystemUserService()) {
         this.subscriberRepository = subscriberRepository;
         this.subscriberService = subscriberService;
         this.creditsService = creditsService;
         this.intakeRepository = intakeRepository;
         this.orderRepository = orderRepository;
+        this.systemUserService = systemUserService;
     }
     buildPaidDisparosOrdersByEmail() {
         const byEmail = new Map();
@@ -140,6 +154,10 @@ class WabaAdminSubscribersService {
             intakesByEmail.set(email, bucket);
         }
         const paidDisparosByEmail = this.buildPaidDisparosOrdersByEmail();
+        const indicators = new Map(this.systemUserService
+            .listPublicUsers()
+            .filter((user) => user.role === "indicador")
+            .map((user) => [user.id, user]));
         return this.subscriberRepository
             .list()
             .slice()
@@ -149,6 +167,7 @@ class WabaAdminSubscribersService {
             const credits = summarizePaidDisparosOrders(paidDisparosByEmail.get(email) ?? []);
             const intakes = intakesByEmail.get(email) ?? [];
             const segment = subscriber.segment ?? "outros";
+            const origin = resolveSubscriberOriginIndicator(subscriber.indicatorUserId, indicators.get(String(subscriber.indicatorUserId || "").trim()));
             return {
                 id: subscriber.id,
                 email,
@@ -167,6 +186,7 @@ class WabaAdminSubscribersService {
                 contractedShipments: credits.contractedShipments,
                 campaignsAwaiting: intakes.filter(isCampaignAwaiting).length,
                 campaignsCompleted: intakes.filter(isCampaignCompleted).length,
+                origin,
             };
         });
     }

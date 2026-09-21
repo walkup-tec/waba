@@ -18,6 +18,7 @@ import {
   type UpdateSubscriberInput,
 } from "../subscribers/waba-subscriber.service";
 import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
+import { WabaSystemUserService } from "../users/waba-system-user.service";
 import {
   deliverSubscriberWelcomeEmail,
   type WabaEmailDeliveryResult,
@@ -45,7 +46,29 @@ export type AdminSubscriberListItem = {
   contractedShipments: number;
   campaignsAwaiting: number;
   campaignsCompleted: number;
+  origin: AdminSubscriberOrigin | null;
 };
+
+export type AdminSubscriberOrigin = {
+  kind: "indicator";
+  indicatorUserId: string;
+  indicatorName: string;
+  indicatorEmail: string;
+};
+
+export function resolveSubscriberOriginIndicator(
+  indicatorUserId?: string | null,
+  indicator?: { fullName?: string | null; email?: string | null } | null,
+): AdminSubscriberOrigin | null {
+  const id = String(indicatorUserId || "").trim();
+  if (!id) return null;
+  return {
+    kind: "indicator",
+    indicatorUserId: id,
+    indicatorName: String(indicator?.fullName || "").trim() || "Indicador",
+    indicatorEmail: String(indicator?.email || "").trim(),
+  };
+}
 
 export type AdminSubscriberPurchaseHistoryItem = {
   id: string;
@@ -210,6 +233,7 @@ export class WabaAdminSubscribersService {
     private readonly creditsService = new WabaDisparosCreditsService(),
     private readonly intakeRepository = new WabaCampaignIntakeRepository(),
     private readonly orderRepository = new WabaBillingOrderRepository(),
+    private readonly systemUserService = new WabaSystemUserService(),
   ) {}
 
   private buildPaidDisparosOrdersByEmail(): Map<string, WabaBillingOrder[]> {
@@ -241,6 +265,12 @@ export class WabaAdminSubscribersService {
     }
 
     const paidDisparosByEmail = this.buildPaidDisparosOrdersByEmail();
+    const indicators = new Map(
+      this.systemUserService
+        .listPublicUsers()
+        .filter((user) => user.role === "indicador")
+        .map((user) => [user.id, user] as const),
+    );
 
     return this.subscriberRepository
       .list()
@@ -251,6 +281,10 @@ export class WabaAdminSubscribersService {
         const credits = summarizePaidDisparosOrders(paidDisparosByEmail.get(email) ?? []);
         const intakes = intakesByEmail.get(email) ?? [];
         const segment = subscriber.segment ?? "outros";
+        const origin = resolveSubscriberOriginIndicator(
+          subscriber.indicatorUserId,
+          indicators.get(String(subscriber.indicatorUserId || "").trim()),
+        );
 
         return {
           id: subscriber.id,
@@ -270,6 +304,7 @@ export class WabaAdminSubscribersService {
           contractedShipments: credits.contractedShipments,
           campaignsAwaiting: intakes.filter(isCampaignAwaiting).length,
           campaignsCompleted: intakes.filter(isCampaignCompleted).length,
+          origin,
         };
       });
   }

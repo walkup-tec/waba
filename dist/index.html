@@ -12128,6 +12128,78 @@
         color: #94a3b8;
       }
 
+      .admin-subscribers-origin-col {
+        width: 72px;
+        text-align: center;
+        overflow: visible;
+      }
+
+      .admin-subscribers-table th.admin-subscribers-origin-col,
+      .admin-subscribers-table td.admin-subscribers-origin-col {
+        text-align: center;
+        overflow: visible;
+      }
+
+      .admin-subscribers-origin-icon {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        background: #38bdf8;
+        color: #0f172a;
+        font-size: 0.78rem;
+        font-weight: 800;
+        font-style: italic;
+        line-height: 1;
+        cursor: default;
+        z-index: 2;
+      }
+
+      .admin-subscribers-origin-icon:hover,
+      .admin-subscribers-origin-icon:focus-visible {
+        z-index: 5;
+      }
+
+      .admin-subscribers-origin-tip {
+        position: absolute;
+        left: 50%;
+        top: calc(100% + 8px);
+        transform: translateX(-50%);
+        min-width: 180px;
+        max-width: 260px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: #0b1220;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        box-shadow: 0 10px 24px rgba(2, 6, 23, 0.45);
+        color: #e2e8f0;
+        font-style: normal;
+        font-weight: 500;
+        font-size: 0.72rem;
+        line-height: 1.35;
+        text-align: left;
+        white-space: normal;
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+        z-index: 30;
+      }
+
+      .admin-subscribers-origin-tip strong {
+        display: block;
+        color: #f8fafc;
+        font-weight: 700;
+      }
+
+      .admin-subscribers-origin-icon:hover .admin-subscribers-origin-tip,
+      .admin-subscribers-origin-icon:focus-visible .admin-subscribers-origin-tip {
+        opacity: 1;
+        visibility: visible;
+      }
+
       .admin-subscribers-num {
         font-variant-numeric: tabular-nums;
         text-align: right;
@@ -24600,6 +24672,7 @@
                     <thead>
                       <tr>
                         <th scope="col">Nome</th>
+                        <th scope="col" class="admin-subscribers-origin-col">Origem</th>
                         <th scope="col">Segmento</th>
                         <th scope="col">CPF ou CNPJ</th>
                         <th scope="col">Data inscrição</th>
@@ -24612,7 +24685,7 @@
                     </thead>
                     <tbody id="admin-subscribers-tbody">
                       <tr>
-                        <td colspan="9" class="muted">Carregando…</td>
+                        <td colspan="10" class="muted">Carregando…</td>
                       </tr>
                     </tbody>
                   </table>
@@ -33941,6 +34014,15 @@
         const disparos = escapeAdminHtml(formatDisparosQty(item?.contractedShipments));
         const aguardando = escapeAdminHtml(formatDisparosQty(item?.campaignsAwaiting));
         const finalizados = escapeAdminHtml(formatDisparosQty(item?.campaignsCompleted));
+        const originName = escapeAdminHtml(item?.origin?.indicatorName || "Indicador");
+        const originEmail = escapeAdminHtml(item?.origin?.indicatorEmail || "");
+        const originTip = item?.origin?.kind === "indicator"
+          ? `${originName}${originEmail ? `&#10;${originEmail}` : ""}`
+          : "";
+        const originCell =
+          item?.origin?.kind === "indicator"
+            ? `<span class="admin-subscribers-origin-icon" tabindex="0" title="${originTip}" aria-label="Indicador ${originName}${originEmail ? ` ${originEmail}` : ""}">i<span class="admin-subscribers-origin-tip"><strong>${originName}</strong>${originEmail ? originEmail : ""}</span></span>`
+            : '<span class="muted">—</span>';
         const rowClass = mergeMasterMenuNewRowClass("admin-assinantes", item?.createdAt, "");
         const rowAttrs = rowClass ? `class="${rowClass}"` : "";
         const newMarker = renderMasterMenuNewMarker("admin-assinantes", item?.createdAt);
@@ -33977,6 +34059,7 @@
                   <span class="admin-subscribers-name">${name}${newMarker}</span>
                   ${email ? `<span class="admin-subscribers-email">${email}</span>` : ""}
                 </td>
+                <td class="admin-subscribers-origin-col">${originCell}</td>
                 <td>${segment}</td>
                 <td>${cpf}</td>
                 <td>${createdAt}</td>
@@ -34007,7 +34090,7 @@
 
         if (!rows.length) {
           tbody.innerHTML =
-            '<tr><td colspan="9" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
+            '<tr><td colspan="10" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
           return;
         }
 
@@ -37130,14 +37213,14 @@
         if (!hasMasterAccess()) {
           if (tbody) {
             tbody.innerHTML =
-              '<tr><td colspan="9" class="muted">Área restrita ao usuário master.</td></tr>';
+              '<tr><td colspan="10" class="muted">Área restrita ao usuário master.</td></tr>';
           }
           if (summary) summary.textContent = "Acesso negado.";
           return;
         }
 
         if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="9" class="muted">Carregando…</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" class="muted">Carregando…</td></tr>';
         }
         if (summary) summary.textContent = "Carregando assinantes…";
 
@@ -37150,7 +37233,7 @@
           renderAdminSubscribersTable(payload.items);
         } catch (error) {
           if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="9" class="muted">${escapeAdminHtml(
+            tbody.innerHTML = `<tr><td colspan="10" class="muted">${escapeAdminHtml(
               resolveAdminSubscriberFetchError(error, "Falha ao carregar assinantes.")
             )}</td></tr>`;
           }
@@ -49812,6 +49895,11 @@
         document.getElementById("admin-subscribers-tbody")?.addEventListener("click", (event) => {
           const target = event.target;
           if (!(target instanceof Element)) return;
+          if (target.closest(".admin-subscribers-origin-icon")) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           const resendBtn = target.closest(".admin-subscriber-resend-btn");
           if (resendBtn) {
             event.preventDefault();
