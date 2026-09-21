@@ -40,6 +40,8 @@ const waba_campaign_performance_metrics_1 = require("./waba-campaign-performance
 const waba_campaign_report_timeline_1 = require("./waba-campaign-report-timeline");
 const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 const waba_campaign_laboratorio_attended_1 = require("./waba-campaign-laboratorio-attended");
+const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_short_link_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-short-link");
 const waba_leads_cnpj_browser_runtime_1 = require("../marketing/leads-cnpj/waba-leads-cnpj-browser-runtime");
 const TIMEZONE = "America/Sao_Paulo";
 const escapeHtml = (value) => String(value ?? "")
@@ -568,8 +570,16 @@ const SUBSCRIBER_REPORT_CSS = `
 `;
 function buildCampaignReportSnapshotModel(intake) {
     const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+    const laboratorioAttended = (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake);
+    const broadcast = laboratorioAttended ? (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id) : null;
+    const boundClicks = broadcast
+        ? (0, meta_whatsapp_broadcast_short_link_1.resolveBoundCampaignClicks)({
+            campaign: broadcast,
+            extraSlugs: (0, meta_whatsapp_broadcast_short_link_1.extraSlugsForIntake)(intake),
+        })
+        : 0;
     const showClicks = (0, waba_campaign_report_read_overrides_1.campaignReportShowsClicks)(intake.campaignName, intake.createdAt, report) ||
-        ((0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake) && report?.source === "meta_lab");
+        (laboratorioAttended && report?.source === "meta_lab");
     return {
         campaignName: intake.campaignName,
         timeline: (0, waba_campaign_report_timeline_1.collectIntakeReportTimeline)(intake),
@@ -578,7 +588,7 @@ function buildCampaignReportSnapshotModel(intake) {
         delivered: Math.max(0, Math.round(Number(report?.delivered ?? 0))),
         read: Math.max(0, Math.round(Number(report?.read ?? 0))),
         failed: Math.max(0, Math.round(Number(report?.failed ?? 0))),
-        clicks: Math.max(0, Math.round(Number(report?.clicks ?? 0))),
+        clicks: Math.max(0, Math.round(Number(report?.clicks ?? 0)), boundClicks),
         showClicks,
         reportSource: String(report?.source || "").trim(),
     };

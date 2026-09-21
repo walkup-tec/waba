@@ -10,7 +10,7 @@ exports.tryFinalizeDueLabReports = tryFinalizeDueLabReports;
 exports.ensureLabReportFinalizeSweep = ensureLabReportFinalizeSweep;
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
-const waba_shortener_repository_1 = require("../../shortener/waba-shortener.repository");
+const meta_whatsapp_broadcast_short_link_1 = require("./meta-whatsapp-broadcast-short-link");
 const waba_campaign_intake_repository_1 = require("../../disparos/waba-campaign-intake.repository");
 const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-intake-status");
 const waba_campaign_laboratorio_attended_1 = require("../../disparos/waba-campaign-laboratorio-attended");
@@ -37,7 +37,7 @@ function leadCountsAsRead(lead) {
 function leadCountsAsFailed(lead) {
     return lead.status === "failed" || String(lead.metaStatus || "") === "failed";
 }
-function computeMetaLabCampaignMetrics(campaign, totalLeads) {
+function computeMetaLabCampaignMetrics(campaign, totalLeads, extraSlugs) {
     const leads = Array.isArray(campaign.leads) ? campaign.leads : [];
     return {
         totalLeads: Math.max(0, Math.round(Number(totalLeads) || 0)),
@@ -45,11 +45,7 @@ function computeMetaLabCampaignMetrics(campaign, totalLeads) {
         delivered: leads.filter(leadCountsAsDelivered).length,
         read: leads.filter(leadCountsAsRead).length,
         failed: leads.filter(leadCountsAsFailed).length,
-        clicks: (0, meta_whatsapp_broadcast_store_1.resolveBroadcastReportedClicks)(campaign, (0, waba_shortener_repository_1.peekShortLinkClicksForBroadcast)({
-            trackedSlug: campaign.trackedSlug,
-            shortSlug: campaign.shortSlug,
-            shortUrl: campaign.shortUrl,
-        })),
+        clicks: (0, meta_whatsapp_broadcast_short_link_1.resolveBoundCampaignClicks)({ campaign, extraSlugs }),
     };
 }
 function campaignHasDeliverySignal(campaign) {
@@ -115,7 +111,7 @@ function refreshCompletedLabIntakeReport(intakeCampaignId) {
         return false;
     if (intake.performanceReport?.source !== "meta_lab")
         return false;
-    const metrics = computeMetaLabCampaignMetrics(campaign, Number(intake.plannedSendCount || campaign.total || 0));
+    const metrics = computeMetaLabCampaignMetrics(campaign, Number(intake.plannedSendCount || campaign.total || 0), (0, meta_whatsapp_broadcast_short_link_1.extraSlugsForIntake)(intake));
     if (!performanceChanged(intake.performanceReport, metrics))
         return false;
     const now = new Date().toISOString();
@@ -168,7 +164,7 @@ function tryFinalizeLabIntakeReport(intakeCampaignId, nowMs = Date.now()) {
         return false;
     if (status !== "in_progress")
         return false;
-    const metrics = computeMetaLabCampaignMetrics(campaign, Number(intake.plannedSendCount || campaign.total || 0));
+    const metrics = computeMetaLabCampaignMetrics(campaign, Number(intake.plannedSendCount || campaign.total || 0), (0, meta_whatsapp_broadcast_short_link_1.extraSlugsForIntake)(intake));
     try {
         (0, waba_campaign_report_finalize_service_1.finalizeIntakePerformanceReport)({
             campaignId: intakeId,

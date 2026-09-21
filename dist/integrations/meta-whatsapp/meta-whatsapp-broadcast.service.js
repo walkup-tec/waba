@@ -29,7 +29,9 @@ const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void")
 const meta_whatsapp_broadcast_report_1 = require("./meta-whatsapp-broadcast-report");
 const waba_shortener_service_1 = require("../../shortener/waba-shortener.service");
 const waba_shortener_repository_1 = require("../../shortener/waba-shortener.repository");
+const waba_public_base_url_1 = require("../../lib/waba-public-base-url");
 const meta_whatsapp_template_ai_short_url_1 = require("./meta-whatsapp-template-ai-short-url");
+const meta_whatsapp_broadcast_short_link_1 = require("./meta-whatsapp-broadcast-short-link");
 const waba_campaign_intake_repository_1 = require("../../disparos/waba-campaign-intake.repository");
 const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-intake-status");
 const waba_campaign_laboratorio_attended_1 = require("../../disparos/waba-campaign-laboratorio-attended");
@@ -354,12 +356,50 @@ class MetaWhatsappBroadcastService {
     }
     async createCampaignShortLink(input) {
         const button = input.inspect.urlButton;
-        const existingSlug = button?.slug || "";
+        const plan = (0, meta_whatsapp_broadcast_short_link_1.planBroadcastButtonTracking)(button);
+        const existingSlug = plan.reuseExistingSlug ? plan.slug : String(button?.slug || "");
         const existing = existingSlug ? await (0, waba_shortener_repository_1.findShortLinkBySlug)(existingSlug) : null;
         const destination = existing?.longUrl ||
             (button?.url && /^https?:\/\//i.test(button.url.replace(/\{\{\d+\}\}/g, "x"))
                 ? button.url.replace(/\{\{\d+\}\}/g, input.campaignId.slice(0, 8))
                 : "https://wabadisparos.com.br/");
+        const attachIds = {
+            intakeCampaignId: String(input.intakeCampaignId || "").trim() || undefined,
+        };
+        if (plan.reuseExistingSlug) {
+            if (!existing) {
+                try {
+                    await (0, waba_shortener_service_1.createWabaShortUrl)(destination, {
+                        tenantId: input.tenantId,
+                        slug: plan.slug,
+                        publicBaseHints: input.publicBaseHints,
+                        campaignId: input.campaignId,
+                    });
+                }
+                catch {
+                    /* slug pode já existir; o attach abaixo amarra o disparo */
+                }
+            }
+            await (0, waba_shortener_service_1.attachCampaignIdToShortLink)(plan.slug, input.campaignId, attachIds);
+            const reused = await (0, waba_shortener_repository_1.findShortLinkBySlug)(plan.slug);
+            let publicBase = "";
+            try {
+                publicBase = (0, waba_public_base_url_1.resolveWabaShortPublicBaseUrl)(input.publicBaseHints);
+            }
+            catch {
+                publicBase = "";
+            }
+            return {
+                shortUrl: (0, meta_whatsapp_broadcast_short_link_1.resolveReusedButtonShortUrl)({
+                    slug: plan.slug,
+                    buttonUrl: button?.url,
+                    publicBase,
+                }),
+                shortSlug: plan.slug,
+                trackedSlug: plan.slug,
+                clicksAtStart: Math.max(0, Number((existing || reused)?.clicks || 0)),
+            };
+        }
         const shortUrl = await (0, meta_whatsapp_template_ai_short_url_1.createMetaTemplateButtonShortUrl)({
             destinationUrl: destination,
             tenantId: input.tenantId,
@@ -367,16 +407,9 @@ class MetaWhatsappBroadcastService {
         });
         const shortSlug = (0, waba_shortener_repository_1.extractSlugFromPublicShortUrl)(shortUrl) || "";
         if (shortSlug) {
-            await (0, waba_shortener_service_1.attachCampaignIdToShortLink)(shortSlug, input.campaignId);
+            await (0, waba_shortener_service_1.attachCampaignIdToShortLink)(shortSlug, input.campaignId, attachIds);
         }
-        let trackedSlug = shortSlug;
-        let clicksAtStart = 0;
-        if (existingSlug && !button?.hasVariable) {
-            await (0, waba_shortener_service_1.attachCampaignIdToShortLink)(existingSlug, input.campaignId);
-            trackedSlug = existingSlug;
-            clicksAtStart = Math.max(0, Number(existing?.clicks || 0));
-        }
-        return { shortUrl, shortSlug, trackedSlug, clicksAtStart };
+        return { shortUrl, shortSlug, trackedSlug: shortSlug, clicksAtStart: 0 };
     }
     buildComponents(input) {
         const components = [];
@@ -475,6 +508,7 @@ class MetaWhatsappBroadcastService {
             tenantId: tenant.tenantId,
             inspect: loaded.inspect,
             campaignId,
+            intakeCampaignId,
             publicBaseHints: input.publicBaseHints,
         });
         const now = new Date().toISOString();

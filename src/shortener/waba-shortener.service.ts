@@ -80,6 +80,7 @@ export async function resolveWabaShortRedirect(slug: string): Promise<string | n
   creditShortLinkClickToBroadcast({
     slug: normalized,
     campaignId: record.campaignId,
+    intakeCampaignId: record.intakeCampaignId,
   });
   return record.longUrl;
 }

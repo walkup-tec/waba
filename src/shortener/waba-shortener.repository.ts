@@ -11,6 +11,7 @@ export type WabaShortLinkRecord = {
   createdAt: string;
   clicks: number;
   campaignId?: string;
+  intakeCampaignId?: string;
 };
 
 type WabaShortenerStore = {
@@ -43,6 +44,7 @@ async function loadStore(): Promise<WabaShortenerStore> {
         createdAt: String(row?.createdAt || row?.created_at || new Date().toISOString()),
         clicks: Math.max(0, Number(row?.clicks || 0)),
         campaignId: String(row?.campaignId || row?.campaign_id || "").trim() || undefined,
+        intakeCampaignId: String(row?.intakeCampaignId || row?.intake_campaign_id || "").trim() || undefined,
       })),
     };
   } catch {
@@ -72,16 +74,24 @@ export async function createShortLinkRecord(input: {
   longUrl: string;
   tenantId?: string;
   campaignId?: string;
+  intakeCampaignId?: string;
 }): Promise<WabaShortLinkRecord> {
   const store = await loadStore();
   const existing = slugIndex.get(normalizeSlug(input.slug));
   if (existing) {
     if (existing.longUrl === input.longUrl) {
       const campaignId = String(input.campaignId || "").trim();
+      const intakeCampaignId = String(input.intakeCampaignId || "").trim();
+      let changed = false;
       if (campaignId && existing.campaignId !== campaignId) {
         existing.campaignId = campaignId;
-        await persistStore(store);
+        changed = true;
       }
+      if (intakeCampaignId && existing.intakeCampaignId !== intakeCampaignId) {
+        existing.intakeCampaignId = intakeCampaignId;
+        changed = true;
+      }
+      if (changed) await persistStore(store);
       return existing;
     }
     throw new Error("slug já existe para outra URL");
@@ -94,6 +104,7 @@ export async function createShortLinkRecord(input: {
     createdAt: new Date().toISOString(),
     clicks: 0,
     campaignId: String(input.campaignId || "").trim() || undefined,
+    intakeCampaignId: String(input.intakeCampaignId || "").trim() || undefined,
   };
   store.links.push(record);
   await persistStore(store);
@@ -109,7 +120,11 @@ export async function incrementShortLinkClicks(slug: string): Promise<number> {
   return record.clicks;
 }
 
-export async function attachCampaignIdToShortLink(slug: string, campaignId: string): Promise<boolean> {
+export async function attachCampaignIdToShortLink(
+  slug: string,
+  campaignId: string,
+  extras?: { intakeCampaignId?: string | null },
+): Promise<boolean> {
   const id = String(campaignId || "").trim();
   const key = normalizeSlug(slug);
   if (!id || !key) return false;
@@ -117,6 +132,8 @@ export async function attachCampaignIdToShortLink(slug: string, campaignId: stri
   const record = slugIndex.get(key);
   if (!record) return false;
   record.campaignId = id;
+  const intakeId = String(extras?.intakeCampaignId || "").trim();
+  if (intakeId) record.intakeCampaignId = intakeId;
   await persistStore(store);
   return true;
 }
@@ -126,7 +143,10 @@ export async function getShortLinkClicksByCampaignId(campaignId: string): Promis
   if (!id) return 0;
   const store = await loadStore();
   return store.links
-    .filter((row) => String(row.campaignId || "").trim() === id)
+    .filter(
+      (row) =>
+        String(row.campaignId || "").trim() === id || String(row.intakeCampaignId || "").trim() === id,
+    )
     .reduce((sum, row) => sum + Math.max(0, Number(row.clicks || 0)), 0);
 }
 

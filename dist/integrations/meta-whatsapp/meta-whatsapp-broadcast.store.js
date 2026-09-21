@@ -525,10 +525,13 @@ function stampTemplateApprovedAtOnBroadcasts(input) {
         writeStore(store);
 }
 function resolveBroadcastCampaignForShortClick(campaigns, input) {
-    const campaignId = String(input.campaignId || "").trim();
+    const ids = [input.campaignId, input.intakeCampaignId]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .filter((value, index, all) => all.indexOf(value) === index);
     const slug = String(input.slug || "").trim().toLowerCase();
     const usable = campaigns.filter((row) => isActiveBroadcastRow(row));
-    if (campaignId) {
+    for (const campaignId of ids) {
         const byId = usable.find((item) => item.id === campaignId);
         if (byId)
             return byId;

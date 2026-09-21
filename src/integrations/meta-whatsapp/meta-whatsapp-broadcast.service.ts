@@ -92,12 +92,17 @@ import {
   reuseActiveCloudBroadcast,
 } from "./meta-whatsapp-broadcast-void";
 import { scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
-import { attachCampaignIdToShortLink } from "../../shortener/waba-shortener.service";
+import { attachCampaignIdToShortLink, createWabaShortUrl } from "../../shortener/waba-shortener.service";
 import {
   extractSlugFromPublicShortUrl,
   findShortLinkBySlug,
 } from "../../shortener/waba-shortener.repository";
+import { resolveWabaShortPublicBaseUrl } from "../../lib/waba-public-base-url";
 import { createMetaTemplateButtonShortUrl } from "./meta-whatsapp-template-ai-short-url";
+import {
+  planBroadcastButtonTracking,
+  resolveReusedButtonShortUrl,
+} from "./meta-whatsapp-broadcast-short-link";
 import { WabaCampaignIntakeRepository } from "../../disparos/waba-campaign-intake.repository";
 import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
 import { campaignAttendedByLaboratorioStaff } from "../../disparos/waba-campaign-laboratorio-attended";
@@ -517,16 +522,53 @@ export class MetaWhatsappBroadcastService {
     tenantId: string;
     inspect: MetaBroadcastTemplateInspect;
     campaignId: string;
+    intakeCampaignId?: string;
     publicBaseHints?: WabaPublicBaseRequestHints;
   }): Promise<{ shortUrl: string; shortSlug: string; trackedSlug: string; clicksAtStart: number }> {
     const button = input.inspect.urlButton;
-    const existingSlug = button?.slug || "";
+    const plan = planBroadcastButtonTracking(button);
+    const existingSlug = plan.reuseExistingSlug ? plan.slug : String(button?.slug || "");
     const existing = existingSlug ? await findShortLinkBySlug(existingSlug) : null;
     const destination =
       existing?.longUrl ||
       (button?.url && /^https?:\/\//i.test(button.url.replace(/\{\{\d+\}\}/g, "x"))
         ? button.url.replace(/\{\{\d+\}\}/g, input.campaignId.slice(0, 8))
         : "https://wabadisparos.com.br/");
+    const attachIds = {
+      intakeCampaignId: String(input.intakeCampaignId || "").trim() || undefined,
+    };
+    if (plan.reuseExistingSlug) {
+      if (!existing) {
+        try {
+          await createWabaShortUrl(destination, {
+            tenantId: input.tenantId,
+            slug: plan.slug,
+            publicBaseHints: input.publicBaseHints,
+            campaignId: input.campaignId,
+          });
+        } catch {
+          /* slug pode já existir; o attach abaixo amarra o disparo */
+        }
+      }
+      await attachCampaignIdToShortLink(plan.slug, input.campaignId, attachIds);
+      const reused = await findShortLinkBySlug(plan.slug);
+      let publicBase = "";
+      try {
+        publicBase = resolveWabaShortPublicBaseUrl(input.publicBaseHints);
+      } catch {
+        publicBase = "";
+      }
+      return {
+        shortUrl: resolveReusedButtonShortUrl({
+          slug: plan.slug,
+          buttonUrl: button?.url,
+          publicBase,
+        }),
+        shortSlug: plan.slug,
+        trackedSlug: plan.slug,
+        clicksAtStart: Math.max(0, Number((existing || reused)?.clicks || 0)),
+      };
+    }
     const shortUrl = await createMetaTemplateButtonShortUrl({
       destinationUrl: destination,
       tenantId: input.tenantId,
@@ -534,16 +576,9 @@ export class MetaWhatsappBroadcastService {
     });
     const shortSlug = extractSlugFromPublicShortUrl(shortUrl) || "";
     if (shortSlug) {
-      await attachCampaignIdToShortLink(shortSlug, input.campaignId);
+      await attachCampaignIdToShortLink(shortSlug, input.campaignId, attachIds);
     }
-    let trackedSlug = shortSlug;
-    let clicksAtStart = 0;
-    if (existingSlug && !button?.hasVariable) {
-      await attachCampaignIdToShortLink(existingSlug, input.campaignId);
-      trackedSlug = existingSlug;
-      clicksAtStart = Math.max(0, Number(existing?.clicks || 0));
-    }
-    return { shortUrl, shortSlug, trackedSlug, clicksAtStart };
+    return { shortUrl, shortSlug, trackedSlug: shortSlug, clicksAtStart: 0 };
   }
 
   private buildComponents(input: {
@@ -689,6 +724,7 @@ export class MetaWhatsappBroadcastService {
       tenantId: tenant.tenantId,
       inspect: loaded.inspect,
       campaignId,
+      intakeCampaignId,
       publicBaseHints: input.publicBaseHints,
     });
     const now = new Date().toISOString();

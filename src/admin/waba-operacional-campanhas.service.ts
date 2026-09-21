@@ -81,6 +81,7 @@ import {
   type CloudBroadcastProgressHint,
 } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 import { computeMetaLabCampaignMetrics } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
+import { extraSlugsForIntake } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-short-link";
 
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
 export const CAMPAIGN_START_DEADLINE_MS = CAMPAIGN_START_OVERDUE_MS;
@@ -574,20 +575,23 @@ export class WabaOperacionalCampanhasService {
     let report = intake.performanceReport;
     let liveFromMeta = false;
     const broadcast = findBroadcastByIntakeCampaignId(intake.id);
-    if (laboratorioAttended && status === "in_progress" && broadcast) {
-      const live = computeMetaLabCampaignMetrics(broadcast, totalLeads);
+    const live =
+      laboratorioAttended && broadcast
+        ? computeMetaLabCampaignMetrics(broadcast, totalLeads, extraSlugsForIntake(intake))
+        : null;
+    if (live && (status === "in_progress" || status === "completed")) {
       report = {
         totalLeads: live.totalLeads,
         sent: live.sent,
         delivered: live.delivered,
         read: live.read,
         failed: live.failed,
-        clicks: live.clicks,
+        clicks: Math.max(Number(report?.clicks || 0), live.clicks),
         source: "meta_lab",
-        filledAt: "",
-        filledByEmail: "",
+        filledAt: status === "in_progress" ? "" : String(report?.filledAt || ""),
+        filledByEmail: status === "in_progress" ? "" : String(report?.filledByEmail || ""),
       };
-      liveFromMeta = true;
+      liveFromMeta = status === "in_progress";
     }
     report = applyCampaignReportReadOverride(
       intake.campaignName,
@@ -614,7 +618,7 @@ export class WabaOperacionalCampanhasService {
       intake.id,
     )?.clicks;
     const trackedClicks = laboratorioAttended
-      ? Math.max(0, Math.round(Number(report?.clicks || 0)))
+      ? Math.max(0, Math.round(Number(report?.clicks || 0)), Math.round(Number(live?.clicks || 0)))
       : await resolveIntakeTrackedShortUrlClicks(intake);
     const clicks = laboratorioAttended
       ? trackedClicks

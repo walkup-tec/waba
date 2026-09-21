@@ -8,6 +8,8 @@ import {
 import { applyCampaignReportReadOverride, campaignReportShowsClicks } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
 import type { WabaCampaignIntake } from "./waba-campaign-intake.repository";
+import { findBroadcastByIntakeCampaignId } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
+import { extraSlugsForIntake, resolveBoundCampaignClicks } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-short-link";
 import { buildChromiumLaunchArgs } from "../marketing/leads-cnpj/waba-leads-cnpj-browser-runtime";
 
 export type CampaignReportSnapshotInput = {
@@ -578,9 +580,17 @@ export function buildCampaignReportSnapshotModel(
     intake.createdAt,
     intake.performanceReport,
   );
+  const laboratorioAttended = campaignAttendedByLaboratorioStaff(intake);
+  const broadcast = laboratorioAttended ? findBroadcastByIntakeCampaignId(intake.id) : null;
+  const boundClicks = broadcast
+    ? resolveBoundCampaignClicks({
+        campaign: broadcast,
+        extraSlugs: extraSlugsForIntake(intake),
+      })
+    : 0;
   const showClicks =
     campaignReportShowsClicks(intake.campaignName, intake.createdAt, report) ||
-    (campaignAttendedByLaboratorioStaff(intake) && report?.source === "meta_lab");
+    (laboratorioAttended && report?.source === "meta_lab");
   return {
     campaignName: intake.campaignName,
     timeline: collectIntakeReportTimeline(intake),
@@ -589,7 +599,7 @@ export function buildCampaignReportSnapshotModel(
     delivered: Math.max(0, Math.round(Number(report?.delivered ?? 0))),
     read: Math.max(0, Math.round(Number(report?.read ?? 0))),
     failed: Math.max(0, Math.round(Number(report?.failed ?? 0))),
-    clicks: Math.max(0, Math.round(Number(report?.clicks ?? 0))),
+    clicks: Math.max(0, Math.round(Number(report?.clicks ?? 0)), boundClicks),
     showClicks,
     reportSource: String(report?.source || "").trim(),
   };

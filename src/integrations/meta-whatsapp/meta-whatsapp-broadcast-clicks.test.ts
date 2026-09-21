@@ -44,6 +44,11 @@ describe("cliques do botão /s/ no Disparo Cloud", () => {
       slug: "n9730691",
     });
     assert.equal(bySlug?.id, "bc-tocantins");
+    const byRecordIds = resolveBroadcastCampaignForShortClick(rows, {
+      campaignId: "slug-ainda-sem-broadcast",
+      intakeCampaignId: "intake-tocantins",
+    });
+    assert.equal(byRecordIds?.id, "bc-tocantins");
   });
 
   it("lê o delta do encurtador quando o JSON do disparo ficou em 0", () => {

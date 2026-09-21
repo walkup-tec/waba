@@ -599,12 +599,15 @@ export function stampTemplateApprovedAtOnBroadcasts(input: {
 
 export function resolveBroadcastCampaignForShortClick(
   campaigns: MetaBroadcastCampaign[],
-  input: { campaignId?: string | null; slug?: string | null },
+  input: { campaignId?: string | null; intakeCampaignId?: string | null; slug?: string | null },
 ): MetaBroadcastCampaign | null {
-  const campaignId = String(input.campaignId || "").trim();
+  const ids = [input.campaignId, input.intakeCampaignId]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value, index, all) => all.indexOf(value) === index);
   const slug = String(input.slug || "").trim().toLowerCase();
   const usable = campaigns.filter((row) => isActiveBroadcastRow(row));
-  if (campaignId) {
+  for (const campaignId of ids) {
     const byId = usable.find((item) => item.id === campaignId);
     if (byId) return byId;
     const byIntake = usable
@@ -661,6 +664,7 @@ export function addClicksByBroadcastSlug(slug: string, amount = 1): void {
 export function creditShortLinkClickToBroadcast(input: {
   slug?: string | null;
   campaignId?: string | null;
+  intakeCampaignId?: string | null;
   amount?: number;
 }): boolean {
   const delta = Math.max(0, Math.round(Number(input.amount ?? 1) || 0));

@@ -19,6 +19,8 @@ const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.ut
 const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 const waba_campaign_laboratorio_attended_1 = require("./waba-campaign-laboratorio-attended");
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
+const meta_whatsapp_broadcast_report_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-report");
+const meta_whatsapp_broadcast_short_link_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-short-link");
 const waba_campaign_performance_metrics_1 = require("./waba-campaign-performance-metrics");
 const waba_campaign_report_timeline_1 = require("./waba-campaign-report-timeline");
 const waba_campaign_whatsapp_display_name_1 = require("./waba-campaign-whatsapp-display-name");
@@ -590,9 +592,19 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 error: "O relatório fica disponível quando a campanha estiver com status Finalizado.",
             });
         }
-        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+        const laboratorioAttended = (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake);
+        let report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+        const broadcast = laboratorioAttended ? (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id) : null;
+        if (report && broadcast) {
+            const live = (0, meta_whatsapp_broadcast_report_1.computeMetaLabCampaignMetrics)(broadcast, Number(report.totalLeads || intake.plannedSendCount || broadcast.total || 0), (0, meta_whatsapp_broadcast_short_link_1.extraSlugsForIntake)(intake));
+            report = {
+                ...report,
+                clicks: Math.max(Number(report.clicks || 0), live.clicks),
+                source: report.source || "meta_lab",
+            };
+        }
         const showClicks = (0, waba_campaign_report_read_overrides_1.campaignReportShowsClicks)(intake.campaignName, intake.createdAt, report) ||
-            ((0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake) &&
+            (laboratorioAttended &&
                 report?.source === "meta_lab" &&
                 !(0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report));
         const metrics = report
@@ -630,7 +642,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             campaignName: intake.campaignName,
             createdAt: intake.createdAt,
             completedAt: intake.updatedAt,
-            displayStatus: toDisplayStatus(status, (0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake)),
+            displayStatus: toDisplayStatus(status, laboratorioAttended),
             regionDdd: intake.regionDdd,
             source: report?.source || "manual",
             showClicks,

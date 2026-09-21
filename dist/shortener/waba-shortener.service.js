@@ -68,6 +68,7 @@ async function resolveWabaShortRedirect(slug) {
     (0, meta_whatsapp_broadcast_store_1.creditShortLinkClickToBroadcast)({
         slug: normalized,
         campaignId: record.campaignId,
+        intakeCampaignId: record.intakeCampaignId,
     });
     return record.longUrl;
 }

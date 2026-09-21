@@ -40,6 +40,7 @@ async function loadStore() {
                 createdAt: String(row?.createdAt || row?.created_at || new Date().toISOString()),
                 clicks: Math.max(0, Number(row?.clicks || 0)),
                 campaignId: String(row?.campaignId || row?.campaign_id || "").trim() || undefined,
+                intakeCampaignId: String(row?.intakeCampaignId || row?.intake_campaign_id || "").trim() || undefined,
             })),
         };
     }
@@ -67,10 +68,18 @@ async function createShortLinkRecord(input) {
     if (existing) {
         if (existing.longUrl === input.longUrl) {
             const campaignId = String(input.campaignId || "").trim();
+            const intakeCampaignId = String(input.intakeCampaignId || "").trim();
+            let changed = false;
             if (campaignId && existing.campaignId !== campaignId) {
                 existing.campaignId = campaignId;
-                await persistStore(store);
+                changed = true;
             }
+            if (intakeCampaignId && existing.intakeCampaignId !== intakeCampaignId) {
+                existing.intakeCampaignId = intakeCampaignId;
+                changed = true;
+            }
+            if (changed)
+                await persistStore(store);
             return existing;
         }
         throw new Error("slug já existe para outra URL");
@@ -83,6 +92,7 @@ async function createShortLinkRecord(input) {
         createdAt: new Date().toISOString(),
         clicks: 0,
         campaignId: String(input.campaignId || "").trim() || undefined,
+        intakeCampaignId: String(input.intakeCampaignId || "").trim() || undefined,
     };
     store.links.push(record);
     await persistStore(store);
@@ -97,7 +107,7 @@ async function incrementShortLinkClicks(slug) {
     await persistStore(store);
     return record.clicks;
 }
-async function attachCampaignIdToShortLink(slug, campaignId) {
+async function attachCampaignIdToShortLink(slug, campaignId, extras) {
     const id = String(campaignId || "").trim();
     const key = normalizeSlug(slug);
     if (!id || !key)
@@ -107,6 +117,9 @@ async function attachCampaignIdToShortLink(slug, campaignId) {
     if (!record)
         return false;
     record.campaignId = id;
+    const intakeId = String(extras?.intakeCampaignId || "").trim();
+    if (intakeId)
+        record.intakeCampaignId = intakeId;
     await persistStore(store);
     return true;
 }
@@ -116,7 +129,7 @@ async function getShortLinkClicksByCampaignId(campaignId) {
         return 0;
     const store = await loadStore();
     return store.links
-        .filter((row) => String(row.campaignId || "").trim() === id)
+        .filter((row) => String(row.campaignId || "").trim() === id || String(row.intakeCampaignId || "").trim() === id)
         .reduce((sum, row) => sum + Math.max(0, Number(row.clicks || 0)), 0);
 }
 function peekShortLinkClicksSync(slug) {

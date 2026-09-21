@@ -1,12 +1,11 @@
 import { logMetaWhatsappSafe } from "./meta-whatsapp-errors";
 import {
   findBroadcastByIntakeCampaignId,
-  resolveBroadcastReportedClicks,
   saveBroadcastCampaign,
   type MetaBroadcastCampaign,
   type MetaBroadcastLead,
 } from "./meta-whatsapp-broadcast.store";
-import { peekShortLinkClicksForBroadcast } from "../../shortener/waba-shortener.repository";
+import { extraSlugsForIntake, resolveBoundCampaignClicks } from "./meta-whatsapp-broadcast-short-link";
 import { WabaCampaignIntakeRepository } from "../../disparos/waba-campaign-intake.repository";
 import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
 import { campaignAttendedByLaboratorioStaff } from "../../disparos/waba-campaign-laboratorio-attended";
@@ -42,7 +41,11 @@ function leadCountsAsFailed(lead: MetaBroadcastLead): boolean {
   return lead.status === "failed" || String(lead.metaStatus || "") === "failed";
 }
 
-export function computeMetaLabCampaignMetrics(campaign: MetaBroadcastCampaign, totalLeads: number) {
+export function computeMetaLabCampaignMetrics(
+  campaign: MetaBroadcastCampaign,
+  totalLeads: number,
+  extraSlugs?: Array<string | null | undefined>,
+) {
   const leads = Array.isArray(campaign.leads) ? campaign.leads : [];
   return {
     totalLeads: Math.max(0, Math.round(Number(totalLeads) || 0)),
@@ -50,14 +53,7 @@ export function computeMetaLabCampaignMetrics(campaign: MetaBroadcastCampaign, t
     delivered: leads.filter(leadCountsAsDelivered).length,
     read: leads.filter(leadCountsAsRead).length,
     failed: leads.filter(leadCountsAsFailed).length,
-    clicks: resolveBroadcastReportedClicks(
-      campaign,
-      peekShortLinkClicksForBroadcast({
-        trackedSlug: campaign.trackedSlug,
-        shortSlug: campaign.shortSlug,
-        shortUrl: campaign.shortUrl,
-      }),
-    ),
+    clicks: resolveBoundCampaignClicks({ campaign, extraSlugs }),
   };
 }
 
@@ -121,7 +117,11 @@ export function refreshCompletedLabIntakeReport(intakeCampaignId: string): boole
   if (normalizeCampaignIntakeStatus(intake.status) !== "completed") return false;
   if (campaignForcesCompleted(intake.campaignName, intake.createdAt, intake.id)) return false;
   if (intake.performanceReport?.source !== "meta_lab") return false;
-  const metrics = computeMetaLabCampaignMetrics(campaign, Number(intake.plannedSendCount || campaign.total || 0));
+  const metrics = computeMetaLabCampaignMetrics(
+    campaign,
+    Number(intake.plannedSendCount || campaign.total || 0),
+    extraSlugsForIntake(intake),
+  );
   if (!performanceChanged(intake.performanceReport, metrics)) return false;
   const now = new Date().toISOString();
   intakes.updateById(intakeId, {
@@ -167,7 +167,11 @@ export function tryFinalizeLabIntakeReport(intakeCampaignId: string, nowMs = Dat
   const status = normalizeCampaignIntakeStatus(intake.status);
   if (status === "completed" || status === "error_reported" || status === "cancelled") return false;
   if (status !== "in_progress") return false;
-  const metrics = computeMetaLabCampaignMetrics(campaign, Number(intake.plannedSendCount || campaign.total || 0));
+  const metrics = computeMetaLabCampaignMetrics(
+    campaign,
+    Number(intake.plannedSendCount || campaign.total || 0),
+    extraSlugsForIntake(intake),
+  );
   try {
     finalizeIntakePerformanceReport({
       campaignId: intakeId,

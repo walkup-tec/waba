@@ -34,6 +34,7 @@ const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-spli
 const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 const meta_whatsapp_broadcast_report_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-report");
+const meta_whatsapp_broadcast_short_link_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-short-link");
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
 exports.CAMPAIGN_START_DEADLINE_MS = waba_campaign_supplier_assignment_service_1.CAMPAIGN_START_OVERDUE_MS;
 const normalizeEmail = (value) => value.trim().toLowerCase();
@@ -327,20 +328,22 @@ class WabaOperacionalCampanhasService {
         let report = intake.performanceReport;
         let liveFromMeta = false;
         const broadcast = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intake.id);
-        if (laboratorioAttended && status === "in_progress" && broadcast) {
-            const live = (0, meta_whatsapp_broadcast_report_1.computeMetaLabCampaignMetrics)(broadcast, totalLeads);
+        const live = laboratorioAttended && broadcast
+            ? (0, meta_whatsapp_broadcast_report_1.computeMetaLabCampaignMetrics)(broadcast, totalLeads, (0, meta_whatsapp_broadcast_short_link_1.extraSlugsForIntake)(intake))
+            : null;
+        if (live && (status === "in_progress" || status === "completed")) {
             report = {
                 totalLeads: live.totalLeads,
                 sent: live.sent,
                 delivered: live.delivered,
                 read: live.read,
                 failed: live.failed,
-                clicks: live.clicks,
+                clicks: Math.max(Number(report?.clicks || 0), live.clicks),
                 source: "meta_lab",
-                filledAt: "",
-                filledByEmail: "",
+                filledAt: status === "in_progress" ? "" : String(report?.filledAt || ""),
+                filledByEmail: status === "in_progress" ? "" : String(report?.filledByEmail || ""),
             };
-            liveFromMeta = true;
+            liveFromMeta = status === "in_progress";
         }
         report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, report) ?? undefined;
         const hideClicks = (0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report);
@@ -350,7 +353,7 @@ class WabaOperacionalCampanhasService {
             : (0, waba_campaign_intake_short_url_1.resolveOperacionalManualReportShowClicks)({ hideClicks, forceShowClicks });
         const overrideClicks = (0, waba_campaign_report_read_overrides_2.resolveCampaignReportOverride)(intake.campaignName, intake.createdAt, report, intake.id)?.clicks;
         const trackedClicks = laboratorioAttended
-            ? Math.max(0, Math.round(Number(report?.clicks || 0)))
+            ? Math.max(0, Math.round(Number(report?.clicks || 0)), Math.round(Number(live?.clicks || 0)))
             : await (0, waba_campaign_intake_short_url_1.resolveIntakeTrackedShortUrlClicks)(intake);
         const clicks = laboratorioAttended
             ? trackedClicks

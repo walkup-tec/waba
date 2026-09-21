@@ -41,10 +41,13 @@ import {
 } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
 import {
+  findBroadcastByIntakeCampaignId,
   findBroadcastProgressByIntakeCampaignId,
   indexBroadcastProgressByIntakeId,
   type CloudBroadcastProgressHint,
 } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
+import { computeMetaLabCampaignMetrics } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
+import { extraSlugsForIntake } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast-short-link";
 import { computeCampaignPerformanceMetrics } from "./waba-campaign-performance-metrics";
 import { collectIntakeReportTimeline } from "./waba-campaign-report-timeline";
 import { WABA_CAMPAIGN_WHATSAPP_DISPLAY_NAME } from "./waba-campaign-whatsapp-display-name";
@@ -766,14 +769,28 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       });
     }
 
-    const report = applyCampaignReportReadOverride(
+    const laboratorioAttended = campaignAttendedByLaboratorioStaff(intake);
+    let report = applyCampaignReportReadOverride(
       intake.campaignName,
       intake.createdAt,
       intake.performanceReport,
     );
+    const broadcast = laboratorioAttended ? findBroadcastByIntakeCampaignId(intake.id) : null;
+    if (report && broadcast) {
+      const live = computeMetaLabCampaignMetrics(
+        broadcast,
+        Number(report.totalLeads || intake.plannedSendCount || broadcast.total || 0),
+        extraSlugsForIntake(intake),
+      );
+      report = {
+        ...report,
+        clicks: Math.max(Number(report.clicks || 0), live.clicks),
+        source: report.source || "meta_lab",
+      };
+    }
     const showClicks =
       campaignReportShowsClicks(intake.campaignName, intake.createdAt, report) ||
-      (campaignAttendedByLaboratorioStaff(intake) &&
+      (laboratorioAttended &&
         report?.source === "meta_lab" &&
         !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report));
     const metrics = report
@@ -812,7 +829,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       campaignName: intake.campaignName,
       createdAt: intake.createdAt,
       completedAt: intake.updatedAt,
-      displayStatus: toDisplayStatus(status, campaignAttendedByLaboratorioStaff(intake)),
+      displayStatus: toDisplayStatus(status, laboratorioAttended),
       regionDdd: intake.regionDdd,
       source: report?.source || "manual",
       showClicks,
