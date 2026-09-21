@@ -13,6 +13,7 @@ const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.servi
 const meta_whatsapp_inbox_types_1 = require("./meta-whatsapp-inbox.types");
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
 const waba_bot_media_store_1 = require("./bots/waba-bot-media.store");
+const waba_bot_typing_1 = require("./bots/waba-bot-typing");
 function requireTenant(auth) {
     try {
         return (0, meta_whatsapp_tenant_1.resolveMetaWhatsappTenant)(auth);
@@ -97,6 +98,18 @@ class MetaWhatsappMessagingService {
                 connections: [connection],
             }) || String(existingConversation?.phoneNumberId || connection.phoneNumberId || "").trim() || null;
         const botSend = body?.source === "bot";
+        if (botSend) {
+            await this.showBotTypingForTenant(tenantId, {
+                conversationId: existingConversation?.id || conversationId,
+                connectionId: preferredConnectionId || connection.id,
+                phoneNumberId: sendPhoneNumberId || undefined,
+                inboundWamid: String(body?.inboundWamid || body?.inbound_wamid || body?.message_id || "").trim(),
+            });
+            await (0, waba_bot_typing_1.waitBotTyping)((0, waba_bot_typing_1.botTypingDelayMs)({
+                type,
+                text: String(body?.text || body?.caption || "").trim(),
+            }));
+        }
         const atIso = new Date().toISOString();
         const upserted = await this.conversations.upsertForContact({
             tenantId,
@@ -250,6 +263,44 @@ class MetaWhatsappMessagingService {
                 withinWindow: window.withinWindow,
             },
         };
+    }
+    async showBotTypingForTenant(tenantId, input) {
+        const inboundWamid = await this.resolveInboundWamid(tenantId, String(input.conversationId || "").trim(), String(input.inboundWamid || "").trim());
+        if (!inboundWamid)
+            return false;
+        try {
+            await this.provider.sendTypingIndicator({
+                tenantId,
+                messageId: inboundWamid,
+                connectionId: String(input.connectionId || "").trim() || undefined,
+                phoneNumberId: String(input.phoneNumberId || "").trim() || undefined,
+            });
+            return true;
+        }
+        catch {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("bot-typing-failed", { tenantId });
+            return false;
+        }
+    }
+    async resolveInboundWamid(tenantId, conversationId, explicit) {
+        const direct = String(explicit || "").trim();
+        if (direct)
+            return direct;
+        const id = String(conversationId || "").trim();
+        if (!id)
+            return "";
+        try {
+            const rows = await this.messages.listByConversation(tenantId, id, 30);
+            for (let i = rows.length - 1; i >= 0; i -= 1) {
+                const wamid = String(rows[i]?.wamid || "").trim();
+                if (rows[i]?.direction === "inbound" && wamid)
+                    return wamid;
+            }
+        }
+        catch {
+            return "";
+        }
+        return "";
     }
 }
 exports.MetaWhatsappMessagingService = MetaWhatsappMessagingService;

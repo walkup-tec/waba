@@ -131,6 +131,16 @@ function registerWabaBotRoutes(app) {
             return handleMetaError(res, error);
         }
     });
+    app.post("/integrations/meta/whatsapp/bots/link-ai", async (req, res) => {
+        try {
+            warnClientTenantClaim(req);
+            const result = await service.testLinkAi((0, waba_request_auth_1.resolveWabaRequestAuth)(req), req.body && typeof req.body === "object" ? req.body : {});
+            return sendPublic(res, 200, result);
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
     app.post("/integrations/meta/whatsapp/bots/test-node", async (req, res) => {
         try {
             const result = await service.testNode((0, waba_request_auth_1.resolveWabaRequestAuth)(req), req.body && typeof req.body === "object" ? req.body : {});

@@ -4,6 +4,7 @@ exports.normalizeBotHttpsUrl = normalizeBotHttpsUrl;
 exports.normalizeBotButtonLabel = normalizeBotButtonLabel;
 exports.isWhatsappVoiceFormat = isWhatsappVoiceFormat;
 exports.cloudMediaType = cloudMediaType;
+exports.buildCloudTypingIndicatorBody = buildCloudTypingIndicatorBody;
 exports.buildCloudCtaUrlBody = buildCloudCtaUrlBody;
 exports.buildCloudMediaBody = buildCloudMediaBody;
 const BUTTON_LABEL_MAX = 20;
@@ -38,6 +39,14 @@ function cloudMediaType(kind) {
     if (kind === "audio")
         return "audio";
     return "video";
+}
+function buildCloudTypingIndicatorBody(messageId) {
+    return {
+        messaging_product: "whatsapp",
+        status: "read",
+        message_id: String(messageId || "").trim(),
+        typing_indicator: { type: "text" },
+    };
 }
 function buildCloudCtaUrlBody(input) {
     const to = String(input.to || "").trim();

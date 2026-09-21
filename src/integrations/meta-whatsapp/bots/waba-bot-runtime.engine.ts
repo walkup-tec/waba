@@ -2,6 +2,7 @@ import { getBotNodeDefinition } from "./waba-bot-node.registry";
 import { resolveBrasiliaExpedienteTurno } from "./waba-bot-expediente";
 import { formatNumberedMenu } from "./waba-bot-flow.normalize";
 import { normalizeBotButtonLabel, normalizeBotHttpsUrl } from "./waba-bot-cloud-payload";
+import { rewriteLinkAiForSend } from "./waba-bot-link-ai";
 import type {
   BotFlowDraft,
   BotFlowNode,
@@ -88,7 +89,16 @@ export async function executeBotNode(ctx: BotNodeExecuteContext): Promise<BotNod
         return { ok: true, status: "success", message: "Fluxo finalizado" };
 
       case "message": {
-        const text = resolveTemplate(config.text || definition?.label || "", variables);
+        let text = resolveTemplate(config.text || definition?.label || "", variables).trim();
+        if (config.aiEnabled && !dryRun) {
+          text = await rewriteLinkAiForSend({
+            sourceText: text,
+            tenantId: ctx.tenantId,
+            flowId: ctx.flowId,
+            nodeId: node.id,
+            seed: ctx.conversationId || ctx.phone || ctx.testPhone || "",
+          });
+        }
         return {
           ok: true,
           status: "success",
@@ -124,7 +134,16 @@ export async function executeBotNode(ctx: BotNodeExecuteContext): Promise<BotNod
       }
 
       case "link": {
-        const text = resolveTemplate(config.text || "Toque no botão para abrir o link.", variables).trim();
+        let text = resolveTemplate(config.text || "Toque no botão para abrir o link.", variables).trim();
+        if (config.aiEnabled && !dryRun) {
+          text = await rewriteLinkAiForSend({
+            sourceText: text,
+            tenantId: ctx.tenantId,
+            flowId: ctx.flowId,
+            nodeId: node.id,
+            seed: ctx.conversationId || ctx.phone || ctx.testPhone || "",
+          });
+        }
         const buttonLabel = normalizeBotButtonLabel(resolveTemplate(config.buttonLabel || "Abrir link", variables));
         const url = normalizeBotHttpsUrl(resolveTemplate(config.url || "", variables));
         if (!buttonLabel || !url) {
@@ -354,6 +373,7 @@ export async function advanceBotRun(input: {
   inboundText?: string;
   conversationId?: string;
   phone?: string;
+  tenantId?: string;
 }): Promise<{
   run: BotRunState;
   outboundTexts: string[];
@@ -401,6 +421,8 @@ export async function advanceBotRun(input: {
       inboundText: input.inboundText,
       conversationId: input.conversationId,
       phone: input.phone || run.testPhone,
+      tenantId: input.tenantId,
+      flowId: input.flow.id,
     });
 
     run.logs.push(

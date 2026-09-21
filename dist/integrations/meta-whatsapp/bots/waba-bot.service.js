@@ -12,6 +12,7 @@ const waba_bot_flow_normalize_1 = require("./waba-bot-flow.normalize");
 const waba_bot_media_store_1 = require("./waba-bot-media.store");
 const waba_bot_runtime_engine_1 = require("./waba-bot-runtime.engine");
 const waba_bot_store_1 = require("./waba-bot.store");
+const waba_bot_link_ai_1 = require("./waba-bot-link-ai");
 const testRuns = new Map();
 /** Só entra no Bots o chip marcado BOT. */
 function listBotAssignableChannels(tenantId, connections) {
@@ -126,6 +127,29 @@ class WabaBotService {
         });
         return { ok: true, links };
     }
+    async testLinkAi(auth, body) {
+        const tenant = requireTenant(auth);
+        const sourceText = String(body?.text || body?.sourceText || body?.source_text || "").trim();
+        if (!sourceText)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload", 400, "Informe o texto da mensagem para a IA.");
+        try {
+            const result = await (0, waba_bot_link_ai_1.rewriteLinkAiText)({
+                sourceText,
+                tenantId: tenant.tenantId,
+                flowId: String(body?.flowId || body?.botId || body?.flow_id || "").trim(),
+                nodeId: String(body?.nodeId || body?.node_id || "").trim(),
+                seed: `test:${Date.now()}:${Math.random()}`,
+            });
+            return { ok: true, ...result };
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível gerar o texto com a IA.";
+            if (message.includes("Limite temporário")) {
+                throw new meta_whatsapp_errors_1.MetaWhatsappError("template_ai_rate_limited", 429, message);
+            }
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("template_ai_unavailable", 503, message);
+        }
+    }
     async testNode(auth, body) {
         requireTenant(auth);
         const node = body?.node;
@@ -141,19 +165,19 @@ class WabaBotService {
         });
     }
     async startTest(auth, body) {
-        requireTenant(auth);
+        const tenant = requireTenant(auth);
         const flow = (0, waba_bot_flow_normalize_1.normalizeBotDraft)(body?.flow);
         if (!(0, waba_bot_runtime_engine_1.findStartNode)(flow))
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
         const phone = String(body?.testPhone || body?.test_phone || "00000000000").trim();
         let run = (0, waba_bot_runtime_engine_1.createBotRunState)({ flow, testPhone: phone });
-        const advanced = await (0, waba_bot_runtime_engine_1.advanceBotRun)({ flow, run });
+        const advanced = await (0, waba_bot_runtime_engine_1.advanceBotRun)({ flow, run, tenantId: tenant.tenantId });
         run = advanced.run;
         testRuns.set(run.id, run);
         return { ok: true, run, outboundTexts: advanced.outboundTexts };
     }
     async continueTest(auth, body) {
-        requireTenant(auth);
+        const tenant = requireTenant(auth);
         const runId = String(body?.runId || body?.run_id || "").trim();
         const current = testRuns.get(runId);
         if (!current)
@@ -163,6 +187,7 @@ class WabaBotService {
             flow,
             run: current,
             inboundText: body?.inboundText != null ? String(body.inboundText) : undefined,
+            tenantId: tenant.tenantId,
         });
         testRuns.set(advanced.run.id, advanced.run);
         return { ok: true, run: advanced.run, outboundTexts: advanced.outboundTexts };

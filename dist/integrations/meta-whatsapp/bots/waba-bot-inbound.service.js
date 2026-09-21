@@ -157,12 +157,25 @@ class WabaBotInboundService {
                     testPhone: String(conversation.contactWaId || conversation.contactPhone || ""),
                 });
             }
+            const inboundWamid = String(message.wamid || "").trim();
+            const messaging = this.messaging();
+            if (typeof messaging.showBotTypingForTenant === "function") {
+                await messaging
+                    .showBotTypingForTenant(tenantId, {
+                    conversationId,
+                    connectionId: conversation.connectionId,
+                    phoneNumberId,
+                    inboundWamid,
+                })
+                    .catch(() => false);
+            }
             const advanced = await (0, waba_bot_runtime_engine_1.advanceBotRun)({
                 flow,
                 run: run,
                 inboundText: inboundForAdvance,
                 conversationId,
                 phone: conversation.contactWaId,
+                tenantId,
             });
             run = advanced.run;
             (0, waba_bot_store_1.writeConversationBotRun)(tenantId, conversationId, run);
@@ -177,6 +190,7 @@ class WabaBotInboundService {
                     phoneNumberId,
                     connectionId: conversation.connectionId,
                     source: "bot",
+                    inboundWamid,
                 });
             }
             if (advanced.transferHuman || run.phase === "finished") {

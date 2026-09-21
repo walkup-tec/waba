@@ -12,6 +12,7 @@ const waba_bot_node_registry_1 = require("./waba-bot-node.registry");
 const waba_bot_expediente_1 = require("./waba-bot-expediente");
 const waba_bot_flow_normalize_1 = require("./waba-bot-flow.normalize");
 const waba_bot_cloud_payload_1 = require("./waba-bot-cloud-payload");
+const waba_bot_link_ai_1 = require("./waba-bot-link-ai");
 function nowIso() {
     return new Date().toISOString();
 }
@@ -79,7 +80,16 @@ async function executeBotNode(ctx) {
             case "end":
                 return { ok: true, status: "success", message: "Fluxo finalizado" };
             case "message": {
-                const text = resolveTemplate(config.text || definition?.label || "", variables);
+                let text = resolveTemplate(config.text || definition?.label || "", variables).trim();
+                if (config.aiEnabled && !dryRun) {
+                    text = await (0, waba_bot_link_ai_1.rewriteLinkAiForSend)({
+                        sourceText: text,
+                        tenantId: ctx.tenantId,
+                        flowId: ctx.flowId,
+                        nodeId: node.id,
+                        seed: ctx.conversationId || ctx.phone || ctx.testPhone || "",
+                    });
+                }
                 return {
                     ok: true,
                     status: "success",
@@ -113,7 +123,16 @@ async function executeBotNode(ctx) {
                 };
             }
             case "link": {
-                const text = resolveTemplate(config.text || "Toque no botão para abrir o link.", variables).trim();
+                let text = resolveTemplate(config.text || "Toque no botão para abrir o link.", variables).trim();
+                if (config.aiEnabled && !dryRun) {
+                    text = await (0, waba_bot_link_ai_1.rewriteLinkAiForSend)({
+                        sourceText: text,
+                        tenantId: ctx.tenantId,
+                        flowId: ctx.flowId,
+                        nodeId: node.id,
+                        seed: ctx.conversationId || ctx.phone || ctx.testPhone || "",
+                    });
+                }
                 const buttonLabel = (0, waba_bot_cloud_payload_1.normalizeBotButtonLabel)(resolveTemplate(config.buttonLabel || "Abrir link", variables));
                 const url = (0, waba_bot_cloud_payload_1.normalizeBotHttpsUrl)(resolveTemplate(config.url || "", variables));
                 if (!buttonLabel || !url) {
@@ -349,6 +368,8 @@ async function advanceBotRun(input) {
             inboundText: input.inboundText,
             conversationId: input.conversationId,
             phone: input.phone || run.testPhone,
+            tenantId: input.tenantId,
+            flowId: input.flow.id,
         });
         run.logs.push(log(result.ok ? "info" : "error", `[${node.data.title}] ${result.message}`, result.data));
         if (result.variables)

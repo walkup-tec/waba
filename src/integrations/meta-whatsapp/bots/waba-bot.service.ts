@@ -27,6 +27,7 @@ import {
   setBotPhoneLink,
   upsertBotFlow,
 } from "./waba-bot.store";
+import { rewriteLinkAiText } from "./waba-bot-link-ai";
 import type { BotFlowDraft, BotFlowNode, BotJson, BotRunState } from "./waba-bot.types";
 
 const testRuns = new Map<string, BotRunState>();
@@ -161,6 +162,28 @@ export class WabaBotService {
     return { ok: true, links };
   }
 
+  async testLinkAi(auth: WabaRequestAuth, body: Record<string, unknown> | undefined) {
+    const tenant = requireTenant(auth);
+    const sourceText = String(body?.text || body?.sourceText || body?.source_text || "").trim();
+    if (!sourceText) throw new MetaWhatsappError("invalid_payload", 400, "Informe o texto da mensagem para a IA.");
+    try {
+      const result = await rewriteLinkAiText({
+        sourceText,
+        tenantId: tenant.tenantId,
+        flowId: String(body?.flowId || body?.botId || body?.flow_id || "").trim(),
+        nodeId: String(body?.nodeId || body?.node_id || "").trim(),
+        seed: `test:${Date.now()}:${Math.random()}`,
+      });
+      return { ok: true, ...result };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível gerar o texto com a IA.";
+      if (message.includes("Limite temporário")) {
+        throw new MetaWhatsappError("template_ai_rate_limited", 429, message);
+      }
+      throw new MetaWhatsappError("template_ai_unavailable", 503, message);
+    }
+  }
+
   async testNode(auth: WabaRequestAuth, body: Record<string, unknown> | undefined) {
     requireTenant(auth);
     const node = body?.node as BotFlowNode | undefined;
@@ -177,19 +200,19 @@ export class WabaBotService {
   }
 
   async startTest(auth: WabaRequestAuth, body: Record<string, unknown> | undefined) {
-    requireTenant(auth);
+    const tenant = requireTenant(auth);
     const flow = normalizeBotDraft(body?.flow);
     if (!findStartNode(flow)) throw new MetaWhatsappError("invalid_payload");
     const phone = String(body?.testPhone || body?.test_phone || "00000000000").trim();
     let run = createBotRunState({ flow, testPhone: phone });
-    const advanced = await advanceBotRun({ flow, run });
+    const advanced = await advanceBotRun({ flow, run, tenantId: tenant.tenantId });
     run = advanced.run;
     testRuns.set(run.id, run);
     return { ok: true, run, outboundTexts: advanced.outboundTexts };
   }
 
   async continueTest(auth: WabaRequestAuth, body: Record<string, unknown> | undefined) {
-    requireTenant(auth);
+    const tenant = requireTenant(auth);
     const runId = String(body?.runId || body?.run_id || "").trim();
     const current = testRuns.get(runId);
     if (!current) throw new MetaWhatsappError("conversation_not_found");
@@ -198,6 +221,7 @@ export class WabaBotService {
       flow,
       run: current,
       inboundText: body?.inboundText != null ? String(body.inboundText) : undefined,
+      tenantId: tenant.tenantId,
     });
     testRuns.set(advanced.run.id, advanced.run);
     return { ok: true, run: advanced.run, outboundTexts: advanced.outboundTexts };

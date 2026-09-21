@@ -35,6 +35,15 @@ export function cloudMediaType(kind: BotMediaKind): "video" | "document" | "audi
   return "video";
 }
 
+export function buildCloudTypingIndicatorBody(messageId: string): Record<string, unknown> {
+  return {
+    messaging_product: "whatsapp",
+    status: "read",
+    message_id: String(messageId || "").trim(),
+    typing_indicator: { type: "text" },
+  };
+}
+
 export function buildCloudCtaUrlBody(input: {
   to: string;
   text: string;

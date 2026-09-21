@@ -98,7 +98,7 @@ function toSendBody(payload: BotOutboundPayload): Record<string, unknown> | null
 export type WabaBotInboundDeps = {
   messages?: Pick<MetaWhatsappMessageRepository, "findByIdForTenant">;
   conversations?: Pick<MetaWhatsappConversationRepository, "findByIdForTenant" | "assign">;
-  messaging?: Pick<MetaWhatsappMessagingService, "sendForTenant">;
+  messaging?: Pick<MetaWhatsappMessagingService, "sendForTenant" | "showBotTypingForTenant">;
 };
 
 export class WabaBotInboundService {
@@ -197,12 +197,26 @@ export class WabaBotInboundService {
         });
       }
 
+      const inboundWamid = String(message.wamid || "").trim();
+      const messaging = this.messaging();
+      if (typeof messaging.showBotTypingForTenant === "function") {
+        await messaging
+          .showBotTypingForTenant(tenantId, {
+            conversationId,
+            connectionId: conversation.connectionId,
+            phoneNumberId,
+            inboundWamid,
+          })
+          .catch(() => false);
+      }
+
       const advanced = await advanceBotRun({
         flow,
         run: run!,
         inboundText: inboundForAdvance,
         conversationId,
         phone: conversation.contactWaId,
+        tenantId,
       });
       run = advanced.run;
       writeConversationBotRun(tenantId, conversationId, run);
@@ -217,6 +231,7 @@ export class WabaBotInboundService {
           phoneNumberId,
           connectionId: conversation.connectionId,
           source: "bot",
+          inboundWamid,
         });
       }
 

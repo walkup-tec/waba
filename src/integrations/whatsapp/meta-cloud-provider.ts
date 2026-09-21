@@ -26,6 +26,7 @@ import { uploadCloudApiMedia } from "../meta-whatsapp/meta-whatsapp-broadcast-me
 import {
   buildCloudCtaUrlBody,
   buildCloudMediaBody,
+  buildCloudTypingIndicatorBody,
   isWhatsappVoiceFormat,
   normalizeBotButtonLabel,
   normalizeBotHttpsUrl,
@@ -75,6 +76,22 @@ export class MetaCloudProvider implements WhatsAppProvider {
       type: "text",
       text: { preview_url: false, body: text },
     }, input.phoneNumberId);
+  }
+
+  async sendTypingIndicator(input: {
+    tenantId: string;
+    messageId: string;
+    connectionId?: string;
+    phoneNumberId?: string;
+  }): Promise<WhatsAppSendResult> {
+    const messageId = String(input.messageId || "").trim();
+    if (!messageId) throw new MetaWhatsappError("invalid_payload");
+    const connection = await this.requireConnected(
+      input.tenantId,
+      input.connectionId,
+      input.phoneNumberId,
+    );
+    return this.dispatch(connection, buildCloudTypingIndicatorBody(messageId), input.phoneNumberId);
   }
 
   async sendCtaUrl(input: {

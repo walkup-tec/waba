@@ -16,9 +16,11 @@ import {
 import {
   buildCloudCtaUrlBody,
   buildCloudMediaBody,
+  buildCloudTypingIndicatorBody,
   normalizeBotButtonLabel,
   normalizeBotHttpsUrl,
 } from "./waba-bot-cloud-payload";
+import { botTypingDelayMs, setBotTypingWaitForTests } from "./waba-bot-typing";
 import { resolveCustomerCareWindow } from "../meta-whatsapp-customer-care-window";
 import {
   getBotIdForPhone,
@@ -28,6 +30,12 @@ import {
   upsertBotFlow,
   wasBotMessageClaimed,
 } from "./waba-bot.store";
+import {
+  clipBotAiText,
+  resetLinkAiMemoryForTests,
+  rewriteLinkAiText,
+  setLinkAiOpenAiCallerForTests,
+} from "./waba-bot-link-ai";
 import { listBotAssignableChannels, WabaBotService } from "./waba-bot.service";
 import { unhideBusiness } from "../meta-whatsapp-hidden-business.store";
 import { MetaWhatsappError } from "../meta-whatsapp-errors";
@@ -138,6 +146,8 @@ afterEach(() => {
   resetWabaBotStoreForTests(TENANT_B);
   purgePhoneIdentities(TENANT_A);
   unhideBusiness(TENANT_A, "1041827648719609");
+  resetLinkAiMemoryForTests();
+  setBotTypingWaitForTests(null);
 });
 
 describe("WABA bots — motor", () => {
@@ -179,6 +189,7 @@ describe("WABA bots — inbound 1 a 9", () => {
     const messages = new Map<string, MetaMessageRecord>();
     if (input?.message) messages.set(input.message.id, input.message);
     const sent = input?.sent || [];
+    const typing: Array<Record<string, unknown>> = [];
     const service = new WabaBotInboundService({
       messages: {
         findByIdForTenant: async (tenantId, id) => {
@@ -200,6 +211,10 @@ describe("WABA bots — inbound 1 a 9", () => {
         },
       },
       messaging: {
+        showBotTypingForTenant: async (tenantId, body) => {
+          typing.push({ tenantId, ...body });
+          return true;
+        },
         sendForTenant: async (tenantId, body) => {
           sent.push({ tenantId, ...body });
           return {
@@ -214,7 +229,7 @@ describe("WABA bots — inbound 1 a 9", () => {
         },
       },
     });
-    return { service, conversations, messages, sent, conversation };
+    return { service, conversations, messages, sent, typing, conversation };
   }
 
   it("1) inbound inicia o bot do número associado", async () => {
@@ -301,7 +316,7 @@ describe("WABA bots — inbound 1 a 9", () => {
       }),
     );
     setBotPhoneLink({ tenantId: TENANT_A, phoneNumberId: "phone-a", botId: flow.id });
-    const { service, messages, sent } = setupInbound();
+    const { service, messages, sent, typing } = setupInbound();
     messages.set("msg-1", msg());
     const handled = await service.handleInbound({
       name: "inbound_message",
@@ -312,8 +327,11 @@ describe("WABA bots — inbound 1 a 9", () => {
       occurredAt: new Date().toISOString(),
     });
     assert.equal(handled, true);
+    assert.equal(typing.length >= 1, true);
+    assert.equal(typing[0]?.inboundWamid, "wamid.1");
     assert.equal(sent.some((row) => row.type === "video" && row.mediaUrl === "https://files.example.com/demo.mp4"), true);
     assert.equal(sent.some((row) => row.type === "cta_url" && row.buttonLabel === "Site"), true);
+    assert.equal(sent.every((row) => row.inboundWamid === "wamid.1" && row.source === "bot"), true);
   });
 
   it("3) opção inválida de botão não avança o fluxo", async () => {
@@ -649,6 +667,14 @@ describe("WABA bots — menu FARM BM", () => {
     assert.match(html, /waba-bots-node-media-kind/);
     assert.match(html, /waba-bots-node-button-label/);
     assert.match(html, /waba-bots-node-button-url/);
+    assert.match(html, /id="waba-bots-node-ai-toggle"/);
+    assert.match(html, /Ativar IA/);
+    assert.match(html, /id="waba-bots-node-ai-test"/);
+    assert.match(html, /Teste IA/);
+    assert.match(html, /bots\/link-ai/);
+    assert.match(html, /node\.data\.kind === "message"/);
+    assert.match(html, /wabaBotsNodeAllowsAi/);
+    assert.match(html, /function wabaBotsAiInspectorBlock/);
     assert.match(html, /Nota de voz do WhatsApp/);
     assert.match(html, /botão CTA URL/);
     assert.match(html, /function wabaBotsApplyName/);
@@ -691,6 +717,17 @@ describe("WABA bots — mídia e link", () => {
     assert.equal(interactive.action.parameters.url, "https://waba.draxsistemas.com.br/s/abc");
     assert.equal(normalizeBotHttpsUrl("http://exemplo.com"), "");
     assert.equal(normalizeBotButtonLabel("  Abrir  "), "Abrir");
+  });
+
+  it("monta o efeito oficial de digitação da Cloud API", () => {
+    const body = buildCloudTypingIndicatorBody("wamid.HBgLMTY1");
+    assert.equal(body.messaging_product, "whatsapp");
+    assert.equal(body.status, "read");
+    assert.equal(body.message_id, "wamid.HBgLMTY1");
+    assert.deepEqual(body.typing_indicator, { type: "text" });
+    assert.ok(botTypingDelayMs({ type: "text", text: "Oi" }) >= 1200);
+    assert.equal(botTypingDelayMs({ type: "video" }), 1800);
+    assert.equal(botTypingDelayMs({ type: "cta_url" }), 1800);
   });
 
   it("envia áudio OGG como nota de voz nativa", () => {
@@ -748,6 +785,108 @@ describe("WABA bots — mídia e link", () => {
     badLink.data.config.url = "http://inseguro.example.com";
     const emptyLink = await executeBotNode({ node: badLink, variables: {} });
     assert.equal(emptyLink.ok, false);
+  });
+});
+
+describe("WABA bots — link IA", () => {
+  it("corta o texto gerado no tamanho do original", () => {
+    const source = "Fale com o consultor agora.";
+    assert.equal(clipBotAiText("Texto bem maior que o original informado no campo", source.length).length <= source.length, true);
+  });
+
+  it("gera um texto novo a cada chamada e nunca passa do original", async () => {
+    const source = "Fale diretamente o consultor. Acesse o whatsapp dele clicando no botão abaixo:";
+    let n = 0;
+    setLinkAiOpenAiCallerForTests(async () => {
+      n += 1;
+      return {
+        value: { text: n === 1 ? "Fale agora com o especialista pelo botão abaixo." : "Abra o WhatsApp do consultor no botão." },
+        model: "test",
+        responseId: "r1",
+        latencyMs: 1,
+      };
+    });
+    const first = await rewriteLinkAiText({
+      sourceText: source,
+      tenantId: TENANT_A,
+      flowId: "bot-ai",
+      nodeId: "link-1",
+      seed: "lead-a",
+    });
+    const second = await rewriteLinkAiText({
+      sourceText: source,
+      tenantId: TENANT_A,
+      flowId: "bot-ai",
+      nodeId: "link-1",
+      seed: "lead-b",
+    });
+    assert.ok(first.text);
+    assert.ok(second.text);
+    assert.notEqual(first.text, second.text);
+    assert.notEqual(first.text, source);
+    assert.ok(first.text.length <= source.length);
+    assert.ok(second.text.length <= source.length);
+  });
+
+  it("envia o texto gerado no node Link quando a IA está ativa", async () => {
+    setLinkAiOpenAiCallerForTests(async () => ({
+      value: { text: "Fale agora com o especialista." },
+      model: "test",
+      responseId: "r2",
+      latencyMs: 1,
+    }));
+    const start = node("start", "s");
+    const link = node("link", "l");
+    link.data.config.text = "Fale diretamente o consultor agora.";
+    link.data.config.buttonLabel = "Abrir";
+    link.data.config.url = "https://drax.example.com/consultor";
+    link.data.config.aiEnabled = true;
+    const flow = normalizeBotDraft({
+      id: "bot-link-ai",
+      name: "Link IA",
+      nodes: [start, link],
+      edges: [{ id: "e1", source: "s", target: "l", sourceHandle: "out" }],
+    });
+    const advanced = await advanceBotRun({
+      flow,
+      run: createBotRunState({ flow, testPhone: "5551999000000" }),
+      tenantId: TENANT_A,
+      conversationId: "conv-ai-1",
+    });
+    const cta = advanced.outbound.find((item) => item.type === "cta_url");
+    assert.ok(cta && cta.type === "cta_url");
+    if (cta && cta.type === "cta_url") {
+      assert.equal(cta.cta.text, "Fale agora com o especialista.");
+      assert.ok(cta.cta.text.length <= String(link.data.config.text).length);
+      assert.notEqual(cta.cta.text, link.data.config.text);
+    }
+  });
+
+  it("envia o texto gerado no node Mensagem quando a IA está ativa", async () => {
+    setLinkAiOpenAiCallerForTests(async () => ({
+      value: { text: "Posso te ajudar agora?" },
+      model: "test",
+      responseId: "r3",
+      latencyMs: 1,
+    }));
+    const start = node("start", "s");
+    const message = node("message", "m");
+    message.data.config.text = "Olá! Como posso ajudar?";
+    message.data.config.aiEnabled = true;
+    const flow = normalizeBotDraft({
+      id: "bot-msg-ai",
+      name: "Mensagem IA",
+      nodes: [start, message],
+      edges: [{ id: "e1", source: "s", target: "m", sourceHandle: "out" }],
+    });
+    const advanced = await advanceBotRun({
+      flow,
+      run: createBotRunState({ flow, testPhone: "5551999000000" }),
+      tenantId: TENANT_A,
+      conversationId: "conv-ai-2",
+    });
+    assert.deepEqual(advanced.outboundTexts, ["Posso te ajudar agora?"]);
+    assert.ok(String(advanced.outboundTexts[0] || "").length <= String(message.data.config.text).length);
   });
 });
 

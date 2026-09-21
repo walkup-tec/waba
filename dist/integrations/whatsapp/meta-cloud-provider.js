@@ -51,6 +51,13 @@ class MetaCloudProvider {
             text: { preview_url: false, body: text },
         }, input.phoneNumberId);
     }
+    async sendTypingIndicator(input) {
+        const messageId = String(input.messageId || "").trim();
+        if (!messageId)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
+        const connection = await this.requireConnected(input.tenantId, input.connectionId, input.phoneNumberId);
+        return this.dispatch(connection, (0, waba_bot_cloud_payload_1.buildCloudTypingIndicatorBody)(messageId), input.phoneNumberId);
+    }
     async sendCtaUrl(input) {
         const text = String(input.text || "").trim();
         const buttonLabel = (0, waba_bot_cloud_payload_1.normalizeBotButtonLabel)(input.buttonLabel);

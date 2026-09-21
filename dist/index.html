@@ -3299,6 +3299,29 @@
           max-height: 88px;
           resize: vertical;
         }
+        .waba-bots-node-ai {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 8px;
+        }
+        .waba-bots-node-ai .instance-action-btn {
+          margin: 0;
+        }
+        .waba-bots-node-ai-preview {
+          margin-top: 8px;
+          padding: 8px 10px;
+          border-radius: 8px;
+          border: 1px solid var(--border-subtle);
+          background: rgba(15, 23, 42, 0.64);
+          color: var(--text-soft);
+          font-size: 0.76rem;
+          line-height: 1.45;
+          white-space: pre-wrap;
+        }
+        .waba-bots-node-ai-preview.is-error {
+          color: #fca5a5;
+        }
         .waba-bots-palette-item {
           display: block;
           width: 100%;
@@ -45217,6 +45240,7 @@
         pan: { x: 24, y: 24 },
         zoom: 1,
         phoneQuery: "",
+        linkAi: { nodeId: "", text: "", error: "", loading: false },
       };
 
       function wabaBotsBanner(text, isError) {
@@ -45508,6 +45532,8 @@
         const buttonUrl = document.getElementById("waba-bots-node-button-url");
         if (buttonLabel) node.data.config.buttonLabel = String(buttonLabel.value || "").trim().slice(0, 20);
         if (buttonUrl) node.data.config.url = buttonUrl.value.trim();
+        const aiToggle = document.getElementById("waba-bots-node-ai-toggle");
+        if (aiToggle) node.data.config.aiEnabled = aiToggle.getAttribute("data-ai-enabled") === "1";
       }
 
       function wabaBotsResolveOutputs(node) {
@@ -45591,6 +45617,31 @@
         world.style.transform = `translate(${wabaBotsUi.pan.x}px, ${wabaBotsUi.pan.y}px) scale(${wabaBotsUi.zoom})`;
       }
 
+      function wabaBotsNodeAllowsAi(kind) {
+        return kind === "link" || kind === "message";
+      }
+
+      function wabaBotsAiInspectorBlock(node) {
+        const aiOn = node.data.config.aiEnabled === true;
+        const preview = wabaBotsUi.linkAi && wabaBotsUi.linkAi.nodeId === node.id ? wabaBotsUi.linkAi : null;
+        const previewHtml = aiOn
+          ? preview && preview.loading
+            ? `<div class="waba-bots-node-ai-preview">Gerando texto com a IA…</div>`
+            : preview && (preview.text || preview.error)
+              ? `<div class="waba-bots-node-ai-preview${preview.error ? " is-error" : ""}">${escapeAdminHtml(preview.error || preview.text)}</div>`
+              : ""
+          : "";
+        return (
+          `<div class="waba-bots-node-ai">` +
+          `<button type="button" class="instance-action-btn ${aiOn ? "btn-qrcode" : "btn-refresh"} enabled" id="waba-bots-node-ai-toggle" data-ai-enabled="${aiOn ? "1" : "0"}">${aiOn ? "IA ativa" : "Ativar IA"}</button>` +
+          (aiOn
+            ? `<button type="button" class="instance-action-btn btn-refresh enabled" id="waba-bots-node-ai-test">Teste IA</button>`
+            : "") +
+          `</div>` +
+          previewHtml
+        );
+      }
+
       function wabaBotsRenderBuilderInspector() {
         const box = document.getElementById("waba-bots-builder-inspector");
         if (!box) return;
@@ -45641,12 +45692,21 @@
             deleteBlock;
           return;
         }
+        if (node.data.kind === "message") {
+          box.innerHTML =
+            `<label>Texto da mensagem</label>` +
+            `<textarea id="waba-bots-node-text" class="form-control" rows="4">${escapeAdminHtml(node.data.config.text || "")}</textarea>` +
+            wabaBotsAiInspectorBlock(node) +
+            deleteBlock;
+          return;
+        }
         if (node.data.kind === "link") {
           box.innerHTML =
             titleBlock +
             `<p class="muted" style="margin:8px 0;">A API oficial envia um botão CTA URL. O contato toca e abre o site. Rótulo até 20 caracteres.</p>` +
             `<label style="margin-top:8px;">Texto da mensagem</label>` +
             `<textarea id="waba-bots-node-text" class="form-control" rows="4">${escapeAdminHtml(node.data.config.text || "")}</textarea>` +
+            wabaBotsAiInspectorBlock(node) +
             `<label style="margin-top:8px;">Rótulo do botão</label>` +
             `<input id="waba-bots-node-button-label" class="form-control" maxlength="20" value="${escapeAdminHtml(node.data.config.buttonLabel || "")}" />` +
             `<label style="margin-top:8px;">Link</label>` +
@@ -46130,7 +46190,56 @@
           wabaBotsApplyInspector();
           if (wabaBotsUi.builderOpen) wabaBotsRenderBuilder();
         });
-        builder?.addEventListener("click", (event) => {
+        builder?.addEventListener("click", async (event) => {
+          if (event.target.id === "waba-bots-node-ai-toggle") {
+            event.preventDefault();
+            const node = (wabaBotsUi.draft?.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
+            if (!node || !wabaBotsNodeAllowsAi(node.data.kind)) return;
+            wabaBotsApplyInspector();
+            node.data.config.aiEnabled = node.data.config.aiEnabled !== true;
+            if (!node.data.config.aiEnabled) wabaBotsUi.linkAi = { nodeId: "", text: "", error: "", loading: false };
+            wabaBotsRenderBuilderInspector();
+            return;
+          }
+          if (event.target.id === "waba-bots-node-ai-test") {
+            event.preventDefault();
+            const node = (wabaBotsUi.draft?.nodes || []).find((item) => item.id === wabaBotsUi.selectedNodeId);
+            if (!node || !wabaBotsNodeAllowsAi(node.data.kind)) return;
+            wabaBotsApplyInspector();
+            const sourceText = String(node.data.config.text || "").trim();
+            if (!sourceText) {
+              wabaBotsUi.linkAi = { nodeId: node.id, text: "", error: "Informe o texto da mensagem para testar a IA.", loading: false };
+              wabaBotsRenderBuilderInspector();
+              return;
+            }
+            wabaBotsUi.linkAi = { nodeId: node.id, text: "", error: "", loading: true };
+            wabaBotsRenderBuilderInspector();
+            try {
+              const payload = await wabaBotsJson("/integrations/meta/whatsapp/bots/link-ai", {
+                method: "POST",
+                body: JSON.stringify({
+                  text: sourceText,
+                  flowId: wabaBotsUi.draft?.id || "",
+                  nodeId: node.id,
+                }),
+              });
+              wabaBotsUi.linkAi = {
+                nodeId: node.id,
+                text: String(payload.text || "").trim() || "A IA não devolveu texto.",
+                error: "",
+                loading: false,
+              };
+            } catch (error) {
+              wabaBotsUi.linkAi = {
+                nodeId: node.id,
+                text: "",
+                error: error && error.message ? error.message : "Não foi possível gerar o texto com a IA.",
+                loading: false,
+              };
+            }
+            wabaBotsRenderBuilderInspector();
+            return;
+          }
           if (event.target.id === "waba-bots-edge-delete" && wabaBotsUi.draft && wabaBotsUi.selectedEdgeId) {
             wabaBotsUi.draft.edges = wabaBotsUi.draft.edges.filter((item) => item.id !== wabaBotsUi.selectedEdgeId);
             wabaBotsUi.selectedEdgeId = "";

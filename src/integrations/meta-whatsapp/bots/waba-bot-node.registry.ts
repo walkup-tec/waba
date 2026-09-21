@@ -122,7 +122,7 @@ export const BOT_NODE_REGISTRY: BotNodeDefinition[] = [
     executionKind: "flow",
     label: "Mensagem",
     description: "Envia texto ao contato",
-    defaultConfig: { text: "Olá! Como posso ajudar?" },
+    defaultConfig: { text: "Olá! Como posso ajudar?", aiEnabled: false },
   }),
   def({
     kind: "media",
@@ -150,6 +150,7 @@ export const BOT_NODE_REGISTRY: BotNodeDefinition[] = [
       text: "Toque no botão para abrir o link.",
       buttonLabel: "Abrir link",
       url: "",
+      aiEnabled: false,
     },
   }),
   def({

@@ -74,6 +74,7 @@ export type BotNodeConfig = {
   voiceNote?: boolean;
   buttonLabel?: string;
   url?: string;
+  aiEnabled?: boolean;
 };
 
 export type BotNodeData = {
@@ -142,6 +143,8 @@ export type BotNodeExecuteContext = {
   inboundText?: string | null;
   conversationId?: string;
   phone?: string;
+  tenantId?: string;
+  flowId?: string;
 };
 
 export type BotOutboundInteractive = {
