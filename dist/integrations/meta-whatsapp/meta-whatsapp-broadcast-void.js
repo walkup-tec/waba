@@ -11,6 +11,7 @@ exports.shouldAbortBroadcastOnHeaderMediaFailure = shouldAbortBroadcastOnHeaderM
 exports.isBroadcastAbandonedForRetry = isBroadcastAbandonedForRetry;
 exports.shouldVoidCloudBroadcast = shouldVoidCloudBroadcast;
 exports.isCloudBroadcastInactiveForRetry = isCloudBroadcastInactiveForRetry;
+exports.reuseActiveCloudBroadcast = reuseActiveCloudBroadcast;
 /** Disparo Cloud da Jandira 2 que a Meta recusou (131053 / weblink 403). */
 exports.JANDIRA2_VOID_BROADCAST_ID = "26d33b09-8868-41dd-af78-afd59e7982f2";
 exports.JANDIRA2_RERUN_VOID_BROADCAST_ID = "c8e99348-4579-476c-b52d-af4f05d509df";
@@ -91,4 +92,14 @@ function isCloudBroadcastInactiveForRetry(row) {
     return (isBroadcastStoppedByOperator(row) ||
         isBroadcastAbandonedForRetry(row) ||
         shouldAbortBroadcastOnHeaderMediaFailure(row));
+}
+/** 502 no POST /start: devolve o lote já gravado em vez de abrir um segundo disparo. */
+function reuseActiveCloudBroadcast(row) {
+    if (!row)
+        return null;
+    if (String(row.status || "") === "failed")
+        return null;
+    if (isCloudBroadcastInactiveForRetry(row))
+        return null;
+    return row;
 }

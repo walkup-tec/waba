@@ -408,6 +408,15 @@ class MetaWhatsappBroadcastService {
     }
     async startFromAuth(auth, input) {
         const tenant = requireTenant(auth);
+        const intakeKey = String(input.intakeCampaignId || "").trim();
+        if (intakeKey) {
+            const existing = (0, meta_whatsapp_broadcast_store_1.findBroadcastByIntakeCampaignId)(intakeKey);
+            if (existing && String(existing.tenantId || "") === tenant.tenantId) {
+                const reuse = (0, meta_whatsapp_broadcast_void_1.reuseActiveCloudBroadcast)(existing);
+                if (reuse)
+                    return (0, meta_whatsapp_broadcast_store_1.publicBroadcastCampaign)(reuse);
+            }
+        }
         const connectionId = String(input.connectionId || "").trim();
         const loaded = await this.loadApprovedTemplate(tenant.tenantId, connectionId, String(input.templateId || "").trim());
         const { bindings: phoneBindings, portfolios: selectedPortfolios } = await this.requireActivePhoneBindings(auth, (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(input.phoneNumberIds?.length ? input.phoneNumberIds : [String(input.phoneNumberId || "")]));
