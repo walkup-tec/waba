@@ -89,6 +89,7 @@ import {
   isBroadcastPaused,
   isBroadcastVoided,
   isCloudBroadcastInactiveForRetry,
+  reuseActiveCloudBroadcast,
 } from "./meta-whatsapp-broadcast-void";
 import { scheduleLabReportFinalize } from "./meta-whatsapp-broadcast-report";
 import { attachCampaignIdToShortLink } from "../../shortener/waba-shortener.service";
@@ -593,6 +594,14 @@ export class MetaWhatsappBroadcastService {
     },
   ) {
     const tenant = requireTenant(auth);
+    const intakeKey = String(input.intakeCampaignId || "").trim();
+    if (intakeKey) {
+      const existing = findBroadcastByIntakeCampaignId(intakeKey);
+      if (existing && String(existing.tenantId || "") === tenant.tenantId) {
+        const reuse = reuseActiveCloudBroadcast(existing);
+        if (reuse) return publicBroadcastCampaign(reuse);
+      }
+    }
     const connectionId = String(input.connectionId || "").trim();
     const loaded = await this.loadApprovedTemplate(tenant.tenantId, connectionId, String(input.templateId || "").trim());
     const { bindings: phoneBindings, portfolios: selectedPortfolios } = await this.requireActivePhoneBindings(

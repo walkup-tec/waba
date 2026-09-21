@@ -98,3 +98,13 @@ export function isCloudBroadcastInactiveForRetry(row: MetaBroadcastCampaign | nu
     shouldAbortBroadcastOnHeaderMediaFailure(row)
   );
 }
+
+/** 502 no POST /start: devolve o lote já gravado em vez de abrir um segundo disparo. */
+export function reuseActiveCloudBroadcast(
+  row: MetaBroadcastCampaign | null | undefined,
+): MetaBroadcastCampaign | null {
+  if (!row) return null;
+  if (String(row.status || "") === "failed") return null;
+  if (isCloudBroadcastInactiveForRetry(row)) return null;
+  return row;
+}

@@ -40,4 +40,10 @@ describe("Disparo Cloud: portfólios, WABAs, números e limite diário", () => {
     assert.match(html, /Carregue a planilha/);
     assert.match(html, /broadcast\/preview/);
   });
+
+  it("espera o /health e retenta o start no 502 do Redeploy", () => {
+    assert.match(html, /function metaTplBroadcastWaitUntilHealthy/);
+    assert.match(html, /preview\|start/);
+    assert.match(html, /metaTplBroadcastStarting/);
+  });
 });

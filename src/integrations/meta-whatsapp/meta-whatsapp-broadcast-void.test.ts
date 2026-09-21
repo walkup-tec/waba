@@ -8,6 +8,7 @@ import {
   OPT_IN_PTX_RESUME_INTAKE_ID,
   isBroadcastAbandonedForRetry,
   isCloudBroadcastInactiveForRetry,
+  reuseActiveCloudBroadcast,
   shouldAbortBroadcastOnHeaderMediaFailure,
   shouldVoidCloudBroadcast,
 } from "./meta-whatsapp-broadcast-void";
@@ -125,6 +126,21 @@ describe("cancelar Disparo Cloud sem entrega", () => {
         }),
       ),
       true,
+    );
+  });
+
+  it("reusa o lote ativo no retry do start e não reabre failed/void", () => {
+    assert.equal(reuseActiveCloudBroadcast(base({ status: "queued" }))?.status, "queued");
+    assert.equal(reuseActiveCloudBroadcast(base({ status: "running" }))?.status, "running");
+    assert.equal(reuseActiveCloudBroadcast(base({ status: "failed" })), null);
+    assert.equal(
+      reuseActiveCloudBroadcast(
+        base({
+          status: "queued",
+          hiddenAt: "2026-09-21T14:00:00.000Z",
+        }),
+      ),
+      null,
     );
   });
 });

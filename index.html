@@ -42491,7 +42491,7 @@
           requestSummary = { note: "request_parse_failed" };
         }
         const retryable =
-          method === "GET" || /\/broadcast\/preview$/i.test(String(path || ""));
+          method === "GET" || /\/broadcast\/(preview|start)$/i.test(String(path || ""));
         const maxAttempts = retryable ? 8 : 1;
         let lastError = null;
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -42569,6 +42569,30 @@
       let metaTplBroadcastInspect = null;
       let metaTplBroadcastCampaignId = "";
       let metaTplBroadcastPoll = 0;
+      let metaTplBroadcastStarting = false;
+
+      async function metaTplBroadcastWaitUntilHealthy() {
+        for (let attempt = 1; attempt <= 8; attempt += 1) {
+          try {
+            const response = await fetch(resolveWabaPublicPath("/health"), {
+              credentials: "same-origin",
+              cache: "no-store",
+            });
+            const payload = await response.json().catch(function () {
+              return {};
+            });
+            if (response.ok && payload && payload.ok === true && !payload.shuttingDown) return;
+          } catch (_error) {
+            /* 502 do Redeploy — tenta de novo */
+          }
+          if (attempt < 8) {
+            await new Promise(function (resolve) {
+              setTimeout(resolve, Math.min(2500, 800 * attempt));
+            });
+          }
+        }
+        throw new Error("O servidor ainda está voltando do Redeploy. Atualize a página em alguns segundos.");
+      }
 
       function metaTplBroadcastEl(id) {
         return document.getElementById(id);
@@ -44228,8 +44252,13 @@
           );
           return;
         }
+        if (metaTplBroadcastStarting) return;
+        metaTplBroadcastStarting = true;
+        const startBtn = metaTplBroadcastEl("meta-tpl-broadcast-start");
+        if (startBtn) startBtn.setAttribute("disabled", "disabled");
         metaTplBroadcastSetStatus("Iniciando disparo Cloud…");
         try {
+          await metaTplBroadcastWaitUntilHealthy();
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/start", {
             method: "POST",
             body: metaTplBroadcastFormData(),
@@ -44257,6 +44286,9 @@
             message: message,
             error: error,
           });
+        } finally {
+          metaTplBroadcastStarting = false;
+          if (startBtn) startBtn.removeAttribute("disabled");
         }
       }
 
