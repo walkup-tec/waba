@@ -13723,6 +13723,9 @@
         flex-direction: column;
         gap: 6px;
       }
+      .aquecedor-field[hidden] {
+        display: none !important;
+      }
 
       .aquecedor-field label {
         font-size: 0.78rem;
@@ -22450,8 +22453,8 @@
                           type="file"
                           id="dis-wizard-leads-file"
                           class="dis-campaign-file-input"
-                          accept=".xlsx,.xls,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/plain"
-                          aria-label="Selecionar arquivo de leads (Excel ou TXT)"
+                          accept=".xlsx,.xls,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain"
+                          aria-label="Selecionar arquivo de leads (Excel, CSV ou TXT)"
                           required
                         />
                         <div class="dis-campaign-dropzone-visual">
@@ -22467,7 +22470,7 @@
                             <strong>Arraste o arquivo até aqui</strong>
                             <span>ou clique para escolher</span>
                             <span class="aquecedor-hint" style="display:block;margin-top:6px;">
-                              Formatos aceitos: Excel (.xlsx, .xls) ou TXT (.txt). Números repetidos (com ou sem o 9º dígito) entram uma só vez.
+                              Formatos aceitos: Excel (.xlsx, .xls), CSV (.csv separado por ponto e vírgula) ou TXT (.txt). Números repetidos (com ou sem o 9º dígito) entram uma só vez.
                             </span>
                             <div class="dis-campaign-file-meta" id="dis-wizard-leads-file-label">Nenhum arquivo carregado.</div>
                             <p id="dis-wizard-leads-current" class="dis-campaign-file-current" hidden></p>
@@ -23663,9 +23666,9 @@
                   <span class="muted">A Meta não reusa o link de exemplo. Se a foto for a mesma de outro template, envie o arquivo de novo neste.</span>
                 </div>
                 <div class="aquecedor-field">
-                  <label for="meta-tpl-broadcast-file-btn">6. Lista (.xlsx, .xls ou .txt)</label>
+                  <label for="meta-tpl-broadcast-file-btn">6. Lista (.xlsx, .xls, .csv ou .txt)</label>
                   <div class="meta-tpl-ai-file-row">
-                    <input id="meta-tpl-broadcast-file" type="file" accept=".xlsx,.xls,.txt" hidden />
+                    <input id="meta-tpl-broadcast-file" type="file" accept=".xlsx,.xls,.csv,.txt,text/csv,text/plain" hidden />
                     <button id="meta-tpl-broadcast-file-btn" type="button" class="instance-action-btn btn-refresh enabled">Escolher planilha</button>
                     <span id="meta-tpl-broadcast-file-name" class="muted meta-tpl-ai-file-name">Nenhum arquivo.</span>
                   </div>
@@ -42487,7 +42490,9 @@
         } catch (_error) {
           requestSummary = { note: "request_parse_failed" };
         }
-        const maxAttempts = method === "GET" ? 8 : 1;
+        const retryable =
+          method === "GET" || /\/broadcast\/preview$/i.test(String(path || ""));
+        const maxAttempts = retryable ? 8 : 1;
         let lastError = null;
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
           try {
@@ -42508,7 +42513,7 @@
               payload = {};
             }
             if (
-              method === "GET" &&
+              retryable &&
               metaTplLabIsTransientProxyFailure(response, payload, rawText) &&
               attempt < maxAttempts
             ) {
@@ -42547,7 +42552,7 @@
           } catch (error) {
             lastError = error;
             const canRetryNetwork =
-              method === "GET" &&
+              retryable &&
               attempt < maxAttempts &&
               !(error && error.labEvidence && error.labEvidence.httpStatus && error.labEvidence.httpStatus < 500);
             if (canRetryNetwork && (!error || !error.labEvidence || Number(error.labEvidence.httpStatus || 0) >= 500)) {
@@ -43958,30 +43963,41 @@
 
       async function metaTplBroadcastLoadColumns() {
         if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
-          if (!metaTplBroadcastHasTemplate()) {
-            metaTplBroadcastSyncMappingFields({ nome: false, numero: false });
-            return;
-          }
           const sample = metaDisparoCloudPreviewSample();
-          const mapping = (metaTplBroadcastInspect && metaTplBroadcastInspect.mapping) || sample.mapping;
+          const mapping = (metaTplBroadcastInspect && metaTplBroadcastInspect.mapping) || sample.mapping || {
+            phone: true,
+            nome: false,
+            numero: false,
+          };
+          mapping.phone = true;
           metaTplBroadcastFillColumns(sample.columns, sample);
           metaTplBroadcastSyncMappingFields(mapping);
           return;
         }
-        if (!metaTplBroadcastFile || !metaTplBroadcastHasTemplate()) return;
+        if (!metaTplBroadcastFile) return;
         try {
+          metaTplBroadcastSetStatus("Lendo as colunas da planilha…");
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/preview", {
             method: "POST",
             body: metaTplBroadcastFormData(),
           });
-          metaTplBroadcastFillColumns(payload.columns || [], {
+          const columns = payload.columns || [];
+          metaTplBroadcastFillColumns(columns, {
             phoneColumn: payload.phoneColumn,
             nomeColumn: payload.nomeColumn,
             numeroColumn: payload.numeroColumn,
           });
-          metaTplBroadcastSyncMappingFields(payload.mapping || {});
-        } catch (_error) {
-          /* o start ainda tenta adivinhar as colunas */
+          const mapping = payload.mapping || { phone: true, nome: false, numero: false };
+          mapping.phone = true;
+          metaTplBroadcastSyncMappingFields(mapping);
+          metaTplBroadcastSetStatus(
+            columns.length
+              ? ""
+              : "Não encontrei colunas nesta planilha. Confira se a primeira aba tem o cabeçalho.",
+          );
+        } catch (error) {
+          const message = error && error.message ? error.message : "Não foi possível ler a planilha.";
+          metaTplBroadcastSetStatus(message);
         }
       }
 
@@ -44593,10 +44609,14 @@
       });
       document.getElementById("meta-tpl-broadcast-category")?.addEventListener("change", function () {
         metaTplBroadcastFillTemplates();
-        metaTplBroadcastLoadInspect();
+        void metaTplBroadcastLoadInspect().then(function () {
+          if (metaTplBroadcastFile) void metaTplBroadcastLoadColumns();
+        });
       });
       document.getElementById("meta-tpl-broadcast-template")?.addEventListener("change", function () {
-        metaTplBroadcastLoadInspect();
+        void metaTplBroadcastLoadInspect().then(function () {
+          if (metaTplBroadcastFile) void metaTplBroadcastLoadColumns();
+        });
       });
       document.getElementById("meta-tpl-broadcast-header-btn")?.addEventListener("click", function () {
         document.getElementById("meta-tpl-broadcast-header-file")?.click();
@@ -55842,7 +55862,7 @@
             }
           }
           if (!disCampaignWizardLeadsFile && !disCampaignWizardKeepExistingLeads) {
-            return "Envie o arquivo de leads em Excel (.xlsx, .xls) ou TXT (.txt).";
+            return "Envie o arquivo de leads em Excel (.xlsx, .xls), CSV (.csv) ou TXT (.txt).";
           }
           const imported = Math.max(0, Math.floor(Number(disCampaignWizardImportedLineCount) || 0));
           if (imported < 1) {
@@ -56528,7 +56548,7 @@
 
       function isDisCampaignWizardLeadsFileName(fileName) {
         const lower = String(fileName || "").toLowerCase();
-        return lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".txt");
+        return lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".csv") || lower.endsWith(".txt");
       }
 
       function canonicalizeOfficialWizardPhone(raw) {
@@ -56575,7 +56595,7 @@
 
       async function countDisCampaignWizardLeadsRows(file) {
         const lower = String(file?.name || "").toLowerCase();
-        if (lower.endsWith(".txt")) {
+        if (lower.endsWith(".txt") || lower.endsWith(".csv")) {
           const text = await file.text();
           const lines = String(text || "")
             .split(/\r\n|\n|\r/)
@@ -56634,7 +56654,7 @@
           clearDisCampaignWizardLeadsCountError();
           updateDisCampaignWizardLeadsCountUi();
           showToast(
-            "Formato inválido. Envie apenas Excel (.xlsx, .xls) ou TXT (.txt).",
+            "Formato inválido. Envie apenas Excel (.xlsx, .xls), CSV (.csv) ou TXT (.txt).",
             "warning",
             5200
           );
@@ -57030,7 +57050,7 @@
             throw new Error(getDisCampaignWizardMediaMissingMessage());
           }
           if (!disCampaignWizardLeadsFile && !disCampaignWizardKeepExistingLeads) {
-            throw new Error("Envie o arquivo de leads em Excel (.xlsx, .xls) ou TXT (.txt).");
+            throw new Error("Envie o arquivo de leads em Excel (.xlsx, .xls), CSV (.csv) ou TXT (.txt).");
           }
 
           const timeoutMs = resolveDisCampaignWizardSubmitTimeoutMs();

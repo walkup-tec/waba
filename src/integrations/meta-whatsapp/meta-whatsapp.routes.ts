@@ -1021,7 +1021,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
         if (!file?.buffer?.length) {
           return sendPublic(res, 400, {
             ok: false,
-            error: "Envie uma planilha .xlsx, .xls ou .txt.",
+            error: "Envie uma planilha .xlsx, .xls, .csv ou .txt.",
             code: "invalid_payload",
           });
         }
@@ -1055,7 +1055,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
         if (!file?.buffer?.length) {
           return sendPublic(res, 400, {
             ok: false,
-            error: "Envie uma planilha .xlsx, .xls ou .txt.",
+            error: "Envie uma planilha .xlsx, .xls, .csv ou .txt.",
             code: "invalid_payload",
           });
         }

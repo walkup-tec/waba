@@ -204,16 +204,24 @@ class MetaWhatsappBroadcastService {
     }
     async previewFromAuth(auth, input) {
         const tenant = requireTenant(auth);
-        const loaded = await this.loadApprovedTemplate(tenant.tenantId, String(input.connectionId || "").trim(), String(input.templateId || "").trim());
+        const templateId = String(input.templateId || "").trim();
+        const connectionId = String(input.connectionId || "").trim();
+        let inspect;
+        let mapping = (0, meta_whatsapp_broadcast_template_1.resolveBroadcastColumnMapping)([]);
+        if (templateId) {
+            const loaded = await this.loadApprovedTemplate(tenant.tenantId, connectionId, templateId);
+            inspect = loaded.inspect;
+            mapping = (0, meta_whatsapp_broadcast_template_1.resolveBroadcastColumnMapping)(loaded.inspect.bodyVariables);
+        }
         const preview = this.previewFromBuffer({
             buffer: input.buffer,
             fileName: input.fileName,
             mapping: input.mapping,
-            inspect: loaded.inspect,
+            inspect,
         });
         return {
-            inspect: loaded.inspect,
-            mapping: (0, meta_whatsapp_broadcast_template_1.resolveBroadcastColumnMapping)(loaded.inspect.bodyVariables),
+            inspect: inspect || null,
+            mapping,
             columns: preview.columns,
             phoneColumn: preview.phoneColumn,
             nomeColumn: preview.nomeColumn,

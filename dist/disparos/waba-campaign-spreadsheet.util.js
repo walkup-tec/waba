@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isCampaignLeadsTxtFileName = exports.isCampaignLeadsFileName = exports.CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS = void 0;
+exports.isCampaignLeadsDelimitedFileName = exports.isCampaignLeadsCsvFileName = exports.isCampaignLeadsTxtFileName = exports.isCampaignLeadsFileName = exports.CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS = void 0;
 exports.countTxtImportedRows = countTxtImportedRows;
 exports.trimTxtBufferToRowCount = trimTxtBufferToRowCount;
 exports.countSpreadsheetImportedRows = countSpreadsheetImportedRows;
@@ -41,8 +41,8 @@ exports.trimSpreadsheetBufferToRowCount = trimSpreadsheetBufferToRowCount;
 exports.countLeadsImportedRows = countLeadsImportedRows;
 exports.trimLeadsBufferToRowCount = trimLeadsBufferToRowCount;
 const XLSX = __importStar(require("xlsx"));
-/** Extensões aceitas no intake de leads (wizard API Oficial). */
-exports.CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".txt"];
+/** Extensões aceitas no intake de leads (wizard API Oficial e Disparo Cloud). */
+exports.CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".csv", ".txt"];
 const isCampaignLeadsFileName = (fileName) => {
     const lower = String(fileName || "").trim().toLowerCase();
     return exports.CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS.some((ext) => lower.endsWith(ext));
@@ -50,6 +50,10 @@ const isCampaignLeadsFileName = (fileName) => {
 exports.isCampaignLeadsFileName = isCampaignLeadsFileName;
 const isCampaignLeadsTxtFileName = (fileName) => String(fileName || "").trim().toLowerCase().endsWith(".txt");
 exports.isCampaignLeadsTxtFileName = isCampaignLeadsTxtFileName;
+const isCampaignLeadsCsvFileName = (fileName) => String(fileName || "").trim().toLowerCase().endsWith(".csv");
+exports.isCampaignLeadsCsvFileName = isCampaignLeadsCsvFileName;
+const isCampaignLeadsDelimitedFileName = (fileName) => (0, exports.isCampaignLeadsTxtFileName)(fileName) || (0, exports.isCampaignLeadsCsvFileName)(fileName);
+exports.isCampaignLeadsDelimitedFileName = isCampaignLeadsDelimitedFileName;
 /** Conta linhas não vazias de um TXT (um contato por linha). */
 function countTxtImportedRows(buffer) {
     const text = buffer.toString("utf8");
@@ -96,16 +100,16 @@ function trimSpreadsheetBufferToRowCount(buffer, maxRows) {
     XLSX.utils.book_append_sheet(nextWorkbook, nextSheet, sheetName);
     return Buffer.from(XLSX.write(nextWorkbook, { type: "buffer", bookType: "xlsx" }));
 }
-/** Conta leads conforme extensão do arquivo (.xlsx/.xls ou .txt). */
+/** Conta leads conforme extensão do arquivo (.xlsx/.xls, .csv ou .txt). */
 function countLeadsImportedRows(buffer, fileName) {
-    if ((0, exports.isCampaignLeadsTxtFileName)(fileName)) {
+    if ((0, exports.isCampaignLeadsDelimitedFileName)(fileName)) {
         return countTxtImportedRows(buffer);
     }
     return countSpreadsheetImportedRows(buffer);
 }
-/** Corta o arquivo de leads ao limite de envios, preservando o tipo (Excel→xlsx / TXT→txt). */
+/** Corta o arquivo de leads ao limite de envios, preservando o tipo (Excel→xlsx / CSV/TXT→texto). */
 function trimLeadsBufferToRowCount(buffer, maxRows, fileName) {
-    if ((0, exports.isCampaignLeadsTxtFileName)(fileName)) {
+    if ((0, exports.isCampaignLeadsDelimitedFileName)(fileName)) {
         return trimTxtBufferToRowCount(buffer, maxRows);
     }
     return trimSpreadsheetBufferToRowCount(buffer, maxRows);

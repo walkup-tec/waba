@@ -65,22 +65,57 @@ function uniqueColumns(headers) {
     }
     return out;
 }
-function parseTxtRows(buffer) {
+function splitDelimitedLine(line, delimiter) {
+    const out = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
+        if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+                current += '"';
+                i += 1;
+            }
+            else {
+                inQuotes = !inQuotes;
+            }
+            continue;
+        }
+        if (ch === delimiter && !inQuotes) {
+            out.push(current.trim());
+            current = "";
+            continue;
+        }
+        current += ch;
+    }
+    out.push(current.trim());
+    return out;
+}
+function detectDelimitedSeparator(first) {
+    if (first.includes(";"))
+        return ";";
+    if (first.includes("\t"))
+        return "\t";
+    if (first.includes(","))
+        return ",";
+    return "";
+}
+function parseDelimitedRows(buffer, forceTable) {
     const text = buffer.toString("utf8").replace(/^\uFEFF/, "");
     const lines = text
         .split(/\r\n|\n|\r/)
         .map((line) => line.trim())
         .filter(Boolean);
     if (!lines.length)
-        return { columns: ["telefone"], rows: [] };
+        return forceTable ? { columns: [], rows: [] } : { columns: ["telefone"], rows: [] };
     const first = lines[0];
-    const delimiter = first.includes(";") ? ";" : first.includes("\t") ? "\t" : first.includes(",") ? "," : "";
+    const delimiter = detectDelimitedSeparator(first);
     if (delimiter) {
-        const headers = uniqueColumns(first.split(delimiter).map((item) => item.trim()));
-        const looksHeader = headers.some((item) => PHONE_HEADER_RE.test(item) || NAME_HEADER_RE.test(item));
-        if (looksHeader) {
+        const headers = uniqueColumns(splitDelimitedLine(first, delimiter));
+        const useTable = forceTable || headers.length > 1 || headers.some((item) => PHONE_HEADER_RE.test(item) || NAME_HEADER_RE.test(item));
+        if (useTable) {
             const rows = lines.slice(1).map((line) => {
-                const parts = line.split(delimiter);
+                const parts = splitDelimitedLine(line, delimiter);
                 const row = {};
                 headers.forEach((header, index) => {
                     row[header] = String(parts[index] ?? "").trim();
@@ -95,20 +130,64 @@ function parseTxtRows(buffer) {
         rows: lines.map((line) => ({ telefone: line })),
     };
 }
+function rowCells(row) {
+    if (!Array.isArray(row))
+        return [];
+    return row.map((cell) => String(cell ?? "").trim());
+}
+function pickHeaderRowIndex(matrix) {
+    const window = matrix.slice(0, 20);
+    const scored = window.map((row, index) => {
+        const cells = rowCells(row).filter(Boolean);
+        const looks = cells.some((item) => PHONE_HEADER_RE.test(item) || NAME_HEADER_RE.test(item) || /tel|phone|whats|cel|nome/i.test(item));
+        return { index, cells, looks, count: cells.length };
+    });
+    const headerLike = scored.find((item) => item.looks && item.count >= 1);
+    if (headerLike)
+        return headerLike.index;
+    const first = scored.find((item) => item.count >= 1);
+    return first ? first.index : -1;
+}
+function sheetFromMatrix(matrix) {
+    const headerIndex = pickHeaderRowIndex(matrix);
+    if (headerIndex < 0)
+        return null;
+    const headers = uniqueColumns(rowCells(matrix[headerIndex]));
+    if (!headers.some((item) => String(item || "").trim()))
+        return null;
+    const rows = matrix
+        .slice(headerIndex + 1)
+        .filter((row) => rowCells(row).some(Boolean))
+        .map((row) => {
+        const cells = rowCells(row);
+        const out = {};
+        headers.forEach((header, index) => {
+            out[header] = cells[index] || "";
+        });
+        return out;
+    });
+    return { columns: headers, rows };
+}
 function readMetaBroadcastSheet(buffer, fileName) {
     if (!buffer?.length)
         return { columns: [], rows: [] };
+    if ((0, waba_campaign_spreadsheet_util_1.isCampaignLeadsCsvFileName)(fileName)) {
+        return parseDelimitedRows(buffer, true);
+    }
     if ((0, waba_campaign_spreadsheet_util_1.isCampaignLeadsTxtFileName)(fileName)) {
-        return parseTxtRows(buffer);
+        return parseDelimitedRows(buffer, false);
     }
     const wb = XLSX.read(buffer, { type: "buffer", cellDates: false, raw: true });
-    const sheetName = wb.SheetNames[0];
-    if (!sheetName)
-        return { columns: [], rows: [] };
-    const sheet = wb.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
-    const columns = rows[0] ? Object.keys(rows[0]) : [];
-    return { columns, rows };
+    for (const sheetName of wb.SheetNames || []) {
+        const sheet = wb.Sheets[sheetName];
+        if (!sheet)
+            continue;
+        const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true });
+        const parsed = sheetFromMatrix(matrix);
+        if (parsed)
+            return parsed;
+    }
+    return { columns: [], rows: [] };
 }
 function guessMetaBroadcastPhoneColumn(columns) {
     const list = columns.map((item) => String(item || "").trim()).filter(Boolean);

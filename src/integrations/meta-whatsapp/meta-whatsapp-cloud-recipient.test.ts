@@ -123,4 +123,52 @@ describe("parseMetaBroadcastLeads", () => {
     assert.equal(parsed.leads[0]?.nome, "Ana");
     assert.equal(parsed.leads[1]?.waId, "5551982001261");
   });
+
+  it("lê o cabeçalho mesmo sem linhas de dados", () => {
+    const wb = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([["Nome", "Telefone"]]);
+    XLSX.utils.book_append_sheet(wb, sheet, "Leads");
+    const buffer = Buffer.from(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
+    const parsedSheet = readMetaBroadcastSheet(buffer, "leads.xlsx");
+    assert.deepEqual(parsedSheet.columns, ["Nome", "Telefone"]);
+    assert.equal(parsedSheet.rows.length, 0);
+    assert.equal(guessMetaBroadcastPhoneColumn(parsedSheet.columns), "Telefone");
+  });
+
+  it("pula a primeira aba vazia e o título acima do cabeçalho", () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[], []]), "Capa");
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ["Campanha Tocantins"],
+      [],
+      ["Nome", "Telefone", "Cidade"],
+      ["Ana", "(51) 99988-7766", "Palmas"],
+    ]);
+    XLSX.utils.book_append_sheet(wb, sheet, "Leads");
+    const buffer = Buffer.from(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
+    const parsedSheet = readMetaBroadcastSheet(buffer, "tocantins_25-08-2026_60_Disparo.xlsx");
+    assert.deepEqual(parsedSheet.columns, ["Nome", "Telefone", "Cidade"]);
+    assert.equal(parsedSheet.rows.length, 1);
+    assert.equal(guessMetaBroadcastPhoneColumn(parsedSheet.columns), "Telefone");
+  });
+
+  it("lê CSV separado por ponto e vírgula e monta as colunas do cabeçalho", () => {
+    const csv = Buffer.from(
+      "\uFEFFNome;Telefone;Cidade\n\"Souza; Filho\";(63) 99999-0000;Palmas\nAna;63988887777;Araguaína\n",
+      "utf8",
+    );
+    const parsedSheet = readMetaBroadcastSheet(csv, "leads.csv");
+    assert.deepEqual(parsedSheet.columns, ["Nome", "Telefone", "Cidade"]);
+    assert.equal(parsedSheet.rows.length, 2);
+    assert.equal(String(parsedSheet.rows[0]?.Nome || ""), "Souza; Filho");
+    assert.equal(guessMetaBroadcastPhoneColumn(parsedSheet.columns), "Telefone");
+    const parsed = parseMetaBroadcastLeads({
+      sheet: parsedSheet,
+      mapping: { phoneColumn: "Telefone", nomeColumn: "Nome" },
+      bodyVariables: [{ index: 1, key: "nome", label: "Variável Nome" }],
+    });
+    assert.equal(parsed.leads.length, 2);
+    assert.equal(parsed.leads[0]?.nome, "Souza; Filho");
+    assert.equal(parsed.leads[0]?.waId, "5563999990000");
+  });
 });

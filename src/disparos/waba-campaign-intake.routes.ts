@@ -507,7 +507,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       const sheetName = String(spreadsheetFile.originalname || "").toLowerCase();
       if (!isCampaignLeadsFileName(sheetName)) {
         return res.status(400).json({
-          error: "A lista de clientes deve ser Excel (.xlsx ou .xls) ou TXT (.txt).",
+          error: "A lista de clientes deve ser Excel (.xlsx ou .xls), CSV (.csv) ou TXT (.txt).",
         });
       }
 
@@ -1043,7 +1043,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         sheetName = String(spreadsheetFile.originalname || "").toLowerCase();
         if (!isCampaignLeadsFileName(sheetName)) {
           return res.status(400).json({
-            error: "A lista de clientes deve ser Excel (.xlsx ou .xls) ou TXT (.txt).",
+            error: "A lista de clientes deve ser Excel (.xlsx ou .xls), CSV (.csv) ou TXT (.txt).",
           });
         }
         try {

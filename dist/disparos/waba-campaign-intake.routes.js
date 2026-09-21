@@ -372,7 +372,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             const sheetName = String(spreadsheetFile.originalname || "").toLowerCase();
             if (!(0, waba_campaign_spreadsheet_util_1.isCampaignLeadsFileName)(sheetName)) {
                 return res.status(400).json({
-                    error: "A lista de clientes deve ser Excel (.xlsx ou .xls) ou TXT (.txt).",
+                    error: "A lista de clientes deve ser Excel (.xlsx ou .xls), CSV (.csv) ou TXT (.txt).",
                 });
             }
             const { apiKind, error: apiKindError } = parseRequestedApiKind(body, auth.email);
@@ -827,7 +827,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 sheetName = String(spreadsheetFile.originalname || "").toLowerCase();
                 if (!(0, waba_campaign_spreadsheet_util_1.isCampaignLeadsFileName)(sheetName)) {
                     return res.status(400).json({
-                        error: "A lista de clientes deve ser Excel (.xlsx ou .xls) ou TXT (.txt).",
+                        error: "A lista de clientes deve ser Excel (.xlsx ou .xls), CSV (.csv) ou TXT (.txt).",
                     });
                 }
                 try {

@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 
-/** Extensões aceitas no intake de leads (wizard API Oficial). */
-export const CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".txt"] as const;
+/** Extensões aceitas no intake de leads (wizard API Oficial e Disparo Cloud). */
+export const CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".csv", ".txt"] as const;
 
 export const isCampaignLeadsFileName = (fileName: string): boolean => {
   const lower = String(fileName || "").trim().toLowerCase();
@@ -10,6 +10,12 @@ export const isCampaignLeadsFileName = (fileName: string): boolean => {
 
 export const isCampaignLeadsTxtFileName = (fileName: string): boolean =>
   String(fileName || "").trim().toLowerCase().endsWith(".txt");
+
+export const isCampaignLeadsCsvFileName = (fileName: string): boolean =>
+  String(fileName || "").trim().toLowerCase().endsWith(".csv");
+
+export const isCampaignLeadsDelimitedFileName = (fileName: string): boolean =>
+  isCampaignLeadsTxtFileName(fileName) || isCampaignLeadsCsvFileName(fileName);
 
 /** Conta linhas não vazias de um TXT (um contato por linha). */
 export function countTxtImportedRows(buffer: Buffer): number {
@@ -59,21 +65,21 @@ export function trimSpreadsheetBufferToRowCount(buffer: Buffer, maxRows: number)
   return Buffer.from(XLSX.write(nextWorkbook, { type: "buffer", bookType: "xlsx" }));
 }
 
-/** Conta leads conforme extensão do arquivo (.xlsx/.xls ou .txt). */
+/** Conta leads conforme extensão do arquivo (.xlsx/.xls, .csv ou .txt). */
 export function countLeadsImportedRows(buffer: Buffer, fileName: string): number {
-  if (isCampaignLeadsTxtFileName(fileName)) {
+  if (isCampaignLeadsDelimitedFileName(fileName)) {
     return countTxtImportedRows(buffer);
   }
   return countSpreadsheetImportedRows(buffer);
 }
 
-/** Corta o arquivo de leads ao limite de envios, preservando o tipo (Excel→xlsx / TXT→txt). */
+/** Corta o arquivo de leads ao limite de envios, preservando o tipo (Excel→xlsx / CSV/TXT→texto). */
 export function trimLeadsBufferToRowCount(
   buffer: Buffer,
   maxRows: number,
   fileName: string,
 ): Buffer {
-  if (isCampaignLeadsTxtFileName(fileName)) {
+  if (isCampaignLeadsDelimitedFileName(fileName)) {
     return trimTxtBufferToRowCount(buffer, maxRows);
   }
   return trimSpreadsheetBufferToRowCount(buffer, maxRows);
