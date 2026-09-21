@@ -8,11 +8,14 @@ exports.createShortLinkRecord = createShortLinkRecord;
 exports.incrementShortLinkClicks = incrementShortLinkClicks;
 exports.attachCampaignIdToShortLink = attachCampaignIdToShortLink;
 exports.getShortLinkClicksByCampaignId = getShortLinkClicksByCampaignId;
+exports.peekShortLinkClicksSync = peekShortLinkClicksSync;
+exports.peekShortLinkClicksForBroadcast = peekShortLinkClicksForBroadcast;
 exports.getShortLinkClicksByUrl = getShortLinkClicksByUrl;
 exports.extractSlugFromPublicShortUrl = extractSlugFromPublicShortUrl;
 exports.normalizeSlug = normalizeSlug;
 exports.randomSlug = randomSlug;
 const promises_1 = __importDefault(require("fs/promises"));
+const node_fs_1 = require("node:fs");
 const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../data-path");
 const STORE_FILE = (0, data_path_1.resolveDataFile)("shortener-links.json");
@@ -115,6 +118,44 @@ async function getShortLinkClicksByCampaignId(campaignId) {
     return store.links
         .filter((row) => String(row.campaignId || "").trim() === id)
         .reduce((sum, row) => sum + Math.max(0, Number(row.clicks || 0)), 0);
+}
+function peekShortLinkClicksSync(slug) {
+    const key = normalizeSlug(slug);
+    if (!key)
+        return null;
+    if (storeCache) {
+        const row = slugIndex.get(key);
+        return row ? Math.max(0, Number(row.clicks || 0)) : null;
+    }
+    try {
+        const raw = (0, node_fs_1.readFileSync)(STORE_FILE, "utf8");
+        const parsed = JSON.parse(raw.trim() || "{}");
+        const links = Array.isArray(parsed?.links) ? parsed.links : [];
+        const row = links.find((item) => normalizeSlug(String(item?.slug || "")) === key);
+        if (!row)
+            return null;
+        return Math.max(0, Number(row.clicks || 0));
+    }
+    catch {
+        return null;
+    }
+}
+function peekShortLinkClicksForBroadcast(input) {
+    const slugs = [
+        String(input.trackedSlug || "").trim(),
+        String(input.shortSlug || "").trim(),
+        extractSlugFromPublicShortUrl(String(input.shortUrl || "")) || "",
+    ]
+        .map((item) => normalizeSlug(item))
+        .filter(Boolean);
+    let found = null;
+    for (const slug of slugs) {
+        const clicks = peekShortLinkClicksSync(slug);
+        if (clicks == null)
+            continue;
+        found = found == null ? clicks : Math.max(found, clicks);
+    }
+    return found;
 }
 async function getShortLinkClicksByUrl(shortUrl) {
     const slug = extractSlugFromPublicShortUrl(shortUrl);

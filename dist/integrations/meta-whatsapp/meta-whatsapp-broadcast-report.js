@@ -10,6 +10,7 @@ exports.tryFinalizeDueLabReports = tryFinalizeDueLabReports;
 exports.ensureLabReportFinalizeSweep = ensureLabReportFinalizeSweep;
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_broadcast_store_1 = require("./meta-whatsapp-broadcast.store");
+const waba_shortener_repository_1 = require("../../shortener/waba-shortener.repository");
 const waba_campaign_intake_repository_1 = require("../../disparos/waba-campaign-intake.repository");
 const waba_campaign_intake_status_1 = require("../../disparos/waba-campaign-intake-status");
 const waba_campaign_laboratorio_attended_1 = require("../../disparos/waba-campaign-laboratorio-attended");
@@ -44,7 +45,11 @@ function computeMetaLabCampaignMetrics(campaign, totalLeads) {
         delivered: leads.filter(leadCountsAsDelivered).length,
         read: leads.filter(leadCountsAsRead).length,
         failed: leads.filter(leadCountsAsFailed).length,
-        clicks: Math.max(0, Math.round(Number(campaign.clicks) || 0)),
+        clicks: (0, meta_whatsapp_broadcast_store_1.resolveBroadcastReportedClicks)(campaign, (0, waba_shortener_repository_1.peekShortLinkClicksForBroadcast)({
+            trackedSlug: campaign.trackedSlug,
+            shortSlug: campaign.shortSlug,
+            shortUrl: campaign.shortUrl,
+        })),
     };
 }
 function campaignHasDeliverySignal(campaign) {

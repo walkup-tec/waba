@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import { readFileSync } from "node:fs";
 import path from "path";
 import { resolveDataFile } from "../data-path";
 
@@ -127,6 +128,46 @@ export async function getShortLinkClicksByCampaignId(campaignId: string): Promis
   return store.links
     .filter((row) => String(row.campaignId || "").trim() === id)
     .reduce((sum, row) => sum + Math.max(0, Number(row.clicks || 0)), 0);
+}
+
+export function peekShortLinkClicksSync(slug: string): number | null {
+  const key = normalizeSlug(slug);
+  if (!key) return null;
+  if (storeCache) {
+    const row = slugIndex.get(key);
+    return row ? Math.max(0, Number(row.clicks || 0)) : null;
+  }
+  try {
+    const raw = readFileSync(STORE_FILE, "utf8");
+    const parsed = JSON.parse(raw.trim() || "{}") as { links?: Array<{ slug?: string; clicks?: unknown }> };
+    const links = Array.isArray(parsed?.links) ? parsed.links : [];
+    const row = links.find((item) => normalizeSlug(String(item?.slug || "")) === key);
+    if (!row) return null;
+    return Math.max(0, Number(row.clicks || 0));
+  } catch {
+    return null;
+  }
+}
+
+export function peekShortLinkClicksForBroadcast(input: {
+  trackedSlug?: string | null;
+  shortSlug?: string | null;
+  shortUrl?: string | null;
+}): number | null {
+  const slugs = [
+    String(input.trackedSlug || "").trim(),
+    String(input.shortSlug || "").trim(),
+    extractSlugFromPublicShortUrl(String(input.shortUrl || "")) || "",
+  ]
+    .map((item) => normalizeSlug(item))
+    .filter(Boolean);
+  let found: number | null = null;
+  for (const slug of slugs) {
+    const clicks = peekShortLinkClicksSync(slug);
+    if (clicks == null) continue;
+    found = found == null ? clicks : Math.max(found, clicks);
+  }
+  return found;
 }
 
 export async function getShortLinkClicksByUrl(shortUrl: string): Promise<number | null> {

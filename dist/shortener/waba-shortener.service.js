@@ -65,10 +65,10 @@ async function resolveWabaShortRedirect(slug) {
     if (!record?.longUrl)
         return null;
     await (0, waba_shortener_repository_1.incrementShortLinkClicks)(normalized);
-    if (record.campaignId)
-        (0, meta_whatsapp_broadcast_store_1.addClicksToBroadcastCampaign)(record.campaignId, 1);
-    else
-        (0, meta_whatsapp_broadcast_store_1.addClicksByBroadcastSlug)(normalized, 1);
+    (0, meta_whatsapp_broadcast_store_1.creditShortLinkClickToBroadcast)({
+        slug: normalized,
+        campaignId: record.campaignId,
+    });
     return record.longUrl;
 }
 async function fetchWabaShortUrlClicks(shortUrl) {

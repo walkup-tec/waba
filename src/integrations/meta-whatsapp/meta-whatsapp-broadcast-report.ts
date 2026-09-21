@@ -1,10 +1,12 @@
 import { logMetaWhatsappSafe } from "./meta-whatsapp-errors";
 import {
   findBroadcastByIntakeCampaignId,
+  resolveBroadcastReportedClicks,
   saveBroadcastCampaign,
   type MetaBroadcastCampaign,
   type MetaBroadcastLead,
 } from "./meta-whatsapp-broadcast.store";
+import { peekShortLinkClicksForBroadcast } from "../../shortener/waba-shortener.repository";
 import { WabaCampaignIntakeRepository } from "../../disparos/waba-campaign-intake.repository";
 import { normalizeCampaignIntakeStatus } from "../../disparos/waba-campaign-intake-status";
 import { campaignAttendedByLaboratorioStaff } from "../../disparos/waba-campaign-laboratorio-attended";
@@ -48,7 +50,14 @@ export function computeMetaLabCampaignMetrics(campaign: MetaBroadcastCampaign, t
     delivered: leads.filter(leadCountsAsDelivered).length,
     read: leads.filter(leadCountsAsRead).length,
     failed: leads.filter(leadCountsAsFailed).length,
-    clicks: Math.max(0, Math.round(Number(campaign.clicks) || 0)),
+    clicks: resolveBroadcastReportedClicks(
+      campaign,
+      peekShortLinkClicksForBroadcast({
+        trackedSlug: campaign.trackedSlug,
+        shortSlug: campaign.shortSlug,
+        shortUrl: campaign.shortUrl,
+      }),
+    ),
   };
 }
 

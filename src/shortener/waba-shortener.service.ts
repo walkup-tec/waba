@@ -15,7 +15,7 @@ import {
   normalizeSlug,
   randomSlug,
 } from "./waba-shortener.repository";
-import { addClicksByBroadcastSlug, addClicksToBroadcastCampaign } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
+import { creditShortLinkClickToBroadcast } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 
 function buildPublicShortUrl(slug: string, hints?: WabaPublicBaseRequestHints): string {
   rememberPublicBaseFromRequest(hints);
@@ -77,8 +77,10 @@ export async function resolveWabaShortRedirect(slug: string): Promise<string | n
   const record = await findShortLinkBySlug(normalized);
   if (!record?.longUrl) return null;
   await incrementShortLinkClicks(normalized);
-  if (record.campaignId) addClicksToBroadcastCampaign(record.campaignId, 1);
-  else addClicksByBroadcastSlug(normalized, 1);
+  creditShortLinkClickToBroadcast({
+    slug: normalized,
+    campaignId: record.campaignId,
+  });
   return record.longUrl;
 }
 

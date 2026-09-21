@@ -28,8 +28,11 @@ exports.matchBroadcastLeadForMetaStatus = matchBroadcastLeadForMetaStatus;
 exports.findBroadcastLeadForInbox = findBroadcastLeadForInbox;
 exports.applyMetaStatusToBroadcastByWamid = applyMetaStatusToBroadcastByWamid;
 exports.stampTemplateApprovedAtOnBroadcasts = stampTemplateApprovedAtOnBroadcasts;
+exports.resolveBroadcastCampaignForShortClick = resolveBroadcastCampaignForShortClick;
+exports.resolveBroadcastReportedClicks = resolveBroadcastReportedClicks;
 exports.addClicksToBroadcastCampaign = addClicksToBroadcastCampaign;
 exports.addClicksByBroadcastSlug = addClicksByBroadcastSlug;
+exports.creditShortLinkClickToBroadcast = creditShortLinkClickToBroadcast;
 exports.publicBroadcastCampaign = publicBroadcastCampaign;
 const node_fs_1 = require("node:fs");
 const meta_whatsapp_broadcast_void_1 = require("./meta-whatsapp-broadcast-void");
@@ -521,13 +524,40 @@ function stampTemplateApprovedAtOnBroadcasts(input) {
     if (changed)
         writeStore(store);
 }
+function resolveBroadcastCampaignForShortClick(campaigns, input) {
+    const campaignId = String(input.campaignId || "").trim();
+    const slug = String(input.slug || "").trim().toLowerCase();
+    const usable = campaigns.filter((row) => isActiveBroadcastRow(row));
+    if (campaignId) {
+        const byId = usable.find((item) => item.id === campaignId);
+        if (byId)
+            return byId;
+        const byIntake = usable
+            .filter((item) => String(item.intakeCampaignId || "").trim() === campaignId)
+            .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+        if (byIntake[0])
+            return byIntake[0];
+    }
+    if (!slug)
+        return null;
+    return (usable.find((item) => String(item.trackedSlug || "").toLowerCase() === slug ||
+        String(item.shortSlug || "").toLowerCase() === slug) || null);
+}
+function resolveBroadcastReportedClicks(campaign, shortenerClicks) {
+    const stored = Math.max(0, Math.round(Number(campaign.clicks) || 0));
+    const start = Math.max(0, Math.round(Number(campaign.clicksAtStart) || 0));
+    if (shortenerClicks == null || !Number.isFinite(Number(shortenerClicks)))
+        return stored;
+    const delta = Math.max(0, Math.round(Number(shortenerClicks) || 0) - start);
+    return Math.max(stored, delta);
+}
 function addClicksToBroadcastCampaign(campaignId, amount = 1) {
     const id = String(campaignId || "").trim();
     const delta = Math.max(0, Math.round(Number(amount) || 0));
     if (!id || !delta)
         return;
     const store = readStore();
-    const row = store.campaigns.find((item) => item.id === id);
+    const row = resolveBroadcastCampaignForShortClick(store.campaigns, { campaignId: id });
     if (!row)
         return;
     row.clicks = Math.max(0, Number(row.clicks || 0)) + delta;
@@ -540,12 +570,26 @@ function addClicksByBroadcastSlug(slug, amount = 1) {
     if (!key || !delta)
         return;
     const store = readStore();
-    const row = store.campaigns.find((item) => String(item.trackedSlug || "").toLowerCase() === key || String(item.shortSlug || "").toLowerCase() === key);
+    const row = resolveBroadcastCampaignForShortClick(store.campaigns, { slug: key });
     if (!row)
         return;
     row.clicks = Math.max(0, Number(row.clicks || 0)) + delta;
     row.updatedAt = new Date().toISOString();
     writeStore(store);
+}
+/** Clique no /s/:slug: tenta o id do disparo, o id da campanha do assinante e o slug do botão. */
+function creditShortLinkClickToBroadcast(input) {
+    const delta = Math.max(0, Math.round(Number(input.amount ?? 1) || 0));
+    if (!delta)
+        return false;
+    const store = readStore();
+    const row = resolveBroadcastCampaignForShortClick(store.campaigns, input);
+    if (!row)
+        return false;
+    row.clicks = Math.max(0, Number(row.clicks || 0)) + delta;
+    row.updatedAt = new Date().toISOString();
+    writeStore(store);
+    return true;
 }
 function publicBroadcastCampaign(row) {
     return {
