@@ -5,6 +5,7 @@ const asaas_identifiers_1 = require("./asaas-identifiers");
 const asaas_client_1 = require("./asaas.client");
 const asaas_pix_key_1 = require("./asaas-pix-key");
 const waba_financeiro_split_settlement_repository_1 = require("./waba-financeiro-split-settlement.repository");
+const waba_financeiro_split_manual_paid_1 = require("./waba-financeiro-split-manual-paid");
 const isPaidTransferStatus = (status) => {
     const normalized = String(status ?? "").trim().toUpperCase();
     return normalized === "DONE" || normalized === "CONFIRMED";
@@ -272,6 +273,10 @@ class WabaFinanceiroSplitPayoutService {
         return this.executeForSettlement(current);
     }
     async executeForSettlement(settlement) {
+        const marked = (0, waba_financeiro_split_manual_paid_1.applyManualBankPaidSplit)(settlement);
+        if (marked !== settlement) {
+            return this.settlementRepository.save(marked);
+        }
         if (!this.isPayoutEnabled()) {
             return settlement;
         }

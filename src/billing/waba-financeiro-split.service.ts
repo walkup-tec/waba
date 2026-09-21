@@ -25,6 +25,7 @@ import type {
   SplitSettlementLine,
 } from "./waba-financeiro-split-settlement.repository";
 import { WabaFinanceiroSplitPayoutService } from "./waba-financeiro-split-payout.service";
+import { applyManualBankPaidSplit } from "./waba-financeiro-split-manual-paid";
 import {
   resolveFinanceiroCetCentsForPaidOrder,
   resolveFinanceiroCetCentsPerOperation,
@@ -197,15 +198,18 @@ export class WabaFinanceiroSplitService {
     const byEmail = new Map(
       this.subscriberRepository.list().map((item) => [String(item.email || "").trim().toLowerCase(), item]),
     );
-    return items.map((item) => ({
-      ...item,
-      subscriberName: resolveSplitSettlementSubscriberName({
-        customerName: item.customerName,
-        ownerEmail: item.ownerEmail,
-        orderId: item.orderId,
-        subscriberFullName: byEmail.get(this.normalizeOwnerEmail(item.ownerEmail))?.fullName,
-      }),
-    }));
+    return items.map((item) => {
+      const settled = applyManualBankPaidSplit(item);
+      return {
+        ...settled,
+        subscriberName: resolveSplitSettlementSubscriberName({
+          customerName: settled.customerName,
+          ownerEmail: settled.ownerEmail,
+          orderId: settled.orderId,
+          subscriberFullName: byEmail.get(this.normalizeOwnerEmail(settled.ownerEmail))?.fullName,
+        }),
+      };
+    });
   }
 
   /** Remove settlements já gravados de owners excluídos das métricas/split. */

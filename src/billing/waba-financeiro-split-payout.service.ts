@@ -19,6 +19,7 @@ import {
   type SplitSettlementLine,
   WabaFinanceiroSplitSettlementRepository,
 } from "./waba-financeiro-split-settlement.repository";
+import { applyManualBankPaidSplit } from "./waba-financeiro-split-manual-paid";
 
 const isPaidTransferStatus = (status: string | undefined): boolean => {
   const normalized = String(status ?? "").trim().toUpperCase();
@@ -368,6 +369,10 @@ export class WabaFinanceiroSplitPayoutService {
   }
 
   async executeForSettlement(settlement: FinanceiroSplitSettlement): Promise<FinanceiroSplitSettlement> {
+    const marked = applyManualBankPaidSplit(settlement);
+    if (marked !== settlement) {
+      return this.settlementRepository.save(marked);
+    }
     if (!this.isPayoutEnabled()) {
       return settlement;
     }

@@ -46,6 +46,7 @@ const waba_disparos_order_shipments_1 = require("./waba-disparos-order-shipments
 const waba_financeiro_split_repository_1 = require("./waba-financeiro-split.repository");
 const waba_financeiro_split_settlement_repository_1 = require("./waba-financeiro-split-settlement.repository");
 const waba_financeiro_split_payout_service_1 = require("./waba-financeiro-split-payout.service");
+const waba_financeiro_split_manual_paid_1 = require("./waba-financeiro-split-manual-paid");
 const waba_financeiro_cet_1 = require("./waba-financeiro-cet");
 const waba_metrics_excluded_owners_1 = require("./waba-metrics-excluded-owners");
 const waba_campaign_credit_funding_1 = require("./waba-campaign-credit-funding");
@@ -169,15 +170,18 @@ class WabaFinanceiroSplitService {
         this.absorbSyntheticCampaignSupplierSettlements();
         const items = (0, waba_metrics_excluded_owners_1.filterOutMetricsExcludedOwners)(this.settlementRepository.list(limit));
         const byEmail = new Map(this.subscriberRepository.list().map((item) => [String(item.email || "").trim().toLowerCase(), item]));
-        return items.map((item) => ({
-            ...item,
-            subscriberName: resolveSplitSettlementSubscriberName({
-                customerName: item.customerName,
-                ownerEmail: item.ownerEmail,
-                orderId: item.orderId,
-                subscriberFullName: byEmail.get(this.normalizeOwnerEmail(item.ownerEmail))?.fullName,
-            }),
-        }));
+        return items.map((item) => {
+            const settled = (0, waba_financeiro_split_manual_paid_1.applyManualBankPaidSplit)(item);
+            return {
+                ...settled,
+                subscriberName: resolveSplitSettlementSubscriberName({
+                    customerName: settled.customerName,
+                    ownerEmail: settled.ownerEmail,
+                    orderId: settled.orderId,
+                    subscriberFullName: byEmail.get(this.normalizeOwnerEmail(settled.ownerEmail))?.fullName,
+                }),
+            };
+        });
     }
     /** Remove settlements já gravados de owners excluídos das métricas/split. */
     purgeExcludedOwnerSettlements() {
