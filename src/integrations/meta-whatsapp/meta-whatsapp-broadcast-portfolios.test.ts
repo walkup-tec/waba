@@ -46,4 +46,11 @@ describe("Disparo Cloud: portfólios, WABAs, números e limite diário", () => {
     assert.match(html, /preview\|start/);
     assert.match(html, /metaTplBroadcastStarting/);
   });
+
+  it("manda CSV leve no start quando a planilha é grande", () => {
+    assert.match(html, /function metaTplBroadcastFileForUpload/);
+    assert.match(html, /function metaTplBroadcastBuildCompactCsv/);
+    assert.match(html, /leads-cloud\.csv/);
+    assert.match(html, /xlsx de 5\+ MB toma 502/);
+  });
 });

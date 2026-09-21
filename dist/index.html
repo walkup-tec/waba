@@ -43684,7 +43684,53 @@
         return metaTplBroadcastSelectedConnectionIds()[0] || "";
       }
 
-      function metaTplBroadcastFormData() {
+      function metaTplBroadcastCsvCell(value) {
+        const text = String(value == null ? "" : value).trim();
+        if (/[;"\n\r]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
+        return text;
+      }
+
+      function metaTplBroadcastBuildCompactCsv(sheet) {
+        const phone =
+          String((metaTplBroadcastEl("meta-tpl-broadcast-phone-col") || {}).value || "").trim() ||
+          metaTplBroadcastGuessPhoneColumn((sheet && sheet.columns) || []);
+        const nome = String((metaTplBroadcastEl("meta-tpl-broadcast-nome-col") || {}).value || "").trim();
+        const numero = String((metaTplBroadcastEl("meta-tpl-broadcast-numero-col") || {}).value || "").trim();
+        const headers = [];
+        if (phone) headers.push(phone);
+        if (nome && headers.indexOf(nome) === -1) headers.push(nome);
+        if (numero && headers.indexOf(numero) === -1) headers.push(numero);
+        if (!headers.length) return { csv: "", rows: 0 };
+        const lines = [headers.map(metaTplBroadcastCsvCell).join(";")];
+        ((sheet && sheet.rows) || []).forEach(function (row) {
+          const phoneVal = phone ? String((row && row[phone]) || "").trim() : "";
+          if (!phoneVal) return;
+          lines.push(
+            headers
+              .map(function (header) {
+                return metaTplBroadcastCsvCell(row && row[header]);
+              })
+              .join(";"),
+          );
+        });
+        return { csv: "\uFEFF" + lines.join("\n"), rows: lines.length - 1 };
+      }
+
+      async function metaTplBroadcastFileForUpload() {
+        if (!metaTplBroadcastFile) return null;
+        // xlsx de 5+ MB toma 502 no Traefik; o start só precisa telefone/nome.
+        if (metaTplBroadcastFile.size < 350 * 1024) return metaTplBroadcastFile;
+        try {
+          const local = await metaTplBroadcastReadLocalSheet(metaTplBroadcastFile);
+          const compact = metaTplBroadcastBuildCompactCsv(local);
+          if (compact.rows < 1 || !compact.csv) return metaTplBroadcastFile;
+          return new File([compact.csv], "leads-cloud.csv", { type: "text/csv" });
+        } catch (_error) {
+          return metaTplBroadcastFile;
+        }
+      }
+
+      async function metaTplBroadcastFormData() {
         const data = new FormData();
         data.append("connectionId", metaTplBroadcastSelectedTemplateConnectionId());
         data.append("templateId", String((metaTplBroadcastEl("meta-tpl-broadcast-template") || {}).value || ""));
@@ -43699,7 +43745,8 @@
         data.append("intakeCampaignId", String((metaTplBroadcastEl("meta-tpl-broadcast-intake") || {}).value || ""));
         const phoneQuotas = metaTplBroadcastReadSplitQuotaInputs();
         if (phoneQuotas.length) data.append("phoneQuotas", JSON.stringify(phoneQuotas));
-        if (metaTplBroadcastFile) data.append("file", metaTplBroadcastFile, metaTplBroadcastFile.name || "leads.xlsx");
+        const file = await metaTplBroadcastFileForUpload();
+        if (file) data.append("file", file, file.name || "leads.csv");
         return data;
       }
 
@@ -44054,7 +44101,15 @@
             : { columns: ["telefone"], rows: [] };
         }
         const headers = metaTplBroadcastUniqueColumns(metaTplBroadcastSplitDelimitedLine(lines[0], delimiter));
-        return { columns: headers, rows: [] };
+        const rows = lines.slice(1).map(function (line) {
+          const parts = metaTplBroadcastSplitDelimitedLine(line, delimiter);
+          const row = {};
+          headers.forEach(function (header, index) {
+            row[header] = String(parts[index] || "").trim();
+          });
+          return row;
+        });
+        return { columns: headers, rows: rows };
       }
 
       function metaTplBroadcastSheetFromMatrix(matrix) {
@@ -44083,7 +44138,21 @@
         if (!headers.some(function (item) { return String(item || "").trim(); })) {
           return { columns: [], rows: [] };
         }
-        return { columns: headers, rows: [] };
+        const rows = (matrix || [])
+          .slice(headerIndex + 1)
+          .map(function (raw) {
+            const cells = (Array.isArray(raw) ? raw : []).map(function (cell) {
+              return String(cell == null ? "" : cell).trim();
+            });
+            if (!cells.some(Boolean)) return null;
+            const row = {};
+            headers.forEach(function (header, index) {
+              row[header] = cells[index] || "";
+            });
+            return row;
+          })
+          .filter(Boolean);
+        return { columns: headers, rows: rows };
       }
 
       function metaTplBroadcastGuessPhoneColumn(columns) {
@@ -44179,7 +44248,7 @@
         try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/preview", {
             method: "POST",
-            body: metaTplBroadcastFormData(),
+            body: await metaTplBroadcastFormData(),
           });
           const columns = payload.columns || [];
           metaTplBroadcastFillColumns(columns, {
@@ -44261,7 +44330,7 @@
           await metaTplBroadcastWaitUntilHealthy();
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/start", {
             method: "POST",
-            body: metaTplBroadcastFormData(),
+            body: await metaTplBroadcastFormData(),
           });
           const campaign = payload.campaign || {};
           metaTplBroadcastCampaignId = String(campaign.id || "");
