@@ -11,7 +11,12 @@ import { MetaCloudProvider } from "../whatsapp/meta-cloud-provider";
 import { MetaWhatsappError } from "./meta-whatsapp-errors";
 import { stripMetaSecrets } from "./meta-whatsapp-connection.service";
 import { resolveCustomerCareWindow } from "./meta-whatsapp-customer-care-window";
-import { windowStateFromCare, toPublicInboxConversation, toPublicInboxMessage } from "./meta-whatsapp-inbox.types";
+import {
+  windowStateFromCare,
+  toPublicInboxConversation,
+  toPublicInboxMessage,
+  splitInboxButtonText,
+} from "./meta-whatsapp-inbox.types";
 import type { MetaGraphMessagesResult } from "./meta-whatsapp-graph-messages.client";
 import { purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
 import { hideBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
@@ -582,6 +587,26 @@ describe("fase 8 DTO público", () => {
     assert.equal(publicConv.humanTakeover, true);
     assert.equal(publicMsg.errorMessage, "Não foi possível enviar.");
     assert.equal(JSON.stringify(publicConv).includes("access_token"), false);
+  });
+
+  it("separa o botão persistido como [Continue Atendimento]", () => {
+    const split = splitInboxButtonText(
+      "Fale diretamente com o consultor especializado. Acesse o whatsapp dele, clicando no botão abaixo: [Continue Atendimento]",
+      "cta_url",
+    );
+    assert.equal(split.text?.startsWith("Fale diretamente"), true);
+    assert.equal(split.buttons.length, 1);
+    assert.equal(split.buttons[0]?.label, "Continue Atendimento");
+    const publicMsg = toPublicInboxMessage(
+      msg({
+        direction: "outbound",
+        type: "cta_url",
+        textContent:
+          "Fale diretamente com o consultor especializado. Acesse o whatsapp dele, clicando no botão abaixo: [Continue Atendimento]",
+      }),
+    );
+    assert.equal(publicMsg.buttons[0]?.label, "Continue Atendimento");
+    assert.equal(String(publicMsg.text || "").includes("[Continue Atendimento]"), false);
   });
 });
 

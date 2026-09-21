@@ -5284,11 +5284,19 @@
         }
         .meta-inbox-composer-lock strong { color: #e9edef; }
         .meta-inbox-scroll { overflow:auto; flex:1; min-height:0; }
-        .meta-inbox-item { display:grid; grid-template-columns:44px minmax(0,1fr) auto; gap:10px; width:100%; text-align:left; border:0; border-bottom:1px solid rgba(255,255,255,.04); background:transparent; color:#e9edef; padding:12px 14px; cursor:pointer; }
+        .meta-inbox-item { display:grid; grid-template-columns:44px minmax(0,1fr) auto; gap:10px; width:100%; text-align:left; border:0; border-bottom:1px solid rgba(255,255,255,.04); background:transparent; color:#e9edef; padding:12px 14px; cursor:pointer; transition:background .16s ease, box-shadow .16s ease; }
         .meta-inbox-item:hover { background:#202c33; }
-        .meta-inbox-item.is-active { background:#2a3942; }
+        .meta-inbox-item.is-active { background:#005c4b; box-shadow: inset 3px 0 0 #25d366; }
+        .meta-inbox-item.is-active .meta-inbox-item-title { color:#fff; }
+        .meta-inbox-item.is-active .meta-inbox-item-preview { color:#d1f4ea; }
+        .meta-inbox-item.is-active .meta-inbox-item-meta { color:#b7ddd3; }
+        .meta-inbox-item.is-active .meta-inbox-origin { color:#a5f3fc; }
         .meta-inbox-item-title { font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .meta-inbox-item-preview { font-size:13px; color:#8696a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .meta-inbox-msg-actions { display:grid; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.14); }
+        .meta-inbox-msg-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; border:0; border-radius:10px; background:rgba(255,255,255,.08); color:#53bdeb; font-size:13px; font-weight:700; line-height:1.2; padding:8px 10px; }
+        .meta-inbox-msg.is-out .meta-inbox-msg-btn { background:rgba(0,0,0,.18); color:#d1f4ea; }
+        .meta-inbox-msg-btn-ico { width:14px; height:14px; flex:0 0 14px; opacity:.9; }
         .meta-chat-unread { min-width:18px; height:18px; border-radius:999px; background:#25d366; color:#052e16; font-size:11px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; padding:0 5px; }
         .meta-chat-thread {
           background-color: #0b141a;
@@ -44910,6 +44918,7 @@
             { id: "demo-m1", direction: "inbound", type: "text", text: "Olá! Quero conhecer melhor os planos.", status: "accepted", createdAt: new Date(now.getTime() - 8 * 60000).toISOString() },
             { id: "demo-m2", direction: "outbound", source: "bot", type: "text", text: "Olá! Temos opções para diferentes necessidades. Como posso ajudar?", status: "read", createdAt: new Date(now.getTime() - 7 * 60000).toISOString() },
             { id: "demo-m3", direction: "inbound", type: "text", text: "Gostaria de falar sobre o plano profissional.", status: "accepted", createdAt: new Date(now.getTime() - 4 * 60000).toISOString() },
+            { id: "demo-m4", direction: "outbound", source: "bot", type: "cta_url", text: "Fale diretamente com o consultor especializado. Acesse o WhatsApp dele, clicando no botão abaixo:", buttons: [{ label: "Continue Atendimento" }], status: "delivered", createdAt: new Date(now.getTime() - 3 * 60000).toISOString() },
           ],
         };
       }
@@ -44956,6 +44965,53 @@
 
       function metaInboxChannelPhone(item) {
         return String((item && (item.channelPhone || item.displayPhoneNumber)) || "");
+      }
+
+      function metaInboxMarkSelected(id) {
+        const selected = String(id || "");
+        document.querySelectorAll("#meta-inbox-list .meta-inbox-item").forEach((el) => {
+          const on = String(el.getAttribute("data-meta-inbox-open") || "") === selected;
+          el.classList.toggle("is-active", on);
+          if (on) el.setAttribute("aria-current", "true");
+          else el.removeAttribute("aria-current");
+        });
+      }
+
+      function metaInboxSplitButtons(text, type) {
+        const raw = String(text || "");
+        const buttons = [];
+        let body = raw;
+        const trailing = /\s*\[([^\[\]]{1,40})\]\s*$/;
+        const preferType = type === "cta_url" || type === "interactive";
+        while (true) {
+          const match = body.match(trailing);
+          if (!match) break;
+          const label = String(match[1] || "").trim();
+          if (!label) break;
+          if (!preferType && label.length > 25) break;
+          buttons.unshift({ label: label });
+          body = body.slice(0, match.index).replace(/\s+$/g, "");
+          if (!preferType) break;
+        }
+        return { text: body.trim(), buttons: buttons };
+      }
+
+      function metaInboxMessageButtons(msg) {
+        if (Array.isArray(msg && msg.buttons) && msg.buttons.length) {
+          return msg.buttons
+            .map((item) => ({ label: String((item && item.label) || "").trim() }))
+            .filter((item) => item.label);
+        }
+        return metaInboxSplitButtons(msg && msg.text, msg && msg.type).buttons;
+      }
+
+      function metaInboxMessageBody(msg) {
+        if (msg && msg.templateName) return "Template " + msg.templateName;
+        if (Array.isArray(msg && msg.buttons) && msg.buttons.length) {
+          return String((msg && msg.text) || "").trim();
+        }
+        const split = metaInboxSplitButtons(msg && msg.text, msg && msg.type);
+        return split.text || (msg && msg.type ? "[" + msg.type + "]" : "mensagem");
       }
 
       function metaInboxRenderChannels(channels) {
@@ -45080,7 +45136,8 @@
         }
         const html = rows
           .map((item) => {
-            const active = item.id === metaInbox.selectedId ? " is-active" : "";
+            const selected = item.id === metaInbox.selectedId;
+            const active = selected ? " is-active" : "";
             const unread = Number(item.unreadCount || 0);
             const when = item.lastMessageAt ? new Date(item.lastMessageAt).toLocaleString("pt-BR") : "—";
             const channel = metaInboxChannelName(item);
@@ -45093,7 +45150,7 @@
               .toUpperCase() || "WA";
             const agent = item.agentKind === "human" ? "Humano" : "Bot";
             return (
-              `<button type="button" class="meta-inbox-item${active}" data-meta-inbox-open="${escapeAdminHtml(item.id)}">` +
+              `<button type="button" class="meta-inbox-item${active}" data-meta-inbox-open="${escapeAdminHtml(item.id)}"${selected ? ' aria-current="true"' : ""}>` +
               `<div class="meta-chat-avatar">${escapeAdminHtml(initials)}</div>` +
               `<div class="meta-inbox-item-main">` +
               `<div class="meta-inbox-item-title">${escapeAdminHtml(item.contactName || item.contactWaId || "Contato")}</div>` +
@@ -45147,9 +45204,8 @@
         box.innerHTML = messages
           .map((msg) => {
             const cls = msg.direction === "outbound" ? "is-out" : "is-in";
-            const body = msg.templateName
-              ? `Template ${msg.templateName}`
-              : msg.text || `[${msg.type || "mensagem"}]`;
+            const body = metaInboxMessageBody(msg);
+            const buttons = metaInboxMessageButtons(msg);
             const err = msg.errorMessage ? `<div class="muted">${escapeAdminHtml(msg.errorMessage)}</div>` : "";
             const when = msg.createdAt ? new Date(msg.createdAt).toLocaleString("pt-BR") : "";
             const label =
@@ -45158,10 +45214,21 @@
                 : msg.source === "human"
                   ? `<div class="meta-inbox-msg-label">Você</div>`
                   : "";
+            const buttonHtml = buttons.length
+              ? `<div class="meta-inbox-msg-actions">${buttons
+                  .map(
+                    (item) =>
+                      `<div class="meta-inbox-msg-btn">` +
+                      `<svg class="meta-inbox-msg-btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 5h5v5h-2V8.41l-6.3 6.3-1.4-1.42L15.58 7H14V5ZM5 7h6v2H7v8h8v-4h2v6H5V7Z"/></svg>` +
+                      `<span>${escapeAdminHtml(item.label)}</span></div>`,
+                  )
+                  .join("")}</div>`
+              : "";
             return (
               `<div class="meta-inbox-msg ${cls}">` +
               label +
-              `<div>${escapeAdminHtml(body)}</div>` +
+              (body ? `<div>${escapeAdminHtml(body)}</div>` : "") +
+              buttonHtml +
               `<div class="muted" style="font-size:11px;">${escapeAdminHtml(metaInboxStatusLabel(msg.status))} · ${escapeAdminHtml(when)}</div>` +
               err +
               `</div>`
@@ -46415,7 +46482,7 @@
           }
           const fp = (payload.conversations || [])
             .map((item) => `${item.id}:${item.unreadCount}:${item.lastMessageAt}:${item.status}:${item.phoneNumberId}`)
-            .join("|") + `|ch:${metaInbox.channelId}`;
+            .join("|") + `|ch:${metaInbox.channelId}|sel:${metaInbox.selectedId}`;
           if (!append && fp === metaInbox.listFp) {
             metaInboxBanner(metaInboxConnectedNumbersText(payload.channels), !(payload.channels || []).length);
             return;
@@ -46554,6 +46621,7 @@
         const openId = target.getAttribute("data-meta-inbox-open");
         if (openId) {
           metaInbox.selectedId = openId;
+          metaInboxMarkSelected(openId);
           const shell = document.getElementById("meta-chat-shell");
           const sideButton = document.getElementById("meta-inbox-toggle-side");
           const side = document.getElementById("meta-inbox-side");

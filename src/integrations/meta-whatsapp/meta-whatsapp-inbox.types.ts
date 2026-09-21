@@ -42,11 +42,36 @@ export type MetaInboxMessagePublic = {
   type: string;
   status: MetaMessageRecord["status"];
   text: string | null;
+  buttons: Array<{ label: string }>;
   templateName: string | null;
   createdAt: string;
   errorMessage: string | null;
   source: "contact" | "bot" | "human";
 };
+
+/** Separa o rótulo persistido como `texto [Botão]` no envio de CTA. */
+export function splitInboxButtonText(
+  text: string | null | undefined,
+  type?: string,
+): { text: string | null; buttons: Array<{ label: string }> } {
+  const raw = String(text || "");
+  const buttons: Array<{ label: string }> = [];
+  let body = raw;
+  const trailing = /\s*\[([^\[\]]{1,40})\]\s*$/;
+  const preferType = type === "cta_url" || type === "interactive";
+  while (true) {
+    const match = body.match(trailing);
+    if (!match) break;
+    const label = String(match[1] || "").trim();
+    if (!label) break;
+    if (!preferType && label.length > 25) break;
+    buttons.unshift({ label });
+    body = body.slice(0, match.index).replace(/\s+$/g, "");
+    if (!preferType) break;
+  }
+  const cleaned = body.trim();
+  return { text: cleaned || null, buttons };
+}
 
 export function windowStateFromCare(window: CustomerCareWindowState): MetaInboxWindowLabel {
   if (!window.known || window.withinWindow == null) return "UNKNOWN";
@@ -100,12 +125,14 @@ export function toPublicInboxConversation(
 export function toPublicInboxMessage(row: MetaMessageRecord): MetaInboxMessagePublic {
   const source =
     row.direction === "inbound" ? "contact" : row.provider === "automation" ? "bot" : "human";
+  const split = splitInboxButtonText(row.textContent, row.type);
   return {
     id: row.id,
     direction: row.direction,
     type: row.type,
     status: row.status,
-    text: row.textContent,
+    text: split.text,
+    buttons: split.buttons,
     templateName: row.templateName,
     createdAt: row.createdAt,
     errorMessage: row.status === "failed" ? row.errorMessage || "Não foi possível enviar." : null,
