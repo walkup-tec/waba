@@ -83,14 +83,15 @@ export function previewFromContent(input: {
   type?: string;
   templateName?: string | null;
 }): string {
+  const text = String(input.text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text) return text.slice(0, 80);
   if (String(input.type || "") === "template") {
     const name = String(input.templateName || "template").trim();
     return `Template: ${name}`.slice(0, 80);
   }
-  return String(input.text || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 80);
+  return "";
 }
 
 export function toPublicInboxConversation(

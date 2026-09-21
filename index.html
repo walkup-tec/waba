@@ -5205,8 +5205,43 @@
         .meta-chat-search input, .meta-inbox-composer textarea { width:100%; border:0; border-radius:14px; background:#202c33; color:#e9edef; padding:11px 14px; }
         .meta-chat-search input::placeholder, .meta-inbox-composer textarea::placeholder { color:#8696a0; }
         .meta-chat-filters { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 10px; }
-        .meta-chat-filters button { border:0; border-radius:999px; background:#202c33; color:#8696a0; font-size:12px; padding:6px 10px; cursor:pointer; }
+        .meta-chat-filters button { border:0; border-radius:999px; background:#202c33; color:#8696a0; font-size:12px; padding:6px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
         .meta-chat-filters button.is-active { background:#00a884; color:#052e16; font-weight:700; }
+        .meta-chat-filter-count {
+          min-width:18px;
+          height:18px;
+          border-radius:999px;
+          padding:0 6px;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          background:rgba(255,255,255,.08);
+          color:#e9edef;
+          font-size:11px;
+          font-weight:700;
+          line-height:1;
+        }
+        .meta-chat-filters button.is-active .meta-chat-filter-count {
+          background:rgba(5,46,22,.18);
+          color:#052e16;
+        }
+        .meta-chat-list { overflow:hidden; }
+        #meta-inbox-list.meta-inbox-scroll {
+          overflow-y:scroll;
+          overflow-x:hidden;
+          flex:1 1 auto;
+          min-height:0;
+          scrollbar-gutter:stable;
+          scrollbar-width:auto;
+          scrollbar-color:#25d366 #0b141a;
+        }
+        #meta-inbox-list.meta-inbox-scroll::-webkit-scrollbar { width:12px; }
+        #meta-inbox-list.meta-inbox-scroll::-webkit-scrollbar-track { background:#0b141a; }
+        #meta-inbox-list.meta-inbox-scroll::-webkit-scrollbar-thumb {
+          background:#25d366;
+          border-radius:8px;
+          border:2px solid #0b141a;
+        }
         .meta-chat-channels { display:flex; flex-direction:column; gap:7px; padding:12px; overflow-y:auto; scrollbar-width:thin; }
         .meta-chat-channel {
           display: grid;
@@ -23316,15 +23351,14 @@
                   <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Contatos</div><div class="meta-chat-thread-sub">Conversas recebidas</div></div></div>
                   <div class="meta-chat-search"><input id="meta-inbox-search" type="search" placeholder="Buscar contato ou conversa" autocomplete="off" /></div>
                   <div class="meta-chat-filters">
-                    <button type="button" class="is-active" data-meta-inbox-filter="all">Todas</button>
-                    <button type="button" data-meta-inbox-filter="unread">Não lidas</button>
-                    <button type="button" data-meta-inbox-filter="open">Abertas</button>
-                    <button type="button" data-meta-inbox-filter="pending">Pendentes</button>
-                    <button type="button" data-meta-inbox-filter="closed">Finalizadas</button>
-                    <button type="button" data-meta-inbox-filter="mine">Minhas</button>
+                    <button type="button" class="is-active" data-meta-inbox-filter="all">Todas <span class="meta-chat-filter-count" data-meta-inbox-count="all">0</span></button>
+                    <button type="button" data-meta-inbox-filter="unread">Não lidas <span class="meta-chat-filter-count" data-meta-inbox-count="unread">0</span></button>
+                    <button type="button" data-meta-inbox-filter="open">Abertas <span class="meta-chat-filter-count" data-meta-inbox-count="open">0</span></button>
+                    <button type="button" data-meta-inbox-filter="pending">Pendentes <span class="meta-chat-filter-count" data-meta-inbox-count="pending">0</span></button>
+                    <button type="button" data-meta-inbox-filter="closed">Finalizadas <span class="meta-chat-filter-count" data-meta-inbox-count="closed">0</span></button>
+                    <button type="button" data-meta-inbox-filter="mine">Minhas <span class="meta-chat-filter-count" data-meta-inbox-count="mine">0</span></button>
                   </div>
                   <div id="meta-inbox-list" class="meta-inbox-scroll"><div class="meta-chat-empty"><strong>Nenhuma conversa ainda</strong>Ligue Inbox no chip do Laboratório. Quem escrever para esse número entra aqui.</div></div>
-                  <div style="padding:8px;"><button id="meta-inbox-more" type="button" class="instance-action-btn btn-refresh enabled" hidden>Carregar mais</button></div>
                 </div>
                 <div class="meta-chat-thread">
                   <div class="meta-chat-thread-head">
@@ -45245,6 +45279,8 @@
         threadTimer: 0,
         listFp: "",
         templates: [],
+        loadingMore: false,
+        counts: { all: 0, unread: 0, open: 0, pending: 0, closed: 0, mine: 0 },
       };
 
       function isMetaInboxUiPreview() {
@@ -45272,6 +45308,14 @@
         if (metaInbox.channelId) rows = rows.filter((item) => item.phoneNumberId === metaInbox.channelId);
         if (metaInbox.filter === "unread") rows = rows.filter((item) => Number(item.unreadCount || 0) > 0);
         metaInboxRenderChannels(demo.channels);
+        metaInboxRenderFilterCounts({
+          all: demo.conversations.length,
+          unread: demo.conversations.filter((item) => Number(item.unreadCount || 0) > 0).length,
+          open: demo.conversations.filter((item) => item.status === "open").length,
+          pending: demo.conversations.filter((item) => item.status === "pending").length,
+          closed: demo.conversations.filter((item) => item.status === "closed").length,
+          mine: demo.conversations.filter((item) => item.assignedTo).length,
+        });
         metaInboxRenderList(rows, false);
         const selected = rows.find((item) => item.id === metaInbox.selectedId) || rows[0];
         if (selected) {
@@ -45348,12 +45392,35 @@
       }
 
       function metaInboxMessageBody(msg) {
-        if (msg && msg.templateName) return "Template " + msg.templateName;
-        if (Array.isArray(msg && msg.buttons) && msg.buttons.length) {
-          return String((msg && msg.text) || "").trim();
+        const raw = String((msg && msg.text) || "").trim();
+        if (raw) {
+          if (Array.isArray(msg && msg.buttons) && msg.buttons.length) return raw;
+          return metaInboxSplitButtons(raw, msg && msg.type).text || raw;
         }
-        const split = metaInboxSplitButtons(msg && msg.text, msg && msg.type);
-        return split.text || (msg && msg.type ? "[" + msg.type + "]" : "mensagem");
+        if (msg && msg.templateName) return String(msg.templateName);
+        return msg && msg.type ? "[" + msg.type + "]" : "mensagem";
+      }
+
+      function metaInboxRenderFilterCounts(counts) {
+        const keys = ["all", "unread", "open", "pending", "closed", "mine"];
+        keys.forEach((key) => {
+          const el = document.querySelector('[data-meta-inbox-count="' + key + '"]');
+          if (!el) return;
+          const value = counts && Number.isFinite(Number(counts[key])) ? Number(counts[key]) : 0;
+          el.textContent = String(value);
+        });
+      }
+
+      function metaInboxBindListScroll() {
+        const box = document.getElementById("meta-inbox-list");
+        if (!box || box.getAttribute("data-meta-inbox-scroll") === "1") return;
+        box.setAttribute("data-meta-inbox-scroll", "1");
+        box.addEventListener("scroll", function onMetaInboxListScroll() {
+          if (!metaInbox.hasMore || metaInbox.loadingMore) return;
+          if (box.scrollTop + box.clientHeight >= box.scrollHeight - 72) {
+            metaInboxLoadList(true);
+          }
+        });
       }
 
       function metaInboxRenderChannels(channels) {
@@ -45470,6 +45537,7 @@
         const box = document.getElementById("meta-inbox-list");
         if (!box) return;
         const rows = Array.isArray(conversations) ? conversations : [];
+        box.querySelectorAll(".meta-inbox-more-wrap").forEach((el) => el.remove());
         if (!append) box.innerHTML = "";
         if (!rows.length && !append) {
           box.innerHTML =
@@ -45507,6 +45575,12 @@
           .join("");
         if (append) box.insertAdjacentHTML("beforeend", html);
         else box.innerHTML = html;
+        if (metaInbox.hasMore) {
+          box.insertAdjacentHTML(
+            "beforeend",
+            '<div class="meta-inbox-more-wrap" style="padding:10px 12px 14px;"><button id="meta-inbox-more" type="button" class="instance-action-btn btn-refresh enabled">Carregar mais</button></div>',
+          );
+        }
       }
 
       function metaInboxRenderThread(payload) {
@@ -46799,18 +46873,23 @@
 
       async function metaInboxLoadList(append) {
         if (!metaInbox.active || document.hidden) return;
+        if (append && (metaInbox.loadingMore || !metaInbox.hasMore)) return;
+        if (append) metaInbox.loadingMore = true;
         try {
           const offset = append ? metaInbox.offset : 0;
           const channelQ = metaInbox.channelId
             ? `&phoneNumberId=${encodeURIComponent(metaInbox.channelId)}`
             : "";
           const payload = await metaInboxJson(
-            `/integrations/meta/whatsapp/inbox/conversations?filter=${encodeURIComponent(metaInbox.filter)}&limit=30&offset=${offset}${channelQ}`,
+            `/integrations/meta/whatsapp/inbox/conversations?filter=${encodeURIComponent(metaInbox.filter)}&limit=80&offset=${offset}${channelQ}`,
           );
           metaInbox.listMs = Number(payload.poll && payload.poll.listMs) || metaInbox.listMs;
           metaInbox.threadMs = Number(payload.poll && payload.poll.threadMs) || metaInbox.threadMs;
           metaInbox.hasMore = Boolean(payload.page && payload.page.hasMore);
           metaInbox.offset = offset + (payload.conversations || []).length;
+          metaInbox.counts = payload.counts || metaInbox.counts;
+          metaInboxRenderFilterCounts(metaInbox.counts);
+          metaInboxBindListScroll();
           if (!append) {
             const pending = String(metaInbox.pendingChannelId || "").trim();
             if (pending) {
@@ -46823,16 +46902,14 @@
             metaInboxRenderChannels(payload.channels || []);
           }
           const fp = (payload.conversations || [])
-            .map((item) => `${item.id}:${item.unreadCount}:${item.lastMessageAt}:${item.status}:${item.phoneNumberId}`)
-            .join("|") + `|ch:${metaInbox.channelId}|sel:${metaInbox.selectedId}`;
+            .map((item) => `${item.id}:${item.unreadCount}:${item.lastMessageAt}:${item.status}:${item.phoneNumberId}:${item.lastMessagePreview || ""}`)
+            .join("|") + `|ch:${metaInbox.channelId}|sel:${metaInbox.selectedId}|more:${metaInbox.hasMore}`;
           if (!append && fp === metaInbox.listFp) {
             metaInboxBanner(metaInboxConnectedNumbersText(payload.channels), !(payload.channels || []).length);
             return;
           }
           if (!append) metaInbox.listFp = fp;
           metaInboxRenderList(payload.conversations, append);
-          const more = document.getElementById("meta-inbox-more");
-          if (more) more.hidden = !metaInbox.hasMore;
           metaInboxBanner(metaInboxConnectedNumbersText(payload.channels), !(payload.channels || []).length);
         } catch (error) {
           const msg = error && error.message ? error.message : "Erro";
@@ -46841,6 +46918,8 @@
             const box = document.getElementById("meta-inbox-list");
             if (box) box.innerHTML = `<div class="muted" style="padding:12px;">${escapeAdminHtml(msg)}</div>`;
           }
+        } finally {
+          if (append) metaInbox.loadingMore = false;
         }
       }
 

@@ -7,6 +7,14 @@ import { previewFromContent } from "./meta-whatsapp-inbox.types";
 import { mapWebhookStatus } from "./meta-whatsapp-messaging.types";
 import { logMetaWebhook } from "./meta-whatsapp-webhook-log";
 import { listEnabledInboxPhoneIds } from "./meta-whatsapp-phone-identity.store";
+import {
+  defaultInboxBroadcastMatcher,
+  defaultInboxTemplateBodyLookup,
+  persistBroadcastOutboundInInbox,
+  resolveBroadcastInboxText,
+  type InboxBroadcastMatcher,
+  type InboxTemplateBodyLookup,
+} from "./meta-whatsapp-inbox-broadcast-persist";
 
 export type MetaWhatsappWebhookInboxPort = {
   persistInbound(input: {
@@ -29,6 +37,8 @@ export class MetaWhatsappWebhookInboxService implements MetaWhatsappWebhookInbox
   constructor(
     private readonly conversations = new MetaWhatsappConversationRepository(),
     private readonly messages = new MetaWhatsappMessageRepository(),
+    private readonly matchBroadcast: InboxBroadcastMatcher = defaultInboxBroadcastMatcher,
+    private readonly lookupTemplateBody: InboxTemplateBodyLookup = defaultInboxTemplateBodyLookup,
   ) {}
 
   async persistInbound(input: {
@@ -116,6 +126,40 @@ export class MetaWhatsappWebhookInboxService implements MetaWhatsappWebhookInbox
     const phoneNumberId = String(input.event.phoneNumberId || input.connection.phoneNumberId || "").trim();
     if (!recipient || !phoneNumberId) return;
     if (!listEnabledInboxPhoneIds(input.connection.tenantId, [input.connection]).includes(phoneNumberId)) {
+      return;
+    }
+    const match = this.matchBroadcast({
+      tenantId: input.connection.tenantId,
+      wamid,
+      recipientId: recipient,
+      phoneNumberId,
+    });
+    if (match) {
+      let text = "";
+      try {
+        text = await resolveBroadcastInboxText({
+          tenantId: input.connection.tenantId,
+          match,
+          lookup: this.lookupTemplateBody,
+        });
+      } catch {
+        text = "";
+      }
+      await persistBroadcastOutboundInInbox({
+        tenantId: input.connection.tenantId,
+        connectionId: match.lead.connectionId || match.campaign.connectionId || input.connection.id,
+        phoneNumberId,
+        contactWaId: recipient,
+        contactName: match.lead.nome || null,
+        wamid,
+        status: next,
+        atIso,
+        text,
+        templateName: match.campaign.templateName || null,
+        templateLanguage: match.campaign.language || null,
+        conversations: this.conversations,
+        messages: this.messages,
+      });
       return;
     }
     await this.conversations.upsertForContact({

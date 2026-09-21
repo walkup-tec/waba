@@ -25,6 +25,7 @@ exports.hideBroadcastCampaign = hideBroadcastCampaign;
 exports.ensureVoidedFailedCloudBroadcasts = ensureVoidedFailedCloudBroadcasts;
 exports.voidAbandonedCloudBroadcastsForRetry = voidAbandonedCloudBroadcastsForRetry;
 exports.matchBroadcastLeadForMetaStatus = matchBroadcastLeadForMetaStatus;
+exports.findBroadcastLeadForInbox = findBroadcastLeadForInbox;
 exports.applyMetaStatusToBroadcastByWamid = applyMetaStatusToBroadcastByWamid;
 exports.stampTemplateApprovedAtOnBroadcasts = stampTemplateApprovedAtOnBroadcasts;
 exports.addClicksToBroadcastCampaign = addClicksToBroadcastCampaign;
@@ -440,6 +441,14 @@ function matchBroadcastLeadForMetaStatus(campaigns, input) {
             return { campaign, lead };
     }
     return null;
+}
+function findBroadcastLeadForInbox(input) {
+    const store = readStore();
+    const tenantId = String(input.tenantId || "").trim();
+    const campaigns = tenantId
+        ? store.campaigns.filter((row) => row.tenantId === tenantId)
+        : store.campaigns;
+    return matchBroadcastLeadForMetaStatus(campaigns, input);
 }
 function applyMetaStatusToBroadcastByWamid(wamid, status, extras) {
     const store = readStore();

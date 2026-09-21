@@ -14,6 +14,8 @@ const meta_whatsapp_customer_care_window_1 = require("./meta-whatsapp-customer-c
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
 const meta_whatsapp_inbox_types_1 = require("./meta-whatsapp-inbox.types");
 const meta_whatsapp_connection_service_1 = require("./meta-whatsapp-connection.service");
+const meta_whatsapp_inbox_broadcast_persist_1 = require("./meta-whatsapp-inbox-broadcast-persist");
+const meta_whatsapp_inbox_template_preview_1 = require("./meta-whatsapp-inbox-template-preview");
 const FILTERS = new Set(["all", "unread", "open", "pending", "closed", "mine"]);
 const STATUSES = new Set(["open", "pending", "closed"]);
 const inboxWebhookEnsureAt = new Map();
@@ -72,11 +74,13 @@ function withChannel(row, channelsById, connectionPhone, connectionName, verifie
     });
 }
 class MetaWhatsappInboxService {
-    constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), conversations = new meta_whatsapp_conversation_repository_1.MetaWhatsappConversationRepository(), messages = new meta_whatsapp_message_repository_1.MetaWhatsappMessageRepository(), messaging = new meta_whatsapp_messaging_service_1.MetaWhatsappMessagingService()) {
+    constructor(connections = new meta_whatsapp_connection_repository_1.MetaWhatsappConnectionRepository(), conversations = new meta_whatsapp_conversation_repository_1.MetaWhatsappConversationRepository(), messages = new meta_whatsapp_message_repository_1.MetaWhatsappMessageRepository(), messaging = new meta_whatsapp_messaging_service_1.MetaWhatsappMessagingService(), matchBroadcast = meta_whatsapp_inbox_broadcast_persist_1.defaultInboxBroadcastMatcher, lookupTemplateBody = meta_whatsapp_inbox_broadcast_persist_1.defaultInboxTemplateBodyLookup) {
         this.connections = connections;
         this.conversations = conversations;
         this.messages = messages;
         this.messaging = messaging;
+        this.matchBroadcast = matchBroadcast;
+        this.lookupTemplateBody = lookupTemplateBody;
     }
     async inboxConnectionSets(tenantId) {
         const all = await this.connections.listInboxConnections(tenantId);
@@ -151,7 +155,7 @@ class MetaWhatsappInboxService {
         const connection = open[0];
         const filter = parseFilter(query?.filter);
         const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();
-        const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
+        const limit = Math.min(100, Math.max(1, clampPage(query?.limit, 80, 100) || 80));
         const offset = clampPage(query?.offset, 0, 10000);
         const hints = all.length ? all : open;
         const verifiedByPhone = verifiedNamesByPhone(hints);
@@ -181,6 +185,7 @@ class MetaWhatsappInboxService {
             channels,
             selectedPhoneNumberId: selectedPhone || null,
             unreadCount: 0,
+            counts: (0, meta_whatsapp_inbox_template_preview_1.emptyInboxFilterCounts)(),
             page: { limit, offset, hasMore: false },
         };
         if (!enabledIds.length || !conversationIds.length) {
@@ -209,6 +214,31 @@ class MetaWhatsappInboxService {
             for (const channel of channels) {
                 channel.unreadCount = unreadByPhone.get(channel.phoneNumberId) || 0;
             }
+            const counts = typeof this.conversations.countForInbox === "function"
+                ? await this.conversations.countForInbox({
+                    tenantId: tenant.tenantId,
+                    assignedTo: auth.email,
+                    phoneNumberId: null,
+                    includePhoneNumberIds: conversationIds,
+                })
+                : (0, meta_whatsapp_inbox_template_preview_1.emptyInboxFilterCounts)();
+            for (const row of page) {
+                try {
+                    const enriched = await (0, meta_whatsapp_inbox_broadcast_persist_1.enrichInboxFromBroadcast)({
+                        tenantId: tenant.tenantId,
+                        conversation: row,
+                        conversations: this.conversations,
+                        messages: this.messages,
+                        matchBroadcast: this.matchBroadcast,
+                        lookupBody: this.lookupTemplateBody,
+                    });
+                    if (enriched.preview)
+                        row.lastMessagePreview = enriched.preview;
+                }
+                catch {
+                    /* preview do disparo é complementar; a lista segue sem ele */
+                }
+            }
             const poll = (0, meta_config_1.readMetaInboxPollMs)();
             const byConn = new Map(open.map((row) => [row.id, row]));
             (0, meta_whatsapp_inbox_log_1.logMetaInbox)("LIST", { tenantId: tenant.tenantId, filter, count: page.length });
@@ -222,6 +252,7 @@ class MetaWhatsappInboxService {
                 channels,
                 selectedPhoneNumberId: selectedPhone || null,
                 unreadCount: unreadAll,
+                counts,
                 page: { limit, offset, hasMore },
             };
         }
@@ -243,7 +274,26 @@ class MetaWhatsappInboxService {
             serving[0] ||
             all[0];
         const limit = Math.min(80, Math.max(1, clampPage(query?.limit, 80, 80) || 80));
-        const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
+        let messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
+        if (!messages.length) {
+            try {
+                const enriched = await (0, meta_whatsapp_inbox_broadcast_persist_1.enrichInboxFromBroadcast)({
+                    tenantId: tenant.tenantId,
+                    conversation: row,
+                    conversations: this.conversations,
+                    messages: this.messages,
+                    matchBroadcast: this.matchBroadcast,
+                    lookupBody: this.lookupTemplateBody,
+                    force: true,
+                });
+                if (enriched.preview)
+                    row.lastMessagePreview = enriched.preview;
+                messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
+            }
+            catch {
+                messages = [];
+            }
+        }
         (0, meta_whatsapp_inbox_log_1.logMetaInbox)("THREAD", { tenantId: tenant.tenantId, count: messages.length });
         const hints = all.length ? all : serving;
         const verifiedByPhone = verifiedNamesByPhone(hints);

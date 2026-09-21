@@ -35,14 +35,16 @@ function windowStateFromCare(window) {
     return window.withinWindow ? "OPEN" : "CLOSED";
 }
 function previewFromContent(input) {
+    const text = String(input.text || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (text)
+        return text.slice(0, 80);
     if (String(input.type || "") === "template") {
         const name = String(input.templateName || "template").trim();
         return `Template: ${name}`.slice(0, 80);
     }
-    return String(input.text || "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 80);
+    return "";
 }
 function toPublicInboxConversation(row, window, channel) {
     return {

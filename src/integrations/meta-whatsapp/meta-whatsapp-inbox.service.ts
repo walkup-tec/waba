@@ -28,6 +28,14 @@ import type { MetaConversationRecord, MetaConversationStatus } from "./meta-what
 import type { MetaSendPublicResult } from "./meta-whatsapp-messaging.service";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import { pickConnectionsForWebhookSubscribe } from "./meta-whatsapp-connection.service";
+import {
+  defaultInboxBroadcastMatcher,
+  defaultInboxTemplateBodyLookup,
+  enrichInboxFromBroadcast,
+  type InboxBroadcastMatcher,
+  type InboxTemplateBodyLookup,
+} from "./meta-whatsapp-inbox-broadcast-persist";
+import { emptyInboxFilterCounts } from "./meta-whatsapp-inbox-template-preview";
 
 const FILTERS = new Set<MetaInboxFilter>(["all", "unread", "open", "pending", "closed", "mine"]);
 const STATUSES = new Set<MetaConversationStatus>(["open", "pending", "closed"]);
@@ -107,6 +115,8 @@ export class MetaWhatsappInboxService {
     private readonly conversations = new MetaWhatsappConversationRepository(),
     private readonly messages = new MetaWhatsappMessageRepository(),
     private readonly messaging = new MetaWhatsappMessagingService(),
+    private readonly matchBroadcast: InboxBroadcastMatcher = defaultInboxBroadcastMatcher,
+    private readonly lookupTemplateBody: InboxTemplateBodyLookup = defaultInboxTemplateBodyLookup,
   ) {}
 
   private async inboxConnectionSets(tenantId: string): Promise<{
@@ -191,7 +201,7 @@ export class MetaWhatsappInboxService {
     const connection = open[0];
     const filter = parseFilter(query?.filter);
     const selectedPhone = String(query?.phoneNumberId || query?.phone_number_id || "").trim();
-    const limit = Math.min(50, Math.max(1, clampPage(query?.limit, 30, 50) || 30));
+    const limit = Math.min(100, Math.max(1, clampPage(query?.limit, 80, 100) || 80));
     const offset = clampPage(query?.offset, 0, 10_000);
     const hints = all.length ? all : open;
     const verifiedByPhone = verifiedNamesByPhone(hints);
@@ -225,6 +235,7 @@ export class MetaWhatsappInboxService {
       channels,
       selectedPhoneNumberId: selectedPhone || null,
       unreadCount: 0,
+      counts: emptyInboxFilterCounts(),
       page: { limit, offset, hasMore: false },
     };
     if (!enabledIds.length || !conversationIds.length) {
@@ -252,6 +263,30 @@ export class MetaWhatsappInboxService {
       for (const channel of channels) {
         channel.unreadCount = unreadByPhone.get(channel.phoneNumberId) || 0;
       }
+      const counts =
+        typeof this.conversations.countForInbox === "function"
+          ? await this.conversations.countForInbox({
+              tenantId: tenant.tenantId,
+              assignedTo: auth.email,
+              phoneNumberId: null,
+              includePhoneNumberIds: conversationIds,
+            })
+          : emptyInboxFilterCounts();
+      for (const row of page) {
+        try {
+          const enriched = await enrichInboxFromBroadcast({
+            tenantId: tenant.tenantId,
+            conversation: row,
+            conversations: this.conversations,
+            messages: this.messages,
+            matchBroadcast: this.matchBroadcast,
+            lookupBody: this.lookupTemplateBody,
+          });
+          if (enriched.preview) row.lastMessagePreview = enriched.preview;
+        } catch {
+          /* preview do disparo é complementar; a lista segue sem ele */
+        }
+      }
       const poll = readMetaInboxPollMs();
       const byConn = new Map(open.map((row) => [row.id, row]));
       logMetaInbox("LIST", { tenantId: tenant.tenantId, filter, count: page.length });
@@ -271,6 +306,7 @@ export class MetaWhatsappInboxService {
         channels,
         selectedPhoneNumberId: selectedPhone || null,
         unreadCount: unreadAll,
+        counts,
         page: { limit, offset, hasMore },
       };
     } catch (error) {
@@ -300,7 +336,24 @@ export class MetaWhatsappInboxService {
       serving[0] ||
       all[0];
     const limit = Math.min(80, Math.max(1, clampPage(query?.limit, 80, 80) || 80));
-    const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
+    let messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
+    if (!messages.length) {
+      try {
+        const enriched = await enrichInboxFromBroadcast({
+          tenantId: tenant.tenantId,
+          conversation: row,
+          conversations: this.conversations,
+          messages: this.messages,
+          matchBroadcast: this.matchBroadcast,
+          lookupBody: this.lookupTemplateBody,
+          force: true,
+        });
+        if (enriched.preview) row.lastMessagePreview = enriched.preview;
+        messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
+      } catch {
+        messages = [];
+      }
+    }
     logMetaInbox("THREAD", { tenantId: tenant.tenantId, count: messages.length });
     const hints = all.length ? all : serving;
     const verifiedByPhone = verifiedNamesByPhone(hints);

@@ -38,6 +38,10 @@ const meta_whatsapp_broadcast_linkable_1 = require("./meta-whatsapp-broadcast-li
 const meta_whatsapp_broadcast_history_1 = require("./meta-whatsapp-broadcast-history");
 const meta_whatsapp_template_approved_at_store_1 = require("./meta-whatsapp-template-approved-at.store");
 const waba_campaign_schedule_1 = require("../../disparos/waba-campaign-schedule");
+const meta_whatsapp_conversation_repository_1 = require("./meta-whatsapp-conversation.repository");
+const meta_whatsapp_message_repository_1 = require("./meta-whatsapp-message.repository");
+const meta_whatsapp_inbox_broadcast_persist_1 = require("./meta-whatsapp-inbox-broadcast-persist");
+const meta_whatsapp_inbox_template_preview_1 = require("./meta-whatsapp-inbox-template-preview");
 const running = new Set();
 let resumeWatchdogTimer = null;
 function isCloudBroadcastSendLoopAlive(campaignId) {
@@ -532,6 +536,7 @@ class MetaWhatsappBroadcastService {
                 phoneNumberId: sendingPhoneNumberId,
                 phoneNumberIds: sendingPhoneNumberIds,
                 inspect: loaded.inspect,
+                bodyText: (0, meta_whatsapp_inbox_template_preview_1.extractTemplateBodyText)(loaded.template.components),
                 headerByPhone,
                 buttonSlug: loaded.inspect.urlButton?.hasVariable ? short.shortSlug : undefined,
             });
@@ -551,6 +556,9 @@ class MetaWhatsappBroadcastService {
         if (!row.sendStartedAt)
             row.sendStartedAt = new Date().toISOString();
         (0, meta_whatsapp_broadcast_store_1.saveBroadcastCampaign)(row);
+        const inboxConversations = new meta_whatsapp_conversation_repository_1.MetaWhatsappConversationRepository();
+        const inboxMessages = new meta_whatsapp_message_repository_1.MetaWhatsappMessageRepository();
+        const bodyText = String(ctx.bodyText || "").trim();
         let consecutiveTemplateMissing = 0;
         try {
             for (let index = 0; index < row.leads.length; index += 1) {
@@ -637,11 +645,33 @@ class MetaWhatsappBroadcastService {
                     lead.status = "sent";
                     lead.metaStatus = "accepted";
                     lead.wamid = sent.messageId || lead.wamid;
+                    const previewText = (0, meta_whatsapp_inbox_template_preview_1.renderTemplateBodyText)({
+                        bodyText,
+                        inspect: ctx.inspect,
+                        lead,
+                    });
+                    if (previewText)
+                        lead.previewText = previewText;
                     (0, meta_whatsapp_broadcast_store_1.appendBroadcastLeadStatusLog)(lead, {
                         status: "accepted",
                         at: new Date().toISOString(),
                     });
                     row.sent += 1;
+                    void (0, meta_whatsapp_inbox_broadcast_persist_1.persistBroadcastOutboundInInbox)({
+                        tenantId,
+                        connectionId: leadConnectionId || ctx.connectionId,
+                        phoneNumberId: leadPhoneNumberId || ctx.phoneNumberId,
+                        contactWaId: lead.waId,
+                        contactName: lead.nome || null,
+                        wamid: lead.wamid || null,
+                        status: "accepted",
+                        atIso: new Date().toISOString(),
+                        text: previewText,
+                        templateName: ctx.templateName,
+                        templateLanguage: ctx.language,
+                        conversations: inboxConversations,
+                        messages: inboxMessages,
+                    }).catch(() => undefined);
                 }
                 catch (error) {
                     const graphCode = String(error?.graphCode || "").trim();
@@ -883,6 +913,7 @@ class MetaWhatsappBroadcastService {
                 phoneNumberId: phoneNumberIds[0] || row.phoneNumberId,
                 phoneNumberIds,
                 inspect: loaded.inspect,
+                bodyText: (0, meta_whatsapp_inbox_template_preview_1.extractTemplateBodyText)(loaded.template.components),
                 headerByPhone,
                 buttonSlug: loaded.inspect.urlButton?.hasVariable ? row.shortSlug : undefined,
             });

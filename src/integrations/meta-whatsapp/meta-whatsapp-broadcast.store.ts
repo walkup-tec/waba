@@ -35,6 +35,8 @@ export type MetaBroadcastLead = {
   error?: string;
   errorCode?: string;
   statusLog?: MetaBroadcastLeadStatusLog[];
+  /** Texto do template já interpolado para o Inbox. */
+  previewText?: string;
 };
 
 export type MetaBroadcastCampaign = {
@@ -496,6 +498,20 @@ export function matchBroadcastLeadForMetaStatus(
     if (lead) return { campaign, lead };
   }
   return null;
+}
+
+export function findBroadcastLeadForInbox(input: {
+  tenantId?: string;
+  wamid?: string | null;
+  recipientId?: string | null;
+  phoneNumberId?: string | null;
+}): { campaign: MetaBroadcastCampaign; lead: MetaBroadcastLead } | null {
+  const store = readStore();
+  const tenantId = String(input.tenantId || "").trim();
+  const campaigns = tenantId
+    ? store.campaigns.filter((row) => row.tenantId === tenantId)
+    : store.campaigns;
+  return matchBroadcastLeadForMetaStatus(campaigns, input);
 }
 
 export function applyMetaStatusToBroadcastByWamid(

@@ -3,6 +3,11 @@ import type {
   MetaConversationRecord,
   MetaConversationStatus,
 } from "./meta-whatsapp-messaging.types";
+import {
+  accumulateInboxFilterCounts,
+  emptyInboxFilterCounts,
+  type MetaInboxFilterCounts,
+} from "./meta-whatsapp-inbox-template-preview";
 
 const TABLE = "meta_whatsapp_conversations";
 
@@ -259,6 +264,62 @@ export class MetaWhatsappConversationRepository {
     const { data, error } = await query;
     if (error) throw new Error(error.message);
     return (data || []).map((row) => mapRow(asRow(row)));
+  }
+
+  async patchLastMessagePreview(
+    tenantId: string,
+    id: string,
+    lastMessagePreview: string | null,
+  ): Promise<MetaConversationRecord | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .update({ last_message_preview: lastMessagePreview })
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .select(COLUMNS)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+
+  async countForInbox(input: {
+    tenantId: string;
+    assignedTo?: string | null;
+    phoneNumberId?: string | null;
+    includePhoneNumberIds?: string[];
+  }): Promise<MetaInboxFilterCounts> {
+    const counts = emptyInboxFilterCounts();
+    const selected = String(input.phoneNumberId || "").trim();
+    const include = (input.includePhoneNumberIds || []).map((id) => String(id || "").trim()).filter(Boolean);
+    if (!selected && input.includePhoneNumberIds && !include.length) return counts;
+    let offset = 0;
+    while (true) {
+      let query = this.client()
+        .from(TABLE)
+        .select("status, unread_count, assigned_to")
+        .eq("tenant_id", input.tenantId)
+        .range(offset, offset + 999);
+      if (selected) query = query.eq("phone_number_id", selected);
+      else if (include.length) query = query.in("phone_number_id", include);
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      const rows = data || [];
+      for (const raw of rows) {
+        const rec = asRow(raw);
+        accumulateInboxFilterCounts(
+          counts,
+          {
+            status: rec.status ? String(rec.status) : null,
+            unreadCount: Number(rec.unread_count || 0),
+            assignedTo: rec.assigned_to ? String(rec.assigned_to) : null,
+          },
+          input.assignedTo,
+        );
+      }
+      if (rows.length < 1000) break;
+      offset += 1000;
+    }
+    return counts;
   }
 
   async listUnreadByPhone(

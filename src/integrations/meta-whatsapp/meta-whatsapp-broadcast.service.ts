@@ -113,6 +113,13 @@ import {
   isScheduledSendPending,
   parseScheduledSendAt,
 } from "../../disparos/waba-campaign-schedule";
+import { MetaWhatsappConversationRepository } from "./meta-whatsapp-conversation.repository";
+import { MetaWhatsappMessageRepository } from "./meta-whatsapp-message.repository";
+import { persistBroadcastOutboundInInbox } from "./meta-whatsapp-inbox-broadcast-persist";
+import {
+  extractTemplateBodyText,
+  renderTemplateBodyText,
+} from "./meta-whatsapp-inbox-template-preview";
 
 const running = new Set<string>();
 let resumeWatchdogTimer: ReturnType<typeof setInterval> | null = null;
@@ -743,6 +750,7 @@ export class MetaWhatsappBroadcastService {
         phoneNumberId: sendingPhoneNumberId,
         phoneNumberIds: sendingPhoneNumberIds,
         inspect: loaded.inspect,
+        bodyText: extractTemplateBodyText(loaded.template.components),
         headerByPhone,
         buttonSlug: loaded.inspect.urlButton?.hasVariable ? short.shortSlug : undefined,
       });
@@ -761,6 +769,7 @@ export class MetaWhatsappBroadcastService {
       phoneNumberId: string;
       phoneNumberIds?: string[];
       inspect: MetaBroadcastTemplateInspect;
+      bodyText?: string;
       header?: { mediaId?: string; link?: string } | null;
       headerByPhone?: Record<string, { mediaId?: string; link?: string } | null>;
       buttonSlug?: string;
@@ -776,6 +785,9 @@ export class MetaWhatsappBroadcastService {
     row.status = "running";
     if (!row.sendStartedAt) row.sendStartedAt = new Date().toISOString();
     saveBroadcastCampaign(row);
+    const inboxConversations = new MetaWhatsappConversationRepository();
+    const inboxMessages = new MetaWhatsappMessageRepository();
+    const bodyText = String(ctx.bodyText || "").trim();
     let consecutiveTemplateMissing = 0;
     try {
       for (let index = 0; index < row.leads.length; index += 1) {
@@ -864,11 +876,32 @@ export class MetaWhatsappBroadcastService {
           lead.status = "sent";
           lead.metaStatus = "accepted";
           lead.wamid = sent.messageId || lead.wamid;
+          const previewText = renderTemplateBodyText({
+            bodyText,
+            inspect: ctx.inspect,
+            lead,
+          });
+          if (previewText) lead.previewText = previewText;
           appendBroadcastLeadStatusLog(lead, {
             status: "accepted",
             at: new Date().toISOString(),
           });
           row.sent += 1;
+          void persistBroadcastOutboundInInbox({
+            tenantId,
+            connectionId: leadConnectionId || ctx.connectionId,
+            phoneNumberId: leadPhoneNumberId || ctx.phoneNumberId,
+            contactWaId: lead.waId,
+            contactName: lead.nome || null,
+            wamid: lead.wamid || null,
+            status: "accepted",
+            atIso: new Date().toISOString(),
+            text: previewText,
+            templateName: ctx.templateName,
+            templateLanguage: ctx.language,
+            conversations: inboxConversations,
+            messages: inboxMessages,
+          }).catch(() => undefined);
         } catch (error) {
           const graphCode = String(
             (error as { graphCode?: string | null })?.graphCode || "",
@@ -1101,6 +1134,7 @@ export class MetaWhatsappBroadcastService {
         phoneNumberId: phoneNumberIds[0] || row.phoneNumberId,
         phoneNumberIds,
         inspect: loaded.inspect,
+        bodyText: extractTemplateBodyText(loaded.template.components),
         headerByPhone,
         buttonSlug: loaded.inspect.urlButton?.hasVariable ? row.shortSlug : undefined,
       });

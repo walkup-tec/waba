@@ -16,6 +16,10 @@ import {
 import type { WhatsAppSendResult, WhatsAppTemplateComponent } from "../whatsapp/whatsapp-provider";
 import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 import { previewFromContent } from "./meta-whatsapp-inbox.types";
+import {
+  extractTemplateBodyText,
+  renderTemplateBodyText,
+} from "./meta-whatsapp-inbox-template-preview";
 import { resolveInboxSendPhoneNumberId } from "./meta-whatsapp-phone-identity.store";
 import { readBotMedia } from "./bots/waba-bot-media.store";
 import type { BotMediaKind } from "./bots/waba-bot.types";
@@ -152,6 +156,25 @@ export class MetaWhatsappMessagingService {
     }
 
     const atIso = new Date().toISOString();
+    const isTemplateEarly = type === "template";
+    const templateEarly = isTemplateEarly ? sanitizeTemplateFromBody(body?.template) : null;
+    let templateBodyText = "";
+    if (isTemplateEarly && templateEarly && typeof this.templates.findByNameForConnection === "function") {
+      try {
+        const stored = await this.templates.findByNameForConnection(
+          tenantId,
+          connection.id,
+          templateEarly.name,
+          templateEarly.language,
+        );
+        templateBodyText = renderTemplateBodyText({
+          bodyText: extractTemplateBodyText(stored?.components),
+          sendComponents: templateEarly.components,
+        });
+      } catch {
+        templateBodyText = "";
+      }
+    }
     const upserted = await this.conversations.upsertForContact({
       tenantId,
       connectionId: connection.id,
@@ -162,7 +185,7 @@ export class MetaWhatsappMessagingService {
       lastMessagePreview: previewFromContent({
         text:
           type === "template"
-            ? null
+            ? templateBodyText || null
             : type === "cta_url"
               ? String(body?.text || body?.buttonLabel || "Link").trim()
               : type === "video" || type === "document" || type === "audio"
@@ -198,11 +221,13 @@ export class MetaWhatsappMessagingService {
 
     const persistType = isTemplate ? "template" : isCta ? "cta_url" : isMedia ? type : "text";
     const persistText =
-      isCta
-        ? `${String(body?.text || "").trim()} [${String(body?.buttonLabel || body?.button_label || "").trim()}]`.trim()
-        : isMedia
-          ? text || `[${type}]`
-          : text;
+      isTemplate
+        ? templateBodyText || null
+        : isCta
+          ? `${String(body?.text || "").trim()} [${String(body?.buttonLabel || body?.button_label || "").trim()}]`.trim()
+          : isMedia
+            ? text || `[${type}]`
+            : text;
 
     const inserted = await this.messages.insert({
       tenantId,

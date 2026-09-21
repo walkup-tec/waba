@@ -101,6 +101,24 @@ export class MetaWhatsappTemplateRepository {
     return (data || []).map((row) => mapRow(asRow(row)));
   }
 
+  async findByNameLanguage(
+    tenantId: string,
+    name: string,
+    language: string,
+  ): Promise<MetaTemplateRecord | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("tenant_id", tenantId)
+      .eq("name", name)
+      .eq("language", language)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+
   async findForSend(
     tenantId: string,
     connectionId: string,

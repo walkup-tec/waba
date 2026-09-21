@@ -226,6 +226,38 @@ class FakeConversations {
     }
     return rows.slice(input.offset, input.offset + input.limit);
   }
+  async patchLastMessagePreview(tenantId: string, id: string, lastMessagePreview: string | null) {
+    const row = await this.findByIdForTenant(tenantId, id);
+    if (!row) return null;
+    row.lastMessagePreview = lastMessagePreview;
+    return row;
+  }
+  async countForInbox(input: {
+    tenantId: string;
+    assignedTo?: string | null;
+    phoneNumberId?: string | null;
+    includePhoneNumberIds?: string[];
+  }) {
+    const rows = await this.listForInbox({
+      tenantId: input.tenantId,
+      filter: "all",
+      assignedTo: input.assignedTo,
+      phoneNumberId: input.phoneNumberId,
+      includePhoneNumberIds: input.includePhoneNumberIds,
+      limit: 10_000,
+      offset: 0,
+    });
+    const counts = { all: 0, unread: 0, open: 0, pending: 0, closed: 0, mine: 0 };
+    for (const row of rows) {
+      counts.all += 1;
+      if (row.unreadCount > 0) counts.unread += 1;
+      if (row.status === "open") counts.open += 1;
+      if (row.status === "pending") counts.pending += 1;
+      if (row.status === "closed") counts.closed += 1;
+      if (input.assignedTo && row.assignedTo === input.assignedTo) counts.mine += 1;
+    }
+    return counts;
+  }
   async listUnreadByPhone(tenantId: string, connectionIds?: string[]) {
     const allowed = connectionIds?.length ? new Set(connectionIds) : null;
     return this.rows
@@ -391,6 +423,9 @@ describe("fase 8 listagem e isolamento", () => {
     assert.equal(result.conversations.length, 1);
     assert.equal(result.conversations[0].id, "c2");
     assert.equal(result.page.hasMore, true);
+    assert.equal(result.counts.all, 2);
+    assert.equal(result.counts.unread, 1);
+    assert.equal(result.counts.open, 2);
     assert.equal(result.conversations[0].contactName, "Ana");
     assert.equal("tenantId" in result.conversations[0], false);
     assert.equal(/access_token/i.test(JSON.stringify(stripMetaSecrets(result))), false);

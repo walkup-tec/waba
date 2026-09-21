@@ -8,6 +8,7 @@ const meta_whatsapp_inbox_types_1 = require("./meta-whatsapp-inbox.types");
 const meta_whatsapp_messaging_types_1 = require("./meta-whatsapp-messaging.types");
 const meta_whatsapp_webhook_log_1 = require("./meta-whatsapp-webhook-log");
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
+const meta_whatsapp_inbox_broadcast_persist_1 = require("./meta-whatsapp-inbox-broadcast-persist");
 function isoFromUnix(value) {
     const n = Number(value || "");
     if (Number.isFinite(n) && n > 0)
@@ -15,9 +16,11 @@ function isoFromUnix(value) {
     return new Date().toISOString();
 }
 class MetaWhatsappWebhookInboxService {
-    constructor(conversations = new meta_whatsapp_conversation_repository_1.MetaWhatsappConversationRepository(), messages = new meta_whatsapp_message_repository_1.MetaWhatsappMessageRepository()) {
+    constructor(conversations = new meta_whatsapp_conversation_repository_1.MetaWhatsappConversationRepository(), messages = new meta_whatsapp_message_repository_1.MetaWhatsappMessageRepository(), matchBroadcast = meta_whatsapp_inbox_broadcast_persist_1.defaultInboxBroadcastMatcher, lookupTemplateBody = meta_whatsapp_inbox_broadcast_persist_1.defaultInboxTemplateBodyLookup) {
         this.conversations = conversations;
         this.messages = messages;
+        this.matchBroadcast = matchBroadcast;
+        this.lookupTemplateBody = lookupTemplateBody;
     }
     async persistInbound(input) {
         const from = String(input.event.fromWaId || "").trim();
@@ -95,6 +98,41 @@ class MetaWhatsappWebhookInboxService {
         if (!recipient || !phoneNumberId)
             return;
         if (!(0, meta_whatsapp_phone_identity_store_1.listEnabledInboxPhoneIds)(input.connection.tenantId, [input.connection]).includes(phoneNumberId)) {
+            return;
+        }
+        const match = this.matchBroadcast({
+            tenantId: input.connection.tenantId,
+            wamid,
+            recipientId: recipient,
+            phoneNumberId,
+        });
+        if (match) {
+            let text = "";
+            try {
+                text = await (0, meta_whatsapp_inbox_broadcast_persist_1.resolveBroadcastInboxText)({
+                    tenantId: input.connection.tenantId,
+                    match,
+                    lookup: this.lookupTemplateBody,
+                });
+            }
+            catch {
+                text = "";
+            }
+            await (0, meta_whatsapp_inbox_broadcast_persist_1.persistBroadcastOutboundInInbox)({
+                tenantId: input.connection.tenantId,
+                connectionId: match.lead.connectionId || match.campaign.connectionId || input.connection.id,
+                phoneNumberId,
+                contactWaId: recipient,
+                contactName: match.lead.nome || null,
+                wamid,
+                status: next,
+                atIso,
+                text,
+                templateName: match.campaign.templateName || null,
+                templateLanguage: match.campaign.language || null,
+                conversations: this.conversations,
+                messages: this.messages,
+            });
             return;
         }
         await this.conversations.upsertForContact({

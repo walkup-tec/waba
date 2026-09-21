@@ -11,6 +11,7 @@ const meta_whatsapp_customer_care_window_1 = require("./meta-whatsapp-customer-c
 const meta_whatsapp_recipient_1 = require("./meta-whatsapp-recipient");
 const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.service");
 const meta_whatsapp_inbox_types_1 = require("./meta-whatsapp-inbox.types");
+const meta_whatsapp_inbox_template_preview_1 = require("./meta-whatsapp-inbox-template-preview");
 const meta_whatsapp_phone_identity_store_1 = require("./meta-whatsapp-phone-identity.store");
 const waba_bot_media_store_1 = require("./bots/waba-bot-media.store");
 const waba_bot_typing_1 = require("./bots/waba-bot-typing");
@@ -111,6 +112,21 @@ class MetaWhatsappMessagingService {
             }));
         }
         const atIso = new Date().toISOString();
+        const isTemplateEarly = type === "template";
+        const templateEarly = isTemplateEarly ? sanitizeTemplateFromBody(body?.template) : null;
+        let templateBodyText = "";
+        if (isTemplateEarly && templateEarly && typeof this.templates.findByNameForConnection === "function") {
+            try {
+                const stored = await this.templates.findByNameForConnection(tenantId, connection.id, templateEarly.name, templateEarly.language);
+                templateBodyText = (0, meta_whatsapp_inbox_template_preview_1.renderTemplateBodyText)({
+                    bodyText: (0, meta_whatsapp_inbox_template_preview_1.extractTemplateBodyText)(stored?.components),
+                    sendComponents: templateEarly.components,
+                });
+            }
+            catch {
+                templateBodyText = "";
+            }
+        }
         const upserted = await this.conversations.upsertForContact({
             tenantId,
             connectionId: connection.id,
@@ -120,7 +136,7 @@ class MetaWhatsappMessagingService {
             outbound: true,
             lastMessagePreview: (0, meta_whatsapp_inbox_types_1.previewFromContent)({
                 text: type === "template"
-                    ? null
+                    ? templateBodyText || null
                     : type === "cta_url"
                         ? String(body?.text || body?.buttonLabel || "Link").trim()
                         : type === "video" || type === "document" || type === "audio"
@@ -154,11 +170,13 @@ class MetaWhatsappMessagingService {
             });
         }
         const persistType = isTemplate ? "template" : isCta ? "cta_url" : isMedia ? type : "text";
-        const persistText = isCta
-            ? `${String(body?.text || "").trim()} [${String(body?.buttonLabel || body?.button_label || "").trim()}]`.trim()
-            : isMedia
-                ? text || `[${type}]`
-                : text;
+        const persistText = isTemplate
+            ? templateBodyText || null
+            : isCta
+                ? `${String(body?.text || "").trim()} [${String(body?.buttonLabel || body?.button_label || "").trim()}]`.trim()
+                : isMedia
+                    ? text || `[${type}]`
+                    : text;
         const inserted = await this.messages.insert({
             tenantId,
             conversationId: upserted.record.id,

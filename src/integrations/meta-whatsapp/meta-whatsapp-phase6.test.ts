@@ -116,6 +116,7 @@ class FakeConversations {
     inbound?: boolean;
     outbound?: boolean;
     atIso: string;
+    lastMessagePreview?: string | null;
   }) {
     this.upserts.push({ contactWaId: input.contactWaId, inbound: input.inbound });
     const phoneNumberId = String(input.phoneNumberId || "").trim();
@@ -136,6 +137,7 @@ class FakeConversations {
       }
       if (input.outbound) existing.lastOutboundAt = input.atIso;
       if (input.contactName) existing.contactName = input.contactName;
+      if (input.lastMessagePreview !== undefined) existing.lastMessagePreview = input.lastMessagePreview || null;
       return { record: existing, created: false };
     }
     const record: MetaConversationRecord = {
@@ -153,12 +155,19 @@ class FakeConversations {
       lastOutboundAt: input.outbound ? input.atIso : null,
       unreadCount: input.inbound ? 1 : 0,
       humanTakeover: false,
-      lastMessagePreview: null,
+      lastMessagePreview: input.lastMessagePreview || null,
       createdAt: input.atIso,
       updatedAt: input.atIso,
     };
     this.rows.push(record);
     return { record, created: true };
+  }
+
+  async patchLastMessagePreview(tenantId: string, id: string, lastMessagePreview: string | null) {
+    const row = await this.findByIdForTenant(tenantId, id);
+    if (!row) return null;
+    row.lastMessagePreview = lastMessagePreview;
+    return row;
   }
 }
 
@@ -167,6 +176,13 @@ class FakeMessages {
 
   async findByTenantWamid(tenantId: string, wamid: string) {
     return this.rows.find((row) => row.tenantId === tenantId && row.wamid === wamid) || null;
+  }
+
+  async listByConversation(tenantId: string, conversationId: string, limit: number) {
+    return this.rows
+      .filter((row) => row.tenantId === tenantId && row.conversationId === conversationId)
+      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+      .slice(-limit);
   }
 
   async insert(input: Partial<MetaMessageRecord> & {
