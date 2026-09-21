@@ -32,4 +32,12 @@ describe("Disparo Cloud: portfólios, WABAs, números e limite diário", () => {
     assert.match(html, /onSelectedCard/);
     assert.match(html, /force: onDisparoCloud/);
   });
+
+  it("lê as colunas da planilha no navegador se o preview der 502", () => {
+    assert.match(html, /function metaTplBroadcastReadLocalSheet/);
+    assert.match(html, /function metaTplBroadcastApplyLocalColumns/);
+    assert.match(html, /Planilha selecionada\. As colunas já estão no formulário/);
+    assert.match(html, /Carregue a planilha/);
+    assert.match(html, /broadcast\/preview/);
+  });
 });

@@ -43963,6 +43963,170 @@
         }
       }
 
+      function metaTplBroadcastUniqueColumns(headers) {
+        const seen = {};
+        const out = [];
+        (headers || []).forEach(function (header) {
+          const name = String(header || "").trim() || "coluna";
+          let next = name;
+          let n = 2;
+          while (seen[next]) {
+            next = name + "_" + n;
+            n += 1;
+          }
+          seen[next] = true;
+          out.push(next);
+        });
+        return out;
+      }
+
+      function metaTplBroadcastSplitDelimitedLine(line, delimiter) {
+        const out = [];
+        let current = "";
+        let inQuotes = false;
+        const text = String(line || "");
+        for (let i = 0; i < text.length; i += 1) {
+          const ch = text.charAt(i);
+          if (ch === '"') {
+            if (inQuotes && text.charAt(i + 1) === '"') {
+              current += '"';
+              i += 1;
+            } else {
+              inQuotes = !inQuotes;
+            }
+            continue;
+          }
+          if (ch === delimiter && !inQuotes) {
+            out.push(current.trim());
+            current = "";
+            continue;
+          }
+          current += ch;
+        }
+        out.push(current.trim());
+        return out;
+      }
+
+      function metaTplBroadcastDetectDelimiter(first) {
+        if (first.indexOf(";") !== -1) return ";";
+        if (first.indexOf("\t") !== -1) return "\t";
+        if (first.indexOf(",") !== -1) return ",";
+        return "";
+      }
+
+      function metaTplBroadcastParseDelimitedText(text, forceTable) {
+        const lines = String(text || "")
+          .replace(/^\uFEFF/, "")
+          .split(/\r\n|\n|\r/)
+          .map(function (line) {
+            return line.trim();
+          })
+          .filter(Boolean);
+        if (!lines.length) return { columns: [], rows: [] };
+        const delimiter = metaTplBroadcastDetectDelimiter(lines[0]);
+        if (!delimiter) {
+          return forceTable
+            ? { columns: metaTplBroadcastUniqueColumns(lines[0].split(/\s{2,}/)), rows: [] }
+            : { columns: ["telefone"], rows: [] };
+        }
+        const headers = metaTplBroadcastUniqueColumns(metaTplBroadcastSplitDelimitedLine(lines[0], delimiter));
+        return { columns: headers, rows: [] };
+      }
+
+      function metaTplBroadcastSheetFromMatrix(matrix) {
+        const windowRows = (matrix || []).slice(0, 20);
+        let headerIndex = -1;
+        for (let i = 0; i < windowRows.length; i += 1) {
+          const cells = (Array.isArray(windowRows[i]) ? windowRows[i] : []).map(function (cell) {
+            return String(cell == null ? "" : cell).trim();
+          });
+          const filled = cells.filter(Boolean);
+          if (!filled.length) continue;
+          const looks = filled.some(function (item) {
+            return /^(telefone|phone|celular|whatsapp|whats|mobile|tel|n[uú]mero|numero|destino|nome|name|cliente|contato|lead)$/i.test(
+              item,
+            ) || /tel|phone|whats|cel|nome/i.test(item);
+          });
+          if (looks || headerIndex < 0) headerIndex = i;
+          if (looks) break;
+        }
+        if (headerIndex < 0) return { columns: [], rows: [] };
+        const headers = metaTplBroadcastUniqueColumns(
+          (Array.isArray(matrix[headerIndex]) ? matrix[headerIndex] : []).map(function (cell) {
+            return String(cell == null ? "" : cell).trim();
+          }),
+        );
+        if (!headers.some(function (item) { return String(item || "").trim(); })) {
+          return { columns: [], rows: [] };
+        }
+        return { columns: headers, rows: [] };
+      }
+
+      function metaTplBroadcastGuessPhoneColumn(columns) {
+        const list = (columns || []).map(function (item) { return String(item || "").trim(); }).filter(Boolean);
+        const exact = list.find(function (item) {
+          return /^(telefone|phone|celular|whatsapp|whats|mobile|tel|n[uú]mero|numero|destino)$/i.test(item);
+        });
+        if (exact) return exact;
+        const fuzzy = list.find(function (item) { return /tel|phone|whats|cel/i.test(item); });
+        return fuzzy || list[0] || "";
+      }
+
+      function metaTplBroadcastGuessNomeColumn(columns) {
+        return (
+          (columns || [])
+            .map(function (item) { return String(item || "").trim(); })
+            .find(function (item) { return /^(nome|name|cliente|contato|lead)$/i.test(item); }) || ""
+        );
+      }
+
+      function metaTplBroadcastHasColumnOptions() {
+        const phone = metaTplBroadcastEl("meta-tpl-broadcast-phone-col");
+        if (!phone) return false;
+        return Array.prototype.slice.call(phone.options || []).some(function (opt) {
+          return Boolean(String(opt && opt.value || "").trim());
+        });
+      }
+
+      function metaTplBroadcastApplyLocalColumns(columns) {
+        const list = (columns || []).map(function (item) { return String(item || "").trim(); }).filter(Boolean);
+        if (!list.length) return false;
+        const mapping = (metaTplBroadcastInspect && metaTplBroadcastInspect.mapping) || {
+          phone: true,
+          nome: false,
+          numero: false,
+        };
+        mapping.phone = true;
+        metaTplBroadcastFillColumns(list, {
+          phoneColumn: metaTplBroadcastGuessPhoneColumn(list),
+          nomeColumn: metaTplBroadcastGuessNomeColumn(list),
+          numeroColumn: "",
+        });
+        metaTplBroadcastSyncMappingFields(mapping);
+        return true;
+      }
+
+      async function metaTplBroadcastReadLocalSheet(file) {
+        if (!file) return { columns: [], rows: [] };
+        const name = String(file.name || "").toLowerCase();
+        if (/\.(csv|txt)$/.test(name)) {
+          return metaTplBroadcastParseDelimitedText(await file.text(), name.indexOf(".csv") !== -1);
+        }
+        if (typeof ensureXlsxParserReady === "function") await ensureXlsxParserReady();
+        if (!window.XLSX) throw new Error("Biblioteca de planilha ainda não carregou. Atualize a página e tente de novo.");
+        const buffer = await file.arrayBuffer();
+        const wb = window.XLSX.read(buffer, { type: "array", cellDates: false, raw: true });
+        const names = wb.SheetNames || [];
+        for (let i = 0; i < names.length; i += 1) {
+          const sheet = wb.Sheets[names[i]];
+          if (!sheet) continue;
+          const matrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true });
+          const parsed = metaTplBroadcastSheetFromMatrix(matrix);
+          if (parsed.columns.length) return parsed;
+        }
+        return { columns: [], rows: [] };
+      }
+
       async function metaTplBroadcastLoadColumns() {
         if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
           const sample = metaDisparoCloudPreviewSample();
@@ -43977,8 +44141,18 @@
           return;
         }
         if (!metaTplBroadcastFile) return;
+        metaTplBroadcastSetStatus("Lendo as colunas da planilha…");
+        // O nome do arquivo já é local. Sem esta leitura o select fica em
+        // "Carregue a planilha" quando o POST /preview toma 502 do Redeploy.
         try {
-          metaTplBroadcastSetStatus("Lendo as colunas da planilha…");
+          const local = await metaTplBroadcastReadLocalSheet(metaTplBroadcastFile);
+          if (metaTplBroadcastApplyLocalColumns(local.columns)) {
+            metaTplBroadcastSetStatus("");
+          }
+        } catch (_localError) {
+          /* preview ainda tenta; se os dois falharem o status abaixo explica */
+        }
+        try {
           const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/preview", {
             method: "POST",
             body: metaTplBroadcastFormData(),
@@ -43998,6 +44172,10 @@
               : "Não encontrei colunas nesta planilha. Confira se a primeira aba tem o cabeçalho.",
           );
         } catch (error) {
+          if (metaTplBroadcastHasColumnOptions()) {
+            metaTplBroadcastSetStatus("Planilha selecionada. As colunas já estão no formulário.");
+            return;
+          }
           const message = error && error.message ? error.message : "Não foi possível ler a planilha.";
           metaTplBroadcastSetStatus(message);
         }
