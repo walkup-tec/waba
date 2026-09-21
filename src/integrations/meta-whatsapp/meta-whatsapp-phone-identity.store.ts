@@ -48,6 +48,7 @@ export type MetaPhoneInboxChannel = {
   profilePictureUrl: string | null;
   inboxEnabled: boolean;
   inboxEligible: boolean;
+  botEligible: boolean;
 };
 
 export type InboxAccountHint = {
@@ -345,6 +346,22 @@ function accountIsRestricted(
   return isWithdrawnInboxDisplayPhone(hinted?.displayPhoneNumber);
 }
 
+/** Chip ativo em ATIVAS, sem restrição. Inbox não entra nesta conta. */
+export function isPhoneAutomationEligible(
+  identity: MetaPhoneIdentity | null,
+  tenantId?: string,
+  connections?: InboxAccountHint[] | null,
+  phoneNumberId?: string,
+): boolean {
+  if (!identity) return false;
+  if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito") return false;
+  if (isWithdrawnInboxDisplayPhone(identity.displayPhoneNumber)) return false;
+  const tenant = String(tenantId || "").trim();
+  const phone = String(phoneNumberId || "").trim();
+  if (tenant && accountIsRestricted(tenant, phone, identity, connections)) return false;
+  return true;
+}
+
 /** Inbox ligado, chip Ativo, portfólio ATIVAS. A restrição é do chip, não da conexão. */
 export function isPhoneInboxEligible(
   identity: MetaPhoneIdentity | null,
@@ -353,12 +370,17 @@ export function isPhoneInboxEligible(
   phoneNumberId?: string,
 ): boolean {
   if (!isPhoneInboxEnabled(identity) || !identity) return false;
-  if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito") return false;
-  if (isWithdrawnInboxDisplayPhone(identity.displayPhoneNumber)) return false;
-  const tenant = String(tenantId || "").trim();
-  const phone = String(phoneNumberId || "").trim();
-  if (tenant && accountIsRestricted(tenant, phone, identity, connections)) return false;
-  return true;
+  return isPhoneAutomationEligible(identity, tenantId, connections, phoneNumberId);
+}
+
+/** Mesma regra do chip ativo, sem exigir Inbox — usado pelos Bots. */
+export function isPhoneBotEligible(
+  identity: MetaPhoneIdentity | null,
+  tenantId?: string,
+  connections?: InboxAccountHint[] | null,
+  phoneNumberId?: string,
+): boolean {
+  return isPhoneAutomationEligible(identity, tenantId, connections, phoneNumberId);
 }
 
 export function phoneInboxDisplayName(
@@ -431,6 +453,7 @@ export function listPhoneInboxChannels(
         profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
         inboxEnabled: isPhoneInboxEnabled(identity),
         inboxEligible: isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId),
+        botEligible: isPhoneBotEligible(identity, tenantId, connections, phoneNumberId),
       });
     }
     return out;

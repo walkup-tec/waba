@@ -3,7 +3,7 @@ import { MetaWhatsappError } from "../meta-whatsapp-errors";
 import { resolveMetaWhatsappTenant } from "../meta-whatsapp-tenant";
 import { MetaWhatsappConnectionRepository } from "../meta-whatsapp-connection.repository";
 import {
-  isPhoneInboxEligible,
+  isPhoneBotEligible,
   listPhoneInboxChannels,
   readPhoneIdentity,
   type InboxAccountHint,
@@ -31,12 +31,12 @@ import type { BotFlowDraft, BotFlowNode, BotJson, BotRunState } from "./waba-bot
 
 const testRuns = new Map<string, BotRunState>();
 
-/** Mesma regra do Atendimento: Inbox, conta sem restrição e portfólio ATIVAS. */
+/** Chip ativo em ATIVAS, sem restrição. Inbox não é obrigatório. */
 export function listBotAssignableChannels(
   tenantId: string,
   connections?: InboxAccountHint[] | null,
 ) {
-  return listPhoneInboxChannels(tenantId, undefined, connections).filter((row) => row.inboxEligible);
+  return listPhoneInboxChannels(tenantId, undefined, connections).filter((row) => row.botEligible);
 }
 
 async function loadInboxHints(
@@ -95,6 +95,7 @@ export class WabaBotService {
         displayPhoneNumber: row.displayPhoneNumber,
         inboxEnabled: row.inboxEnabled,
         inboxEligible: row.inboxEligible,
+        botEligible: row.botEligible,
         botId: getBotIdForPhone(tenant.tenantId, row.phoneNumberId),
       })),
       catalog: this.getCatalog(),
@@ -148,7 +149,7 @@ export class WabaBotService {
     if (botId) {
       const identity = readPhoneIdentity(tenant.tenantId, phoneNumberId);
       const hints = await loadInboxHints(this.connections, tenant.tenantId);
-      if (!isPhoneInboxEligible(identity, tenant.tenantId, hints, phoneNumberId)) {
+      if (!isPhoneBotEligible(identity, tenant.tenantId, hints, phoneNumberId)) {
         throw new MetaWhatsappError("invalid_payload");
       }
     }

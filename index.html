@@ -23327,8 +23327,8 @@
               <p id="waba-bots-banner" class="meta-inbox-banner" role="status">Carregando bots…</p>
               <div class="waba-bots-layout">
                 <aside class="waba-bots-col" aria-label="Chips Inbox e biblioteca de bots">
-                  <div class="meta-chat-thread-title">Números Inbox</div>
-                  <p class="muted" style="margin:6px 0 8px;">O chip é o ponto de partida. Veja o bot atual, edite ou troque para o próximo template. Nunca ficam dois bots no mesmo número.</p>
+                  <div class="meta-chat-thread-title">Números</div>
+                  <p class="muted" style="margin:6px 0 8px;">O chip é o ponto de partida, com ou sem Inbox. Veja o bot atual, edite ou troque. Nunca ficam dois bots no mesmo número.</p>
                   <div class="waba-bots-phone-search aquecedor-field">
                     <label class="visually-hidden" for="waba-bots-phone-search">Pesquisar número Inbox</label>
                     <input id="waba-bots-phone-search" type="search" class="waba-bots-phone-search-input" placeholder="Pesquisar número…" autocomplete="off" inputmode="tel" />
@@ -45190,7 +45190,7 @@
       }
 
       function wabaBotsEligibleChannels() {
-        return (wabaBotsUi.channels || []).filter((row) => row.inboxEligible === true);
+        return (wabaBotsUi.channels || []).filter((row) => row.botEligible === true);
       }
 
       function wabaBotsDigits(value) {

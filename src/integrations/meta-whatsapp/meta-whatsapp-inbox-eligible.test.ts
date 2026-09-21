@@ -84,6 +84,9 @@ describe("Atendimento só lista chip Ativo com Inbox", () => {
     writePhoneIdentity(tenantId, "phone-1", { inboxEnabled: false });
     applyLocalPhoneIdentities(tenantId, [number({ metaStatus: "CONNECTED", uiStatus: "ativo" })]);
     assert.deepEqual(listEnabledInboxPhoneIds(tenantId), []);
+    const channel = listPhoneInboxChannels(tenantId)[0];
+    assert.equal(channel?.inboxEligible, false);
+    assert.equal(channel?.botEligible, true);
     purgePhoneIdentities(tenantId);
   });
 

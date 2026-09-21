@@ -10,7 +10,9 @@ exports.localPhonePhotoUrl = localPhonePhotoUrl;
 exports.phoneIdentitySyncStatus = phoneIdentitySyncStatus;
 exports.isPhoneInboxEnabled = isPhoneInboxEnabled;
 exports.isConnectionAccountRestricted = isConnectionAccountRestricted;
+exports.isPhoneAutomationEligible = isPhoneAutomationEligible;
 exports.isPhoneInboxEligible = isPhoneInboxEligible;
+exports.isPhoneBotEligible = isPhoneBotEligible;
 exports.phoneInboxDisplayName = phoneInboxDisplayName;
 exports.syncInboxChannelNameFromMeta = syncInboxChannelNameFromMeta;
 exports.listPhoneInboxChannels = listPhoneInboxChannels;
@@ -269,9 +271,9 @@ function accountIsRestricted(_tenantId, phoneNumberId, identity, connections) {
     const hinted = (connections || []).find((row) => String(row.phoneNumberId || "").trim() === String(phoneNumberId || "").trim());
     return (0, meta_whatsapp_known_owned_wabas_1.isWithdrawnInboxDisplayPhone)(hinted?.displayPhoneNumber);
 }
-/** Inbox ligado, chip Ativo, portfólio ATIVAS. A restrição é do chip, não da conexão. */
-function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
-    if (!isPhoneInboxEnabled(identity) || !identity)
+/** Chip ativo em ATIVAS, sem restrição. Inbox não entra nesta conta. */
+function isPhoneAutomationEligible(identity, tenantId, connections, phoneNumberId) {
+    if (!identity)
         return false;
     if (identity.uiStatus === "pendente" || identity.uiStatus === "restrito")
         return false;
@@ -282,6 +284,16 @@ function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
     if (tenant && accountIsRestricted(tenant, phone, identity, connections))
         return false;
     return true;
+}
+/** Inbox ligado, chip Ativo, portfólio ATIVAS. A restrição é do chip, não da conexão. */
+function isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId) {
+    if (!isPhoneInboxEnabled(identity) || !identity)
+        return false;
+    return isPhoneAutomationEligible(identity, tenantId, connections, phoneNumberId);
+}
+/** Mesma regra do chip ativo, sem exigir Inbox — usado pelos Bots. */
+function isPhoneBotEligible(identity, tenantId, connections, phoneNumberId) {
+    return isPhoneAutomationEligible(identity, tenantId, connections, phoneNumberId);
 }
 function phoneInboxDisplayName(identity, verifiedNameFromMeta) {
     const meta = String(verifiedNameFromMeta || "").trim();
@@ -342,6 +354,7 @@ function listPhoneInboxChannels(tenantId, verifiedNameByPhone, connections) {
                 profilePictureUrl: localPhonePhotoUrl(phoneNumberId, identity),
                 inboxEnabled: isPhoneInboxEnabled(identity),
                 inboxEligible: isPhoneInboxEligible(identity, tenantId, connections, phoneNumberId),
+                botEligible: isPhoneBotEligible(identity, tenantId, connections, phoneNumberId),
             });
         }
         return out;

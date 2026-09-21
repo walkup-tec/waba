@@ -506,27 +506,31 @@ describe("WABA bots — inbound 1 a 9", () => {
   });
 });
 
-describe("WABA bots — números Inbox", () => {
+describe("WABA bots — números", () => {
   const authA: WabaRequestAuth = { email: EMAIL_A, role: "subscriber" };
 
-  it("lista só chips com Inbox ligado em Conexão", () => {
+  it("lista chip ativo mesmo sem Inbox ligado", () => {
     writePhoneIdentity(TENANT_A, "phone-on", {
       inboxEnabled: true,
+      uiStatus: "ativo",
       channelName: "Atendimento",
       displayPhoneNumber: "+55 11 90000-0001",
     });
     writePhoneIdentity(TENANT_A, "phone-off", {
       inboxEnabled: false,
+      uiStatus: "ativo",
       channelName: "Sem inbox",
       displayPhoneNumber: "+55 11 90000-0002",
     });
     const rows = listBotAssignableChannels(TENANT_A);
     assert.deepEqual(
-      rows.map((row) => row.phoneNumberId),
-      ["phone-on"],
+      rows.map((row) => row.phoneNumberId).sort(),
+      ["phone-off", "phone-on"],
     );
-    assert.equal(rows[0]?.inboxEnabled, true);
-    assert.equal(rows[0]?.inboxEligible, true);
+    const off = rows.find((row) => row.phoneNumberId === "phone-off");
+    assert.equal(off?.inboxEnabled, false);
+    assert.equal(off?.inboxEligible, false);
+    assert.equal(off?.botEligible, true);
   });
 
   it("lista Relacionamento do Drax Waba mesmo se a conexão ainda tiver o 5182001279", () => {
@@ -634,7 +638,7 @@ describe("WABA bots — números Inbox", () => {
     );
   });
 
-  it("recusa associar chip inelegível e aceita o Inbox válido", async () => {
+  it("recusa associar chip inelegível e aceita chip ativo sem Inbox", async () => {
     writePhoneIdentity(TENANT_A, "phone-drax", {
       inboxEnabled: true,
       uiStatus: "ativo",
@@ -642,7 +646,7 @@ describe("WABA bots — números Inbox", () => {
       displayPhoneNumber: "+55 51 8200-1279",
     });
     writePhoneIdentity(TENANT_A, "phone-ok", {
-      inboxEnabled: true,
+      inboxEnabled: false,
       uiStatus: "ativo",
       channelName: "Relacionamento e Atendimento",
       displayPhoneNumber: "+55 51 92636-1688",
@@ -696,7 +700,8 @@ describe("WABA bots — menu FARM BM", () => {
     assert.match(html, /data-menu-section="farm-bm"/);
     assert.match(html, /<span class="tab-label">Bots<\/span>/);
     assert.match(html, /id="tab-whatsapp-bots"/);
-    assert.match(html, /row\.inboxEligible === true/);
+    assert.match(html, /row\.botEligible === true/);
+    assert.doesNotMatch(html, /Números Inbox/);
     assert.match(html, /data-bot-chip-select/);
     assert.match(html, /data-bot-edit-chip/);
     assert.match(html, /data-bot-switch-open/);
