@@ -42749,39 +42749,36 @@
           root.innerHTML = '<span class="muted">Marque os portfólios para ver as contas WABA.</span>';
           return;
         }
-        const preview =
-          (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) ||
-          (typeof isMetaTemplateAiUiPreview === "function" && isMetaTemplateAiUiPreview());
-        const groups =
-          Array.isArray(groupsInput) && groupsInput.length
-            ? groupsInput
-            : preview
-            ? typeof metaTplLabWabaGroupsFromLocal === "function"
-              ? metaTplLabWabaGroupsFromLocal(connectionIds)
-              : connectionIds.map(function (connectionId) {
-                  const portfolio = metaTplBroadcastPortfolioByConnectionId(connectionId);
-                  return {
-                    connectionId: connectionId,
-                    label:
-                      typeof metaTpPortfolioTitle === "function"
-                        ? metaTpPortfolioTitle(portfolio || { connectionId: connectionId })
-                        : String((portfolio && portfolio.name) || "Portfólio"),
-                    items:
-                      typeof metaTplLabWabasFromPortfolio === "function"
-                        ? metaTplLabWabasFromPortfolio(portfolio)
+        // Card local na hora. Sem isso o passo 2 fica em "Carregando…" até a Graph
+        // (8s + retry 502) e o passo 5 acha que nenhuma WABA foi marcada.
+        const fromGraph = Array.isArray(groupsInput) && groupsInput.length;
+        const groups = fromGraph
+          ? groupsInput
+          : typeof metaTplLabWabaGroupsFromLocal === "function"
+            ? metaTplLabWabaGroupsFromLocal(connectionIds)
+            : connectionIds.map(function (connectionId) {
+                const portfolio = metaTplBroadcastPortfolioByConnectionId(connectionId);
+                return {
+                  connectionId: connectionId,
+                  label:
+                    typeof metaTpPortfolioTitle === "function"
+                      ? metaTpPortfolioTitle(portfolio || { connectionId: connectionId })
+                      : String((portfolio && portfolio.name) || "Portfólio"),
+                  items:
+                    typeof metaTplLabWabasFromPortfolio === "function"
+                      ? metaTplLabWabasFromPortfolio(portfolio)
+                      : typeof metaTplPrimaryWabasFromPortfolio === "function"
+                        ? metaTplPrimaryWabasFromPortfolio(portfolio)
                         : [],
-                  };
-                })
-            : null;
-        if (!groups) {
-          root.innerHTML = '<span class="muted">Carregando contas WABA deste portfólio…</span>';
-          return;
-        }
+                };
+              });
         const totalItems = groups.reduce(function (sum, group) {
           return sum + ((group && group.items) || []).length;
         }, 0);
         if (!totalItems) {
-          root.innerHTML = '<span class="muted">Nenhuma conta WABA nestes portfólios.</span>';
+          root.innerHTML = fromGraph
+            ? '<span class="muted">Nenhuma conta WABA nestes portfólios.</span>'
+            : '<span class="muted">Carregando contas WABA deste portfólio…</span>';
           return;
         }
         root.innerHTML = groups
@@ -42795,7 +42792,10 @@
                 if (!id) return "";
                 const key = metaTplBroadcastWabaKey(connectionId, id);
                 const checked =
-                  previous.has(key) || (previous.size === 0 && totalItems === 1) ? " checked" : "";
+                  previous.has(key) ||
+                  (previous.size === 0 && (totalItems === 1 || !fromGraph))
+                    ? " checked"
+                    : "";
                 return (
                   '<label class="meta-tpl-broadcast-number-option">' +
                   '<input type="checkbox" data-connection-id="' +
@@ -42837,9 +42837,11 @@
               ? metaTplLabPortfolioByConnectionId(connectionId)
               : metaTplBroadcastPortfolioByConnectionId(connectionId);
           const localItems =
-            typeof metaTplPrimaryWabasFromPortfolio === "function"
-              ? metaTplPrimaryWabasFromPortfolio(portfolio)
-              : [];
+            typeof metaTplLabWabasFromPortfolio === "function"
+              ? metaTplLabWabasFromPortfolio(portfolio)
+              : typeof metaTplPrimaryWabasFromPortfolio === "function"
+                ? metaTplPrimaryWabasFromPortfolio(portfolio)
+                : [];
           let items = localItems;
           try {
             const payload = await metaTplLabFetchJson(
@@ -42854,7 +42856,7 @@
                 ? metaTplLabMergeCardAndGraphWabas(localItems, mapped, portfolio)
                 : localItems;
           } catch (_error) {
-            /* sem a Graph, só a WABA da conexão — nunca o dump do token */
+            /* sem a Graph, mantém as WABAs do card — nunca o dump do token */
           }
           groups.push({
             connectionId: connectionId,

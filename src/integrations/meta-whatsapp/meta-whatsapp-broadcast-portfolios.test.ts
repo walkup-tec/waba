@@ -19,6 +19,8 @@ describe("Disparo Cloud: portfólios, WABAs, números e limite diário", () => {
     assert.match(html, /function metaTplBroadcastRefreshWabasFromMeta/);
     assert.match(html, /templates\/wabas\?connectionId=/);
     assert.match(html, /function metaTplPrimaryWabasFromPortfolio/);
+    assert.match(html, /function metaTplLabWabaGroupsFromLocal/);
+    assert.match(html, /Card local na hora/);
     assert.match(html, /Carregando contas WABA deste portfólio/);
     assert.match(html, /nunca o dump do token/);
     assert.match(html, /function metaTplBroadcastNumberMatchesSelectedWaba/);
