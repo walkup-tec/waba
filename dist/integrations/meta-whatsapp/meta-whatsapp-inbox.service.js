@@ -236,17 +236,21 @@ class MetaWhatsappInboxService {
     }
     async listMessages(auth, conversationId, query) {
         const tenant = requireTenant(auth);
-        const open = await this.inboxConnections(tenant.tenantId);
+        const { all, serving } = await this.inboxConnectionSets(tenant.tenantId);
         const row = await this.requireOwnedConversation(tenant.tenantId, conversationId);
-        const origin = open.find((item) => item.id === row.connectionId) || open[0];
+        const origin = serving.find((item) => item.id === row.connectionId) ||
+            all.find((item) => item.id === row.connectionId) ||
+            serving[0] ||
+            all[0];
         const limit = Math.min(80, Math.max(1, clampPage(query?.limit, 80, 80) || 80));
         const messages = await this.messages.listByConversation(tenant.tenantId, row.id, limit);
         (0, meta_whatsapp_inbox_log_1.logMetaInbox)("THREAD", { tenantId: tenant.tenantId, count: messages.length });
-        const verifiedByPhone = verifiedNamesByPhone(open);
-        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone, open);
+        const hints = all.length ? all : serving;
+        const verifiedByPhone = verifiedNamesByPhone(hints);
+        const snapshots = (0, meta_whatsapp_phone_identity_store_1.listPhoneInboxChannels)(tenant.tenantId, verifiedByPhone, hints);
         const channelsById = new Map(snapshots.map((item) => [item.phoneNumberId, item]));
         return {
-            conversation: withChannel(row, channelsById, origin.displayPhoneNumber, origin.verifiedName, verifiedByPhone),
+            conversation: withChannel(row, channelsById, origin?.displayPhoneNumber || null, origin?.verifiedName || null, verifiedByPhone),
             messages: messages.map(meta_whatsapp_inbox_types_1.toPublicInboxMessage),
         };
     }

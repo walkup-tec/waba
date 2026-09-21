@@ -419,6 +419,49 @@ describe("fase 8 listagem e isolamento", () => {
 describe("fase 8 histórico unread status assign", () => {
   beforeEach(() => enableInbox());
   afterEach(() => purgePhoneIdentities(TENANT_A));
+  it("abre o histórico do Relacionamento mesmo sem conexão serving", async () => {
+    const businessId = "1041827648719609";
+    purgePhoneIdentities(TENANT_A);
+    unhideBusiness(TENANT_A, businessId);
+    writePhoneIdentity(TENANT_A, "phone-rel", {
+      inboxEnabled: true,
+      uiStatus: "ativo",
+      channelName: "Relacionamento e Atendimento",
+      displayPhoneNumber: "+55 51 92636-1688",
+    });
+    hideBusiness(TENANT_A, businessId, "BAN Drax Sistemas");
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "conn-drax",
+        phoneNumberId: "phone-drax",
+        metaBusinessId: businessId,
+        wabaId: "1988957871663919",
+        displayPhoneNumber: "+55 51 8200-1279",
+        verifiedName: "Drax Sistema",
+      }),
+    );
+    const conversations = new FakeConversations();
+    conversations.rows.push(
+      conv({
+        id: "conv-rel",
+        connectionId: "conn-drax",
+        phoneNumberId: "phone-rel",
+        contactName: "Marcelo Mozart",
+      }),
+    );
+    const messages = new FakeMessages();
+    messages.rows.push(msg({ conversationId: "conv-rel", connectionId: "conn-drax" }));
+    const service = inboxOf(connections, conversations, messages);
+    const thread = await service.listMessages(auth(EMAIL_A), "conv-rel", {});
+    assert.equal(thread.conversation.contactName, "Marcelo Mozart");
+    assert.equal(thread.conversation.channelName, "Relacionamento e Atendimento");
+    assert.match(String(thread.conversation.channelPhone || ""), /92636-1688/);
+    assert.equal(thread.messages.length, 1);
+    unhideBusiness(TENANT_A, businessId);
+    purgePhoneIdentities(TENANT_A);
+  });
+
   it("histórico só do tenant e DTO sem token", async () => {
     const connections = new FakeConnections();
     connections.rows.push(connectedRow());
