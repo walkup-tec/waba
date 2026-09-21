@@ -42444,12 +42444,20 @@
 
       function metaTplLabHttpFallbackMessage(status) {
         if (status === 502 || status === 504) {
-          return "O servidor não concluiu a sincronização a tempo. Espere um minuto e clique de novo em Atualizar da Meta.";
+          return "O servidor ainda está voltando do Redeploy. Atualize a página em alguns segundos.";
         }
         if (status === 503) {
-          return "A Meta ou o servidor está temporariamente indisponível. Tente de novo em instantes.";
+          return "O servidor está temporariamente indisponível. Tente de novo em instantes.";
         }
         return "Não foi possível concluir.";
+      }
+
+      function metaTplLabIsTransientProxyFailure(response, payload, rawText) {
+        const status = Number(response && response.status || 0);
+        if (status === 502 || status === 503 || status === 504) return true;
+        const text = String(rawText || "");
+        const blob = text || JSON.stringify(payload || {});
+        return /api\/errors\/bad-gateway|cannot get \/api\/errors|bad gateway/i.test(blob);
       }
 
       function metaTplLabIsRateLimitError(error) {
@@ -42479,44 +42487,77 @@
         } catch (_error) {
           requestSummary = { note: "request_parse_failed" };
         }
-        const response = await fetch(resolveWabaPublicPath(path), {
-          credentials: "same-origin",
-          ...extra,
-          headers: {
-            Accept: "application/json",
-            ...(extra.body && !isForm ? { "Content-Type": "application/json" } : {}),
-            ...(extra.headers || {}),
-          },
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (metaTplLabHasSecret(payload)) {
-          const secretError = new Error("Resposta inválida.");
-          secretError.labEvidence = {
-            source: "meta-lab-fetch",
-            path: String(path || ""),
-            method: method,
-            httpStatus: response.status,
-            code: "secret_stripped",
-            request: requestSummary,
-            response: { ok: false, note: "payload_contained_secret_and_was_stripped" },
-          };
-          throw secretError;
+        const maxAttempts = method === "GET" ? 8 : 1;
+        let lastError = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const response = await fetch(resolveWabaPublicPath(path), {
+              credentials: "same-origin",
+              ...extra,
+              headers: {
+                Accept: "application/json",
+                ...(extra.body && !isForm ? { "Content-Type": "application/json" } : {}),
+                ...(extra.headers || {}),
+              },
+            });
+            const rawText = await response.text().catch(() => "");
+            let payload = {};
+            try {
+              payload = rawText ? JSON.parse(rawText) : {};
+            } catch (_error) {
+              payload = {};
+            }
+            if (
+              method === "GET" &&
+              metaTplLabIsTransientProxyFailure(response, payload, rawText) &&
+              attempt < maxAttempts
+            ) {
+              await new Promise((resolve) => setTimeout(resolve, Math.min(2500, 800 * attempt)));
+              continue;
+            }
+            if (metaTplLabHasSecret(payload)) {
+              const secretError = new Error("Resposta inválida.");
+              secretError.labEvidence = {
+                source: "meta-lab-fetch",
+                path: String(path || ""),
+                method: method,
+                httpStatus: response.status,
+                code: "secret_stripped",
+                request: requestSummary,
+                response: { ok: false, note: "payload_contained_secret_and_was_stripped" },
+              };
+              throw secretError;
+            }
+            if (!response.ok || payload.ok === false) {
+              const message = String(payload.error || metaTplLabHttpFallbackMessage(response.status));
+              const err = new Error(message);
+              err.labEvidence = {
+                source: "meta-lab-fetch",
+                path: String(path || ""),
+                method: method,
+                httpStatus: response.status,
+                code: payload.code != null ? payload.code : null,
+                request: requestSummary,
+                response: metaTplLabSanitizeEvidence(payload),
+              };
+              lastError = err;
+              throw err;
+            }
+            return payload;
+          } catch (error) {
+            lastError = error;
+            const canRetryNetwork =
+              method === "GET" &&
+              attempt < maxAttempts &&
+              !(error && error.labEvidence && error.labEvidence.httpStatus && error.labEvidence.httpStatus < 500);
+            if (canRetryNetwork && (!error || !error.labEvidence || Number(error.labEvidence.httpStatus || 0) >= 500)) {
+              await new Promise((resolve) => setTimeout(resolve, Math.min(2500, 800 * attempt)));
+              continue;
+            }
+            throw error;
+          }
         }
-        if (!response.ok || payload.ok === false) {
-          const message = String(payload.error || metaTplLabHttpFallbackMessage(response.status));
-          const err = new Error(message);
-          err.labEvidence = {
-            source: "meta-lab-fetch",
-            path: String(path || ""),
-            method: method,
-            httpStatus: response.status,
-            code: payload.code != null ? payload.code : null,
-            request: requestSummary,
-            response: metaTplLabSanitizeEvidence(payload),
-          };
-          throw err;
-        }
-        return payload;
+        throw lastError || new Error(metaTplLabHttpFallbackMessage(502));
       }
 
       let metaTplBroadcastFile = null;
