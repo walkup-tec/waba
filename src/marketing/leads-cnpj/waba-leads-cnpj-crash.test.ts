@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 import {
   classifyGotoFailure,
   isChromiumTargetCrash,
+  isKeepaliveProgressMessage,
   isPortalAntiBotBlock,
   isPortalChallengeHint,
+  resolveLeadsPhaseStallMs,
 } from "./waba-leads-cnpj-casadosdados.adapter";
 import { resolveCasaDosDadosUserAgent } from "./waba-leads-cnpj-browser-runtime";
 import {
@@ -72,6 +74,25 @@ describe("Leads PJ anti-bot Cloudflare", () => {
       resolveCasaDosDadosUserAgent("127.0.6533.17"),
       /Chrome\/127\.0\.0\.0 Safari\/537\.36/,
     );
+  });
+});
+
+describe("Leads PJ fase presa", () => {
+  it("não trata pulso de keepalive como progresso real", () => {
+    assert.equal(
+      isKeepaliveProgressMessage("FILTERS: abrindo tela de pesquisa… — 1258s"),
+      true,
+    );
+    assert.equal(
+      isKeepaliveProgressMessage("COPY: retomada rápida → pág. 382 (storageState; sem CNAE)…"),
+      false,
+    );
+  });
+
+  it("limita o stall de fase entre 30s e 180s", () => {
+    const ms = resolveLeadsPhaseStallMs();
+    assert.equal(ms >= 30_000, true);
+    assert.equal(ms <= 180_000, true);
   });
 });
 

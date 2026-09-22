@@ -17,6 +17,7 @@ import {
   resolvePortalResumePage,
   isSoftScrapeError,
   isLeadsScrapeError,
+  isKeepaliveProgressMessage,
   LeadsScrapeError,
 } from "./waba-leads-cnpj-casadosdados.adapter";
 import {
@@ -2373,15 +2374,15 @@ export class WabaLeadsCnpjService {
             let scrapeSessionCompleted = false;
             let scrapeSessionDoneReason = "";
             /**
-             * NÃO fechar Chromium por “stall” de progresso (default off).
-             * Em produção o watchdog de 90s matava a sessão no meio de CNAE/Pesquisar
-             * e reabria login+filtros em loop — oposto do V02 (1 janela até copiar tudo).
-             * Opt-in diagnóstico: CASADOSDADOS_SCRAPE_STALL_MS=90000
+             * Sem progresso REAL (não o pulso `— 1258s`) por 90s: aborta o Chromium.
+             * Keepalive sozinho não conta — Odontologia ficou 21 min em FILTERS.
+             * Override: CASADOSDADOS_SCRAPE_STALL_MS=0 desliga.
              */
-            const stallMs = Math.max(
-              0,
-              Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STALL_MS || 0) || 0),
-            );
+            const stallRaw = process.env.CASADOSDADOS_SCRAPE_STALL_MS;
+            const stallMs =
+              stallRaw === undefined || stallRaw === ""
+                ? 90_000
+                : Math.max(0, Math.round(Number(stallRaw) || 0));
             let lastProgressAt = Date.now();
             try {
               releaseScrapeSlot = await acquirePortalScrapeSlot(listId, (info) => {
@@ -2405,7 +2406,9 @@ export class WabaLeadsCnpjService {
               const scrapeResult = await scrapeCasaDosDadosLeads(
                 scrapeFilters,
                 (message) => {
-                  lastProgressAt = Date.now();
+                  if (!isKeepaliveProgressMessage(message)) {
+                    lastProgressAt = Date.now();
+                  }
                   patch({ progressMessage: message });
                 },
                 {

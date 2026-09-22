@@ -57,25 +57,42 @@ export function isPortalAntiBotBlock(error: unknown): boolean {
   );
 }
 
+/** Pulso `— 1258s` do keepalive NÃO é progresso real da tela. */
+export function isKeepaliveProgressMessage(message: string): boolean {
+  return /\s—\s+\d+s(?:\/\d+s)?\s*$/.test(String(message || "").trim());
+}
+
+/** Teto duro por fase (FILTERS/LOGIN/SEARCH). Default 90s. */
+export function resolveLeadsPhaseStallMs(): number {
+  const raw = Math.round(Number(process.env.CASADOSDADOS_PHASE_STALL_MS || 90_000) || 90_000);
+  return Math.max(30_000, Math.min(180_000, Number.isFinite(raw) ? raw : 90_000));
+}
+
 async function isCloudflareInterstitial(page: {
   title: () => Promise<string>;
   evaluate: <T>(fn: () => T) => Promise<T>;
   url?: () => string;
-}): Promise<boolean> {
-  const title = await page.title().catch(() => "");
+}): Promise<boolean | "hung"> {
+  const title = await withNodeTimeout(page.title().catch(() => ""), 2500, null as string | null);
+  if (title === null) return "hung";
   const url = typeof page.url === "function" ? String(page.url() || "") : "";
   if (isPortalChallengeHint({ title, url })) return true;
-  const hint = await page
-    .evaluate(() => {
-      const text = String(document.body?.innerText || "").slice(0, 1200);
-      const hasWidget = Boolean(
-        document.querySelector(
-          'iframe[src*="challenges.cloudflare"], iframe[src*="turnstile"], #challenge-running, .cf-browser-verification, input[name="cf-turnstile-response"]',
-        ),
-      );
-      return { text, hasWidget };
-    })
-    .catch(() => ({ text: "", hasWidget: false }));
+  const hint = await withNodeTimeout(
+    page
+      .evaluate(() => {
+        const text = String(document.body?.innerText || "").slice(0, 1200);
+        const hasWidget = Boolean(
+          document.querySelector(
+            'iframe[src*="challenges.cloudflare"], iframe[src*="turnstile"], #challenge-running, .cf-browser-verification, input[name="cf-turnstile-response"]',
+          ),
+        );
+        return { text, hasWidget };
+      })
+      .catch(() => ({ text: "", hasWidget: false })),
+    2500,
+    null as { text: string; hasWidget: boolean } | null,
+  );
+  if (hint === null) return "hung";
   if (hint.hasWidget) return true;
   return isPortalChallengeHint({ title, url, body: hint.text });
 }
@@ -123,7 +140,15 @@ async function waitPastCloudflare(
     ),
   );
   const stage = options?.stage || "portal";
-  if (!(await isCloudflareInterstitial(page))) return;
+  const blocked = await isCloudflareInterstitial(page);
+  if (blocked === "hung") {
+    throw new LeadsScrapeError(
+      "CDP_PROBE_TIMEOUT",
+      "new-browser",
+      `Probe anti-bot travou (${stage}) — CDP/title sem resposta.`,
+    );
+  }
+  if (!blocked) return;
 
   const started = Date.now();
   let lastPulse = 0;
@@ -137,17 +162,37 @@ async function waitPastCloudflare(
     );
   };
   pulse("aguardando liberação");
-  await nudgeCloudflareChallenge(page);
+  await withNodeTimeout(nudgeCloudflareChallenge(page).then(() => true), 2500, false);
 
   while (Date.now() - started < timeoutMs) {
-    if (!(await isCloudflareInterstitial(page))) {
-      await page.waitForTimeout(600).catch(() => null);
-      if (!(await isCloudflareInterstitial(page))) return;
+    const still = await isCloudflareInterstitial(page);
+    if (still === "hung") {
+      throw new LeadsScrapeError(
+        "CDP_PROBE_TIMEOUT",
+        "new-browser",
+        `Probe anti-bot travou no meio do desafio (${stage}).`,
+      );
+    }
+    if (!still) {
+      await sleepNode(600);
+      const again = await isCloudflareInterstitial(page);
+      if (again === "hung") {
+        throw new LeadsScrapeError(
+          "CDP_PROBE_TIMEOUT",
+          "new-browser",
+          `Probe anti-bot travou após aparente liberação (${stage}).`,
+        );
+      }
+      if (!again) return;
     }
     pulse("desafio Cloudflare/Turnstile");
-    await nudgeCloudflareChallenge(page);
-    await page.waitForTimeout(1500).catch(() => null);
-    await page.waitForLoadState?.("domcontentloaded").catch(() => null);
+    await withNodeTimeout(nudgeCloudflareChallenge(page).then(() => true), 2500, false);
+    await sleepNode(1500);
+    await withNodeTimeout(
+      page.waitForLoadState?.("domcontentloaded").then(() => true) ?? Promise.resolve(true),
+      2500,
+      false,
+    );
   }
 
   const title = await page.title().catch(() => "");
@@ -200,8 +245,12 @@ async function gotoWithRetry(
       if (kind !== "retry" || attempt >= 3) throw error;
       const alive = await rendererProbe(page, 1500).catch(() => false);
       if (!alive) throw error;
-      await page.waitForLoadState("domcontentloaded").catch(() => null);
-      await page.waitForTimeout(600 * attempt);
+      await withNodeTimeout(
+        page.waitForLoadState("domcontentloaded").then(() => true),
+        2500,
+        false,
+      );
+      await sleepNode(600 * attempt);
     }
   }
   throw lastError;
@@ -2762,10 +2811,25 @@ async function scrapeCasaDosDadosLeadsOnce(
     onProgress?.(message);
   };
   const sessionKeepAlive = setInterval(() => {
-    const elapsed = Math.max(0, Math.round((Date.now() - phaseStartedAt) / 1000));
+    const elapsedMs = Date.now() - phaseStartedAt;
+    const elapsed = Math.max(0, Math.round(elapsedMs / 1000));
     const base = String(sessionPhase || phase).replace(/\s*—\s*\d+s(?:\/\d+s)?\s*$/i, "").trim();
     onProgress?.(`${base} — ${elapsed}s`);
-  }, 10_000);
+    const stallMs = resolveLeadsPhaseStallMs();
+    if (elapsedMs >= stallMs) {
+      console.error(
+        JSON.stringify({
+          event: "LEADS_PHASE_STALL",
+          phase,
+          sessionPhase: base,
+          elapsedSec: elapsed,
+          stallMs,
+          ts: new Date().toISOString(),
+        }),
+      );
+      void releaseJobBrowser(browser, `phase-stall-${phase}-${elapsed}s`);
+    }
+  }, 8_000);
 
   try {
     const chromeUa = resolveCasaDosDadosUserAgent(browser.version());
@@ -3831,13 +3895,18 @@ async function scrapeCasaDosDadosLeadsOnce(
     clearInterval(abortWatch);
     clearInterval(sessionKeepAlive);
     // Sempre fecha o Context (erro em FILTERS/CNAE antes vazava).
+    // CDP morto: close() sem teto prende o job na mesma mensagem por 20+ min.
     if (context) {
-      await context.close().catch(() => undefined);
+      await withNodeTimeout(context.close().then(() => true), 8_000, false);
       context = null;
     }
     // Modo paralelo: cada job fecha o próprio Chromium. Compartilhado (legado) fica vivo.
     if (isDedicatedJobBrowser(browser)) {
-      await releaseJobBrowser(browser, "job-session-end");
+      await withNodeTimeout(
+        releaseJobBrowser(browser, "job-session-end").then(() => true),
+        8_000,
+        false,
+      );
     }
   }
 }
