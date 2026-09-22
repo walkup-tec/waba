@@ -75,9 +75,9 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 const phoneRefreshJobs = new Set<string>();
 
 function resolveMaxConcurrentScrapes(): number {
-  // Evidência: 3 Chromiums → Page crashed / login timeout / SEARCH sem CNPJ.
-  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 2) || 2);
-  return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 2));
+  // 1 Chromium: Cloudflare + Xvfb saturam com 2–3 em paralelo (crash / anti-bot).
+  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 1) || 1);
+  return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 1));
 }
 
 function resolveScrapeStaggerMs(): number {
@@ -2792,7 +2792,7 @@ export class WabaLeadsCnpjService {
       const hardRecovery =
         (isLeadsScrapeError(error) && error.recovery === "new-browser") ||
         (!(error instanceof LeadsScrapeError) &&
-          /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|browser has been closed|has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT|LOGIN_TIMEOUT|locator\.waitFor|input\[name=.email/i.test(
+          /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|browser has been closed|has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT|LOGIN_TIMEOUT|ANTI_BOT|anti-bot|cloudflare|turnstile|just a moment|um momento|locator\.waitFor|input\[name=.email/i.test(
             msg,
           ));
 

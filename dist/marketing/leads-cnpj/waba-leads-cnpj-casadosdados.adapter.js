@@ -34,6 +34,8 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LeadsScrapeError = exports.RendererUnresponsiveError = void 0;
+exports.isPortalChallengeHint = isPortalChallengeHint;
+exports.isPortalAntiBotBlock = isPortalAntiBotBlock;
 exports.classifyGotoFailure = classifyGotoFailure;
 exports.resolvePortalResumePage = resolvePortalResumePage;
 exports.isLeadsScrapeError = isLeadsScrapeError;
@@ -48,48 +50,111 @@ const waba_leads_cnpj_browser_runtime_1 = require("./waba-leads-cnpj-browser-run
 const PORTAL_LOGIN_URL = process.env.CASADOSDADOS_LOGIN_URL || "https://portal.casadosdados.com.br/entrar";
 const PORTAL_SEARCH_URL = process.env.CASADOSDADOS_SEARCH_URL ||
     "https://portal.casadosdados.com.br/plataforma/pesquisa";
+function isPortalChallengeHint(input) {
+    const title = String(input.title || "");
+    const url = String(input.url || "");
+    const body = String(input.body || "").toLowerCase();
+    if (/um momento|just a moment|attention required|access denied|blocked/i.test(title)) {
+        return true;
+    }
+    if (/__cf_chl|cf-challenge|cdn-cgi\/challenge|challenges\.cloudflare|turnstile|cf-browser-verification/i.test(url)) {
+        return true;
+    }
+    return (body.includes("cloudflare") ||
+        body.includes("verificação de segurança") ||
+        body.includes("checking your browser") ||
+        body.includes("just a moment") ||
+        body.includes("um momento") ||
+        body.includes("are you a robot") ||
+        body.includes("attention required") ||
+        body.includes("why have i been blocked") ||
+        body.includes("enable javascript and cookies") ||
+        /\bray id\b/i.test(body));
+}
+function isPortalAntiBotBlock(error) {
+    const msg = error instanceof Error ? error.message : String(error || "");
+    return /ANTI_BOT|anti-bot|um momento|just a moment|cloudflare|turnstile|verifica[cç][aã]o de seguran|attention required|access denied|are you a robot|cf-challenge|__cf_chl|bloqueou o robô/i.test(msg);
+}
 async function isCloudflareInterstitial(page) {
     const title = await page.title().catch(() => "");
-    if (/um momento|just a moment/i.test(title))
-        return true;
     const url = typeof page.url === "function" ? String(page.url() || "") : "";
-    if (/__cf_chl|cf-challenge|cdn-cgi\/challenge/i.test(url))
+    if (isPortalChallengeHint({ title, url }))
         return true;
     const hint = await page
         .evaluate(() => {
-        const text = String(document.body?.innerText || "").slice(0, 800).toLowerCase();
-        return (text.includes("cloudflare") ||
-            text.includes("verificação de segurança") ||
-            text.includes("checking your browser") ||
-            text.includes("just a moment"));
+        const text = String(document.body?.innerText || "").slice(0, 1200);
+        const hasWidget = Boolean(document.querySelector('iframe[src*="challenges.cloudflare"], iframe[src*="turnstile"], #challenge-running, .cf-browser-verification, input[name="cf-turnstile-response"]'));
+        return { text, hasWidget };
     })
-        .catch(() => false);
-    return Boolean(hint);
+        .catch(() => ({ text: "", hasWidget: false }));
+    if (hint.hasWidget)
+        return true;
+    return isPortalChallengeHint({ title, url, body: hint.text });
+}
+async function nudgeCloudflareChallenge(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+page) {
+    try {
+        await page.mouse.move(120 + Math.round(Math.random() * 40), 160 + Math.round(Math.random() * 30));
+        await page.mouse.move(280 + Math.round(Math.random() * 80), 240 + Math.round(Math.random() * 40));
+    }
+    catch {
+        /* ignore */
+    }
+    const frameSel = 'iframe[src*="challenges.cloudflare"], iframe[src*="turnstile"], iframe[title*="Widget"]';
+    const box = await page
+        .locator(frameSel)
+        .first()
+        .boundingBox()
+        .catch(() => null);
+    if (box && box.width > 8 && box.height > 8) {
+        try {
+            await page.mouse.click(box.x + Math.min(28, box.width / 3), box.y + box.height / 2);
+        }
+        catch {
+            /* ignore */
+        }
+    }
 }
 /**
- * Anti-bot do portal (título "Um momento…" / "Just a moment…").
- * Em headless costuma NÃO limpar; com janela (V02) ou Xvfb+headed limpa em <2s.
+ * Anti-bot do portal (título "Um momento…" / Turnstile / "Just a moment…").
+ * Headed (V02) ou Xvfb+headed (Docker) costuma limpar; headless puro não.
+ * Se não passar, lança ANTI_BOT new-browser para o job reabrir o Chromium.
  */
-async function waitPastCloudflare(page, options) {
-    const timeoutMs = Math.max(5000, Math.round(Number(options?.timeoutMs ?? (Number(process.env.CASADOSDADOS_CF_WAIT_MS || 90000) || 90000))));
+async function waitPastCloudflare(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+page, options) {
+    const timeoutMs = Math.max(8000, Math.round(Number(options?.timeoutMs ?? (Number(process.env.CASADOSDADOS_CF_WAIT_MS || 90000) || 90000))));
     const stage = options?.stage || "portal";
     if (!(await isCloudflareInterstitial(page)))
         return;
-    options?.onProgress?.(`Abrindo Portal: verificação anti-bot em andamento (${stage}) — aguardando liberação…`);
-    const cleared = await page
-        .waitForFunction(() => !/um momento|just a moment/i.test(document.title), {
-        timeout: timeoutMs,
-    })
-        .then(() => true)
-        .catch(() => false);
-    await page.waitForTimeout(800);
-    if (cleared && !(await isCloudflareInterstitial(page)))
-        return;
+    const started = Date.now();
+    let lastPulse = 0;
+    const pulse = (detail) => {
+        const elapsed = Math.max(0, Math.round((Date.now() - started) / 1000));
+        const now = Date.now();
+        if (now - lastPulse < 7000 && lastPulse > 0)
+            return;
+        lastPulse = now;
+        options?.onProgress?.(`Abrindo Portal: verificação anti-bot (${stage}) — ${detail} (${elapsed}s/${Math.round(timeoutMs / 1000)}s)…`);
+    };
+    pulse("aguardando liberação");
+    await nudgeCloudflareChallenge(page);
+    while (Date.now() - started < timeoutMs) {
+        if (!(await isCloudflareInterstitial(page))) {
+            await page.waitForTimeout(600).catch(() => null);
+            if (!(await isCloudflareInterstitial(page)))
+                return;
+        }
+        pulse("desafio Cloudflare/Turnstile");
+        await nudgeCloudflareChallenge(page);
+        await page.waitForTimeout(1500).catch(() => null);
+        await page.waitForLoadState?.("domcontentloaded").catch(() => null);
+    }
     const title = await page.title().catch(() => "");
     const url = typeof page.url === "function" ? page.url() : "";
-    throw new Error(`Portal Casa dos Dados bloqueou o robô (anti-bot / "Um momento…"). ` +
-        `No V02 funciona com janela visível; no Docker use Xvfb + Chromium headed (entrypoint). ` +
-        `stage=${stage}; title=${title || "(vazio)"}; url=${String(url).slice(0, 160)}`);
+    throw new LeadsScrapeError("ANTI_BOT", "new-browser", `Portal Casa dos Dados ainda em verificação anti-bot (${stage}). ` +
+        `title=${title || "(vazio)"}; url=${String(url).slice(0, 180)}`);
 }
 /**
  * Evita "Navigation … is interrupted by another navigation" (ex.: pós-login
@@ -100,7 +165,7 @@ function classifyGotoFailure(message) {
     if (/Page crashed|Target crashed|browser has been closed|Target page, context or browser has been closed/i.test(msg)) {
         return "hard-dead";
     }
-    if (/interrupted by another navigation|net::ERR_ABORTED|frame was detached/i.test(msg)) {
+    if (/interrupted by another navigation|net::ERR_ABORTED|frame was detached|ERR_HTTP2|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_NETWORK_CHANGED|ERR_SSL/i.test(msg)) {
         return "retry";
     }
     return "throw";
@@ -423,8 +488,12 @@ function requiresBrowserRecovery(error) {
         return true;
     if (anyErr?.code === "RENDERER_UNRESPONSIVE")
         return true;
+    if (anyErr?.code === "ANTI_BOT")
+        return true;
     if (isSoftScrapeError(error))
         return false;
+    if (isPortalAntiBotBlock(error))
+        return true;
     return isChromiumTargetCrash(error);
 }
 /** Texto da área de resultados (evita serializar document.body inteiro via CDP). */
@@ -2135,8 +2204,16 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         onProgress?.(`${base} — ${elapsed}s`);
     }, 10000);
     try {
+        const chromeUa = (0, waba_leads_cnpj_browser_runtime_1.resolveCasaDosDadosUserAgent)(browser.version());
         const contextOptions = {
             locale: "pt-BR",
+            timezoneId: "America/Sao_Paulo",
+            userAgent: chromeUa,
+            colorScheme: "light",
+            extraHTTPHeaders: {
+                "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Upgrade-Insecure-Requests": "1",
+            },
             // Viewport fixo no Docker/Xvfb — null + maximizado crasha o Chromium.
             viewport: headless || hasXvfb ? { width: 1440, height: 900 } : null,
         };
@@ -2145,7 +2222,29 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         }
         context = await browser.newContext(contextOptions);
         await context.addInitScript(() => {
-            Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+            try {
+                Object.defineProperty(navigator, "webdriver", { get: () => undefined, configurable: true });
+            }
+            catch {
+                /* ignore */
+            }
+            try {
+                Object.defineProperty(navigator, "language", { get: () => "pt-BR", configurable: true });
+                Object.defineProperty(navigator, "languages", {
+                    get: () => ["pt-BR", "pt", "en-US", "en"],
+                    configurable: true,
+                });
+            }
+            catch {
+                /* ignore */
+            }
+            try {
+                const chromeObj = { runtime: {}, loadTimes: () => ({}), csi: () => ({}) };
+                Object.defineProperty(window, "chrome", { get: () => chromeObj, configurable: true });
+            }
+            catch {
+                /* ignore */
+            }
         });
         let page = await context.newPage();
         page.setDefaultTimeout(45000);
@@ -2211,9 +2310,9 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             if (/\/entrar/i.test(pathNow)) {
                 setPhase("LOGIN", "sessão expirou — autenticando…");
                 await loginCasaDosDadosPortal(page, email, password);
-                await waitPastCloudflare(page, { onProgress, stage: "pós-login" });
+                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pós-login" });
                 await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
-                await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
+                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
             }
         };
         let searchResult = { kind: "results", total: null };
@@ -2222,7 +2321,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             // Retomada: NÃO abrir /entrar (travava em LOGIN). Vai direto à pesquisa com cookies.
             setPhase("COPY", `retomada rápida → pág. ${resumeTarget} (storageState; sem CNAE)…`);
             await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
-            await waitPastCloudflare(page, { onProgress, stage: "retomada" });
+            await waitPastCloudflare(page, { onProgress: markPhase, stage: "retomada" });
             await ensureAuthedOnSearch();
             await sleepNode(500);
             try {
@@ -2268,13 +2367,13 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             if (!wantFastResume) {
                 setPhase("LOGIN", "abrindo portal…");
                 await gotoWithNodeBudget(page, PORTAL_LOGIN_URL, "login", 40000);
-                await waitPastCloudflare(page, { onProgress, stage: "login", timeoutMs: 45000 });
+                await waitPastCloudflare(page, { onProgress: markPhase, stage: "login" });
             }
             else {
                 // Já estamos (ou estivemos) em /pesquisa — garantir auth sem /entrar cego.
                 setPhase("LOGIN", "abrindo pesquisa (retomada)…");
                 await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-retomada", 40000);
-                await waitPastCloudflare(page, { onProgress, stage: "pesquisa", timeoutMs: 45000 });
+                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
             }
             const alreadyIn = await page
                 .evaluate(() => /\/plataforma\b/i.test(location.pathname || ""))
@@ -2282,10 +2381,10 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             if (!alreadyIn) {
                 setPhase("LOGIN", "autenticando…");
                 await loginCasaDosDadosPortal(page, email, password);
-                await waitPastCloudflare(page, { onProgress, stage: "pós-login", timeoutMs: 45000 });
+                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pós-login" });
                 setPhase("LOGIN", "autenticado — abrindo pesquisa…");
                 await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-pos-login", 40000);
-                await waitPastCloudflare(page, { onProgress, stage: "pesquisa", timeoutMs: 45000 });
+                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
             }
             else {
                 setPhase("LOGIN", "sessão restaurada (storageState)");
@@ -2301,7 +2400,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             if (!wantFastResume) {
                 setPhase("FILTERS", "abrindo tela de pesquisa…");
                 await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-filtros", 40000);
-                await waitPastCloudflare(page, { onProgress, stage: "pesquisa", timeoutMs: 45000 });
+                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
                 await sleepNode(800);
             }
             setPhase("FILTERS", "aplicando filtros (CNAE, situação, celular)…");

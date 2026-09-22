@@ -77,6 +77,9 @@ export function saveCasaDosDadosStorageState(state: unknown): void {
   }
 }
 
+/** Playwright injeta isso por default — Cloudflare/Turnstile detecta. */
+export const CHROMIUM_IGNORE_DEFAULT_ARGS = ["--enable-automation"];
+
 export function buildChromiumLaunchArgs(opts: {
   headless: boolean;
   hasXvfb: boolean;
@@ -88,15 +91,23 @@ export function buildChromiumLaunchArgs(opts: {
     // Com shm grande (Fase B), preferir /dev/shm real — Playwright doc ainda recomenda IPC/shm.
     ...(useRealShm ? [] : ["--disable-dev-shm-usage"]),
     "--disable-gpu",
-    "--disable-extensions",
     "--mute-audio",
     "--no-first-run",
     "--no-default-browser-check",
-    "--disable-background-networking",
+    "--disable-infobars",
+    "--lang=pt-BR",
+    "--window-size=1440,900",
     "--disable-background-timer-throttling",
     ...(opts.headless || opts.hasXvfb ? [] : ["--start-maximized"]),
   ];
   return args;
+}
+
+export function resolveCasaDosDadosUserAgent(browserVersion: string): string {
+  const major = String(browserVersion || "127")
+    .split(".")[0]
+    .replace(/\D/g, "") || "127";
+  return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
 }
 
 function wireBrowser(b: Browser, label: string) {
@@ -126,6 +137,7 @@ export async function acquireSharedBrowser(opts: {
       headless: launchHeadless,
       slowMo: launchSlowMo,
       args: launchArgs,
+      ignoreDefaultArgs: CHROMIUM_IGNORE_DEFAULT_ARGS,
     });
     dedicatedBrowsers.add(dedicated);
     dedicated.on("disconnected", () => {
@@ -162,6 +174,7 @@ export async function acquireSharedBrowser(opts: {
         server = await pw.chromium.launchServer({
           headless: launchHeadless,
           args: launchArgs,
+          ignoreDefaultArgs: CHROMIUM_IGNORE_DEFAULT_ARGS,
         });
         const endpoint = server.wsEndpoint();
         browser = await pw.chromium.connect(endpoint);
@@ -189,6 +202,7 @@ export async function acquireSharedBrowser(opts: {
       headless: launchHeadless,
       slowMo: launchSlowMo,
       args: launchArgs,
+      ignoreDefaultArgs: CHROMIUM_IGNORE_DEFAULT_ARGS,
     });
     wireBrowser(browser, "launch");
     return browser;

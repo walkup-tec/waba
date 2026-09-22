@@ -36,12 +36,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.CHROMIUM_IGNORE_DEFAULT_ARGS = void 0;
 exports.isDedicatedBrowserMode = isDedicatedBrowserMode;
 exports.isDedicatedJobBrowser = isDedicatedJobBrowser;
 exports.resolveCasaDosDadosStoragePath = resolveCasaDosDadosStoragePath;
 exports.loadCasaDosDadosStorageState = loadCasaDosDadosStorageState;
 exports.saveCasaDosDadosStorageState = saveCasaDosDadosStorageState;
 exports.buildChromiumLaunchArgs = buildChromiumLaunchArgs;
+exports.resolveCasaDosDadosUserAgent = resolveCasaDosDadosUserAgent;
 exports.acquireSharedBrowser = acquireSharedBrowser;
 exports.releaseJobBrowser = releaseJobBrowser;
 exports.releaseSharedBrowser = releaseSharedBrowser;
@@ -114,6 +116,8 @@ function saveCasaDosDadosStorageState(state) {
         console.warn("[Leads PJ] falha ao gravar storageState:", error instanceof Error ? error.message : String(error));
     }
 }
+/** Playwright injeta isso por default — Cloudflare/Turnstile detecta. */
+exports.CHROMIUM_IGNORE_DEFAULT_ARGS = ["--enable-automation"];
 function buildChromiumLaunchArgs(opts) {
     const useRealShm = String(process.env.CASADOSDADOS_USE_DEV_SHM || "").trim() === "1";
     const args = [
@@ -122,15 +126,22 @@ function buildChromiumLaunchArgs(opts) {
         // Com shm grande (Fase B), preferir /dev/shm real — Playwright doc ainda recomenda IPC/shm.
         ...(useRealShm ? [] : ["--disable-dev-shm-usage"]),
         "--disable-gpu",
-        "--disable-extensions",
         "--mute-audio",
         "--no-first-run",
         "--no-default-browser-check",
-        "--disable-background-networking",
+        "--disable-infobars",
+        "--lang=pt-BR",
+        "--window-size=1440,900",
         "--disable-background-timer-throttling",
         ...(opts.headless || opts.hasXvfb ? [] : ["--start-maximized"]),
     ];
     return args;
+}
+function resolveCasaDosDadosUserAgent(browserVersion) {
+    const major = String(browserVersion || "127")
+        .split(".")[0]
+        .replace(/\D/g, "") || "127";
+    return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
 }
 function wireBrowser(b, label) {
     b.on("disconnected", () => {
@@ -154,6 +165,7 @@ async function acquireSharedBrowser(opts) {
             headless: launchHeadless,
             slowMo: launchSlowMo,
             args: launchArgs,
+            ignoreDefaultArgs: exports.CHROMIUM_IGNORE_DEFAULT_ARGS,
         });
         dedicatedBrowsers.add(dedicated);
         dedicated.on("disconnected", () => {
@@ -187,6 +199,7 @@ async function acquireSharedBrowser(opts) {
                 server = await pw.chromium.launchServer({
                     headless: launchHeadless,
                     args: launchArgs,
+                    ignoreDefaultArgs: exports.CHROMIUM_IGNORE_DEFAULT_ARGS,
                 });
                 const endpoint = server.wsEndpoint();
                 browser = await pw.chromium.connect(endpoint);
@@ -209,6 +222,7 @@ async function acquireSharedBrowser(opts) {
             headless: launchHeadless,
             slowMo: launchSlowMo,
             args: launchArgs,
+            ignoreDefaultArgs: exports.CHROMIUM_IGNORE_DEFAULT_ARGS,
         });
         wireBrowser(browser, "launch");
         return browser;

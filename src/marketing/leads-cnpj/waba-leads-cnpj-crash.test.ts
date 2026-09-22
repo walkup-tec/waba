@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 import {
   classifyGotoFailure,
   isChromiumTargetCrash,
+  isPortalAntiBotBlock,
+  isPortalChallengeHint,
 } from "./waba-leads-cnpj-casadosdados.adapter";
+import { resolveCasaDosDadosUserAgent } from "./waba-leads-cnpj-browser-runtime";
 import {
   shouldResumeZeroCopyPortalList,
   shouldStayOnPortalScrapeForThisList,
@@ -33,6 +36,42 @@ describe("Leads PJ Chromium crash", () => {
       true,
     );
     assert.equal(isChromiumTargetCrash(new Error("Timeout 30000ms exceeded")), false);
+  });
+});
+
+describe("Leads PJ anti-bot Cloudflare", () => {
+  it("reconhece desafio Just a moment / Turnstile / Ray ID", () => {
+    assert.equal(isPortalChallengeHint({ title: "Just a moment..." }), true);
+    assert.equal(isPortalChallengeHint({ title: "Um momento…" }), true);
+    assert.equal(
+      isPortalChallengeHint({ url: "https://portal.casadosdados.com.br/cdn-cgi/challenge-platform" }),
+      true,
+    );
+    assert.equal(
+      isPortalChallengeHint({ body: "Enable JavaScript and cookies to continue. Ray ID: abc" }),
+      true,
+    );
+    assert.equal(isPortalChallengeHint({ title: "Pesquisa", url: "/plataforma/pesquisa" }), false);
+  });
+
+  it("trata bloqueio anti-bot como recover de Chromium, não falha permanente", () => {
+    assert.equal(
+      isPortalAntiBotBlock(
+        new Error(
+          'Portal Casa dos Dados ainda em verificação anti-bot (login). title=Just a moment...; url=https://portal.casadosdados.com.br/entrar',
+        ),
+      ),
+      true,
+    );
+    assert.equal(isPortalAntiBotBlock(new Error("ANTI_BOT: turnstile")), true);
+    assert.equal(isPortalAntiBotBlock(new Error("Timeout 30000ms exceeded")), false);
+  });
+
+  it("monta User-Agent Chrome alinhado à versão do Chromium", () => {
+    assert.match(
+      resolveCasaDosDadosUserAgent("127.0.6533.17"),
+      /Chrome\/127\.0\.0\.0 Safari\/537\.36/,
+    );
   });
 });
 
