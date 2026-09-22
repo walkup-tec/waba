@@ -342,6 +342,7 @@ function listPushAlertsForAuth(auth) {
         : null;
     return pushRepository
         .listMessages(100)
+        .filter((row) => !(0, waba_push_repository_1.isRetiredSystemPush)(row))
         .filter((row) => row.status === "sent" || row.status === "partial")
         .filter((row) => {
         const dismissed = new Set((row.dismissedBy || []).map(normalizeEmail));

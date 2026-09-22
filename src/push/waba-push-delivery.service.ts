@@ -5,7 +5,7 @@ import { wabaMailService } from "../mail/waba-mail.service";
 import { buildPushAnnouncementTemplate } from "../mail/waba-mail.templates";
 import { sendPushToWhatsAppCommunity } from "./waba-push-community.service";
 import { sanitizeReviewedPushText } from "./waba-push-openai.service";
-import { WabaPushRepository } from "./waba-push.repository";
+import { isRetiredSystemPush, WabaPushRepository } from "./waba-push.repository";
 import type {
   WabaPushAlertView,
   WabaPushAudience,
@@ -445,6 +445,7 @@ export function listPushAlertsForAuth(auth: WabaRequestAuth): WabaPushAlertView[
 
   return pushRepository
     .listMessages(100)
+    .filter((row) => !isRetiredSystemPush(row))
     .filter((row) => row.status === "sent" || row.status === "partial")
     .filter((row) => {
       const dismissed = new Set((row.dismissedBy || []).map(normalizeEmail));

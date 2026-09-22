@@ -4,6 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaPushRepository = void 0;
+exports.normalizePushTitleKey = normalizePushTitleKey;
+exports.isRetiredSystemPush = isRetiredSystemPush;
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const node_crypto_1 = __importDefault(require("node:crypto"));
@@ -18,6 +20,27 @@ const DEFAULT_CONFIG = {
     updatedAt: new Date().toISOString(),
 };
 const emptyStore = () => ({ version: 1, messages: [] });
+function normalizePushTitleKey(title) {
+    return String(title || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+}
+const RETIRED_SYSTEM_PUSH_TITLES = new Set(["relatorios de campanha", "plataforma meta"]);
+/** Comunicados antigos que não devem mais aparecer no sininho nem no histórico. */
+function isRetiredSystemPush(message) {
+    const titleKey = normalizePushTitleKey(message.title || "");
+    if (RETIRED_SYSTEM_PUSH_TITLES.has(titleKey))
+        return true;
+    const body = `${message.reviewedText || ""} ${message.originalText || ""}`;
+    if (/relat[oó]rio de sua campanha foi atualizado/i.test(body))
+        return true;
+    if (/31 de julho[\s\S]{0,400}plataforma meta/i.test(body))
+        return true;
+    return false;
+}
 class WabaPushRepository {
     readMessages() {
         const filePath = (0, data_path_1.resolveDataFile)(MESSAGES_FILE);
@@ -30,6 +53,17 @@ class WabaPushRepository {
             const parsed = JSON.parse((0, node_fs_1.readFileSync)(filePath, "utf8"));
             if (parsed?.version !== 1 || !Array.isArray(parsed.messages))
                 return emptyStore();
+            const messages = parsed.messages.filter((row) => !isRetiredSystemPush(row));
+            if (messages.length !== parsed.messages.length) {
+                const next = { version: 1, messages };
+                try {
+                    this.writeMessages(next);
+                }
+                catch {
+                    /* filtro em memória se o disco falhar */
+                }
+                return next;
+            }
             return parsed;
         }
         catch {

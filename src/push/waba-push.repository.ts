@@ -25,6 +25,31 @@ type MessageStore = {
 
 const emptyStore = (): MessageStore => ({ version: 1, messages: [] });
 
+export function normalizePushTitleKey(title: string): string {
+  return String(title || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+const RETIRED_SYSTEM_PUSH_TITLES = new Set(["relatorios de campanha", "plataforma meta"]);
+
+/** Comunicados antigos que não devem mais aparecer no sininho nem no histórico. */
+export function isRetiredSystemPush(message: {
+  title?: string;
+  reviewedText?: string;
+  originalText?: string;
+}): boolean {
+  const titleKey = normalizePushTitleKey(message.title || "");
+  if (RETIRED_SYSTEM_PUSH_TITLES.has(titleKey)) return true;
+  const body = `${message.reviewedText || ""} ${message.originalText || ""}`;
+  if (/relat[oó]rio de sua campanha foi atualizado/i.test(body)) return true;
+  if (/31 de julho[\s\S]{0,400}plataforma meta/i.test(body)) return true;
+  return false;
+}
+
 export class WabaPushRepository {
   private readMessages(): MessageStore {
     const filePath = resolveDataFile(MESSAGES_FILE);
@@ -34,6 +59,16 @@ export class WabaPushRepository {
     try {
       const parsed = JSON.parse(readFileSync(filePath, "utf8")) as MessageStore;
       if (parsed?.version !== 1 || !Array.isArray(parsed.messages)) return emptyStore();
+      const messages = parsed.messages.filter((row) => !isRetiredSystemPush(row));
+      if (messages.length !== parsed.messages.length) {
+        const next: MessageStore = { version: 1, messages };
+        try {
+          this.writeMessages(next);
+        } catch {
+          /* filtro em memória se o disco falhar */
+        }
+        return next;
+      }
       return parsed;
     } catch {
       return emptyStore();
