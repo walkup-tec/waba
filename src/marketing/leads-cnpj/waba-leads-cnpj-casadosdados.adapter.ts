@@ -68,6 +68,33 @@ export function resolveLeadsPhaseStallMs(): number {
   return Math.max(30_000, Math.min(180_000, Number.isFinite(raw) ? raw : 90_000));
 }
 
+/**
+ * Aborta a Promise da sessão mesmo quando o CDP/Playwright não rejeita.
+ * Matar o Chromium sozinho não desprende `page.goto` / `page.title` zumbi.
+ */
+export function createSessionAbortGate(): {
+  promise: Promise<never>;
+  abort: (error: Error) => boolean;
+  aborted: () => boolean;
+} {
+  let aborted = false;
+  let rejectFn: (error: Error) => void = () => {};
+  const promise = new Promise<never>((_, reject) => {
+    rejectFn = reject;
+  });
+  void promise.catch(() => undefined);
+  return {
+    promise,
+    abort(error: Error) {
+      if (aborted) return false;
+      aborted = true;
+      rejectFn(error);
+      return true;
+    },
+    aborted: () => aborted,
+  };
+}
+
 async function isCloudflareInterstitial(page: {
   title: () => Promise<string>;
   evaluate: <T>(fn: () => T) => Promise<T>;
@@ -195,7 +222,7 @@ async function waitPastCloudflare(
     );
   }
 
-  const title = await page.title().catch(() => "");
+  const title = await withNodeTimeout(page.title().catch(() => ""), 2500, "");
   const url = typeof page.url === "function" ? page.url() : "";
   throw new LeadsScrapeError(
     "ANTI_BOT",
@@ -375,7 +402,7 @@ async function loginCasaDosDadosPortal(
       .waitForURL((url: URL) => !/\/entrar\/?$/i.test(url.pathname), { timeout: 45000 })
       .catch(() => null);
     await page.waitForLoadState("domcontentloaded").catch(() => null);
-    await page.waitForTimeout(400);
+    await sleepNode(400);
 
     const afterUrl = String(page.url?.() || "");
     if (/\/entrar\/?$/i.test(new URL(afterUrl || "https://portal.casadosdados.com.br/entrar").pathname)) {
@@ -718,7 +745,7 @@ async function dismissBlockingPortalOverlays(page: PageLike) {
 
 export function isChromiumTargetCrash(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error || "");
-  return /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|has been closed|browser has been closed|Target page, context or browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(
+  return /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|has been closed|browser has been closed|Target page, context or browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT|PHASE_STALL/i.test(
     msg,
   );
 }
@@ -752,12 +779,12 @@ async function evaluateOrReconnect<T>(
   fn: () => T | Promise<T>,
 ): Promise<T> {
   try {
-    return await page.evaluate(fn);
+    return await cdpOrReconnect(page.evaluate(fn), 8_000, label);
   } catch (error) {
-    if (isChromiumTargetCrash(error)) {
+    if (isLeadsScrapeError(error) || isChromiumTargetCrash(error)) {
       const msg = error instanceof Error ? error.message : String(error);
       throw new LeadsScrapeError(
-        "TARGET_CRASHED",
+        isLeadsScrapeError(error) ? error.code : "TARGET_CRASHED",
         "new-browser",
         `${label}: ${msg.slice(0, 220)}`,
       );
@@ -1925,7 +1952,7 @@ async function findCnaeSearchInput(page: PageLike, timeoutMs = 10000) {
       if (!(await loc.isVisible().catch(() => false))) continue;
       return loc;
     }
-    await page.waitForTimeout(250);
+    await sleepNode(250);
   }
   for (const sel of candidates) {
     const loc = page.locator(sel).last();
@@ -1955,7 +1982,7 @@ async function tryOpenCnaePicker(page: PageLike) {
     if (!(await el.isVisible().catch(() => false))) continue;
     await el.scrollIntoViewIfNeeded().catch(() => undefined);
     await el.click({ timeout: 8000, force: true }).catch(() => undefined);
-    await page.waitForTimeout(500);
+    await sleepNode(500);
     const search = await findCnaeSearchInput(page, 2500);
     if (search) return true;
   }
@@ -2777,7 +2804,7 @@ async function scrapeCasaDosDadosLeadsOnce(
     options?.storageState ?? loadCasaDosDadosStorageState() ?? undefined;
 
   let browser;
-  let context: import("playwright").BrowserContext | null = null;
+  const sessionRef: { ctx: import("playwright").BrowserContext | null } = { ctx: null };
   try {
     browser = await acquireSharedBrowser({ headless, slowMo, hasXvfb });
   } catch (error) {
@@ -2798,10 +2825,11 @@ async function scrapeCasaDosDadosLeadsOnce(
   const resumeFromPageLog = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
 
   /** Fecha Chromium só se shouldAbort (exclusão do usuário) — não por demora. */
+  const sessionAbort = createSessionAbortGate();
   const abortWatch = setInterval(() => {
     if (!options?.shouldAbort?.()) return;
     console.error(`[Leads PJ] SCRAPE_ABORT_CLOSE page=${resumeFromPageLog}`);
-    void releaseJobBrowser(browser, "user-abort");
+    void withNodeTimeout(releaseJobBrowser(browser, "user-abort").then(() => true), 8_000, false);
   }, 4000);
 
   /** Heartbeat = tempo na fase; NÃO fingir progresso. */
@@ -2817,6 +2845,12 @@ async function scrapeCasaDosDadosLeadsOnce(
     onProgress?.(`${base} — ${elapsed}s`);
     const stallMs = resolveLeadsPhaseStallMs();
     if (elapsedMs >= stallMs) {
+      const stallErr = new LeadsScrapeError(
+        "PHASE_STALL",
+        "new-browser",
+        `${base || phase} preso ${elapsed}s sem avanço da tela — recarregando Chromium.`,
+      );
+      if (!sessionAbort.abort(stallErr)) return;
       console.error(
         JSON.stringify({
           event: "LEADS_PHASE_STALL",
@@ -2827,11 +2861,16 @@ async function scrapeCasaDosDadosLeadsOnce(
           ts: new Date().toISOString(),
         }),
       );
-      void releaseJobBrowser(browser, `phase-stall-${phase}-${elapsed}s`);
+      void withNodeTimeout(
+        releaseJobBrowser(browser, `phase-stall-${phase}-${elapsed}s`).then(() => true),
+        8_000,
+        false,
+      );
     }
   }, 8_000);
 
   try {
+    const runSession = async (): Promise<ScrapeCasaDosDadosResult> => {
     const chromeUa = resolveCasaDosDadosUserAgent(browser.version());
     const contextOptions: Record<string, unknown> = {
       locale: "pt-BR",
@@ -2848,8 +2887,9 @@ async function scrapeCasaDosDadosLeadsOnce(
     if (effectiveStorage) {
       contextOptions.storageState = effectiveStorage;
     }
-    context = await browser.newContext(contextOptions);
-    await context.addInitScript(() => {
+    const sessionContext = await browser.newContext(contextOptions);
+    sessionRef.ctx = sessionContext;
+    await sessionContext.addInitScript(() => {
       try {
         Object.defineProperty(navigator, "webdriver", { get: () => undefined, configurable: true });
       } catch {
@@ -2871,7 +2911,7 @@ async function scrapeCasaDosDadosLeadsOnce(
         /* ignore */
       }
     });
-    let page = await context.newPage();
+    let page = await sessionContext.newPage();
     page.setDefaultTimeout(45000);
     let pageCrashed = false;
     page.on("crash", () => {
@@ -2890,7 +2930,7 @@ async function scrapeCasaDosDadosLeadsOnce(
       } catch {
         /* ignore */
       }
-      page = await context!.newPage();
+      page = await sessionContext.newPage();
       page.setDefaultTimeout(45000);
       pageCrashed = false;
       page.on("crash", () => {
@@ -2935,14 +2975,16 @@ async function scrapeCasaDosDadosLeadsOnce(
     });
 
     const ensureAuthedOnSearch = async (): Promise<void> => {
-      const pathNow = await page
-        .evaluate(() => String(location.pathname || ""))
-        .catch(() => "");
-      if (/\/entrar/i.test(pathNow)) {
+      const pathNow = await withNodeTimeout(
+        page.evaluate(() => String(location.pathname || "")).catch(() => ""),
+        2500,
+        "",
+      );
+      if (/\/entrar/i.test(pathNow || "")) {
         setPhase("LOGIN", "sessão expirou — autenticando…");
         await loginCasaDosDadosPortal(page, email, password);
         await waitPastCloudflare(page, { onProgress: markPhase, stage: "pós-login" });
-        await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
+        await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-reauth", 40_000);
         await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
       }
     };
@@ -2956,13 +2998,13 @@ async function scrapeCasaDosDadosLeadsOnce(
         "COPY",
         `retomada rápida → pág. ${resumeTarget} (storageState; sem CNAE)…`,
       );
-      await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
+      await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-retomada-rapida", 40_000);
       await waitPastCloudflare(page, { onProgress: markPhase, stage: "retomada" });
       await ensureAuthedOnSearch();
       await sleepNode(500);
 
       try {
-        const state = await context!.storageState();
+        const state = await sessionContext.storageState();
         saveCasaDosDadosStorageState(state);
         await options?.onStorageState?.(state);
       } catch {
@@ -3031,9 +3073,11 @@ async function scrapeCasaDosDadosLeadsOnce(
         await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
       }
 
-      const alreadyIn = await page
-        .evaluate(() => /\/plataforma\b/i.test(location.pathname || ""))
-        .catch(() => false);
+      const alreadyIn = await withNodeTimeout(
+        page.evaluate(() => /\/plataforma\b/i.test(location.pathname || "")).catch(() => false),
+        2500,
+        false,
+      );
       if (!alreadyIn) {
         setPhase("LOGIN", "autenticando…");
         await loginCasaDosDadosPortal(page, email, password);
@@ -3046,7 +3090,7 @@ async function scrapeCasaDosDadosLeadsOnce(
       }
 
       try {
-        const state = await context!.storageState();
+        const state = await sessionContext.storageState();
         saveCasaDosDadosStorageState(state);
         await options?.onStorageState?.(state);
       } catch {
@@ -3167,8 +3211,8 @@ async function scrapeCasaDosDadosLeadsOnce(
       }
       if (searchResult.kind === "empty") {
         setPhase("DONE", "pesquisa sem resultados");
-        await context!.close().catch(() => undefined);
-        context = null;
+        await withNodeTimeout(sessionContext.close().then(() => true), 8_000, false);
+        sessionRef.ctx = null;
         return { leads: [], scrapeCompleted: true, doneReason: "SEARCH_EMPTY" };
       }
     }
@@ -3595,8 +3639,8 @@ async function scrapeCasaDosDadosLeadsOnce(
           ? `Copiando: checkpoint página ${startPage} além do teto da UI (${portalUiMaxPage}) — raspagem via portal encerrada; pool já arquivado será usado.`
           : `Copiando: checkpoint página ${startPage} além do total (${pagesToFetch}) — sessão sem páginas novas.`,
       );
-      await context!.close().catch(() => undefined);
-      context = null;
+      await withNodeTimeout(sessionContext.close().then(() => true), 8_000, false);
+      sessionRef.ctx = null;
       return {
         leads: [],
         scrapeCompleted: true,
@@ -3868,8 +3912,8 @@ async function scrapeCasaDosDadosLeadsOnce(
       scrapeCompleted = false;
     }
 
-    await context!.close().catch(() => undefined);
-    context = null;
+    await withNodeTimeout(sessionContext.close().then(() => true), 8_000, false);
+    sessionRef.ctx = null;
     // Retomada (startPage>1) que não leu nenhum card NÃO é sucesso — senão o service
     // limpa o checkpoint e enriquece só o pool parcial (incidente Corbans: 140 de ~8070).
     if (!collected.size) {
@@ -3891,14 +3935,19 @@ async function scrapeCasaDosDadosLeadsOnce(
       scrapeCompleted,
       doneReason,
     };
+    };
+    const running = runSession();
+    void running.catch(() => undefined);
+    return await Promise.race([running, sessionAbort.promise]);
   } finally {
     clearInterval(abortWatch);
     clearInterval(sessionKeepAlive);
     // Sempre fecha o Context (erro em FILTERS/CNAE antes vazava).
     // CDP morto: close() sem teto prende o job na mesma mensagem por 20+ min.
-    if (context) {
-      await withNodeTimeout(context.close().then(() => true), 8_000, false);
-      context = null;
+    const ctxToClose = sessionRef.ctx;
+    sessionRef.ctx = null;
+    if (ctxToClose) {
+      await withNodeTimeout(ctxToClose.close().then(() => true), 8_000, false);
     }
     // Modo paralelo: cada job fecha o próprio Chromium. Compartilhado (legado) fica vivo.
     if (isDedicatedJobBrowser(browser)) {

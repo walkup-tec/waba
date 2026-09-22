@@ -38,6 +38,7 @@ exports.isPortalChallengeHint = isPortalChallengeHint;
 exports.isPortalAntiBotBlock = isPortalAntiBotBlock;
 exports.isKeepaliveProgressMessage = isKeepaliveProgressMessage;
 exports.resolveLeadsPhaseStallMs = resolveLeadsPhaseStallMs;
+exports.createSessionAbortGate = createSessionAbortGate;
 exports.classifyGotoFailure = classifyGotoFailure;
 exports.resolvePortalResumePage = resolvePortalResumePage;
 exports.isLeadsScrapeError = isLeadsScrapeError;
@@ -85,6 +86,29 @@ function isKeepaliveProgressMessage(message) {
 function resolveLeadsPhaseStallMs() {
     const raw = Math.round(Number(process.env.CASADOSDADOS_PHASE_STALL_MS || 90000) || 90000);
     return Math.max(30000, Math.min(180000, Number.isFinite(raw) ? raw : 90000));
+}
+/**
+ * Aborta a Promise da sessão mesmo quando o CDP/Playwright não rejeita.
+ * Matar o Chromium sozinho não desprende `page.goto` / `page.title` zumbi.
+ */
+function createSessionAbortGate() {
+    let aborted = false;
+    let rejectFn = () => { };
+    const promise = new Promise((_, reject) => {
+        rejectFn = reject;
+    });
+    void promise.catch(() => undefined);
+    return {
+        promise,
+        abort(error) {
+            if (aborted)
+                return false;
+            aborted = true;
+            rejectFn(error);
+            return true;
+        },
+        aborted: () => aborted,
+    };
 }
 async function isCloudflareInterstitial(page) {
     const title = await withNodeTimeout(page.title().catch(() => ""), 2500, null);
@@ -178,7 +202,7 @@ page, options) {
         await sleepNode(1500);
         await withNodeTimeout(page.waitForLoadState?.("domcontentloaded").then(() => true) ?? Promise.resolve(true), 2500, false);
     }
-    const title = await page.title().catch(() => "");
+    const title = await withNodeTimeout(page.title().catch(() => ""), 2500, "");
     const url = typeof page.url === "function" ? page.url() : "";
     throw new LeadsScrapeError("ANTI_BOT", "new-browser", `Portal Casa dos Dados ainda em verificação anti-bot (${stage}). ` +
         `title=${title || "(vazio)"}; url=${String(url).slice(0, 180)}`);
@@ -316,7 +340,7 @@ page, email, password) {
             .waitForURL((url) => !/\/entrar\/?$/i.test(url.pathname), { timeout: 45000 })
             .catch(() => null);
         await page.waitForLoadState("domcontentloaded").catch(() => null);
-        await page.waitForTimeout(400);
+        await sleepNode(400);
         const afterUrl = String(page.url?.() || "");
         if (/\/entrar\/?$/i.test(new URL(afterUrl || "https://portal.casadosdados.com.br/entrar").pathname)) {
             const tip = await page
@@ -503,7 +527,7 @@ async function dismissBlockingPortalOverlays(page) {
 }
 function isChromiumTargetCrash(error) {
     const msg = error instanceof Error ? error.message : String(error || "");
-    return /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|has been closed|browser has been closed|Target page, context or browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(msg);
+    return /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|has been closed|browser has been closed|Target page, context or browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT|PHASE_STALL/i.test(msg);
 }
 function requiresBrowserRecovery(error) {
     if (error instanceof LeadsScrapeError)
@@ -534,12 +558,12 @@ async function readResultsSampleText(page, maxChars = 12000) {
 }
 async function evaluateOrReconnect(page, label, fn) {
     try {
-        return await page.evaluate(fn);
+        return await cdpOrReconnect(page.evaluate(fn), 8000, label);
     }
     catch (error) {
-        if (isChromiumTargetCrash(error)) {
+        if (isLeadsScrapeError(error) || isChromiumTargetCrash(error)) {
             const msg = error instanceof Error ? error.message : String(error);
-            throw new LeadsScrapeError("TARGET_CRASHED", "new-browser", `${label}: ${msg.slice(0, 220)}`);
+            throw new LeadsScrapeError(isLeadsScrapeError(error) ? error.code : "TARGET_CRASHED", "new-browser", `${label}: ${msg.slice(0, 220)}`);
         }
         throw error;
     }
@@ -1514,7 +1538,7 @@ async function findCnaeSearchInput(page, timeoutMs = 10000) {
                 continue;
             return loc;
         }
-        await page.waitForTimeout(250);
+        await sleepNode(250);
     }
     for (const sel of candidates) {
         const loc = page.locator(sel).last();
@@ -1546,7 +1570,7 @@ async function tryOpenCnaePicker(page) {
             continue;
         await el.scrollIntoViewIfNeeded().catch(() => undefined);
         await el.click({ timeout: 8000, force: true }).catch(() => undefined);
-        await page.waitForTimeout(500);
+        await sleepNode(500);
         const search = await findCnaeSearchInput(page, 2500);
         if (search)
             return true;
@@ -2196,7 +2220,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
     // Persistência: se o caller não passou storageState, usa disco.
     const effectiveStorage = options?.storageState ?? (0, waba_leads_cnpj_browser_runtime_1.loadCasaDosDadosStorageState)() ?? undefined;
     let browser;
-    let context = null;
+    const sessionRef = { ctx: null };
     try {
         browser = await (0, waba_leads_cnpj_browser_runtime_1.acquireSharedBrowser)({ headless, slowMo, hasXvfb });
     }
@@ -2213,11 +2237,12 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
     }
     const resumeFromPageLog = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
     /** Fecha Chromium só se shouldAbort (exclusão do usuário) — não por demora. */
+    const sessionAbort = createSessionAbortGate();
     const abortWatch = setInterval(() => {
         if (!options?.shouldAbort?.())
             return;
         console.error(`[Leads PJ] SCRAPE_ABORT_CLOSE page=${resumeFromPageLog}`);
-        void (0, waba_leads_cnpj_browser_runtime_1.releaseJobBrowser)(browser, "user-abort");
+        void withNodeTimeout((0, waba_leads_cnpj_browser_runtime_1.releaseJobBrowser)(browser, "user-abort").then(() => true), 8000, false);
     }, 4000);
     /** Heartbeat = tempo na fase; NÃO fingir progresso. */
     const markPhase = (message) => {
@@ -2232,6 +2257,9 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         onProgress?.(`${base} — ${elapsed}s`);
         const stallMs = resolveLeadsPhaseStallMs();
         if (elapsedMs >= stallMs) {
+            const stallErr = new LeadsScrapeError("PHASE_STALL", "new-browser", `${base || phase} preso ${elapsed}s sem avanço da tela — recarregando Chromium.`);
+            if (!sessionAbort.abort(stallErr))
+                return;
             console.error(JSON.stringify({
                 event: "LEADS_PHASE_STALL",
                 phase,
@@ -2240,74 +2268,57 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                 stallMs,
                 ts: new Date().toISOString(),
             }));
-            void (0, waba_leads_cnpj_browser_runtime_1.releaseJobBrowser)(browser, `phase-stall-${phase}-${elapsed}s`);
+            void withNodeTimeout((0, waba_leads_cnpj_browser_runtime_1.releaseJobBrowser)(browser, `phase-stall-${phase}-${elapsed}s`).then(() => true), 8000, false);
         }
     }, 8000);
     try {
-        const chromeUa = (0, waba_leads_cnpj_browser_runtime_1.resolveCasaDosDadosUserAgent)(browser.version());
-        const contextOptions = {
-            locale: "pt-BR",
-            timezoneId: "America/Sao_Paulo",
-            userAgent: chromeUa,
-            colorScheme: "light",
-            extraHTTPHeaders: {
-                "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Upgrade-Insecure-Requests": "1",
-            },
-            // Viewport fixo no Docker/Xvfb — null + maximizado crasha o Chromium.
-            viewport: headless || hasXvfb ? { width: 1440, height: 900 } : null,
-        };
-        if (effectiveStorage) {
-            contextOptions.storageState = effectiveStorage;
-        }
-        context = await browser.newContext(contextOptions);
-        await context.addInitScript(() => {
-            try {
-                Object.defineProperty(navigator, "webdriver", { get: () => undefined, configurable: true });
+        const runSession = async () => {
+            const chromeUa = (0, waba_leads_cnpj_browser_runtime_1.resolveCasaDosDadosUserAgent)(browser.version());
+            const contextOptions = {
+                locale: "pt-BR",
+                timezoneId: "America/Sao_Paulo",
+                userAgent: chromeUa,
+                colorScheme: "light",
+                extraHTTPHeaders: {
+                    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Upgrade-Insecure-Requests": "1",
+                },
+                // Viewport fixo no Docker/Xvfb — null + maximizado crasha o Chromium.
+                viewport: headless || hasXvfb ? { width: 1440, height: 900 } : null,
+            };
+            if (effectiveStorage) {
+                contextOptions.storageState = effectiveStorage;
             }
-            catch {
-                /* ignore */
-            }
-            try {
-                Object.defineProperty(navigator, "language", { get: () => "pt-BR", configurable: true });
-                Object.defineProperty(navigator, "languages", {
-                    get: () => ["pt-BR", "pt", "en-US", "en"],
-                    configurable: true,
-                });
-            }
-            catch {
-                /* ignore */
-            }
-            try {
-                const chromeObj = { runtime: {}, loadTimes: () => ({}), csi: () => ({}) };
-                Object.defineProperty(window, "chrome", { get: () => chromeObj, configurable: true });
-            }
-            catch {
-                /* ignore */
-            }
-        });
-        let page = await context.newPage();
-        page.setDefaultTimeout(45000);
-        let pageCrashed = false;
-        page.on("crash", () => {
-            pageCrashed = true;
-            console.error(`[Leads PJ] PAGE_CRASH page=${resumeFromPageLog}`);
-        });
-        if (!headless) {
-            await page.bringToFront().catch(() => undefined);
-        }
-        /** Nível 4: nova Page no mesmo Context (renderer morto, browser vivo). */
-        const recreatePageSameContext = async (reason) => {
-            markPhase(`COPY: recover nível4 — nova Page (mesmo context): ${reason}`);
-            try {
-                await page.close().catch(() => undefined);
-            }
-            catch {
-                /* ignore */
-            }
-            page = await context.newPage();
+            const sessionContext = await browser.newContext(contextOptions);
+            sessionRef.ctx = sessionContext;
+            await sessionContext.addInitScript(() => {
+                try {
+                    Object.defineProperty(navigator, "webdriver", { get: () => undefined, configurable: true });
+                }
+                catch {
+                    /* ignore */
+                }
+                try {
+                    Object.defineProperty(navigator, "language", { get: () => "pt-BR", configurable: true });
+                    Object.defineProperty(navigator, "languages", {
+                        get: () => ["pt-BR", "pt", "en-US", "en"],
+                        configurable: true,
+                    });
+                }
+                catch {
+                    /* ignore */
+                }
+                try {
+                    const chromeObj = { runtime: {}, loadTimes: () => ({}), csi: () => ({}) };
+                    Object.defineProperty(window, "chrome", { get: () => chromeObj, configurable: true });
+                }
+                catch {
+                    /* ignore */
+                }
+            });
+            let page = await sessionContext.newPage();
             page.setDefaultTimeout(45000);
-            pageCrashed = false;
+            let pageCrashed = false;
             page.on("crash", () => {
                 pageCrashed = true;
                 console.error(`[Leads PJ] PAGE_CRASH page=${resumeFromPageLog}`);
@@ -2315,792 +2326,812 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             if (!headless) {
                 await page.bringToFront().catch(() => undefined);
             }
-        };
-        const resumeFloor = Math.max(1, Math.round(Number(options?.resumeFloorPage || 0) || 0) || 1);
-        const resumeTargetRaw = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
-        const resumeTarget = resolvePortalResumePage(resumeTargetRaw, resumeFloor);
-        if (resumeTarget !== resumeTargetRaw) {
-            markPhase(`COPY: alvo pág. ${resumeTargetRaw} ajustado para ${resumeTarget} (piso pool ${resumeFloor})…`);
-        }
-        const wantFastResume = resumeTarget > 1 && Boolean(effectiveStorage);
-        // Captura total da API (se houver). Anexar cedo — vale para retomada e pesquisa nova.
-        let interceptedTotal = null;
-        page.on("response", async (res) => {
-            try {
-                const url = res.url();
-                if (!/cnpj\/pesquisa|pesquisa/i.test(url))
-                    return;
-                const ct = String(res.headers()["content-type"] || "");
-                if (!ct.includes("json"))
-                    return;
-                const json = (await res.json().catch(() => null));
-                if (!json)
-                    return;
-                if (typeof json.total === "number")
-                    interceptedTotal = json.total;
-            }
-            catch {
-                /* ignore */
-            }
-        });
-        const ensureAuthedOnSearch = async () => {
-            const pathNow = await page
-                .evaluate(() => String(location.pathname || ""))
-                .catch(() => "");
-            if (/\/entrar/i.test(pathNow)) {
-                setPhase("LOGIN", "sessão expirou — autenticando…");
-                await loginCasaDosDadosPortal(page, email, password);
-                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pós-login" });
-                await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
-                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
-            }
-        };
-        let searchResult = { kind: "results", total: null };
-        let usedFastResume = false;
-        if (wantFastResume) {
-            // Retomada: NÃO abrir /entrar (travava em LOGIN). Vai direto à pesquisa com cookies.
-            setPhase("COPY", `retomada rápida → pág. ${resumeTarget} (storageState; sem CNAE)…`);
-            await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
-            await waitPastCloudflare(page, { onProgress: markPhase, stage: "retomada" });
-            await ensureAuthedOnSearch();
-            await sleepNode(500);
-            try {
-                const state = await context.storageState();
-                (0, waba_leads_cnpj_browser_runtime_1.saveCasaDosDadosStorageState)(state);
-                await options?.onStorageState?.(state);
-            }
-            catch {
-                /* ignore */
-            }
-            let lite = await withNodeTimeout(probeSearchAckLite(page), 4000, null);
-            if (!(lite && (lite.pagination || lite.cnpjNodes > 0))) {
-                // Sessão pode manter filtros sem resultados pintados — 1 disparo de Pesquisar.
-                markPhase("COPY: retomada — disparando Pesquisar (filtros da sessão)…");
+            /** Nível 4: nova Page no mesmo Context (renderer morto, browser vivo). */
+            const recreatePageSameContext = async (reason) => {
+                markPhase(`COPY: recover nível4 — nova Page (mesmo context): ${reason}`);
                 try {
-                    await dispatchSearchWithAck(page, (msg) => {
-                        sessionPhase = msg;
-                        onProgress?.(msg);
-                    });
-                    await waitForSearchTransition(page, Math.min(60000, Math.max(15000, Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90000) || 90000))), (msg) => {
-                        sessionPhase = msg;
-                        onProgress?.(msg);
-                    }, options?.shouldAbort);
+                    await page.close().catch(() => undefined);
                 }
-                catch (resumeSearchErr) {
-                    markPhase(`COPY: retomada Pesquisar falhou — ${resumeSearchErr instanceof Error
-                        ? resumeSearchErr.message.slice(0, 80)
-                        : "erro"}; caindo no fluxo completo…`);
+                catch {
+                    /* ignore */
                 }
-                lite = await withNodeTimeout(probeSearchAckLite(page), 4000, null);
-            }
-            if (lite && (lite.pagination || lite.cnpjNodes > 0)) {
-                usedFastResume = true;
-                searchResult = { kind: "results", total: null };
-                markPhase(`COPY: sessão OK (pag=${lite.pagination || "?"} cnpj=${lite.cnpjNodes}) — pulando login/CNAE; alvo pág. ${resumeTarget}`);
-            }
-            else {
-                markPhase("COPY: retomada sem resultados na sessão — reaplicando filtros (fallback)…");
-            }
-        }
-        if (!usedFastResume) {
-            // Fluxo completo: login só se necessário; filtros + pesquisa.
-            if (!wantFastResume) {
-                setPhase("LOGIN", "abrindo portal…");
-                await gotoWithNodeBudget(page, PORTAL_LOGIN_URL, "login", 40000);
-                await waitPastCloudflare(page, { onProgress: markPhase, stage: "login" });
-            }
-            else {
-                // Já estamos (ou estivemos) em /pesquisa — garantir auth sem /entrar cego.
-                setPhase("LOGIN", "abrindo pesquisa (retomada)…");
-                await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-retomada", 40000);
-                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
-            }
-            const alreadyIn = await page
-                .evaluate(() => /\/plataforma\b/i.test(location.pathname || ""))
-                .catch(() => false);
-            if (!alreadyIn) {
-                setPhase("LOGIN", "autenticando…");
-                await loginCasaDosDadosPortal(page, email, password);
-                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pós-login" });
-                setPhase("LOGIN", "autenticado — abrindo pesquisa…");
-                await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-pos-login", 40000);
-                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
-            }
-            else {
-                setPhase("LOGIN", "sessão restaurada (storageState)");
-            }
-            try {
-                const state = await context.storageState();
-                (0, waba_leads_cnpj_browser_runtime_1.saveCasaDosDadosStorageState)(state);
-                await options?.onStorageState?.(state);
-            }
-            catch {
-                /* ignore */
-            }
-            if (!wantFastResume) {
-                setPhase("FILTERS", "abrindo tela de pesquisa…");
-                await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-filtros", 40000);
-                await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
-                await sleepNode(800);
-            }
-            setPhase("FILTERS", "aplicando filtros (CNAE, situação, celular)…");
-            await applyFilters(page, filters, (msg) => {
-                sessionPhase = `FILTERS: ${msg}`;
-                phaseStartedAt = Date.now();
-                onProgress?.(sessionPhase);
-            });
-            setPhase("SEARCH", "dismiss modal CNAE (Escape)…");
-            try {
-                await Promise.race([
-                    page.keyboard.press("Escape").then(() => undefined),
-                    new Promise((resolve) => {
-                        setTimeout(resolve, 800);
-                    }),
-                ]);
-                await sleepNode(200);
-            }
-            catch {
-                /* segue */
-            }
-            setPhase("SEARCH", "preparando CTA Pesquisar…");
-            const searchTimeoutMs = Math.max(15000, Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90000) || 90000));
-            const runSearchOnce = async (allowRedispatch) => {
-                setPhase("SEARCH", "checando estado pré-CTA…");
-                const preLite = await withNodeTimeout(probeSearchAckLite(page), 3000, null);
-                if (preLite && (preLite.pagination || preLite.cnpjNodes > 0)) {
-                    onProgress?.(`SEARCH: resultados já presentes — pag=${preLite.pagination} cnpj=${preLite.cnpjNodes}`);
-                    return { kind: "results", total: null };
-                }
-                if (preLite && preLite.loadingNodes > 0 && !allowRedispatch) {
-                    setPhase("SEARCH", "loading ativo — aguardando sem redisparo…");
-                    return waitForSearchTransition(page, searchTimeoutMs, (msg) => {
-                        sessionPhase = msg;
-                        onProgress?.(msg);
-                    }, options?.shouldAbort);
-                }
-                await dispatchSearchWithAck(page, (msg) => {
-                    sessionPhase = msg;
-                    phaseStartedAt = Date.now();
-                    onProgress?.(msg);
+                page = await sessionContext.newPage();
+                page.setDefaultTimeout(45000);
+                pageCrashed = false;
+                page.on("crash", () => {
+                    pageCrashed = true;
+                    console.error(`[Leads PJ] PAGE_CRASH page=${resumeFromPageLog}`);
                 });
-                setPhase("SEARCH", "ACK ok — aguardando resultados…");
-                return waitForSearchTransition(page, searchTimeoutMs, (msg) => {
-                    sessionPhase = msg;
-                    onProgress?.(msg);
-                }, options?.shouldAbort);
+                if (!headless) {
+                    await page.bringToFront().catch(() => undefined);
+                }
             };
-            searchResult = await runSearchOnce(true);
-            if (searchResult.kind === "timeout-responsive") {
-                const stuckProbe = searchResult.probe ||
-                    (await withNodeTimeout(probeSearchState(page), 3000, null));
-                if (stuckProbe && stuckProbe.loadingNodes > 0) {
-                    throw new LeadsScrapeError("SEARCH_TIMEOUT_RESPONSIVE", "new-browser", `PORTAL_SEARCH_STUCK — loading ainda ativo após timeout. ${formatProbeShort(stuckProbe)}`);
+            const resumeFloor = Math.max(1, Math.round(Number(options?.resumeFloorPage || 0) || 0) || 1);
+            const resumeTargetRaw = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
+            const resumeTarget = resolvePortalResumePage(resumeTargetRaw, resumeFloor);
+            if (resumeTarget !== resumeTargetRaw) {
+                markPhase(`COPY: alvo pág. ${resumeTargetRaw} ajustado para ${resumeTarget} (piso pool ${resumeFloor})…`);
+            }
+            const wantFastResume = resumeTarget > 1 && Boolean(effectiveStorage);
+            // Captura total da API (se houver). Anexar cedo — vale para retomada e pesquisa nova.
+            let interceptedTotal = null;
+            page.on("response", async (res) => {
+                try {
+                    const url = res.url();
+                    if (!/cnpj\/pesquisa|pesquisa/i.test(url))
+                        return;
+                    const ct = String(res.headers()["content-type"] || "");
+                    if (!ct.includes("json"))
+                        return;
+                    const json = (await res.json().catch(() => null));
+                    if (!json)
+                        return;
+                    if (typeof json.total === "number")
+                        interceptedTotal = json.total;
                 }
-                setPhase("SEARCH", "timeout responsivo — 1 retry controlado na mesma Page…");
-                searchResult = await runSearchOnce(true);
-            }
-            if (searchResult.kind === "renderer-unresponsive") {
-                throw new LeadsScrapeError("RENDERER_UNRESPONSIVE", "new-browser", "Renderer não responde durante SEARCH");
-            }
-            if (searchResult.kind === "blocked") {
-                throw new LeadsScrapeError("PORTAL_BLOCKED", "stop", "Cloudflare ou desafio de segurança na pesquisa.");
-            }
-            if (searchResult.kind === "timeout-responsive") {
-                const last = searchResult.probe ||
-                    (await withNodeTimeout(probeSearchState(page), 3000, null));
-                // Sem CNPJ após ACK+timeout sob carga: Chromium novo (same-page só “pausava” o job).
-                throw new LeadsScrapeError("SEARCH_TIMEOUT_RESPONSIVE", "new-browser", `Pesquisa excedeu timeout (renderer saudável). ${last ? formatProbeShort(last) : "sem-probe"}`);
-            }
-            if (searchResult.kind === "empty") {
-                setPhase("DONE", "pesquisa sem resultados");
-                await context.close().catch(() => undefined);
-                context = null;
-                return { leads: [], scrapeCompleted: true, doneReason: "SEARCH_EMPTY" };
-            }
-        }
-        // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
-        const pageText = await withNodeTimeout(readResultsSampleText(page, 24000), 8000, "");
-        const portalTotal = interceptedTotal ??
-            searchResult.total ??
-            parseResultTotalFromText(pageText);
-        if (portalTotal != null) {
-            setPhase("COPY", `retornou ${portalTotal.toLocaleString("pt-BR")} empresas — iniciando cópia…`);
-        }
-        else {
-            setPhase("COPY", usedFastResume
-                ? `retomada pág. ${resumeTarget} — lendo cards…`
-                : "lendo cards na tela (CNPJ + Razão Social)…");
-        }
-        const collected = new Map();
-        let doneReason = "UNKNOWN";
-        let scrapeCompleted = false;
-        // NÃO pré-carregar interceptedRows aqui: se a API já encher `collected`,
-        // a página 1 fica com added=0 e o robô encerra a paginação sem ir à página 2
-        // (Seguro 14: 20 CNPJs da pág.1 = já usados → pool vazio).
-        // Espera cards pintarem; parser alinhado a readScreenCardsLight.
-        setPhase("COPY", "aguardando cards CNPJ na tela…");
-        {
-            let primed = [];
-            for (let wait = 0; wait < 25; wait += 1) {
-                if (options?.shouldAbort?.())
-                    throw new Error("__MLC_JOB_ABORTED__");
-                primed = await withNodeTimeout(readScreenCardsLight(page), 8000, []);
-                if (primed.length > 0) {
-                    onProgress?.(`COPY: ${primed.length} card(s) prontos na tela`);
-                    break;
+                catch {
+                    /* ignore */
                 }
-                await sleepNode(400);
-            }
-            if (primed.length > 0) {
-                page.__mlcPrimedCards = primed;
-            }
-            else {
-                onProgress?.("COPY: sem cards após espera — seguir para tentativa de página");
-            }
-        }
-        const readScreenCards = async () => {
-            const primed = page.__mlcPrimedCards;
-            if (primed && primed.length) {
-                page.__mlcPrimedCards = undefined;
-                return primed;
-            }
-            const rows = await withNodeTimeout(readScreenCardsLight(page), 8000, null);
-            if (rows === null) {
-                throw new LeadsScrapeError("CDP_PROBE_TIMEOUT", "new-browser", "Leitura de cards COPY não respondeu em 8s (CDP/DOM travado) — reconectar Chromium.");
-            }
-            return rows;
-        };
-        const firstCnpjOf = (rows) => (rows[0] ? (0, waba_leads_cnpj_repository_1.normalizeCnpjDigits)(rows[0][0]) : "");
-        const readCurrentPageNumber = async () => cdpOrReconnect(page.evaluate(() => {
-            const active = document.querySelector([
-                'nav[data-oruga="pagination"] button[aria-current="page"]',
-                'nav[data-oruga="pagination"] button.pagination-link.is-current',
-                'nav[data-oruga="pagination"] button[aria-current="true"]',
-            ].join(", "));
-            const n = Number(String(active?.textContent || "").trim());
-            return Number.isFinite(n) && n > 0 ? n : 1;
-        }), 5000, "Leitura do número da página Oruga");
-        const portalUiMaxPage = resolvePortalUiMaxPage();
-        /** Lê página ativa Oruga (is-current / aria-current). */
-        const waitUntilPage = async (expectedPage, timeoutMs) => {
-            const deadline = Date.now() + Math.max(500, timeoutMs);
-            while (Date.now() < deadline) {
-                if (options?.shouldAbort?.())
-                    return false;
-                const cur = await readCurrentPageNumber();
-                if (cur === expectedPage)
-                    return true;
-                await sleepNode(200);
-            }
-            return false;
-        };
-        /**
-         * Salto de página via DOM nativo (sem locator Playwright) — mais estável no Xvfb.
-         * Oruga: botões aria-label "Página N." / texto N / input numérico se existir.
-         * Retorna true só se a UI confirmar a página alvo.
-         */
-        const jumpToPageDom = async (target) => {
-            const t = Math.max(1, Math.round(target || 1));
-            const attempt = await withNodeTimeout(page
-                .evaluate((pageTarget) => {
-                const nav = document.querySelector('nav[data-oruga="pagination"]');
-                if (!nav)
-                    return { ok: false, how: "no-nav" };
-                const tryClick = (el) => {
-                    if (!el)
-                        return false;
-                    const b = el;
-                    if (b.disabled ||
-                        b.classList.contains("is-disabled") ||
-                        b.getAttribute("aria-disabled") === "true") {
-                        return false;
-                    }
-                    b.click();
-                    return true;
-                };
-                // 1) Botão exato "Página N"
-                const buttons = Array.from(nav.querySelectorAll("button.pagination-link, button"));
-                for (const b of buttons) {
-                    const label = String(b.getAttribute("aria-label") || "");
-                    const text = String(b.textContent || "").trim();
-                    if (label === `Página ${pageTarget}.` ||
-                        label === `Página ${pageTarget}` ||
-                        new RegExp(`Página\\s+${pageTarget}\\b`, "i").test(label) ||
-                        text === String(pageTarget)) {
-                        if (tryClick(b))
-                            return { ok: true, how: "button" };
-                    }
+            });
+            const ensureAuthedOnSearch = async () => {
+                const pathNow = await withNodeTimeout(page.evaluate(() => String(location.pathname || "")).catch(() => ""), 2500, "");
+                if (/\/entrar/i.test(pathNow || "")) {
+                    setPhase("LOGIN", "sessão expirou — autenticando…");
+                    await loginCasaDosDadosPortal(page, email, password);
+                    await waitPastCloudflare(page, { onProgress: markPhase, stage: "pós-login" });
+                    await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-reauth", 40000);
+                    await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
                 }
-                // 2) Input numérico (Oruga) — dispara eventos que a UI realmente escuta
-                const input = nav.querySelector('input[type="number"], input.input, input[class*="pagination"]');
-                if (input) {
-                    input.focus();
-                    const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
-                    proto?.set?.call(input, String(pageTarget));
-                    input.dispatchEvent(new Event("input", { bubbles: true }));
-                    input.dispatchEvent(new Event("change", { bubbles: true }));
-                    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
-                    input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }));
-                    input.blur();
-                    return { ok: true, how: "input" };
-                }
-                return { ok: false, how: "miss" };
-            }, t)
-                .catch(() => ({ ok: false, how: "err" })), 4000, { ok: false, how: "err" });
-            if (!attempt.ok)
-                return false;
-            return waitUntilPage(t, attempt.how === "input" ? 8000 : 5000);
-        };
-        /** Maior botão numérico visível com N > current e N <= target (aproxima em saltos). */
-        const hopTowardPageDom = async (target) => {
-            const t = Math.max(1, Math.round(target || 1));
-            const hopped = await withNodeTimeout(page
-                .evaluate((pageTarget) => {
-                const nav = document.querySelector('nav[data-oruga="pagination"]');
-                if (!nav)
-                    return 0;
-                const active = nav.querySelector('button[aria-current="page"], button.pagination-link.is-current, button[aria-current="true"]');
-                const current = Number(String(active?.textContent || "").trim()) || 0;
-                let bestN = 0;
-                for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
-                    const text = String(b.textContent || "").trim();
-                    const n = Number(text);
-                    if (!Number.isFinite(n) || n <= current || n > pageTarget)
-                        continue;
-                    const btn = b;
-                    if (btn.disabled || btn.classList.contains("is-disabled"))
-                        continue;
-                    if (n > bestN)
-                        bestN = n;
-                }
-                if (bestN <= 0)
-                    return 0;
-                for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
-                    if (String(b.textContent || "").trim() === String(bestN)) {
-                        b.click();
-                        return bestN;
-                    }
-                }
-                return 0;
-            }, t)
-                .catch(() => 0), 3000, 0);
-            if (hopped <= 0)
-                return 0;
-            const moved = await waitUntilPage(hopped, 5000);
-            return moved ? hopped : 0;
-        };
-        /**
-         * Avança 1 página — caminho rápido (estilo V02).
-         * Só: click DOM no next + confirmação por nº da página OU troca do 1º CNPJ.
-         * NÃO chama waitForPortalSearchResults (isso é da 1ª pesquisa; na paginação
-         * custava 10–30s+/página e travava horas em 5/1000).
-         */
-        const goToNextResultsPage = async (previousFirstCnpj, fromPage) => {
-            const targetPage = fromPage + 1;
-            markPhase(`Copiando: avançando paginação ${fromPage} → ${targetPage}…`);
-            const clicked = await withNodeTimeout(page
-                .evaluate(() => {
-                const nav = document.querySelector('nav[data-oruga="pagination"]');
-                if (!nav)
-                    return false;
-                const next = nav.querySelector("button.pagination-next:not([disabled]):not(.is-disabled)") ||
-                    nav.querySelector('button[aria-label*="Pŕoxima"], button[aria-label*="Próxima"], button[aria-label*="proxima" i]');
-                if (!next)
-                    return false;
-                if (next.disabled ||
-                    next.classList.contains("is-disabled") ||
-                    next.getAttribute("aria-disabled") === "true") {
-                    return false;
-                }
-                next.click();
-                return true;
-            })
-                .catch(() => false), 2500, false);
-            if (!clicked)
-                return false;
-            // Oruga troca a página em ~0,2–1s. Teto duro 4s — sem re-aguardar “SEARCH”.
-            const deadline = Date.now() + 4000;
-            while (Date.now() < deadline) {
-                if (options?.shouldAbort?.())
-                    return false;
-                const cur = await withNodeTimeout(page
-                    .evaluate(() => {
-                    const active = document.querySelector([
-                        'nav[data-oruga="pagination"] button[aria-current="page"]',
-                        'nav[data-oruga="pagination"] button.pagination-link.is-current',
-                        'nav[data-oruga="pagination"] button[aria-current="true"]',
-                    ].join(", "));
-                    const n = Number(String(active?.textContent || "").trim());
-                    return Number.isFinite(n) && n > 0 ? n : 0;
-                })
-                    .catch(() => 0), 1500, 0);
-                if (cur === targetPage)
-                    return true;
-                if (previousFirstCnpj) {
-                    const nextFirst = await withNodeTimeout(readFirstVisibleCnpjDigits(page), 1500, "");
-                    if (nextFirst && nextFirst !== previousFirstCnpj)
-                        return true;
-                }
-                await sleepNode(120);
-            }
-            return false;
-        };
-        /**
-         * Posiciona na página alvo.
-         * Estratégia: jump (input/botão) → hops nos botões visíveis → next sequencial
-         * com teto = distância real (não 12 passos fixos — isso travava em pág. 104).
-         */
-        const goToResultsPage = async (targetPage) => {
-            const target = Math.max(1, Math.round(targetPage || 1));
-            if (target > portalUiMaxPage)
-                return false;
-            let current = await readCurrentPageNumber();
-            if (current === target)
-                return true;
-            // UI à frente do alvo — tenta salto direto; não anda com "next" para trás.
-            if (current > target + 1) {
-                markPhase(`Copiando: UI pág. ${current} > alvo ${target} — salto DOM (sem next sequencial)…`);
-                if (await jumpToPageDom(target))
-                    return true;
-                current = await readCurrentPageNumber();
-                return current === target;
-            }
-            // Distância real manda — env só PODE AUMENTAR o teto, nunca cortar (bug pág. 104).
-            const distanceSteps = Math.max(20, target - current + 15);
-            const envBoost = Math.max(0, Math.round(Number(process.env.CASADOSDADOS_MAX_SEQUENTIAL_RESUME_STEPS || 0) || 0));
-            const maxSteps = Math.min(400, Math.max(distanceSteps, envBoost));
-            let guard = 0;
-            let stalled = 0;
-            while (guard < maxSteps) {
-                if (options?.shouldAbort?.())
-                    return false;
-                current = await readCurrentPageNumber();
-                if (current === target)
-                    return true;
-                if (current > target) {
-                    // Passou do alvo — tenta voltar via jump; se falhar, aceita falso.
-                    if (await jumpToPageDom(target))
-                        return true;
-                    return false;
-                }
-                guard += 1;
-                markPhase(`Copiando: posicionando retomada — passo ${guard}/${maxSteps} (UI pág. ${current} → ${target})…`);
-                // 1) Salto direto (input / botão exato)
-                if (await jumpToPageDom(target))
-                    return true;
-                // 2) Hop no maior botão visível ≤ alvo
-                const before = current;
-                const hopped = await hopTowardPageDom(target);
-                if (hopped > before) {
-                    stalled = 0;
-                    continue;
-                }
-                // 3) Next +1
-                const prev = await readFirstVisibleCnpjDigits(page);
-                const ok = await goToNextResultsPage(prev, current);
-                if (!ok) {
-                    stalled += 1;
-                    if (stalled >= 3) {
-                        markPhase(`Copiando: paginação não avançou (UI ${current} → ${target}) — abortando posicionamento.`);
-                        return false;
-                    }
-                    await sleepNode(400);
-                    continue;
-                }
-                stalled = 0;
-                // Após next, tenta jump de novo (às vezes o botão 104 aparece na janela).
-                if (await jumpToPageDom(target))
-                    return true;
-            }
-            current = await readCurrentPageNumber();
-            return current === target;
-        };
-        let pagesToFetch = maxPagesCap > 0 ? maxPagesCap : Number.MAX_SAFE_INTEGER;
-        if (portalTotal != null) {
-            const totalPagesAvailable = Math.max(1, Math.ceil(portalTotal / PORTAL_PAGE_SIZE));
-            // portalTotal é só informativo na UI. NÃO encolher o teto de cópia:
-            // total subestimado (API/DOM) fazia MAX_PAGES em ~104 com maxPages=1000
-            // e seguia para ReceitaWS com pool parcial.
-            markPhase(`Portal: ${portalTotal.toLocaleString("pt-BR")} empresas · ${PORTAL_PAGE_SIZE}/página · ~${totalPagesAvailable.toLocaleString("pt-BR")} pág. no total · meta de cópia ${maxPagesCap > 0 ? pagesToFetch : "todas até o fim"}…`);
-        }
-        else if (maxPagesCap <= 0) {
-            markPhase(`Copiando: total do portal não lido — avançando página a página até acabar (sem teto)…`);
-        }
-        // UI Oruga não navega além de portalUiMaxPage — evita loop Chromium em 1001+.
-        if (pagesToFetch > portalUiMaxPage) {
-            markPhase(`Copiando: teto da UI do portal = página ${portalUiMaxPage} (além disso a paginação não avança).`);
-            pagesToFetch = portalUiMaxPage;
-        }
-        let startPage = resolvePortalResumePage(Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1)), Math.max(1, Math.round(Number(options?.resumeFloorPage || 0) || 0) || 1));
-        const copyResumeFloor = Math.max(1, Math.round(Number(options?.resumeFloorPage || 0) || 0) || startPage);
-        if (startPage !== Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1))) {
-            markPhase(`COPY: checkpoint alinhado ao piso ${copyResumeFloor} → início na pág. ${startPage}.`);
-        }
-        if (startPage > pagesToFetch) {
-            markPhase(startPage > portalUiMaxPage
-                ? `Copiando: checkpoint página ${startPage} além do teto da UI (${portalUiMaxPage}) — raspagem via portal encerrada; pool já arquivado será usado.`
-                : `Copiando: checkpoint página ${startPage} além do total (${pagesToFetch}) — sessão sem páginas novas.`);
-            await context.close().catch(() => undefined);
-            context = null;
-            return {
-                leads: [],
-                scrapeCompleted: true,
-                doneReason: startPage > portalUiMaxPage ? "BEYOND_UI_MAX" : "BEYOND_TOTAL",
             };
-        }
-        if (startPage > 1) {
-            markPhase(`COPY: posicionando na página ${startPage} (retomada; piso ${copyResumeFloor})…`);
-            const positioned = await goToResultsPage(startPage);
-            if (!positioned) {
-                markPhase(`COPY: falha ao posicionar pág. ${startPage} — forçando piso do pool (${copyResumeFloor})…`);
-                startPage = copyResumeFloor;
-                const okFloor = startPage > 1 ? await goToResultsPage(startPage) : await jumpToPageDom(1);
-                if (!okFloor) {
-                    const cur = await readCurrentPageNumber();
-                    // Só adota UI se estiver no entorno do piso. UI ≫ piso (ex.: 322 vs 60)
-                    // pulava dezenas de páginas sem arquivar CNPJs.
-                    if (cur >= copyResumeFloor && cur <= copyResumeFloor + 2) {
-                        markPhase(`COPY: UI na pág. ${cur}; copiando daqui (sem pular CNPJs).`);
-                        startPage = cur;
-                    }
-                    else {
-                        markPhase(`COPY: UI pág. ${cur} ≠ piso ${copyResumeFloor} — tentando jump Dom ${copyResumeFloor}.`);
-                        const jumped = await jumpToPageDom(copyResumeFloor).catch(() => false);
-                        if (jumped) {
-                            startPage = copyResumeFloor;
-                        }
-                        else if (cur >= 1 && cur < copyResumeFloor) {
-                            // UI atrás do piso — sobe com next/hop a partir da UI.
-                            markPhase(`COPY: UI ${cur} < piso ${copyResumeFloor} — avançando da UI até o piso (sem pular).`);
-                            startPage = cur;
-                        }
-                        else {
-                            // UI à frente ou ilegível: NÃO adotar página alta. Recomeça do piso via
-                            // goToResultsPage com distância real; se falhar, pág. 1 (dedupe no pool).
-                            markPhase(`COPY: UI ${cur} longe do piso ${copyResumeFloor} — forçando caminhada até o piso (sem adotar ${cur}).`);
-                            const walked = await goToResultsPage(copyResumeFloor);
-                            if (walked) {
-                                startPage = copyResumeFloor;
-                            }
-                            else {
-                                markPhase(`COPY: não posicionou no piso ${copyResumeFloor} — reinício pág. 1 (dedupe no pool).`);
-                                startPage = 1;
-                            }
-                        }
-                    }
+            let searchResult = { kind: "results", total: null };
+            let usedFastResume = false;
+            if (wantFastResume) {
+                // Retomada: NÃO abrir /entrar (travava em LOGIN). Vai direto à pesquisa com cookies.
+                setPhase("COPY", `retomada rápida → pág. ${resumeTarget} (storageState; sem CNAE)…`);
+                await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-retomada-rapida", 40000);
+                await waitPastCloudflare(page, { onProgress: markPhase, stage: "retomada" });
+                await ensureAuthedOnSearch();
+                await sleepNode(500);
+                try {
+                    const state = await sessionContext.storageState();
+                    (0, waba_leads_cnpj_browser_runtime_1.saveCasaDosDadosStorageState)(state);
+                    await options?.onStorageState?.(state);
                 }
-            }
-            const uiAfter = await readCurrentPageNumber();
-            if (uiAfter > 0 && uiAfter !== startPage) {
-                markPhase(`COPY: após posicionar, UI=${uiAfter} alvo=${startPage} — re-sincronizando…`);
-                if (await jumpToPageDom(startPage)) {
-                    const ui2 = await readCurrentPageNumber();
-                    if (ui2 === startPage) {
-                        /* ok */
-                    }
-                    else if (ui2 >= 1 && Math.abs(ui2 - startPage) <= 2) {
-                        markPhase(`COPY: UI ${ui2} ≈ alvo ${startPage} — adotando UI.`);
-                        startPage = ui2;
-                    }
-                    else {
-                        markPhase(`COPY: UI ${ui2} desalinhada do alvo ${startPage} — mantendo alvo (não adota salto).`);
-                    }
+                catch {
+                    /* ignore */
                 }
-                else if (uiAfter >= 1 && Math.abs(uiAfter - startPage) <= 2) {
-                    markPhase(`COPY: jump falhou; UI ${uiAfter} ≈ alvo — adotando UI.`);
-                    startPage = uiAfter;
+                let lite = await withNodeTimeout(probeSearchAckLite(page), 4000, null);
+                if (!(lite && (lite.pagination || lite.cnpjNodes > 0))) {
+                    // Sessão pode manter filtros sem resultados pintados — 1 disparo de Pesquisar.
+                    markPhase("COPY: retomada — disparando Pesquisar (filtros da sessão)…");
+                    try {
+                        await dispatchSearchWithAck(page, (msg) => {
+                            sessionPhase = msg;
+                            onProgress?.(msg);
+                        });
+                        await waitForSearchTransition(page, Math.min(60000, Math.max(15000, Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90000) || 90000))), (msg) => {
+                            sessionPhase = msg;
+                            onProgress?.(msg);
+                        }, options?.shouldAbort);
+                    }
+                    catch (resumeSearchErr) {
+                        markPhase(`COPY: retomada Pesquisar falhou — ${resumeSearchErr instanceof Error
+                            ? resumeSearchErr.message.slice(0, 80)
+                            : "erro"}; caindo no fluxo completo…`);
+                    }
+                    lite = await withNodeTimeout(probeSearchAckLite(page), 4000, null);
+                }
+                if (lite && (lite.pagination || lite.cnpjNodes > 0)) {
+                    usedFastResume = true;
+                    searchResult = { kind: "results", total: null };
+                    markPhase(`COPY: sessão OK (pag=${lite.pagination || "?"} cnpj=${lite.cnpjNodes}) — pulando login/CNAE; alvo pág. ${resumeTarget}`);
                 }
                 else {
-                    markPhase(`COPY: UI ${uiAfter} ≠ ${startPage} após jump — mantendo alvo ${startPage} (sem adotar UI distante).`);
+                    markPhase("COPY: retomada sem resultados na sessão — reaplicando filtros (fallback)…");
                 }
             }
-        }
-        let emptyStreak = 0;
-        for (let pageIndex = startPage; pageIndex <= pagesToFetch; pageIndex += 1) {
-            if (options?.shouldAbort?.()) {
-                throw new Error("__MLC_JOB_ABORTED__");
-            }
-            const totalLabel = portalTotal != null ? ` de ${portalTotal.toLocaleString("pt-BR")}` : "";
-            setPhase("COPY", `página ${pageIndex}/${pagesToFetch === Number.MAX_SAFE_INTEGER ? "?" : pagesToFetch}${totalLabel} · sessão ${collected.size.toLocaleString("pt-BR")} CNPJ(s)`);
-            let rows = await readScreenCards();
-            // Página vazia: relê na MESMA sessão (não fecha Chromium / não refaz CNAE).
-            if (rows.length === 0) {
-                for (let reread = 1; reread <= 3; reread += 1) {
-                    markPhase(`COPY: página ${pageIndex} sem cards — relendo ${reread}/3 (mesma sessão)…`);
-                    await sleepNode(reread === 1 ? 500 : 1000);
-                    rows = await readScreenCards();
-                    if (rows.length)
-                        break;
+            if (!usedFastResume) {
+                // Fluxo completo: login só se necessário; filtros + pesquisa.
+                if (!wantFastResume) {
+                    setPhase("LOGIN", "abrindo portal…");
+                    await gotoWithNodeBudget(page, PORTAL_LOGIN_URL, "login", 40000);
+                    await waitPastCloudflare(page, { onProgress: markPhase, stage: "login" });
                 }
-            }
-            const mapPageRows = (sourceRows) => {
-                let mapped = 0;
-                let fresh = 0;
-                const leads = [];
-                for (const cells of sourceRows) {
-                    const lead = mapRowCells(cells);
-                    if (!lead)
-                        continue;
-                    mapped += 1;
-                    // Sempre inclui no merge (dedupe no pool) — garante arquivar CNPJ da página visitada.
-                    leads.push(lead);
-                    if (!collected.has(lead.cnpj)) {
-                        collected.set(lead.cnpj, lead);
-                        fresh += 1;
-                    }
+                else {
+                    // Já estamos (ou estivemos) em /pesquisa — garantir auth sem /entrar cego.
+                    setPhase("LOGIN", "abrindo pesquisa (retomada)…");
+                    await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-retomada", 40000);
+                    await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
                 }
-                return { mapped, fresh, leads };
-            };
-            let mappedResult = mapPageRows(rows);
-            // Cards na tela sem CNPJ parseável = não avançar checkpoint (não “pular” a página).
-            if (rows.length > 0 && mappedResult.mapped === 0) {
-                for (let reread = 1; reread <= 3; reread += 1) {
-                    markPhase(`COPY: página ${pageIndex} com ${rows.length} cards sem CNPJ — relendo ${reread}/3…`);
-                    await sleepNode(600);
-                    rows = await readScreenCards();
-                    mappedResult = mapPageRows(rows);
-                    if (mappedResult.mapped > 0 || rows.length === 0)
-                        break;
+                const alreadyIn = await withNodeTimeout(page.evaluate(() => /\/plataforma\b/i.test(location.pathname || "")).catch(() => false), 2500, false);
+                if (!alreadyIn) {
+                    setPhase("LOGIN", "autenticando…");
+                    await loginCasaDosDadosPortal(page, email, password);
+                    await waitPastCloudflare(page, { onProgress: markPhase, stage: "pós-login" });
+                    setPhase("LOGIN", "autenticado — abrindo pesquisa…");
+                    await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-pos-login", 40000);
+                    await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
                 }
-            }
-            if (rows.length > 0 && mappedResult.mapped === 0) {
-                throw new RendererUnresponsiveError(`COPY page ${pageIndex}: ${rows.length} cards na tela mas 0 CNPJ parseável — não avança sem copiar`);
-            }
-            const pageFirst = firstCnpjOf(rows);
-            const added = mappedResult.fresh;
-            const pageLeads = mappedResult.leads;
-            markPhase(`COPY: página ${pageIndex} arquivada — +${added} novos / ${mappedResult.mapped} CNPJ(s) / ${rows.length} cards · pool sessão ${collected.size.toLocaleString("pt-BR")} · próxima ${pageIndex + 1}`);
-            (0, waba_leads_cnpj_browser_runtime_1.logScrapePageTelemetry)({
-                page: pageIndex,
-                sessionCnpjs: collected.size,
-                browserConnected: Boolean(browser?.isConnected?.() ?? true),
-            });
-            const nextPage = pageIndex + 1;
-            // Checkpoint ANTES do next (contrato: persistir página N com CNPJs antes de avançar).
-            await options?.onPageCheckpoint?.({
-                completedPage: pageIndex,
-                nextPage,
-                pageLeads,
-                sessionCollected: [...collected.values()],
-                portalTotal,
-                pagesToFetch: pagesToFetch === Number.MAX_SAFE_INTEGER ? pageIndex : pagesToFetch,
-            });
-            if (pageIndex >= pagesToFetch) {
-                doneReason = "MAX_PAGES";
-                scrapeCompleted = true;
-                break;
-            }
-            if (rows.length === 0) {
-                emptyStreak += 1;
-                if (pageIndex >= pagesToFetch || pageIndex >= portalUiMaxPage) {
-                    markPhase(`COPY: página ${pageIndex} sem cards — fim da paginação.`);
-                    doneReason = "EMPTY_AT_END";
-                    scrapeCompleted = true;
-                    break;
+                else {
+                    setPhase("LOGIN", "sessão restaurada (storageState)");
                 }
-                if (emptyStreak >= 3) {
-                    markPhase(`COPY: 3 páginas vazias seguidas (até pág. ${pageIndex}) — fim (${collected.size} CNPJs).`);
-                    doneReason = "THREE_EMPTY_PAGES";
-                    scrapeCompleted = true;
-                    break;
-                }
-                markPhase(`COPY: página ${pageIndex} vazia — avançando para ${nextPage} (mesma Page)…`);
-            }
-            else {
-                emptyStreak = 0;
-            }
-            if (nextPage > portalUiMaxPage) {
-                markPhase(`COPY: atingiu teto UI (página ${portalUiMaxPage}) — encerrando raspagem.`);
-                doneReason = "UI_MAX_PAGE";
-                scrapeCompleted = true;
-                break;
-            }
-            markPhase(`COPY: avançando ${pageIndex} → ${nextPage}…`);
-            let advanced = await goToNextResultsPage(pageFirst, pageIndex);
-            if (!advanced) {
-                advanced = await jumpToPageDom(nextPage);
-            }
-            if (!advanced) {
-                for (let retry = 1; retry <= 3; retry += 1) {
-                    markPhase(`COPY: recover nível1 — retry paginação ${pageIndex}→${nextPage} (${retry}/3)…`);
-                    await sleepNode(400);
-                    advanced =
-                        (await goToNextResultsPage(pageFirst, pageIndex)) ||
-                            (await jumpToPageDom(nextPage));
-                    if (advanced)
-                        break;
-                }
-            }
-            // Nível 3: reload da Page atual (renderer lento, browser vivo).
-            if (!advanced && !pageCrashed) {
-                markPhase(`COPY: recover nível3 — reload Page e retry ${pageIndex}→${nextPage}…`);
                 try {
-                    await page.reload({ waitUntil: "domcontentloaded", timeout: 45000 });
+                    const state = await sessionContext.storageState();
+                    (0, waba_leads_cnpj_browser_runtime_1.saveCasaDosDadosStorageState)(state);
+                    await options?.onStorageState?.(state);
+                }
+                catch {
+                    /* ignore */
+                }
+                if (!wantFastResume) {
+                    setPhase("FILTERS", "abrindo tela de pesquisa…");
+                    await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-filtros", 40000);
+                    await waitPastCloudflare(page, { onProgress: markPhase, stage: "pesquisa" });
                     await sleepNode(800);
-                    advanced =
-                        (await jumpToPageDom(nextPage)) ||
-                            (await goToNextResultsPage(pageFirst, pageIndex));
+                }
+                setPhase("FILTERS", "aplicando filtros (CNAE, situação, celular)…");
+                await applyFilters(page, filters, (msg) => {
+                    sessionPhase = `FILTERS: ${msg}`;
+                    phaseStartedAt = Date.now();
+                    onProgress?.(sessionPhase);
+                });
+                setPhase("SEARCH", "dismiss modal CNAE (Escape)…");
+                try {
+                    await Promise.race([
+                        page.keyboard.press("Escape").then(() => undefined),
+                        new Promise((resolve) => {
+                            setTimeout(resolve, 800);
+                        }),
+                    ]);
+                    await sleepNode(200);
                 }
                 catch {
                     /* segue */
                 }
+                setPhase("SEARCH", "preparando CTA Pesquisar…");
+                const searchTimeoutMs = Math.max(15000, Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90000) || 90000));
+                const runSearchOnce = async (allowRedispatch) => {
+                    setPhase("SEARCH", "checando estado pré-CTA…");
+                    const preLite = await withNodeTimeout(probeSearchAckLite(page), 3000, null);
+                    if (preLite && (preLite.pagination || preLite.cnpjNodes > 0)) {
+                        onProgress?.(`SEARCH: resultados já presentes — pag=${preLite.pagination} cnpj=${preLite.cnpjNodes}`);
+                        return { kind: "results", total: null };
+                    }
+                    if (preLite && preLite.loadingNodes > 0 && !allowRedispatch) {
+                        setPhase("SEARCH", "loading ativo — aguardando sem redisparo…");
+                        return waitForSearchTransition(page, searchTimeoutMs, (msg) => {
+                            sessionPhase = msg;
+                            onProgress?.(msg);
+                        }, options?.shouldAbort);
+                    }
+                    await dispatchSearchWithAck(page, (msg) => {
+                        sessionPhase = msg;
+                        phaseStartedAt = Date.now();
+                        onProgress?.(msg);
+                    });
+                    setPhase("SEARCH", "ACK ok — aguardando resultados…");
+                    return waitForSearchTransition(page, searchTimeoutMs, (msg) => {
+                        sessionPhase = msg;
+                        onProgress?.(msg);
+                    }, options?.shouldAbort);
+                };
+                searchResult = await runSearchOnce(true);
+                if (searchResult.kind === "timeout-responsive") {
+                    const stuckProbe = searchResult.probe ||
+                        (await withNodeTimeout(probeSearchState(page), 3000, null));
+                    if (stuckProbe && stuckProbe.loadingNodes > 0) {
+                        throw new LeadsScrapeError("SEARCH_TIMEOUT_RESPONSIVE", "new-browser", `PORTAL_SEARCH_STUCK — loading ainda ativo após timeout. ${formatProbeShort(stuckProbe)}`);
+                    }
+                    setPhase("SEARCH", "timeout responsivo — 1 retry controlado na mesma Page…");
+                    searchResult = await runSearchOnce(true);
+                }
+                if (searchResult.kind === "renderer-unresponsive") {
+                    throw new LeadsScrapeError("RENDERER_UNRESPONSIVE", "new-browser", "Renderer não responde durante SEARCH");
+                }
+                if (searchResult.kind === "blocked") {
+                    throw new LeadsScrapeError("PORTAL_BLOCKED", "stop", "Cloudflare ou desafio de segurança na pesquisa.");
+                }
+                if (searchResult.kind === "timeout-responsive") {
+                    const last = searchResult.probe ||
+                        (await withNodeTimeout(probeSearchState(page), 3000, null));
+                    // Sem CNPJ após ACK+timeout sob carga: Chromium novo (same-page só “pausava” o job).
+                    throw new LeadsScrapeError("SEARCH_TIMEOUT_RESPONSIVE", "new-browser", `Pesquisa excedeu timeout (renderer saudável). ${last ? formatProbeShort(last) : "sem-probe"}`);
+                }
+                if (searchResult.kind === "empty") {
+                    setPhase("DONE", "pesquisa sem resultados");
+                    await withNodeTimeout(sessionContext.close().then(() => true), 8000, false);
+                    sessionRef.ctx = null;
+                    return { leads: [], scrapeCompleted: true, doneReason: "SEARCH_EMPTY" };
+                }
             }
-            // Nível 4: page.crash → nova Page no context; se não recuperar, sobe para hard recover.
-            if (pageCrashed || (!advanced && !(await rendererProbe(page, 2000)))) {
-                try {
-                    await recreatePageSameContext(pageCrashed ? "page.crash" : "renderer-soft");
-                    advanced = await jumpToPageDom(nextPage);
-                    if (advanced) {
-                        markPhase(`COPY: recover nível4 OK — UI na página ${nextPage}`);
+            // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
+            const pageText = await withNodeTimeout(readResultsSampleText(page, 24000), 8000, "");
+            const portalTotal = interceptedTotal ??
+                searchResult.total ??
+                parseResultTotalFromText(pageText);
+            if (portalTotal != null) {
+                setPhase("COPY", `retornou ${portalTotal.toLocaleString("pt-BR")} empresas — iniciando cópia…`);
+            }
+            else {
+                setPhase("COPY", usedFastResume
+                    ? `retomada pág. ${resumeTarget} — lendo cards…`
+                    : "lendo cards na tela (CNPJ + Razão Social)…");
+            }
+            const collected = new Map();
+            let doneReason = "UNKNOWN";
+            let scrapeCompleted = false;
+            // NÃO pré-carregar interceptedRows aqui: se a API já encher `collected`,
+            // a página 1 fica com added=0 e o robô encerra a paginação sem ir à página 2
+            // (Seguro 14: 20 CNPJs da pág.1 = já usados → pool vazio).
+            // Espera cards pintarem; parser alinhado a readScreenCardsLight.
+            setPhase("COPY", "aguardando cards CNPJ na tela…");
+            {
+                let primed = [];
+                for (let wait = 0; wait < 25; wait += 1) {
+                    if (options?.shouldAbort?.())
+                        throw new Error("__MLC_JOB_ABORTED__");
+                    primed = await withNodeTimeout(readScreenCardsLight(page), 8000, []);
+                    if (primed.length > 0) {
+                        onProgress?.(`COPY: ${primed.length} card(s) prontos na tela`);
+                        break;
+                    }
+                    await sleepNode(400);
+                }
+                if (primed.length > 0) {
+                    page.__mlcPrimedCards = primed;
+                }
+                else {
+                    onProgress?.("COPY: sem cards após espera — seguir para tentativa de página");
+                }
+            }
+            const readScreenCards = async () => {
+                const primed = page.__mlcPrimedCards;
+                if (primed && primed.length) {
+                    page.__mlcPrimedCards = undefined;
+                    return primed;
+                }
+                const rows = await withNodeTimeout(readScreenCardsLight(page), 8000, null);
+                if (rows === null) {
+                    throw new LeadsScrapeError("CDP_PROBE_TIMEOUT", "new-browser", "Leitura de cards COPY não respondeu em 8s (CDP/DOM travado) — reconectar Chromium.");
+                }
+                return rows;
+            };
+            const firstCnpjOf = (rows) => (rows[0] ? (0, waba_leads_cnpj_repository_1.normalizeCnpjDigits)(rows[0][0]) : "");
+            const readCurrentPageNumber = async () => cdpOrReconnect(page.evaluate(() => {
+                const active = document.querySelector([
+                    'nav[data-oruga="pagination"] button[aria-current="page"]',
+                    'nav[data-oruga="pagination"] button.pagination-link.is-current',
+                    'nav[data-oruga="pagination"] button[aria-current="true"]',
+                ].join(", "));
+                const n = Number(String(active?.textContent || "").trim());
+                return Number.isFinite(n) && n > 0 ? n : 1;
+            }), 5000, "Leitura do número da página Oruga");
+            const portalUiMaxPage = resolvePortalUiMaxPage();
+            /** Lê página ativa Oruga (is-current / aria-current). */
+            const waitUntilPage = async (expectedPage, timeoutMs) => {
+                const deadline = Date.now() + Math.max(500, timeoutMs);
+                while (Date.now() < deadline) {
+                    if (options?.shouldAbort?.())
+                        return false;
+                    const cur = await readCurrentPageNumber();
+                    if (cur === expectedPage)
+                        return true;
+                    await sleepNode(200);
+                }
+                return false;
+            };
+            /**
+             * Salto de página via DOM nativo (sem locator Playwright) — mais estável no Xvfb.
+             * Oruga: botões aria-label "Página N." / texto N / input numérico se existir.
+             * Retorna true só se a UI confirmar a página alvo.
+             */
+            const jumpToPageDom = async (target) => {
+                const t = Math.max(1, Math.round(target || 1));
+                const attempt = await withNodeTimeout(page
+                    .evaluate((pageTarget) => {
+                    const nav = document.querySelector('nav[data-oruga="pagination"]');
+                    if (!nav)
+                        return { ok: false, how: "no-nav" };
+                    const tryClick = (el) => {
+                        if (!el)
+                            return false;
+                        const b = el;
+                        if (b.disabled ||
+                            b.classList.contains("is-disabled") ||
+                            b.getAttribute("aria-disabled") === "true") {
+                            return false;
+                        }
+                        b.click();
+                        return true;
+                    };
+                    // 1) Botão exato "Página N"
+                    const buttons = Array.from(nav.querySelectorAll("button.pagination-link, button"));
+                    for (const b of buttons) {
+                        const label = String(b.getAttribute("aria-label") || "");
+                        const text = String(b.textContent || "").trim();
+                        if (label === `Página ${pageTarget}.` ||
+                            label === `Página ${pageTarget}` ||
+                            new RegExp(`Página\\s+${pageTarget}\\b`, "i").test(label) ||
+                            text === String(pageTarget)) {
+                            if (tryClick(b))
+                                return { ok: true, how: "button" };
+                        }
+                    }
+                    // 2) Input numérico (Oruga) — dispara eventos que a UI realmente escuta
+                    const input = nav.querySelector('input[type="number"], input.input, input[class*="pagination"]');
+                    if (input) {
+                        input.focus();
+                        const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+                        proto?.set?.call(input, String(pageTarget));
+                        input.dispatchEvent(new Event("input", { bubbles: true }));
+                        input.dispatchEvent(new Event("change", { bubbles: true }));
+                        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
+                        input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }));
+                        input.blur();
+                        return { ok: true, how: "input" };
+                    }
+                    return { ok: false, how: "miss" };
+                }, t)
+                    .catch(() => ({ ok: false, how: "err" })), 4000, { ok: false, how: "err" });
+                if (!attempt.ok)
+                    return false;
+                return waitUntilPage(t, attempt.how === "input" ? 8000 : 5000);
+            };
+            /** Maior botão numérico visível com N > current e N <= target (aproxima em saltos). */
+            const hopTowardPageDom = async (target) => {
+                const t = Math.max(1, Math.round(target || 1));
+                const hopped = await withNodeTimeout(page
+                    .evaluate((pageTarget) => {
+                    const nav = document.querySelector('nav[data-oruga="pagination"]');
+                    if (!nav)
+                        return 0;
+                    const active = nav.querySelector('button[aria-current="page"], button.pagination-link.is-current, button[aria-current="true"]');
+                    const current = Number(String(active?.textContent || "").trim()) || 0;
+                    let bestN = 0;
+                    for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
+                        const text = String(b.textContent || "").trim();
+                        const n = Number(text);
+                        if (!Number.isFinite(n) || n <= current || n > pageTarget)
+                            continue;
+                        const btn = b;
+                        if (btn.disabled || btn.classList.contains("is-disabled"))
+                            continue;
+                        if (n > bestN)
+                            bestN = n;
+                    }
+                    if (bestN <= 0)
+                        return 0;
+                    for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
+                        if (String(b.textContent || "").trim() === String(bestN)) {
+                            b.click();
+                            return bestN;
+                        }
+                    }
+                    return 0;
+                }, t)
+                    .catch(() => 0), 3000, 0);
+                if (hopped <= 0)
+                    return 0;
+                const moved = await waitUntilPage(hopped, 5000);
+                return moved ? hopped : 0;
+            };
+            /**
+             * Avança 1 página — caminho rápido (estilo V02).
+             * Só: click DOM no next + confirmação por nº da página OU troca do 1º CNPJ.
+             * NÃO chama waitForPortalSearchResults (isso é da 1ª pesquisa; na paginação
+             * custava 10–30s+/página e travava horas em 5/1000).
+             */
+            const goToNextResultsPage = async (previousFirstCnpj, fromPage) => {
+                const targetPage = fromPage + 1;
+                markPhase(`Copiando: avançando paginação ${fromPage} → ${targetPage}…`);
+                const clicked = await withNodeTimeout(page
+                    .evaluate(() => {
+                    const nav = document.querySelector('nav[data-oruga="pagination"]');
+                    if (!nav)
+                        return false;
+                    const next = nav.querySelector("button.pagination-next:not([disabled]):not(.is-disabled)") ||
+                        nav.querySelector('button[aria-label*="Pŕoxima"], button[aria-label*="Próxima"], button[aria-label*="proxima" i]');
+                    if (!next)
+                        return false;
+                    if (next.disabled ||
+                        next.classList.contains("is-disabled") ||
+                        next.getAttribute("aria-disabled") === "true") {
+                        return false;
+                    }
+                    next.click();
+                    return true;
+                })
+                    .catch(() => false), 2500, false);
+                if (!clicked)
+                    return false;
+                // Oruga troca a página em ~0,2–1s. Teto duro 4s — sem re-aguardar “SEARCH”.
+                const deadline = Date.now() + 4000;
+                while (Date.now() < deadline) {
+                    if (options?.shouldAbort?.())
+                        return false;
+                    const cur = await withNodeTimeout(page
+                        .evaluate(() => {
+                        const active = document.querySelector([
+                            'nav[data-oruga="pagination"] button[aria-current="page"]',
+                            'nav[data-oruga="pagination"] button.pagination-link.is-current',
+                            'nav[data-oruga="pagination"] button[aria-current="true"]',
+                        ].join(", "));
+                        const n = Number(String(active?.textContent || "").trim());
+                        return Number.isFinite(n) && n > 0 ? n : 0;
+                    })
+                        .catch(() => 0), 1500, 0);
+                    if (cur === targetPage)
+                        return true;
+                    if (previousFirstCnpj) {
+                        const nextFirst = await withNodeTimeout(readFirstVisibleCnpjDigits(page), 1500, "");
+                        if (nextFirst && nextFirst !== previousFirstCnpj)
+                            return true;
+                    }
+                    await sleepNode(120);
+                }
+                return false;
+            };
+            /**
+             * Posiciona na página alvo.
+             * Estratégia: jump (input/botão) → hops nos botões visíveis → next sequencial
+             * com teto = distância real (não 12 passos fixos — isso travava em pág. 104).
+             */
+            const goToResultsPage = async (targetPage) => {
+                const target = Math.max(1, Math.round(targetPage || 1));
+                if (target > portalUiMaxPage)
+                    return false;
+                let current = await readCurrentPageNumber();
+                if (current === target)
+                    return true;
+                // UI à frente do alvo — tenta salto direto; não anda com "next" para trás.
+                if (current > target + 1) {
+                    markPhase(`Copiando: UI pág. ${current} > alvo ${target} — salto DOM (sem next sequencial)…`);
+                    if (await jumpToPageDom(target))
+                        return true;
+                    current = await readCurrentPageNumber();
+                    return current === target;
+                }
+                // Distância real manda — env só PODE AUMENTAR o teto, nunca cortar (bug pág. 104).
+                const distanceSteps = Math.max(20, target - current + 15);
+                const envBoost = Math.max(0, Math.round(Number(process.env.CASADOSDADOS_MAX_SEQUENTIAL_RESUME_STEPS || 0) || 0));
+                const maxSteps = Math.min(400, Math.max(distanceSteps, envBoost));
+                let guard = 0;
+                let stalled = 0;
+                while (guard < maxSteps) {
+                    if (options?.shouldAbort?.())
+                        return false;
+                    current = await readCurrentPageNumber();
+                    if (current === target)
+                        return true;
+                    if (current > target) {
+                        // Passou do alvo — tenta voltar via jump; se falhar, aceita falso.
+                        if (await jumpToPageDom(target))
+                            return true;
+                        return false;
+                    }
+                    guard += 1;
+                    markPhase(`Copiando: posicionando retomada — passo ${guard}/${maxSteps} (UI pág. ${current} → ${target})…`);
+                    // 1) Salto direto (input / botão exato)
+                    if (await jumpToPageDom(target))
+                        return true;
+                    // 2) Hop no maior botão visível ≤ alvo
+                    const before = current;
+                    const hopped = await hopTowardPageDom(target);
+                    if (hopped > before) {
+                        stalled = 0;
+                        continue;
+                    }
+                    // 3) Next +1
+                    const prev = await readFirstVisibleCnpjDigits(page);
+                    const ok = await goToNextResultsPage(prev, current);
+                    if (!ok) {
+                        stalled += 1;
+                        if (stalled >= 3) {
+                            markPhase(`Copiando: paginação não avançou (UI ${current} → ${target}) — abortando posicionamento.`);
+                            return false;
+                        }
+                        await sleepNode(400);
+                        continue;
+                    }
+                    stalled = 0;
+                    // Após next, tenta jump de novo (às vezes o botão 104 aparece na janela).
+                    if (await jumpToPageDom(target))
+                        return true;
+                }
+                current = await readCurrentPageNumber();
+                return current === target;
+            };
+            let pagesToFetch = maxPagesCap > 0 ? maxPagesCap : Number.MAX_SAFE_INTEGER;
+            if (portalTotal != null) {
+                const totalPagesAvailable = Math.max(1, Math.ceil(portalTotal / PORTAL_PAGE_SIZE));
+                // portalTotal é só informativo na UI. NÃO encolher o teto de cópia:
+                // total subestimado (API/DOM) fazia MAX_PAGES em ~104 com maxPages=1000
+                // e seguia para ReceitaWS com pool parcial.
+                markPhase(`Portal: ${portalTotal.toLocaleString("pt-BR")} empresas · ${PORTAL_PAGE_SIZE}/página · ~${totalPagesAvailable.toLocaleString("pt-BR")} pág. no total · meta de cópia ${maxPagesCap > 0 ? pagesToFetch : "todas até o fim"}…`);
+            }
+            else if (maxPagesCap <= 0) {
+                markPhase(`Copiando: total do portal não lido — avançando página a página até acabar (sem teto)…`);
+            }
+            // UI Oruga não navega além de portalUiMaxPage — evita loop Chromium em 1001+.
+            if (pagesToFetch > portalUiMaxPage) {
+                markPhase(`Copiando: teto da UI do portal = página ${portalUiMaxPage} (além disso a paginação não avança).`);
+                pagesToFetch = portalUiMaxPage;
+            }
+            let startPage = resolvePortalResumePage(Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1)), Math.max(1, Math.round(Number(options?.resumeFloorPage || 0) || 0) || 1));
+            const copyResumeFloor = Math.max(1, Math.round(Number(options?.resumeFloorPage || 0) || 0) || startPage);
+            if (startPage !== Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1))) {
+                markPhase(`COPY: checkpoint alinhado ao piso ${copyResumeFloor} → início na pág. ${startPage}.`);
+            }
+            if (startPage > pagesToFetch) {
+                markPhase(startPage > portalUiMaxPage
+                    ? `Copiando: checkpoint página ${startPage} além do teto da UI (${portalUiMaxPage}) — raspagem via portal encerrada; pool já arquivado será usado.`
+                    : `Copiando: checkpoint página ${startPage} além do total (${pagesToFetch}) — sessão sem páginas novas.`);
+                await withNodeTimeout(sessionContext.close().then(() => true), 8000, false);
+                sessionRef.ctx = null;
+                return {
+                    leads: [],
+                    scrapeCompleted: true,
+                    doneReason: startPage > portalUiMaxPage ? "BEYOND_UI_MAX" : "BEYOND_TOTAL",
+                };
+            }
+            if (startPage > 1) {
+                markPhase(`COPY: posicionando na página ${startPage} (retomada; piso ${copyResumeFloor})…`);
+                const positioned = await goToResultsPage(startPage);
+                if (!positioned) {
+                    markPhase(`COPY: falha ao posicionar pág. ${startPage} — forçando piso do pool (${copyResumeFloor})…`);
+                    startPage = copyResumeFloor;
+                    const okFloor = startPage > 1 ? await goToResultsPage(startPage) : await jumpToPageDom(1);
+                    if (!okFloor) {
+                        const cur = await readCurrentPageNumber();
+                        // Só adota UI se estiver no entorno do piso. UI ≫ piso (ex.: 322 vs 60)
+                        // pulava dezenas de páginas sem arquivar CNPJs.
+                        if (cur >= copyResumeFloor && cur <= copyResumeFloor + 2) {
+                            markPhase(`COPY: UI na pág. ${cur}; copiando daqui (sem pular CNPJs).`);
+                            startPage = cur;
+                        }
+                        else {
+                            markPhase(`COPY: UI pág. ${cur} ≠ piso ${copyResumeFloor} — tentando jump Dom ${copyResumeFloor}.`);
+                            const jumped = await jumpToPageDom(copyResumeFloor).catch(() => false);
+                            if (jumped) {
+                                startPage = copyResumeFloor;
+                            }
+                            else if (cur >= 1 && cur < copyResumeFloor) {
+                                // UI atrás do piso — sobe com next/hop a partir da UI.
+                                markPhase(`COPY: UI ${cur} < piso ${copyResumeFloor} — avançando da UI até o piso (sem pular).`);
+                                startPage = cur;
+                            }
+                            else {
+                                // UI à frente ou ilegível: NÃO adotar página alta. Recomeça do piso via
+                                // goToResultsPage com distância real; se falhar, pág. 1 (dedupe no pool).
+                                markPhase(`COPY: UI ${cur} longe do piso ${copyResumeFloor} — forçando caminhada até o piso (sem adotar ${cur}).`);
+                                const walked = await goToResultsPage(copyResumeFloor);
+                                if (walked) {
+                                    startPage = copyResumeFloor;
+                                }
+                                else {
+                                    markPhase(`COPY: não posicionou no piso ${copyResumeFloor} — reinício pág. 1 (dedupe no pool).`);
+                                    startPage = 1;
+                                }
+                            }
+                        }
                     }
                 }
-                catch {
-                    advanced = false;
+                const uiAfter = await readCurrentPageNumber();
+                if (uiAfter > 0 && uiAfter !== startPage) {
+                    markPhase(`COPY: após posicionar, UI=${uiAfter} alvo=${startPage} — re-sincronizando…`);
+                    if (await jumpToPageDom(startPage)) {
+                        const ui2 = await readCurrentPageNumber();
+                        if (ui2 === startPage) {
+                            /* ok */
+                        }
+                        else if (ui2 >= 1 && Math.abs(ui2 - startPage) <= 2) {
+                            markPhase(`COPY: UI ${ui2} ≈ alvo ${startPage} — adotando UI.`);
+                            startPage = ui2;
+                        }
+                        else {
+                            markPhase(`COPY: UI ${ui2} desalinhada do alvo ${startPage} — mantendo alvo (não adota salto).`);
+                        }
+                    }
+                    else if (uiAfter >= 1 && Math.abs(uiAfter - startPage) <= 2) {
+                        markPhase(`COPY: jump falhou; UI ${uiAfter} ≈ alvo — adotando UI.`);
+                        startPage = uiAfter;
+                    }
+                    else {
+                        markPhase(`COPY: UI ${uiAfter} ≠ ${startPage} após jump — mantendo alvo ${startPage} (sem adotar UI distante).`);
+                    }
+                }
+            }
+            let emptyStreak = 0;
+            for (let pageIndex = startPage; pageIndex <= pagesToFetch; pageIndex += 1) {
+                if (options?.shouldAbort?.()) {
+                    throw new Error("__MLC_JOB_ABORTED__");
+                }
+                const totalLabel = portalTotal != null ? ` de ${portalTotal.toLocaleString("pt-BR")}` : "";
+                setPhase("COPY", `página ${pageIndex}/${pagesToFetch === Number.MAX_SAFE_INTEGER ? "?" : pagesToFetch}${totalLabel} · sessão ${collected.size.toLocaleString("pt-BR")} CNPJ(s)`);
+                let rows = await readScreenCards();
+                // Página vazia: relê na MESMA sessão (não fecha Chromium / não refaz CNAE).
+                if (rows.length === 0) {
+                    for (let reread = 1; reread <= 3; reread += 1) {
+                        markPhase(`COPY: página ${pageIndex} sem cards — relendo ${reread}/3 (mesma sessão)…`);
+                        await sleepNode(reread === 1 ? 500 : 1000);
+                        rows = await readScreenCards();
+                        if (rows.length)
+                            break;
+                    }
+                }
+                const mapPageRows = (sourceRows) => {
+                    let mapped = 0;
+                    let fresh = 0;
+                    const leads = [];
+                    for (const cells of sourceRows) {
+                        const lead = mapRowCells(cells);
+                        if (!lead)
+                            continue;
+                        mapped += 1;
+                        // Sempre inclui no merge (dedupe no pool) — garante arquivar CNPJ da página visitada.
+                        leads.push(lead);
+                        if (!collected.has(lead.cnpj)) {
+                            collected.set(lead.cnpj, lead);
+                            fresh += 1;
+                        }
+                    }
+                    return { mapped, fresh, leads };
+                };
+                let mappedResult = mapPageRows(rows);
+                // Cards na tela sem CNPJ parseável = não avançar checkpoint (não “pular” a página).
+                if (rows.length > 0 && mappedResult.mapped === 0) {
+                    for (let reread = 1; reread <= 3; reread += 1) {
+                        markPhase(`COPY: página ${pageIndex} com ${rows.length} cards sem CNPJ — relendo ${reread}/3…`);
+                        await sleepNode(600);
+                        rows = await readScreenCards();
+                        mappedResult = mapPageRows(rows);
+                        if (mappedResult.mapped > 0 || rows.length === 0)
+                            break;
+                    }
+                }
+                if (rows.length > 0 && mappedResult.mapped === 0) {
+                    throw new RendererUnresponsiveError(`COPY page ${pageIndex}: ${rows.length} cards na tela mas 0 CNPJ parseável — não avança sem copiar`);
+                }
+                const pageFirst = firstCnpjOf(rows);
+                const added = mappedResult.fresh;
+                const pageLeads = mappedResult.leads;
+                markPhase(`COPY: página ${pageIndex} arquivada — +${added} novos / ${mappedResult.mapped} CNPJ(s) / ${rows.length} cards · pool sessão ${collected.size.toLocaleString("pt-BR")} · próxima ${pageIndex + 1}`);
+                (0, waba_leads_cnpj_browser_runtime_1.logScrapePageTelemetry)({
+                    page: pageIndex,
+                    sessionCnpjs: collected.size,
+                    browserConnected: Boolean(browser?.isConnected?.() ?? true),
+                });
+                const nextPage = pageIndex + 1;
+                // Checkpoint ANTES do next (contrato: persistir página N com CNPJs antes de avançar).
+                await options?.onPageCheckpoint?.({
+                    completedPage: pageIndex,
+                    nextPage,
+                    pageLeads,
+                    sessionCollected: [...collected.values()],
+                    portalTotal,
+                    pagesToFetch: pagesToFetch === Number.MAX_SAFE_INTEGER ? pageIndex : pagesToFetch,
+                });
+                if (pageIndex >= pagesToFetch) {
+                    doneReason = "MAX_PAGES";
+                    scrapeCompleted = true;
+                    break;
+                }
+                if (rows.length === 0) {
+                    emptyStreak += 1;
+                    if (pageIndex >= pagesToFetch || pageIndex >= portalUiMaxPage) {
+                        markPhase(`COPY: página ${pageIndex} sem cards — fim da paginação.`);
+                        doneReason = "EMPTY_AT_END";
+                        scrapeCompleted = true;
+                        break;
+                    }
+                    if (emptyStreak >= 3) {
+                        markPhase(`COPY: 3 páginas vazias seguidas (até pág. ${pageIndex}) — fim (${collected.size} CNPJs).`);
+                        doneReason = "THREE_EMPTY_PAGES";
+                        scrapeCompleted = true;
+                        break;
+                    }
+                    markPhase(`COPY: página ${pageIndex} vazia — avançando para ${nextPage} (mesma Page)…`);
+                }
+                else {
+                    emptyStreak = 0;
+                }
+                if (nextPage > portalUiMaxPage) {
+                    markPhase(`COPY: atingiu teto UI (página ${portalUiMaxPage}) — encerrando raspagem.`);
+                    doneReason = "UI_MAX_PAGE";
+                    scrapeCompleted = true;
+                    break;
+                }
+                markPhase(`COPY: avançando ${pageIndex} → ${nextPage}…`);
+                let advanced = await goToNextResultsPage(pageFirst, pageIndex);
+                if (!advanced) {
+                    advanced = await jumpToPageDom(nextPage);
                 }
                 if (!advanced) {
-                    throw new RendererUnresponsiveError(`COPY next ${pageIndex}→${nextPage}`);
+                    for (let retry = 1; retry <= 3; retry += 1) {
+                        markPhase(`COPY: recover nível1 — retry paginação ${pageIndex}→${nextPage} (${retry}/3)…`);
+                        await sleepNode(400);
+                        advanced =
+                            (await goToNextResultsPage(pageFirst, pageIndex)) ||
+                                (await jumpToPageDom(nextPage));
+                        if (advanced)
+                            break;
+                    }
+                }
+                // Nível 3: reload da Page atual (renderer lento, browser vivo).
+                if (!advanced && !pageCrashed) {
+                    markPhase(`COPY: recover nível3 — reload Page e retry ${pageIndex}→${nextPage}…`);
+                    try {
+                        await page.reload({ waitUntil: "domcontentloaded", timeout: 45000 });
+                        await sleepNode(800);
+                        advanced =
+                            (await jumpToPageDom(nextPage)) ||
+                                (await goToNextResultsPage(pageFirst, pageIndex));
+                    }
+                    catch {
+                        /* segue */
+                    }
+                }
+                // Nível 4: page.crash → nova Page no context; se não recuperar, sobe para hard recover.
+                if (pageCrashed || (!advanced && !(await rendererProbe(page, 2000)))) {
+                    try {
+                        await recreatePageSameContext(pageCrashed ? "page.crash" : "renderer-soft");
+                        advanced = await jumpToPageDom(nextPage);
+                        if (advanced) {
+                            markPhase(`COPY: recover nível4 OK — UI na página ${nextPage}`);
+                        }
+                    }
+                    catch {
+                        advanced = false;
+                    }
+                    if (!advanced) {
+                        throw new RendererUnresponsiveError(`COPY next ${pageIndex}→${nextPage}`);
+                    }
+                }
+                if (!advanced) {
+                    const stillOn = await readCurrentPageNumber();
+                    // Soft: encerra com o já copiado — scrape incompleto (service mantém checkpoint).
+                    // Browser compartilhado permanece aberto (Fase C).
+                    markPhase(`COPY: paginação stall em ${pageIndex} (UI ${stillOn}) — ${collected.size} CNPJs; sem matar Chromium.`);
+                    doneReason = "PAGINATION_STALL";
+                    scrapeCompleted = false;
+                    break;
                 }
             }
-            if (!advanced) {
-                const stillOn = await readCurrentPageNumber();
-                // Soft: encerra com o já copiado — scrape incompleto (service mantém checkpoint).
-                // Browser compartilhado permanece aberto (Fase C).
-                markPhase(`COPY: paginação stall em ${pageIndex} (UI ${stillOn}) — ${collected.size} CNPJs; sem matar Chromium.`);
-                doneReason = "PAGINATION_STALL";
+            if (!scrapeCompleted && doneReason === "UNKNOWN") {
+                // Saiu do for sem marcar fim explícito — tratar como incompleto.
+                doneReason = "INCOMPLETE";
                 scrapeCompleted = false;
-                break;
             }
-        }
-        if (!scrapeCompleted && doneReason === "UNKNOWN") {
-            // Saiu do for sem marcar fim explícito — tratar como incompleto.
-            doneReason = "INCOMPLETE";
-            scrapeCompleted = false;
-        }
-        await context.close().catch(() => undefined);
-        context = null;
-        // Retomada (startPage>1) que não leu nenhum card NÃO é sucesso — senão o service
-        // limpa o checkpoint e enriquece só o pool parcial (incidente Corbans: 140 de ~8070).
-        if (!collected.size) {
-            if (startPage > 1) {
-                throw new Error(`Retomada na página ${startPage} não leu CNPJ/Razão Social — reconectar mantendo checkpoint/pool.`);
+            await withNodeTimeout(sessionContext.close().then(() => true), 8000, false);
+            sessionRef.ctx = null;
+            // Retomada (startPage>1) que não leu nenhum card NÃO é sucesso — senão o service
+            // limpa o checkpoint e enriquece só o pool parcial (incidente Corbans: 140 de ~8070).
+            if (!collected.size) {
+                if (startPage > 1) {
+                    throw new Error(`Retomada na página ${startPage} não leu CNPJ/Razão Social — reconectar mantendo checkpoint/pool.`);
+                }
+                throw new Error("Robô não leu CNPJ/Razão Social na tela. Confirme login, filtros e se os cards aparecem (formato: 00.000.000/0000-00 - NOME). Se Cloudflare bloquear, use CASADOSDADOS_HEADLESS=0.");
             }
-            throw new Error("Robô não leu CNPJ/Razão Social na tela. Confirme login, filtros e se os cards aparecem (formato: 00.000.000/0000-00 - NOME). Se Cloudflare bloquear, use CASADOSDADOS_HEADLESS=0.");
-        }
-        setPhase("DONE", `${collected.size.toLocaleString("pt-BR")} CNPJ(s) · reason=${doneReason} · completed=${scrapeCompleted}`);
-        return {
-            leads: [...collected.values()],
-            scrapeCompleted,
-            doneReason,
+            setPhase("DONE", `${collected.size.toLocaleString("pt-BR")} CNPJ(s) · reason=${doneReason} · completed=${scrapeCompleted}`);
+            return {
+                leads: [...collected.values()],
+                scrapeCompleted,
+                doneReason,
+            };
         };
+        const running = runSession();
+        void running.catch(() => undefined);
+        return await Promise.race([running, sessionAbort.promise]);
     }
     finally {
         clearInterval(abortWatch);
         clearInterval(sessionKeepAlive);
         // Sempre fecha o Context (erro em FILTERS/CNAE antes vazava).
         // CDP morto: close() sem teto prende o job na mesma mensagem por 20+ min.
-        if (context) {
-            await withNodeTimeout(context.close().then(() => true), 8000, false);
-            context = null;
+        const ctxToClose = sessionRef.ctx;
+        sessionRef.ctx = null;
+        if (ctxToClose) {
+            await withNodeTimeout(ctxToClose.close().then(() => true), 8000, false);
         }
         // Modo paralelo: cada job fecha o próprio Chromium. Compartilhado (legado) fica vivo.
         if ((0, waba_leads_cnpj_browser_runtime_1.isDedicatedJobBrowser)(browser)) {

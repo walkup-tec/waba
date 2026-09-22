@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   classifyGotoFailure,
+  createSessionAbortGate,
   isChromiumTargetCrash,
   isKeepaliveProgressMessage,
   isPortalAntiBotBlock,
   isPortalChallengeHint,
+  LeadsScrapeError,
   resolveLeadsPhaseStallMs,
 } from "./waba-leads-cnpj-casadosdados.adapter";
 import { resolveCasaDosDadosUserAgent } from "./waba-leads-cnpj-browser-runtime";
@@ -93,6 +95,29 @@ describe("Leads PJ fase presa", () => {
     const ms = resolveLeadsPhaseStallMs();
     assert.equal(ms >= 30_000, true);
     assert.equal(ms <= 180_000, true);
+  });
+
+  it("aborta a Promise da sessão mesmo sem o Playwright rejeitar", async () => {
+    const gate = createSessionAbortGate();
+    const hung = new Promise<string>(() => undefined);
+    const raced = Promise.race([hung, gate.promise]);
+    const err = new LeadsScrapeError(
+      "PHASE_STALL",
+      "new-browser",
+      "FILTERS: abrindo tela de pesquisa… preso 90s",
+    );
+    assert.equal(gate.abort(err), true);
+    assert.equal(gate.abort(err), false);
+    await assert.rejects(raced, (caught: unknown) => {
+      assert.equal(caught instanceof LeadsScrapeError, true);
+      assert.equal((caught as LeadsScrapeError).code, "PHASE_STALL");
+      assert.equal((caught as LeadsScrapeError).recovery, "new-browser");
+      return true;
+    });
+  });
+
+  it("trata PHASE_STALL como recover de Chromium", () => {
+    assert.equal(isChromiumTargetCrash(new Error("PHASE_STALL preso 90s")), true);
   });
 });
 

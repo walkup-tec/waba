@@ -234,20 +234,36 @@ async function acquireSharedBrowser(opts) {
         starting = null;
     }
 }
+async function closeWithBudget(closable, ms = 8000) {
+    if (!closable)
+        return;
+    let timer;
+    try {
+        await Promise.race([
+            closable
+                .close()
+                .then(() => undefined)
+                .catch(() => undefined),
+            new Promise((resolve) => {
+                timer = setTimeout(resolve, Math.max(50, ms));
+            }),
+        ]);
+    }
+    finally {
+        if (timer)
+            clearTimeout(timer);
+    }
+}
 /**
  * Fecha Chromium do job: dedicado sempre; compartilhado só em hard recovery.
+ * close() sem teto prende o job quando o CDP já morreu.
  */
 async function releaseJobBrowser(jobBrowser, reason) {
     if (!jobBrowser)
         return;
     if (isDedicatedJobBrowser(jobBrowser)) {
         console.warn(`[Leads PJ] releaseJobBrowser(dedicated): ${reason}`);
-        try {
-            await jobBrowser.close();
-        }
-        catch {
-            /* ignore */
-        }
+        await closeWithBudget(jobBrowser);
         return;
     }
     await releaseSharedBrowser(reason);
@@ -257,24 +273,10 @@ async function releaseSharedBrowser(reason) {
     console.warn(`[Leads PJ] releaseSharedBrowser: ${reason}`);
     const b = browser;
     browser = null;
-    if (b) {
-        try {
-            await b.close();
-        }
-        catch {
-            /* ignore */
-        }
-    }
+    await closeWithBudget(b);
     const s = server;
     server = null;
-    if (s) {
-        try {
-            await s.close();
-        }
-        catch {
-            /* ignore */
-        }
-    }
+    await closeWithBudget(s);
 }
 function isSharedBrowserConnected() {
     try {
