@@ -270,6 +270,32 @@ function isPortalCopyContinuationList(list: Pick<WabaLeadsCnpjList, "dayKey" | "
   return /\bc[oó]pia portal\b/i.test(String(list.name || ""));
 }
 
+/** Falha/fila com 0 páginas: retomar Chromium (não pular para ReceitaWS). */
+export function shouldResumeZeroCopyPortalList(list: {
+  source?: string;
+  skipPortalScrape?: boolean;
+  scrapeCompleted?: boolean | null;
+  status?: string;
+}): boolean {
+  if (String(list.source || "portal") !== "portal") return false;
+  if (list.skipPortalScrape) return false;
+  if (list.scrapeCompleted === true) return false;
+  return ["draft", "failed", "queued", "scraping"].includes(String(list.status || ""));
+}
+
+/** Esta lista ainda precisa da raspagem — não herdar “cópia ok” de outra linha da campanha. */
+export function shouldStayOnPortalScrapeForThisList(list: {
+  source?: string;
+  skipPortalScrape?: boolean;
+  scrapeCompleted?: boolean | null;
+}): boolean {
+  return (
+    String(list.source || "") === "portal" &&
+    !list.skipPortalScrape &&
+    list.scrapeCompleted !== true
+  );
+}
+
 function portalCopyContinuationDayKey(today = saoPauloDayKey()): string {
   return `${today}${PORTAL_COPY_DAY_SUFFIX}`;
 }
@@ -852,13 +878,16 @@ export class WabaLeadsCnpjService {
 
   private ensurePortalCopyContinues(campaignKey: string, portalUiMaxPage: number): void {
     const key = String(campaignKey || "").trim();
-    if (!key || this.isCampaignPortalCopyComplete(key)) return;
+    if (!key) return;
     if (this.repository.getPool(key)?.autoContinuePaused) return;
 
     const lists = this.repository
       .list()
       .filter((l) => String(l.campaignKey || "").trim() === key && l.source === "portal");
     if (!lists.length) return;
+
+    const stuckZeroCopy = lists.find((l) => shouldResumeZeroCopyPortalList(l));
+    if (!stuckZeroCopy && this.isCampaignPortalCopyComplete(key)) return;
 
     const activeScrape = lists.find(
       (l) => l.status === "scraping" && !l.skipPortalScrape,
@@ -872,6 +901,7 @@ export class WabaLeadsCnpjService {
     const pending = pool?.pending.length || 0;
     const used = this.repository.collectUsedCnpjs(key).size;
     const sample =
+      lists.find((l) => isPortalCopyContinuationList(l) && l.scrapeCompleted !== true) ||
       lists.find((l) => isPortalCopyContinuationList(l)) ||
       lists.find((l) => l.status === "ready") ||
       lists.find((l) => !l.skipPortalScrape) ||
@@ -883,7 +913,11 @@ export class WabaLeadsCnpjService {
       metrics.pagesDone < portalUiMaxPage &&
       resumePage <= portalUiMaxPage;
     const neverFinished = sample.scrapeCompleted !== true && resumePage <= portalUiMaxPage;
-    if (!clearlyIncomplete && !(neverFinished && (pending > 0 || metrics.cnpjCopied > 0))) {
+    if (
+      !stuckZeroCopy &&
+      !clearlyIncomplete &&
+      !(neverFinished && (pending > 0 || metrics.cnpjCopied > 0))
+    ) {
       return;
     }
     // Checkpoint já além do teto = cópia tratada como fim da UI.
@@ -891,9 +925,9 @@ export class WabaLeadsCnpjService {
 
     const openPartial = lists.find(
       (l) =>
-        !isPortalCopyContinuationList(l) &&
         (l.status === "enriching" || l.status === "queued" || l.status === "failed") &&
-        !l.skipPortalScrape,
+        !l.skipPortalScrape &&
+        l.scrapeCompleted !== true,
     );
     if (openPartial) {
       this.resumeIncompletePortalScrape(openPartial.id);
@@ -916,10 +950,14 @@ export class WabaLeadsCnpjService {
       (l) =>
         !l.skipPortalScrape &&
         l.scrapeCompleted !== true &&
-        ["draft", "failed", "scraping"].includes(l.status),
+        ["draft", "failed", "scraping", "queued"].includes(l.status),
     );
     if (anyIncomplete) {
-      if (anyIncomplete.status === "failed" || anyIncomplete.status === "draft") {
+      if (
+        anyIncomplete.status === "failed" ||
+        anyIncomplete.status === "draft" ||
+        anyIncomplete.status === "queued"
+      ) {
         this.resumeIncompletePortalScrape(anyIncomplete.id);
       } else {
         this.enqueueJob(anyIncomplete.id);
@@ -1026,7 +1064,7 @@ export class WabaLeadsCnpjService {
     if (list.source !== "portal" || list.skipPortalScrape) {
       throw new Error("Só listas do portal podem retomar a cópia.");
     }
-    if (!["enriching", "queued", "failed", "ready", "scraping"].includes(list.status)) {
+    if (!["enriching", "queued", "failed", "ready", "scraping", "draft"].includes(list.status)) {
       throw new Error(`Status ${list.status} não permite retomar a raspagem.`);
     }
     // Ready com Excel: não apaga Lista NN — sobe linha `#portal-copy`.
@@ -2259,6 +2297,7 @@ export class WabaLeadsCnpjService {
            * Regra de produto: copiar até maxPages / teto UI ANTES de enriquecer.
            * scrapeCompleted prematuro (total do portal subestimado → ~104 págs.) não conta.
            */
+          const thisListNeedsOwnCopy = shouldStayOnPortalScrapeForThisList(freshList);
           const portalCopyDone =
             this.isPortalScrapeReallyComplete(
               freshList,
@@ -2267,11 +2306,12 @@ export class WabaLeadsCnpjService {
               portalUiMaxPage,
             ) ||
             Boolean(ckpt && resumeFromPage > portalUiMaxPage) ||
-            this.repository.list().some(
-              (l) =>
-                String(l.campaignKey || "").trim() === campaignKey &&
-                this.isPortalScrapeReallyComplete(l, pendingCount, used.size, portalUiMaxPage),
-            );
+            (!thisListNeedsOwnCopy &&
+              this.repository.list().some(
+                (l) =>
+                  String(l.campaignKey || "").trim() === campaignKey &&
+                  this.isPortalScrapeReallyComplete(l, pendingCount, used.size, portalUiMaxPage),
+              ));
           const needPortalCopy =
             !portalCopyDone &&
             !(ckpt && resumeFromPage > portalUiMaxPage);
@@ -2575,10 +2615,14 @@ export class WabaLeadsCnpjService {
         if (list.source === "portal" && !list.skipPortalScrape) {
           const liveGate = this.repository.getById(listId);
           const poolLeftGate = this.repository.getPool(campaignKey)?.pending.length || 0;
+          const thisNeedsCopy = liveGate
+            ? shouldStayOnPortalScrapeForThisList(liveGate)
+            : true;
           const campaignCopyDone =
             (liveGate
               ? this.isPortalScrapeReallyComplete(liveGate, poolLeftGate, used.size)
-              : false) || this.isCampaignPortalCopyComplete(campaignKey);
+              : false) ||
+            (!thisNeedsCopy && this.isCampaignPortalCopyComplete(campaignKey));
           if (!campaignCopyDone) {
             patch({
               status: "scraping",

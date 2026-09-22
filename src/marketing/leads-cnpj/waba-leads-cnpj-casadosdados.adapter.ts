@@ -86,6 +86,21 @@ async function waitPastCloudflare(
  * Evita "Navigation … is interrupted by another navigation" (ex.: pós-login
  * ainda indo para /plataforma enquanto o robô chama goto /pesquisa).
  */
+export function classifyGotoFailure(message: string): "hard-dead" | "retry" | "throw" {
+  const msg = String(message || "");
+  if (
+    /Page crashed|Target crashed|browser has been closed|Target page, context or browser has been closed/i.test(
+      msg,
+    )
+  ) {
+    return "hard-dead";
+  }
+  if (/interrupted by another navigation|net::ERR_ABORTED|frame was detached/i.test(msg)) {
+    return "retry";
+  }
+  return "throw";
+}
+
 async function gotoWithRetry(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   page: any,
@@ -102,10 +117,11 @@ async function gotoWithRetry(
     } catch (error) {
       lastError = error;
       const msg = error instanceof Error ? error.message : String(error);
-      if (/Page crashed|Target crashed|has been closed/i.test(msg)) {
-        throw error;
-      }
-      if (!/interrupted by another navigation/i.test(msg)) throw error;
+      const kind = classifyGotoFailure(msg);
+      if (kind === "hard-dead") throw error;
+      if (kind !== "retry" || attempt >= 3) throw error;
+      const alive = await rendererProbe(page, 1500).catch(() => false);
+      if (!alive) throw error;
       await page.waitForLoadState("domcontentloaded").catch(() => null);
       await page.waitForTimeout(600 * attempt);
     }
@@ -573,9 +589,9 @@ async function dismissBlockingPortalOverlays(page: PageLike) {
   await sleepNode(100);
 }
 
-function isChromiumTargetCrash(error: unknown): boolean {
+export function isChromiumTargetCrash(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error || "");
-  return /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(
+  return /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|has been closed|browser has been closed|Target page, context or browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(
     msg,
   );
 }
@@ -601,9 +617,29 @@ async function readResultsSampleText(page: PageLike, maxChars = 12_000): Promise
   }, maxChars);
 }
 
+async function evaluateOrReconnect<T>(
+  page: PageLike,
+  label: string,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  try {
+    return await page.evaluate(fn);
+  } catch (error) {
+    if (isChromiumTargetCrash(error)) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new LeadsScrapeError(
+        "TARGET_CRASHED",
+        "new-browser",
+        `${label}: ${msg.slice(0, 220)}`,
+      );
+    }
+    throw error;
+  }
+}
+
 /** Cards CNPJ na tela — evaluate leve, sem scroll artificial. */
 async function readScreenCardsLight(page: PageLike): Promise<string[][]> {
-  return page.evaluate(() => {
+  return evaluateOrReconnect(page, "lendo cards CNPJ", () => {
     const cnpjRe = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/;
     const seen = new Set<string>();
     const out: string[][] = [];
@@ -1063,8 +1099,8 @@ async function probeSearchAckLite(page: PageLike): Promise<{
   dialogs: number;
   searchButtonDisabled: boolean;
 } | null> {
-  return page
-    .evaluate(() => {
+  try {
+    return await evaluateOrReconnect(page, "probe ACK pesquisa", () => {
       const pagination = Boolean(document.querySelector('nav[data-oruga="pagination"]'));
       const loadingNodes = document.querySelectorAll(
         [
@@ -1114,8 +1150,11 @@ async function probeSearchAckLite(page: PageLike): Promise<{
             searchBtn.getAttribute("aria-disabled") === "true"
           : false,
       };
-    })
-    .catch(() => null);
+    });
+  } catch (error) {
+    if (isLeadsScrapeError(error) || isChromiumTargetCrash(error)) throw error;
+    return null;
+  }
 }
 
 /**

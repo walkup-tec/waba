@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaLeadsCnpjService = void 0;
 exports.isLeadsCnpjSearchRunning = isLeadsCnpjSearchRunning;
+exports.shouldResumeZeroCopyPortalList = shouldResumeZeroCopyPortalList;
+exports.shouldStayOnPortalScrapeForThisList = shouldStayOnPortalScrapeForThisList;
 exports.resolveScrapeHistoryMetrics = resolveScrapeHistoryMetrics;
 exports.pickCampaignHistoryLists = pickCampaignHistoryLists;
 exports.saoPauloDayKey = saoPauloDayKey;
@@ -218,6 +220,22 @@ function isPortalCopyContinuationList(list) {
     if (day.includes(PORTAL_COPY_DAY_SUFFIX))
         return true;
     return /\bc[oó]pia portal\b/i.test(String(list.name || ""));
+}
+/** Falha/fila com 0 páginas: retomar Chromium (não pular para ReceitaWS). */
+function shouldResumeZeroCopyPortalList(list) {
+    if (String(list.source || "portal") !== "portal")
+        return false;
+    if (list.skipPortalScrape)
+        return false;
+    if (list.scrapeCompleted === true)
+        return false;
+    return ["draft", "failed", "queued", "scraping"].includes(String(list.status || ""));
+}
+/** Esta lista ainda precisa da raspagem — não herdar “cópia ok” de outra linha da campanha. */
+function shouldStayOnPortalScrapeForThisList(list) {
+    return (String(list.source || "") === "portal" &&
+        !list.skipPortalScrape &&
+        list.scrapeCompleted !== true);
 }
 function portalCopyContinuationDayKey(today = saoPauloDayKey()) {
     return `${today}${PORTAL_COPY_DAY_SUFFIX}`;
@@ -743,7 +761,7 @@ class WabaLeadsCnpjService {
     }
     ensurePortalCopyContinues(campaignKey, portalUiMaxPage) {
         const key = String(campaignKey || "").trim();
-        if (!key || this.isCampaignPortalCopyComplete(key))
+        if (!key)
             return;
         if (this.repository.getPool(key)?.autoContinuePaused)
             return;
@@ -751,6 +769,9 @@ class WabaLeadsCnpjService {
             .list()
             .filter((l) => String(l.campaignKey || "").trim() === key && l.source === "portal");
         if (!lists.length)
+            return;
+        const stuckZeroCopy = lists.find((l) => shouldResumeZeroCopyPortalList(l));
+        if (!stuckZeroCopy && this.isCampaignPortalCopyComplete(key))
             return;
         const activeScrape = lists.find((l) => l.status === "scraping" && !l.skipPortalScrape);
         if (activeScrape) {
@@ -760,7 +781,8 @@ class WabaLeadsCnpjService {
         const pool = this.repository.getPool(key);
         const pending = pool?.pending.length || 0;
         const used = this.repository.collectUsedCnpjs(key).size;
-        const sample = lists.find((l) => isPortalCopyContinuationList(l)) ||
+        const sample = lists.find((l) => isPortalCopyContinuationList(l) && l.scrapeCompleted !== true) ||
+            lists.find((l) => isPortalCopyContinuationList(l)) ||
             lists.find((l) => l.status === "ready") ||
             lists.find((l) => !l.skipPortalScrape) ||
             lists[0];
@@ -770,15 +792,17 @@ class WabaLeadsCnpjService {
             metrics.pagesDone < portalUiMaxPage &&
             resumePage <= portalUiMaxPage;
         const neverFinished = sample.scrapeCompleted !== true && resumePage <= portalUiMaxPage;
-        if (!clearlyIncomplete && !(neverFinished && (pending > 0 || metrics.cnpjCopied > 0))) {
+        if (!stuckZeroCopy &&
+            !clearlyIncomplete &&
+            !(neverFinished && (pending > 0 || metrics.cnpjCopied > 0))) {
             return;
         }
         // Checkpoint já além do teto = cópia tratada como fim da UI.
         if (resumePage > portalUiMaxPage)
             return;
-        const openPartial = lists.find((l) => !isPortalCopyContinuationList(l) &&
-            (l.status === "enriching" || l.status === "queued" || l.status === "failed") &&
-            !l.skipPortalScrape);
+        const openPartial = lists.find((l) => (l.status === "enriching" || l.status === "queued" || l.status === "failed") &&
+            !l.skipPortalScrape &&
+            l.scrapeCompleted !== true);
         if (openPartial) {
             this.resumeIncompletePortalScrape(openPartial.id);
             return;
@@ -793,9 +817,11 @@ class WabaLeadsCnpjService {
         }
         const anyIncomplete = lists.find((l) => !l.skipPortalScrape &&
             l.scrapeCompleted !== true &&
-            ["draft", "failed", "scraping"].includes(l.status));
+            ["draft", "failed", "scraping", "queued"].includes(l.status));
         if (anyIncomplete) {
-            if (anyIncomplete.status === "failed" || anyIncomplete.status === "draft") {
+            if (anyIncomplete.status === "failed" ||
+                anyIncomplete.status === "draft" ||
+                anyIncomplete.status === "queued") {
                 this.resumeIncompletePortalScrape(anyIncomplete.id);
             }
             else {
@@ -893,7 +919,7 @@ class WabaLeadsCnpjService {
         if (list.source !== "portal" || list.skipPortalScrape) {
             throw new Error("Só listas do portal podem retomar a cópia.");
         }
-        if (!["enriching", "queued", "failed", "ready", "scraping"].includes(list.status)) {
+        if (!["enriching", "queued", "failed", "ready", "scraping", "draft"].includes(list.status)) {
             throw new Error(`Status ${list.status} não permite retomar a raspagem.`);
         }
         // Ready com Excel: não apaga Lista NN — sobe linha `#portal-copy`.
@@ -1982,10 +2008,12 @@ class WabaLeadsCnpjService {
                      * Regra de produto: copiar até maxPages / teto UI ANTES de enriquecer.
                      * scrapeCompleted prematuro (total do portal subestimado → ~104 págs.) não conta.
                      */
+                    const thisListNeedsOwnCopy = shouldStayOnPortalScrapeForThisList(freshList);
                     const portalCopyDone = this.isPortalScrapeReallyComplete(freshList, pendingCount, used.size, portalUiMaxPage) ||
                         Boolean(ckpt && resumeFromPage > portalUiMaxPage) ||
-                        this.repository.list().some((l) => String(l.campaignKey || "").trim() === campaignKey &&
-                            this.isPortalScrapeReallyComplete(l, pendingCount, used.size, portalUiMaxPage));
+                        (!thisListNeedsOwnCopy &&
+                            this.repository.list().some((l) => String(l.campaignKey || "").trim() === campaignKey &&
+                                this.isPortalScrapeReallyComplete(l, pendingCount, used.size, portalUiMaxPage)));
                     const needPortalCopy = !portalCopyDone &&
                         !(ckpt && resumeFromPage > portalUiMaxPage);
                     if (needPortalCopy || mustResumeScrape) {
@@ -2256,9 +2284,13 @@ class WabaLeadsCnpjService {
                 if (list.source === "portal" && !list.skipPortalScrape) {
                     const liveGate = this.repository.getById(listId);
                     const poolLeftGate = this.repository.getPool(campaignKey)?.pending.length || 0;
+                    const thisNeedsCopy = liveGate
+                        ? shouldStayOnPortalScrapeForThisList(liveGate)
+                        : true;
                     const campaignCopyDone = (liveGate
                         ? this.isPortalScrapeReallyComplete(liveGate, poolLeftGate, used.size)
-                        : false) || this.isCampaignPortalCopyComplete(campaignKey);
+                        : false) ||
+                        (!thisNeedsCopy && this.isCampaignPortalCopyComplete(campaignKey));
                     if (!campaignCopyDone) {
                         patch({
                             status: "scraping",

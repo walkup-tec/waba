@@ -47786,6 +47786,13 @@
       function resolveMarketingLeadsCnpjStage(item) {
         const status = String(item?.status || "");
         const msg = String(item?.progressMessage || item?.error || "").toLowerCase();
+        if (
+          status === "queued" ||
+          status === "enriching" ||
+          /fila de enriquecimento|1 campanha\/dia|1 campanha por dia/.test(msg)
+        ) {
+          return "enriquecendo";
+        }
         // Prefixo de fase do adapter (BOOT/LOGIN/FILTERS/SEARCH/COPY) — fonte de verdade.
         if (
           /\bcopy\b|^\s*copy:|recover nível|retomada|retomando (da )?página|retomando extração/i.test(
@@ -47813,7 +47820,6 @@
           if (/login|boot|abrindo|cloudflare|portal|entrar/.test(msg)) return "abrindo";
           return "abrindo";
         }
-        if (status === "enriching") return "enriquecendo";
         if (status === "scraping" || status === "draft") {
           if (/enriquec|receitaws|lote do dia/.test(msg)) return "enriquecendo";
           if (/página|copi|card|lendo|coletados|avançando/.test(msg)) return "copiando";

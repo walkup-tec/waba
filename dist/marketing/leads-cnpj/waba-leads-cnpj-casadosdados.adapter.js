@@ -34,12 +34,14 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LeadsScrapeError = exports.RendererUnresponsiveError = void 0;
+exports.classifyGotoFailure = classifyGotoFailure;
 exports.resolvePortalResumePage = resolvePortalResumePage;
 exports.isLeadsScrapeError = isLeadsScrapeError;
 exports.isSoftScrapeError = isSoftScrapeError;
 exports.readCasaDosDadosCredentials = readCasaDosDadosCredentials;
 exports.assertCasaDosDadosCredentials = assertCasaDosDadosCredentials;
 exports.resolvePortalUiMaxPage = resolvePortalUiMaxPage;
+exports.isChromiumTargetCrash = isChromiumTargetCrash;
 exports.scrapeCasaDosDadosLeads = scrapeCasaDosDadosLeads;
 const waba_leads_cnpj_repository_1 = require("./waba-leads-cnpj.repository");
 const waba_leads_cnpj_browser_runtime_1 = require("./waba-leads-cnpj-browser-runtime");
@@ -93,6 +95,16 @@ async function waitPastCloudflare(page, options) {
  * Evita "Navigation … is interrupted by another navigation" (ex.: pós-login
  * ainda indo para /plataforma enquanto o robô chama goto /pesquisa).
  */
+function classifyGotoFailure(message) {
+    const msg = String(message || "");
+    if (/Page crashed|Target crashed|browser has been closed|Target page, context or browser has been closed/i.test(msg)) {
+        return "hard-dead";
+    }
+    if (/interrupted by another navigation|net::ERR_ABORTED|frame was detached/i.test(msg)) {
+        return "retry";
+    }
+    return "throw";
+}
 async function gotoWithRetry(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 page, url, options) {
@@ -107,10 +119,13 @@ page, url, options) {
         catch (error) {
             lastError = error;
             const msg = error instanceof Error ? error.message : String(error);
-            if (/Page crashed|Target crashed|has been closed/i.test(msg)) {
+            const kind = classifyGotoFailure(msg);
+            if (kind === "hard-dead")
                 throw error;
-            }
-            if (!/interrupted by another navigation/i.test(msg))
+            if (kind !== "retry" || attempt >= 3)
+                throw error;
+            const alive = await rendererProbe(page, 1500).catch(() => false);
+            if (!alive)
                 throw error;
             await page.waitForLoadState("domcontentloaded").catch(() => null);
             await page.waitForTimeout(600 * attempt);
@@ -396,7 +411,7 @@ async function dismissBlockingPortalOverlays(page) {
 }
 function isChromiumTargetCrash(error) {
     const msg = error instanceof Error ? error.message : String(error || "");
-    return /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
+    return /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|has been closed|browser has been closed|Target page, context or browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(msg);
 }
 function requiresBrowserRecovery(error) {
     if (error instanceof LeadsScrapeError)
@@ -421,9 +436,21 @@ async function readResultsSampleText(page, maxChars = 12000) {
         return String(root?.innerText || "").slice(0, Math.max(1000, limit));
     }, maxChars);
 }
+async function evaluateOrReconnect(page, label, fn) {
+    try {
+        return await page.evaluate(fn);
+    }
+    catch (error) {
+        if (isChromiumTargetCrash(error)) {
+            const msg = error instanceof Error ? error.message : String(error);
+            throw new LeadsScrapeError("TARGET_CRASHED", "new-browser", `${label}: ${msg.slice(0, 220)}`);
+        }
+        throw error;
+    }
+}
 /** Cards CNPJ na tela — evaluate leve, sem scroll artificial. */
 async function readScreenCardsLight(page) {
-    return page.evaluate(() => {
+    return evaluateOrReconnect(page, "lendo cards CNPJ", () => {
         const cnpjRe = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/;
         const seen = new Set();
         const out = [];
@@ -814,51 +841,56 @@ async function cdpOrReconnect(promise, timeoutMs, label) {
 }
 /** Probe leve só para ACK pós-clique — sem reescanear todos os CTAs. */
 async function probeSearchAckLite(page) {
-    return page
-        .evaluate(() => {
-        const pagination = Boolean(document.querySelector('nav[data-oruga="pagination"]'));
-        const loadingNodes = document.querySelectorAll([
-            '[aria-busy="true"]',
-            ".loading",
-            ".is-loading",
-            ".loader",
-            ".spinner",
-            '[class*="loading"]',
-            '[class*="spinner"]',
-        ].join(",")).length;
-        const root = document.querySelector("main") || document.body;
-        const sample = String(root?.innerText || "").slice(0, 20000);
-        const cnpjRe = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g;
-        const found = sample.match(cnpjRe) || [];
-        const cnpjNodes = Math.min(20, new Set(found).size);
-        const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
-        const searchBtn = buttons.find((el) => {
-            const text = String(el instanceof HTMLInputElement ? el.value : el.textContent || "")
-                .replace(/\s+/g, " ")
-                .trim()
-                .toLowerCase();
-            const aria = String(el.getAttribute("aria-label") || "")
-                .replace(/\s+/g, " ")
-                .trim()
-                .toLowerCase();
-            return (text.includes("pesquisar") ||
-                text.includes("buscar") ||
-                aria.includes("pesquisar") ||
-                aria.includes("buscar"));
+    try {
+        return await evaluateOrReconnect(page, "probe ACK pesquisa", () => {
+            const pagination = Boolean(document.querySelector('nav[data-oruga="pagination"]'));
+            const loadingNodes = document.querySelectorAll([
+                '[aria-busy="true"]',
+                ".loading",
+                ".is-loading",
+                ".loader",
+                ".spinner",
+                '[class*="loading"]',
+                '[class*="spinner"]',
+            ].join(",")).length;
+            const root = document.querySelector("main") || document.body;
+            const sample = String(root?.innerText || "").slice(0, 20000);
+            const cnpjRe = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g;
+            const found = sample.match(cnpjRe) || [];
+            const cnpjNodes = Math.min(20, new Set(found).size);
+            const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
+            const searchBtn = buttons.find((el) => {
+                const text = String(el instanceof HTMLInputElement ? el.value : el.textContent || "")
+                    .replace(/\s+/g, " ")
+                    .trim()
+                    .toLowerCase();
+                const aria = String(el.getAttribute("aria-label") || "")
+                    .replace(/\s+/g, " ")
+                    .trim()
+                    .toLowerCase();
+                return (text.includes("pesquisar") ||
+                    text.includes("buscar") ||
+                    aria.includes("pesquisar") ||
+                    aria.includes("buscar"));
+            });
+            return {
+                url: location.href,
+                pagination,
+                loadingNodes,
+                cnpjNodes,
+                dialogs: document.querySelectorAll('[role="dialog"], .modal, .o-modal').length,
+                searchButtonDisabled: searchBtn
+                    ? Boolean(searchBtn.disabled) ||
+                        searchBtn.getAttribute("aria-disabled") === "true"
+                    : false,
+            };
         });
-        return {
-            url: location.href,
-            pagination,
-            loadingNodes,
-            cnpjNodes,
-            dialogs: document.querySelectorAll('[role="dialog"], .modal, .o-modal').length,
-            searchButtonDisabled: searchBtn
-                ? Boolean(searchBtn.disabled) ||
-                    searchBtn.getAttribute("aria-disabled") === "true"
-                : false,
-        };
-    })
-        .catch(() => null);
+    }
+    catch (error) {
+        if (isLeadsScrapeError(error) || isChromiumTargetCrash(error))
+            throw error;
+        return null;
+    }
 }
 /**
  * ACK com deadline do Node. Nunca usa page.waitForTimeout no loop —
