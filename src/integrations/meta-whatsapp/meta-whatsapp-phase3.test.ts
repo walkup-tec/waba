@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { MetaWhatsappConnectionService, stripMetaSecrets } from "./meta-whatsapp-connection.service";
 import { MetaWhatsappError, toPublicMetaError } from "./meta-whatsapp-errors";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
+import { hideBusiness, isHiddenBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
 import type { AttachClaimedAssetsInput, UpsertPendingTokenInput } from "./meta-whatsapp-connection.repository";
@@ -270,6 +271,9 @@ describe("meta-whatsapp phase 3", () => {
     const service = new MetaWhatsappConnectionService(repo as any, oauthOk);
     await service.exchangeCodeAndStore(authA, { code: "ok-code" });
     assert.equal(repo.rows[0].metaBusinessId, null);
+    const tenantA = deriveStableMetaTenantId(authA.email);
+    hideBusiness(tenantA, "1041827648719609", "Drax Sistemas");
+    assert.equal(isHiddenBusiness(tenantA, "1041827648719609"), true);
     const claimed = await service.attachSessionAssets(authA, {
       wabaId: "waba-incoming",
       phoneNumberId: "phone-incoming",
@@ -277,6 +281,8 @@ describe("meta-whatsapp phase 3", () => {
     });
     assert.equal(claimed.businessId, "1041827648719609");
     assert.equal(claimed.wabaId, "waba-incoming");
+    assert.equal(isHiddenBusiness(tenantA, "1041827648719609"), false);
+    unhideBusiness(tenantA, "1041827648719609");
   });
 
   it("segundo portfólio não sobrescreve token nem WABA do primeiro", async () => {

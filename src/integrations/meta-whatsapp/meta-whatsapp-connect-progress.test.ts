@@ -16,6 +16,8 @@ describe("progresso ao lado de Conectar Portfólio", () => {
     assert.match(html, /Listando os números do WhatsApp/);
     assert.match(html, /Conexão concluída com sucesso/);
     assert.match(html, /wabaEnsureMetaPortfolioLoad/);
+    assert.match(html, /timeoutMs: 28000/);
+    assert.match(html, /metaTpPortfolioPage === "ativas" && !ativas.length && restritas.length/);
     assert.match(html, /meta-connect-progress-check/);
   });
 

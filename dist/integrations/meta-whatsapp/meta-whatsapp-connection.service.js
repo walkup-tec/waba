@@ -1684,6 +1684,9 @@ class MetaWhatsappConnectionService {
             if (phoneNumberId) {
                 rememberOfficialPhoneDisplayName(tenant.tenantId, phoneNumberId);
             }
+            if (businessId) {
+                (0, meta_whatsapp_hidden_business_store_1.unhideBusiness)(tenant.tenantId, businessId);
+            }
             (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
             return toMetaWhatsappPublicConnection(row);
         }
@@ -1968,7 +1971,7 @@ class MetaWhatsappConnectionService {
         const selectPage = await collectSelectPageAdminCards({
             graph: withHydrateLimits(this.graph),
             writeTokens,
-            extraBusinessIds: [...(0, meta_whatsapp_manual_business_store_1.listManualBusinessIds)(tenantId), ...(0, meta_whatsapp_hidden_business_store_1.listHiddenBusinessIds)(tenantId)],
+            extraBusinessIds: [...(0, meta_whatsapp_manual_business_store_1.listManualBusinessIds)(tenantId)],
         });
         const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenantId, row, (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(rows, row), writeTokens, { assignedJson: selectPage.assignedByConnectionId.get(row.id) })));
         const leftIds = hydrated

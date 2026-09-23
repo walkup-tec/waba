@@ -39386,6 +39386,8 @@
       }
 
       function metaTpHasVisiblePortfolios() {
+        const bundles = metaTpSession.portfolios || [];
+        if (bundles.some(function (item) { return item && item.hidden !== true; })) return true;
         const list = document.getElementById("meta-tp-portfolio-list");
         const section = document.getElementById("meta-tp-portfolio");
         if (!list || (section && section.hidden)) return false;
@@ -40224,6 +40226,11 @@
         }
         section.hidden = false;
         if (empty) empty.hidden = true;
+        const ativas = metaTpFilterPortfoliosByPage(bundles, "ativas");
+        const restritas = metaTpFilterPortfoliosByPage(bundles, "restritas");
+        if (metaTpPortfolioPage === "ativas" && !ativas.length && restritas.length) {
+          metaTpPortfolioPage = "restritas";
+        }
         metaTpSyncPortfolioPageNav(bundles);
         const visible = metaTpFilterPortfoliosByPage(bundles, metaTpPortfolioPage);
         const savedBiz = String(metaTpSession.savedBusinessId || "").trim();
@@ -40333,6 +40340,7 @@
         try {
           const { response, payload } = await metaTpFetchJson(
             "/integrations/meta/whatsapp/portfolio" + (force ? "?fresh=1" : ""),
+            { timeoutMs: 28000 },
           );
           if (!response.ok || payload.ok === false) {
             if (response.status === 502 || response.status === 504) {
@@ -40346,7 +40354,13 @@
           metaTpPortfolioFingerprint = next;
           metaTpAdvanceConnectProgress(META_TP_CONNECT_STEPS.length - 1);
           metaTpRenderPortfolio(payload);
-        } catch {
+        } catch (err) {
+          const aborted =
+            Boolean(err && err.name === "AbortError") ||
+            /aborted|AbortError/i.test(String((err && err.message) || ""));
+          if (aborted) {
+            metaTpSetStatus("O servidor não concluiu a leitura dos números a tempo. Clique de novo em Atualizar.");
+          }
           if (!silent && !force) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
         }
         })();
@@ -40387,17 +40401,34 @@
         const opts = options || {};
         const headers = { Accept: "application/json" };
         if (opts.body) headers["Content-Type"] = "application/json";
-        const response = await fetch(resolveWabaPublicPath(path), {
-          credentials: "same-origin",
-          method: opts.method || "GET",
-          headers,
-          body: opts.body || undefined,
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (metaTpHasSecret(payload)) {
-          throw new Error("Resposta bloqueada por segurança.");
+        const timeoutMs = Number(opts.timeoutMs || 0);
+        const controller = timeoutMs > 0 && typeof AbortController === "function" ? new AbortController() : null;
+        let timer = 0;
+        if (controller && timeoutMs > 0) {
+          timer = window.setTimeout(function () {
+            try {
+              controller.abort();
+            } catch (e) {
+              /* noop */
+            }
+          }, timeoutMs);
         }
-        return { response, payload };
+        try {
+          const response = await fetch(resolveWabaPublicPath(path), {
+            credentials: "same-origin",
+            method: opts.method || "GET",
+            headers,
+            body: opts.body || undefined,
+            signal: controller ? controller.signal : undefined
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (metaTpHasSecret(payload)) {
+            throw new Error("Resposta bloqueada por segurança.");
+          }
+          return { response, payload };
+        } finally {
+          if (timer) window.clearTimeout(timer);
+        }
       }
 
       async function metaTpRefreshStatusSilent() {

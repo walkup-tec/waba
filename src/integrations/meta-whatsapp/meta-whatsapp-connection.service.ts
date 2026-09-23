@@ -2032,6 +2032,9 @@ export class MetaWhatsappConnectionService {
       if (phoneNumberId) {
         rememberOfficialPhoneDisplayName(tenant.tenantId, phoneNumberId);
       }
+      if (businessId) {
+        unhideBusiness(tenant.tenantId, businessId);
+      }
       invalidateCachedPortfolioGraph(tenant.tenantId);
       return toMetaWhatsappPublicConnection(row);
     } catch {
@@ -2359,7 +2362,7 @@ export class MetaWhatsappConnectionService {
     const selectPage = await collectSelectPageAdminCards({
       graph: withHydrateLimits(this.graph),
       writeTokens,
-      extraBusinessIds: [...listManualBusinessIds(tenantId), ...listHiddenBusinessIds(tenantId)],
+      extraBusinessIds: [...listManualBusinessIds(tenantId)],
     });
     const hydrated = await Promise.all(
       rows.map((row) =>
