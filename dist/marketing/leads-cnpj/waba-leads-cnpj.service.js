@@ -41,12 +41,11 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 /** Evita dois backfills de telefone no mesmo listId. */
 const phoneRefreshJobs = new Set();
 function resolveMaxConcurrentScrapes() {
-    // 1 Chromium: Cloudflare + Xvfb saturam com 2 em paralelo (Odontologia LOGIN vs Imobiliarias COPY).
-    const allowParallel = String(process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES || "").trim() === "1";
-    const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 1) || 1);
-    const requested = Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 1));
-    if (!allowParallel)
-        return 1;
+    const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 4) || 4);
+    const requested = Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 4));
+    // EasyPanel ainda pode ter 1–2 do teto anti-bot; o fluxo é várias listas ao mesmo tempo.
+    if (requested < 3)
+        return 4;
     return requested;
 }
 /** Cópia já na pág. N passa na frente de LOGIN zerado na fila do Chromium. */
@@ -58,8 +57,9 @@ function scrapeResumePriority(list) {
     return page * 1000000 + collected;
 }
 function resolveScrapeStaggerMs() {
-    const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 12000) || 12000);
-    return Math.max(0, Math.min(120000, Number.isFinite(raw) ? raw : 12000));
+    const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 0) || 0);
+    // Sem espera longa entre launches — portais abrem juntos, como no localhost.
+    return Math.max(0, Math.min(2000, Number.isFinite(raw) ? raw : 0));
 }
 function formatListaLabel(index) {
     const n = Math.max(1, Math.round(Number(index) || 1));

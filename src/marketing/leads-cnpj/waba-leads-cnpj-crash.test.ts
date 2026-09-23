@@ -192,18 +192,18 @@ describe("Leads PJ fila de Chromium", () => {
     );
   });
 
-  it("mantém 1 Chromium mesmo com MAX_CONCURRENT=2 sem ALLOW_PARALLEL", () => {
+  it("abre várias listas em paralelo (default 4; teto 1–2 vira 4)", () => {
     const prevMax = process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES;
-    const prevAllow = process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES;
-    process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES = "2";
-    delete process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES;
+    delete process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES;
     try {
-      assert.equal(resolveMaxConcurrentScrapes(), 1);
+      assert.equal(resolveMaxConcurrentScrapes(), 4);
+      process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES = "2";
+      assert.equal(resolveMaxConcurrentScrapes(), 4);
+      process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES = "6";
+      assert.equal(resolveMaxConcurrentScrapes(), 6);
     } finally {
       if (prevMax === undefined) delete process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES;
       else process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES = prevMax;
-      if (prevAllow === undefined) delete process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES;
-      else process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES = prevAllow;
     }
   });
 });

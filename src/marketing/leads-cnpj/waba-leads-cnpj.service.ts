@@ -52,10 +52,9 @@ const continueTimers = new Map<string, ReturnType<typeof setTimeout>>();
 /** Timer global da fila de enriquecimento (1 campanha por dia civil SP). */
 let globalEnrichTimer: ReturnType<typeof setTimeout> | null = null;
 /**
- * Soft-cap da raspagem Playwright: 1 Chromium (Cloudflare satura com 2).
- * EasyPanel com CASADOSDADOS_MAX_CONCURRENT_SCRAPES=2 era ignorado na prática:
- * LOGIN zerado ocupava a 2ª vaga e a cópia em andamento parava de evoluir.
- * Paralelo só com CASADOSDADOS_ALLOW_PARALLEL_SCRAPES=1.
+ * Soft-cap da raspagem Playwright: N Chromiums em paralelo (default 4).
+ * Abrir Portal + Pesquisar + Copiar rodam juntos, um Chromium por lista.
+ * Override: CASADOSDADOS_MAX_CONCURRENT_SCRAPES (3–12).
  */
 type PortalScrapeWaiter = {
   listId: string;
@@ -77,11 +76,10 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 const phoneRefreshJobs = new Set<string>();
 
 export function resolveMaxConcurrentScrapes(): number {
-  // 1 Chromium: Cloudflare + Xvfb saturam com 2 em paralelo (Odontologia LOGIN vs Imobiliarias COPY).
-  const allowParallel = String(process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES || "").trim() === "1";
-  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 1) || 1);
-  const requested = Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 1));
-  if (!allowParallel) return 1;
+  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 4) || 4);
+  const requested = Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 4));
+  // EasyPanel ainda pode ter 1–2 do teto anti-bot; o fluxo é várias listas ao mesmo tempo.
+  if (requested < 3) return 4;
   return requested;
 }
 
@@ -100,8 +98,9 @@ export function scrapeResumePriority(list: {
 }
 
 function resolveScrapeStaggerMs(): number {
-  const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 12_000) || 12_000);
-  return Math.max(0, Math.min(120_000, Number.isFinite(raw) ? raw : 12_000));
+  const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 0) || 0);
+  // Sem espera longa entre launches — portais abrem juntos, como no localhost.
+  return Math.max(0, Math.min(2_000, Number.isFinite(raw) ? raw : 0));
 }
 
 function formatListaLabel(index: number): string {
