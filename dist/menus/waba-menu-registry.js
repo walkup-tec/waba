@@ -162,6 +162,14 @@ exports.WABA_MENU_REGISTRY = [
         profile: "production",
     },
     {
+        id: "whatsapp-adspower",
+        label: "Perfis AdsPower",
+        tab: "whatsapp-adspower",
+        section: "farm-bm",
+        sectionLabel: SECTION_LABELS["farm-bm"],
+        profile: "production",
+    },
+    {
         id: "admin-dashboard",
         label: "Dashboard",
         tab: "admin-dashboard",
@@ -285,6 +293,7 @@ exports.WABA_TECH_PROVIDER_MENU_IDS = [
     "whatsapp-automation",
     "whatsapp-inbox",
     "whatsapp-bots",
+    "whatsapp-adspower",
 ];
 const listWabaMenuDefinitions = () => exports.WABA_MENU_REGISTRY.map((item) => ({ ...item }));
 exports.listWabaMenuDefinitions = listWabaMenuDefinitions;

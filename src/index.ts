@@ -94,6 +94,10 @@ import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-a
 import { registerSomaChatbotCloudRelayRoutes } from "./integrations/soma/soma-chatbot-cloud-relay";
 import { registerMetaWhatsappIntegrationRoutes } from "./integrations/meta-whatsapp/meta-whatsapp.routes";
 import { registerWabaBotRoutes } from "./integrations/meta-whatsapp/bots/waba-bot.routes";
+import {
+  registerAdsPowerIngestRoute,
+  registerAdsPowerLabRoutes,
+} from "./integrations/adspower/waba-adspower.routes";
 import { startWabaBots } from "./integrations/meta-whatsapp/bots/waba-bot.bootstrap";
 import { startMetaWhatsappAutomation } from "./integrations/meta-whatsapp/meta-whatsapp-automation.bootstrap";
 import { ensureLabReportFinalizeSweep } from "./integrations/meta-whatsapp/meta-whatsapp-broadcast-report";
@@ -823,12 +827,14 @@ app.get("/maintenance", (_req, res) => {
 registerWabaCors(app);
 registerWabaAuthRoutes(app);
 registerMetaWhatsappWebhookRoutes(app);
+registerAdsPowerIngestRoute(app);
 registerSomaChatbotCloudRelayRoutes(app);
 registerWabaSubscriberRoutes(app);
 registerWabaEntitlementRoutes(app);
 app.use(wabaRequireAuthMiddleware);
 registerMetaWhatsappIntegrationRoutes(app);
 registerWabaBotRoutes(app);
+registerAdsPowerLabRoutes(app);
 startWabaBots();
 startMetaWhatsappAutomation();
 ensureLabReportFinalizeSweep();

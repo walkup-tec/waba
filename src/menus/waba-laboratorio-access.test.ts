@@ -60,6 +60,7 @@ describe("waba-laboratorio-access", () => {
       assert.equal(perms["whatsapp-oficial"], false);
       assert.equal(perms["whatsapp-inbox"], false);
       assert.equal(perms["whatsapp-bots"], false);
+      assert.equal(perms["whatsapp-adspower"], false);
       assert.equal(perms["whatsapp-templates"], false);
       assert.equal(perms["whatsapp-disparo-cloud"], false);
       assert.equal(perms["whatsapp-automation"], false);
@@ -92,6 +93,7 @@ describe("waba-laboratorio-access", () => {
       assert.equal(perms["whatsapp-oficial"], true);
       assert.equal(perms["whatsapp-inbox"], true);
       assert.equal(perms["whatsapp-bots"], true);
+      assert.equal(perms["whatsapp-adspower"], true);
       assert.equal(perms["whatsapp-templates"], true);
       assert.equal(perms["whatsapp-disparo-cloud"], true);
       assert.equal(perms["whatsapp-automation"], true);

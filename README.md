@@ -43,3 +43,21 @@ Primeira vez: `npm run init:env` → editar `.env.v01` e `.env.v02`.
    npm start
    ```
 
+## AdsPower (perfis WABA)
+
+A Local API do AdsPower (`http://local.adspower.net:50325`) existe só no PC do operador. A DRAX na nuvem **não** alcança esse localhost.
+
+1. No EasyPanel, defina `ADSPOWER_INGEST_TOKEN` (mesmo valor no PC).
+2. No computador com AdsPower aberto:
+   ```bash
+   ADSPOWER_API_BASE=http://local.adspower.net:50325 \
+   ADSPOWER_API_TOKEN=seu_token_local \
+   DRAX_BASE=https://waba.draxsistemas.com.br \
+   ADSPOWER_INGEST_TOKEN=mesmo_token_do_easypanel \
+   node scripts/adspower-sync-to-drax.mjs
+   ```
+3. No painel: **FARM BM → Perfis AdsPower**. Um perfil = uma conta WABA oficial já conectada no Laboratório.
+4. Aprovar templates e disparar segue em **Templates** e **Disparo Cloud** (Cloud API). A Meta registra esses envios oficiais. O AdsPower isola o navegador no PC; não esconde a API oficial.
+
+Se a DRAX e o AdsPower rodarem no mesmo PC, `POST /integrations/adspower/sync` puxa a lista direto da Local API.
+

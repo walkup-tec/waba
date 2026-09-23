@@ -2,4 +2,4 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WABA_DEPLOY_MARKER = void 0;
-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-23-101200-LEADS-PARALLEL";
+exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-09-23-103200-ADSPOWER";

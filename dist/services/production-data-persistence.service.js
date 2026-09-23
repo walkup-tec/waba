@@ -35,6 +35,7 @@ exports.PRODUCTION_PERSISTENCE_CATALOG = [
     },
     { id: "adminBadges", file: "waba-admin-master-menu-badges.json", label: "Dashboard / badges admin" },
     { id: "alternativaActivations", file: "alternativa-number-activations.json", label: "Números alternativa" },
+    { id: "adspowerProfiles", file: "waba-adspower-profiles.json", label: "AdsPower / perfis WABA" },
 ];
 function isDataDirWritable(dataDir) {
     try {
