@@ -2451,6 +2451,230 @@ describe("meta portfolio service", () => {
     assert.equal(marilza?.name, "60.846.306 Marilza de Castro");
   });
 
+  it("BM administrado sem conexão: WABA owned e chips entram no card", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup-sander",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const sanderPhones = [
+      {
+        id: "phone-sander-1",
+        display_phone_number: "+1 555-440-9968",
+        verified_name: "Sander de souza",
+        status: "CONNECTED",
+        code_verification_status: "VERIFIED",
+      },
+      {
+        id: "phone-sander-2",
+        display_phone_number: "+1 555-425-7122",
+        verified_name: "Sander roosevelt de souza",
+        status: "CONNECTED",
+        code_verification_status: "VERIFIED",
+      },
+    ];
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "4141369862822598", name: "Grupo Walkup" },
+              { id: "1588459689692010", name: "61.687.659 sander roosevelt de souza" },
+            ],
+          },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path === "1588459689692010") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1588459689692010",
+            name: "61.687.659 sander roosevelt de souza",
+            owned_whatsapp_business_accounts: {
+              data: [
+                {
+                  id: "waba-sander-1",
+                  name: "Sander de souza",
+                  phone_numbers: { data: [sanderPhones[0]] },
+                },
+                {
+                  id: "waba-sander-2",
+                  name: "Sander roosevelt de souza",
+                  phone_numbers: { data: [sanderPhones[1]] },
+                },
+              ],
+            },
+            client_whatsapp_business_accounts: { data: [] },
+          },
+        };
+      }
+      if (input.path === "1588459689692010/owned_whatsapp_business_accounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "waba-sander-1", name: "Sander de souza" },
+              { id: "waba-sander-2", name: "Sander roosevelt de souza" },
+            ],
+          },
+        };
+      }
+      if (input.path === "waba-sander-1/phone_numbers") {
+        return { ok: true, status: 200, json: { data: [sanderPhones[0]] } };
+      }
+      if (input.path === "waba-sander-2/phone_numbers") {
+        return { ok: true, status: 200, json: { data: [sanderPhones[1]] } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const sander = (assets.portfolios || []).find((item) => item.id === "1588459689692010");
+    assert.ok(sander);
+    assert.equal(sander?.name, "61.687.659 sander roosevelt de souza");
+    assert.equal(sander?.wabaId, "waba-sander-1");
+    const numbers = sander?.numbers || [];
+    assert.equal(numbers.length, 2);
+    assert.ok(numbers.some((item) => String(item.phoneNumberId || "") === "phone-sander-1"));
+    assert.ok(numbers.some((item) => String(item.phoneNumberId || "") === "phone-sander-2"));
+    const walkupCard = (assets.portfolios || []).find((item) => item.id === "4141369862822598");
+    assert.equal(
+      (walkupCard?.numbers || []).some((item) => String(item.phoneNumberId || "").startsWith("phone-sander")),
+      false,
+    );
+  });
+
+  it("BM sem owned: WABA client da agência cujo dono é esse BM entra no card", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup-partner",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const sanderPhone = {
+      id: "phone-sander-partner",
+      display_phone_number: "+1 555-425-7122",
+      verified_name: "Sander roosevelt de souza",
+      status: "CONNECTED",
+      code_verification_status: "VERIFIED",
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "4141369862822598", name: "Grupo Walkup" },
+              { id: "1588459689692010", name: "61.687.659 sander roosevelt de souza" },
+            ],
+          },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path === "1588459689692010") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1588459689692010",
+            name: "61.687.659 sander roosevelt de souza",
+            owned_whatsapp_business_accounts: { data: [] },
+            client_whatsapp_business_accounts: { data: [] },
+          },
+        };
+      }
+      if (input.path === "4141369862822598/client_whatsapp_business_accounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "waba-sander-partner",
+                name: "Sander roosevelt de souza",
+                owner_business_info: { id: "1588459689692010", name: "61.687.659 sander roosevelt de souza" },
+                phone_numbers: { data: [sanderPhone] },
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "waba-sander-partner/phone_numbers") {
+        return { ok: true, status: 200, json: { data: [sanderPhone] } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const sander = (assets.portfolios || []).find((item) => item.id === "1588459689692010");
+    assert.equal(sander?.wabaId, "waba-sander-partner");
+    const numbers = sander?.numbers || [];
+    assert.equal(numbers.length, 1);
+    assert.equal(numbers[0]?.phoneNumberId, "phone-sander-partner");
+    const walkupCard = (assets.portfolios || []).find((item) => item.id === "4141369862822598");
+    assert.equal(
+      (walkupCard?.numbers || []).some((item) => String(item.phoneNumberId || "") === "phone-sander-partner"),
+      false,
+    );
+  });
+
   it("busca o BM da Marilza com o token já conectado quando me/businesses omite", async () => {
     const walkup = {
       ...connectedRow(),
