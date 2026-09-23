@@ -8,6 +8,7 @@ import {
   META_ES_UNAVAILABLE_MESSAGE,
   buildMetaEsFbLoginOptions,
   buildMetaEsOauthDialogUrl,
+  buildMetaEsOauthLaunchUrl,
   buildMetaEsSetupPrefill,
   configIdLast4,
   isGenericFacebookOauthUrl,
@@ -148,8 +149,10 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /AdsPower/);
     assert.match(html, /Grupo Walkup App/);
     assert.match(html, /wabaMetaEsBuildOauthDialogUrl/);
+    assert.match(html, /wabaMetaEsBuildOauthLaunchUrl/);
     assert.match(html, /wabaMetaEsResumeLabOauthReturn/);
-    assert.match(html, /display", "page"/);
+    assert.match(html, /login\/reauth\.php/);
+    assert.match(html, /web\.facebook\.com/);
     assert.doesNotMatch(html, /adicione a conta deste perfil AdsPower como Testador/);
     assert.doesNotMatch(html, /Data Use Checkup/);
     assert.doesNotMatch(html, /troque web\.facebook\.com/);
@@ -169,15 +172,30 @@ describe("meta-es-fb-login", () => {
     });
     assert.ok(dialog);
     const parsed = new URL(dialog);
-    assert.equal(parsed.hostname, "www.facebook.com");
+    assert.equal(parsed.hostname, "web.facebook.com");
     assert.equal(parsed.searchParams.get("client_id"), "1279182514183979");
+    assert.equal(parsed.searchParams.get("app_id"), "1279182514183979");
     assert.equal(parsed.searchParams.get("config_id"), "1590195526041278");
     assert.equal(parsed.searchParams.get("response_type"), "code");
-    assert.equal(parsed.searchParams.get("display"), "page");
+    assert.equal(parsed.searchParams.get("display"), "popup");
     assert.equal(parsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br/");
     assert.equal(parsed.searchParams.get("state"), "abc123");
     assert.match(String(parsed.searchParams.get("extras") || ""), /"setup":\{\}/);
     assert.equal("sessionInfoVersion" in JSON.parse(String(parsed.searchParams.get("extras"))), false);
+    const launch = buildMetaEsOauthLaunchUrl({
+      appId: "1279182514183979",
+      configId: "1590195526041278",
+      redirectUri: "https://waba.draxsistemas.com.br/",
+      state: "abc123",
+    });
+    assert.ok(launch);
+    const launchParsed = new URL(launch);
+    assert.equal(launchParsed.hostname, "web.facebook.com");
+    assert.equal(launchParsed.pathname, "/login/reauth.php");
+    assert.equal(launchParsed.searchParams.get("app_id"), "1279182514183979");
+    assert.equal(launchParsed.searchParams.get("signed_next"), "1");
+    assert.match(String(launchParsed.searchParams.get("next") || ""), /config_id=1590195526041278/);
+    assert.doesNotMatch(launch, /www\.facebook\.com/);
     assert.equal(
       shouldUseMetaEsPageRedirect({ preferPage: true }),
       true,

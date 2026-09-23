@@ -27691,16 +27691,27 @@
           var version = String((input && input.graphVersion) || "v26.0").trim() || "v26.0";
           var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
           var extras = options && options.extras ? options.extras : { setup: {} };
-          var parsed = new URL("https://www.facebook.com/" + version + "/dialog/oauth");
+          var parsed = new URL("https://web.facebook.com/" + version + "/dialog/oauth");
           parsed.searchParams.set("client_id", appId);
+          parsed.searchParams.set("app_id", appId);
           parsed.searchParams.set("redirect_uri", redirectUri);
           parsed.searchParams.set("response_type", "code");
           parsed.searchParams.set("override_default_response_type", "true");
           parsed.searchParams.set("config_id", configId);
-          parsed.searchParams.set("display", "page");
+          parsed.searchParams.set("display", "popup");
           parsed.searchParams.set("extras", JSON.stringify(extras));
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
           return parsed.toString();
+        };
+        window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
+          var dialog = window.wabaMetaEsBuildOauthDialogUrl(input);
+          var appId = String(input && input.appId || "").trim();
+          if (!dialog || !appId) return "";
+          var reauth = new URL("https://web.facebook.com/login/reauth.php");
+          reauth.searchParams.set("app_id", appId);
+          reauth.searchParams.set("signed_next", "1");
+          reauth.searchParams.set("next", dialog);
+          return reauth.toString();
         };
         window.wabaMetaEsCreateOauthState = function () {
           var bytes = new Uint8Array(16);
@@ -27808,7 +27819,7 @@
           }
           if (preferPage && appId && redirectUri) {
             var state = window.wabaMetaEsCreateOauthState();
-            var dialogUrl = window.wabaMetaEsBuildOauthDialogUrl({
+            var dialogUrl = window.wabaMetaEsBuildOauthLaunchUrl({
               appId: appId,
               configId: options.config_id,
               redirectUri: redirectUri,
@@ -27835,9 +27846,10 @@
             }
             console.info(
               "[META][ES][PAGE_REDIRECT]",
-              "host=www.facebook.com",
+              "host=web.facebook.com",
+              "reauth=true",
               "configIdPresent=true",
-              "display=page"
+              "display=popup"
             );
             window.location.assign(dialogUrl);
             return { ok: true, mode: "page" };

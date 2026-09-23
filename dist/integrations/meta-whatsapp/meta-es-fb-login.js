@@ -15,7 +15,7 @@
  * Login for Business / ES v4 não renderiza no path /v22.0/.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
+exports.META_ES_OAUTH_HOST = exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
 exports.readMetaConfigIdFromEnv = readMetaConfigIdFromEnv;
 exports.resolveMetaEsJsSdkGraphVersion = resolveMetaEsJsSdkGraphVersion;
 exports.resolveMetaEsConfigId = resolveMetaEsConfigId;
@@ -34,6 +34,7 @@ exports.isAdsPowerLikeBrowser = isAdsPowerLikeBrowser;
 exports.shouldUseMetaEsPageRedirect = shouldUseMetaEsPageRedirect;
 exports.createMetaEsOauthState = createMetaEsOauthState;
 exports.buildMetaEsOauthDialogUrl = buildMetaEsOauthDialogUrl;
+exports.buildMetaEsOauthLaunchUrl = buildMetaEsOauthLaunchUrl;
 exports.parseMetaEsOauthReturn = parseMetaEsOauthReturn;
 exports.stripMetaEsOauthSearch = stripMetaEsOauthSearch;
 exports.isLegacyExchangePath = isLegacyExchangePath;
@@ -56,6 +57,8 @@ exports.META_ES_LEGACY_EXCHANGE_PATHS = [
     "/waba-embedded-signup-exchange",
 ];
 exports.META_ES_OAUTH_STORAGE_KEY = "waba-meta-es-oauth";
+/** Host do wizard que funcionou no Chrome. www dispara _rdc + encrypted_query_string. */
+exports.META_ES_OAUTH_HOST = "web.facebook.com";
 function readMetaConfigIdFromEnv(env = process.env) {
     return String(env.META_CONFIG_ID || env.META_ES_CONFIG_ID || "").trim();
 }
@@ -211,18 +214,35 @@ function buildMetaEsOauthDialogUrl(input) {
         businessId: input.setup?.business?.id,
         wabaId: input.setup?.whatsAppBusinessAccount?.ids,
     });
-    const parsed = new URL(`https://www.facebook.com/${version}/dialog/oauth`);
+    const parsed = new URL(`https://${exports.META_ES_OAUTH_HOST}/${version}/dialog/oauth`);
     parsed.searchParams.set("client_id", appId);
+    parsed.searchParams.set("app_id", appId);
     parsed.searchParams.set("redirect_uri", redirectUri);
     parsed.searchParams.set("response_type", "code");
     parsed.searchParams.set("override_default_response_type", "true");
     parsed.searchParams.set("config_id", configId);
-    parsed.searchParams.set("display", input.display === "popup" ? "popup" : "page");
+    parsed.searchParams.set("display", input.display === "page" ? "page" : "popup");
     parsed.searchParams.set("extras", JSON.stringify({ setup }));
     const state = String(input.state || "").trim();
     if (state)
         parsed.searchParams.set("state", state);
     return parsed.toString();
+}
+/**
+ * Chrome chega no wizard via login/reauth.php?app_id=…&next=dialog.
+ * Abrir www.facebook.com/dialog/oauth faz a Meta pular para web com
+ * encrypted_query_string (#_rdc) e Recurso indisponível no AdsPower.
+ */
+function buildMetaEsOauthLaunchUrl(input) {
+    const dialog = buildMetaEsOauthDialogUrl(input);
+    const appId = String(input.appId || "").trim();
+    if (!dialog || !appId)
+        return null;
+    const reauth = new URL(`https://${exports.META_ES_OAUTH_HOST}/login/reauth.php`);
+    reauth.searchParams.set("app_id", appId);
+    reauth.searchParams.set("signed_next", "1");
+    reauth.searchParams.set("next", dialog);
+    return reauth.toString();
 }
 function readJsonObject(raw) {
     const text = String(raw || "").trim();
