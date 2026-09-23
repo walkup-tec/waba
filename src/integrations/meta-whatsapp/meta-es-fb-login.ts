@@ -351,15 +351,17 @@ export function buildMetaEsOauthDialogUrl(input: {
     businessId: input.setup?.business?.id,
     wabaId: input.setup?.whatsAppBusinessAccount?.ids,
   });
+  // Hosted ES (App Dashboard → View onboarding): só app_id + config_id + extras.
+  // response_type / override_default_response_type / redirect_uri são do FB.login;
+  // no LaunchBridge o Começar monta dialog/oauth → Recurso indisponível no AdsPower.
   const parsed = new URL(`${META_ES_ONBOARD_ORIGIN}${META_ES_ONBOARD_PATH}`);
   parsed.searchParams.set("app_id", appId);
   parsed.searchParams.set("config_id", configId);
-  parsed.searchParams.set("response_type", "code");
-  parsed.searchParams.set("override_default_response_type", "true");
-  parsed.searchParams.set("redirect_uri", siteOrigin);
   parsed.searchParams.set("extras", JSON.stringify({ setup }));
   const state = String(input.state || "").trim();
   if (state) parsed.searchParams.set("state", state);
+  const businessId = String(setup.business?.id || input.setup?.business?.id || "").trim();
+  if (businessId) parsed.searchParams.set("business_id", businessId);
   void input.display;
   void input.cbt;
   void input.graphVersion;

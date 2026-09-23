@@ -27781,11 +27781,15 @@
           var parsed = new URL("https://business.facebook.com/messaging/whatsapp/onboard/");
           parsed.searchParams.set("app_id", appId);
           parsed.searchParams.set("config_id", configId);
-          parsed.searchParams.set("response_type", "code");
-          parsed.searchParams.set("override_default_response_type", "true");
-          parsed.searchParams.set("redirect_uri", siteOrigin);
           parsed.searchParams.set("extras", JSON.stringify(extras));
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
+          var businessId =
+            extras.setup && extras.setup.business
+              ? String(extras.setup.business.id || "").trim()
+              : input && input.setup && input.setup.business
+                ? String(input.setup.business.id || "").trim()
+                : "";
+          if (businessId) parsed.searchParams.set("business_id", businessId);
           return parsed.toString();
         };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {

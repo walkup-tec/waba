@@ -165,6 +165,9 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /troque web\.facebook\.com/);
     assert.doesNotMatch(html, /Parceiros → Adicionar/);
     assert.doesNotMatch(html, /window\.location\.assign\(dialogUrl\)/);
+    assert.doesNotMatch(html, /searchParams.set\("response_type", "code"\)/);
+    assert.doesNotMatch(html, /searchParams.set\("override_default_response_type"/);
+    assert.doesNotMatch(html, /searchParams.set\("redirect_uri", siteOrigin\)/);
   });
 
   it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {
@@ -183,13 +186,28 @@ describe("meta-es-fb-login", () => {
     assert.equal(parsed.pathname, "/messaging/whatsapp/onboard/");
     assert.equal(parsed.searchParams.get("app_id"), "1279182514183979");
     assert.equal(parsed.searchParams.get("config_id"), "1590195526041278");
-    assert.equal(parsed.searchParams.get("response_type"), "code");
-    assert.equal(parsed.searchParams.get("override_default_response_type"), "true");
-    assert.equal(parsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br");
+    assert.equal(parsed.searchParams.get("response_type"), null);
+    assert.equal(parsed.searchParams.get("override_default_response_type"), null);
+    assert.equal(parsed.searchParams.get("redirect_uri"), null);
     assert.equal(parsed.searchParams.get("state"), "abc123");
     assert.match(String(parsed.searchParams.get("extras") || ""), /"setup":\{\}/);
     assert.equal("sessionInfoVersion" in JSON.parse(String(parsed.searchParams.get("extras"))), false);
     assert.doesNotMatch(dialog, /dialog\/oauth/);
+    const withPortfolio = buildMetaEsOauthDialogUrl({
+      appId: "1279182514183979",
+      configId: "1590195526041278",
+      redirectUri: "https://waba.draxsistemas.com.br/",
+      setup: {
+        business: { id: "1588459689692010" },
+        whatsAppBusinessAccount: { ids: "waba-sander" },
+      },
+    });
+    assert.ok(withPortfolio);
+    const withPortfolioParsed = new URL(withPortfolio);
+    assert.equal(withPortfolioParsed.searchParams.get("business_id"), "1588459689692010");
+    assert.equal(withPortfolioParsed.searchParams.get("response_type"), null);
+    assert.equal(withPortfolioParsed.searchParams.get("redirect_uri"), null);
+    assert.match(String(withPortfolioParsed.searchParams.get("extras") || ""), /1588459689692010/);
     assert.equal(isMetaEsFacebookMessageOrigin("https://web.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://business.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://staticxx.facebook.com"), true);
