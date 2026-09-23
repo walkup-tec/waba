@@ -114,9 +114,11 @@ function markHiddenPortfolioAssets(tenantId, assets) {
     const isHiddenId = (value) => hiddenRows.some((row) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(value || ""), row.id));
     const portfolios = (assets.portfolios || []).map((item) => ({
         ...item,
-        hidden: isHiddenId(String(item.id || "")),
+        hidden: isHiddenId(String(item.id || "")) && !(0, meta_whatsapp_known_owned_wabas_1.isCatalogBackfillBusiness)(String(item.id || "")),
     }));
     for (const row of hiddenRows) {
+        if ((0, meta_whatsapp_known_owned_wabas_1.isCatalogBackfillBusiness)(row.id))
+            continue;
         if (portfolios.some((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), row.id)))
             continue;
         portfolios.push({
@@ -1283,7 +1285,7 @@ async function fillEmptyAdminPortfolioCards(graph, tenantId, cards, writeTokens)
     const out = cards.map((card) => ({ ...card, numbers: (card.numbers || []).slice() }));
     const empty = out.filter((card) => {
         const bm = String(card.id || "").trim();
-        if (!bm || (0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, bm))
+        if (!bm || ((0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, bm) && !(0, meta_whatsapp_known_owned_wabas_1.isCatalogBackfillBusiness)(bm)))
             return false;
         return !(card.numbers || []).some((row) => String(row.displayPhoneNumber || row.phoneNumberId || "").trim());
     });
@@ -1815,6 +1817,10 @@ class MetaWhatsappConnectionService {
     async listPortfolioAssets(auth, opts) {
         const tenant = requireTenant(auth);
         const requested = String(opts?.connectionId || "").trim();
+        for (const id of (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)()) {
+            if ((0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenant.tenantId, id))
+                (0, meta_whatsapp_hidden_business_store_1.unhideBusiness)(tenant.tenantId, id);
+        }
         if (opts?.fresh)
             (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
         if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
@@ -1971,7 +1977,7 @@ class MetaWhatsappConnectionService {
         const selectPage = await collectSelectPageAdminCards({
             graph: withHydrateLimits(this.graph),
             writeTokens,
-            extraBusinessIds: [...(0, meta_whatsapp_manual_business_store_1.listManualBusinessIds)(tenantId)],
+            extraBusinessIds: [...(0, meta_whatsapp_manual_business_store_1.listManualBusinessIds)(tenantId), ...(0, meta_whatsapp_hidden_business_store_1.listHiddenBusinessIds)(tenantId)],
         });
         const hydrated = await Promise.all(rows.map((row) => hydrateOpenConnection(this.graph, this.decrypt, tenantId, row, (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(rows, row), writeTokens, { assignedJson: selectPage.assignedByConnectionId.get(row.id) })));
         const leftIds = hydrated

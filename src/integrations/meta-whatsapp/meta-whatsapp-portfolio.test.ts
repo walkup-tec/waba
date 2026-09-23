@@ -3118,6 +3118,56 @@ describe("meta portfolio service", () => {
     assert.equal(natally?.name, "52.797.696 Natally Carissia Muniz Bezerra");
   });
 
+  it("busca o BM do Sander com o token já conectado quando me/businesses omite", async () => {
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1588459689692010") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "1588459689692010", name: "61.687.659 sander roosevelt de souza" },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const sander = (assets.portfolios || []).find((item) => item.id === "1588459689692010");
+    assert.equal(sander?.name, "61.687.659 sander roosevelt de souza");
+    assert.equal(sander?.hidden, false);
+  });
+
   it("consulta Flaviane no GET do catálogo antes de varrer /clients", async () => {
     const walkup = {
       ...connectedRow(),
@@ -3335,6 +3385,89 @@ describe("meta portfolio service", () => {
     assert.equal(stub?.hidden, true);
     assert.equal(stub?.name, "Cliente oculto");
     unhideBusiness(hideTenant, "1999000111222333");
+  });
+
+  it("Sander, Marilza e Flaviane ficam em Ativas mesmo se o store as marcou ocultas", async () => {
+    const hideAuth: WabaRequestAuth = { email: "ativas-catalog@exemplo.com", role: "subscriber" };
+    const hideTenant = deriveStableMetaTenantId("ativas-catalog@exemplo.com");
+    const catalogIds = ["1588459689692010", "4681844838758316", "962298516898955"] as const;
+    for (const id of catalogIds) {
+      unhideBusiness(hideTenant, id);
+      hideBusiness(hideTenant, id, "Oculto por engano");
+    }
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup-ativas",
+      tenantId: hideTenant,
+      ownerEmail: "ativas-catalog@exemplo.com",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup-ativas"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1588459689692010") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "1588459689692010", name: "61.687.659 sander roosevelt de souza" },
+        };
+      }
+      if (input.path === "4681844838758316") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
+        };
+      }
+      if (input.path === "962298516898955") {
+        return {
+          ok: true,
+          status: 200,
+          json: { id: "962298516898955", name: "60.845.972 Flaviane Ferreira Trindade" },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    try {
+      const assets = await service.listPortfolioAssets(hideAuth, { fresh: true });
+      const sander = (assets.portfolios || []).find((item) => item.id === "1588459689692010");
+      const marilza = (assets.portfolios || []).find((item) => item.id === "4681844838758316");
+      const flaviane = (assets.portfolios || []).find((item) => item.id === "962298516898955");
+      assert.equal(sander?.name, "61.687.659 sander roosevelt de souza");
+      assert.equal(marilza?.name, "60.846.306 Marilza de Castro");
+      assert.equal(flaviane?.name, "60.845.972 Flaviane Ferreira Trindade");
+      assert.equal(sander?.hidden, false);
+      assert.equal(marilza?.hidden, false);
+      assert.equal(flaviane?.hidden, false);
+    } finally {
+      for (const id of catalogIds) unhideBusiness(hideTenant, id);
+    }
   });
 
   it("lista BM criado no administrador via /owned_businesses da agência", async () => {

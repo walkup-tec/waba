@@ -9,8 +9,9 @@
  * não inventa pendente já excluído do Business Manager.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KNOWN_OWNED_BUSINESS_WABAS = exports.NATALLY_CARISSIA_MUNIZ_BEZERRA_BUSINESS_IDS = exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = exports.MARILZA_DE_CASTRO_BUSINESS_IDS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS = exports.DRAX_SISTEMAS_STALE_WABA_ID = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
+exports.KNOWN_OWNED_BUSINESS_WABAS = exports.SANDER_ROOSEVELT_BUSINESS_IDS = exports.NATALLY_CARISSIA_MUNIZ_BEZERRA_BUSINESS_IDS = exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = exports.MARILZA_DE_CASTRO_BUSINESS_IDS = exports.WALKUP_APP_BUSINESS_IDS = exports.WALKUP_WABA01_ID = exports.WALKUP_BUSINESS_IDS = exports.DRAX_SISTEMAS_DISPLAY_PHONE_DIGITS = exports.DRAX_SISTEMAS_STALE_WABA_ID = exports.DRAX_SISTEMAS_WABA_ID = exports.DRAX_SISTEMAS_BUSINESS_IDS = exports.RIO_DE_JANEIRO_01_WABA_ID = exports.ANDRE_WABA02_PENDING_PHONE_ID = exports.ANDRE_WABA02_ID = exports.ANDRE_WABA01_ID = exports.ANDRE_AGUIAR_BUSINESS_IDS = void 0;
 exports.catalogBackfillBusinessIds = catalogBackfillBusinessIds;
+exports.isCatalogBackfillBusiness = isCatalogBackfillBusiness;
 exports.catalogBusinessLabel = catalogBusinessLabel;
 exports.catalogAgencyBusinessIds = catalogAgencyBusinessIds;
 exports.catalogAdminBusinessIds = catalogAdminBusinessIds;
@@ -54,10 +55,12 @@ exports.WALKUP_APP_BUSINESS_IDS = ["1247508354180311"];
 exports.MARILZA_DE_CASTRO_BUSINESS_IDS = ["4681844838758316"];
 exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = ["962298516898955"];
 exports.NATALLY_CARISSIA_MUNIZ_BEZERRA_BUSINESS_IDS = ["1832926164812406"];
+exports.SANDER_ROOSEVELT_BUSINESS_IDS = ["1588459689692010"];
 const CATALOG_ADMIN_BUSINESS_LABELS = {
     "4681844838758316": "60.846.306 Marilza de Castro",
     "962298516898955": "60.845.972 Flaviane Ferreira Trindade",
     "1832926164812406": "52.797.696 Natally Carissia Muniz Bezerra",
+    "1588459689692010": "61.687.659 sander roosevelt de souza",
 };
 /** BMs de cliente administrados no laboratório — o me/businesses costuma omitir. */
 function catalogBackfillBusinessIds() {
@@ -65,7 +68,14 @@ function catalogBackfillBusinessIds() {
         ...exports.MARILZA_DE_CASTRO_BUSINESS_IDS,
         ...exports.FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS,
         ...exports.NATALLY_CARISSIA_MUNIZ_BEZERRA_BUSINESS_IDS,
+        ...exports.SANDER_ROOSEVELT_BUSINESS_IDS,
     ];
+}
+function isCatalogBackfillBusiness(businessId) {
+    const wanted = String(businessId || "").trim();
+    if (!wanted)
+        return false;
+    return catalogBackfillBusinessIds().some((id) => metaBusinessIdsMatch(id, wanted));
 }
 /** Nome oficial do BM no Manager, quando a Graph devolve o id sem name. */
 function catalogBusinessLabel(businessId) {

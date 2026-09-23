@@ -54,11 +54,13 @@ export const WALKUP_APP_BUSINESS_IDS = ["1247508354180311"] as const;
 export const MARILZA_DE_CASTRO_BUSINESS_IDS = ["4681844838758316"] as const;
 export const FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = ["962298516898955"] as const;
 export const NATALLY_CARISSIA_MUNIZ_BEZERRA_BUSINESS_IDS = ["1832926164812406"] as const;
+export const SANDER_ROOSEVELT_BUSINESS_IDS = ["1588459689692010"] as const;
 
 const CATALOG_ADMIN_BUSINESS_LABELS: Record<string, string> = {
   "4681844838758316": "60.846.306 Marilza de Castro",
   "962298516898955": "60.845.972 Flaviane Ferreira Trindade",
   "1832926164812406": "52.797.696 Natally Carissia Muniz Bezerra",
+  "1588459689692010": "61.687.659 sander roosevelt de souza",
 };
 
 /** BMs de cliente administrados no laboratório — o me/businesses costuma omitir. */
@@ -67,7 +69,14 @@ export function catalogBackfillBusinessIds(): string[] {
     ...MARILZA_DE_CASTRO_BUSINESS_IDS,
     ...FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS,
     ...NATALLY_CARISSIA_MUNIZ_BEZERRA_BUSINESS_IDS,
+    ...SANDER_ROOSEVELT_BUSINESS_IDS,
   ];
+}
+
+export function isCatalogBackfillBusiness(businessId: string): boolean {
+  const wanted = String(businessId || "").trim();
+  if (!wanted) return false;
+  return catalogBackfillBusinessIds().some((id) => metaBusinessIdsMatch(id, wanted));
 }
 
 /** Nome oficial do BM no Manager, quando a Graph devolve o id sem name. */

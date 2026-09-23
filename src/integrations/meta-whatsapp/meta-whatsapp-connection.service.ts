@@ -70,6 +70,7 @@ import {
   businessIdsToReopenAfterFalseLeftManager,
   catalogAgencyBusinessIds,
   catalogBackfillBusinessIds,
+  isCatalogBackfillBusiness,
   isWithdrawnInboxDisplayPhone,
 } from "./meta-whatsapp-known-owned-wabas";
 import {
@@ -258,9 +259,10 @@ function markHiddenPortfolioAssets(
     hiddenRows.some((row) => metaBusinessIdsMatch(String(value || ""), row.id));
   const portfolios = (assets.portfolios || []).map((item) => ({
     ...item,
-    hidden: isHiddenId(String(item.id || "")),
+    hidden: isHiddenId(String(item.id || "")) && !isCatalogBackfillBusiness(String(item.id || "")),
   }));
   for (const row of hiddenRows) {
+    if (isCatalogBackfillBusiness(row.id)) continue;
     if (portfolios.some((item) => metaBusinessIdsMatch(String(item.id || ""), row.id))) continue;
     portfolios.push({
       id: row.id,
@@ -1556,7 +1558,7 @@ async function fillEmptyAdminPortfolioCards(
   const out = cards.map((card) => ({ ...card, numbers: (card.numbers || []).slice() }));
   const empty = out.filter((card) => {
     const bm = String(card.id || "").trim();
-    if (!bm || isHiddenBusiness(tenantId, bm)) return false;
+    if (!bm || (isHiddenBusiness(tenantId, bm) && !isCatalogBackfillBusiness(bm))) return false;
     return !(card.numbers || []).some((row) =>
       String(row.displayPhoneNumber || row.phoneNumberId || "").trim(),
     );
@@ -2164,6 +2166,9 @@ export class MetaWhatsappConnectionService {
   ): Promise<MetaPortfolioAssetsPublic> {
     const tenant = requireTenant(auth);
     const requested = String(opts?.connectionId || "").trim();
+    for (const id of catalogBackfillBusinessIds()) {
+      if (isHiddenBusiness(tenant.tenantId, id)) unhideBusiness(tenant.tenantId, id);
+    }
     if (opts?.fresh) invalidateCachedPortfolioGraph(tenant.tenantId);
     if (isMetaGraphUploadCooldown()) {
       const stale = readStaleCachedPortfolioGraph(tenant.tenantId);
@@ -2362,7 +2367,7 @@ export class MetaWhatsappConnectionService {
     const selectPage = await collectSelectPageAdminCards({
       graph: withHydrateLimits(this.graph),
       writeTokens,
-      extraBusinessIds: [...listManualBusinessIds(tenantId)],
+      extraBusinessIds: [...listManualBusinessIds(tenantId), ...listHiddenBusinessIds(tenantId)],
     });
     const hydrated = await Promise.all(
       rows.map((row) =>

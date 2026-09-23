@@ -22,6 +22,7 @@ import {
   catalogAgencyBusinessIds,
   catalogBackfillBusinessIds,
   catalogBusinessLabel,
+  isCatalogBackfillBusiness,
 } from "./meta-whatsapp-known-owned-wabas";
 
 describe("known owned WABAs", () => {
@@ -94,6 +95,10 @@ describe("known owned WABAs", () => {
     assert.ok(catalogAdminBusinessIds().includes("4681844838758316"));
     assert.ok(catalogBackfillBusinessIds().includes("1832926164812406"));
     assert.ok(catalogAdminBusinessIds().includes("1832926164812406"));
+    assert.ok(catalogBackfillBusinessIds().includes("1588459689692010"));
+    assert.ok(catalogAdminBusinessIds().includes("1588459689692010"));
+    assert.equal(isCatalogBackfillBusiness("1588459689692010"), true);
+    assert.equal(isCatalogBackfillBusiness("1041827648719609"), false);
   });
 
   it("varre só os BMs da agência no Atualizar, sem tratar cliente como semente", () => {
@@ -104,6 +109,7 @@ describe("known owned WABAs", () => {
     assert.equal(agencies.includes("962298516898955"), false);
     assert.equal(agencies.includes("4681844838758316"), false);
     assert.equal(agencies.includes("1832926164812406"), false);
+    assert.equal(agencies.includes("1588459689692010"), false);
   });
 
   it("nomeia Flaviane e Marilza pelo catálogo quando o id casa", () => {
@@ -116,6 +122,10 @@ describe("known owned WABAs", () => {
     assert.equal(
       catalogBusinessLabel("1832926164812406"),
       "52.797.696 Natally Carissia Muniz Bezerra",
+    );
+    assert.equal(
+      catalogBusinessLabel("1588459689692010"),
+      "61.687.659 sander roosevelt de souza",
     );
     assert.equal(catalogBusinessLabel("1041827648719609"), "");
   });
