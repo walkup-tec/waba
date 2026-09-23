@@ -203,6 +203,25 @@ export function isLegacyExchangePath(path: string): boolean {
   return META_ES_LEGACY_EXCHANGE_PATHS.some((item) => raw.includes(item));
 }
 
+/** web.facebook.com + #_rdc é redirect da Meta, não um recurso nativo do AdsPower. */
+export function describeMetaEsBrowserSurface(input: {
+  userAgent?: string;
+  userAgentData?: { mobile?: boolean; platform?: string } | null;
+}): {
+  mobileHint: boolean;
+  platform: string;
+  adsPowerNativeWebHost: false;
+} {
+  const ua = String(input.userAgent || "");
+  const chMobile = Boolean(input.userAgentData && input.userAgentData.mobile === true);
+  const uaMobile = /Mobile|iPhone|iPad|Android.+Mobile|IEMobile/i.test(ua);
+  return {
+    mobileHint: chMobile || uaMobile,
+    platform: String(input.userAgentData?.platform || "").trim(),
+    adsPowerNativeWebHost: false,
+  };
+}
+
 export function toPublicMetaEsConfig(input: {
   appId?: string;
   configId?: string;

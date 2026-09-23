@@ -23682,8 +23682,10 @@
                 </div>
               </div>
               <ol class="waba-adspower-steps">
+                <li>Facebook só no AdsPower. O salto para <strong>web.facebook.com</strong> (#_rdc) é da Meta, não um recurso nativo do AdsPower; limpar cache não muda isso.</li>
                 <li>No AdsPower, abra o perfil recebido (BM, WABA e chip já estão nele).</li>
-                <li>Nesse mesmo navegador, entre na DRAX e em <strong>Conectar WABA</strong> use Conectar com Meta — assim a BM/WABA entra no Laboratório.</li>
+                <li>Se Conectar com Meta cair em Recurso indisponível: neste mesmo navegador, no Gerenciador de Negócios da BM, <strong>Parceiros → Adicionar</strong> o ID do portfólio Drax/Walkup que já aparece nas Ativas da DRAX e compartilhe as contas WhatsApp. Volte ao Laboratório e Atualize.</li>
+                <li>Senão, neste mesmo navegador use <strong>Conectar WABA → Conectar com Meta</strong>.</li>
                 <li>Volte aqui, vincule o chip ao perfil e envie o template em <strong>Templates</strong> dessa WABA.</li>
               </ol>
               <p id="waba-adspower-banner" class="waba-adspower-status" role="status">Carregando perfis AdsPower…</p>
@@ -27618,7 +27620,7 @@
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
-          "A Meta recusou o Login for Business (Recurso indisponível). Não é cargo nem Testador. Fique no AdsPower, recarregue esta página da DRAX e clique de novo em Conectar Portfólio — o diálogo agora abre em www.facebook.com com config_id.";
+          "A Meta recusou o Login for Business (Recurso indisponível). web.facebook.com com #_rdc não é o AdsPower: é redirect da própria Meta, e também acontece em Chrome desktop. Limpar cache não impede. Não é cargo/Testador. Neste AdsPower, no Gerenciador de Negócios desta BM: Parceiros → Adicionar o ID do portfólio Drax/Walkup que já está nas Ativas da DRAX e compartilhe as contas WhatsApp. Depois no Laboratório clique Atualizar.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
@@ -27719,11 +27721,14 @@
           window.__WABA_META_ES_LOGIN_CB = callback;
           window.wabaMetaEsPatchOauthOpen();
           var setupKeys = options.extras && options.extras.setup ? Object.keys(options.extras.setup) : [];
+          var uaData = navigator.userAgentData || {};
           console.info(
             "[META][ES][FB_LOGIN]",
             "responseType=code",
             "configIdPresent=true",
             "setupKeys=" + (setupKeys.length ? setupKeys.join(",") : "empty"),
+            "chMobile=" + (uaData.mobile ? "true" : "false"),
+            "chPlatform=" + String(uaData.platform || ""),
           );
           FB.login(callback, options);
           return { ok: true };

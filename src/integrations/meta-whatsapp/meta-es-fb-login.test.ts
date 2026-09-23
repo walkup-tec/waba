@@ -11,6 +11,7 @@ import {
   configIdLast4,
   isGenericFacebookOauthUrl,
   rewriteMetaEsOauthUrl,
+  describeMetaEsBrowserSurface,
   isLegacyExchangePath,
   mentionsMissingConfigId,
   planMetaEsTechProviderClick,
@@ -139,10 +140,10 @@ describe("meta-es-fb-login", () => {
   it("login recusado pela Meta não pede Testador", () => {
     const html = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
     assert.match(html, /WABA_META_ES_LOGIN_BLOCKED_MESSAGE/);
-    assert.match(html, /Não é cargo nem Testador/);
+    assert.match(html, /Não é cargo nem Testador|Não é cargo\/Testador/);
     assert.match(html, /AdsPower/);
-    assert.match(html, /wabaMetaEsRewriteOauthUrl/);
-    assert.match(html, /wabaMetaEsPatchOauthOpen/);
+    assert.match(html, /Parceiros/);
+    assert.match(html, /redirect da própria Meta|é da Meta/);
     assert.doesNotMatch(html, /adicione a conta deste perfil AdsPower como Testador/);
     assert.doesNotMatch(html, /Data Use Checkup/);
     assert.doesNotMatch(html, /troque web\.facebook\.com/);
@@ -165,6 +166,12 @@ describe("meta-es-fb-login", () => {
     assert.equal(encryptedParsed.hostname, "www.facebook.com");
     assert.equal(encryptedParsed.searchParams.get("config_id"), null);
     assert.equal(encryptedParsed.searchParams.get("encrypted_query_string"), "AeH_blob");
+    const surface = describeMetaEsBrowserSurface({
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120",
+      userAgentData: { mobile: false, platform: "Windows" },
+    });
+    assert.equal(surface.adsPowerNativeWebHost, false);
+    assert.equal(surface.mobileHint, false);
   });
 
   it("botão + sem WABA não envia extras.setup só com BM", () => {

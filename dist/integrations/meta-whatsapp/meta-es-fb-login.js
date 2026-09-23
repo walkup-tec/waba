@@ -28,6 +28,7 @@ exports.mentionsMissingConfigId = mentionsMissingConfigId;
 exports.isGenericFacebookOauthUrl = isGenericFacebookOauthUrl;
 exports.rewriteMetaEsOauthUrl = rewriteMetaEsOauthUrl;
 exports.isLegacyExchangePath = isLegacyExchangePath;
+exports.describeMetaEsBrowserSurface = describeMetaEsBrowserSurface;
 exports.toPublicMetaEsConfig = toPublicMetaEsConfig;
 exports.planMetaEsTechProviderClick = planMetaEsTechProviderClick;
 exports.META_ES_JS_SDK_GRAPH_VERSION = "v26.0";
@@ -155,6 +156,17 @@ function rewriteMetaEsOauthUrl(rawUrl, input) {
 function isLegacyExchangePath(path) {
     const raw = String(path || "");
     return exports.META_ES_LEGACY_EXCHANGE_PATHS.some((item) => raw.includes(item));
+}
+/** web.facebook.com + #_rdc é redirect da Meta, não um recurso nativo do AdsPower. */
+function describeMetaEsBrowserSurface(input) {
+    const ua = String(input.userAgent || "");
+    const chMobile = Boolean(input.userAgentData && input.userAgentData.mobile === true);
+    const uaMobile = /Mobile|iPhone|iPad|Android.+Mobile|IEMobile/i.test(ua);
+    return {
+        mobileHint: chMobile || uaMobile,
+        platform: String(input.userAgentData?.platform || "").trim(),
+        adsPowerNativeWebHost: false,
+    };
 }
 function toPublicMetaEsConfig(input) {
     const appId = String(input.appId || "").trim();
