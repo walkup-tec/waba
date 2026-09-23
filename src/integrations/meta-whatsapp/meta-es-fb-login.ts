@@ -95,8 +95,12 @@ export function buildMetaEsSetupPrefill(input: {
   const setup: MetaEsSetupPrefill = {};
   const businessId = String(input.businessId || "").trim();
   const wabaId = String(input.wabaId || "").trim();
-  if (businessId) setup.business = { id: businessId };
-  if (wabaId) setup.whatsAppBusinessAccount = { ids: wabaId };
+  // Prefill só no fluxo «adicionar número»: BM + WABA juntos.
+  // Só BM (card AdsPower com WABA —) quebra o Login for Business (Recurso indisponível).
+  if (businessId && wabaId) {
+    setup.business = { id: businessId };
+    setup.whatsAppBusinessAccount = { ids: wabaId };
+  }
   return setup;
 }
 
@@ -106,11 +110,15 @@ export function buildMetaEsFbLoginOptions(
 ): MetaEsFbLoginOptions | null {
   const id = String(configId || "").trim();
   if (!id) return null;
+  const sanitized = buildMetaEsSetupPrefill({
+    businessId: setup?.business?.id,
+    wabaId: setup?.whatsAppBusinessAccount?.ids,
+  });
   return {
     config_id: id,
     response_type: "code",
     override_default_response_type: true,
-    extras: { setup: setup && Object.keys(setup).length ? setup : {} },
+    extras: { setup: sanitized },
   };
 }
 

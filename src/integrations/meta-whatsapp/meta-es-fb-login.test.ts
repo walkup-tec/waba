@@ -38,6 +38,10 @@ describe("meta-es-fb-login", () => {
     const withSetup = buildMetaEsFbLoginOptions("1467449278208212", prefill);
     assert.equal(withSetup?.extras.setup.business?.id, "1247508354180311");
     assert.equal(withSetup?.extras.setup.whatsAppBusinessAccount?.ids, "waba-1");
+    assert.deepEqual(buildMetaEsSetupPrefill({ businessId: "1588459689692010" }), {});
+    assert.deepEqual(buildMetaEsFbLoginOptions("1467449278208212", { business: { id: "1588459689692010" } })?.extras, {
+      setup: {},
+    });
     const plan = planMetaEsTechProviderClick("1467449278208212");
     assert.equal(plan.callFbInit, false);
     assert.equal(plan.loginOptions?.config_id, "1467449278208212");
@@ -136,5 +140,16 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /WABA_META_ES_LOGIN_BLOCKED_MESSAGE/);
     assert.match(html, /Data Use Checkup/);
     assert.match(html, /1279182514183979/);
+  });
+
+  it("botão + sem WABA não envia extras.setup só com BM", () => {
+    const html = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
+    assert.match(html, /wabaAddMetaWhatsappNumber/);
+    assert.match(
+      html,
+      /businessId && wabaId\s*\n\s*\? \{ business: \{ id: businessId \}, whatsAppBusinessAccount: \{ ids: wabaId \} \}/,
+    );
+    assert.doesNotMatch(html, /if \(metaTpSession\.savedBusinessId\) setup\.business/);
+    assert.match(html, /if \(businessId && wabaId\) \{\s*\n\s*extrasSetup\.business/);
   });
 });

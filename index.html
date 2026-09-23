@@ -27626,7 +27626,17 @@
         window.wabaMetaEsBuildLoginOptions = function (configId, setup) {
           var id = String(configId || "").trim();
           if (!id) return null;
-          var extrasSetup = setup && typeof setup === "object" ? setup : {};
+          var extrasSetup = {};
+          var businessId =
+            setup && setup.business ? String(setup.business.id || "").trim() : "";
+          var wabaId =
+            setup && setup.whatsAppBusinessAccount
+              ? String(setup.whatsAppBusinessAccount.ids || "").trim()
+              : "";
+          if (businessId && wabaId) {
+            extrasSetup.business = { id: businessId };
+            extrasSetup.whatsAppBusinessAccount = { ids: wabaId };
+          }
           return {
             config_id: id,
             response_type: "code",
@@ -40249,7 +40259,13 @@
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         metaTpLogLines = [];
         metaTpResetSession();
-        if (setup && (setup.business || setup.whatsAppBusinessAccount)) metaTpSession.addNumber = true;
+        var setupBusinessId =
+          setup && setup.business ? String(setup.business.id || "").trim() : "";
+        var setupWabaId =
+          setup && setup.whatsAppBusinessAccount
+            ? String(setup.whatsAppBusinessAccount.ids || "").trim()
+            : "";
+        if (setupBusinessId && setupWabaId) metaTpSession.addNumber = true;
         if (window.location.protocol !== "https:") {
           metaTpSetStatus("O Embedded Signup exige HTTPS. Abra o Waba em https://waba.draxsistemas.com.br/");
           return false;
@@ -40308,9 +40324,12 @@
       };
 
       window.wabaAddMetaWhatsappNumber = function wabaAddMetaWhatsappNumber(event) {
-        const setup = {};
-        if (metaTpSession.savedBusinessId) setup.business = { id: metaTpSession.savedBusinessId };
-        if (metaTpSession.savedWabaId) setup.whatsAppBusinessAccount = { ids: metaTpSession.savedWabaId };
+        const businessId = String(metaTpSession.savedBusinessId || "").trim();
+        const wabaId = String(metaTpSession.savedWabaId || "").trim();
+        const setup =
+          businessId && wabaId
+            ? { business: { id: businessId }, whatsAppBusinessAccount: { ids: wabaId } }
+            : {};
         return window.wabaConnectMetaWhatsappOficial(event, setup);
       };
 
