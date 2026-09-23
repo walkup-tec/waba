@@ -52,6 +52,7 @@ export type MetaEsPublicConfig = {
   configId?: string;
   graphVersion: string;
   callbackPath: string;
+  redirectUri?: string;
 };
 
 export type MetaEsPopupDecision = {
@@ -62,6 +63,7 @@ export type MetaEsPopupDecision = {
 export type MetaEsClickPlan = {
   callFbInit: boolean;
   openGenericOauthUrl: boolean;
+  openPageRedirect: boolean;
   loginOptions: MetaEsFbLoginOptions | null;
   configPath: string;
   startPath: string;
@@ -70,6 +72,18 @@ export type MetaEsClickPlan = {
   confirmPath: string;
   forbiddenPaths: readonly string[];
 };
+
+export type MetaEsOauthReturn = {
+  code: string;
+  state: string;
+  error: string;
+  errorDescription: string;
+  wabaId: string;
+  phoneNumberId: string;
+  businessId: string;
+};
+
+export const META_ES_OAUTH_STORAGE_KEY = "waba-meta-es-oauth";
 
 export function readMetaConfigIdFromEnv(env: NodeJS.ProcessEnv = process.env): string {
   return String(env.META_CONFIG_ID || env.META_ES_CONFIG_ID || "").trim();
@@ -160,42 +174,194 @@ export function isGenericFacebookOauthUrl(url: string): boolean {
 }
 
 /**
- * O SDK abre web.facebook.com (barra do popup travada no AdsPower) e, neste hop,
- * o dialog/oauth chega só com app_id/cbt/channel_url — sem config_id. Sem config_id
- * a Meta trata como Facebook Login comum e responde Recurso indisponível.
- * Encrypted query: só troca o host. Não injeta params no blob.
+ * Não reescrever o dialog/oauth do JS SDK.
+ * No Chrome o wizard funciona em web.facebook.com com app_id/cbt.
+ * Trocar para www e injetar query no popup do AdsPower gera encrypted_query_string
+ * e Recurso indisponível. O AdsPower usa o dialog construído (buildMetaEsOauthDialogUrl).
  */
 export function rewriteMetaEsOauthUrl(
   rawUrl: string,
-  input: { configId?: string; setup?: MetaEsSetupPrefill },
+  _input?: { configId?: string; setup?: MetaEsSetupPrefill },
 ): string {
-  const raw = String(rawUrl || "").trim();
-  if (!raw || !/dialog\/oauth/i.test(raw)) return rawUrl;
-  let parsed: URL;
+  void _input;
+  return rawUrl;
+}
+
+export function normalizeMetaEsRedirectUri(raw: string): string {
+  const value = String(raw || "").trim();
+  if (!value) return "";
   try {
-    parsed = new URL(raw);
-  } catch {
-    return rawUrl;
-  }
-  if (!/facebook\.com$/i.test(parsed.hostname)) return rawUrl;
-  if (/^(web|m|mobile)\./i.test(parsed.hostname)) {
-    parsed.hostname = "www.facebook.com";
-  }
-  const encrypted = String(parsed.searchParams.get("encrypted_query_string") || "").trim();
-  const configId = String(input.configId || "").trim();
-  if (!encrypted && configId && !String(parsed.searchParams.get("config_id") || "").trim()) {
-    parsed.searchParams.set("config_id", configId);
-    parsed.searchParams.set("response_type", "code");
-    parsed.searchParams.set("override_default_response_type", "true");
-    if (!String(parsed.searchParams.get("extras") || "").trim()) {
-      const setup = buildMetaEsSetupPrefill({
-        businessId: input.setup?.business?.id,
-        wabaId: input.setup?.whatsAppBusinessAccount?.ids,
-      });
-      parsed.searchParams.set("extras", JSON.stringify({ setup }));
+    const parsed = new URL(value);
+    parsed.hash = "";
+    parsed.search = "";
+    if (parsed.pathname === "/" || parsed.pathname === "") {
+      return `${parsed.protocol}//${parsed.host}`;
     }
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return value.replace(/\/+$/, "");
   }
+}
+
+export function resolveMetaEsRedirectUri(input: {
+  configRedirectUri?: string;
+  locationOrigin?: string;
+}): string {
+  const fromConfig = String(input.configRedirectUri || "").trim();
+  if (fromConfig) return fromConfig;
+  return normalizeMetaEsRedirectUri(String(input.locationOrigin || ""));
+}
+
+export function isNativeWindowOpen(openFn: unknown): boolean {
+  if (typeof openFn !== "function") return false;
+  try {
+    return /\[native code\]/.test(Function.prototype.toString.call(openFn));
+  } catch {
+    return false;
+  }
+}
+
+export function isAdsPowerLikeBrowser(input: {
+  userAgent?: string;
+  windowOpen?: unknown;
+  globals?: Record<string, unknown> | null;
+}): boolean {
+  const ua = String(input.userAgent || "");
+  if (/AdsPower|SunBrowser|ADSPower/i.test(ua)) return true;
+  const globals = input.globals || {};
+  if (globals.adsPower || globals.__adspower || globals.Adspower) return true;
+  if (input.windowOpen !== undefined && !isNativeWindowOpen(input.windowOpen)) return true;
+  return false;
+}
+
+/**
+ * Popup do FB.login no AdsPower cai em Recurso indisponível (query criptografada).
+ * Chrome nativo completa o mesmo config_id. No AdsPower (e em qualquer browser
+ * que hooka window.open) o login vai na mesma aba, via dialog/oauth documentado.
+ */
+export function shouldUseMetaEsPageRedirect(input: {
+  userAgent?: string;
+  windowOpen?: unknown;
+  globals?: Record<string, unknown> | null;
+  preferPage?: boolean;
+}): boolean {
+  if (input.preferPage === true) return true;
+  return isAdsPowerLikeBrowser(input);
+}
+
+export function createMetaEsOauthState(): string {
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function buildMetaEsOauthDialogUrl(input: {
+  appId: string;
+  configId: string;
+  redirectUri: string;
+  graphVersion?: string;
+  setup?: MetaEsSetupPrefill;
+  state?: string;
+  display?: "page" | "popup";
+}): string | null {
+  const appId = String(input.appId || "").trim();
+  const configId = String(input.configId || "").trim();
+  const redirectUri = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
+  if (!appId || !configId || !redirectUri) return null;
+  const version = String(input.graphVersion || META_ES_JS_SDK_GRAPH_VERSION).trim() || META_ES_JS_SDK_GRAPH_VERSION;
+  const setup = buildMetaEsSetupPrefill({
+    businessId: input.setup?.business?.id,
+    wabaId: input.setup?.whatsAppBusinessAccount?.ids,
+  });
+  const parsed = new URL(`https://www.facebook.com/${version}/dialog/oauth`);
+  parsed.searchParams.set("client_id", appId);
+  parsed.searchParams.set("redirect_uri", redirectUri);
+  parsed.searchParams.set("response_type", "code");
+  parsed.searchParams.set("override_default_response_type", "true");
+  parsed.searchParams.set("config_id", configId);
+  parsed.searchParams.set("display", input.display === "popup" ? "popup" : "page");
+  parsed.searchParams.set("extras", JSON.stringify({ setup }));
+  const state = String(input.state || "").trim();
+  if (state) parsed.searchParams.set("state", state);
   return parsed.toString();
+}
+
+function readJsonObject(raw: string): Record<string, unknown> {
+  const text = String(raw || "").trim();
+  if (!text) return {};
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export function parseMetaEsOauthReturn(search: string): MetaEsOauthReturn {
+  let params: URLSearchParams;
+  try {
+    const raw = String(search || "");
+    params = new URLSearchParams(raw.startsWith("?") ? raw.slice(1) : raw);
+  } catch {
+    params = new URLSearchParams();
+  }
+  const extras = readJsonObject(String(params.get("extras") || params.get("session_info") || ""));
+  const nested =
+    extras.data && typeof extras.data === "object" && !Array.isArray(extras.data)
+      ? (extras.data as Record<string, unknown>)
+      : extras;
+  const wabaId = String(
+    params.get("waba_id") || extras.waba_id || nested.waba_id || nested.current_waba_id || "",
+  ).trim();
+  const phoneNumberId = String(
+    params.get("phone_number_id") ||
+      extras.phone_number_id ||
+      nested.phone_number_id ||
+      nested.current_phone_number_id ||
+      "",
+  ).trim();
+  const businessId = String(
+    params.get("business_id") || extras.business_id || nested.business_id || "",
+  ).trim();
+  return {
+    code: String(params.get("code") || "").trim(),
+    state: String(params.get("state") || "").trim(),
+    error: String(params.get("error") || "").trim(),
+    errorDescription: String(params.get("error_description") || params.get("error_reason") || "").trim(),
+    wabaId,
+    phoneNumberId,
+    businessId,
+  };
+}
+
+export function stripMetaEsOauthSearch(search: string): string {
+  let params: URLSearchParams;
+  try {
+    const raw = String(search || "");
+    params = new URLSearchParams(raw.startsWith("?") ? raw.slice(1) : raw);
+  } catch {
+    return "";
+  }
+  [
+    "code",
+    "state",
+    "error",
+    "error_description",
+    "error_reason",
+    "extras",
+    "session_info",
+    "waba_id",
+    "phone_number_id",
+    "business_id",
+  ].forEach((key) => params.delete(key));
+  const next = params.toString();
+  return next ? `?${next}` : "";
 }
 
 export function isLegacyExchangePath(path: string): boolean {
@@ -207,18 +373,29 @@ export function isLegacyExchangePath(path: string): boolean {
 export function describeMetaEsBrowserSurface(input: {
   userAgent?: string;
   userAgentData?: { mobile?: boolean; platform?: string } | null;
+  windowOpen?: unknown;
+  globals?: Record<string, unknown> | null;
 }): {
   mobileHint: boolean;
   platform: string;
   adsPowerNativeWebHost: false;
+  adsPowerLike: boolean;
+  usePageRedirect: boolean;
 } {
   const ua = String(input.userAgent || "");
   const chMobile = Boolean(input.userAgentData && input.userAgentData.mobile === true);
   const uaMobile = /Mobile|iPhone|iPad|Android.+Mobile|IEMobile/i.test(ua);
+  const adsPowerLike = isAdsPowerLikeBrowser({
+    userAgent: ua,
+    windowOpen: input.windowOpen,
+    globals: input.globals,
+  });
   return {
     mobileHint: chMobile || uaMobile,
     platform: String(input.userAgentData?.platform || "").trim(),
     adsPowerNativeWebHost: false,
+    adsPowerLike,
+    usePageRedirect: adsPowerLike,
   };
 }
 
@@ -226,12 +403,14 @@ export function toPublicMetaEsConfig(input: {
   appId?: string;
   configId?: string;
   graphVersion?: string;
+  redirectUri?: string;
   appSecret?: string;
   accessToken?: string;
   encryptionKey?: string;
 }): MetaEsPublicConfig {
   const appId = String(input.appId || "").trim();
   const configId = String(input.configId || "").trim();
+  const redirectUri = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
   return {
     ok: Boolean(appId && configId),
     appId: appId || undefined,
@@ -239,6 +418,7 @@ export function toPublicMetaEsConfig(input: {
     graphVersion:
       String(input.graphVersion || resolveMetaEsJsSdkGraphVersion()).trim() || META_ES_JS_SDK_GRAPH_VERSION,
     callbackPath: META_ES_TECH_PROVIDER_PATHS.callback,
+    redirectUri: redirectUri || undefined,
   };
 }
 
@@ -246,6 +426,7 @@ export function planMetaEsTechProviderClick(configId: string): MetaEsClickPlan {
   return {
     callFbInit: false,
     openGenericOauthUrl: false,
+    openPageRedirect: true,
     loginOptions: buildMetaEsFbLoginOptions(configId),
     configPath: META_ES_TECH_PROVIDER_PATHS.config,
     startPath: META_ES_TECH_PROVIDER_PATHS.start,

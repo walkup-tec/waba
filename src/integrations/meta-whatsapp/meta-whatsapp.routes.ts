@@ -142,11 +142,24 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
 
   /**
    * Callback de API (sessão autenticada).
-   * O Embedded Signup atual usa FB.login na SPA e POST do `code` — não é redirect OAuth para a home.
-   * GET existe para a URL dedicada existir; se vier `code` na query (futuro OAuth redirect), troca e persiste.
+   * AdsPower: o login é redirect na mesma aba; o browser volta para a SPA com `code`.
+   * GET em HTML só devolve a home com a query; o POST autenticado troca o code.
    */
   app.get("/integrations/meta/whatsapp/callback", async (req: Request, res: Response) => {
+    const accept = String(req.headers.accept || "");
+    const wantsHtml = /text\/html/i.test(accept);
     const code = String(req.query.code || "").trim();
+    const state = String(req.query.state || "").trim();
+    const error = String(req.query.error || "").trim();
+    if (wantsHtml && (code || error)) {
+      const dest = new URL("/", `${req.protocol}://${req.get("host") || "localhost"}`);
+      if (code) dest.searchParams.set("code", code);
+      if (state) dest.searchParams.set("state", state);
+      if (error) dest.searchParams.set("error", error);
+      const description = String(req.query.error_description || "").trim();
+      if (description) dest.searchParams.set("error_description", description);
+      return res.redirect(302, dest.pathname + dest.search);
+    }
     if (!code) {
       return sendPublic(res, 200, {
         ok: true,

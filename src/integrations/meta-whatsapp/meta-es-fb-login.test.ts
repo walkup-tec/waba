@@ -7,6 +7,7 @@ import {
   META_ES_TECH_PROVIDER_PATHS,
   META_ES_UNAVAILABLE_MESSAGE,
   buildMetaEsFbLoginOptions,
+  buildMetaEsOauthDialogUrl,
   buildMetaEsSetupPrefill,
   configIdLast4,
   isGenericFacebookOauthUrl,
@@ -14,6 +15,7 @@ import {
   describeMetaEsBrowserSurface,
   isLegacyExchangePath,
   mentionsMissingConfigId,
+  parseMetaEsOauthReturn,
   planMetaEsTechProviderClick,
   readMetaConfigIdFromEnv,
   META_ES_JS_SDK_GRAPH_VERSION,
@@ -21,6 +23,7 @@ import {
   resolveMetaEsConfigId,
   resolveMetaEsJsSdkGraphVersion,
   shouldOpenMetaEsPopup,
+  shouldUseMetaEsPageRedirect,
   toPublicMetaEsConfig,
 } from "./meta-es-fb-login";
 
@@ -46,6 +49,7 @@ describe("meta-es-fb-login", () => {
     });
     const plan = planMetaEsTechProviderClick("1467449278208212");
     assert.equal(plan.callFbInit, false);
+    assert.equal(plan.openPageRedirect, true);
     assert.equal(plan.loginOptions?.config_id, "1467449278208212");
   });
 
@@ -137,40 +141,68 @@ describe("meta-es-fb-login", () => {
     assert.equal(mentionsMissingConfigId("Parâmetro inválido: config_id é obrigatório."), true);
   });
 
-  it("login recusado pela Meta não pede Testador", () => {
+  it("login recusado pela Meta não pede Testador nem Parceiros", () => {
     const html = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
     assert.match(html, /WABA_META_ES_LOGIN_BLOCKED_MESSAGE/);
-    assert.match(html, /Não é cargo nem Testador|Não é cargo\/Testador/);
+    assert.match(html, /mesma aba/);
     assert.match(html, /AdsPower/);
-    assert.match(html, /Parceiros/);
-    assert.match(html, /redirect da própria Meta|é da Meta/);
+    assert.match(html, /Grupo Walkup App/);
+    assert.match(html, /wabaMetaEsBuildOauthDialogUrl/);
+    assert.match(html, /wabaMetaEsResumeLabOauthReturn/);
+    assert.match(html, /display", "page"/);
     assert.doesNotMatch(html, /adicione a conta deste perfil AdsPower como Testador/);
     assert.doesNotMatch(html, /Data Use Checkup/);
     assert.doesNotMatch(html, /troque web\.facebook\.com/);
+    assert.doesNotMatch(html, /Parceiros → Adicionar/);
+    assert.doesNotMatch(html, /__WABA_META_ES_OPEN_PATCHED/);
   });
 
-  it("dialog/oauth sem config_id em web.facebook.com recebe host www e config_id", () => {
+  it("não reescreve web.facebook.com do SDK; AdsPower usa dialog/oauth na mesma aba", () => {
     const raw =
       "https://web.facebook.com/v26.0/dialog/oauth?app_id=1279182514183979&cbt=1790173659109&channel_url=https%3A%2F%2Fstaticxx.facebook.com%2Fx%2Fconnect%2Fxd_arbiter";
-    const rewritten = rewriteMetaEsOauthUrl(raw, { configId: "1590195526041278" });
-    const parsed = new URL(rewritten);
+    assert.equal(rewriteMetaEsOauthUrl(raw, { configId: "1590195526041278" }), raw);
+    const dialog = buildMetaEsOauthDialogUrl({
+      appId: "1279182514183979",
+      configId: "1590195526041278",
+      redirectUri: "https://waba.draxsistemas.com.br/",
+      state: "abc123",
+    });
+    assert.ok(dialog);
+    const parsed = new URL(dialog);
     assert.equal(parsed.hostname, "www.facebook.com");
+    assert.equal(parsed.searchParams.get("client_id"), "1279182514183979");
     assert.equal(parsed.searchParams.get("config_id"), "1590195526041278");
     assert.equal(parsed.searchParams.get("response_type"), "code");
-    assert.equal(parsed.searchParams.get("override_default_response_type"), "true");
+    assert.equal(parsed.searchParams.get("display"), "page");
+    assert.equal(parsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br/");
+    assert.equal(parsed.searchParams.get("state"), "abc123");
     assert.match(String(parsed.searchParams.get("extras") || ""), /"setup":\{\}/);
-    const encrypted =
-      "https://web.facebook.com/v26.0/dialog/oauth?encrypted_query_string=AeH_blob";
-    const encryptedRewritten = rewriteMetaEsOauthUrl(encrypted, { configId: "1590195526041278" });
-    const encryptedParsed = new URL(encryptedRewritten);
-    assert.equal(encryptedParsed.hostname, "www.facebook.com");
-    assert.equal(encryptedParsed.searchParams.get("config_id"), null);
-    assert.equal(encryptedParsed.searchParams.get("encrypted_query_string"), "AeH_blob");
+    assert.equal("sessionInfoVersion" in JSON.parse(String(parsed.searchParams.get("extras"))), false);
+    assert.equal(
+      shouldUseMetaEsPageRedirect({ preferPage: true }),
+      true,
+    );
+    assert.equal(
+      shouldUseMetaEsPageRedirect({
+        userAgent: "Mozilla/5.0 Chrome/120",
+        windowOpen: function hookedOpen() {
+          return null;
+        },
+      }),
+      true,
+    );
+    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120" }), false);
+    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120" }), true);
+    const returned = parseMetaEsOauthReturn("?code=AQC123&state=abc123&waba_id=waba-9");
+    assert.equal(returned.code, "AQC123");
+    assert.equal(returned.state, "abc123");
+    assert.equal(returned.wabaId, "waba-9");
     const surface = describeMetaEsBrowserSurface({
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120",
       userAgentData: { mobile: false, platform: "Windows" },
     });
     assert.equal(surface.adsPowerNativeWebHost, false);
+    assert.equal(surface.adsPowerLike, false);
     assert.equal(surface.mobileHint, false);
   });
 

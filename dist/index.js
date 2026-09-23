@@ -10482,6 +10482,7 @@ app.get("/integrations/meta/whatsapp/config", (_req, res) => {
         configId: configId || undefined,
         graphVersion: META_JS_SDK_GRAPH_VERSION,
         callbackPath: "/integrations/meta/whatsapp/callback",
+        redirectUri: String(process.env.META_OAUTH_REDIRECT_URI || "").trim() || undefined,
     });
 });
 /**

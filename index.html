@@ -23682,11 +23682,10 @@
                 </div>
               </div>
               <ol class="waba-adspower-steps">
-                <li>Facebook só no AdsPower. O salto para <strong>web.facebook.com</strong> (#_rdc) é da Meta, não um recurso nativo do AdsPower; limpar cache não muda isso.</li>
-                <li>No AdsPower, abra o perfil recebido (BM, WABA e chip já estão nele).</li>
-                <li>Se Conectar com Meta cair em Recurso indisponível: neste mesmo navegador, no Gerenciador de Negócios da BM, <strong>Parceiros → Adicionar</strong> o ID do portfólio Drax/Walkup que já aparece nas Ativas da DRAX e compartilhe as contas WhatsApp. Volte ao Laboratório e Atualize.</li>
-                <li>Senão, neste mesmo navegador use <strong>Conectar WABA → Conectar com Meta</strong>.</li>
-                <li>Volte aqui, vincule o chip ao perfil e envie o template em <strong>Templates</strong> dessa WABA.</li>
+                <li>Abra a DRAX <strong>neste mesmo perfil AdsPower</strong> e clique em <strong>Conectar WABA → Conectar Portfólio</strong>.</li>
+                <li>O Facebook abre <strong>nesta aba</strong> (mesmo perfil, mesmos cookies). É o assistente Grupo Walkup App — o mesmo do Chrome — para escolher o número da BM (ex.: Verificado).</li>
+                <li>Não use o popup criptografado do SDK. Se a Meta pedir senha, informe a senha do Facebook logado neste perfil e continue.</li>
+                <li>Ao voltar para a DRAX, o Laboratório grava a WABA. Depois volte aqui, vincule o chip ao perfil e envie o template em <strong>Templates</strong>.</li>
               </ol>
               <p id="waba-adspower-banner" class="waba-adspower-status" role="status">Carregando perfis AdsPower…</p>
               <div class="waba-adspower-toolbar">
@@ -27609,9 +27608,11 @@
     <script>
       (function initWabaMetaEsLoginHelper() {
         var UNAVAILABLE = "Configuração do WhatsApp Embedded Signup indisponível.";
+        var OAUTH_KEY = "waba-meta-es-oauth";
         window.__WABA_META_ES_LOGIN_OPTIONS = null;
         window.__WABA_META_ES_LOGIN_CB = null;
         window.__WABA_META_ES_RETRYING = false;
+        window.__WABA_META_ES_OAUTH_RETURN = null;
         window.wabaMetaEsPublicPath = function (path) {
           if (typeof resolveWabaPublicPath === "function") return resolveWabaPublicPath(path);
           var base = String(window.WABA_BASE_PATH || "").replace(/\/$/, "");
@@ -27620,10 +27621,43 @@
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
-          "A Meta recusou o Login for Business (Recurso indisponível). web.facebook.com com #_rdc não é o AdsPower: é redirect da própria Meta, e também acontece em Chrome desktop. Limpar cache não impede. Não é cargo/Testador. Neste AdsPower, no Gerenciador de Negócios desta BM: Parceiros → Adicionar o ID do portfólio Drax/Walkup que já está nas Ativas da DRAX e compartilhe as contas WhatsApp. Depois no Laboratório clique Atualizar.";
+          "A Meta recusou o Login for Business neste navegador. No AdsPower o Facebook precisa abrir nesta mesma aba do perfil — o mesmo assistente Grupo Walkup App do Chrome, sem o popup criptografado do SDK. Feche a tela da Meta, recarregue o Laboratório e clique de novo em Conectar Portfólio.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
+        };
+        window.wabaMetaEsNormalizeRedirectUri = function (raw) {
+          var value = String(raw || "").trim();
+          if (!value) return "";
+          try {
+            var parsed = new URL(value);
+            parsed.hash = "";
+            parsed.search = "";
+            if (parsed.pathname === "/" || parsed.pathname === "") {
+              return parsed.protocol + "//" + parsed.host;
+            }
+            return parsed.protocol + "//" + parsed.host + String(parsed.pathname || "").replace(/\/+$/, "");
+          } catch (e) {
+            return value.replace(/\/+$/, "");
+          }
+        };
+        window.wabaMetaEsIsNativeWindowOpen = function () {
+          if (typeof window.open !== "function") return false;
+          try {
+            return /\[native code\]/.test(Function.prototype.toString.call(window.open));
+          } catch (e) {
+            return false;
+          }
+        };
+        window.wabaMetaEsIsAdsPowerBrowser = function () {
+          var ua = String(navigator.userAgent || "");
+          if (/AdsPower|SunBrowser|ADSPower/i.test(ua)) return true;
+          if (window.adsPower || window.__adspower || window.Adspower) return true;
+          return !window.wabaMetaEsIsNativeWindowOpen();
+        };
+        window.wabaMetaEsShouldUsePageRedirect = function (preferPage) {
+          if (preferPage === true) return true;
+          return window.wabaMetaEsIsAdsPowerBrowser();
         };
         window.wabaMetaEsBuildLoginOptions = function (configId, setup) {
           var id = String(configId || "").trim();
@@ -27646,6 +27680,99 @@
             extras: { setup: extrasSetup }
           };
         };
+        window.wabaMetaEsBuildOauthDialogUrl = function (input) {
+          var appId = String(input && input.appId || "").trim();
+          var configId = String(input && input.configId || "").trim();
+          var redirectUri = String((input && input.redirectUri) || "").trim();
+          if (!redirectUri) {
+            redirectUri = window.wabaMetaEsNormalizeRedirectUri(window.location.origin);
+          }
+          if (!appId || !configId || !redirectUri) return "";
+          var version = String((input && input.graphVersion) || "v26.0").trim() || "v26.0";
+          var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
+          var extras = options && options.extras ? options.extras : { setup: {} };
+          var parsed = new URL("https://www.facebook.com/" + version + "/dialog/oauth");
+          parsed.searchParams.set("client_id", appId);
+          parsed.searchParams.set("redirect_uri", redirectUri);
+          parsed.searchParams.set("response_type", "code");
+          parsed.searchParams.set("override_default_response_type", "true");
+          parsed.searchParams.set("config_id", configId);
+          parsed.searchParams.set("display", "page");
+          parsed.searchParams.set("extras", JSON.stringify(extras));
+          if (input && input.state) parsed.searchParams.set("state", String(input.state));
+          return parsed.toString();
+        };
+        window.wabaMetaEsCreateOauthState = function () {
+          var bytes = new Uint8Array(16);
+          if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+            window.crypto.getRandomValues(bytes);
+          } else {
+            for (var i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+          }
+          return Array.prototype.map.call(bytes, function (b) {
+            return ("0" + b.toString(16)).slice(-2);
+          }).join("");
+        };
+        window.wabaMetaEsParseOauthReturn = function (search) {
+          var raw = String(search || window.location.search || "");
+          var params = new URLSearchParams(raw.charAt(0) === "?" ? raw.slice(1) : raw);
+          var extras = {};
+          try {
+            extras = JSON.parse(String(params.get("extras") || params.get("session_info") || "{}")) || {};
+          } catch (e) {
+            extras = {};
+          }
+          var nested = extras && extras.data && typeof extras.data === "object" ? extras.data : extras;
+          return {
+            code: String(params.get("code") || "").trim(),
+            state: String(params.get("state") || "").trim(),
+            error: String(params.get("error") || "").trim(),
+            errorDescription: String(params.get("error_description") || params.get("error_reason") || "").trim(),
+            wabaId: String(params.get("waba_id") || extras.waba_id || nested.waba_id || "").trim(),
+            phoneNumberId: String(
+              params.get("phone_number_id") || extras.phone_number_id || nested.phone_number_id || ""
+            ).trim(),
+            businessId: String(params.get("business_id") || extras.business_id || nested.business_id || "").trim()
+          };
+        };
+        window.wabaMetaEsStripOauthSearch = function () {
+          try {
+            var params = new URLSearchParams(window.location.search || "");
+            [
+              "code",
+              "state",
+              "error",
+              "error_description",
+              "error_reason",
+              "extras",
+              "session_info",
+              "waba_id",
+              "phone_number_id",
+              "business_id"
+            ].forEach(function (key) {
+              params.delete(key);
+            });
+            var next = params.toString();
+            var url = window.location.pathname + (next ? "?" + next : "") + (window.location.hash || "");
+            window.history.replaceState({}, document.title, url);
+          } catch (e) {
+            /* noop */
+          }
+        };
+        window.wabaMetaEsCaptureOauthReturn = function () {
+          var parsed = window.wabaMetaEsParseOauthReturn(window.location.search);
+          if (!parsed.code && !parsed.error) return null;
+          window.__WABA_META_ES_OAUTH_RETURN = parsed;
+          window.wabaMetaEsStripOauthSearch();
+          return parsed;
+        };
+        window.wabaMetaEsReadPendingOauth = function () {
+          try {
+            return JSON.parse(sessionStorage.getItem(OAUTH_KEY) || "null");
+          } catch (e) {
+            return null;
+          }
+        };
         window.wabaMetaEsLogStart = function (info) {
           var cfgPresent = Boolean(info && info.configIdPresent);
           console.info(
@@ -27653,85 +27780,81 @@
             "appIdPresent=" + (info && info.appIdPresent ? "true" : "false"),
             "configIdPresent=" + (cfgPresent ? "true" : "false"),
             "configIdLast4=" + (cfgPresent ? String(info.configIdLast4 || "") : ""),
-            "sdkReady=" + (info && info.sdkReady ? "true" : "false")
+            "sdkReady=" + (info && info.sdkReady ? "true" : "false"),
+            "pageRedirect=" + (info && info.pageRedirect ? "true" : "false")
           );
         };
-        window.wabaMetaEsRewriteOauthUrl = function (rawUrl, options) {
-          var raw = String(rawUrl || "").trim();
-          if (!raw || !/dialog\/oauth/i.test(raw)) return rawUrl;
-          var parsed;
-          try {
-            parsed = new URL(raw);
-          } catch (e) {
-            return rawUrl;
-          }
-          if (!/facebook\.com$/i.test(parsed.hostname)) return rawUrl;
-          if (/^(web|m|mobile)\./i.test(parsed.hostname)) parsed.hostname = "www.facebook.com";
-          var encrypted = String(parsed.searchParams.get("encrypted_query_string") || "").trim();
-          var configId = options && options.config_id ? String(options.config_id).trim() : "";
-          if (!encrypted && configId && !String(parsed.searchParams.get("config_id") || "").trim()) {
-            parsed.searchParams.set("config_id", configId);
-            parsed.searchParams.set("response_type", "code");
-            parsed.searchParams.set("override_default_response_type", "true");
-            if (!String(parsed.searchParams.get("extras") || "").trim()) {
-              var extras = options && options.extras ? options.extras : { setup: {} };
-              parsed.searchParams.set("extras", JSON.stringify(extras));
-            }
-          }
-          return parsed.toString();
+        window.wabaMetaEsRewriteOauthUrl = function (rawUrl) {
+          return rawUrl;
         };
         window.wabaMetaEsPatchOauthOpen = function () {
-          if (window.__WABA_META_ES_OPEN_PATCHED) return;
-          if (typeof window.open !== "function") return;
-          window.__WABA_META_ES_OPEN_PATCHED = true;
-          var nativeOpen = window.open;
-          window.open = function (url, target, features) {
-            var next = url;
-            if (typeof url === "string" && /dialog\/oauth/i.test(url)) {
-              next = window.wabaMetaEsRewriteOauthUrl(url, window.__WABA_META_ES_LOGIN_OPTIONS || {});
-              try {
-                var logged = new URL(String(next));
-                var names = [];
-                logged.searchParams.forEach(function (_value, key) {
-                  names.push(key);
-                });
-                console.info(
-                  "[META][ES][OAUTH_OPEN]",
-                  "host=" + logged.hostname,
-                  "configIdPresent=" + (logged.searchParams.get("config_id") ? "true" : "false"),
-                  "paramNames=" + names.join(","),
-                );
-              } catch (e) {
-                console.info("[META][ES][OAUTH_OPEN]", "rewrite");
-              }
-            }
-            return nativeOpen.call(window, next, target, features);
-          };
+          return;
         };
-        window.wabaMetaEsInvokeFbLogin = function (callback, configId, setup) {
+        window.wabaMetaEsInvokeFbLogin = function (callback, configId, setup, extra) {
           var options = window.wabaMetaEsBuildLoginOptions(configId, setup);
           if (!options) {
             console.error("[META][ES][FB_LOGIN]", "configIdPresent=false");
             return { ok: false, error: UNAVAILABLE };
           }
+          window.__WABA_META_ES_LOGIN_OPTIONS = options;
+          window.__WABA_META_ES_LOGIN_CB = callback;
+          var cfg = extra || {};
+          var publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
+          var preferPage = cfg.preferPage === true || window.wabaMetaEsShouldUsePageRedirect(cfg.preferPage);
+          var appId = String(cfg.appId || publicCfg.appId || "").trim();
+          var redirectUri = String(cfg.redirectUri || publicCfg.redirectUri || "").trim();
+          if (!redirectUri) {
+            redirectUri = window.wabaMetaEsNormalizeRedirectUri(window.location.origin);
+          }
+          if (preferPage && appId && redirectUri) {
+            var state = window.wabaMetaEsCreateOauthState();
+            var dialogUrl = window.wabaMetaEsBuildOauthDialogUrl({
+              appId: appId,
+              configId: options.config_id,
+              redirectUri: redirectUri,
+              graphVersion: publicCfg.graphVersion || "v26.0",
+              setup: setup,
+              state: state
+            });
+            if (!dialogUrl) {
+              return { ok: false, error: UNAVAILABLE };
+            }
+            try {
+              sessionStorage.setItem(
+                OAUTH_KEY,
+                JSON.stringify({
+                  state: state,
+                  source: String(cfg.source || "lab"),
+                  redirectUri: redirectUri,
+                  setup: setup || {},
+                  ts: Date.now()
+                })
+              );
+            } catch (e) {
+              /* segue mesmo se o storage falhar */
+            }
+            console.info(
+              "[META][ES][PAGE_REDIRECT]",
+              "host=www.facebook.com",
+              "configIdPresent=true",
+              "display=page"
+            );
+            window.location.assign(dialogUrl);
+            return { ok: true, mode: "page" };
+          }
           if (typeof FB === "undefined" || typeof FB.login !== "function") {
             return { ok: false, error: "SDK da Meta não carregou. Verifique bloqueador de anúncios." };
           }
-          window.__WABA_META_ES_LOGIN_OPTIONS = options;
-          window.__WABA_META_ES_LOGIN_CB = callback;
-          window.wabaMetaEsPatchOauthOpen();
           var setupKeys = options.extras && options.extras.setup ? Object.keys(options.extras.setup) : [];
-          var uaData = navigator.userAgentData || {};
           console.info(
             "[META][ES][FB_LOGIN]",
             "responseType=code",
             "configIdPresent=true",
             "setupKeys=" + (setupKeys.length ? setupKeys.join(",") : "empty"),
-            "chMobile=" + (uaData.mobile ? "true" : "false"),
-            "chPlatform=" + String(uaData.platform || ""),
+            "pageRedirect=false"
           );
           FB.login(callback, options);
-          return { ok: true };
+          return { ok: true, mode: "popup" };
         };
         window.wabaMetaEsRetryLoginIfNeeded = function (callback, reason) {
           var options = window.__WABA_META_ES_LOGIN_OPTIONS;
@@ -27740,11 +27863,14 @@
           var msg = String(reason || "").toLowerCase();
           if (msg.indexOf("config_id") === -1) return false;
           window.__WABA_META_ES_RETRYING = true;
-          window.wabaMetaEsPatchOauthOpen();
           console.info("[META][ES][FB_LOGIN]", "responseType=code", "configIdPresent=true");
-          FB.login(callback || window.__WABA_META_ES_LOGIN_CB, options);
-          return true;
+          if (typeof FB !== "undefined" && typeof FB.login === "function") {
+            FB.login(callback || window.__WABA_META_ES_LOGIN_CB, options);
+            return true;
+          }
+          return false;
         };
+        window.wabaMetaEsCaptureOauthReturn();
       })();
 
       (function initMetaEmbeddedSignupSdk() {
@@ -40220,8 +40346,15 @@
             metaTpPaintConnectProgress(1);
             let redirectUri = "";
             try {
-              const cfg = await metaTpFetchJson("/integrations/meta/whatsapp/config");
-              redirectUri = String(cfg.payload.redirectUri || "").trim();
+              const pending =
+                typeof window.wabaMetaEsReadPendingOauth === "function"
+                  ? window.wabaMetaEsReadPendingOauth()
+                  : null;
+              if (pending && pending.redirectUri) redirectUri = String(pending.redirectUri || "").trim();
+              if (!redirectUri) {
+                const cfg = await metaTpFetchJson("/integrations/meta/whatsapp/config");
+                redirectUri = String(cfg.payload.redirectUri || "").trim();
+              }
             } catch {
               redirectUri = "";
             }
@@ -40244,6 +40377,11 @@
             metaTpLog("token exchange concluído");
             metaTpSetStatus("");
             metaTpLog(metaTpFormatPublicStatus(payload));
+            try {
+              sessionStorage.removeItem("waba-meta-es-oauth");
+            } catch (e) {
+              /* noop */
+            }
           }
 
           if (metaTpSession.exchanged && metaTpSession.wabaId) {
@@ -40312,6 +40450,16 @@
               window.__wabaMetaTechSignupActive = false;
             }
           }
+          if (metaTpSession.exchanged && !metaTpSession.wabaId) {
+            metaTpLog("token sem waba_id do postMessage; lendo portfólio na Graph");
+            await metaTpLoadPortfolio({ force: true });
+            if (metaTpHasVisiblePortfolios()) {
+              metaTpSetStatus("");
+              metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
+              window.__wabaMetaTechSignupActive = false;
+              return;
+            }
+          }
           if (metaTpConnectProgressActive) {
             metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasVisiblePortfolios() });
           }
@@ -40338,6 +40486,7 @@
         const publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
         const appId = String(publicCfg.appId || "").trim();
         const configId = String(publicCfg.configId || "").trim();
+        const preferPage = true;
         const sdkReady = typeof FB !== "undefined" && typeof FB.login === "function";
         if (typeof window.wabaMetaEsLogStart === "function") {
           window.wabaMetaEsLogStart({
@@ -40345,6 +40494,7 @@
             configIdPresent: Boolean(configId),
             configIdLast4: typeof window.wabaMetaEsLast4 === "function" ? window.wabaMetaEsLast4(configId) : "",
             sdkReady: sdkReady,
+            pageRedirect: preferPage,
           });
         }
         if (!configId) {
@@ -40355,7 +40505,7 @@
           metaTpSetStatus("A conexão com a Meta não está disponível. Recarregue a página e tente de novo.");
           return false;
         }
-        if (!sdkReady) {
+        if (!preferPage && !sdkReady) {
           metaTpSetStatus("SDK da Meta não carregou. Verifique bloqueador de anúncios.");
           return false;
         }
@@ -40379,11 +40529,18 @@
           metaTpTryAdvance();
         };
         var invoked = typeof window.wabaMetaEsInvokeFbLogin === "function"
-          ? window.wabaMetaEsInvokeFbLogin(onFbLogin, configId, setup || {})
+          ? window.wabaMetaEsInvokeFbLogin(onFbLogin, configId, setup || {}, {
+              preferPage: preferPage,
+              source: "lab",
+              appId: appId,
+              redirectUri: publicCfg.redirectUri || window.location.origin,
+            })
           : { ok: false, error: "SDK da Meta não carregou. Verifique bloqueador de anúncios." };
         if (!invoked || invoked.ok === false) {
           window.__wabaMetaTechSignupActive = false;
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
+        } else if (invoked.mode === "page") {
+          metaTpSetStatus("Abrindo o Facebook nesta aba, no mesmo perfil do AdsPower…");
         }
         return false;
       };
@@ -40670,6 +40827,55 @@
             window.wabaRefreshMetaWhatsappStatus();
           }
         }
+        window.wabaMetaEsResumeLabOauthReturn = function wabaMetaEsResumeLabOauthReturn() {
+          var parsed =
+            window.__WABA_META_ES_OAUTH_RETURN ||
+            (typeof window.wabaMetaEsCaptureOauthReturn === "function"
+              ? window.wabaMetaEsCaptureOauthReturn()
+              : null);
+          if (!parsed || (!parsed.code && !parsed.error)) return false;
+          var pending =
+            typeof window.wabaMetaEsReadPendingOauth === "function"
+              ? window.wabaMetaEsReadPendingOauth()
+              : null;
+          if (parsed.error) {
+            metaTpSetStatus(
+              parsed.errorDescription
+                ? "A Meta recusou o login: " + parsed.errorDescription
+                : window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE
+            );
+            try {
+              sessionStorage.removeItem("waba-meta-es-oauth");
+            } catch (e) {
+              /* noop */
+            }
+            window.__WABA_META_ES_OAUTH_RETURN = null;
+            return true;
+          }
+          if (pending && pending.state && parsed.state && pending.state !== parsed.state) {
+            metaTpSetStatus("A sessão do Facebook não bateu com este Laboratório. Clique de novo em Conectar Portfólio.");
+            window.__WABA_META_ES_OAUTH_RETURN = null;
+            return true;
+          }
+          if (typeof window.wabaOpenLabTab === "function") window.wabaOpenLabTab("whatsapp-oficial");
+          metaTpResetSession();
+          window.__wabaMetaTechSignupActive = true;
+          metaTpSession.codeReceived = true;
+          metaTpSession._code = parsed.code;
+          if (parsed.wabaId) metaTpSession.wabaId = parsed.wabaId;
+          if (parsed.phoneNumberId) metaTpSession.phoneNumberId = parsed.phoneNumberId;
+          if (parsed.businessId) metaTpSession.businessId = parsed.businessId;
+          metaTpLog("retorno OAuth na mesma aba");
+          metaTpSetStatus("Facebook concluído neste perfil. Gravando a WABA no Laboratório…");
+          window.__WABA_META_ES_OAUTH_RETURN = null;
+          metaTpTryAdvance();
+          return true;
+        };
+        window.setTimeout(function () {
+          if (typeof window.wabaMetaEsResumeLabOauthReturn === "function") {
+            window.wabaMetaEsResumeLabOauthReturn();
+          }
+        }, 0);
       }
 
       let metaTplLabCache = [];
@@ -47629,7 +47835,7 @@
         hint.textContent =
           "Perfil AdsPower «" +
           focus.name +
-          "»: abra esta página no navegador desse perfil e clique em Conectar com Meta. A BM/WABA/chip entram no Laboratório; depois volte em Perfis AdsPower e vincule.";
+          "»: abra esta página neste mesmo perfil AdsPower e clique em Conectar Portfólio. O Facebook abre nesta aba (Grupo Walkup App). Depois volte em Perfis AdsPower e vincule.";
       };
 
       function wabaAdsPowerBindUi() {
@@ -70438,7 +70644,14 @@
             }
             showToast("Abrindo janela da Meta…", "info");
             var esLogin = typeof window.wabaMetaEsInvokeFbLogin === "function"
-              ? window.wabaMetaEsInvokeFbLogin(metaEsFbLoginCallback, String(cfg.configId))
+              ? window.wabaMetaEsInvokeFbLogin(metaEsFbLoginCallback, String(cfg.configId), {}, {
+                  preferPage: typeof window.wabaMetaEsShouldUsePageRedirect === "function"
+                    ? window.wabaMetaEsShouldUsePageRedirect()
+                    : false,
+                  source: "ativos",
+                  appId: String(cfg.appId || "").trim(),
+                  redirectUri: cfg.redirectUri || window.location.origin,
+                })
               : { ok: false, error: "Helper de login Meta indisponível." };
             if (!esLogin || esLogin.ok === false) {
               const err = String((esLogin && esLogin.error) || "Não foi possível abrir a conexão com a Meta.");
