@@ -40226,11 +40226,6 @@
         }
         section.hidden = false;
         if (empty) empty.hidden = true;
-        const ativas = metaTpFilterPortfoliosByPage(bundles, "ativas");
-        const restritas = metaTpFilterPortfoliosByPage(bundles, "restritas");
-        if (metaTpPortfolioPage === "ativas" && !ativas.length && restritas.length) {
-          metaTpPortfolioPage = "restritas";
-        }
         metaTpSyncPortfolioPageNav(bundles);
         const visible = metaTpFilterPortfoliosByPage(bundles, metaTpPortfolioPage);
         const savedBiz = String(metaTpSession.savedBusinessId || "").trim();
