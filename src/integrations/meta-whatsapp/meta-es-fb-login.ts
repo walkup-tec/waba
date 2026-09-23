@@ -88,6 +88,13 @@ export const META_ES_OAUTH_STORAGE_KEY = "waba-meta-es-oauth";
 /** Host do wizard que funcionou no Chrome. www dispara _rdc + encrypted_query_string. */
 export const META_ES_OAUTH_HOST = "web.facebook.com";
 
+/**
+ * redirect_uri do JS SDK (FB.login). Web OAuth com origin da DRAX + display=page
+ * chega no Recurso indisponível depois da senha, mesmo com hash da Meta.
+ */
+export const META_ES_SDK_XD_ARBITER =
+  "https://staticxx.facebook.com/x/connect/xd_arbiter/?version=46";
+
 export function readMetaConfigIdFromEnv(env: NodeJS.ProcessEnv = process.env): string {
   return String(env.META_CONFIG_ID || env.META_ES_CONFIG_ID || "").trim();
 }
@@ -263,6 +270,66 @@ export function createMetaEsOauthState(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+export function siteHostFromMetaEsOrigin(origin: string): string {
+  const value = resolveMetaEsRedirectUri({ locationOrigin: origin });
+  if (!value) return "";
+  try {
+    return new URL(value).host;
+  } catch {
+    return "";
+  }
+}
+
+export function isMetaEsFacebookMessageOrigin(origin: string): boolean {
+  const raw = String(origin || "").trim();
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return host === "facebook.com" || host.endsWith(".facebook.com");
+  } catch {
+    return /(?:^|\.)facebook\.com$/i.test(raw);
+  }
+}
+
+export function parseMetaEsFacebookOauthMessage(data: unknown): MetaEsOauthReturn | null {
+  if (data == null) return null;
+  if (typeof data === "string") {
+    const text = String(data).trim();
+    if (!text) return null;
+    if (text.charAt(0) === "{" || text.charAt(0) === "[") {
+      try {
+        return parseMetaEsFacebookOauthMessage(JSON.parse(text));
+      } catch {
+        /* query string abaixo */
+      }
+    }
+    const queryStart = text.search(/[?#]/);
+    const query = queryStart >= 0 ? text.slice(queryStart) : `?${text}`;
+    const parsed = parseMetaEsOauthReturn(query);
+    return parsed.code || parsed.error ? parsed : null;
+  }
+  if (typeof data !== "object" || Array.isArray(data)) return null;
+  const rec = data as Record<string, unknown>;
+  if (String(rec.type || "") === "WABA_META_ES_OAUTH_RETURN") return null;
+  const auth =
+    rec.authResponse && typeof rec.authResponse === "object" && !Array.isArray(rec.authResponse)
+      ? (rec.authResponse as Record<string, unknown>)
+      : null;
+  const direct = parseMetaEsOauthReturn(
+    `?code=${encodeURIComponent(String(auth?.code || rec.code || ""))}&state=${encodeURIComponent(
+      String(auth?.state || rec.state || ""),
+    )}&error=${encodeURIComponent(String(auth?.error || rec.error || ""))}&error_description=${encodeURIComponent(
+      String(auth?.error_description || rec.error_description || rec.errorDescription || ""),
+    )}`,
+  );
+  if (direct.code || direct.error) return direct;
+  for (const key of ["result", "query", "params", "data", "payload"]) {
+    const nested = parseMetaEsFacebookOauthMessage(rec[key]);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 export function buildMetaEsOauthDialogUrl(input: {
   appId: string;
   configId: string;
@@ -271,27 +338,45 @@ export function buildMetaEsOauthDialogUrl(input: {
   setup?: MetaEsSetupPrefill;
   state?: string;
   display?: "page" | "popup";
+  cbt?: string | number;
 }): string | null {
   const appId = String(input.appId || "").trim();
   const configId = String(input.configId || "").trim();
-  const redirectUri = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
-  if (!appId || !configId || !redirectUri) return null;
+  const siteOrigin = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
+  if (!appId || !configId || !siteOrigin) return null;
+  const host = siteHostFromMetaEsOrigin(siteOrigin);
   const version = String(input.graphVersion || META_ES_JS_SDK_GRAPH_VERSION).trim() || META_ES_JS_SDK_GRAPH_VERSION;
   const setup = buildMetaEsSetupPrefill({
     businessId: input.setup?.business?.id,
     wabaId: input.setup?.whatsAppBusinessAccount?.ids,
   });
+  const state = String(input.state || "").trim();
+  const cb = `f${(state || createMetaEsOauthState()).slice(0, 16)}`;
+  const sdkRedirect = `${META_ES_SDK_XD_ARBITER}#cb=${cb}&origin=${encodeURIComponent(siteOrigin)}&domain=${host}&relation=opener`;
   const parsed = new URL(`https://${META_ES_OAUTH_HOST}/${version}/dialog/oauth`);
   parsed.searchParams.set("client_id", appId);
   parsed.searchParams.set("app_id", appId);
-  parsed.searchParams.set("redirect_uri", redirectUri);
+  parsed.searchParams.set("redirect_uri", sdkRedirect);
+  parsed.searchParams.set(
+    "channel_url",
+    `${META_ES_SDK_XD_ARBITER}#origin=${encodeURIComponent(siteOrigin)}&domain=${host}&relation=parent.parent`,
+  );
+  parsed.searchParams.set("fallback_redirect_uri", siteOrigin);
   parsed.searchParams.set("response_type", "code");
   parsed.searchParams.set("override_default_response_type", "true");
   parsed.searchParams.set("config_id", configId);
-  parsed.searchParams.set("display", input.display === "popup" ? "popup" : "page");
+  parsed.searchParams.set("display", "popup");
+  parsed.searchParams.set("sdk", "joey");
+  parsed.searchParams.set("ret", "login");
+  parsed.searchParams.set("cbt", String(input.cbt ?? Date.now()));
+  parsed.searchParams.set("origin", "1");
+  if (host) parsed.searchParams.set("domain", host);
+  parsed.searchParams.set("locale", "pt_BR");
+  parsed.searchParams.set("e2e", "{}");
+  parsed.searchParams.set("version", version);
   parsed.searchParams.set("extras", JSON.stringify({ setup }));
-  const state = String(input.state || "").trim();
   if (state) parsed.searchParams.set("state", state);
+  void input.display;
   return parsed.toString();
 }
 
@@ -300,9 +385,9 @@ export function metaEsOauthPopupFeatures(): string {
 }
 
 /**
- * Chrome chega no wizard via login/reauth.php?app_id=…&next=dialog.
- * display=page na janela nova: o wizard Grupo Walkup App preenche a janela.
- * display=popup na aba da DRAX não renderiza o assistente.
+ * Chrome chega no wizard via login/reauth.php?app_id=…&next=dialog SDK.
+ * A senha continua no reauth. O next deixa de ser Web OAuth (origin DRAX +
+ * display=page), que no AdsPower vira Recurso indisponível depois da senha.
  */
 export function buildMetaEsOauthLaunchUrl(
   input: Parameters<typeof buildMetaEsOauthDialogUrl>[0],

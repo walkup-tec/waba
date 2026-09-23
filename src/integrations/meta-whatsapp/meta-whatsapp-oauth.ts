@@ -1,3 +1,4 @@
+import { META_ES_SDK_XD_ARBITER } from "./meta-es-fb-login";
 import {
   readMetaAppId,
   readMetaAppSecret,
@@ -29,7 +30,7 @@ export async function exchangeEmbeddedSignupCode(input: {
   const redirectFromEnv = readMetaOauthRedirectUri();
   const redirectFromInput = String(input.redirectUri || "").trim();
   const uniqueRedirects = Array.from(
-    new Set([redirectFromEnv, redirectFromInput].filter(Boolean)),
+    new Set([redirectFromInput, META_ES_SDK_XD_ARBITER, redirectFromEnv].filter(Boolean)),
   );
   const candidates: (string | undefined)[] = [...uniqueRedirects, undefined];
 

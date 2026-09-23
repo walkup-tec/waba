@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.readMetaConfigId = exports.readMetaBusinessId = void 0;
 exports.exchangeEmbeddedSignupCode = exchangeEmbeddedSignupCode;
 exports.metaOauthExpiresAt = metaOauthExpiresAt;
+const meta_es_fb_login_1 = require("./meta-es-fb-login");
 const meta_config_1 = require("./meta-config");
 Object.defineProperty(exports, "readMetaBusinessId", { enumerable: true, get: function () { return meta_config_1.readMetaBusinessId; } });
 Object.defineProperty(exports, "readMetaConfigId", { enumerable: true, get: function () { return meta_config_1.readMetaConfigId; } });
@@ -17,7 +18,7 @@ async function exchangeEmbeddedSignupCode(input) {
     }
     const redirectFromEnv = (0, meta_config_1.readMetaOauthRedirectUri)();
     const redirectFromInput = String(input.redirectUri || "").trim();
-    const uniqueRedirects = Array.from(new Set([redirectFromEnv, redirectFromInput].filter(Boolean)));
+    const uniqueRedirects = Array.from(new Set([redirectFromInput, meta_es_fb_login_1.META_ES_SDK_XD_ARBITER, redirectFromEnv].filter(Boolean)));
     const candidates = [...uniqueRedirects, undefined];
     const tryExchange = async (redirectUri) => {
         const url = new URL(`${(0, meta_config_1.readMetaGraphBase)()}/${(0, meta_config_1.readMetaGraphVersion)()}/oauth/access_token`);

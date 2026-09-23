@@ -14,6 +14,9 @@ import {
   isGenericFacebookOauthUrl,
   rewriteMetaEsOauthUrl,
   describeMetaEsBrowserSurface,
+  isMetaEsFacebookMessageOrigin,
+  parseMetaEsFacebookOauthMessage,
+  META_ES_SDK_XD_ARBITER,
   isLegacyExchangePath,
   mentionsMissingConfigId,
   parseMetaEsOauthReturn,
@@ -152,7 +155,11 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /wabaMetaEsBuildOauthLaunchUrl/);
     assert.match(html, /wabaMetaEsResumeLabOauthReturn/);
     assert.match(html, /wabaMetaEsOpenFacebook/);
-    assert.match(html, /display", "page"/);
+    assert.match(html, /sdk", "joey"/);
+    assert.match(html, /display", "popup"/);
+    assert.match(html, /xd_arbiter/);
+    assert.match(html, /wabaMetaEsDeliverOauthReturn/);
+    assert.match(html, /wabaMetaEsParseFacebookOauthMessage/);
     assert.match(html, /popup=yes/);
     assert.match(html, /window\.open\(url, "_blank"\)/);
     assert.doesNotMatch(html, /adicione a conta deste perfil AdsPower como Testador/);
@@ -171,6 +178,7 @@ describe("meta-es-fb-login", () => {
       configId: "1590195526041278",
       redirectUri: "https://waba.draxsistemas.com.br/",
       state: "abc123",
+      cbt: "1790187184561",
     });
     assert.ok(dialog);
     const parsed = new URL(dialog);
@@ -179,11 +187,33 @@ describe("meta-es-fb-login", () => {
     assert.equal(parsed.searchParams.get("app_id"), "1279182514183979");
     assert.equal(parsed.searchParams.get("config_id"), "1590195526041278");
     assert.equal(parsed.searchParams.get("response_type"), "code");
-    assert.equal(parsed.searchParams.get("display"), "page");
-    assert.equal(parsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br");
+    assert.equal(parsed.searchParams.get("display"), "popup");
+    assert.equal(parsed.searchParams.get("sdk"), "joey");
+    assert.equal(parsed.searchParams.get("ret"), "login");
+    assert.equal(parsed.searchParams.get("cbt"), "1790187184561");
+    assert.equal(parsed.searchParams.get("domain"), "waba.draxsistemas.com.br");
+    assert.equal(parsed.searchParams.get("fallback_redirect_uri"), "https://waba.draxsistemas.com.br");
+    assert.match(String(parsed.searchParams.get("redirect_uri") || ""), /staticxx\.facebook\.com\/x\/connect\/xd_arbiter/);
+    assert.match(String(parsed.searchParams.get("channel_url") || ""), /xd_arbiter/);
+    assert.doesNotMatch(String(parsed.searchParams.get("redirect_uri") || ""), /^https:\/\/waba\.draxsistemas\.com\.br$/);
     assert.equal(parsed.searchParams.get("state"), "abc123");
     assert.match(String(parsed.searchParams.get("extras") || ""), /"setup":\{\}/);
     assert.equal("sessionInfoVersion" in JSON.parse(String(parsed.searchParams.get("extras"))), false);
+    assert.equal(META_ES_SDK_XD_ARBITER, "https://staticxx.facebook.com/x/connect/xd_arbiter/?version=46");
+    assert.equal(isMetaEsFacebookMessageOrigin("https://web.facebook.com"), true);
+    assert.equal(isMetaEsFacebookMessageOrigin("https://staticxx.facebook.com"), true);
+    assert.equal(isMetaEsFacebookMessageOrigin("https://waba.draxsistemas.com.br"), false);
+    const fromHash = parseMetaEsFacebookOauthMessage(
+      "#cb=fabc123&origin=https%3A%2F%2Fwaba.draxsistemas.com.br&code=AQC999&state=abc123",
+    );
+    assert.equal(fromHash?.code, "AQC999");
+    assert.equal(fromHash?.state, "abc123");
+    const fromSdk = parseMetaEsFacebookOauthMessage({ authResponse: { code: "AQC888" } });
+    assert.equal(fromSdk?.code, "AQC888");
+    assert.equal(
+      parseMetaEsFacebookOauthMessage({ type: "WA_EMBEDDED_SIGNUP", event: "FINISH", data: { waba_id: "1" } }),
+      null,
+    );
     const launch = buildMetaEsOauthLaunchUrl({
       appId: "1279182514183979",
       configId: "1590195526041278",
@@ -197,6 +227,8 @@ describe("meta-es-fb-login", () => {
     assert.equal(launchParsed.searchParams.get("app_id"), "1279182514183979");
     assert.equal(launchParsed.searchParams.get("signed_next"), "1");
     assert.match(String(launchParsed.searchParams.get("next") || ""), /config_id=1590195526041278/);
+    assert.match(String(launchParsed.searchParams.get("next") || ""), /sdk=joey/);
+    assert.match(String(launchParsed.searchParams.get("next") || ""), /xd_arbiter/);
     assert.doesNotMatch(launch, /www\.facebook\.com/);
     assert.equal(
       shouldUseMetaEsPageRedirect({ preferPage: true }),

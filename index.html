@@ -27680,26 +27680,65 @@
             extras: { setup: extrasSetup }
           };
         };
+        window.WABA_META_ES_SDK_XD_ARBITER = "https://staticxx.facebook.com/x/connect/xd_arbiter/?version=46";
+        window.wabaMetaEsSiteHost = function (origin) {
+          var value = window.wabaMetaEsNormalizeRedirectUri(origin);
+          if (!value) return "";
+          try {
+            return new URL(value).host;
+          } catch (e) {
+            return "";
+          }
+        };
+        window.wabaMetaEsIsFacebookMessageOrigin = function (origin) {
+          var raw = String(origin || "").trim();
+          if (!raw) return false;
+          try {
+            var host = new URL(raw).hostname.toLowerCase();
+            return host === "facebook.com" || host.slice(-13) === ".facebook.com";
+          } catch (e2) {
+            return /(?:^|\.)facebook\.com$/i.test(raw);
+          }
+        };
         window.wabaMetaEsBuildOauthDialogUrl = function (input) {
           var appId = String(input && input.appId || "").trim();
           var configId = String(input && input.configId || "").trim();
-          var redirectUri = window.wabaMetaEsNormalizeRedirectUri(
+          var siteOrigin = window.wabaMetaEsNormalizeRedirectUri(
             String((input && input.redirectUri) || "") || window.location.origin
           );
-          if (!appId || !configId || !redirectUri) return "";
+          if (!appId || !configId || !siteOrigin) return "";
           var version = String((input && input.graphVersion) || "v26.0").trim() || "v26.0";
           var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
           var extras = options && options.extras ? options.extras : { setup: {} };
+          var host = window.wabaMetaEsSiteHost(siteOrigin);
+          var state = input && input.state ? String(input.state) : "";
+          var cb = "f" + (state || window.wabaMetaEsCreateOauthState()).slice(0, 16);
+          var xd = window.WABA_META_ES_SDK_XD_ARBITER;
+          var sdkRedirect =
+            xd + "#cb=" + cb + "&origin=" + encodeURIComponent(siteOrigin) + "&domain=" + host + "&relation=opener";
           var parsed = new URL("https://web.facebook.com/" + version + "/dialog/oauth");
           parsed.searchParams.set("client_id", appId);
           parsed.searchParams.set("app_id", appId);
-          parsed.searchParams.set("redirect_uri", redirectUri);
+          parsed.searchParams.set("redirect_uri", sdkRedirect);
+          parsed.searchParams.set(
+            "channel_url",
+            xd + "#origin=" + encodeURIComponent(siteOrigin) + "&domain=" + host + "&relation=parent.parent"
+          );
+          parsed.searchParams.set("fallback_redirect_uri", siteOrigin);
           parsed.searchParams.set("response_type", "code");
           parsed.searchParams.set("override_default_response_type", "true");
           parsed.searchParams.set("config_id", configId);
-          parsed.searchParams.set("display", "page");
+          parsed.searchParams.set("display", "popup");
+          parsed.searchParams.set("sdk", "joey");
+          parsed.searchParams.set("ret", "login");
+          parsed.searchParams.set("cbt", String(Date.now()));
+          parsed.searchParams.set("origin", "1");
+          if (host) parsed.searchParams.set("domain", host);
+          parsed.searchParams.set("locale", "pt_BR");
+          parsed.searchParams.set("e2e", "{}");
+          parsed.searchParams.set("version", version);
           parsed.searchParams.set("extras", JSON.stringify(extras));
-          if (input && input.state) parsed.searchParams.set("state", String(input.state));
+          if (state) parsed.searchParams.set("state", state);
           return parsed.toString();
         };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
@@ -27722,6 +27761,70 @@
           return Array.prototype.map.call(bytes, function (b) {
             return ("0" + b.toString(16)).slice(-2);
           }).join("");
+        };
+        window.wabaMetaEsParseFacebookOauthMessage = function (data) {
+          if (data == null) return null;
+          if (typeof data === "string") {
+            var text = String(data).trim();
+            if (!text) return null;
+            if (text.charAt(0) === "{" || text.charAt(0) === "[") {
+              try {
+                return window.wabaMetaEsParseFacebookOauthMessage(JSON.parse(text));
+              } catch (e) {
+                /* query abaixo */
+              }
+            }
+            var mark = text.search(/[?#]/);
+            return window.wabaMetaEsParseOauthReturn(mark >= 0 ? text.slice(mark) : "?" + text);
+          }
+          if (typeof data !== "object") return null;
+          if (String(data.type || "") === "WABA_META_ES_OAUTH_RETURN") return null;
+          var auth = data.authResponse && typeof data.authResponse === "object" ? data.authResponse : null;
+          var parsed = window.wabaMetaEsParseOauthReturn(
+            "?code=" + encodeURIComponent(String((auth && auth.code) || data.code || "")) +
+              "&state=" + encodeURIComponent(String((auth && auth.state) || data.state || "")) +
+              "&error=" + encodeURIComponent(String((auth && auth.error) || data.error || "")) +
+              "&error_description=" + encodeURIComponent(
+                String((auth && auth.error_description) || data.error_description || data.errorDescription || "")
+              )
+          );
+          if (parsed && (parsed.code || parsed.error)) return parsed;
+          var keys = ["result", "query", "params", "data", "payload"];
+          for (var i = 0; i < keys.length; i += 1) {
+            var nested = window.wabaMetaEsParseFacebookOauthMessage(data[keys[i]]);
+            if (nested && (nested.code || nested.error)) return nested;
+          }
+          return null;
+        };
+        window.wabaMetaEsDeliverOauthReturn = function (parsed) {
+          if (!parsed || (!parsed.code && !parsed.error)) return false;
+          if (parsed.code && window.__WABA_META_ES_OAUTH_CODE_USED === parsed.code) return false;
+          if (parsed.code) window.__WABA_META_ES_OAUTH_CODE_USED = parsed.code;
+          if (parsed.code && !parsed.error) parsed.error = "";
+          window.__WABA_META_ES_OAUTH_RETURN = parsed;
+          try {
+            localStorage.setItem(OAUTH_RETURN_KEY, JSON.stringify(parsed));
+          } catch (e) {
+            /* noop */
+          }
+          var pending = null;
+          try {
+            pending = window.wabaMetaEsReadPendingOauth();
+          } catch (e2) {
+            pending = null;
+          }
+          var source = pending && pending.source ? String(pending.source) : "";
+          if (source === "ativos") {
+            var cb = window.__WABA_META_ES_LOGIN_CB;
+            if (typeof cb === "function" && parsed.code) {
+              cb({ authResponse: { code: parsed.code } });
+            }
+            return true;
+          }
+          if (typeof window.wabaMetaEsResumeLabOauthReturn === "function") {
+            window.wabaMetaEsResumeLabOauthReturn();
+          }
+          return true;
         };
         window.wabaMetaEsParseOauthReturn = function (search) {
           var raw = String(search || window.location.search || "");
@@ -27927,7 +28030,8 @@
             window.wabaMetaEsWritePendingOauth({
               state: state,
               source: String(cfg.source || "lab"),
-              redirectUri: redirectUri,
+              redirectUri: window.WABA_META_ES_SDK_XD_ARBITER,
+              siteOrigin: redirectUri,
               setup: setup || {},
               ts: Date.now()
             });
@@ -27936,7 +28040,8 @@
               "host=web.facebook.com",
               "reauth=true",
               "configIdPresent=true",
-              "display=page",
+              "sdk=joey",
+              "display=popup",
               "open=new-window"
             );
             var opened = window.wabaMetaEsOpenFacebook(dialogUrl);
@@ -27974,13 +28079,20 @@
           return false;
         };
         window.addEventListener("message", function (event) {
+          if (window.wabaMetaEsIsFacebookMessageOrigin(String(event.origin || ""))) {
+            var fromFb =
+              typeof window.wabaMetaEsParseFacebookOauthMessage === "function"
+                ? window.wabaMetaEsParseFacebookOauthMessage(event.data)
+                : null;
+            if (fromFb && (fromFb.code || fromFb.error)) {
+              window.wabaMetaEsDeliverOauthReturn(fromFb);
+            }
+            return;
+          }
           if (String(event.origin || "") !== String(window.location.origin || "")) return;
           var data = event.data && typeof event.data === "object" ? event.data : null;
           if (!data || data.type !== "WABA_META_ES_OAUTH_RETURN" || !data.payload) return;
-          window.__WABA_META_ES_OAUTH_RETURN = data.payload;
-          if (typeof window.wabaMetaEsResumeLabOauthReturn === "function") {
-            window.wabaMetaEsResumeLabOauthReturn();
-          }
+          window.wabaMetaEsDeliverOauthReturn(data.payload);
         });
         window.addEventListener("storage", function (event) {
           if (event.key !== OAUTH_RETURN_KEY || !event.newValue) return;
