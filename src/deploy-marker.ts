@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-23-165500-ES-PARTNER-SHARE";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-23-172000-WALKUP-APP-CLIENT";

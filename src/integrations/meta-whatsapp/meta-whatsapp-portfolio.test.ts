@@ -2675,6 +2675,97 @@ describe("meta portfolio service", () => {
     );
   });
 
+  it("WABA client do Grupo Walkup App (parceiro) hidrata o card da BM dona", async () => {
+    const walkupApp = {
+      ...connectedRow(),
+      id: "conn-walkup-app-partner",
+      metaBusinessId: "1247508354180311",
+      wabaId: "waba-walkup-app",
+      accessTokenEncrypted: encryptMetaToken("token-walkup-app"),
+    };
+    const sanderPhone = {
+      id: "phone-sander-app",
+      display_phone_number: "+1 555-440-9968",
+      verified_name: "Sander de souza",
+      status: "CONNECTED",
+      code_verification_status: "VERIFIED",
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "1247508354180311", name: "Grupo Walkup App" },
+              { id: "1588459689692010", name: "61.687.659 sander roosevelt de souza" },
+            ],
+          },
+        };
+      }
+      if (input.path === "1247508354180311") {
+        return { ok: true, status: 200, json: { id: "1247508354180311", name: "Grupo Walkup App" } };
+      }
+      if (input.path === "1588459689692010") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1588459689692010",
+            name: "61.687.659 sander roosevelt de souza",
+            owned_whatsapp_business_accounts: { data: [] },
+            client_whatsapp_business_accounts: { data: [] },
+          },
+        };
+      }
+      if (input.path === "1247508354180311/client_whatsapp_business_accounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "waba-sander-app",
+                name: "Sander de souza",
+                phone_numbers: { data: [sanderPhone] },
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "waba-sander-app") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "waba-sander-app",
+            owner_business_info: { id: "1588459689692010", name: "61.687.659 sander roosevelt de souza" },
+          },
+        };
+      }
+      if (input.path === "waba-sander-app/phone_numbers") {
+        return { ok: true, status: 200, json: { data: [sanderPhone] } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkupApp];
+        },
+        async findOpenByTenant() {
+          return walkupApp;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const sander = (assets.portfolios || []).find((item) => item.id === "1588459689692010");
+    assert.equal(sander?.wabaId, "waba-sander-app");
+    assert.equal(sander?.numbers?.[0]?.phoneNumberId, "phone-sander-app");
+  });
+
   it("me/businesses aninhado traz WABA do BM administrado mesmo sem edge owned", async () => {
     const walkup = {
       ...connectedRow(),

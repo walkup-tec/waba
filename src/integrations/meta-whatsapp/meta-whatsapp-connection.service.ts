@@ -415,7 +415,16 @@ function collectPortfolioWriteTokens(
       /* conexão sem token utilizável */
     }
   }
-  return out;
+  const agency: PortfolioWriteToken[] = [];
+  const rest: PortfolioWriteToken[] = [];
+  for (const row of out) {
+    if (catalogAgencyBusinessIds().some((id) => metaBusinessIdsMatch(id, row.metaBusinessId))) {
+      agency.push(row);
+    } else {
+      rest.push(row);
+    }
+  }
+  return [...agency, ...rest];
 }
 
 function tokensForTargetWaba(
@@ -1406,11 +1415,29 @@ async function collectAgencyClientWabasByOwner(
         const rec = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
         const wabaId = String(rec.id || "").trim();
         const owner = rec.owner_business_info;
-        const ownerId =
+        let ownerId =
           owner && typeof owner === "object"
             ? String((owner as { id?: unknown }).id || "").trim()
             : "";
-        if (!wabaId || !ownerId) continue;
+        if (!wabaId) continue;
+        if (!ownerId) {
+          const info = await graph({
+            token,
+            method: "GET",
+            path: wabaId,
+            query: { fields: "id,owner_business_info{id,name}" },
+          });
+          const payload =
+            info.ok && info.json && typeof info.json === "object"
+              ? (info.json as Record<string, unknown>)
+              : {};
+          const nested = payload.owner_business_info;
+          ownerId =
+            nested && typeof nested === "object"
+              ? String((nested as { id?: unknown }).id || "").trim()
+              : "";
+        }
+        if (!ownerId) continue;
         addToPartnerBucket(byOwner, ownerId, wabaId, takeWabaPhonesFromNode(row, wabaId));
       }
       const nextAfter = String(res.json?.paging?.cursors?.after || "").trim();
@@ -1570,15 +1597,18 @@ async function fillEmptyAdminPortfolioCards(
           const mapped = mapMetaPhoneListToPortfolioNumbers({ data: fanout.phones });
           if (!mapped.length && !fanout.wabaIds.length) continue;
           card.wabaId = String(card.wabaId || "").trim() || fanout.wabaIds[0] || card.wabaId;
-          if (mapped.length) card.numbers = unionPortfolioNumbers(card.numbers || [], mapped);
+          if (mapped.length) {
+            card.numbers = unionPortfolioNumbers(card.numbers || [], mapped);
+            if (!card.connectionId) card.connectionId = row.id;
+            logMetaWhatsappSafe("portfolio-admin-fanout", {
+              tenantId,
+              businessId: bm,
+              wabaCount: fanout.wabaIds.length,
+              phoneRowCount: (card.numbers || []).length,
+            });
+            break;
+          }
           if (!card.connectionId) card.connectionId = row.id;
-          logMetaWhatsappSafe("portfolio-admin-fanout", {
-            tenantId,
-            businessId: bm,
-            wabaCount: fanout.wabaIds.length,
-            phoneRowCount: (card.numbers || []).length,
-          });
-          break;
         }
       } catch {
         logMetaWhatsappSafe("portfolio-admin-fanout-failed", { tenantId, businessId: bm });
