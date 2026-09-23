@@ -20,6 +20,9 @@ import {
 import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import {
+  canViewerSeeSubscriber,
+} from "../users/waba-eduardo-master-scope";
+import {
   deliverSubscriberWelcomeEmail,
   type WabaEmailDeliveryResult,
 } from "../mail/waba-mail-delivery";
@@ -47,6 +50,7 @@ export type AdminSubscriberListItem = {
   campaignsAwaiting: number;
   campaignsCompleted: number;
   origin: AdminSubscriberOrigin | null;
+  createdByEmail: string;
 };
 
 export type AdminSubscriberOrigin = {
@@ -254,7 +258,7 @@ export class WabaAdminSubscribersService {
     return byEmail;
   }
 
-  listSubscribers(): AdminSubscriberListItem[] {
+  listSubscribers(viewerEmail = ""): AdminSubscriberListItem[] {
     const intakesByEmail = new Map<string, WabaCampaignIntake[]>();
     for (const intake of this.intakeRepository.listAll()) {
       const email = normalizeEmail(intake.ownerEmail);
@@ -272,8 +276,11 @@ export class WabaAdminSubscribersService {
         .map((user) => [user.id, user] as const),
     );
 
+    const staffUsers = this.systemUserService.listPublicUsers();
+
     return this.subscriberRepository
       .list()
+      .filter((subscriber) => canViewerSeeSubscriber(viewerEmail, subscriber, staffUsers))
       .slice()
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map((subscriber) => {
@@ -305,15 +312,19 @@ export class WabaAdminSubscribersService {
           campaignsAwaiting: intakes.filter(isCampaignAwaiting).length,
           campaignsCompleted: intakes.filter(isCampaignCompleted).length,
           origin,
+          createdByEmail: String(subscriber.createdByEmail || "").trim().toLowerCase(),
         };
       });
   }
 
-  getSubscriberDetail(subscriberId: string): AdminSubscriberDetail {
+  getSubscriberDetail(subscriberId: string, viewerEmail = ""): AdminSubscriberDetail {
     const id = String(subscriberId ?? "").trim();
     if (!id) throw new Error("Assinante inválido.");
     const subscriber = this.subscriberRepository.getById(id);
     if (!subscriber) throw new Error("Assinante não encontrado.");
+    if (!canViewerSeeSubscriber(viewerEmail, subscriber, this.systemUserService.listPublicUsers())) {
+      throw new Error("Assinante não encontrado.");
+    }
 
     const email = normalizeEmail(subscriber.email);
     const credits = this.creditsService.getCreditsSummary(email);
@@ -350,9 +361,10 @@ export class WabaAdminSubscribersService {
     };
   }
 
-  updateSubscriber(subscriberId: string, input: UpdateSubscriberInput): AdminSubscriberDetail {
+  updateSubscriber(subscriberId: string, input: UpdateSubscriberInput, viewerEmail = ""): AdminSubscriberDetail {
+    this.getSubscriberDetail(subscriberId, viewerEmail);
     this.subscriberService.update(subscriberId, input);
-    return this.getSubscriberDetail(subscriberId);
+    return this.getSubscriberDetail(subscriberId, viewerEmail);
   }
 
   async resendSubscriberWelcome(subscriberId: string): Promise<{

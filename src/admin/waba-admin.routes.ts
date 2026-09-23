@@ -103,9 +103,10 @@ export const registerWabaAdminRoutes = (app: Express) => {
   });
 
   app.get("/admin/subscribers", (req, res) => {
-    if (!rejectNonMaster(req, res)) return;
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
     try {
-      const items = adminSubscribersService.listSubscribers();
+      const items = adminSubscribersService.listSubscribers(auth.email);
       return res.status(200).json({ items });
     } catch (error) {
       return res.status(500).json({
@@ -115,9 +116,13 @@ export const registerWabaAdminRoutes = (app: Express) => {
   });
 
   app.get("/admin/subscribers/:subscriberId", (req, res) => {
-    if (!rejectNonMaster(req, res)) return;
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
     try {
-      const detail = adminSubscribersService.getSubscriberDetail(String(req.params.subscriberId ?? ""));
+      const detail = adminSubscribersService.getSubscriberDetail(
+        String(req.params.subscriberId ?? ""),
+        auth.email,
+      );
       return res.status(200).json(detail);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível carregar o assinante.";
@@ -127,20 +132,25 @@ export const registerWabaAdminRoutes = (app: Express) => {
   });
 
   app.patch("/admin/subscribers/:subscriberId", (req, res) => {
-    if (!rejectNonMaster(req, res)) return;
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
     try {
       const body = req.body as Record<string, unknown>;
       const whatsapp = String(body.whatsapp ?? "");
-      const detail = adminSubscribersService.updateSubscriber(String(req.params.subscriberId ?? ""), {
-        email: String(body.email ?? ""),
-        fullName: String(body.fullName ?? body.name ?? ""),
-        whatsapp,
-        phone: String(body.phone ?? whatsapp),
-        cpfCnpj: String(body.cpfCnpj ?? ""),
-        aquecedorGranted: body.aquecedorGranted === true,
-        segment: body.segment,
-        password: body.password !== undefined ? String(body.password) : undefined,
-      });
+      const detail = adminSubscribersService.updateSubscriber(
+        String(req.params.subscriberId ?? ""),
+        {
+          email: String(body.email ?? ""),
+          fullName: String(body.fullName ?? body.name ?? ""),
+          whatsapp,
+          phone: String(body.phone ?? whatsapp),
+          cpfCnpj: String(body.cpfCnpj ?? ""),
+          aquecedorGranted: body.aquecedorGranted === true,
+          segment: body.segment,
+          password: body.password !== undefined ? String(body.password) : undefined,
+        },
+        auth.email,
+      );
       return res.status(200).json({ ok: true, ...detail });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível atualizar o assinante.";
@@ -163,10 +173,11 @@ export const registerWabaAdminRoutes = (app: Express) => {
   });
 
   app.delete("/admin/subscribers/:subscriberId", (req, res) => {
-    if (!rejectNonMaster(req, res)) return;
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
     try {
       const subscriberId = String(req.params.subscriberId ?? "").trim();
-      const detail = adminSubscribersService.getSubscriberDetail(subscriberId);
+      const detail = adminSubscribersService.getSubscriberDetail(subscriberId, auth.email);
       if (!detail?.profile?.email) {
         return res.status(404).json({ error: "Assinante não encontrado." });
       }
@@ -195,6 +206,7 @@ export const registerWabaAdminRoutes = (app: Express) => {
         cpfCnpj: String(body.cpfCnpj ?? ""),
         aquecedorGranted: body.aquecedorGranted === true,
         segment: body.segment,
+        createdByEmail: auth.email,
       });
       const notifications = await deliverSubscriberWelcomeNotifications({
         email: subscriber.email,
@@ -371,8 +383,9 @@ export const registerWabaAdminRoutes = (app: Express) => {
   });
 
   app.get("/admin/financeiro/overview", async (req, res) => {
-    if (!rejectNonMaster(req, res)) return;
-    return res.status(200).json(await adminFinanceiroService.getOverview());
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    return res.status(200).json(await adminFinanceiroService.getOverview(auth.email));
   });
 
   app.get("/admin/financeiro/asaas-monitor/status", async (req, res) => {
@@ -495,13 +508,15 @@ export const registerWabaAdminRoutes = (app: Express) => {
   });
 
   app.get("/admin/financeiro/orders", (req, res) => {
-    if (!rejectNonMaster(req, res)) return;
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
     const limit = Number(req.query.limit ?? 10);
     const offset = Number(req.query.offset ?? 0);
     return res.status(200).json(
       adminFinanceiroService.listOrders({
         limit: Number.isFinite(limit) ? limit : 10,
         offset: Number.isFinite(offset) ? offset : 0,
+        viewerEmail: auth.email,
       }),
     );
   });
@@ -530,11 +545,12 @@ export const registerWabaAdminRoutes = (app: Express) => {
   });
 
   app.get("/admin/financeiro/split-settlements", (req, res) => {
-    if (!rejectNonMaster(req, res)) return;
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
     const rawLimit = Number(req.query.limit ?? 100);
     const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(500, Math.floor(rawLimit))) : 100;
     return res.status(200).json({
-      items: financeiroSplitService.listSettlements(limit),
+      items: financeiroSplitService.listSettlements(limit, auth.email),
       payoutEnabled: financeiroSplitService.isPayoutEnabled(),
     });
   });

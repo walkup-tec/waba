@@ -7,6 +7,8 @@ import { WabaBillingOrderRepository, type WabaBillingOrder } from "../billing/wa
 import { WabaBillingService } from "../billing/waba-billing.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { isWabaMetricsExcludedOwnerEmail } from "../billing/waba-metrics-excluded-owners";
+import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
+import { canViewerSeeFinanceiroOrder } from "../users/waba-eduardo-master-scope";
 
 const maskApiBaseUrl = (raw: string): string => {
   const value = String(raw || "").trim().replace(/\/$/, "");
@@ -41,6 +43,7 @@ export class WabaAdminFinanceiroService {
     private readonly billingService = new WabaBillingService(),
     private readonly splitService = new WabaFinanceiroSplitService(),
     private readonly systemUserService = new WabaSystemUserService(),
+    private readonly subscriberRepository = new WabaSubscriberRepository(),
   ) {}
 
   private toAdminOrder(order: WabaBillingOrder) {
@@ -209,13 +212,28 @@ export class WabaAdminFinanceiroService {
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   }
 
-  listOrders(params?: { limit?: number; offset?: number }) {
+  private listDisparosOrdersForViewer(viewerEmail = "") {
+    const staff = this.systemUserService.listPublicUsers();
+    return this.listDisparosOrdersSorted().filter((order) => {
+      const subscriber = this.subscriberRepository.getByEmail(String(order.ownerEmail || "").trim());
+      return canViewerSeeFinanceiroOrder(
+        viewerEmail,
+        order.paidAt || order.createdAt,
+        subscriber,
+        staff,
+      );
+    });
+  }
+
+  listOrders(params?: { limit?: number; offset?: number; viewerEmail?: string }) {
     const limitRaw = Number(params?.limit ?? 10);
     const offsetRaw = Number(params?.offset ?? 0);
     const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(50, Math.floor(limitRaw))) : 10;
     const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
 
-    const filtered = this.listDisparosOrdersSorted().filter((order) => order.status === "paid");
+    const filtered = this.listDisparosOrdersForViewer(params?.viewerEmail).filter(
+      (order) => order.status === "paid",
+    );
     const slice = filtered.slice(offset, offset + limit);
 
     return {
@@ -230,7 +248,7 @@ export class WabaAdminFinanceiroService {
     };
   }
 
-  async getOverview() {
+  async getOverview(viewerEmail = "") {
     const disparosConfig = this.billingService.getDisparosConfig();
     const asaasApiBaseUrl = String(process.env.ASAAS_API_BASE_URL ?? "").trim();
     const webhookTokenConfigured = Boolean(String(process.env.ASAAS_WEBHOOK_ACCESS_TOKEN ?? "").trim());
@@ -255,7 +273,7 @@ export class WabaAdminFinanceiroService {
       );
     }
 
-    const orders = this.listDisparosOrdersSorted();
+    const orders = this.listDisparosOrdersForViewer(viewerEmail);
 
     await this.splitService.syncSettlementTransferStatuses(100);
 
@@ -303,7 +321,7 @@ export class WabaAdminFinanceiroService {
       masterUsers: this.listMasterUsersForSplit(),
       operacionalUsers: this.listOperacionalUsersForSuppliers(),
       splitConfig: this.splitService.getConfig(),
-      splitSettlements: this.splitService.listSettlements(100),
+      splitSettlements: this.splitService.listSettlements(100, viewerEmail),
       splitPayoutEnabled: this.splitService.isPayoutEnabled(),
       splitTransferProbe: transferProbe,
     };

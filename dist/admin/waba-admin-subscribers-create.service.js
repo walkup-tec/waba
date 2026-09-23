@@ -17,6 +17,7 @@ class WabaAdminSubscribersCreateService {
             aquecedorGranted: input.aquecedorGranted === true,
             segment: input.segment,
             indicatorUserId: input.indicatorUserId,
+            createdByEmail: input.createdByEmail,
         });
     }
 }

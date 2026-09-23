@@ -9,6 +9,10 @@ import { WabaAdminSubscribersService } from "./waba-admin-subscribers.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaOperacionalCampanhasService } from "./waba-operacional-campanhas.service";
 import { isWabaMetricsExcludedOwnerEmail } from "../billing/waba-metrics-excluded-owners";
+import {
+  canViewerSeeFinanceiroOrder,
+  isEduardoScopedMaster,
+} from "../users/waba-eduardo-master-scope";
 
 export type AdminDashboardAuth = {
   role: string;
@@ -282,26 +286,37 @@ export class WabaAdminDashboardService {
       this.splitService.purgeBonusOnlyCampaignSettlements();
     }
 
-    const disparosOrders = this.orderRepository
-      .list()
-      .filter(
-        (order) =>
-          order.product === "waba-disparos" &&
-          !isWabaMetricsExcludedOwnerEmail(order.ownerEmail),
-      )
-      .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
-
-    const subscribers = capabilities.subscribers ? this.subscribersService.listSubscribers() : [];
+    const subscribers = capabilities.subscribers
+      ? this.subscribersService.listSubscribers(auth.email)
+      : [];
     const campaigns = capabilities.campanhas
       ? this.campanhasService
           .listCampaigns(staff)
           .filter((campaign) => !isWabaMetricsExcludedOwnerEmail(campaign.subscriberEmail))
       : [];
     const users = capabilities.users ? this.usersService.listUsers() : [];
+    const staffUsers = this.systemUserService.listPublicUsers();
+    const subscribersByEmail = new Map(subscribers.map((item) => [String(item.email || "").toLowerCase(), item]));
+
+    const disparosOrders = this.orderRepository
+      .list()
+      .filter((order) => {
+        if (order.product !== "waba-disparos") return false;
+        if (isWabaMetricsExcludedOwnerEmail(order.ownerEmail)) return false;
+        if (!isEduardoScopedMaster(auth.email, staffUsers)) return true;
+        const owner = String(order.ownerEmail || "").trim().toLowerCase();
+        return canViewerSeeFinanceiroOrder(
+          auth.email,
+          order.paidAt || order.createdAt,
+          subscribersByEmail.get(owner) ?? { email: owner, createdAt: order.createdAt },
+          staffUsers,
+        );
+      })
+      .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
 
     let financeOverview: Awaited<ReturnType<WabaAdminFinanceiroService["getOverview"]>> | null = null;
     if (capabilities.finance) {
-      financeOverview = await this.financeiroService.getOverview();
+      financeOverview = await this.financeiroService.getOverview(auth.email);
     }
 
     const productMetrics = financeOverview?.productMetrics ?? null;
@@ -316,7 +331,7 @@ export class WabaAdminDashboardService {
       Number(oficial?.grossProfitCents || 0) + Number(alternativa?.grossProfitCents || 0);
     const marginPct = revenueCents > 0 ? (profitCents / revenueCents) * 100 : 0;
 
-    const settlements = capabilities.finance ? this.splitService.listSettlements(100) : [];
+    const settlements = capabilities.finance ? this.splitService.listSettlements(100, auth.email) : [];
     let splitPayoutPending = 0;
     let splitPayoutFailed = 0;
     for (const settlement of settlements) {

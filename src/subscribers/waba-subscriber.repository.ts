@@ -17,6 +17,8 @@ export type WabaSubscriber = {
   aquecedorGranted?: boolean;
   /** Usuário sistema INDICADOR dono comercial deste assinante. */
   indicatorUserId?: string | null;
+  /** Master (ou staff) que cadastrou o assinante no Admin. Autocadastro / outros canais = vazio. */
+  createdByEmail?: string | null;
   createdAt: string;
   updatedAt: string;
 };

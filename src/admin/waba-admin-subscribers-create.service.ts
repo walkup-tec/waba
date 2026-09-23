@@ -11,6 +11,7 @@ export type AdminCreateSubscriberInput = {
   aquecedorGranted?: boolean;
   segment: WabaSubscriberSegment | unknown;
   indicatorUserId?: string | null;
+  createdByEmail?: string | null;
 };
 
 export class WabaAdminSubscribersCreateService {
@@ -27,6 +28,7 @@ export class WabaAdminSubscribersCreateService {
       aquecedorGranted: input.aquecedorGranted === true,
       segment: input.segment,
       indicatorUserId: input.indicatorUserId,
+      createdByEmail: input.createdByEmail,
     });
   }
 }

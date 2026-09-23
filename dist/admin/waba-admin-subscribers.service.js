@@ -10,6 +10,7 @@ const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.rep
 const waba_subscriber_service_1 = require("../subscribers/waba-subscriber.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
+const waba_eduardo_master_scope_1 = require("../users/waba-eduardo-master-scope");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_welcome_whatsapp_service_1 = require("../mail/waba-welcome-whatsapp.service");
 function resolveSubscriberOriginIndicator(indicatorUserId, indicator) {
@@ -143,7 +144,7 @@ class WabaAdminSubscribersService {
         }
         return byEmail;
     }
-    listSubscribers() {
+    listSubscribers(viewerEmail = "") {
         const intakesByEmail = new Map();
         for (const intake of this.intakeRepository.listAll()) {
             const email = normalizeEmail(intake.ownerEmail);
@@ -158,8 +159,10 @@ class WabaAdminSubscribersService {
             .listPublicUsers()
             .filter((user) => user.role === "indicador")
             .map((user) => [user.id, user]));
+        const staffUsers = this.systemUserService.listPublicUsers();
         return this.subscriberRepository
             .list()
+            .filter((subscriber) => (0, waba_eduardo_master_scope_1.canViewerSeeSubscriber)(viewerEmail, subscriber, staffUsers))
             .slice()
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .map((subscriber) => {
@@ -187,16 +190,20 @@ class WabaAdminSubscribersService {
                 campaignsAwaiting: intakes.filter(isCampaignAwaiting).length,
                 campaignsCompleted: intakes.filter(isCampaignCompleted).length,
                 origin,
+                createdByEmail: String(subscriber.createdByEmail || "").trim().toLowerCase(),
             };
         });
     }
-    getSubscriberDetail(subscriberId) {
+    getSubscriberDetail(subscriberId, viewerEmail = "") {
         const id = String(subscriberId ?? "").trim();
         if (!id)
             throw new Error("Assinante inválido.");
         const subscriber = this.subscriberRepository.getById(id);
         if (!subscriber)
             throw new Error("Assinante não encontrado.");
+        if (!(0, waba_eduardo_master_scope_1.canViewerSeeSubscriber)(viewerEmail, subscriber, this.systemUserService.listPublicUsers())) {
+            throw new Error("Assinante não encontrado.");
+        }
         const email = normalizeEmail(subscriber.email);
         const credits = this.creditsService.getCreditsSummary(email);
         const intakes = this.intakeRepository.listByEmail(email);
@@ -230,9 +237,10 @@ class WabaAdminSubscribersService {
             purchaseHistory: this.listPurchaseHistory(email),
         };
     }
-    updateSubscriber(subscriberId, input) {
+    updateSubscriber(subscriberId, input, viewerEmail = "") {
+        this.getSubscriberDetail(subscriberId, viewerEmail);
         this.subscriberService.update(subscriberId, input);
-        return this.getSubscriberDetail(subscriberId);
+        return this.getSubscriberDetail(subscriberId, viewerEmail);
     }
     async resendSubscriberWelcome(subscriberId) {
         const id = String(subscriberId || "").trim();

@@ -86,10 +86,11 @@ const registerWabaAdminRoutes = (app) => {
         }
     });
     app.get("/admin/subscribers", (req, res) => {
-        if (!rejectNonMaster(req, res))
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
             return;
         try {
-            const items = adminSubscribersService.listSubscribers();
+            const items = adminSubscribersService.listSubscribers(auth.email);
             return res.status(200).json({ items });
         }
         catch (error) {
@@ -99,10 +100,11 @@ const registerWabaAdminRoutes = (app) => {
         }
     });
     app.get("/admin/subscribers/:subscriberId", (req, res) => {
-        if (!rejectNonMaster(req, res))
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
             return;
         try {
-            const detail = adminSubscribersService.getSubscriberDetail(String(req.params.subscriberId ?? ""));
+            const detail = adminSubscribersService.getSubscriberDetail(String(req.params.subscriberId ?? ""), auth.email);
             return res.status(200).json(detail);
         }
         catch (error) {
@@ -112,7 +114,8 @@ const registerWabaAdminRoutes = (app) => {
         }
     });
     app.patch("/admin/subscribers/:subscriberId", (req, res) => {
-        if (!rejectNonMaster(req, res))
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
             return;
         try {
             const body = req.body;
@@ -126,7 +129,7 @@ const registerWabaAdminRoutes = (app) => {
                 aquecedorGranted: body.aquecedorGranted === true,
                 segment: body.segment,
                 password: body.password !== undefined ? String(body.password) : undefined,
-            });
+            }, auth.email);
             return res.status(200).json({ ok: true, ...detail });
         }
         catch (error) {
@@ -150,11 +153,12 @@ const registerWabaAdminRoutes = (app) => {
         }
     });
     app.delete("/admin/subscribers/:subscriberId", (req, res) => {
-        if (!rejectNonMaster(req, res))
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
             return;
         try {
             const subscriberId = String(req.params.subscriberId ?? "").trim();
-            const detail = adminSubscribersService.getSubscriberDetail(subscriberId);
+            const detail = adminSubscribersService.getSubscriberDetail(subscriberId, auth.email);
             if (!detail?.profile?.email) {
                 return res.status(404).json({ error: "Assinante não encontrado." });
             }
@@ -184,6 +188,7 @@ const registerWabaAdminRoutes = (app) => {
                 cpfCnpj: String(body.cpfCnpj ?? ""),
                 aquecedorGranted: body.aquecedorGranted === true,
                 segment: body.segment,
+                createdByEmail: auth.email,
             });
             const notifications = await (0, waba_mail_delivery_1.deliverSubscriberWelcomeNotifications)({
                 email: subscriber.email,
@@ -364,9 +369,10 @@ const registerWabaAdminRoutes = (app) => {
         }
     });
     app.get("/admin/financeiro/overview", async (req, res) => {
-        if (!rejectNonMaster(req, res))
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
             return;
-        return res.status(200).json(await adminFinanceiroService.getOverview());
+        return res.status(200).json(await adminFinanceiroService.getOverview(auth.email));
     });
     app.get("/admin/financeiro/asaas-monitor/status", async (req, res) => {
         if (!rejectNonMaster(req, res))
@@ -490,13 +496,15 @@ const registerWabaAdminRoutes = (app) => {
         }
     });
     app.get("/admin/financeiro/orders", (req, res) => {
-        if (!rejectNonMaster(req, res))
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
             return;
         const limit = Number(req.query.limit ?? 10);
         const offset = Number(req.query.offset ?? 0);
         return res.status(200).json(adminFinanceiroService.listOrders({
             limit: Number.isFinite(limit) ? limit : 10,
             offset: Number.isFinite(offset) ? offset : 0,
+            viewerEmail: auth.email,
         }));
     });
     app.get("/admin/financeiro/split-config", (req, res) => {
@@ -524,12 +532,13 @@ const registerWabaAdminRoutes = (app) => {
         }
     });
     app.get("/admin/financeiro/split-settlements", (req, res) => {
-        if (!rejectNonMaster(req, res))
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
             return;
         const rawLimit = Number(req.query.limit ?? 100);
         const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(500, Math.floor(rawLimit))) : 100;
         return res.status(200).json({
-            items: financeiroSplitService.listSettlements(limit),
+            items: financeiroSplitService.listSettlements(limit, auth.email),
             payoutEnabled: financeiroSplitService.isPayoutEnabled(),
         });
     });

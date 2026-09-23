@@ -12,6 +12,7 @@ const waba_admin_subscribers_service_1 = require("./waba-admin-subscribers.servi
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
 const waba_operacional_campanhas_service_1 = require("./waba-operacional-campanhas.service");
 const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
+const waba_eduardo_master_scope_1 = require("../users/waba-eduardo-master-scope");
 const TREND_DAYS = 30;
 const GROWTH_DAYS = 30;
 const RECENT_ACTIVITY_LIMIT = 20;
@@ -236,21 +237,33 @@ class WabaAdminDashboardService {
             this.splitService.purgeExcludedOwnerSettlements();
             this.splitService.purgeBonusOnlyCampaignSettlements();
         }
-        const disparosOrders = this.orderRepository
-            .list()
-            .filter((order) => order.product === "waba-disparos" &&
-            !(0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(order.ownerEmail))
-            .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
-        const subscribers = capabilities.subscribers ? this.subscribersService.listSubscribers() : [];
+        const subscribers = capabilities.subscribers
+            ? this.subscribersService.listSubscribers(auth.email)
+            : [];
         const campaigns = capabilities.campanhas
             ? this.campanhasService
                 .listCampaigns(staff)
                 .filter((campaign) => !(0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(campaign.subscriberEmail))
             : [];
         const users = capabilities.users ? this.usersService.listUsers() : [];
+        const staffUsers = this.systemUserService.listPublicUsers();
+        const subscribersByEmail = new Map(subscribers.map((item) => [String(item.email || "").toLowerCase(), item]));
+        const disparosOrders = this.orderRepository
+            .list()
+            .filter((order) => {
+            if (order.product !== "waba-disparos")
+                return false;
+            if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(order.ownerEmail))
+                return false;
+            if (!(0, waba_eduardo_master_scope_1.isEduardoScopedMaster)(auth.email, staffUsers))
+                return true;
+            const owner = String(order.ownerEmail || "").trim().toLowerCase();
+            return (0, waba_eduardo_master_scope_1.canViewerSeeFinanceiroOrder)(auth.email, order.paidAt || order.createdAt, subscribersByEmail.get(owner) ?? { email: owner, createdAt: order.createdAt }, staffUsers);
+        })
+            .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
         let financeOverview = null;
         if (capabilities.finance) {
-            financeOverview = await this.financeiroService.getOverview();
+            financeOverview = await this.financeiroService.getOverview(auth.email);
         }
         const productMetrics = financeOverview?.productMetrics ?? null;
         const oficial = productMetrics?.oficial;
@@ -259,7 +272,7 @@ class WabaAdminDashboardService {
         const costCents = Number(oficial?.totalCostCents || 0) + Number(alternativa?.totalCostCents || 0);
         const profitCents = Number(oficial?.grossProfitCents || 0) + Number(alternativa?.grossProfitCents || 0);
         const marginPct = revenueCents > 0 ? (profitCents / revenueCents) * 100 : 0;
-        const settlements = capabilities.finance ? this.splitService.listSettlements(100) : [];
+        const settlements = capabilities.finance ? this.splitService.listSettlements(100, auth.email) : [];
         let splitPayoutPending = 0;
         let splitPayoutFailed = 0;
         for (const settlement of settlements) {

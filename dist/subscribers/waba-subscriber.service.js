@@ -89,6 +89,7 @@ class WabaSubscriberService {
             segment,
             aquecedorGranted: aquecedorGranted || undefined,
             indicatorUserId: String(input.indicatorUserId ?? "").trim() || null,
+            createdByEmail: normalizeEmail(String(input.createdByEmail ?? "")) || null,
             createdAt: now,
             updatedAt: now,
         });

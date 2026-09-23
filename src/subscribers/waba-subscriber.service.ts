@@ -42,6 +42,7 @@ export type RegisterSubscriberInput = {
   segment?: unknown;
   signupOrigin?: unknown;
   indicatorUserId?: string | null;
+  createdByEmail?: string | null;
 };
 
 export type UpdateSubscriberInput = {
@@ -129,6 +130,7 @@ export class WabaSubscriberService {
       segment,
       aquecedorGranted: aquecedorGranted || undefined,
       indicatorUserId: String(input.indicatorUserId ?? "").trim() || null,
+      createdByEmail: normalizeEmail(String(input.createdByEmail ?? "")) || null,
       createdAt: now,
       updatedAt: now,
     });

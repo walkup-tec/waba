@@ -45,6 +45,10 @@ import { WabaIndicatorCommissionService } from "../indicators/waba-indicator-com
 import { WabaIndicatorProfileRepository } from "../indicators/waba-indicator-profile.repository";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
+import {
+  canViewerSeeFinanceiroOrder,
+  resolveEduardoOriginProfitPercents,
+} from "../users/waba-eduardo-master-scope";
 
 const PERCENT_SUM_TOLERANCE = 0.01;
 
@@ -192,13 +196,24 @@ export class WabaFinanceiroSplitService {
     return this.payoutService.isPayoutEnabled();
   }
 
-  listSettlements(limit = 100) {
+  listSettlements(limit = 100, viewerEmail = "") {
     this.absorbSyntheticCampaignSupplierSettlements();
     const items = filterOutMetricsExcludedOwners(this.settlementRepository.list(limit));
+    const subscribers = this.subscriberRepository.list();
     const byEmail = new Map(
-      this.subscriberRepository.list().map((item) => [String(item.email || "").trim().toLowerCase(), item]),
+      subscribers.map((item) => [String(item.email || "").trim().toLowerCase(), item]),
     );
-    return items.map((item) => {
+    const staff = this.systemUserService.listPublicUsers();
+    const visible = items.filter((item) => {
+      const owner = this.normalizeOwnerEmail(item.ownerEmail);
+      return canViewerSeeFinanceiroOrder(
+        viewerEmail,
+        item.createdAt,
+        byEmail.get(owner) ?? null,
+        staff,
+      );
+    });
+    return visible.map((item) => {
       const settled = applyManualBankPaidSplit(item);
       return {
         ...settled,
@@ -559,9 +574,16 @@ export class WabaFinanceiroSplitService {
     }
 
     if (distributableCents > 0 && payProfits && activeParticipants.length) {
-      const percents = activeParticipants.map((item) => item.sharePercent);
+      const subscriber = this.subscriberRepository.getByEmail(order.ownerEmail);
+      const profitParticipants = resolveEduardoOriginProfitPercents(
+        activeParticipants,
+        subscriber,
+        order.paidAt || order.createdAt,
+        this.systemUserService.listPublicUsers(),
+      );
+      const percents = profitParticipants.map((item) => item.sharePercent);
       const amounts = distributeCentsByPercents(distributableCents, percents);
-      for (const [index, participant] of activeParticipants.entries()) {
+      for (const [index, participant] of profitParticipants.entries()) {
         const amountCents = amounts[index] ?? 0;
         lines.push({
           lineKind: "partner",
