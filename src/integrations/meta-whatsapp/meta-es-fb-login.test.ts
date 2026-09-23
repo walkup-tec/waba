@@ -168,6 +168,10 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /searchParams.set\("response_type", "code"\)/);
     assert.doesNotMatch(html, /searchParams.set\("override_default_response_type"/);
     assert.doesNotMatch(html, /searchParams.set\("redirect_uri", siteOrigin\)/);
+    assert.match(html, /function metaTpOnboardBusinessId/);
+    assert.match(html, /global_scope_id/);
+    assert.match(html, /onboardBusinessId = metaTpOnboardBusinessId/);
+    assert.match(html, /businessId: onboardBusinessId/);
   });
 
   it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {
@@ -205,9 +209,22 @@ describe("meta-es-fb-login", () => {
     assert.ok(withPortfolio);
     const withPortfolioParsed = new URL(withPortfolio);
     assert.equal(withPortfolioParsed.searchParams.get("business_id"), "1588459689692010");
+    assert.equal(withPortfolioParsed.searchParams.get("global_scope_id"), "1588459689692010");
     assert.equal(withPortfolioParsed.searchParams.get("response_type"), null);
     assert.equal(withPortfolioParsed.searchParams.get("redirect_uri"), null);
     assert.match(String(withPortfolioParsed.searchParams.get("extras") || ""), /1588459689692010/);
+    const suiteOnly = buildMetaEsOauthDialogUrl({
+      appId: "1279182514183979",
+      configId: "1590195526041278",
+      redirectUri: "https://waba.draxsistemas.com.br/",
+      businessId: "1588459689692010",
+    });
+    assert.ok(suiteOnly);
+    const suiteOnlyParsed = new URL(suiteOnly);
+    assert.equal(suiteOnlyParsed.searchParams.get("business_id"), "1588459689692010");
+    assert.equal(suiteOnlyParsed.searchParams.get("global_scope_id"), "1588459689692010");
+    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /"setup":\{\}/);
+    assert.doesNotMatch(String(suiteOnlyParsed.searchParams.get("extras") || ""), /1588459689692010/);
     assert.equal(isMetaEsFacebookMessageOrigin("https://web.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://business.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://staticxx.facebook.com"), true);

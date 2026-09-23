@@ -339,6 +339,7 @@ export function buildMetaEsOauthDialogUrl(input: {
   redirectUri: string;
   graphVersion?: string;
   setup?: MetaEsSetupPrefill;
+  businessId?: string;
   state?: string;
   display?: "page" | "popup";
   cbt?: string | number;
@@ -360,8 +361,13 @@ export function buildMetaEsOauthDialogUrl(input: {
   parsed.searchParams.set("extras", JSON.stringify({ setup }));
   const state = String(input.state || "").trim();
   if (state) parsed.searchParams.set("state", state);
-  const businessId = String(setup.business?.id || input.setup?.business?.id || "").trim();
-  if (businessId) parsed.searchParams.set("business_id", businessId);
+  const businessId = String(
+    setup.business?.id || input.businessId || input.setup?.business?.id || "",
+  ).trim();
+  if (businessId) {
+    parsed.searchParams.set("business_id", businessId);
+    parsed.searchParams.set("global_scope_id", businessId);
+  }
   void input.display;
   void input.cbt;
   void input.graphVersion;

@@ -293,9 +293,11 @@ function buildMetaEsOauthDialogUrl(input) {
     const state = String(input.state || "").trim();
     if (state)
         parsed.searchParams.set("state", state);
-    const businessId = String(setup.business?.id || input.setup?.business?.id || "").trim();
-    if (businessId)
+    const businessId = String(setup.business?.id || input.businessId || input.setup?.business?.id || "").trim();
+    if (businessId) {
         parsed.searchParams.set("business_id", businessId);
+        parsed.searchParams.set("global_scope_id", businessId);
+    }
     void input.display;
     void input.cbt;
     void input.graphVersion;
