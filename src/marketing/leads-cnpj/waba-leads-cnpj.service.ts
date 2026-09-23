@@ -52,16 +52,17 @@ const continueTimers = new Map<string, ReturnType<typeof setTimeout>>();
 /** Timer global da fila de enriquecimento (1 campanha por dia civil SP). */
 let globalEnrichTimer: ReturnType<typeof setTimeout> | null = null;
 /**
- * Soft-cap da raspagem Playwright: até N Chromiums em paralelo (default 3).
- * Evidência prod 2026-08-24: 3 dedicados simultâneos → Page crashed / login timeout.
- * Fila segura o restante; override até 12 se o VPS aguentar.
- * Override: CASADOSDADOS_MAX_CONCURRENT_SCRAPES (1–12), CASADOSDADOS_SCRAPE_STAGGER_MS.
+ * Soft-cap da raspagem Playwright: 1 Chromium (Cloudflare satura com 2).
+ * EasyPanel com CASADOSDADOS_MAX_CONCURRENT_SCRAPES=2 era ignorado na prática:
+ * LOGIN zerado ocupava a 2ª vaga e a cópia em andamento parava de evoluir.
+ * Paralelo só com CASADOSDADOS_ALLOW_PARALLEL_SCRAPES=1.
  */
 type PortalScrapeWaiter = {
   listId: string;
   grant: () => void;
   reject: (err: Error) => void;
   pulse?: ReturnType<typeof setInterval>;
+  priority: number;
 };
 const portalScrapeActive = new Set<string>();
 const portalScrapeWaiters: PortalScrapeWaiter[] = [];
@@ -75,10 +76,27 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 /** Evita dois backfills de telefone no mesmo listId. */
 const phoneRefreshJobs = new Set<string>();
 
-function resolveMaxConcurrentScrapes(): number {
-  // 1 Chromium: Cloudflare + Xvfb saturam com 2–3 em paralelo (crash / anti-bot).
+export function resolveMaxConcurrentScrapes(): number {
+  // 1 Chromium: Cloudflare + Xvfb saturam com 2 em paralelo (Odontologia LOGIN vs Imobiliarias COPY).
+  const allowParallel = String(process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES || "").trim() === "1";
   const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 1) || 1);
-  return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 1));
+  const requested = Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 1));
+  if (!allowParallel) return 1;
+  return requested;
+}
+
+/** Cópia já na pág. N passa na frente de LOGIN zerado na fila do Chromium. */
+export function scrapeResumePriority(list: {
+  skipPortalScrape?: boolean;
+  scrapeCheckpoint?: { nextPage?: number | null; collectedCount?: number | null } | null;
+}): number {
+  if (list.skipPortalScrape) return 0;
+  const page = Math.max(0, Math.round(Number(list.scrapeCheckpoint?.nextPage || 0) || 0));
+  const collected = Math.max(
+    0,
+    Math.round(Number(list.scrapeCheckpoint?.collectedCount || 0) || 0),
+  );
+  return page * 1_000_000 + collected;
 }
 
 function resolveScrapeStaggerMs(): number {
@@ -111,6 +129,7 @@ function acquirePortalScrapeSlot(
     max: number;
     waitMs?: number;
   }) => void,
+  priority = 0,
 ): Promise<() => void> {
   const max = resolveMaxConcurrentScrapes();
 
@@ -185,11 +204,14 @@ function acquirePortalScrapeSlot(
       listId,
       grant: activate,
       reject,
+      priority,
     };
-    portalScrapeWaiters.push(waiter);
+    const insertAt = portalScrapeWaiters.findIndex((w) => w.priority < priority);
+    if (insertAt < 0) portalScrapeWaiters.push(waiter);
+    else portalScrapeWaiters.splice(insertAt, 0, waiter);
     onWaiting?.({
       phase: "queue",
-      position: portalScrapeWaiters.length,
+      position: portalScrapeQueuePosition(listId),
       activeCount: portalScrapeActive.size,
       max,
     });
@@ -1640,6 +1662,10 @@ export class WabaLeadsCnpjService {
 
     const pool = this.repository.getPool(active);
     if (pool && (pool.pending || []).length > 0 && !pool.autoContinuePaused) {
+      if (!this.isCampaignPortalCopyComplete(active)) {
+        // Cópia ainda na pág. 381: não cria lote 0/1000 “enriquecer” que falha no dia seguinte.
+        return;
+      }
       this.createAndStart({
         name: pool.name,
         source: pool.source,
@@ -1752,11 +1778,12 @@ export class WabaLeadsCnpjService {
     this.pauseNonActiveEnrichLists(active);
     // Antes do enrich: retoma cópia incompleta (ex. 118/1000 com Lista 01 já ready).
     this.ensureIncompletePortalCopiesResume();
-    for (const list of this.repository.list()) {
-      if (list.status === "scraping") {
-        this.enqueueJob(list.id);
-        continue;
-      }
+    const scraping = this.repository
+      .list()
+      .filter((list) => list.status === "scraping")
+      .sort((a, b) => scrapeResumePriority(b) - scrapeResumePriority(a));
+    for (const list of scraping) {
+      this.enqueueJob(list.id);
     }
     if (active) this.startActiveCampaignEnrichDay(active);
     if (!this.hasActiveEnrichWork()) {
@@ -2385,7 +2412,9 @@ export class WabaLeadsCnpjService {
                 : Math.max(0, Math.round(Number(stallRaw) || 0));
             let lastProgressAt = Date.now();
             try {
-              releaseScrapeSlot = await acquirePortalScrapeSlot(listId, (info) => {
+              releaseScrapeSlot = await acquirePortalScrapeSlot(
+                listId,
+                (info) => {
                 lastProgressAt = Date.now();
                 if (info.phase === "stagger") {
                   const secs = Math.max(1, Math.ceil((info.waitMs || 0) / 1000));
@@ -2401,7 +2430,9 @@ export class WabaLeadsCnpjService {
                   progressMessage: `Fila de raspagem: posição ${info.position} (máx. ${info.max} em paralelo; ${info.activeCount} ativo(s))…`,
                   error: null,
                 });
-              });
+                },
+                scrapeResumePriority(list),
+              );
               assertAlive();
               const scrapeResult = await scrapeCasaDosDadosLeads(
                 scrapeFilters,

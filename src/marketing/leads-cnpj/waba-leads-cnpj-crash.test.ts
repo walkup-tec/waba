@@ -14,6 +14,8 @@ import { resolveCasaDosDadosUserAgent } from "./waba-leads-cnpj-browser-runtime"
 import {
   shouldResumeZeroCopyPortalList,
   shouldStayOnPortalScrapeForThisList,
+  scrapeResumePriority,
+  resolveMaxConcurrentScrapes,
 } from "./waba-leads-cnpj.service";
 
 describe("Leads PJ Chromium crash", () => {
@@ -178,5 +180,30 @@ describe("Leads PJ retomada de cópia zerada", () => {
       }),
       false,
     );
+  });
+});
+
+describe("Leads PJ fila de Chromium", () => {
+  it("prioriza cópia na pág. 381 sobre LOGIN zerado", () => {
+    assert.equal(
+      scrapeResumePriority({ scrapeCheckpoint: { nextPage: 382, collectedCount: 8423 } }) >
+        scrapeResumePriority({ scrapeCheckpoint: { nextPage: 1, collectedCount: 0 } }),
+      true,
+    );
+  });
+
+  it("mantém 1 Chromium mesmo com MAX_CONCURRENT=2 sem ALLOW_PARALLEL", () => {
+    const prevMax = process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES;
+    const prevAllow = process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES;
+    process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES = "2";
+    delete process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES;
+    try {
+      assert.equal(resolveMaxConcurrentScrapes(), 1);
+    } finally {
+      if (prevMax === undefined) delete process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES;
+      else process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES = prevMax;
+      if (prevAllow === undefined) delete process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES;
+      else process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES = prevAllow;
+    }
   });
 });

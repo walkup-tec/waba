@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaLeadsCnpjService = void 0;
 exports.isLeadsCnpjSearchRunning = isLeadsCnpjSearchRunning;
+exports.resolveMaxConcurrentScrapes = resolveMaxConcurrentScrapes;
+exports.scrapeResumePriority = scrapeResumePriority;
 exports.shouldResumeZeroCopyPortalList = shouldResumeZeroCopyPortalList;
 exports.shouldStayOnPortalScrapeForThisList = shouldStayOnPortalScrapeForThisList;
 exports.resolveScrapeHistoryMetrics = resolveScrapeHistoryMetrics;
@@ -39,9 +41,21 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 /** Evita dois backfills de telefone no mesmo listId. */
 const phoneRefreshJobs = new Set();
 function resolveMaxConcurrentScrapes() {
-    // 1 Chromium: Cloudflare + Xvfb saturam com 2–3 em paralelo (crash / anti-bot).
+    // 1 Chromium: Cloudflare + Xvfb saturam com 2 em paralelo (Odontologia LOGIN vs Imobiliarias COPY).
+    const allowParallel = String(process.env.CASADOSDADOS_ALLOW_PARALLEL_SCRAPES || "").trim() === "1";
     const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 1) || 1);
-    return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 1));
+    const requested = Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 1));
+    if (!allowParallel)
+        return 1;
+    return requested;
+}
+/** Cópia já na pág. N passa na frente de LOGIN zerado na fila do Chromium. */
+function scrapeResumePriority(list) {
+    if (list.skipPortalScrape)
+        return 0;
+    const page = Math.max(0, Math.round(Number(list.scrapeCheckpoint?.nextPage || 0) || 0));
+    const collected = Math.max(0, Math.round(Number(list.scrapeCheckpoint?.collectedCount || 0) || 0));
+    return page * 1000000 + collected;
 }
 function resolveScrapeStaggerMs() {
     const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 12000) || 12000);
@@ -63,7 +77,7 @@ function portalScrapeQueuePosition(listId) {
  * Reserva vaga de Chromium (até max concurrent). Retorna `release()` — sempre em finally.
  * Com stagger: espaça o launch quando outra raspagem já está ativa.
  */
-function acquirePortalScrapeSlot(listId, onWaiting) {
+function acquirePortalScrapeSlot(listId, onWaiting, priority = 0) {
     const max = resolveMaxConcurrentScrapes();
     return new Promise((resolve, reject) => {
         const release = () => {
@@ -134,11 +148,16 @@ function acquirePortalScrapeSlot(listId, onWaiting) {
             listId,
             grant: activate,
             reject,
+            priority,
         };
-        portalScrapeWaiters.push(waiter);
+        const insertAt = portalScrapeWaiters.findIndex((w) => w.priority < priority);
+        if (insertAt < 0)
+            portalScrapeWaiters.push(waiter);
+        else
+            portalScrapeWaiters.splice(insertAt, 0, waiter);
         onWaiting?.({
             phase: "queue",
-            position: portalScrapeWaiters.length,
+            position: portalScrapeQueuePosition(listId),
             activeCount: portalScrapeActive.size,
             max,
         });
@@ -1433,6 +1452,10 @@ class WabaLeadsCnpjService {
         });
         const pool = this.repository.getPool(active);
         if (pool && (pool.pending || []).length > 0 && !pool.autoContinuePaused) {
+            if (!this.isCampaignPortalCopyComplete(active)) {
+                // Cópia ainda na pág. 381: não cria lote 0/1000 “enriquecer” que falha no dia seguinte.
+                return;
+            }
             this.createAndStart({
                 name: pool.name,
                 source: pool.source,
@@ -1530,11 +1553,12 @@ class WabaLeadsCnpjService {
         this.pauseNonActiveEnrichLists(active);
         // Antes do enrich: retoma cópia incompleta (ex. 118/1000 com Lista 01 já ready).
         this.ensureIncompletePortalCopiesResume();
-        for (const list of this.repository.list()) {
-            if (list.status === "scraping") {
-                this.enqueueJob(list.id);
-                continue;
-            }
+        const scraping = this.repository
+            .list()
+            .filter((list) => list.status === "scraping")
+            .sort((a, b) => scrapeResumePriority(b) - scrapeResumePriority(a));
+        for (const list of scraping) {
+            this.enqueueJob(list.id);
         }
         if (active)
             this.startActiveCampaignEnrichDay(active);
@@ -2093,7 +2117,7 @@ class WabaLeadsCnpjService {
                                     progressMessage: `Fila de raspagem: posição ${info.position} (máx. ${info.max} em paralelo; ${info.activeCount} ativo(s))…`,
                                     error: null,
                                 });
-                            });
+                            }, scrapeResumePriority(list));
                             assertAlive();
                             const scrapeResult = await (0, waba_leads_cnpj_casadosdados_adapter_1.scrapeCasaDosDadosLeads)(scrapeFilters, (message) => {
                                 if (!(0, waba_leads_cnpj_casadosdados_adapter_1.isKeepaliveProgressMessage)(message)) {

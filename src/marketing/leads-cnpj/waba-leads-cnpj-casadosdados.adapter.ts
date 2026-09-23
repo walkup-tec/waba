@@ -333,9 +333,28 @@ async function loginCasaDosDadosPortal(
     const passwordInput = page.locator('input[name="senha"]').first();
     const accessBtn = page.locator('button:has-text("Acessar")').first();
 
-    await emailInput.waitFor({ state: "visible", timeout: 30000 });
-    await passwordInput.waitFor({ state: "visible", timeout: 15000 });
-    await accessBtn.waitFor({ state: "visible", timeout: 10000 });
+    const emailReady = await withNodeTimeout(
+      emailInput.waitFor({ state: "visible", timeout: 12_000 }).then(() => true),
+      14_000,
+      false,
+    );
+    const passwordReady = await withNodeTimeout(
+      passwordInput.waitFor({ state: "visible", timeout: 8_000 }).then(() => true),
+      10_000,
+      false,
+    );
+    const accessReady = await withNodeTimeout(
+      accessBtn.waitFor({ state: "visible", timeout: 8_000 }).then(() => true),
+      10_000,
+      false,
+    );
+    if (!emailReady || !passwordReady || !accessReady) {
+      throw new LeadsScrapeError(
+        "LOGIN_TIMEOUT",
+        "new-browser",
+        `Formulário de login não respondeu (email=${emailReady} senha=${passwordReady} acessar=${accessReady}).`,
+      );
+    }
 
     const readLoginState = async () =>
       page.evaluate(() => {
@@ -3012,6 +3031,10 @@ async function scrapeCasaDosDadosLeadsOnce(
       }
 
       let lite = await withNodeTimeout(probeSearchAckLite(page), 4000, null);
+      for (let hydrate = 0; hydrate < 4 && !(lite && (lite.pagination || lite.cnpjNodes > 0)); hydrate += 1) {
+        await sleepNode(800);
+        lite = await withNodeTimeout(probeSearchAckLite(page), 4000, null);
+      }
       if (!(lite && (lite.pagination || lite.cnpjNodes > 0))) {
         // Sessão pode manter filtros sem resultados pintados — 1 disparo de Pesquisar.
         markPhase("COPY: retomada — disparando Pesquisar (filtros da sessão)…");
@@ -3054,8 +3077,10 @@ async function scrapeCasaDosDadosLeadsOnce(
           `COPY: sessão OK (pag=${lite.pagination || "?"} cnpj=${lite.cnpjNodes}) — pulando login/CNAE; alvo pág. ${resumeTarget}`,
         );
       } else {
-        markPhase(
-          "COPY: retomada sem resultados na sessão — reaplicando filtros (fallback)…",
+        throw new LeadsScrapeError(
+          "RESUME_NO_RESULTS",
+          "new-browser",
+          `Retomada pág. ${resumeTarget} sem resultados na sessão — reabrir Chromium sem reaplicar CNAE/LOGIN.`,
         );
       }
     }
