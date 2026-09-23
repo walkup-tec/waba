@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, it } from "node:test";
 import {
   META_ES_LEGACY_EXCHANGE_PATHS,
@@ -127,5 +129,12 @@ describe("meta-es-fb-login", () => {
     );
     assert.equal(readMetaConfigIdFromEnv({ META_ES_CONFIG_ID: "222" }), "222");
     assert.equal(mentionsMissingConfigId("Parâmetro inválido: config_id é obrigatório."), true);
+  });
+
+  it("login recusado pela Meta explica Data Use Checkup no Laboratório", () => {
+    const html = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
+    assert.match(html, /WABA_META_ES_LOGIN_BLOCKED_MESSAGE/);
+    assert.match(html, /Data Use Checkup/);
+    assert.match(html, /1279182514183979/);
   });
 });

@@ -27617,6 +27617,8 @@
           if (!base) return raw;
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
+        window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
+          "A Meta recusou o Login neste Facebook (Recurso indisponível). No developers.facebook.com, app DRAX (1279182514183979): conclua Data Use Checkup, verificação da empresa e deixe o app Live. Enquanto estiver em desenvolvimento, adicione a conta deste perfil AdsPower como Testador. Depois feche o popup e clique de novo em Conectar Portfólio neste mesmo navegador.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
@@ -40284,6 +40286,11 @@
           const code = String((response && response.authResponse && response.authResponse.code) || "").trim();
           if (!code) {
             metaTpLog("FB.login sem code");
+            window.__wabaMetaTechSignupActive = false;
+            metaTpSetStatus(
+              window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE ||
+                "A Meta recusou o Login neste Facebook. Feche o popup e tente de novo.",
+            );
             return;
           }
           metaTpSession.codeReceived = true;
@@ -70282,8 +70289,14 @@
             refreshMetaEmbeddedSignupHint();
             return;
           }
-          setMetaAtivosStatus("Conexão fechada antes de concluir.", "muted");
-          setMetaEsIntegrationResult("fail");
+          setMetaAtivosStatus(
+            window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE || "Conexão fechada antes de concluir.",
+            "error",
+          );
+          setMetaEsIntegrationResult(
+            "fail",
+            window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE || "Conexão fechada antes de concluir.",
+          );
           refreshMetaEmbeddedSignupHint();
         }
       }
