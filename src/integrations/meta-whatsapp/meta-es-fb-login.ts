@@ -159,6 +159,45 @@ export function isGenericFacebookOauthUrl(url: string): boolean {
   }
 }
 
+/**
+ * O SDK abre web.facebook.com (barra do popup travada no AdsPower) e, neste hop,
+ * o dialog/oauth chega só com app_id/cbt/channel_url — sem config_id. Sem config_id
+ * a Meta trata como Facebook Login comum e responde Recurso indisponível.
+ * Encrypted query: só troca o host. Não injeta params no blob.
+ */
+export function rewriteMetaEsOauthUrl(
+  rawUrl: string,
+  input: { configId?: string; setup?: MetaEsSetupPrefill },
+): string {
+  const raw = String(rawUrl || "").trim();
+  if (!raw || !/dialog\/oauth/i.test(raw)) return rawUrl;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return rawUrl;
+  }
+  if (!/facebook\.com$/i.test(parsed.hostname)) return rawUrl;
+  if (/^(web|m|mobile)\./i.test(parsed.hostname)) {
+    parsed.hostname = "www.facebook.com";
+  }
+  const encrypted = String(parsed.searchParams.get("encrypted_query_string") || "").trim();
+  const configId = String(input.configId || "").trim();
+  if (!encrypted && configId && !String(parsed.searchParams.get("config_id") || "").trim()) {
+    parsed.searchParams.set("config_id", configId);
+    parsed.searchParams.set("response_type", "code");
+    parsed.searchParams.set("override_default_response_type", "true");
+    if (!String(parsed.searchParams.get("extras") || "").trim()) {
+      const setup = buildMetaEsSetupPrefill({
+        businessId: input.setup?.business?.id,
+        wabaId: input.setup?.whatsAppBusinessAccount?.ids,
+      });
+      parsed.searchParams.set("extras", JSON.stringify({ setup }));
+    }
+  }
+  return parsed.toString();
+}
+
 export function isLegacyExchangePath(path: string): boolean {
   const raw = String(path || "");
   return META_ES_LEGACY_EXCHANGE_PATHS.some((item) => raw.includes(item));

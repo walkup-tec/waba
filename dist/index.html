@@ -27618,7 +27618,7 @@
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
-          "A Meta recusou o Login for Business deste app (Recurso indisponível). Não é cargo nem Testador: o Embedded Signup desta DRAX já conectou portfólios sem isso. Fique no AdsPower. No popup, troque web.facebook.com por www.facebook.com na URL; se a chave continuar, use fingerprint desktop (Windows/Chrome) neste perfil e clique de novo em Conectar Portfólio.";
+          "A Meta recusou o Login for Business (Recurso indisponível). Não é cargo nem Testador. Fique no AdsPower, recarregue esta página da DRAX e clique de novo em Conectar Portfólio — o diálogo agora abre em www.facebook.com com config_id.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
@@ -27654,6 +27654,58 @@
             "sdkReady=" + (info && info.sdkReady ? "true" : "false")
           );
         };
+        window.wabaMetaEsRewriteOauthUrl = function (rawUrl, options) {
+          var raw = String(rawUrl || "").trim();
+          if (!raw || !/dialog\/oauth/i.test(raw)) return rawUrl;
+          var parsed;
+          try {
+            parsed = new URL(raw);
+          } catch (e) {
+            return rawUrl;
+          }
+          if (!/facebook\.com$/i.test(parsed.hostname)) return rawUrl;
+          if (/^(web|m|mobile)\./i.test(parsed.hostname)) parsed.hostname = "www.facebook.com";
+          var encrypted = String(parsed.searchParams.get("encrypted_query_string") || "").trim();
+          var configId = options && options.config_id ? String(options.config_id).trim() : "";
+          if (!encrypted && configId && !String(parsed.searchParams.get("config_id") || "").trim()) {
+            parsed.searchParams.set("config_id", configId);
+            parsed.searchParams.set("response_type", "code");
+            parsed.searchParams.set("override_default_response_type", "true");
+            if (!String(parsed.searchParams.get("extras") || "").trim()) {
+              var extras = options && options.extras ? options.extras : { setup: {} };
+              parsed.searchParams.set("extras", JSON.stringify(extras));
+            }
+          }
+          return parsed.toString();
+        };
+        window.wabaMetaEsPatchOauthOpen = function () {
+          if (window.__WABA_META_ES_OPEN_PATCHED) return;
+          if (typeof window.open !== "function") return;
+          window.__WABA_META_ES_OPEN_PATCHED = true;
+          var nativeOpen = window.open;
+          window.open = function (url, target, features) {
+            var next = url;
+            if (typeof url === "string" && /dialog\/oauth/i.test(url)) {
+              next = window.wabaMetaEsRewriteOauthUrl(url, window.__WABA_META_ES_LOGIN_OPTIONS || {});
+              try {
+                var logged = new URL(String(next));
+                var names = [];
+                logged.searchParams.forEach(function (_value, key) {
+                  names.push(key);
+                });
+                console.info(
+                  "[META][ES][OAUTH_OPEN]",
+                  "host=" + logged.hostname,
+                  "configIdPresent=" + (logged.searchParams.get("config_id") ? "true" : "false"),
+                  "paramNames=" + names.join(","),
+                );
+              } catch (e) {
+                console.info("[META][ES][OAUTH_OPEN]", "rewrite");
+              }
+            }
+            return nativeOpen.call(window, next, target, features);
+          };
+        };
         window.wabaMetaEsInvokeFbLogin = function (callback, configId, setup) {
           var options = window.wabaMetaEsBuildLoginOptions(configId, setup);
           if (!options) {
@@ -27665,6 +27717,7 @@
           }
           window.__WABA_META_ES_LOGIN_OPTIONS = options;
           window.__WABA_META_ES_LOGIN_CB = callback;
+          window.wabaMetaEsPatchOauthOpen();
           var setupKeys = options.extras && options.extras.setup ? Object.keys(options.extras.setup) : [];
           console.info(
             "[META][ES][FB_LOGIN]",
@@ -27682,6 +27735,7 @@
           var msg = String(reason || "").toLowerCase();
           if (msg.indexOf("config_id") === -1) return false;
           window.__WABA_META_ES_RETRYING = true;
+          window.wabaMetaEsPatchOauthOpen();
           console.info("[META][ES][FB_LOGIN]", "responseType=code", "configIdPresent=true");
           FB.login(callback || window.__WABA_META_ES_LOGIN_CB, options);
           return true;

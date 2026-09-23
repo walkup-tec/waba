@@ -10,6 +10,7 @@ import {
   buildMetaEsSetupPrefill,
   configIdLast4,
   isGenericFacebookOauthUrl,
+  rewriteMetaEsOauthUrl,
   isLegacyExchangePath,
   mentionsMissingConfigId,
   planMetaEsTechProviderClick,
@@ -140,9 +141,30 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /WABA_META_ES_LOGIN_BLOCKED_MESSAGE/);
     assert.match(html, /Não é cargo nem Testador/);
     assert.match(html, /AdsPower/);
-    assert.match(html, /www\.facebook\.com/);
+    assert.match(html, /wabaMetaEsRewriteOauthUrl/);
+    assert.match(html, /wabaMetaEsPatchOauthOpen/);
     assert.doesNotMatch(html, /adicione a conta deste perfil AdsPower como Testador/);
     assert.doesNotMatch(html, /Data Use Checkup/);
+    assert.doesNotMatch(html, /troque web\.facebook\.com/);
+  });
+
+  it("dialog/oauth sem config_id em web.facebook.com recebe host www e config_id", () => {
+    const raw =
+      "https://web.facebook.com/v26.0/dialog/oauth?app_id=1279182514183979&cbt=1790173659109&channel_url=https%3A%2F%2Fstaticxx.facebook.com%2Fx%2Fconnect%2Fxd_arbiter";
+    const rewritten = rewriteMetaEsOauthUrl(raw, { configId: "1590195526041278" });
+    const parsed = new URL(rewritten);
+    assert.equal(parsed.hostname, "www.facebook.com");
+    assert.equal(parsed.searchParams.get("config_id"), "1590195526041278");
+    assert.equal(parsed.searchParams.get("response_type"), "code");
+    assert.equal(parsed.searchParams.get("override_default_response_type"), "true");
+    assert.match(String(parsed.searchParams.get("extras") || ""), /"setup":\{\}/);
+    const encrypted =
+      "https://web.facebook.com/v26.0/dialog/oauth?encrypted_query_string=AeH_blob";
+    const encryptedRewritten = rewriteMetaEsOauthUrl(encrypted, { configId: "1590195526041278" });
+    const encryptedParsed = new URL(encryptedRewritten);
+    assert.equal(encryptedParsed.hostname, "www.facebook.com");
+    assert.equal(encryptedParsed.searchParams.get("config_id"), null);
+    assert.equal(encryptedParsed.searchParams.get("encrypted_query_string"), "AeH_blob");
   });
 
   it("botão + sem WABA não envia extras.setup só com BM", () => {
