@@ -27618,7 +27618,7 @@
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
-          "A Meta recusou o Login neste Facebook (Recurso indisponível). No developers.facebook.com, app DRAX (1279182514183979): conclua Data Use Checkup, verificação da empresa e deixe o app Live. Enquanto estiver em desenvolvimento, adicione a conta deste perfil AdsPower como Testador. Depois feche o popup e clique de novo em Conectar Portfólio neste mesmo navegador.";
+          "A Meta recusou o Login for Business deste app (Recurso indisponível). Não é cargo nem Testador: o Embedded Signup desta DRAX já conectou portfólios sem isso. Fique no AdsPower. No popup, troque web.facebook.com por www.facebook.com na URL; se a chave continuar, use fingerprint desktop (Windows/Chrome) neste perfil e clique de novo em Conectar Portfólio.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
@@ -27665,7 +27665,13 @@
           }
           window.__WABA_META_ES_LOGIN_OPTIONS = options;
           window.__WABA_META_ES_LOGIN_CB = callback;
-          console.info("[META][ES][FB_LOGIN]", "responseType=code", "configIdPresent=true");
+          var setupKeys = options.extras && options.extras.setup ? Object.keys(options.extras.setup) : [];
+          console.info(
+            "[META][ES][FB_LOGIN]",
+            "responseType=code",
+            "configIdPresent=true",
+            "setupKeys=" + (setupKeys.length ? setupKeys.join(",") : "empty"),
+          );
           FB.login(callback, options);
           return { ok: true };
         };

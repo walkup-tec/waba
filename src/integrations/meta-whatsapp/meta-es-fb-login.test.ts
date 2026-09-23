@@ -135,11 +135,14 @@ describe("meta-es-fb-login", () => {
     assert.equal(mentionsMissingConfigId("Parâmetro inválido: config_id é obrigatório."), true);
   });
 
-  it("login recusado pela Meta explica Data Use Checkup no Laboratório", () => {
+  it("login recusado pela Meta não pede Testador", () => {
     const html = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
     assert.match(html, /WABA_META_ES_LOGIN_BLOCKED_MESSAGE/);
-    assert.match(html, /Data Use Checkup/);
-    assert.match(html, /1279182514183979/);
+    assert.match(html, /Não é cargo nem Testador/);
+    assert.match(html, /AdsPower/);
+    assert.match(html, /www\.facebook\.com/);
+    assert.doesNotMatch(html, /adicione a conta deste perfil AdsPower como Testador/);
+    assert.doesNotMatch(html, /Data Use Checkup/);
   });
 
   it("botão + sem WABA não envia extras.setup só com BM", () => {
