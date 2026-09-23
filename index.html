@@ -27707,38 +27707,16 @@
             String((input && input.redirectUri) || "") || window.location.origin
           );
           if (!appId || !configId || !siteOrigin) return "";
-          var version = String((input && input.graphVersion) || "v26.0").trim() || "v26.0";
           var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
           var extras = options && options.extras ? options.extras : { setup: {} };
-          var host = window.wabaMetaEsSiteHost(siteOrigin);
-          var state = input && input.state ? String(input.state) : "";
-          var cb = "f" + (state || window.wabaMetaEsCreateOauthState()).slice(0, 16);
-          var xd = window.WABA_META_ES_SDK_XD_ARBITER;
-          var sdkRedirect =
-            xd + "#cb=" + cb + "&origin=" + encodeURIComponent(siteOrigin) + "&domain=" + host + "&relation=opener";
-          var parsed = new URL("https://web.facebook.com/" + version + "/dialog/oauth");
-          parsed.searchParams.set("client_id", appId);
+          var parsed = new URL("https://business.facebook.com/messaging/whatsapp/onboard/");
           parsed.searchParams.set("app_id", appId);
-          parsed.searchParams.set("redirect_uri", sdkRedirect);
-          parsed.searchParams.set(
-            "channel_url",
-            xd + "#origin=" + encodeURIComponent(siteOrigin) + "&domain=" + host + "&relation=parent.parent"
-          );
-          parsed.searchParams.set("fallback_redirect_uri", siteOrigin);
+          parsed.searchParams.set("config_id", configId);
           parsed.searchParams.set("response_type", "code");
           parsed.searchParams.set("override_default_response_type", "true");
-          parsed.searchParams.set("config_id", configId);
-          parsed.searchParams.set("display", "popup");
-          parsed.searchParams.set("sdk", "joey");
-          parsed.searchParams.set("ret", "login");
-          parsed.searchParams.set("cbt", String(Date.now()));
-          parsed.searchParams.set("origin", "1");
-          if (host) parsed.searchParams.set("domain", host);
-          parsed.searchParams.set("locale", "pt_BR");
-          parsed.searchParams.set("e2e", "{}");
-          parsed.searchParams.set("version", version);
+          parsed.searchParams.set("redirect_uri", siteOrigin);
           parsed.searchParams.set("extras", JSON.stringify(extras));
-          if (state) parsed.searchParams.set("state", state);
+          if (input && input.state) parsed.searchParams.set("state", String(input.state));
           return parsed.toString();
         };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
@@ -28030,7 +28008,7 @@
             window.wabaMetaEsWritePendingOauth({
               state: state,
               source: String(cfg.source || "lab"),
-              redirectUri: window.WABA_META_ES_SDK_XD_ARBITER,
+              redirectUri: redirectUri,
               siteOrigin: redirectUri,
               setup: setup || {},
               ts: Date.now()
@@ -28039,9 +28017,8 @@
               "[META][ES][PAGE_REDIRECT]",
               "host=web.facebook.com",
               "reauth=true",
+              "onboard=true",
               "configIdPresent=true",
-              "sdk=joey",
-              "display=popup",
               "open=new-window"
             );
             var opened = window.wabaMetaEsOpenFacebook(dialogUrl);

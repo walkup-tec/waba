@@ -85,12 +85,15 @@ export type MetaEsOauthReturn = {
 
 export const META_ES_OAUTH_STORAGE_KEY = "waba-meta-es-oauth";
 
-/** Host do wizard que funcionou no Chrome. www dispara _rdc + encrypted_query_string. */
+/** Host do reauth (senha). www dispara _rdc + encrypted_query_string. */
 export const META_ES_OAUTH_HOST = "web.facebook.com";
 
+/** LaunchBridge do Embedded Signup. dialog/oauth com config_id ES vira Recurso indisponível. */
+export const META_ES_ONBOARD_ORIGIN = "https://business.facebook.com";
+export const META_ES_ONBOARD_PATH = "/messaging/whatsapp/onboard/";
+
 /**
- * redirect_uri do JS SDK (FB.login). Web OAuth com origin da DRAX + display=page
- * chega no Recurso indisponível depois da senha, mesmo com hash da Meta.
+ * redirect_uri do JS SDK (FB.login). Mantido só como candidato de troca do code.
  */
 export const META_ES_SDK_XD_ARBITER =
   "https://staticxx.facebook.com/x/connect/xd_arbiter/?version=46";
@@ -344,39 +347,22 @@ export function buildMetaEsOauthDialogUrl(input: {
   const configId = String(input.configId || "").trim();
   const siteOrigin = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
   if (!appId || !configId || !siteOrigin) return null;
-  const host = siteHostFromMetaEsOrigin(siteOrigin);
-  const version = String(input.graphVersion || META_ES_JS_SDK_GRAPH_VERSION).trim() || META_ES_JS_SDK_GRAPH_VERSION;
   const setup = buildMetaEsSetupPrefill({
     businessId: input.setup?.business?.id,
     wabaId: input.setup?.whatsAppBusinessAccount?.ids,
   });
-  const state = String(input.state || "").trim();
-  const cb = `f${(state || createMetaEsOauthState()).slice(0, 16)}`;
-  const sdkRedirect = `${META_ES_SDK_XD_ARBITER}#cb=${cb}&origin=${encodeURIComponent(siteOrigin)}&domain=${host}&relation=opener`;
-  const parsed = new URL(`https://${META_ES_OAUTH_HOST}/${version}/dialog/oauth`);
-  parsed.searchParams.set("client_id", appId);
+  const parsed = new URL(`${META_ES_ONBOARD_ORIGIN}${META_ES_ONBOARD_PATH}`);
   parsed.searchParams.set("app_id", appId);
-  parsed.searchParams.set("redirect_uri", sdkRedirect);
-  parsed.searchParams.set(
-    "channel_url",
-    `${META_ES_SDK_XD_ARBITER}#origin=${encodeURIComponent(siteOrigin)}&domain=${host}&relation=parent.parent`,
-  );
-  parsed.searchParams.set("fallback_redirect_uri", siteOrigin);
+  parsed.searchParams.set("config_id", configId);
   parsed.searchParams.set("response_type", "code");
   parsed.searchParams.set("override_default_response_type", "true");
-  parsed.searchParams.set("config_id", configId);
-  parsed.searchParams.set("display", "popup");
-  parsed.searchParams.set("sdk", "joey");
-  parsed.searchParams.set("ret", "login");
-  parsed.searchParams.set("cbt", String(input.cbt ?? Date.now()));
-  parsed.searchParams.set("origin", "1");
-  if (host) parsed.searchParams.set("domain", host);
-  parsed.searchParams.set("locale", "pt_BR");
-  parsed.searchParams.set("e2e", "{}");
-  parsed.searchParams.set("version", version);
+  parsed.searchParams.set("redirect_uri", siteOrigin);
   parsed.searchParams.set("extras", JSON.stringify({ setup }));
+  const state = String(input.state || "").trim();
   if (state) parsed.searchParams.set("state", state);
   void input.display;
+  void input.cbt;
+  void input.graphVersion;
   return parsed.toString();
 }
 
@@ -385,9 +371,8 @@ export function metaEsOauthPopupFeatures(): string {
 }
 
 /**
- * Chrome chega no wizard via login/reauth.php?app_id=…&next=dialog SDK.
- * A senha continua no reauth. O next deixa de ser Web OAuth (origin DRAX +
- * display=page), que no AdsPower vira Recurso indisponível depois da senha.
+ * Senha: login/reauth.php. Depois: LaunchBridge onboard, não dialog/oauth.
+ * dialog/oauth com config_id ES devolve Recurso indisponível (Login do Facebook).
  */
 export function buildMetaEsOauthLaunchUrl(
   input: Parameters<typeof buildMetaEsOauthDialogUrl>[0],

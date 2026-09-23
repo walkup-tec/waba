@@ -16,7 +16,6 @@ import {
   describeMetaEsBrowserSurface,
   isMetaEsFacebookMessageOrigin,
   parseMetaEsFacebookOauthMessage,
-  META_ES_SDK_XD_ARBITER,
   isLegacyExchangePath,
   mentionsMissingConfigId,
   parseMetaEsOauthReturn,
@@ -155,9 +154,8 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /wabaMetaEsBuildOauthLaunchUrl/);
     assert.match(html, /wabaMetaEsResumeLabOauthReturn/);
     assert.match(html, /wabaMetaEsOpenFacebook/);
-    assert.match(html, /sdk", "joey"/);
-    assert.match(html, /display", "popup"/);
-    assert.match(html, /xd_arbiter/);
+    assert.match(html, /messaging\/whatsapp\/onboard/);
+    assert.match(html, /business\.facebook\.com/);
     assert.match(html, /wabaMetaEsDeliverOauthReturn/);
     assert.match(html, /wabaMetaEsParseFacebookOauthMessage/);
     assert.match(html, /popup=yes/);
@@ -178,29 +176,22 @@ describe("meta-es-fb-login", () => {
       configId: "1590195526041278",
       redirectUri: "https://waba.draxsistemas.com.br/",
       state: "abc123",
-      cbt: "1790187184561",
     });
     assert.ok(dialog);
     const parsed = new URL(dialog);
-    assert.equal(parsed.hostname, "web.facebook.com");
-    assert.equal(parsed.searchParams.get("client_id"), "1279182514183979");
+    assert.equal(parsed.hostname, "business.facebook.com");
+    assert.equal(parsed.pathname, "/messaging/whatsapp/onboard/");
     assert.equal(parsed.searchParams.get("app_id"), "1279182514183979");
     assert.equal(parsed.searchParams.get("config_id"), "1590195526041278");
     assert.equal(parsed.searchParams.get("response_type"), "code");
-    assert.equal(parsed.searchParams.get("display"), "popup");
-    assert.equal(parsed.searchParams.get("sdk"), "joey");
-    assert.equal(parsed.searchParams.get("ret"), "login");
-    assert.equal(parsed.searchParams.get("cbt"), "1790187184561");
-    assert.equal(parsed.searchParams.get("domain"), "waba.draxsistemas.com.br");
-    assert.equal(parsed.searchParams.get("fallback_redirect_uri"), "https://waba.draxsistemas.com.br");
-    assert.match(String(parsed.searchParams.get("redirect_uri") || ""), /staticxx\.facebook\.com\/x\/connect\/xd_arbiter/);
-    assert.match(String(parsed.searchParams.get("channel_url") || ""), /xd_arbiter/);
-    assert.doesNotMatch(String(parsed.searchParams.get("redirect_uri") || ""), /^https:\/\/waba\.draxsistemas\.com\.br$/);
+    assert.equal(parsed.searchParams.get("override_default_response_type"), "true");
+    assert.equal(parsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br");
     assert.equal(parsed.searchParams.get("state"), "abc123");
     assert.match(String(parsed.searchParams.get("extras") || ""), /"setup":\{\}/);
     assert.equal("sessionInfoVersion" in JSON.parse(String(parsed.searchParams.get("extras"))), false);
-    assert.equal(META_ES_SDK_XD_ARBITER, "https://staticxx.facebook.com/x/connect/xd_arbiter/?version=46");
+    assert.doesNotMatch(dialog, /dialog\/oauth/);
     assert.equal(isMetaEsFacebookMessageOrigin("https://web.facebook.com"), true);
+    assert.equal(isMetaEsFacebookMessageOrigin("https://business.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://staticxx.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://waba.draxsistemas.com.br"), false);
     const fromHash = parseMetaEsFacebookOauthMessage(
@@ -227,8 +218,9 @@ describe("meta-es-fb-login", () => {
     assert.equal(launchParsed.searchParams.get("app_id"), "1279182514183979");
     assert.equal(launchParsed.searchParams.get("signed_next"), "1");
     assert.match(String(launchParsed.searchParams.get("next") || ""), /config_id=1590195526041278/);
-    assert.match(String(launchParsed.searchParams.get("next") || ""), /sdk=joey/);
-    assert.match(String(launchParsed.searchParams.get("next") || ""), /xd_arbiter/);
+    assert.match(String(launchParsed.searchParams.get("next") || ""), /messaging\/whatsapp\/onboard/);
+    assert.match(String(launchParsed.searchParams.get("next") || ""), /business\.facebook\.com/);
+    assert.doesNotMatch(String(launchParsed.searchParams.get("next") || ""), /dialog\/oauth/);
     assert.doesNotMatch(launch, /www\.facebook\.com/);
     assert.equal(
       shouldUseMetaEsPageRedirect({ preferPage: true }),
