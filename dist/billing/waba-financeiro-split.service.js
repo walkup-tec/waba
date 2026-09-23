@@ -54,7 +54,7 @@ const waba_indicator_commission_service_1 = require("../indicators/waba-indicato
 const waba_indicator_profile_repository_1 = require("../indicators/waba-indicator-profile.repository");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
-const waba_eduardo_master_scope_1 = require("../users/waba-eduardo-master-scope");
+const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const PERCENT_SUM_TOLERANCE = 0.01;
 const roundPercent = (value) => Math.round(value * 100) / 100;
 function resolveSplitSettlementSubscriberName(input) {
@@ -172,10 +172,9 @@ class WabaFinanceiroSplitService {
         const items = (0, waba_metrics_excluded_owners_1.filterOutMetricsExcludedOwners)(this.settlementRepository.list(limit));
         const subscribers = this.subscriberRepository.list();
         const byEmail = new Map(subscribers.map((item) => [String(item.email || "").trim().toLowerCase(), item]));
-        const staff = this.systemUserService.listPublicUsers();
         const visible = items.filter((item) => {
             const owner = this.normalizeOwnerEmail(item.ownerEmail);
-            return (0, waba_eduardo_master_scope_1.canViewerSeeFinanceiroOrder)(viewerEmail, item.createdAt, byEmail.get(owner) ?? null, staff);
+            return (0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(viewerEmail, byEmail.get(owner) ?? null);
         });
         return visible.map((item) => {
             const settled = (0, waba_financeiro_split_manual_paid_1.applyManualBankPaidSplit)(item);
@@ -460,7 +459,7 @@ class WabaFinanceiroSplitService {
         }
         if (distributableCents > 0 && payProfits && activeParticipants.length) {
             const subscriber = this.subscriberRepository.getByEmail(order.ownerEmail);
-            const profitParticipants = (0, waba_eduardo_master_scope_1.resolveEduardoOriginProfitPercents)(activeParticipants, subscriber, order.paidAt || order.createdAt, this.systemUserService.listPublicUsers());
+            const profitParticipants = (0, waba_subscriber_master_visibility_1.resolveVisibleMasterProfitPercents)(activeParticipants, subscriber);
             const percents = profitParticipants.map((item) => item.sharePercent);
             const amounts = distributeCentsByPercents(distributableCents, percents);
             for (const [index, participant] of profitParticipants.entries()) {

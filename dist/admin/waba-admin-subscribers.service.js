@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaAdminSubscribersService = void 0;
-exports.resolveSubscriberOriginIndicator = resolveSubscriberOriginIndicator;
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
@@ -10,20 +9,9 @@ const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.rep
 const waba_subscriber_service_1 = require("../subscribers/waba-subscriber.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
-const waba_eduardo_master_scope_1 = require("../users/waba-eduardo-master-scope");
+const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_welcome_whatsapp_service_1 = require("../mail/waba-welcome-whatsapp.service");
-function resolveSubscriberOriginIndicator(indicatorUserId, indicator) {
-    const id = String(indicatorUserId || "").trim();
-    if (!id)
-        return null;
-    return {
-        kind: "indicator",
-        indicatorUserId: id,
-        indicatorName: String(indicator?.fullName || "").trim() || "Indicador",
-        indicatorEmail: String(indicator?.email || "").trim(),
-    };
-}
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const formatCpfCnpj = (raw) => {
     const digits = String(raw ?? "").replace(/\D/g, "");
@@ -155,14 +143,10 @@ class WabaAdminSubscribersService {
             intakesByEmail.set(email, bucket);
         }
         const paidDisparosByEmail = this.buildPaidDisparosOrdersByEmail();
-        const indicators = new Map(this.systemUserService
-            .listPublicUsers()
-            .filter((user) => user.role === "indicador")
-            .map((user) => [user.id, user]));
         const staffUsers = this.systemUserService.listPublicUsers();
         return this.subscriberRepository
             .list()
-            .filter((subscriber) => (0, waba_eduardo_master_scope_1.canViewerSeeSubscriber)(viewerEmail, subscriber, staffUsers))
+            .filter((subscriber) => (0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(viewerEmail, subscriber))
             .slice()
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .map((subscriber) => {
@@ -170,7 +154,7 @@ class WabaAdminSubscribersService {
             const credits = summarizePaidDisparosOrders(paidDisparosByEmail.get(email) ?? []);
             const intakes = intakesByEmail.get(email) ?? [];
             const segment = subscriber.segment ?? "outros";
-            const origin = resolveSubscriberOriginIndicator(subscriber.indicatorUserId, indicators.get(String(subscriber.indicatorUserId || "").trim()));
+            const origin = (0, waba_subscriber_master_visibility_1.resolveSubscriberOrigin)(subscriber, staffUsers);
             return {
                 id: subscriber.id,
                 email,
@@ -191,6 +175,7 @@ class WabaAdminSubscribersService {
                 campaignsCompleted: intakes.filter(isCampaignCompleted).length,
                 origin,
                 createdByEmail: String(subscriber.createdByEmail || "").trim().toLowerCase(),
+                visibleToMasters: (0, waba_subscriber_master_visibility_1.isSubscriberVisibleToMasters)(subscriber),
             };
         });
     }
@@ -201,7 +186,7 @@ class WabaAdminSubscribersService {
         const subscriber = this.subscriberRepository.getById(id);
         if (!subscriber)
             throw new Error("Assinante não encontrado.");
-        if (!(0, waba_eduardo_master_scope_1.canViewerSeeSubscriber)(viewerEmail, subscriber, this.systemUserService.listPublicUsers())) {
+        if (!(0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(viewerEmail, subscriber)) {
             throw new Error("Assinante não encontrado.");
         }
         const email = normalizeEmail(subscriber.email);
@@ -241,6 +226,25 @@ class WabaAdminSubscribersService {
         this.getSubscriberDetail(subscriberId, viewerEmail);
         this.subscriberService.update(subscriberId, input);
         return this.getSubscriberDetail(subscriberId, viewerEmail);
+    }
+    setVisibleToMasters(subscriberId, visibleToMasters, viewerEmail) {
+        if (!(0, waba_subscriber_master_visibility_1.isWalkupMasterEmail)(viewerEmail)) {
+            throw new Error("Somente o master Walkup pode alterar a visibilidade.");
+        }
+        const id = String(subscriberId ?? "").trim();
+        if (!id)
+            throw new Error("Assinante inválido.");
+        const subscriber = this.subscriberRepository.getById(id);
+        if (!subscriber)
+            throw new Error("Assinante não encontrado.");
+        this.subscriberRepository.update(id, {
+            visibleToMasters: visibleToMasters === true,
+        });
+        return {
+            id,
+            email: subscriber.email,
+            visibleToMasters: visibleToMasters === true,
+        };
     }
     async resendSubscriberWelcome(subscriberId) {
         const id = String(subscriberId || "").trim();

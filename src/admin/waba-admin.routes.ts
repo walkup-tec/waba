@@ -43,6 +43,7 @@ import {
   WabaAdminBonusEnviosService,
   type BonusEnviosValidityMode,
 } from "./waba-admin-bonus-envios.service";
+import { isWalkupMasterEmail } from "../users/waba-subscriber-master-visibility";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 
@@ -107,11 +108,32 @@ export const registerWabaAdminRoutes = (app: Express) => {
     if (!auth) return;
     try {
       const items = adminSubscribersService.listSubscribers(auth.email);
-      return res.status(200).json({ items });
+      return res.status(200).json({
+        items,
+        canToggleVisibility: isWalkupMasterEmail(auth.email),
+      });
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Não foi possível carregar os assinantes.",
       });
+    }
+  });
+
+  app.patch("/admin/subscribers/:subscriberId/visibility", (req, res) => {
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = adminSubscribersService.setVisibleToMasters(
+        String(req.params.subscriberId ?? ""),
+        body.visibleToMasters === true,
+        auth.email,
+      );
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível alterar a visibilidade.";
+      const status = message.includes("Somente") ? 403 : message.includes("não encontrado") ? 404 : 400;
+      return res.status(status).json({ error: message });
     }
   });
 

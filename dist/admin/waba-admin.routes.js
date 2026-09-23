@@ -32,6 +32,7 @@ const system_connection_log_service_1 = require("../monitoring/system-connection
 const system_connection_log_types_1 = require("../monitoring/system-connection-log.types");
 const waba_coupon_service_1 = require("../billing/waba-coupon.service");
 const waba_admin_bonus_envios_service_1 = require("./waba-admin-bonus-envios.service");
+const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 const adminSubscribersService = new waba_admin_subscribers_service_1.WabaAdminSubscribersService();
 const adminSubscribersCreateService = new waba_admin_subscribers_create_service_1.WabaAdminSubscribersCreateService();
@@ -91,12 +92,30 @@ const registerWabaAdminRoutes = (app) => {
             return;
         try {
             const items = adminSubscribersService.listSubscribers(auth.email);
-            return res.status(200).json({ items });
+            return res.status(200).json({
+                items,
+                canToggleVisibility: (0, waba_subscriber_master_visibility_1.isWalkupMasterEmail)(auth.email),
+            });
         }
         catch (error) {
             return res.status(500).json({
                 error: error instanceof Error ? error.message : "Não foi possível carregar os assinantes.",
             });
+        }
+    });
+    app.patch("/admin/subscribers/:subscriberId/visibility", (req, res) => {
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
+            return;
+        try {
+            const body = req.body;
+            const result = adminSubscribersService.setVisibleToMasters(String(req.params.subscriberId ?? ""), body.visibleToMasters === true, auth.email);
+            return res.status(200).json({ ok: true, ...result });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível alterar a visibilidade.";
+            const status = message.includes("Somente") ? 403 : message.includes("não encontrado") ? 404 : 400;
+            return res.status(status).json({ error: message });
         }
     });
     app.get("/admin/subscribers/:subscriberId", (req, res) => {

@@ -11,7 +11,7 @@ const waba_billing_service_1 = require("../billing/waba-billing.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
-const waba_eduardo_master_scope_1 = require("../users/waba-eduardo-master-scope");
+const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const maskApiBaseUrl = (raw) => {
     const value = String(raw || "").trim().replace(/\/$/, "");
     if (!value)
@@ -197,10 +197,9 @@ class WabaAdminFinanceiroService {
             .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     }
     listDisparosOrdersForViewer(viewerEmail = "") {
-        const staff = this.systemUserService.listPublicUsers();
         return this.listDisparosOrdersSorted().filter((order) => {
             const subscriber = this.subscriberRepository.getByEmail(String(order.ownerEmail || "").trim());
-            return (0, waba_eduardo_master_scope_1.canViewerSeeFinanceiroOrder)(viewerEmail, order.paidAt || order.createdAt, subscriber, staff);
+            return (0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(viewerEmail, subscriber);
         });
     }
     listOrders(params) {

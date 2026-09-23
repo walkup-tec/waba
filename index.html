@@ -12265,15 +12265,26 @@
       }
 
       .admin-subscribers-origin-col {
-        width: 72px;
-        text-align: center;
+        width: 168px;
+        text-align: left;
         overflow: visible;
       }
 
       .admin-subscribers-table th.admin-subscribers-origin-col,
       .admin-subscribers-table td.admin-subscribers-origin-col {
-        text-align: center;
+        text-align: left;
         overflow: visible;
+      }
+
+      .admin-subscribers-origin {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #e2e8f0;
+        font-size: 0.82rem;
+        font-weight: 600;
+        line-height: 1.2;
+        white-space: nowrap;
       }
 
       .admin-subscribers-origin-icon {
@@ -12283,15 +12294,72 @@
         justify-content: center;
         width: 22px;
         height: 22px;
+        flex: 0 0 22px;
         border-radius: 999px;
         background: #38bdf8;
         color: #0f172a;
-        font-size: 0.78rem;
-        font-weight: 800;
-        font-style: italic;
         line-height: 1;
-        cursor: default;
-        z-index: 2;
+      }
+
+      .admin-subscribers-origin-icon svg {
+        width: 13px;
+        height: 13px;
+        display: block;
+      }
+
+      .admin-subscribers-origin-icon.is-site {
+        background: #38bdf8;
+      }
+
+      .admin-subscribers-origin-icon.is-user {
+        background: #a78bfa;
+      }
+
+      .admin-subscribers-visible-col {
+        width: 88px;
+        text-align: center;
+      }
+
+      .admin-subscribers-table:not(.show-visibility) .admin-subscribers-visible-col {
+        display: none;
+      }
+
+      .admin-subscribers-visibility-toggle {
+        position: relative;
+        width: 42px;
+        height: 24px;
+        padding: 0;
+        border: 0;
+        border-radius: 999px;
+        background: #334155;
+        cursor: pointer;
+        vertical-align: middle;
+      }
+
+      .admin-subscribers-visibility-toggle::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: #e2e8f0;
+        transition: transform 0.16s ease, background 0.16s ease;
+      }
+
+      .admin-subscribers-visibility-toggle.is-on {
+        background: #22c55e;
+      }
+
+      .admin-subscribers-visibility-toggle.is-on::after {
+        transform: translateX(18px);
+        background: #f8fafc;
+      }
+
+      .admin-subscribers-visibility-toggle:disabled {
+        opacity: 0.55;
+        cursor: wait;
       }
 
       .admin-subscribers-origin-icon:hover,
@@ -24872,6 +24940,7 @@
                       <tr>
                         <th scope="col">Nome</th>
                         <th scope="col" class="admin-subscribers-origin-col">Origem</th>
+                        <th scope="col" class="admin-subscribers-visible-col">Visível</th>
                         <th scope="col">Segmento</th>
                         <th scope="col">CPF ou CNPJ</th>
                         <th scope="col">Data inscrição</th>
@@ -34617,6 +34686,25 @@
         return div.innerHTML;
       }
 
+      let adminSubscribersCanToggleVisibility = false;
+
+      function adminSubscribersColspan() {
+        return adminSubscribersCanToggleVisibility ? 11 : 10;
+      }
+
+      function setAdminSubscribersVisibilityColumn(enabled) {
+        adminSubscribersCanToggleVisibility = enabled === true;
+        document.querySelector(".admin-subscribers-table")?.classList.toggle(
+          "show-visibility",
+          adminSubscribersCanToggleVisibility
+        );
+      }
+
+      const ADMIN_ORIGIN_ICON_SITE =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M3 12h18M12 3c3 3.2 4.5 6.4 4.5 9S15 17.8 12 21c-3-3.2-4.5-6.4-4.5-9S9 6.2 12 3z" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>';
+      const ADMIN_ORIGIN_ICON_USER =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M5 19.2c1.2-3.2 3.6-4.8 7-4.8s5.8 1.6 7 4.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+
       function buildAdminSubscriberRowHtml(item) {
         const subscriberId = escapeAdminHtml(item?.id || "");
         const subscriberEmail = escapeAdminHtml(item?.email || "");
@@ -34629,15 +34717,31 @@
         const disparos = escapeAdminHtml(formatDisparosQty(item?.contractedShipments));
         const aguardando = escapeAdminHtml(formatDisparosQty(item?.campaignsAwaiting));
         const finalizados = escapeAdminHtml(formatDisparosQty(item?.campaignsCompleted));
-        const originName = escapeAdminHtml(item?.origin?.indicatorName || "Indicador");
-        const originEmail = escapeAdminHtml(item?.origin?.indicatorEmail || "");
-        const originTip = item?.origin?.kind === "indicator"
-          ? `${originName}${originEmail ? `&#10;${originEmail}` : ""}`
-          : "";
-        const originCell =
-          item?.origin?.kind === "indicator"
-            ? `<span class="admin-subscribers-origin-icon" tabindex="0" title="${originTip}" aria-label="Indicador ${originName}${originEmail ? ` ${originEmail}` : ""}">i<span class="admin-subscribers-origin-tip"><strong>${originName}</strong>${originEmail ? originEmail : ""}</span></span>`
-            : '<span class="muted">—</span>';
+        const originKind = String(item?.origin?.kind || "site");
+        const originLabel = escapeAdminHtml(item?.origin?.label || (originKind === "user" ? "Usuário" : "Site"));
+        const originEmail = escapeAdminHtml(item?.origin?.userEmail || "");
+        const originTip = originKind === "user"
+          ? `${originLabel}${originEmail ? `&#10;${originEmail}` : ""}`
+          : "Landing page";
+        const originIcon = originKind === "user" ? ADMIN_ORIGIN_ICON_USER : ADMIN_ORIGIN_ICON_SITE;
+        const originCell = `<span class="admin-subscribers-origin" title="${originTip}">
+            <span class="admin-subscribers-origin-icon ${originKind === "user" ? "is-user" : "is-site"}" aria-hidden="true">${originIcon}</span>
+            <span class="admin-subscribers-origin-label">${originLabel}</span>
+          </span>`;
+        const visibleOn = item?.visibleToMasters !== false;
+        const visibilityCell = `<td class="admin-subscribers-visible-col">${
+          adminSubscribersCanToggleVisibility
+            ? `<button
+                type="button"
+                class="admin-subscribers-visibility-toggle${visibleOn ? " is-on" : ""}"
+                role="switch"
+                aria-checked="${visibleOn ? "true" : "false"}"
+                aria-label="${visibleOn ? "Visível para todos os masters" : "Visível somente para Walkup"}"
+                data-subscriber-id="${subscriberId}"
+                data-visible="${visibleOn ? "true" : "false"}"
+              ></button>`
+            : ""
+        }</td>`;
         const rowClass = mergeMasterMenuNewRowClass("admin-assinantes", item?.createdAt, "");
         const rowAttrs = rowClass ? `class="${rowClass}"` : "";
         const newMarker = renderMasterMenuNewMarker("admin-assinantes", item?.createdAt);
@@ -34675,6 +34779,7 @@
                   ${email ? `<span class="admin-subscribers-email">${email}</span>` : ""}
                 </td>
                 <td class="admin-subscribers-origin-col">${originCell}</td>
+                ${visibilityCell}
                 <td>${segment}</td>
                 <td>${cpf}</td>
                 <td>${createdAt}</td>
@@ -34705,7 +34810,7 @@
 
         if (!rows.length) {
           tbody.innerHTML =
-            '<tr><td colspan="10" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
+            `<tr><td colspan="${adminSubscribersColspan()}" class="muted">Nenhum assinante cadastrado ainda.</td></tr>`;
           return;
         }
 
@@ -37828,14 +37933,14 @@
         if (!hasMasterAccess()) {
           if (tbody) {
             tbody.innerHTML =
-              '<tr><td colspan="10" class="muted">Área restrita ao usuário master.</td></tr>';
+              `<tr><td colspan="${adminSubscribersColspan()}" class="muted">Área restrita ao usuário master.</td></tr>`;
           }
           if (summary) summary.textContent = "Acesso negado.";
           return;
         }
 
         if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="10" class="muted">Carregando…</td></tr>';
+          tbody.innerHTML = `<tr><td colspan="${adminSubscribersColspan()}" class="muted">Carregando…</td></tr>`;
         }
         if (summary) summary.textContent = "Carregando assinantes…";
 
@@ -37845,15 +37950,50 @@
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível carregar os assinantes.");
           }
+          setAdminSubscribersVisibilityColumn(payload.canToggleVisibility === true);
           renderAdminSubscribersTable(payload.items);
         } catch (error) {
           if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="10" class="muted">${escapeAdminHtml(
+            tbody.innerHTML = `<tr><td colspan="${adminSubscribersColspan()}" class="muted">${escapeAdminHtml(
               resolveAdminSubscriberFetchError(error, "Falha ao carregar assinantes.")
             )}</td></tr>`;
           }
           if (summary) summary.textContent = "Falha ao carregar.";
           showToast(resolveAdminSubscriberFetchError(error, "Falha ao carregar assinantes."), "error", 4800);
+        }
+      }
+
+      async function toggleAdminSubscriberVisibility(button) {
+        if (!(button instanceof HTMLButtonElement)) return;
+        const subscriberId = String(button.getAttribute("data-subscriber-id") || "").trim();
+        if (!subscriberId) return;
+        const nextVisible = button.getAttribute("data-visible") !== "true";
+        button.disabled = true;
+        try {
+          const response = await fetchWithTimeout(
+            `/admin/subscribers/${encodeURIComponent(subscriberId)}/visibility`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ visibleToMasters: nextVisible }),
+            },
+            20000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível alterar a visibilidade.");
+          }
+          button.classList.toggle("is-on", nextVisible);
+          button.setAttribute("data-visible", nextVisible ? "true" : "false");
+          button.setAttribute("aria-checked", nextVisible ? "true" : "false");
+          button.setAttribute(
+            "aria-label",
+            nextVisible ? "Visível para todos os masters" : "Visível somente para Walkup"
+          );
+        } catch (error) {
+          showToast(error?.message || "Não foi possível alterar a visibilidade.", "error", 4200);
+        } finally {
+          button.disabled = false;
         }
       }
 
@@ -51081,6 +51221,13 @@
         document.getElementById("admin-subscribers-tbody")?.addEventListener("click", (event) => {
           const target = event.target;
           if (!(target instanceof Element)) return;
+          const visibilityBtn = target.closest(".admin-subscribers-visibility-toggle");
+          if (visibilityBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            void toggleAdminSubscriberVisibility(visibilityBtn);
+            return;
+          }
           if (target.closest(".admin-subscribers-origin-icon")) {
             event.preventDefault();
             event.stopPropagation();

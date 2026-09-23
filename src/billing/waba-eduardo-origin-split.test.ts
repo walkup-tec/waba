@@ -21,7 +21,7 @@ function writeJson(fileName: string, payload: unknown) {
   writeFileSync(path.join(process.cwd(), "data", fileName), JSON.stringify(payload, null, 2));
 }
 
-function seed(createdByEmail: string | null, ownerEmail: string) {
+function seed(visibleToMasters: boolean, ownerEmail: string) {
   mkdirSync(path.join(process.cwd(), "data"), { recursive: true });
   writeJson("waba-system-users.json", {
     version: 1,
@@ -67,7 +67,7 @@ function seed(createdByEmail: string | null, ownerEmail: string) {
         phone: "11999999999",
         cpfCnpj: "00000000191",
         segment: "outros",
-        createdByEmail,
+        visibleToMasters,
         createdAt: now,
         updatedAt: now,
       },
@@ -138,11 +138,11 @@ function paidOrder(ownerEmail: string, id: string): WabaBillingOrder {
   };
 }
 
-describe("Split de lucro pela origem do assinante do Eduardo", () => {
+describe("Split de lucro pela visibilidade do assinante", () => {
   before(() => {
     mkdirSync(path.join(dataRoot, "data"), { recursive: true });
     process.chdir(dataRoot);
-    seed(null, OTHER_EMAIL);
+    seed(false, OTHER_EMAIL);
   });
 
   after(() => {
@@ -150,8 +150,8 @@ describe("Split de lucro pela origem do assinante do Eduardo", () => {
     rmSync(dataRoot, { recursive: true, force: true });
   });
 
-  it("assinante cadastrado pelo Eduardo continua 50/50 e a config não muda", async () => {
-    seed(EDUARDO, HIS_EMAIL);
+  it("assinante visível continua 50/50 e a config não muda", async () => {
+    seed(true, HIS_EMAIL);
     const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
     const { WabaFinanceiroSplitService } = await import("./waba-financeiro-split.service");
     const orders = new WabaBillingOrderRepository();
@@ -176,8 +176,8 @@ describe("Split de lucro pela origem do assinante do Eduardo", () => {
     );
   });
 
-  it("assinante de outro canal a partir de hoje: Walkup 100% e Eduardo skipped", async () => {
-    seed(null, OTHER_EMAIL);
+  it("assinante oculto: Walkup 100% e Eduardo skipped", async () => {
+    seed(false, OTHER_EMAIL);
     const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
     const { WabaFinanceiroSplitService } = await import("./waba-financeiro-split.service");
     const orders = new WabaBillingOrderRepository();

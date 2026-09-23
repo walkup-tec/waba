@@ -9,6 +9,7 @@ const node_crypto_2 = require("node:crypto");
 const phone_1 = require("../billing/phone");
 const waba_subscriber_segment_1 = require("./waba-subscriber-segment");
 const waba_subscriber_repository_1 = require("./waba-subscriber.repository");
+const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const normalizeDigits = (value) => value.replace(/\D/g, "");
 const hashPassword = (password) => {
@@ -90,6 +91,10 @@ class WabaSubscriberService {
             aquecedorGranted: aquecedorGranted || undefined,
             indicatorUserId: String(input.indicatorUserId ?? "").trim() || null,
             createdByEmail: normalizeEmail(String(input.createdByEmail ?? "")) || null,
+            visibleToMasters: (0, waba_subscriber_master_visibility_1.defaultVisibleToMastersOnRegister)({
+                createdByEmail: input.createdByEmail,
+                indicatorUserId: input.indicatorUserId,
+            }),
             createdAt: now,
             updatedAt: now,
         });

@@ -46,9 +46,9 @@ import { WabaIndicatorProfileRepository } from "../indicators/waba-indicator-pro
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
 import {
-  canViewerSeeFinanceiroOrder,
-  resolveEduardoOriginProfitPercents,
-} from "../users/waba-eduardo-master-scope";
+  canViewerSeeSubscriber,
+  resolveVisibleMasterProfitPercents,
+} from "../users/waba-subscriber-master-visibility";
 
 const PERCENT_SUM_TOLERANCE = 0.01;
 
@@ -203,15 +203,9 @@ export class WabaFinanceiroSplitService {
     const byEmail = new Map(
       subscribers.map((item) => [String(item.email || "").trim().toLowerCase(), item]),
     );
-    const staff = this.systemUserService.listPublicUsers();
     const visible = items.filter((item) => {
       const owner = this.normalizeOwnerEmail(item.ownerEmail);
-      return canViewerSeeFinanceiroOrder(
-        viewerEmail,
-        item.createdAt,
-        byEmail.get(owner) ?? null,
-        staff,
-      );
+      return canViewerSeeSubscriber(viewerEmail, byEmail.get(owner) ?? null);
     });
     return visible.map((item) => {
       const settled = applyManualBankPaidSplit(item);
@@ -575,11 +569,9 @@ export class WabaFinanceiroSplitService {
 
     if (distributableCents > 0 && payProfits && activeParticipants.length) {
       const subscriber = this.subscriberRepository.getByEmail(order.ownerEmail);
-      const profitParticipants = resolveEduardoOriginProfitPercents(
+      const profitParticipants = resolveVisibleMasterProfitPercents(
         activeParticipants,
         subscriber,
-        order.paidAt || order.createdAt,
-        this.systemUserService.listPublicUsers(),
       );
       const percents = profitParticipants.map((item) => item.sharePercent);
       const amounts = distributeCentsByPercents(distributableCents, percents);

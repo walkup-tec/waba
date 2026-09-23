@@ -1,30 +1,53 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveSubscriberOriginIndicator } from "./waba-admin-subscribers.service";
+import { resolveSubscriberOrigin } from "../users/waba-subscriber-master-visibility";
 
 describe("origem do assinante na lista do master", () => {
-  it("mostra o indicador quando o assinante veio de um indicador", () => {
-    const origin = resolveSubscriberOriginIndicator("ind-1", {
+  const users = [
+    {
+      id: "ind-1",
       fullName: "João Indicador",
       email: "joao.indicador@test.com",
-    });
-    assert.deepEqual(origin, {
-      kind: "indicator",
-      indicatorUserId: "ind-1",
-      indicatorName: "João Indicador",
-      indicatorEmail: "joao.indicador@test.com",
+      role: "indicador",
+    },
+    {
+      id: "master-1",
+      fullName: "Eduardo Silva",
+      email: "eduardo.master@exemplo.com",
+      role: "master",
+    },
+  ];
+
+  it("mostra Site quando veio da landing page", () => {
+    assert.deepEqual(resolveSubscriberOrigin({ email: "a@x.com" }, users), {
+      kind: "site",
+      label: "Site",
+      userEmail: "",
     });
   });
 
-  it("não mostra origem quando o assinante não tem indicador", () => {
-    assert.equal(resolveSubscriberOriginIndicator("", { fullName: "X", email: "x@test.com" }), null);
-    assert.equal(resolveSubscriberOriginIndicator(null), null);
+  it("mostra o nome do usuário quando o master cadastrou", () => {
+    assert.deepEqual(
+      resolveSubscriberOrigin(
+        { email: "a@x.com", createdByEmail: "eduardo.master@exemplo.com" },
+        users,
+      ),
+      {
+        kind: "user",
+        label: "Eduardo Silva",
+        userEmail: "eduardo.master@exemplo.com",
+      },
+    );
   });
 
-  it("mantém o ícone mesmo se o cadastro do indicador estiver incompleto", () => {
-    const origin = resolveSubscriberOriginIndicator("ind-2", null);
-    assert.equal(origin?.kind, "indicator");
-    assert.equal(origin?.indicatorName, "Indicador");
-    assert.equal(origin?.indicatorEmail, "");
+  it("mostra o nome do indicador quando o assinante veio de um indicador", () => {
+    assert.deepEqual(
+      resolveSubscriberOrigin({ email: "a@x.com", indicatorUserId: "ind-1" }, users),
+      {
+        kind: "user",
+        label: "João Indicador",
+        userEmail: "joao.indicador@test.com",
+      },
+    );
   });
 });

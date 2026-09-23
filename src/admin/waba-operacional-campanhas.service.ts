@@ -14,7 +14,7 @@ import {
 } from "../disparos/waba-campaign-spreadsheet.util";
 import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
-import { canViewerSeeCampaign } from "../users/waba-eduardo-master-scope";
+import { canViewerSeeSubscriber } from "../users/waba-subscriber-master-visibility";
 import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
 import {
   formatOperacionalSegmentsLabel,
@@ -364,14 +364,7 @@ export class WabaOperacionalCampanhasService {
     if (staff.role === "master" || isWabaMasterEmail(staff.email) || staff.role === "suporte") {
       if (staff.role === "master" || isWabaMasterEmail(staff.email)) {
         const subscriber = this.subscriberRepository.getByEmail(normalizeEmail(intake.ownerEmail));
-        if (
-          !canViewerSeeCampaign(
-            staff.email,
-            intake.createdAt,
-            subscriber,
-            this.systemUserService.listPublicUsers(),
-          )
-        ) {
+        if (!canViewerSeeSubscriber(staff.email, subscriber)) {
           return false;
         }
       }

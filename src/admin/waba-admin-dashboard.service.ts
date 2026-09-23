@@ -9,10 +9,7 @@ import { WabaAdminSubscribersService } from "./waba-admin-subscribers.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaOperacionalCampanhasService } from "./waba-operacional-campanhas.service";
 import { isWabaMetricsExcludedOwnerEmail } from "../billing/waba-metrics-excluded-owners";
-import {
-  canViewerSeeFinanceiroOrder,
-  isEduardoScopedMaster,
-} from "../users/waba-eduardo-master-scope";
+import { canViewerSeeSubscriber } from "../users/waba-subscriber-master-visibility";
 
 export type AdminDashboardAuth = {
   role: string;
@@ -295,22 +292,17 @@ export class WabaAdminDashboardService {
           .filter((campaign) => !isWabaMetricsExcludedOwnerEmail(campaign.subscriberEmail))
       : [];
     const users = capabilities.users ? this.usersService.listUsers() : [];
-    const staffUsers = this.systemUserService.listPublicUsers();
-    const subscribersByEmail = new Map(subscribers.map((item) => [String(item.email || "").toLowerCase(), item]));
+    const subscribersByEmail = new Map(
+      subscribers.map((item) => [String(item.email || "").toLowerCase(), item]),
+    );
 
     const disparosOrders = this.orderRepository
       .list()
       .filter((order) => {
         if (order.product !== "waba-disparos") return false;
         if (isWabaMetricsExcludedOwnerEmail(order.ownerEmail)) return false;
-        if (!isEduardoScopedMaster(auth.email, staffUsers)) return true;
         const owner = String(order.ownerEmail || "").trim().toLowerCase();
-        return canViewerSeeFinanceiroOrder(
-          auth.email,
-          order.paidAt || order.createdAt,
-          subscribersByEmail.get(owner) ?? { email: owner, createdAt: order.createdAt },
-          staffUsers,
-        );
+        return canViewerSeeSubscriber(auth.email, subscribersByEmail.get(owner) ?? null);
       })
       .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
 

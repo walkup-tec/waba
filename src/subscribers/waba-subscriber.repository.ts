@@ -19,6 +19,12 @@ export type WabaSubscriber = {
   indicatorUserId?: string | null;
   /** Master (ou staff) que cadastrou o assinante no Admin. Autocadastro / outros canais = vazio. */
   createdByEmail?: string | null;
+  /**
+   * Liga/desliga da coluna Visível (somente Walkup edita).
+   * true = todos os masters veem; false = só walkup@walkuptec.com.br.
+   * Ausente no legado = visível.
+   */
+  visibleToMasters?: boolean;
   createdAt: string;
   updatedAt: string;
 };

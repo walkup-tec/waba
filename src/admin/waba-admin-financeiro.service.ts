@@ -8,7 +8,7 @@ import { WabaBillingService } from "../billing/waba-billing.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { isWabaMetricsExcludedOwnerEmail } from "../billing/waba-metrics-excluded-owners";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
-import { canViewerSeeFinanceiroOrder } from "../users/waba-eduardo-master-scope";
+import { canViewerSeeSubscriber } from "../users/waba-subscriber-master-visibility";
 
 const maskApiBaseUrl = (raw: string): string => {
   const value = String(raw || "").trim().replace(/\/$/, "");
@@ -213,15 +213,9 @@ export class WabaAdminFinanceiroService {
   }
 
   private listDisparosOrdersForViewer(viewerEmail = "") {
-    const staff = this.systemUserService.listPublicUsers();
     return this.listDisparosOrdersSorted().filter((order) => {
       const subscriber = this.subscriberRepository.getByEmail(String(order.ownerEmail || "").trim());
-      return canViewerSeeFinanceiroOrder(
-        viewerEmail,
-        order.paidAt || order.createdAt,
-        subscriber,
-        staff,
-      );
+      return canViewerSeeSubscriber(viewerEmail, subscriber);
     });
   }
 
