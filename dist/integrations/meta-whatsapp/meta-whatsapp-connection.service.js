@@ -1023,7 +1023,6 @@ async function listWabaPhoneNumbersForPortfolio(graph, wabaId, preferredToken, p
     }
     return emptyOk || lastFail;
 }
-const ADMIN_CARD_FANOUT_BUDGET_MS = 12000;
 function emptyPartnerBucket() {
     return { wabaIds: [], phones: [] };
 }
@@ -1037,6 +1036,36 @@ function partnerBucketForBusiness(byOwner, businessId) {
     }
     return emptyPartnerBucket();
 }
+function addToPartnerBucket(byOwner, ownerId, wabaId, phones = []) {
+    const key = (0, meta_whatsapp_known_owned_wabas_1.normalizeMetaBusinessKey)(ownerId);
+    const wid = String(wabaId || "").trim();
+    if (!key || !wid)
+        return;
+    let bucket = byOwner.get(key);
+    if (!bucket) {
+        bucket = emptyPartnerBucket();
+        byOwner.set(key, bucket);
+    }
+    if (!bucket.wabaIds.includes(wid))
+        bucket.wabaIds.push(wid);
+    for (const phone of phones)
+        bucket.phones.push(phone);
+}
+function mergePartnerBuckets(businessId, maps) {
+    const merged = emptyPartnerBucket();
+    for (const map of maps) {
+        const bucket = partnerBucketForBusiness(map, businessId);
+        for (const id of bucket.wabaIds) {
+            if ((0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaForBusiness)(businessId, id))
+                continue;
+            if (!merged.wabaIds.includes(id))
+                merged.wabaIds.push(id);
+        }
+        for (const phone of bucket.phones)
+            merged.phones.push(phone);
+    }
+    return merged;
+}
 function takeWabaPhonesFromNode(row, wabaId) {
     const rec = row && typeof row === "object" ? row : {};
     const phoneBucket = rec.phone_numbers;
@@ -1045,26 +1074,51 @@ function takeWabaPhonesFromNode(row, wabaId) {
         : null;
     return Array.isArray(phoneData) ? stampPhoneRowsWithWabaId(phoneData, wabaId) : [];
 }
+async function collectOwnedWabasByBusinessFromMe(graph, token) {
+    const byOwner = new Map();
+    const fields = [
+        "id",
+        "name",
+        `owned_whatsapp_business_accounts{id,name,phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}}`,
+        "client_whatsapp_business_accounts{id,name}",
+    ].join(",");
+    const res = await graph({
+        token,
+        method: "GET",
+        path: "me/businesses",
+        query: { fields, limit: "50" },
+    });
+    if (!res.ok)
+        return byOwner;
+    const data = Array.isArray(res.json?.data) ? res.json.data : [];
+    for (const node of data) {
+        const rec = node && typeof node === "object" ? node : {};
+        const bm = String(rec.id || "").trim();
+        if (!bm)
+            continue;
+        const extracted = extractWabasAndPhonesFromBusinessNode(node);
+        for (const id of extracted.wabaIds)
+            addToPartnerBucket(byOwner, bm, id);
+        for (const phone of extracted.phones) {
+            const rec = phone && typeof phone === "object" ? phone : {};
+            const wid = String(rec._portfolio_waba_id || "").trim();
+            if (wid)
+                addToPartnerBucket(byOwner, bm, wid, [phone]);
+        }
+        for (const id of extracted.clientWabaIds) {
+            if ((0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaForBusiness)(bm, id))
+                continue;
+            addToPartnerBucket(byOwner, bm, id);
+        }
+    }
+    return byOwner;
+}
 /**
  * WABAs client da agência (Tech Provider) cujo owner_business_info é o BM do card.
  * Não usa o edge client do próprio BM — isso misturaria Rio de Janeiro 01 no André.
  */
 async function collectAgencyClientWabasByOwner(graph, token) {
     const byOwner = new Map();
-    const take = (ownerId, wabaId, phones) => {
-        const key = (0, meta_whatsapp_known_owned_wabas_1.normalizeMetaBusinessKey)(ownerId);
-        if (!key || !wabaId)
-            return;
-        let bucket = byOwner.get(key);
-        if (!bucket) {
-            bucket = emptyPartnerBucket();
-            byOwner.set(key, bucket);
-        }
-        if (!bucket.wabaIds.includes(wabaId))
-            bucket.wabaIds.push(wabaId);
-        for (const phone of phones)
-            bucket.phones.push(phone);
-    };
     const fields = [
         "id",
         "name",
@@ -1096,7 +1150,7 @@ async function collectAgencyClientWabasByOwner(graph, token) {
                     : "";
                 if (!wabaId || !ownerId)
                     continue;
-                take(ownerId, wabaId, takeWabaPhonesFromNode(row, wabaId));
+                addToPartnerBucket(byOwner, ownerId, wabaId, takeWabaPhonesFromNode(row, wabaId));
             }
             const nextAfter = String(res.json?.paging?.cursors?.after || "").trim();
             if (!nextAfter || nextAfter === after || seen.has(nextAfter) || !batch.length)
@@ -1107,88 +1161,151 @@ async function collectAgencyClientWabasByOwner(graph, token) {
     }
     return byOwner;
 }
+async function collectDebugWabasByOwner(graph, token) {
+    const byOwner = new Map();
+    const debug = await listDebugTokenWhatsappTargets(graph, token);
+    const pending = new Set(debug.wabaIds);
+    const phoneNodes = debug.phoneIds.length ? await fetchPhoneNodes(graph, token, debug.phoneIds) : [];
+    for (const row of phoneNodes) {
+        const rec = row && typeof row === "object" ? row : {};
+        const account = rec.whatsapp_business_account;
+        const accountId = account && typeof account === "object"
+            ? String(account.id || "").trim()
+            : String(rec._portfolio_waba_id || "").trim();
+        if (accountId)
+            pending.add(accountId);
+    }
+    for (const wabaId of pending) {
+        const res = await graph({
+            token,
+            method: "GET",
+            path: wabaId,
+            query: {
+                fields: `id,name,owner_business_info{id},phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}`,
+            },
+        });
+        if (!res.ok)
+            continue;
+        const rec = res.json && typeof res.json === "object" ? res.json : {};
+        const owner = rec.owner_business_info;
+        const ownerId = owner && typeof owner === "object" ? String(owner.id || "").trim() : "";
+        if (!ownerId)
+            continue;
+        addToPartnerBucket(byOwner, ownerId, wabaId, takeWabaPhonesFromNode(rec, wabaId));
+    }
+    for (const row of phoneNodes) {
+        const rec = row && typeof row === "object" ? row : {};
+        const account = rec.whatsapp_business_account;
+        const accountId = account && typeof account === "object"
+            ? String(account.id || "").trim()
+            : String(rec._portfolio_waba_id || "").trim();
+        if (!accountId)
+            continue;
+        for (const [ownerId, bucket] of byOwner) {
+            if (bucket.wabaIds.includes(accountId))
+                addToPartnerBucket(byOwner, ownerId, accountId, [row]);
+        }
+    }
+    return byOwner;
+}
 async function fanOutAdminBusinessNumbers(input) {
     const bm = String(input.businessId || "").trim();
     if (!bm)
         return { wabaIds: [], phones: [] };
-    const nested = await collectNestedPhonesFromBusiness(input.graph, input.token, bm);
-    const wabaIds = new Set(nested.wabaIds);
-    for (const id of await listBusinessWabaIds(input.graph, input.token, bm, "owned"))
-        wabaIds.add(id);
-    const phones = [...nested.phones];
-    for (const id of input.partner.wabaIds) {
+    const wabaIds = new Set();
+    const phones = [...input.seed.phones];
+    for (const id of input.seed.wabaIds) {
         if ((0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaForBusiness)(bm, id))
             continue;
         wabaIds.add(id);
     }
-    for (const phone of input.partner.phones)
-        phones.push(phone);
+    if (!wabaIds.size) {
+        for (const id of await listBusinessWabaIds(input.graph, input.token, bm, "owned"))
+            wabaIds.add(id);
+    }
+    if (!wabaIds.size) {
+        for (const id of await listBusinessWabaIds(input.graph, input.token, bm, "client")) {
+            if ((0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaForBusiness)(bm, id))
+                continue;
+            wabaIds.add(id);
+        }
+    }
     if (!wabaIds.size && !phones.length)
         return { wabaIds: [], phones: [] };
-    let anyPhonesOk = phones.length > 0;
+    const alreadyMapped = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: phones });
+    if (alreadyMapped.length)
+        return { wabaIds: [...wabaIds], phones };
     for (const wid of wabaIds) {
         const listed = await listWabaPhoneNumbersForPortfolio(input.graph, wid, input.token, input.writeTokens, bm);
         if (!listed.ok)
             continue;
-        anyPhonesOk = true;
         for (const row of stampPhoneRowsWithWabaId(listed.json.data, wid))
             phones.push(row);
     }
-    if (!anyPhonesOk)
-        return { wabaIds: [...wabaIds], phones: [] };
     return { wabaIds: [...wabaIds], phones };
 }
 /**
  * Cards da select (BM administrado / backfill / + ID) não passam por hydrateOpenConnection.
- * Sem isso a BM aparece e WABA/chip ficam vazios — o caso AdsPower / Sander.
+ * Uma leitura compartilhada (me/businesses + debug_token + client da agência) alimenta
+ * todas as Ativas; BM oculto não consome Graph. Sem teto que abandone o Sander.
  */
 async function fillEmptyAdminPortfolioCards(graph, tenantId, cards, writeTokens) {
     if (!cards.length || !writeTokens.length)
         return cards;
     const out = cards.map((card) => ({ ...card, numbers: (card.numbers || []).slice() }));
-    const startedAt = Date.now();
-    const partnerByToken = new Map();
-    for (const card of out) {
-        if ((card.numbers || []).some((row) => String(row.displayPhoneNumber || row.phoneNumberId || "").trim())) {
-            continue;
-        }
+    const empty = out.filter((card) => {
         const bm = String(card.id || "").trim();
-        if (!bm)
+        if (!bm || (0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, bm))
+            return false;
+        return !(card.numbers || []).some((row) => String(row.displayPhoneNumber || row.phoneNumberId || "").trim());
+    });
+    if (!empty.length)
+        return out;
+    const seedByToken = new Map();
+    for (const row of writeTokens) {
+        const token = String(row.token || "").trim();
+        if (!token || seedByToken.has(token))
             continue;
-        if (Date.now() - startedAt >= ADMIN_CARD_FANOUT_BUDGET_MS)
-            break;
-        for (const row of writeTokens) {
-            const token = String(row.token || "").trim();
-            if (!token)
-                continue;
-            if (!partnerByToken.has(token)) {
-                partnerByToken.set(token, await collectAgencyClientWabasByOwner(graph, token));
-            }
-            const partner = partnerBucketForBusiness(partnerByToken.get(token), bm);
-            const fanout = await fanOutAdminBusinessNumbers({
-                graph,
-                token,
-                writeTokens,
-                businessId: bm,
-                partner,
-            });
-            const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: fanout.phones });
-            if (!mapped.length && !fanout.wabaIds.length)
-                continue;
-            card.wabaId = String(card.wabaId || "").trim() || fanout.wabaIds[0] || card.wabaId;
-            if (mapped.length)
-                card.numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(card.numbers || [], mapped);
-            if (!card.connectionId)
-                card.connectionId = row.id;
-            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-admin-fanout", {
-                tenantId,
-                businessId: bm,
-                wabaCount: fanout.wabaIds.length,
-                phoneRowCount: (card.numbers || []).length,
-            });
-            break;
-        }
+        const maps = await Promise.all([
+            collectOwnedWabasByBusinessFromMe(graph, token),
+            collectAgencyClientWabasByOwner(graph, token),
+            collectDebugWabasByOwner(graph, token),
+        ]);
+        seedByToken.set(token, { row, maps });
     }
+    await Promise.all(empty.map(async (card) => {
+        const bm = String(card.id || "").trim();
+        try {
+            for (const { row, maps } of seedByToken.values()) {
+                const seed = mergePartnerBuckets(bm, maps);
+                const fanout = await fanOutAdminBusinessNumbers({
+                    graph,
+                    token: row.token,
+                    writeTokens,
+                    businessId: bm,
+                    seed,
+                });
+                const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: fanout.phones });
+                if (!mapped.length && !fanout.wabaIds.length)
+                    continue;
+                card.wabaId = String(card.wabaId || "").trim() || fanout.wabaIds[0] || card.wabaId;
+                if (mapped.length)
+                    card.numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(card.numbers || [], mapped);
+                if (!card.connectionId)
+                    card.connectionId = row.id;
+                (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-admin-fanout", {
+                    tenantId,
+                    businessId: bm,
+                    wabaCount: fanout.wabaIds.length,
+                    phoneRowCount: (card.numbers || []).length,
+                });
+                break;
+            }
+        }
+        catch {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-admin-fanout-failed", { tenantId, businessId: bm });
+        }
+    }));
     return out;
 }
 async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {
