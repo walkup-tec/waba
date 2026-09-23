@@ -3241,14 +3241,53 @@
           align-items: center;
           margin: 0 0 12px;
         }
-        .waba-adspower-toolbar input[type="search"] {
-          min-width: min(100%, 240px);
-          flex: 1;
+        #tab-whatsapp-adspower #waba-adspower-search.waba-adspower-search-input,
+        #tab-whatsapp-adspower .waba-adspower-table select {
+          width: 100%;
+          box-sizing: border-box;
+          min-width: 0;
+          height: 38px;
+          border-radius: 10px;
+          border: 1px solid rgba(148, 163, 184, 0.35);
+          background: rgba(2, 6, 23, 0.8) !important;
+          background-color: rgba(2, 6, 23, 0.8) !important;
+          color: #f8fafc !important;
+          padding: 8px 10px;
+          outline: none;
+          appearance: none;
+          -webkit-appearance: none;
+          color-scheme: dark;
+          font-size: 0.86rem;
+          font-weight: 500;
+          box-shadow: none;
         }
-        .waba-adspower-table-wrap {
-          overflow: auto;
-          border: 1px solid rgba(148, 163, 184, 0.22);
-          border-radius: 12px;
+        #tab-whatsapp-adspower #waba-adspower-search.waba-adspower-search-input {
+          flex: 1;
+          min-width: min(100%, 240px);
+        }
+        #tab-whatsapp-adspower #waba-adspower-search.waba-adspower-search-input::placeholder {
+          color: #94a3b8;
+          opacity: 1;
+        }
+        #tab-whatsapp-adspower #waba-adspower-search.waba-adspower-search-input:hover,
+        #tab-whatsapp-adspower .waba-adspower-table select:hover {
+          border-color: rgba(148, 163, 184, 0.55);
+        }
+        #tab-whatsapp-adspower #waba-adspower-search.waba-adspower-search-input:focus,
+        #tab-whatsapp-adspower .waba-adspower-table select:focus {
+          border-color: var(--accent);
+          box-shadow: 0 0 0 1px var(--accent);
+          background: rgba(2, 6, 23, 0.92) !important;
+          background-color: rgba(2, 6, 23, 0.92) !important;
+          color: #f8fafc !important;
+        }
+        #tab-whatsapp-adspower #waba-adspower-search.waba-adspower-search-input::-webkit-search-decoration,
+        #tab-whatsapp-adspower #waba-adspower-search.waba-adspower-search-input::-webkit-search-cancel-button {
+          -webkit-appearance: none;
+        }
+        .waba-adspower-table-wrap:has(> p) {
+          border-color: transparent;
+          background: transparent;
         }
         .waba-adspower-table {
           width: 100%;
@@ -23632,7 +23671,7 @@
               <p id="waba-adspower-banner" class="waba-adspower-status" role="status">Carregando perfis AdsPower…</p>
               <div class="waba-adspower-toolbar">
                 <label class="visually-hidden" for="waba-adspower-search">Pesquisar perfil</label>
-                <input id="waba-adspower-search" type="search" class="form-control" placeholder="Pesquisar nome, grupo ou WABA…" autocomplete="off" />
+                <input id="waba-adspower-search" type="search" class="waba-adspower-search-input" placeholder="Pesquisar nome, grupo ou WABA…" autocomplete="off" />
               </div>
               <div id="waba-adspower-list" class="waba-adspower-table-wrap"></div>
             </section>
@@ -47236,7 +47275,7 @@
             }),
           );
         return (
-          '<select class="form-control" data-adspower-chip="' +
+          '<select class="waba-adspower-chip-select" data-adspower-chip="' +
           wabaAdsPowerEsc(profile.userId) +
           '"' +
           (wabaAdsPowerUi.chips.length ? "" : " disabled") +
@@ -47334,7 +47373,6 @@
         wabaAdsPowerUi.loading = true;
         wabaAdsPowerBanner("Carregando perfis AdsPower…");
         try {
-          await wabaAdsPowerEnsurePortfolios();
           const payload = await wabaAdsPowerJson("/integrations/adspower/profiles");
           wabaAdsPowerUi.profiles = Array.isArray(payload.profiles) ? payload.profiles : [];
           wabaAdsPowerUi.bridge = payload.bridge || null;
@@ -47342,47 +47380,37 @@
           const boundCount = wabaAdsPowerUi.profiles.filter(function (row) {
             return Boolean(row.wabaId);
           }).length;
-          const mode =
-            bridge.mode === "local-api"
-              ? "Local API neste servidor."
-              : bridge.mode === "ingest"
-                ? "Perfis chegam do PC (ingest). Sincronizar na nuvem só atualiza se o AdsPower estiver neste mesmo host."
-                : "Configure ADSPOWER_INGEST_TOKEN no EasyPanel.";
-          wabaAdsPowerBanner(
-            (bridge.detail || mode) +
-              " " +
-              wabaAdsPowerUi.profiles.length +
+          const hint = wabaAdsPowerUi.profiles.length
+            ? String(wabaAdsPowerUi.profiles.length) +
               " perfil(is), " +
               boundCount +
-              " vinculado(s). Um perfil = uma WABA. Templates e disparos seguem na Cloud API — a Meta registra esses envios oficiais.",
-          );
+              " vinculado(s). Um perfil = uma WABA."
+            : "Nenhum perfil na DRAX. Rode o script no PC com AdsPower e clique em Atualizar.";
+          wabaAdsPowerBanner((bridge.detail ? bridge.detail + " " : "") + hint);
           wabaAdsPowerRender();
         } catch (error) {
           wabaAdsPowerBanner(error && error.message ? error.message : "Não foi possível carregar os perfis.", true);
         } finally {
           wabaAdsPowerUi.loading = false;
         }
+        void wabaAdsPowerEnsurePortfolios().then(function () {
+          wabaAdsPowerRender();
+        });
       }
 
       async function wabaAdsPowerSync() {
-        wabaAdsPowerBanner("Sincronizando com o AdsPower…");
-        try {
-          const payload = await wabaAdsPowerJson("/integrations/adspower/sync", { method: "POST", body: "{}" });
-          wabaAdsPowerUi.profiles = Array.isArray(payload.profiles) ? payload.profiles : wabaAdsPowerUi.profiles;
-          wabaAdsPowerUi.bridge = payload.bridge || wabaAdsPowerUi.bridge;
-          wabaAdsPowerBanner(
-            "Sincronizados " +
-              String(payload.upserted || wabaAdsPowerUi.profiles.length) +
-              " perfil(is) da Local API.",
-          );
-          wabaAdsPowerRender();
-        } catch (error) {
-          wabaAdsPowerBanner(
-            (error && error.message ? error.message : "Local API indisponível.") +
-              " Na nuvem, rode o script no PC com AdsPower.",
-            true,
-          );
+        if (wabaAdsPowerUi.bridge && wabaAdsPowerUi.bridge.mode === "local-api") {
+          wabaAdsPowerBanner("Sincronizando com a Local API do AdsPower…");
+          try {
+            const payload = await wabaAdsPowerJson("/integrations/adspower/sync", { method: "POST", body: "{}" });
+            wabaAdsPowerUi.profiles = Array.isArray(payload.profiles) ? payload.profiles : wabaAdsPowerUi.profiles;
+            wabaAdsPowerUi.bridge = payload.bridge || wabaAdsPowerUi.bridge;
+            wabaAdsPowerRender();
+          } catch (error) {
+            wabaAdsPowerBanner(error && error.message ? error.message : "Local API indisponível.", true);
+          }
         }
+        await wabaAdsPowerLoad();
       }
 
       async function wabaAdsPowerBind(userId) {

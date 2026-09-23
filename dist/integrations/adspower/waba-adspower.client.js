@@ -57,8 +57,19 @@ async function adsPowerGet(pathname, search, timeoutMs = 8000) {
 }
 async function probeAdsPowerBridge() {
     const ingestToken = resolveAdsPowerIngestToken();
+    const apiToken = resolveAdsPowerApiToken();
     const baseUrl = resolveAdsPowerApiBase();
-    const ping = await adsPowerGet("/api/v1/user/list", { page: "1", page_size: "1" }, 2500);
+    /** EasyPanel só tem ingest: não pingar local.adspower.net (fetch failed na nuvem). */
+    if (ingestToken && !apiToken) {
+        return {
+            configured: true,
+            reachable: false,
+            mode: "ingest",
+            baseUrl,
+            detail: "Perfis chegam do PC com AdsPower. Atualize a lista depois de rodar o script no computador.",
+        };
+    }
+    const ping = await adsPowerGet("/api/v1/user/list", { page: "1", page_size: "1" }, 800);
     if (ping.ok) {
         return {
             configured: true,
@@ -74,7 +85,7 @@ async function probeAdsPowerBridge() {
             reachable: false,
             mode: "ingest",
             baseUrl,
-            detail: "AdsPower roda no PC do operador. Use o ingest (POST /integrations/adspower/ingest) para enviar a lista de perfis.",
+            detail: "AdsPower roda no PC do operador. Atualize a lista depois de rodar o script no computador.",
         };
     }
     return {

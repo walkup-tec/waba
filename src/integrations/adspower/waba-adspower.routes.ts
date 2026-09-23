@@ -44,8 +44,8 @@ export function registerAdsPowerLabRoutes(app: Express): void {
   app.get("/integrations/adspower/profiles", async (req, res) => {
     try {
       const auth = resolveWabaRequestAuth(req);
-      const bridge = await wabaAdsPowerService.status();
       const profiles = wabaAdsPowerService.list(auth);
+      const bridge = await wabaAdsPowerService.status();
       return res.status(200).json({ ok: true, bridge, profiles });
     } catch (error) {
       return sendError(res, error);

@@ -107,8 +107,18 @@ class WabaAdsPowerService {
     }
     async pullFromLocalApi(auth) {
         requireOperator(auth);
-        const remote = await (0, waba_adspower_client_1.listAdsPowerRemoteProfiles)();
-        return this.ingest(remote);
+        try {
+            const remote = await (0, waba_adspower_client_1.listAdsPowerRemoteProfiles)();
+            return { source: "local-api", ...this.ingest(remote) };
+        }
+        catch {
+            return {
+                source: "ingest",
+                upserted: 0,
+                profiles: this.list(auth),
+                detail: "A Local API não responde neste servidor. Rode o script no PC com AdsPower e clique em Atualizar.",
+            };
+        }
     }
     bind(auth, userId, input) {
         requireOperator(auth);

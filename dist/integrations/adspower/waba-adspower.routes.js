@@ -41,8 +41,8 @@ function registerAdsPowerLabRoutes(app) {
     app.get("/integrations/adspower/profiles", async (req, res) => {
         try {
             const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
-            const bridge = await waba_adspower_service_1.wabaAdsPowerService.status();
             const profiles = waba_adspower_service_1.wabaAdsPowerService.list(auth);
+            const bridge = await waba_adspower_service_1.wabaAdsPowerService.status();
             return res.status(200).json({ ok: true, bridge, profiles });
         }
         catch (error) {

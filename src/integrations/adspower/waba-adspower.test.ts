@@ -7,6 +7,7 @@ import {
   normalizeAdsPowerIngestItem,
   timingSafeEqualText,
 } from "./waba-adspower.service";
+import { probeAdsPowerBridge } from "./waba-adspower.client";
 
 describe("AdsPower ingest", () => {
   it("normaliza user_id da Local API", () => {
@@ -81,5 +82,26 @@ describe("AdsPower menu FARM BM", () => {
     assert.match(html, /Perfis AdsPower/);
     assert.match(html, /wabaStartAdsPower/);
     assert.match(html, /id="waba-adspower-sync"/);
+    assert.match(html, /waba-adspower-search-input/);
+  });
+});
+
+describe("AdsPower bridge", () => {
+  it("na nuvem com só ingest não pinga a Local API", async () => {
+    const prevIngest = process.env.ADSPOWER_INGEST_TOKEN;
+    const prevApi = process.env.ADSPOWER_API_TOKEN;
+    process.env.ADSPOWER_INGEST_TOKEN = "drax-adspower-test";
+    delete process.env.ADSPOWER_API_TOKEN;
+    try {
+      const bridge = await probeAdsPowerBridge();
+      assert.equal(bridge.mode, "ingest");
+      assert.equal(bridge.configured, true);
+      assert.equal(bridge.reachable, false);
+    } finally {
+      if (prevIngest == null) delete process.env.ADSPOWER_INGEST_TOKEN;
+      else process.env.ADSPOWER_INGEST_TOKEN = prevIngest;
+      if (prevApi == null) delete process.env.ADSPOWER_API_TOKEN;
+      else process.env.ADSPOWER_API_TOKEN = prevApi;
+    }
   });
 });
