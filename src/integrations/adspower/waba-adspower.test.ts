@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
+  applyAdsPowerSnapshot,
   findWabaProfileClash,
   normalizeAdsPowerIngestItem,
   timingSafeEqualText,
@@ -70,6 +71,60 @@ describe("AdsPower ingest", () => {
       "waba-a",
     );
     assert.equal(clash?.userId, "p1");
+  });
+
+  it("remove da DRAX o perfil que saiu do AdsPower e mantém o vínculo dos que restaram", () => {
+    const current = [
+      {
+        userId: "gone",
+        serialNumber: "1",
+        name: "Saiu",
+        groupId: "",
+        groupName: "",
+        remark: "",
+        ipCountry: "",
+        lastOpenTime: null,
+        ingestedAt: "",
+        connectionId: null,
+        wabaId: null,
+        phoneNumberId: null,
+        displayPhoneNumber: null,
+        verifiedName: null,
+      },
+      {
+        userId: "keep",
+        serialNumber: "2",
+        name: "Fica",
+        groupId: "",
+        groupName: "",
+        remark: "",
+        ipCountry: "",
+        lastOpenTime: null,
+        ingestedAt: "",
+        connectionId: "conn-1",
+        wabaId: "waba-keep",
+        phoneNumberId: "phone-1",
+        displayPhoneNumber: "+55 11 99999-0000",
+        verifiedName: "Chip",
+      },
+    ];
+    const incoming = [
+      {
+        ...current[1],
+        name: "Fica atualizado",
+        connectionId: null,
+        wabaId: null,
+        phoneNumberId: null,
+        displayPhoneNumber: null,
+        verifiedName: null,
+      },
+    ];
+    const snapshot = applyAdsPowerSnapshot(current, incoming, true);
+    assert.equal(snapshot.pruned, 1);
+    assert.equal(snapshot.profiles.length, 1);
+    assert.equal(snapshot.profiles[0]?.userId, "keep");
+    assert.equal(snapshot.profiles[0]?.wabaId, "waba-keep");
+    assert.equal(snapshot.profiles[0]?.name, "Fica atualizado");
   });
 });
 

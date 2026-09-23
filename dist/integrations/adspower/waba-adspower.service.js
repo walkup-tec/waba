@@ -4,6 +4,7 @@ exports.wabaAdsPowerService = exports.WabaAdsPowerService = void 0;
 exports.normalizeAdsPowerIngestItem = normalizeAdsPowerIngestItem;
 exports.timingSafeEqualText = timingSafeEqualText;
 exports.readBearerToken = readBearerToken;
+exports.applyAdsPowerSnapshot = applyAdsPowerSnapshot;
 exports.findWabaProfileClash = findWabaProfileClash;
 exports.assertAdsPowerIngestAuthorized = assertAdsPowerIngestAuthorized;
 const node_crypto_1 = require("node:crypto");
@@ -57,6 +58,31 @@ function readBearerToken(header) {
     const match = /^Bearer\s+(.+)$/i.exec(raw);
     return match ? String(match[1] || "").trim() : raw;
 }
+function applyAdsPowerSnapshot(current, incoming, prune) {
+    const byId = new Map(current.map((row) => [row.userId, row]));
+    const merged = incoming.map((row) => {
+        const prev = byId.get(row.userId);
+        if (!prev)
+            return row;
+        return {
+            ...row,
+            connectionId: prev.connectionId,
+            wabaId: prev.wabaId,
+            phoneNumberId: prev.phoneNumberId,
+            displayPhoneNumber: prev.displayPhoneNumber,
+            verifiedName: prev.verifiedName,
+        };
+    });
+    if (!prune) {
+        const kept = new Map(current.map((row) => [row.userId, row]));
+        for (const row of merged)
+            kept.set(row.userId, row);
+        return { profiles: [...kept.values()], upserted: merged.length, pruned: 0 };
+    }
+    const keptIds = new Set(merged.map((row) => row.userId));
+    const pruned = current.filter((row) => !keptIds.has(row.userId)).length;
+    return { profiles: merged, upserted: merged.length, pruned };
+}
 function findWabaProfileClash(profiles, userId, wabaId) {
     const id = asText(userId);
     const waba = asText(wabaId);
@@ -84,26 +110,22 @@ class WabaAdsPowerService {
         requireOperator(auth);
         return repository.list();
     }
-    ingest(items) {
+    ingest(items, opts) {
         const incoming = items.map(normalizeAdsPowerIngestItem).filter((row) => Boolean(row));
+        const current = repository.list();
         if (!incoming.length)
-            return { upserted: 0, profiles: repository.list() };
-        const current = new Map(repository.list().map((row) => [row.userId, row]));
-        const merged = incoming.map((row) => {
-            const prev = current.get(row.userId);
-            if (!prev)
-                return row;
-            return {
-                ...row,
-                connectionId: prev.connectionId,
-                wabaId: prev.wabaId,
-                phoneNumberId: prev.phoneNumberId,
-                displayPhoneNumber: prev.displayPhoneNumber,
-                verifiedName: prev.verifiedName,
-            };
-        });
-        repository.upsertMany(merged);
-        return { upserted: merged.length, profiles: repository.list() };
+            return { upserted: 0, pruned: 0, profiles: current };
+        const prune = opts?.prune !== false;
+        const snapshot = applyAdsPowerSnapshot(current, incoming, prune);
+        if (prune)
+            repository.replaceAll(snapshot.profiles);
+        else
+            repository.upsertMany(snapshot.profiles);
+        return {
+            upserted: snapshot.upserted,
+            pruned: snapshot.pruned,
+            profiles: repository.list(),
+        };
     }
     async pullFromLocalApi(auth) {
         requireOperator(auth);

@@ -20,7 +20,8 @@ function registerAdsPowerIngestRoute(app) {
                 : Array.isArray(body.list)
                     ? body.list
                     : [];
-            const result = waba_adspower_service_1.wabaAdsPowerService.ingest(items);
+            const prune = body.prune !== false && body.replace !== false;
+            const result = waba_adspower_service_1.wabaAdsPowerService.ingest(items, { prune });
             return res.status(200).json({ ok: true, ...result });
         }
         catch (error) {

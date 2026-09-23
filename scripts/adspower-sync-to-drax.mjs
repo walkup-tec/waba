@@ -44,11 +44,15 @@ const ingestRes = await fetch(`${draxBase}/integrations/adspower/ingest`, {
     Authorization: `Bearer ${ingestToken}`,
     "Content-Type": "application/json",
   },
-  body: JSON.stringify({ profiles }),
+  body: JSON.stringify({ profiles, prune: true }),
 });
 const ingestJson = await ingestRes.json().catch(() => ({}));
 if (!ingestRes.ok || ingestJson.ok === false) {
   console.error("DRAX ingest:", ingestJson.error || ingestRes.status);
   process.exit(1);
 }
-console.log(`Sincronizados ${ingestJson.upserted || profiles.length} perfil(is) AdsPower → DRAX.`);
+const pruned = Number(ingestJson.pruned || 0);
+console.log(
+  `Sincronizados ${ingestJson.upserted || profiles.length} perfil(is) AdsPower → DRAX.` +
+    (pruned ? ` Removidos ${pruned} que não estão mais no AdsPower.` : ""),
+);

@@ -64,6 +64,34 @@ export function readBearerToken(header: string | undefined): string {
   return match ? String(match[1] || "").trim() : raw;
 }
 
+export function applyAdsPowerSnapshot(
+  current: AdsPowerProfileRecord[],
+  incoming: AdsPowerProfileRecord[],
+  prune: boolean,
+): { profiles: AdsPowerProfileRecord[]; upserted: number; pruned: number } {
+  const byId = new Map(current.map((row) => [row.userId, row]));
+  const merged = incoming.map((row) => {
+    const prev = byId.get(row.userId);
+    if (!prev) return row;
+    return {
+      ...row,
+      connectionId: prev.connectionId,
+      wabaId: prev.wabaId,
+      phoneNumberId: prev.phoneNumberId,
+      displayPhoneNumber: prev.displayPhoneNumber,
+      verifiedName: prev.verifiedName,
+    };
+  });
+  if (!prune) {
+    const kept = new Map(current.map((row) => [row.userId, row]));
+    for (const row of merged) kept.set(row.userId, row);
+    return { profiles: [...kept.values()], upserted: merged.length, pruned: 0 };
+  }
+  const keptIds = new Set(merged.map((row) => row.userId));
+  const pruned = current.filter((row) => !keptIds.has(row.userId)).length;
+  return { profiles: merged, upserted: merged.length, pruned };
+}
+
 export function findWabaProfileClash(
   profiles: AdsPowerProfileRecord[],
   userId: string,
@@ -98,24 +126,22 @@ export class WabaAdsPowerService {
     return repository.list();
   }
 
-  ingest(items: AdsPowerIngestItem[]): { upserted: number; profiles: AdsPowerProfileRecord[] } {
+  ingest(
+    items: AdsPowerIngestItem[],
+    opts?: { prune?: boolean },
+  ): { upserted: number; pruned: number; profiles: AdsPowerProfileRecord[] } {
     const incoming = items.map(normalizeAdsPowerIngestItem).filter((row): row is AdsPowerProfileRecord => Boolean(row));
-    if (!incoming.length) return { upserted: 0, profiles: repository.list() };
-    const current = new Map(repository.list().map((row) => [row.userId, row]));
-    const merged = incoming.map((row) => {
-      const prev = current.get(row.userId);
-      if (!prev) return row;
-      return {
-        ...row,
-        connectionId: prev.connectionId,
-        wabaId: prev.wabaId,
-        phoneNumberId: prev.phoneNumberId,
-        displayPhoneNumber: prev.displayPhoneNumber,
-        verifiedName: prev.verifiedName,
-      };
-    });
-    repository.upsertMany(merged);
-    return { upserted: merged.length, profiles: repository.list() };
+    const current = repository.list();
+    if (!incoming.length) return { upserted: 0, pruned: 0, profiles: current };
+    const prune = opts?.prune !== false;
+    const snapshot = applyAdsPowerSnapshot(current, incoming, prune);
+    if (prune) repository.replaceAll(snapshot.profiles);
+    else repository.upsertMany(snapshot.profiles);
+    return {
+      upserted: snapshot.upserted,
+      pruned: snapshot.pruned,
+      profiles: repository.list(),
+    };
   }
 
   async pullFromLocalApi(auth: WabaRequestAuth) {

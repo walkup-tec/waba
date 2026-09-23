@@ -23,7 +23,8 @@ export function registerAdsPowerIngestRoute(app: Express): void {
         : Array.isArray(body.list)
           ? (body.list as AdsPowerIngestItem[])
           : [];
-      const result = wabaAdsPowerService.ingest(items);
+      const prune = body.prune !== false && body.replace !== false;
+      const result = wabaAdsPowerService.ingest(items, { prune });
       return res.status(200).json({ ok: true, ...result });
     } catch (error) {
       return sendError(res, error);

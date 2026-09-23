@@ -63,4 +63,8 @@ export class WabaAdsPowerRepository {
     this.upsertMany([row]);
     return this.getByUserId(row.userId) || row;
   }
+
+  replaceAll(rows: AdsPowerProfileRecord[]): AdsPowerProfileRecord[] {
+    return this.write({ version: 1, updatedAt: "", profiles: rows }).profiles;
+  }
 }
