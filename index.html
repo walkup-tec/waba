@@ -3335,6 +3335,19 @@
           background: rgba(148, 163, 184, 0.2);
           color: #cbd5e1;
         }
+        .waba-adspower-steps {
+          margin: 0 0 14px;
+          padding: 10px 12px 10px 28px;
+          border-radius: 10px;
+          border: 1px solid rgba(94, 234, 212, 0.18);
+          background: rgba(8, 18, 28, 0.45);
+          color: #cbd5e1;
+          font-size: 0.86rem;
+          line-height: 1.5;
+        }
+        .waba-adspower-steps li + li {
+          margin-top: 6px;
+        }
         @media (max-width: 860px) {
           .waba-adspower-table th:nth-child(3),
           .waba-adspower-table td:nth-child(3) {
@@ -23661,13 +23674,18 @@
               <div class="panel-header">
                 <div>
                   <div class="panel-title">Perfis AdsPower</div>
-                  <span class="muted">Um perfil do AdsPower liga a uma conta WABA oficial. Templates e disparos continuam na Cloud API.</span>
+                  <span class="muted">O perfil AdsPower já traz BM, WABA e chip. A DRAX envia o template para essa WABA pela Cloud API, depois que a conta estiver conectada no Laboratório.</span>
                 </div>
                 <div class="disparos-inline-actions" style="flex-wrap:wrap;gap:8px;">
                   <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-adspower-sync">Sincronizar</button>
                   <button type="button" class="instance-action-btn btn-refresh enabled" id="waba-adspower-reload">Atualizar</button>
                 </div>
               </div>
+              <ol class="waba-adspower-steps">
+                <li>No AdsPower, abra o perfil recebido (BM, WABA e chip já estão nele).</li>
+                <li>Nesse mesmo navegador, entre na DRAX e em <strong>Conectar WABA</strong> use Conectar com Meta — assim a BM/WABA entra no Laboratório.</li>
+                <li>Volte aqui, vincule o chip ao perfil e envie o template em <strong>Templates</strong> dessa WABA.</li>
+              </ol>
               <p id="waba-adspower-banner" class="waba-adspower-status" role="status">Carregando perfis AdsPower…</p>
               <div class="waba-adspower-toolbar">
                 <label class="visually-hidden" for="waba-adspower-search">Pesquisar perfil</label>
@@ -40926,6 +40944,15 @@
         if (options.some((item) => item.connectionId === previous)) {
           select.value = previous;
         }
+        try {
+          const focus = JSON.parse(sessionStorage.getItem("waba-adspower-focus") || "null");
+          const focusId = focus && focus.connectionId ? String(focus.connectionId).trim() : "";
+          if (focusId && options.some((item) => item.connectionId === focusId)) {
+            select.value = focusId;
+          }
+        } catch (_error) {
+          /* sem foco AdsPower */
+        }
       }
 
       function metaTplLabHiddenIds() {
@@ -42975,6 +43002,13 @@
       }
 
       function metaTplBroadcastPreferredConnectionId() {
+        try {
+          const focus = JSON.parse(sessionStorage.getItem("waba-adspower-focus") || "null");
+          const focusId = focus && focus.connectionId ? String(focus.connectionId).trim() : "";
+          if (focusId) return focusId;
+        } catch (_error) {
+          /* segue o portfólio salvo da sessão */
+        }
         const savedBiz = String((metaTpSession && metaTpSession.savedBusinessId) || "").trim();
         const portfolios = (metaTpSession && metaTpSession.portfolios) || [];
         const selected =
@@ -47333,6 +47367,9 @@
                 wabaAdsPowerSelectHtml(row) +
                 "</div></td>" +
                 '<td><div class="waba-adspower-actions">' +
+                '<button type="button" class="instance-action-btn btn-refresh enabled" data-adspower-connect="' +
+                wabaAdsPowerEsc(row.userId) +
+                '">Conectar WABA</button>' +
                 '<button type="button" class="instance-action-btn btn-refresh enabled" data-adspower-bind="' +
                 wabaAdsPowerEsc(row.userId) +
                 '">Vincular</button>' +
@@ -47347,9 +47384,6 @@
                     wabaAdsPowerEsc(row.userId) +
                     '">Disparo</button>'
                   : "") +
-                '<button type="button" class="instance-action-btn btn-refresh enabled" data-adspower-open="' +
-                wabaAdsPowerEsc(row.userId) +
-                '">Abrir no PC</button>' +
                 "</div></td></tr>"
               );
             })
@@ -47454,26 +47488,58 @@
         }
       }
 
-      async function wabaAdsPowerOpen(userId) {
+      function wabaAdsPowerSetFocus(partial) {
+        const next = partial && typeof partial === "object" ? partial : {};
         try {
-          await wabaAdsPowerJson("/integrations/adspower/profiles/" + encodeURIComponent(userId) + "/open", {
-            method: "POST",
-            body: "{}",
-          });
-          wabaAdsPowerBanner("Pedido enviado para abrir o perfil no AdsPower deste computador.");
-        } catch (error) {
-          wabaAdsPowerBanner(
-            (error && error.message ? error.message : "Não abriu.") +
-              " Abrir perfil só funciona no PC onde o AdsPower está rodando.",
-            true,
-          );
+          sessionStorage.setItem("waba-adspower-focus", JSON.stringify(next));
+        } catch (_error) {
+          /* sessionStorage pode estar bloqueado */
         }
+      }
+
+      function wabaAdsPowerGetFocus() {
+        try {
+          const parsed = JSON.parse(sessionStorage.getItem("waba-adspower-focus") || "null");
+          return parsed && typeof parsed === "object" ? parsed : null;
+        } catch (_error) {
+          return null;
+        }
+      }
+
+      function wabaAdsPowerProfileById(userId) {
+        const id = String(userId || "").trim();
+        return (
+          wabaAdsPowerUi.profiles.find(function (row) {
+            return String(row.userId || "") === id;
+          }) || null
+        );
+      }
+
+      function wabaAdsPowerFocusFromProfile(userId) {
+        const profile = wabaAdsPowerProfileById(userId);
+        wabaAdsPowerSetFocus({
+          userId: String((profile && profile.userId) || userId || ""),
+          name: String((profile && profile.name) || userId || ""),
+          connectionId: String((profile && profile.connectionId) || ""),
+          wabaId: String((profile && profile.wabaId) || ""),
+        });
+        return profile;
       }
 
       function wabaAdsPowerGoTab(tabName) {
         const tab = document.querySelector('[data-tab="' + tabName + '"]');
         if (tab && typeof tab.click === "function") tab.click();
       }
+
+      window.wabaAdsPowerApplyConnectHint = function wabaAdsPowerApplyConnectHint() {
+        const focus = wabaAdsPowerGetFocus();
+        const hint = document.getElementById("meta-embedded-signup-hint");
+        if (!hint || !focus || !focus.name) return;
+        hint.textContent =
+          "Perfil AdsPower «" +
+          focus.name +
+          "»: abra esta página no navegador desse perfil e clique em Conectar com Meta. A BM/WABA/chip entram no Laboratório; depois volte em Perfis AdsPower e vincule.";
+      };
 
       function wabaAdsPowerBindUi() {
         if (wabaAdsPowerUi.bound) return;
@@ -47491,6 +47557,13 @@
           wabaAdsPowerRender();
         });
         root.addEventListener("click", function (event) {
+          const connectBtn = event.target.closest("[data-adspower-connect]");
+          if (connectBtn) {
+            wabaAdsPowerFocusFromProfile(connectBtn.getAttribute("data-adspower-connect") || "");
+            wabaAdsPowerGoTab("whatsapp-oficial");
+            if (typeof window.wabaAdsPowerApplyConnectHint === "function") window.wabaAdsPowerApplyConnectHint();
+            return;
+          }
           const bindBtn = event.target.closest("[data-adspower-bind]");
           if (bindBtn) {
             void wabaAdsPowerBind(bindBtn.getAttribute("data-adspower-bind") || "");
@@ -47501,16 +47574,15 @@
             void wabaAdsPowerUnbind(unbindBtn.getAttribute("data-adspower-unbind") || "");
             return;
           }
-          const openBtn = event.target.closest("[data-adspower-open]");
-          if (openBtn) {
-            void wabaAdsPowerOpen(openBtn.getAttribute("data-adspower-open") || "");
-            return;
-          }
-          if (event.target.closest("[data-adspower-templates]")) {
+          const templatesBtn = event.target.closest("[data-adspower-templates]");
+          if (templatesBtn) {
+            wabaAdsPowerFocusFromProfile(templatesBtn.getAttribute("data-adspower-templates") || "");
             wabaAdsPowerGoTab("whatsapp-templates");
             return;
           }
-          if (event.target.closest("[data-adspower-broadcast]")) {
+          const broadcastBtn = event.target.closest("[data-adspower-broadcast]");
+          if (broadcastBtn) {
+            wabaAdsPowerFocusFromProfile(broadcastBtn.getAttribute("data-adspower-broadcast") || "");
             wabaAdsPowerGoTab("whatsapp-disparo-cloud");
           }
         });
@@ -64226,6 +64298,9 @@
           );
           if (nextTab === "whatsapp-oficial" && typeof window.wabaEnsureMetaPortfolioLoad === "function") {
             window.wabaEnsureMetaPortfolioLoad();
+          }
+          if (nextTab === "whatsapp-oficial" && typeof window.wabaAdsPowerApplyConnectHint === "function") {
+            window.wabaAdsPowerApplyConnectHint();
           }
         }
 

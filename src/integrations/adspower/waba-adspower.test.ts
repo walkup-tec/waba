@@ -83,6 +83,9 @@ describe("AdsPower menu FARM BM", () => {
     assert.match(html, /wabaStartAdsPower/);
     assert.match(html, /id="waba-adspower-sync"/);
     assert.match(html, /waba-adspower-search-input/);
+    assert.match(html, /Conectar WABA/);
+    assert.match(html, /data-adspower-connect/);
+    assert.doesNotMatch(html, /data-adspower-open/);
   });
 });
 
