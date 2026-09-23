@@ -50,7 +50,7 @@ describe("meta-es-fb-login", () => {
     });
     const plan = planMetaEsTechProviderClick("1467449278208212");
     assert.equal(plan.callFbInit, false);
-    assert.equal(plan.openPageRedirect, false);
+    assert.equal(plan.openPageRedirect, true);
     assert.equal(plan.loginOptions?.config_id, "1467449278208212");
   });
 
@@ -147,8 +147,7 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /WABA_META_ES_LOGIN_BLOCKED_MESSAGE/);
     assert.match(html, /janela\/aba nova|nova janela\/aba/);
     assert.match(html, /AdsPower/);
-    assert.match(html, /Embedded Browser OAuth Login/);
-    assert.match(html, /FB\.login/);
+    assert.match(html, /Grupo Walkup App/);
     assert.match(html, /wabaMetaEsBuildOauthDialogUrl/);
     assert.match(html, /wabaMetaEsBuildOauthLaunchUrl/);
     assert.match(html, /wabaMetaEsResumeLabOauthReturn/);
@@ -199,20 +198,21 @@ describe("meta-es-fb-login", () => {
     assert.equal(launchParsed.searchParams.get("signed_next"), "1");
     assert.match(String(launchParsed.searchParams.get("next") || ""), /config_id=1590195526041278/);
     assert.doesNotMatch(launch, /www\.facebook\.com/);
-    assert.equal(shouldUseMetaEsPageRedirect({ sdkReady: false }), true);
+    assert.equal(
+      shouldUseMetaEsPageRedirect({ preferPage: true }),
+      true,
+    );
     assert.equal(
       shouldUseMetaEsPageRedirect({
-        preferPage: true,
-        sdkReady: true,
-        userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120",
+        userAgent: "Mozilla/5.0 Chrome/120",
         windowOpen: function hookedOpen() {
           return null;
         },
       }),
-      false,
+      true,
     );
-    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120", sdkReady: true }), false);
-    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120", sdkReady: true }), false);
+    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120" }), false);
+    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120" }), true);
     const returned = parseMetaEsOauthReturn("?code=AQC123&state=abc123&waba_id=waba-9");
     assert.equal(returned.code, "AQC123");
     assert.equal(returned.state, "abc123");

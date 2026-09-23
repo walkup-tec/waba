@@ -239,19 +239,18 @@ export function isAdsPowerLikeBrowser(input: {
 }
 
 /**
- * Embedded Signup da Meta usa FB.login (JS SDK), o fluxo que já funciona no Chrome.
- * dialog/oauth montado na mão chega em Recurso indisponível no SunBrowser mesmo com config_id.
- * Redirect na aba só é fallback se o SDK não carregou.
+ * Popup do FB.login no AdsPower cai em Recurso indisponível (query criptografada).
+ * Chrome nativo completa o mesmo config_id. No AdsPower (e em qualquer browser
+ * que hooka window.open) o login vai na mesma aba, via dialog/oauth documentado.
  */
 export function shouldUseMetaEsPageRedirect(input: {
   userAgent?: string;
   windowOpen?: unknown;
   globals?: Record<string, unknown> | null;
   preferPage?: boolean;
-  sdkReady?: boolean;
 }): boolean {
-  if (input.sdkReady === false) return true;
-  return false;
+  if (input.preferPage === true) return true;
+  return isAdsPowerLikeBrowser(input);
 }
 
 export function createMetaEsOauthState(): string {
@@ -423,7 +422,7 @@ export function describeMetaEsBrowserSurface(input: {
     platform: String(input.userAgentData?.platform || "").trim(),
     adsPowerNativeWebHost: false,
     adsPowerLike,
-    usePageRedirect: false,
+    usePageRedirect: adsPowerLike,
   };
 }
 
@@ -454,7 +453,7 @@ export function planMetaEsTechProviderClick(configId: string): MetaEsClickPlan {
   return {
     callFbInit: false,
     openGenericOauthUrl: false,
-    openPageRedirect: false,
+    openPageRedirect: true,
     loginOptions: buildMetaEsFbLoginOptions(configId),
     configPath: META_ES_TECH_PROVIDER_PATHS.config,
     startPath: META_ES_TECH_PROVIDER_PATHS.start,
