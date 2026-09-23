@@ -23682,9 +23682,9 @@
                 </div>
               </div>
               <ol class="waba-adspower-steps">
-                <li>Abra a DRAX <strong>neste mesmo perfil AdsPower</strong> e clique em <strong>Conectar WABA → Conectar Portfólio</strong>.</li>
-                <li>O Facebook abre em <strong>janela ou aba nova</strong> — o Laboratório permanece. Informe a senha e siga o assistente Grupo Walkup App (números da BM, ex.: Verificado).</li>
-                <li>Ao concluir, a janela da Meta volta para a DRAX. O Laboratório grava a WABA. Depois volte aqui, vincule o chip e envie o template em <strong>Templates</strong>.</li>
+                <li>Abra a DRAX <strong>neste mesmo perfil AdsPower</strong> e clique em <strong>Conectar Portfólio</strong>. O Facebook abre em popup (SDK), como no Chrome.</li>
+                <li>Se Recurso indisponível: no app da Meta, Facebook Login for Business → Settings → ligue <strong>Embedded Browser OAuth Login</strong>. No AdsPower, kernel <strong>Chrome</strong> (a janela não pode ser SunBrowser).</li>
+                <li>No wizard Grupo Walkup App escolha o número da BM. Depois volte aqui, vincule o chip e envie o template.</li>
               </ol>
               <p id="waba-adspower-banner" class="waba-adspower-status" role="status">Carregando perfis AdsPower…</p>
               <div class="waba-adspower-toolbar">
@@ -27621,7 +27621,7 @@
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
-          "A Meta recusou o Login for Business neste navegador. No AdsPower o Facebook abre em uma nova janela/aba do mesmo perfil (o Laboratório permanece). Feche a janela da Meta, volte ao Laboratório e clique de novo em Conectar Portfólio.";
+          "A Meta recusou o Login for Business neste SunBrowser. O assistente Grupo Walkup App no Chrome usa o SDK (FB.login), não o dialog/oauth montado. No app da Meta: Facebook Login for Business → Settings → ligue Embedded Browser OAuth Login. No AdsPower, kernel Chrome (não SunBrowser). Depois clique de novo em Conectar Portfólio.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
@@ -27655,9 +27655,10 @@
           if (window.adsPower || window.__adspower || window.Adspower) return true;
           return !window.wabaMetaEsIsNativeWindowOpen();
         };
-        window.wabaMetaEsShouldUsePageRedirect = function (preferPage) {
-          if (preferPage === true) return true;
-          return window.wabaMetaEsIsAdsPowerBrowser();
+        window.wabaMetaEsShouldUsePageRedirect = function (preferPage, sdkReady) {
+          if (sdkReady === false) return true;
+          if (preferPage === true && sdkReady === false) return true;
+          return false;
         };
         window.wabaMetaEsBuildLoginOptions = function (configId, setup) {
           var id = String(configId || "").trim();
@@ -27904,7 +27905,8 @@
           window.__WABA_META_ES_LOGIN_CB = callback;
           var cfg = extra || {};
           var publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
-          var preferPage = cfg.preferPage === true || window.wabaMetaEsShouldUsePageRedirect(cfg.preferPage);
+          var sdkReady = typeof FB !== "undefined" && typeof FB.login === "function";
+          var preferPage = !sdkReady;
           var appId = String(cfg.appId || publicCfg.appId || "").trim();
           var redirectUri = String(cfg.redirectUri || publicCfg.redirectUri || "").trim();
           if (!redirectUri) {
@@ -40609,7 +40611,7 @@
         const publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
         const appId = String(publicCfg.appId || "").trim();
         const configId = String(publicCfg.configId || "").trim();
-        const preferPage = true;
+        const preferPage = false;
         const sdkReady = typeof FB !== "undefined" && typeof FB.login === "function";
         if (typeof window.wabaMetaEsLogStart === "function") {
           window.wabaMetaEsLogStart({
@@ -40663,7 +40665,7 @@
           window.__wabaMetaTechSignupActive = false;
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
-          metaTpSetStatus("Facebook aberto em nova janela/aba. O Laboratório permanece aqui.");
+          metaTpSetStatus("Abrindo o Facebook no popup do SDK (mesmo fluxo do Chrome). O Laboratório permanece.");
         }
         return false;
       };
@@ -70764,9 +70766,6 @@
             showToast("Abrindo janela da Meta…", "info");
             var esLogin = typeof window.wabaMetaEsInvokeFbLogin === "function"
               ? window.wabaMetaEsInvokeFbLogin(metaEsFbLoginCallback, String(cfg.configId), {}, {
-                  preferPage: typeof window.wabaMetaEsShouldUsePageRedirect === "function"
-                    ? window.wabaMetaEsShouldUsePageRedirect()
-                    : false,
                   source: "ativos",
                   appId: String(cfg.appId || "").trim(),
                   redirectUri: cfg.redirectUri || window.location.origin,
