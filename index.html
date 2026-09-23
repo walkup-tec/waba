@@ -12320,7 +12320,7 @@
         text-align: center;
       }
 
-      .admin-subscribers-table:not(.show-visibility) .admin-subscribers-visible-col {
+      #admin-subscribers-list-table:not(.show-visibility) .admin-subscribers-visible-col {
         display: none;
       }
 
@@ -24935,7 +24935,7 @@
                   </button>
                 </div>
                 <div id="admin-subscribers-table-wrap" class="admin-subscribers-table-wrap">
-                  <table class="admin-subscribers-table" aria-label="Lista de assinantes">
+                  <table id="admin-subscribers-list-table" class="admin-subscribers-table" aria-label="Lista de assinantes">
                     <thead>
                       <tr>
                         <th scope="col">Nome</th>
@@ -27781,18 +27781,11 @@
           var parsed = new URL("https://business.facebook.com/messaging/whatsapp/onboard/");
           parsed.searchParams.set("app_id", appId);
           parsed.searchParams.set("config_id", configId);
+          parsed.searchParams.set("response_type", "code");
+          parsed.searchParams.set("override_default_response_type", "true");
+          parsed.searchParams.set("redirect_uri", siteOrigin);
           parsed.searchParams.set("extras", JSON.stringify(extras));
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
-          var businessId = String(
-            (extras.setup && extras.setup.business && extras.setup.business.id) ||
-              (input && input.businessId) ||
-              (input && input.setup && input.setup.business && input.setup.business.id) ||
-              ""
-          ).trim();
-          if (businessId) {
-            parsed.searchParams.set("business_id", businessId);
-            parsed.searchParams.set("global_scope_id", businessId);
-          }
           return parsed.toString();
         };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
@@ -28076,7 +28069,6 @@
               redirectUri: redirectUri,
               graphVersion: publicCfg.graphVersion || "v26.0",
               setup: setup,
-              businessId: String(cfg.businessId || "").trim(),
               state: state
             });
             if (!dialogUrl) {
@@ -34702,7 +34694,7 @@
 
       function setAdminSubscribersVisibilityColumn(enabled) {
         adminSubscribersCanToggleVisibility = enabled === true;
-        document.querySelector(".admin-subscribers-table")?.classList.toggle(
+        document.getElementById("admin-subscribers-list-table")?.classList.toggle(
           "show-visibility",
           adminSubscribersCanToggleVisibility
         );
@@ -37958,7 +37950,12 @@
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível carregar os assinantes.");
           }
-          setAdminSubscribersVisibilityColumn(payload.canToggleVisibility === true);
+          setAdminSubscribersVisibilityColumn(
+            payload.canToggleVisibility === true ||
+              String(typeof wabaSessionEmail !== "undefined" ? wabaSessionEmail : "")
+                .trim()
+                .toLowerCase() === "walkup@walkuptec.com.br"
+          );
           renderAdminSubscribersTable(payload.items);
         } catch (error) {
           if (tbody) {
@@ -39631,28 +39628,6 @@
         if (el) el.textContent = metaTpLogLines.join("\n");
       }
 
-      function metaTpOnboardBusinessId(setup) {
-        var fromSetup = setup && setup.business ? String(setup.business.id || "").trim() : "";
-        if (fromSetup && fromSetup !== "—") return fromSetup;
-        var saved = String(metaTpSession.savedBusinessId || "").trim();
-        var cards = Array.isArray(metaTpSession.portfolios) ? metaTpSession.portfolios : [];
-        var usable = function (id) {
-          if (!id || id === "—") return false;
-          var card = cards.find(function (item) {
-            return metaTpBusinessIdLabel(item) === id;
-          });
-          if (card && metaTpPortfolioIsRestricted(card)) return false;
-          return true;
-        };
-        if (usable(saved)) return saved;
-        for (var i = 0; i < cards.length; i += 1) {
-          if (metaTpPortfolioIsRestricted(cards[i])) continue;
-          var id = metaTpBusinessIdLabel(cards[i]);
-          if (id && id !== "—") return id;
-        }
-        return "1247508354180311";
-      }
-
       function metaTpResetSession() {
         metaTpSession.codeReceived = false;
         metaTpSession.exchanged = false;
@@ -40879,7 +40854,6 @@
       window.wabaConnectMetaWhatsappOficial = function wabaConnectMetaWhatsappOficial(event, setup) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         metaTpLogLines = [];
-        var onboardBusinessId = metaTpOnboardBusinessId(setup);
         metaTpResetSession();
         var setupBusinessId =
           setup && setup.business ? String(setup.business.id || "").trim() : "";
@@ -40943,7 +40917,6 @@
               source: "lab",
               appId: appId,
               redirectUri: publicCfg.redirectUri || window.location.origin,
-              businessId: onboardBusinessId,
             })
           : { ok: false, error: "SDK da Meta não carregou. Verifique bloqueador de anúncios." };
         if (!invoked || invoked.ok === false) {
