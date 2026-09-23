@@ -145,22 +145,24 @@ describe("meta-es-fb-login", () => {
   it("login recusado pela Meta não pede Testador nem Parceiros", () => {
     const html = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
     assert.match(html, /WABA_META_ES_LOGIN_BLOCKED_MESSAGE/);
-    assert.match(html, /mesma aba/);
+    assert.match(html, /janela\/aba nova|nova janela\/aba/);
     assert.match(html, /AdsPower/);
     assert.match(html, /Grupo Walkup App/);
     assert.match(html, /wabaMetaEsBuildOauthDialogUrl/);
     assert.match(html, /wabaMetaEsBuildOauthLaunchUrl/);
     assert.match(html, /wabaMetaEsResumeLabOauthReturn/);
-    assert.match(html, /login\/reauth\.php/);
-    assert.match(html, /web\.facebook\.com/);
+    assert.match(html, /wabaMetaEsOpenFacebook/);
+    assert.match(html, /display", "page"/);
+    assert.match(html, /popup=yes/);
+    assert.match(html, /window\.open\(url, "_blank"\)/);
     assert.doesNotMatch(html, /adicione a conta deste perfil AdsPower como Testador/);
     assert.doesNotMatch(html, /Data Use Checkup/);
     assert.doesNotMatch(html, /troque web\.facebook\.com/);
     assert.doesNotMatch(html, /Parceiros → Adicionar/);
-    assert.doesNotMatch(html, /__WABA_META_ES_OPEN_PATCHED/);
+    assert.doesNotMatch(html, /window\.location\.assign\(dialogUrl\)/);
   });
 
-  it("não reescreve web.facebook.com do SDK; AdsPower usa dialog/oauth na mesma aba", () => {
+  it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {
     const raw =
       "https://web.facebook.com/v26.0/dialog/oauth?app_id=1279182514183979&cbt=1790173659109&channel_url=https%3A%2F%2Fstaticxx.facebook.com%2Fx%2Fconnect%2Fxd_arbiter";
     assert.equal(rewriteMetaEsOauthUrl(raw, { configId: "1590195526041278" }), raw);
@@ -177,8 +179,8 @@ describe("meta-es-fb-login", () => {
     assert.equal(parsed.searchParams.get("app_id"), "1279182514183979");
     assert.equal(parsed.searchParams.get("config_id"), "1590195526041278");
     assert.equal(parsed.searchParams.get("response_type"), "code");
-    assert.equal(parsed.searchParams.get("display"), "popup");
-    assert.equal(parsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br/");
+    assert.equal(parsed.searchParams.get("display"), "page");
+    assert.equal(parsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br");
     assert.equal(parsed.searchParams.get("state"), "abc123");
     assert.match(String(parsed.searchParams.get("extras") || ""), /"setup":\{\}/);
     assert.equal("sessionInfoVersion" in JSON.parse(String(parsed.searchParams.get("extras"))), false);

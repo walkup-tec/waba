@@ -210,9 +210,10 @@ export function resolveMetaEsRedirectUri(input: {
   configRedirectUri?: string;
   locationOrigin?: string;
 }): string {
-  const fromConfig = String(input.configRedirectUri || "").trim();
-  if (fromConfig) return fromConfig;
-  return normalizeMetaEsRedirectUri(String(input.locationOrigin || ""));
+  return (
+    normalizeMetaEsRedirectUri(String(input.configRedirectUri || "")) ||
+    normalizeMetaEsRedirectUri(String(input.locationOrigin || ""))
+  );
 }
 
 export function isNativeWindowOpen(openFn: unknown): boolean {
@@ -287,17 +288,21 @@ export function buildMetaEsOauthDialogUrl(input: {
   parsed.searchParams.set("response_type", "code");
   parsed.searchParams.set("override_default_response_type", "true");
   parsed.searchParams.set("config_id", configId);
-  parsed.searchParams.set("display", input.display === "page" ? "page" : "popup");
+  parsed.searchParams.set("display", input.display === "popup" ? "popup" : "page");
   parsed.searchParams.set("extras", JSON.stringify({ setup }));
   const state = String(input.state || "").trim();
   if (state) parsed.searchParams.set("state", state);
   return parsed.toString();
 }
 
+export function metaEsOauthPopupFeatures(): string {
+  return "popup=yes,width=1100,height=820,scrollbars=yes,resizable=yes,toolbar=yes,location=yes,menubar=no";
+}
+
 /**
  * Chrome chega no wizard via login/reauth.php?app_id=…&next=dialog.
- * Abrir www.facebook.com/dialog/oauth faz a Meta pular para web com
- * encrypted_query_string (#_rdc) e Recurso indisponível no AdsPower.
+ * display=page na janela nova: o wizard Grupo Walkup App preenche a janela.
+ * display=popup na aba da DRAX não renderiza o assistente.
  */
 export function buildMetaEsOauthLaunchUrl(
   input: Parameters<typeof buildMetaEsOauthDialogUrl>[0],
