@@ -30,6 +30,8 @@ import {
   parseMetaEsConnectMethod,
   metaEsConnectMethodUsesPageRedirect,
   metaEsConnectMethodUsesLoginForBusiness,
+  shouldBlockMetaEsUntilChromeKernel,
+  isAdsPowerLikeBrowser,
   shouldOpenMetaEsPopup,
   shouldUseMetaEsPageRedirect,
   toPublicMetaEsConfig,
@@ -173,6 +175,7 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /wabaMetaEsTrySdkAfterReauth/);
     assert.doesNotMatch(html, /wabaMetaEsArmSdkAfterReauth/);
     assert.doesNotMatch(html, /Não clique em Começar/);
+    assert.doesNotMatch(html, /sem Começar/);
     assert.doesNotMatch(html, /wabaMetaEsBuildPartnerShareUrl/);
     assert.doesNotMatch(html, /latest\/settings\/whatsapp_accounts/);
     assert.match(html, /wabaMetaEsBuildLoginForBusinessUrl/);
@@ -188,6 +191,11 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /Hosted Embedded Signup/);
     assert.match(html, /Login for Business \(página\)/);
     assert.match(html, /kernel Chrome/);
+    assert.match(html, /WABA_META_ES_CHROME_KERNEL_REQUIRED_MESSAGE/);
+    assert.match(html, /wabaMetaEsShouldBlockUntilChromeKernel/);
+    assert.match(html, /id="meta-es-chrome-kernel"/);
+    assert.match(html, /Este perfil já está no kernel Chrome/);
+    assert.match(html, /Na tela do WhatsApp, clique em Começar/);
     assert.match(html, /wabaMetaEsResolveConnectMethod/);
     assert.doesNotMatch(html, /wabaMetaEsBuildLfbContinueUrl/);
     assert.doesNotMatch(html, /wabaMetaEsResumeLfbAfterReauth/);
@@ -353,6 +361,16 @@ describe("meta-es-fb-login", () => {
     assert.equal(metaEsConnectMethodUsesPageRedirect("hosted"), true);
     assert.equal(metaEsConnectMethodUsesLoginForBusiness("lfb"), true);
     assert.equal(metaEsConnectMethodUsesLoginForBusiness("hosted"), false);
+    assert.equal(shouldBlockMetaEsUntilChromeKernel({ adsPowerLike: true, chromeKernelConfirmed: false }), true);
+    assert.equal(shouldBlockMetaEsUntilChromeKernel({ adsPowerLike: true, chromeKernelConfirmed: true }), false);
+    assert.equal(shouldBlockMetaEsUntilChromeKernel({ adsPowerLike: false, chromeKernelConfirmed: false }), false);
+    assert.equal(
+      isAdsPowerLikeBrowser({
+        userAgent: "Mozilla/5.0 Chrome/120",
+        userAgentData: { brands: [{ brand: "SunBrowser" }] },
+      }),
+      true,
+    );
     const returned = parseMetaEsOauthReturn("?code=AQC123&state=abc123&waba_id=waba-9");
     assert.equal(returned.code, "AQC123");
     assert.equal(returned.state, "abc123");

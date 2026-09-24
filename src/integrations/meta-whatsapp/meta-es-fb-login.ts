@@ -264,13 +264,31 @@ export function isAdsPowerLikeBrowser(input: {
   userAgent?: string;
   windowOpen?: unknown;
   globals?: Record<string, unknown> | null;
+  userAgentData?: { brands?: Array<{ brand?: string }> } | null;
 }): boolean {
   const ua = String(input.userAgent || "");
   if (/AdsPower|SunBrowser|ADSPower/i.test(ua)) return true;
+  const brands = input.userAgentData?.brands || [];
+  if (brands.some((item) => /AdsPower|SunBrowser/i.test(String(item?.brand || "")))) return true;
   const globals = input.globals || {};
   if (globals.adsPower || globals.__adspower || globals.Adspower) return true;
   if (input.windowOpen !== undefined && !isNativeWindowOpen(input.windowOpen)) return true;
   return false;
+}
+
+/**
+ * Começar (etapa 3) no SunBrowser abre dialog/oauth criptografado → Recurso indisponível.
+ * O Laboratório só segue depois que o operador confirma kernel Chrome no mesmo perfil.
+ */
+export const META_ES_CHROME_KERNEL_STORAGE_KEY = "waba-meta-es-chrome-kernel";
+export const META_ES_CHROME_KERNEL_REQUIRED_MESSAGE =
+  "O Começar (etapa 3) neste SunBrowser abre Login criptografado e a Meta mostra Recurso indisponível. Feche este navegador. No AdsPower, abra o mesmo perfil com kernel Chrome. Recarregue o Laboratório, marque «Este perfil já está no kernel Chrome» e clique Conectar Portfólio.";
+
+export function shouldBlockMetaEsUntilChromeKernel(input: {
+  adsPowerLike: boolean;
+  chromeKernelConfirmed: boolean;
+}): boolean {
+  return Boolean(input.adsPowerLike) && !input.chromeKernelConfirmed;
 }
 
 /**

@@ -3762,6 +3762,18 @@
           line-height: 1.35;
           color: #94a3b8;
         }
+        .meta-es-chrome-kernel {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          max-width: 420px;
+          font-size: 12px;
+          line-height: 1.35;
+          color: #cbd5e1;
+        }
+        .meta-es-chrome-kernel input {
+          margin-top: 2px;
+        }
         .meta-connect-progress {
           display: flex;
           align-items: flex-start;
@@ -23648,8 +23660,12 @@
                         <option value="sdk">SDK da Meta (FB.login)</option>
                       </select>
                       <p class="meta-es-connect-method-hint">
-                        Etapas 1 e 2 neste perfil: Hosted ES. A etapa 3 é o Começar — o SunBrowser abre Login criptografado. Se falhar, use o kernel Chrome deste mesmo perfil AdsPower e clique Começar de novo.
+                        O Começar (etapa 3) neste SunBrowser abre Login criptografado e a Meta mostra Recurso indisponível. Abra este mesmo perfil no kernel Chrome do AdsPower, marque a caixa e conecte de novo.
                       </p>
+                      <label class="meta-es-chrome-kernel">
+                        <input id="meta-es-chrome-kernel" type="checkbox" />
+                        <span>Este perfil já está no kernel Chrome</span>
+                      </label>
                     </div>
                     <div
                       id="meta-tp-connect-progress"
@@ -27830,8 +27846,48 @@
         window.wabaMetaEsIsAdsPowerBrowser = function () {
           var ua = String(navigator.userAgent || "");
           if (/AdsPower|SunBrowser|ADSPower/i.test(ua)) return true;
+          try {
+            var brands = navigator.userAgentData && navigator.userAgentData.brands;
+            if (Array.isArray(brands)) {
+              for (var i = 0; i < brands.length; i += 1) {
+                if (/AdsPower|SunBrowser/i.test(String((brands[i] && brands[i].brand) || ""))) return true;
+              }
+            }
+          } catch (e) {
+            /* noop */
+          }
           if (window.adsPower || window.__adspower || window.Adspower) return true;
           return !window.wabaMetaEsIsNativeWindowOpen();
+        };
+        window.WABA_META_ES_CHROME_KERNEL_KEY = "waba-meta-es-chrome-kernel";
+        window.WABA_META_ES_CHROME_KERNEL_REQUIRED_MESSAGE =
+          "O Começar (etapa 3) neste SunBrowser abre Login criptografado e a Meta mostra Recurso indisponível. Feche este navegador. No AdsPower, abra o mesmo perfil com kernel Chrome. Recarregue o Laboratório, marque «Este perfil já está no kernel Chrome» e clique Conectar Portfólio.";
+        window.wabaMetaEsChromeKernelConfirmed = function () {
+          var el = document.getElementById("meta-es-chrome-kernel");
+          return Boolean(el && el.checked);
+        };
+        window.wabaMetaEsShouldBlockUntilChromeKernel = function () {
+          if (typeof window.wabaMetaEsIsAdsPowerBrowser === "function" && !window.wabaMetaEsIsAdsPowerBrowser()) {
+            return false;
+          }
+          return !window.wabaMetaEsChromeKernelConfirmed();
+        };
+        window.wabaMetaEsBindChromeKernel = function () {
+          var el = document.getElementById("meta-es-chrome-kernel");
+          if (!el || el.getAttribute("data-bound") === "1") return;
+          el.setAttribute("data-bound", "1");
+          try {
+            el.checked = localStorage.getItem(window.WABA_META_ES_CHROME_KERNEL_KEY) === "1";
+          } catch (e) {
+            /* noop */
+          }
+          el.addEventListener("change", function () {
+            try {
+              localStorage.setItem(window.WABA_META_ES_CHROME_KERNEL_KEY, el.checked ? "1" : "0");
+            } catch (e2) {
+              /* noop */
+            }
+          });
         };
         window.wabaMetaEsShouldUsePageRedirect = function (preferPage) {
           if (preferPage === true) return true;
@@ -28340,6 +28396,7 @@
         });
         window.wabaMetaEsCaptureOauthReturn();
         window.wabaMetaEsBindConnectMethod();
+        window.wabaMetaEsBindChromeKernel();
       })();
 
       (function initMetaEmbeddedSignupSdk() {
@@ -41060,10 +41117,21 @@
         const appId = String(publicCfg.appId || "").trim();
         const configId = String(publicCfg.configId || "").trim();
         if (typeof window.wabaMetaEsBindConnectMethod === "function") window.wabaMetaEsBindConnectMethod();
+        if (typeof window.wabaMetaEsBindChromeKernel === "function") window.wabaMetaEsBindChromeKernel();
         const method =
           typeof window.wabaMetaEsResolveConnectMethod === "function"
             ? window.wabaMetaEsResolveConnectMethod()
             : "hosted";
+        if (
+          typeof window.wabaMetaEsShouldBlockUntilChromeKernel === "function" &&
+          window.wabaMetaEsShouldBlockUntilChromeKernel()
+        ) {
+          metaTpSetStatus(
+            window.WABA_META_ES_CHROME_KERNEL_REQUIRED_MESSAGE ||
+              "Abra este perfil AdsPower com kernel Chrome, marque a caixa e clique de novo em Conectar Portfólio.",
+          );
+          return false;
+        }
         const preferPage = method === "hosted" || method === "lfb";
         const sdkReady = typeof FB !== "undefined" && typeof FB.login === "function";
         if (typeof window.wabaMetaEsLogStart === "function") {
@@ -41118,9 +41186,19 @@
           window.__wabaMetaTechSignupActive = false;
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
-          metaTpSetStatus(
-            "Informe a senha na janela da Meta. Em seguida conecte ao Grupo Walkup App na mesma janela (sem Começar). Esse fluxo não usa Página do Facebook.",
-          );
+          if (method === "hosted") {
+            metaTpSetStatus(
+              "Informe a senha se a Meta pedir. Na tela do WhatsApp, clique em Começar. Esse fluxo não usa Página do Facebook.",
+            );
+          } else if (method === "lfb") {
+            metaTpSetStatus(
+              "Informe a senha na janela da Meta e conecte ao Grupo Walkup App na mesma janela. Esse fluxo não usa Página do Facebook.",
+            );
+          } else {
+            metaTpSetStatus(
+              "Conclua o Login da Meta na janela que abrir. Esse fluxo não usa Página do Facebook.",
+            );
+          }
         }
         return false;
       };
