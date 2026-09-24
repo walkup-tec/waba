@@ -27761,7 +27761,7 @@
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
-          "A Meta recusou o Login for Business neste navegador. No AdsPower o Facebook abre em uma nova janela/aba do mesmo perfil (o Laboratório permanece). Depois da senha, a mesma janela deve mostrar Conecte sua conta a Grupo Walkup App.";
+          "No AdsPower o Login for Business cai em Recurso indisponível. Compartilhe a WABA com o portfólio Walkup 4141369862822598 no Gerenciador e clique em Atualizar no Laboratório.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
@@ -27856,32 +27856,21 @@
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
           return parsed.toString();
         };
-        window.wabaMetaEsBuildLoginForBusinessUrl = function (input) {
-          var appId = String(input && input.appId || "").trim();
-          var configId = String(input && input.configId || "").trim();
-          var siteOrigin = window.wabaMetaEsNormalizeRedirectUri(
-            String((input && input.redirectUri) || "") || window.location.origin
-          );
-          if (!appId || !configId || !siteOrigin) return "";
-          var version = String((input && input.graphVersion) || "v26.0").trim() || "v26.0";
-          var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
-          var extras = options && options.extras ? JSON.parse(JSON.stringify(options.extras)) : { setup: {} };
-          var parsed = new URL("https://business.facebook.com/" + version + "/dialog/oauth");
-          parsed.searchParams.set("client_id", appId);
-          parsed.searchParams.set("redirect_uri", siteOrigin);
-          parsed.searchParams.set("response_type", "code");
-          parsed.searchParams.set("override_default_response_type", "true");
-          parsed.searchParams.set("config_id", configId);
-          parsed.searchParams.set("display", "page");
-          parsed.searchParams.set("extras", JSON.stringify(extras));
-          if (input && input.state) parsed.searchParams.set("state", String(input.state));
+        window.WABA_META_ES_WALKUP_PARTNER_BUSINESS_ID = "4141369862822598";
+        window.wabaMetaEsBuildPartnerShareUrl = function (input) {
+          var parsed = new URL("https://business.facebook.com/latest/settings/whatsapp_accounts");
+          var businessId = String((input && input.businessId) || "").trim();
+          if (businessId) parsed.searchParams.set("business_id", businessId);
           return parsed.toString();
         };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
-          var adsPower = window.wabaMetaEsIsAdsPowerBrowser();
-          var dialog = adsPower
-            ? window.wabaMetaEsBuildLoginForBusinessUrl(input)
-            : window.wabaMetaEsBuildOauthDialogUrl(input);
+          var setup = input && input.setup;
+          var businessId = String(
+            (input && input.businessId) ||
+              (setup && setup.business && setup.business.id) ||
+              ""
+          ).trim();
+          var dialog = window.wabaMetaEsBuildPartnerShareUrl({ businessId: businessId });
           var appId = String(input && input.appId || "").trim();
           if (!dialog || !appId) return "";
           var reauth = new URL("https://web.facebook.com/login/reauth.php");
@@ -41017,12 +41006,8 @@
           window.__wabaMetaTechSignupActive = false;
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
-          var adsPower =
-            typeof window.wabaMetaEsIsAdsPowerBrowser === "function" && window.wabaMetaEsIsAdsPowerBrowser();
           metaTpSetStatus(
-            adsPower
-              ? "Informe a senha na janela da Meta. A próxima tela é Conecte sua conta a Grupo Walkup App, no Business (não no web.facebook.com — esse host a Meta criptografa e o AdsPower recusa)."
-              : "Informe a senha na janela da Meta. Quando aparecer o Grupo Walkup App, clique em Começar. A próxima tela é Conecte sua conta a Grupo Walkup App.",
+            "Informe a senha na janela da Meta. No AdsPower o Login for Business (dialog/oauth) a Meta recusa. Depois da senha abra a conta WhatsApp no Gerenciador, compartilhe com o portfólio Walkup 4141369862822598 e volte aqui em Atualizar.",
           );
         }
         return false;

@@ -88,8 +88,10 @@ export const META_ES_OAUTH_STORAGE_KEY = "waba-meta-es-oauth";
 /** Host do reauth (senha). Dialog/oauth neste host a Meta criptografa (_rdc). */
 export const META_ES_OAUTH_HOST = "web.facebook.com";
 
-/** Login for Business no AdsPower: neste host o dialog NÃO vira encrypted_query_string. */
-export const META_ES_LFB_ORIGIN = "https://business.facebook.com";
+/** BM Walkup — o AdsPower compartilha a WABA com este portfólio (não usa dialog/oauth). */
+export const META_ES_WALKUP_PARTNER_BUSINESS_ID = "4141369862822598";
+
+export const META_ES_PARTNER_SHARE_PATH = "/latest/settings/whatsapp_accounts";
 
 /** LaunchBridge do Embedded Signup. Só existe em business.facebook.com — web.facebook.com devolve página indisponível. */
 export const META_ES_ONBOARD_ORIGIN = "https://business.facebook.com";
@@ -347,6 +349,7 @@ export type MetaEsOauthDialogInput = {
   state?: string;
   display?: "page" | "popup";
   cbt?: string | number;
+  partnerShare?: boolean;
   loginForBusiness?: boolean;
 };
 
@@ -379,32 +382,16 @@ export function buildMetaEsOauthDialogUrl(input: MetaEsOauthDialogInput): string
 }
 
 /**
- * Login for Business (“Conecte sua conta a Grupo Walkup App”).
- * web.facebook.com/dialog/oauth a Meta 302 → encrypted_query_string + _rdc
- * (Recurso indisponível no AdsPower). business.facebook.com mantém config_id.
+ * Gerenciador WhatsApp no business.facebook.com (o Hosted ES já abre neste host).
+ * O AdsPower recusa todo dialog/oauth: a Meta termina em
+ * web.facebook.com/.../encrypted_query_string + Recurso indisponível.
  */
-export function buildMetaEsLoginForBusinessDialogUrl(input: MetaEsOauthDialogInput): string | null {
-  const appId = String(input.appId || "").trim();
-  const configId = String(input.configId || "").trim();
-  const siteOrigin = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
-  if (!appId || !configId || !siteOrigin) return null;
-  const version = String(input.graphVersion || META_ES_JS_SDK_GRAPH_VERSION).trim() || META_ES_JS_SDK_GRAPH_VERSION;
-  const businessId = String(
-    input.setup?.business?.id || input.businessId || "",
-  ).trim();
-  const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || input.wabaId || "").trim();
-  const setup = buildMetaEsSetupPrefill({ businessId, wabaId });
-  const parsed = new URL(`${META_ES_LFB_ORIGIN}/${version}/dialog/oauth`);
-  parsed.searchParams.set("client_id", appId);
-  parsed.searchParams.set("redirect_uri", siteOrigin);
-  parsed.searchParams.set("response_type", "code");
-  parsed.searchParams.set("override_default_response_type", "true");
-  parsed.searchParams.set("config_id", configId);
-  parsed.searchParams.set("display", "page");
-  parsed.searchParams.set("extras", JSON.stringify({ setup }));
-  const state = String(input.state || "").trim();
-  if (state) parsed.searchParams.set("state", state);
-  void input.cbt;
+export function buildMetaEsPartnerShareUrl(input: {
+  businessId?: string;
+} = {}): string {
+  const parsed = new URL(`${META_ES_ONBOARD_ORIGIN}${META_ES_PARTNER_SHARE_PATH}`);
+  const businessId = String(input.businessId || "").trim();
+  if (businessId) parsed.searchParams.set("business_id", businessId);
   return parsed.toString();
 }
 
@@ -414,16 +401,19 @@ export function metaEsOauthPopupFeatures(): string {
 
 /**
  * Senha em login/reauth.php (web.facebook.com).
- * Chrome: next = Hosted ES.
- * AdsPower: next = Login for Business em business.facebook.com (não em web,
- * onde a Meta criptografa o dialog e o SunBrowser cai em Recurso indisponível).
+ * Chrome: next = Hosted ES (Começar funciona).
+ * AdsPower (e UA spoofado de Chrome): next = Gerenciador WhatsApp.
+ * dialog/oauth no SunBrowser sempre vira encrypted_query_string e Recurso indisponível.
  */
 export function buildMetaEsOauthLaunchUrl(
   input: MetaEsOauthDialogInput,
 ): string | null {
-  const dialog = input.loginForBusiness
-    ? buildMetaEsLoginForBusinessDialogUrl(input)
-    : buildMetaEsOauthDialogUrl(input);
+  const dialog =
+    input.partnerShare || input.loginForBusiness
+      ? buildMetaEsPartnerShareUrl({
+          businessId: String(input.setup?.business?.id || input.businessId || "").trim(),
+        })
+      : buildMetaEsOauthDialogUrl(input);
   const appId = String(input.appId || "").trim();
   if (!dialog || !appId) return null;
   const reauth = new URL(`https://${META_ES_OAUTH_HOST}/login/reauth.php`);

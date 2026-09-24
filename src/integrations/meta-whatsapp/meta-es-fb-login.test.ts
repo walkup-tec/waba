@@ -8,7 +8,7 @@ import {
   META_ES_UNAVAILABLE_MESSAGE,
   buildMetaEsFbLoginOptions,
   buildMetaEsOauthDialogUrl,
-  buildMetaEsLoginForBusinessDialogUrl,
+  buildMetaEsPartnerShareUrl,
   buildMetaEsOauthLaunchUrl,
   buildMetaEsSetupPrefill,
   configIdLast4,
@@ -169,11 +169,11 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /wabaMetaEsTrySdkAfterReauth/);
     assert.doesNotMatch(html, /wabaMetaEsArmSdkAfterReauth/);
     assert.doesNotMatch(html, /Não clique em Começar/);
-    assert.match(html, /wabaMetaEsBuildLoginForBusinessUrl/);
-    assert.match(html, /business\.facebook\.com\/" \+ version \+ "\/dialog\/oauth/);
-    assert.match(html, /wabaMetaEsIsAdsPowerBrowser\(\)/);
-    assert.match(html, /clique em Começar/);
-    assert.match(html, /Conecte sua conta a Grupo Walkup App/);
+    assert.match(html, /wabaMetaEsBuildPartnerShareUrl/);
+    assert.match(html, /4141369862822598/);
+    assert.match(html, /whatsapp_accounts/);
+    assert.doesNotMatch(html, /wabaMetaEsBuildLoginForBusinessUrl/);
+    assert.match(html, /Recurso indisponível/);
   });
 
   it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {
@@ -259,44 +259,28 @@ describe("meta-es-fb-login", () => {
     assert.match(String(launchParsed.searchParams.get("next") || ""), /business\.facebook\.com/);
     assert.doesNotMatch(String(launchParsed.searchParams.get("next") || ""), /dialog\/oauth/);
     assert.doesNotMatch(launch, /www\.facebook\.com/);
-    const lfb = buildMetaEsLoginForBusinessDialogUrl({
-      appId: "1279182514183979",
-      configId: "1590195526041278",
-      redirectUri: "https://waba.draxsistemas.com.br/",
-      state: "abc123",
-      cbt: "1",
-    });
-    assert.ok(lfb);
-    const lfbParsed = new URL(lfb);
-    assert.equal(lfbParsed.hostname, "business.facebook.com");
-    assert.equal(lfbParsed.pathname, "/v26.0/dialog/oauth");
-    assert.equal(lfbParsed.searchParams.get("client_id"), "1279182514183979");
-    assert.equal(lfbParsed.searchParams.get("config_id"), "1590195526041278");
-    assert.equal(lfbParsed.searchParams.get("response_type"), "code");
-    assert.equal(lfbParsed.searchParams.get("override_default_response_type"), "true");
-    assert.equal(lfbParsed.searchParams.get("display"), "page");
-    assert.equal(lfbParsed.searchParams.get("sdk"), null);
-    assert.equal(lfbParsed.searchParams.get("scope"), null);
-    assert.equal(lfbParsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br");
+    const partner = buildMetaEsPartnerShareUrl();
+    assert.ok(partner);
+    const partnerParsed = new URL(partner);
+    assert.equal(partnerParsed.hostname, "business.facebook.com");
+    assert.equal(partnerParsed.pathname, "/latest/settings/whatsapp_accounts");
+    assert.doesNotMatch(partner, /dialog\/oauth/);
     const adsLaunch = buildMetaEsOauthLaunchUrl({
       appId: "1279182514183979",
       configId: "1590195526041278",
       redirectUri: "https://waba.draxsistemas.com.br/",
       state: "abc123",
-      loginForBusiness: true,
-      cbt: "1",
+      partnerShare: true,
     });
     assert.ok(adsLaunch);
     const adsLaunchParsed = new URL(adsLaunch);
     assert.equal(adsLaunchParsed.pathname, "/login/reauth.php");
     const adsNext = String(adsLaunchParsed.searchParams.get("next") || "");
     assert.match(adsNext, /business\.facebook\.com/);
-    assert.match(adsNext, /dialog\/oauth/);
-    assert.match(adsNext, /config_id=1590195526041278/);
+    assert.match(adsNext, /whatsapp_accounts/);
+    assert.doesNotMatch(adsNext, /dialog\/oauth/);
     assert.doesNotMatch(adsNext, /web\.facebook\.com/);
     assert.doesNotMatch(adsNext, /encrypted_query_string/);
-    assert.doesNotMatch(adsNext, /[?&]scope=/);
-    assert.doesNotMatch(adsNext, /sdk=joey/);
     assert.equal(
       shouldUseMetaEsPageRedirect({ preferPage: true }),
       true,
