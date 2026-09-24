@@ -174,7 +174,7 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /wabaMetaEsBuildLoginForBusinessUrl/);
     assert.doesNotMatch(html, /sdk=joey/);
     assert.match(html, /Esse fluxo não usa Página do Facebook/);
-    assert.match(html, /loginForBusiness: adsPower/);
+    assert.match(html, /loginForBusiness: true/);
   });
 
   it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {

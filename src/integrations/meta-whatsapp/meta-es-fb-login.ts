@@ -414,10 +414,10 @@ export function buildMetaEsLoginForBusinessDialogUrl(
 
 /**
  * Senha em reauth.php.
- * Chrome: next = Hosted ES (Começar funciona).
- * AdsPower (loginForBusiness): next = LFB display=page na mesma janela —
- * o Começar ainda gera encrypted_query_string mesmo com OAuth em navegador
- * incorporado ligado; o 2º popup é o que falha.
+ * Sem loginForBusiness: next = Hosted ES.
+ * Com loginForBusiness: next = LFB display=page na mesma janela.
+ * O Laboratório sempre envia loginForBusiness=true: o SunBrowser spoofa UA
+ * de Chrome e a detecção AdsPower falhou no marker 134800 (Hosted ES + Começar).
  */
 export function buildMetaEsOauthLaunchUrl(
   input: MetaEsOauthDialogInput,
