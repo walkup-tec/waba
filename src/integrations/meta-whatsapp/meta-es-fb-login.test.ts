@@ -172,6 +172,7 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /wabaMetaEsBuildPartnerShareUrl/);
     assert.doesNotMatch(html, /latest\/settings\/whatsapp_accounts/);
     assert.match(html, /wabaMetaEsBuildLoginForBusinessUrl/);
+    assert.match(html, /wabaMetaEsStrictOauthRedirectUri/);
     assert.doesNotMatch(html, /sdk=joey/);
     assert.match(html, /Esse fluxo não usa Página do Facebook/);
     assert.match(html, /loginForBusiness: true/);
@@ -274,11 +275,11 @@ describe("meta-es-fb-login", () => {
     assert.equal(adsLaunchParsed.hostname, "web.facebook.com");
     assert.equal(adsLaunchParsed.pathname, "/login/reauth.php");
     const adsNext = String(adsLaunchParsed.searchParams.get("next") || "");
-    assert.match(adsNext, /business\.facebook\.com/);
+    assert.match(adsNext, /www\.facebook\.com/);
     assert.match(adsNext, /dialog\/oauth/);
     assert.match(adsNext, /config_id=1590195526041278/);
     assert.match(adsNext, /display=page/);
-    assert.match(adsNext, /redirect_uri=/);
+    assert.match(adsNext, /redirect_uri=https%3A%2F%2Fwaba\.draxsistemas\.com\.br%2F/);
     assert.doesNotMatch(adsNext, /messaging\/whatsapp\/onboard/);
     assert.doesNotMatch(adsNext, /whatsapp_accounts/);
     assert.doesNotMatch(adsNext, /xd_arbiter/);
@@ -292,13 +293,13 @@ describe("meta-es-fb-login", () => {
     });
     assert.ok(lfb);
     const lfbParsed = new URL(lfb);
-    assert.equal(lfbParsed.hostname, "business.facebook.com");
+    assert.equal(lfbParsed.hostname, "www.facebook.com");
     assert.equal(lfbParsed.pathname, "/v26.0/dialog/oauth");
     assert.equal(lfbParsed.searchParams.get("client_id"), "1279182514183979");
     assert.equal(lfbParsed.searchParams.get("config_id"), "1590195526041278");
     assert.equal(lfbParsed.searchParams.get("display"), "page");
     assert.equal(lfbParsed.searchParams.get("response_type"), "code");
-    assert.equal(lfbParsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br");
+    assert.equal(lfbParsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br/");
     assert.equal(lfbParsed.searchParams.get("sdk"), null);
     assert.equal(lfbParsed.searchParams.get("channel_url"), null);
     assert.equal(

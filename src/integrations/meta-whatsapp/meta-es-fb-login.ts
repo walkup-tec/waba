@@ -93,6 +93,13 @@ export const META_ES_ONBOARD_ORIGIN = "https://business.facebook.com";
 export const META_ES_ONBOARD_PATH = "/messaging/whatsapp/onboard/";
 
 /**
+ * Host documentado do Login for Business (dialog/oauth).
+ * business.facebook.com/v26.0/dialog/oauth com config_id em claro ainda
+ * devolveu Recurso indisponível no SunBrowser (marker 135200).
+ */
+export const META_ES_LFB_ORIGIN = "https://www.facebook.com";
+
+/**
  * redirect_uri do JS SDK (FB.login). Mantido só como candidato de troca do code.
  */
 export const META_ES_SDK_XD_ARBITER =
@@ -224,6 +231,24 @@ export function resolveMetaEsRedirectUri(input: {
     normalizeMetaEsRedirectUri(String(input.configRedirectUri || "")) ||
     normalizeMetaEsRedirectUri(String(input.locationOrigin || ""))
   );
+}
+
+/**
+ * Modo estrito do App Dashboard lista `https://waba.draxsistemas.com.br/`
+ * (com barra). normalize() tira a barra; o dialog do 135200 foi sem ela.
+ */
+export function metaEsStrictOauthRedirectUri(raw: string): string {
+  const origin = resolveMetaEsRedirectUri({ configRedirectUri: raw, locationOrigin: raw });
+  if (!origin) return "";
+  try {
+    const parsed = new URL(origin);
+    if (parsed.pathname === "" || parsed.pathname === "/") {
+      return `${parsed.protocol}//${parsed.host}/`;
+    }
+    return origin;
+  } catch {
+    return origin.endsWith("/") ? origin : `${origin}/`;
+  }
 }
 
 export function isNativeWindowOpen(openFn: unknown): boolean {
@@ -380,27 +405,26 @@ export function metaEsOauthPopupFeatures(): string {
 }
 
 /**
- * Login for Business em display=page (doc LFB / ES), sem JS SDK.
- * redirect_uri = origem da DRAX (Valid OAuth: https://waba.draxsistemas.com.br/).
- * Sem sdk=joey / xd_arbiter — isso foi a letra E/H e caiu em Recurso indisponível
- * com «Login OAuth no navegador incorporado» desligado.
- * Hosted ES Começar ainda abre um 2º popup dialog/oauth; este next evita esse popup.
+ * Login for Business em display=page (doc LFB), sem JS SDK.
+ * Host: www.facebook.com — business.facebook.com/dialog/oauth com config_id
+ * visível ainda caiu em Recurso indisponível (SunBrowser, marker 135200).
+ * redirect_uri com barra final: Valid OAuth + Strict Mode no App Dashboard.
  */
 export function buildMetaEsLoginForBusinessDialogUrl(
   input: MetaEsOauthDialogInput,
 ): string | null {
   const appId = String(input.appId || "").trim();
   const configId = String(input.configId || "").trim();
-  const siteOrigin = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
-  if (!appId || !configId || !siteOrigin) return null;
+  const redirectUri = metaEsStrictOauthRedirectUri(input.redirectUri);
+  if (!appId || !configId || !redirectUri) return null;
   const version =
     String(input.graphVersion || META_ES_JS_SDK_GRAPH_VERSION).trim() || META_ES_JS_SDK_GRAPH_VERSION;
   const businessId = String(input.setup?.business?.id || input.businessId || "").trim();
   const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || input.wabaId || "").trim();
   const setup = buildMetaEsSetupPrefill({ businessId, wabaId });
-  const parsed = new URL(`${META_ES_ONBOARD_ORIGIN}/${version}/dialog/oauth`);
+  const parsed = new URL(`${META_ES_LFB_ORIGIN}/${version}/dialog/oauth`);
   parsed.searchParams.set("client_id", appId);
-  parsed.searchParams.set("redirect_uri", siteOrigin);
+  parsed.searchParams.set("redirect_uri", redirectUri);
   parsed.searchParams.set("response_type", "code");
   parsed.searchParams.set("override_default_response_type", "true");
   parsed.searchParams.set("config_id", configId);

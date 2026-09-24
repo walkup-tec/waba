@@ -27856,18 +27856,31 @@
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
           return parsed.toString();
         };
+        window.wabaMetaEsStrictOauthRedirectUri = function (raw) {
+          var siteOrigin = window.wabaMetaEsNormalizeRedirectUri(raw);
+          if (!siteOrigin) return "";
+          try {
+            var hostOnly = new URL(siteOrigin);
+            if (hostOnly.pathname === "" || hostOnly.pathname === "/") {
+              return hostOnly.protocol + "//" + hostOnly.host + "/";
+            }
+            return siteOrigin;
+          } catch (e) {
+            return siteOrigin.charAt(siteOrigin.length - 1) === "/" ? siteOrigin : siteOrigin + "/";
+          }
+        };
         window.wabaMetaEsBuildLoginForBusinessUrl = function (input) {
           var appId = String(input && input.appId || "").trim();
           var configId = String(input && input.configId || "").trim();
-          var siteOrigin = window.wabaMetaEsNormalizeRedirectUri(
+          var redirectUri = window.wabaMetaEsStrictOauthRedirectUri(
             String((input && input.redirectUri) || "") || window.location.origin
           );
-          if (!appId || !configId || !siteOrigin) return "";
+          if (!appId || !configId || !redirectUri) return "";
           var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
           var version = String((input && input.graphVersion) || "v26.0");
-          var parsed = new URL("https://business.facebook.com/" + version + "/dialog/oauth");
+          var parsed = new URL("https://www.facebook.com/" + version + "/dialog/oauth");
           parsed.searchParams.set("client_id", appId);
-          parsed.searchParams.set("redirect_uri", siteOrigin);
+          parsed.searchParams.set("redirect_uri", redirectUri);
           parsed.searchParams.set("response_type", "code");
           parsed.searchParams.set("override_default_response_type", "true");
           parsed.searchParams.set("config_id", configId);
