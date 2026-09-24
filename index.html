@@ -27761,7 +27761,7 @@
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
-          "No AdsPower o Login for Business cai em Recurso indisponível. Compartilhe a WABA com o portfólio Walkup 4141369862822598 no Gerenciador e clique em Atualizar no Laboratório.";
+          "A Meta recusou o Login for Business neste navegador. No AdsPower o Facebook abre em uma nova janela/aba do mesmo perfil (o Laboratório permanece). Feche a janela da Meta, volte ao Laboratório e clique de novo em Conectar Portfólio.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
@@ -27856,21 +27856,15 @@
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
           return parsed.toString();
         };
-        window.WABA_META_ES_WALKUP_PARTNER_BUSINESS_ID = "4141369862822598";
-        window.wabaMetaEsBuildPartnerShareUrl = function (input) {
-          var parsed = new URL("https://business.facebook.com/latest/settings/whatsapp_accounts");
-          var businessId = String((input && input.businessId) || "").trim();
-          if (businessId) parsed.searchParams.set("business_id", businessId);
-          return parsed.toString();
-        };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
-          var setup = input && input.setup;
-          var businessId = String(
-            (input && input.businessId) ||
-              (setup && setup.business && setup.business.id) ||
-              ""
-          ).trim();
-          return window.wabaMetaEsBuildPartnerShareUrl({ businessId: businessId });
+          var dialog = window.wabaMetaEsBuildOauthDialogUrl(input);
+          var appId = String(input && input.appId || "").trim();
+          if (!dialog || !appId) return "";
+          var reauth = new URL("https://web.facebook.com/login/reauth.php");
+          reauth.searchParams.set("app_id", appId);
+          reauth.searchParams.set("signed_next", "1");
+          reauth.searchParams.set("next", dialog);
+          return reauth.toString();
         };
         window.wabaMetaEsCreateOauthState = function () {
           var bytes = new Uint8Array(16);
@@ -28158,9 +28152,10 @@
             });
             console.info(
               "[META][ES][PAGE_REDIRECT]",
-              "host=business.facebook.com",
-              "reauth=false",
-              "whatsappAccounts=true",
+              "host=web.facebook.com",
+              "reauth=true",
+              "onboard=true",
+              "configIdPresent=true",
               "open=new-window"
             );
             var opened = window.wabaMetaEsOpenFacebook(dialogUrl);
@@ -40999,7 +40994,7 @@
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
           metaTpSetStatus(
-            "No AdsPower abriu o Gerenciador de contas WhatsApp. Compartilhe a WABA com o portfólio Walkup 4141369862822598 e volte aqui em Atualizar. Não use o Login for Business (dialog/oauth) — o SunBrowser recusa.",
+            "Informe a senha na janela da Meta. Quando aparecer o Grupo Walkup App, clique em Começar. Esse fluxo não usa Página do Facebook.",
           );
         }
         return false;

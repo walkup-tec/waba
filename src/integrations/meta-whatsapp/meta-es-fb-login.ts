@@ -85,13 +85,8 @@ export type MetaEsOauthReturn = {
 
 export const META_ES_OAUTH_STORAGE_KEY = "waba-meta-es-oauth";
 
-/** Host do reauth (senha). Dialog/oauth neste host a Meta criptografa (_rdc). */
+/** Host do reauth (senha). */
 export const META_ES_OAUTH_HOST = "web.facebook.com";
-
-/** BM Walkup — o AdsPower compartilha a WABA com este portfólio (não usa dialog/oauth). */
-export const META_ES_WALKUP_PARTNER_BUSINESS_ID = "4141369862822598";
-
-export const META_ES_PARTNER_SHARE_PATH = "/latest/settings/whatsapp_accounts";
 
 /** LaunchBridge do Embedded Signup. Só existe em business.facebook.com — web.facebook.com devolve página indisponível. */
 export const META_ES_ONBOARD_ORIGIN = "https://business.facebook.com";
@@ -349,15 +344,12 @@ export type MetaEsOauthDialogInput = {
   state?: string;
   display?: "page" | "popup";
   cbt?: string | number;
-  partnerShare?: boolean;
-  loginForBusiness?: boolean;
 };
 
 /**
- * Hosted ES igual ao Chrome: app_id, config_id, extras={"setup":{}}, state.
- * No Chrome o Começar abre Login for Business. No AdsPower o Começar abre
- * uma janela nova; o SunBrowser reescreve dialog/oauth e a Meta entrega
- * Login do Facebook (Recurso indisponível).
+ * Hosted ES (doc Meta): app_id, config_id, extras={"setup":{}}.
+ * Não usa Página do Facebook — o Business Suite (whatsapp_accounts) exige Página
+ * e não serve para essas BMs.
  */
 export function buildMetaEsOauthDialogUrl(input: MetaEsOauthDialogInput): string | null {
   const appId = String(input.appId || "").trim();
@@ -381,37 +373,17 @@ export function buildMetaEsOauthDialogUrl(input: MetaEsOauthDialogInput): string
   return parsed.toString();
 }
 
-/**
- * Gerenciador WhatsApp no business.facebook.com (o Hosted ES já abre neste host).
- * O AdsPower recusa todo dialog/oauth: a Meta termina em
- * web.facebook.com/.../encrypted_query_string + Recurso indisponível.
- */
-export function buildMetaEsPartnerShareUrl(input: {
-  businessId?: string;
-} = {}): string {
-  const parsed = new URL(`${META_ES_ONBOARD_ORIGIN}${META_ES_PARTNER_SHARE_PATH}`);
-  const businessId = String(input.businessId || "").trim();
-  if (businessId) parsed.searchParams.set("business_id", businessId);
-  return parsed.toString();
-}
-
 export function metaEsOauthPopupFeatures(): string {
   return "popup=yes,width=1100,height=820,scrollbars=yes,resizable=yes,toolbar=yes,location=yes,menubar=no";
 }
 
 /**
- * Chrome (sem partnerShare): senha em reauth.php, next = Hosted ES.
- * AdsPower: Gerenciador WhatsApp direto. reauth.php?next=whatsapp_accounts
- * a Meta recusa (“Sorry, something went wrong”).
+ * Senha em reauth.php; next = Hosted ES (não Business Suite, não dialog/oauth).
+ * Sem Página: o onboard do WhatsApp é o fluxo da doc; /latest/settings exige Página.
  */
 export function buildMetaEsOauthLaunchUrl(
   input: MetaEsOauthDialogInput,
 ): string | null {
-  if (input.partnerShare || input.loginForBusiness) {
-    return buildMetaEsPartnerShareUrl({
-      businessId: String(input.setup?.business?.id || input.businessId || "").trim(),
-    });
-  }
   const dialog = buildMetaEsOauthDialogUrl(input);
   const appId = String(input.appId || "").trim();
   if (!dialog || !appId) return null;
