@@ -15,7 +15,7 @@
  * Login for Business / ES v4 não renderiza no path /v22.0/.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_ES_SDK_XD_ARBITER = exports.META_ES_LFB_ORIGIN = exports.META_ES_ONBOARD_PATH = exports.META_ES_ONBOARD_ORIGIN = exports.META_ES_OAUTH_HOST = exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
+exports.META_ES_CONNECT_METHOD_STORAGE_KEY = exports.META_ES_CONNECT_METHODS = exports.META_ES_SDK_XD_ARBITER = exports.META_ES_LFB_ORIGIN = exports.META_ES_ONBOARD_PATH = exports.META_ES_ONBOARD_ORIGIN = exports.META_ES_OAUTH_HOST = exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
 exports.readMetaConfigIdFromEnv = readMetaConfigIdFromEnv;
 exports.resolveMetaEsJsSdkGraphVersion = resolveMetaEsJsSdkGraphVersion;
 exports.resolveMetaEsConfigId = resolveMetaEsConfigId;
@@ -32,6 +32,10 @@ exports.resolveMetaEsRedirectUri = resolveMetaEsRedirectUri;
 exports.metaEsStrictOauthRedirectUri = metaEsStrictOauthRedirectUri;
 exports.isNativeWindowOpen = isNativeWindowOpen;
 exports.isAdsPowerLikeBrowser = isAdsPowerLikeBrowser;
+exports.parseMetaEsConnectMethod = parseMetaEsConnectMethod;
+exports.resolveMetaEsConnectMethod = resolveMetaEsConnectMethod;
+exports.metaEsConnectMethodUsesPageRedirect = metaEsConnectMethodUsesPageRedirect;
+exports.metaEsConnectMethodUsesLoginForBusiness = metaEsConnectMethodUsesLoginForBusiness;
 exports.shouldUseMetaEsPageRedirect = shouldUseMetaEsPageRedirect;
 exports.createMetaEsOauthState = createMetaEsOauthState;
 exports.siteHostFromMetaEsOrigin = siteHostFromMetaEsOrigin;
@@ -219,14 +223,33 @@ function isAdsPowerLikeBrowser(input) {
     return false;
 }
 /**
- * Popup do FB.login no AdsPower cai em Recurso indisponível (query criptografada).
- * Chrome nativo completa o mesmo config_id. No AdsPower (e em qualquer browser
- * que hooka window.open) o login vai na mesma aba, via dialog/oauth documentado.
+ * Popup do FB.login no AdsPower caía em Recurso indisponível (query criptografada).
+ * O dialog/oauth em página (web/www) também: a Meta reescreve para
+ * web.facebook.com e o Login do Facebook fica indisponível (etapa 2, 162000).
+ * O método fica explícito no Laboratório — não forçar LFB por UA.
  */
+exports.META_ES_CONNECT_METHODS = ["sdk", "hosted", "lfb"];
+exports.META_ES_CONNECT_METHOD_STORAGE_KEY = "waba-meta-es-connect-method";
+function parseMetaEsConnectMethod(raw) {
+    const value = String(raw || "").trim().toLowerCase();
+    if (value === "sdk" || value === "hosted" || value === "lfb")
+        return value;
+    return "";
+}
+function resolveMetaEsConnectMethod(stored) {
+    return parseMetaEsConnectMethod(stored) || "sdk";
+}
+function metaEsConnectMethodUsesPageRedirect(method) {
+    return method === "hosted" || method === "lfb";
+}
+function metaEsConnectMethodUsesLoginForBusiness(method) {
+    return method === "lfb";
+}
 function shouldUseMetaEsPageRedirect(input) {
     if (input.preferPage === true)
         return true;
-    return isAdsPowerLikeBrowser(input);
+    const method = parseMetaEsConnectMethod(input.method) || resolveMetaEsConnectMethod();
+    return metaEsConnectMethodUsesPageRedirect(method);
 }
 function createMetaEsOauthState() {
     const bytes = new Uint8Array(16);

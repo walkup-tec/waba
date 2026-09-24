@@ -3735,6 +3735,26 @@
 
         .meta-onboard { max-width: none; margin: 0; }
         .meta-onboard-hero { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:16px; margin-bottom:18px; }
+        .meta-es-connect-method {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          min-width: min(260px, 100%);
+        }
+        .meta-es-connect-method label {
+          font-size: 11px;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: #93c5fd;
+        }
+        .meta-es-connect-method select {
+          border-radius: 10px;
+          border: 1px solid rgba(148, 163, 184, 0.28);
+          background: rgba(15, 23, 42, 0.85);
+          color: #e2e8f0;
+          padding: 8px 10px;
+          font-size: 13px;
+        }
         .meta-connect-progress {
           display: flex;
           align-items: flex-start;
@@ -23613,6 +23633,14 @@
                       </svg>
                       Conectar Portfólio
                     </button>
+                    <div class="meta-es-connect-method">
+                      <label for="meta-es-connect-method">Método neste perfil</label>
+                      <select id="meta-es-connect-method" aria-label="Método de conexão Meta neste perfil">
+                        <option value="sdk">SDK da Meta (FB.login)</option>
+                        <option value="hosted">Hosted Embedded Signup</option>
+                        <option value="lfb">Login for Business (página)</option>
+                      </select>
+                    </div>
                     <div
                       id="meta-tp-connect-progress"
                       class="meta-connect-progress"
@@ -27797,7 +27825,43 @@
         };
         window.wabaMetaEsShouldUsePageRedirect = function (preferPage) {
           if (preferPage === true) return true;
-          return window.wabaMetaEsIsAdsPowerBrowser();
+          var method = window.wabaMetaEsResolveConnectMethod();
+          return method === "hosted" || method === "lfb";
+        };
+        window.WABA_META_ES_CONNECT_METHOD_KEY = "waba-meta-es-connect-method";
+        window.wabaMetaEsParseConnectMethod = function (raw) {
+          var value = String(raw || "").trim().toLowerCase();
+          if (value === "sdk" || value === "hosted" || value === "lfb") return value;
+          return "";
+        };
+        window.wabaMetaEsResolveConnectMethod = function () {
+          var stored = "";
+          try {
+            stored = window.wabaMetaEsParseConnectMethod(localStorage.getItem(window.WABA_META_ES_CONNECT_METHOD_KEY));
+          } catch (e) {
+            stored = "";
+          }
+          return stored || "sdk";
+        };
+        window.wabaMetaEsWriteConnectMethod = function (raw) {
+          var method = window.wabaMetaEsParseConnectMethod(raw) || "sdk";
+          try {
+            localStorage.setItem(window.WABA_META_ES_CONNECT_METHOD_KEY, method);
+          } catch (e) {
+            /* noop */
+          }
+          var select = document.getElementById("meta-es-connect-method");
+          if (select && select.value !== method) select.value = method;
+          return method;
+        };
+        window.wabaMetaEsBindConnectMethod = function () {
+          var select = document.getElementById("meta-es-connect-method");
+          if (!select || select.getAttribute("data-bound") === "1") return;
+          select.setAttribute("data-bound", "1");
+          select.value = window.wabaMetaEsResolveConnectMethod();
+          select.addEventListener("change", function () {
+            window.wabaMetaEsWriteConnectMethod(select.value);
+          });
         };
         window.wabaMetaEsBuildLoginOptions = function (configId, setup) {
           var id = String(configId || "").trim();
@@ -28162,7 +28226,9 @@
           window.__WABA_META_ES_LOGIN_CB = callback;
           var cfg = extra || {};
           var publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
-          var preferPage = cfg.preferPage === true || window.wabaMetaEsShouldUsePageRedirect(cfg.preferPage);
+          var method = window.wabaMetaEsResolveConnectMethod();
+          var preferPage = cfg.preferPage === true || method === "hosted" || method === "lfb";
+          var loginForBusiness = method === "lfb";
           var appId = String(cfg.appId || publicCfg.appId || "").trim();
           var redirectUri = String(cfg.redirectUri || publicCfg.redirectUri || "").trim();
           if (!redirectUri) {
@@ -28178,7 +28244,7 @@
               graphVersion: publicCfg.graphVersion || "v26.0",
               setup: setup,
               state: state,
-              loginForBusiness: true
+              loginForBusiness: loginForBusiness
             });
             if (!dialogUrl) {
               return { ok: false, error: UNAVAILABLE };
@@ -28193,10 +28259,11 @@
             });
             console.info(
               "[META][ES][PAGE_REDIRECT]",
-              "host=www.facebook.com",
+              "method=" + method,
+              "host=" + (loginForBusiness ? "www.facebook.com" : "web.facebook.com"),
               "reauth=true",
-              "lfb=true",
-              "onboard=false",
+              "lfb=" + (loginForBusiness ? "true" : "false"),
+              "onboard=" + (loginForBusiness ? "false" : "true"),
               "configIdPresent=true",
               "open=new-window"
             );
@@ -28262,6 +28329,7 @@
           }
         });
         window.wabaMetaEsCaptureOauthReturn();
+        window.wabaMetaEsBindConnectMethod();
       })();
 
       (function initMetaEmbeddedSignupSdk() {
@@ -40981,7 +41049,12 @@
         const publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
         const appId = String(publicCfg.appId || "").trim();
         const configId = String(publicCfg.configId || "").trim();
-        const preferPage = true;
+        if (typeof window.wabaMetaEsBindConnectMethod === "function") window.wabaMetaEsBindConnectMethod();
+        const method =
+          typeof window.wabaMetaEsResolveConnectMethod === "function"
+            ? window.wabaMetaEsResolveConnectMethod()
+            : "sdk";
+        const preferPage = method === "hosted" || method === "lfb";
         const sdkReady = typeof FB !== "undefined" && typeof FB.login === "function";
         if (typeof window.wabaMetaEsLogStart === "function") {
           window.wabaMetaEsLogStart({

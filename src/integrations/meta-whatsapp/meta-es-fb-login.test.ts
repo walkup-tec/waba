@@ -26,6 +26,10 @@ import {
   resolveFbLoginOptionsForAttempt,
   resolveMetaEsConfigId,
   resolveMetaEsJsSdkGraphVersion,
+  resolveMetaEsConnectMethod,
+  parseMetaEsConnectMethod,
+  metaEsConnectMethodUsesPageRedirect,
+  metaEsConnectMethodUsesLoginForBusiness,
   shouldOpenMetaEsPopup,
   shouldUseMetaEsPageRedirect,
   toPublicMetaEsConfig,
@@ -175,8 +179,12 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /wabaMetaEsStrictOauthRedirectUri/);
     assert.doesNotMatch(html, /sdk=joey/);
     assert.match(html, /Esse fluxo não usa Página do Facebook/);
-    assert.match(html, /loginForBusiness: true/);
-    assert.match(html, /www\.facebook\.com\/login\/reauth\.php/);
+    assert.match(html, /loginForBusiness: loginForBusiness/);
+    assert.match(html, /id="meta-es-connect-method"/);
+    assert.match(html, /SDK da Meta \(FB\.login\)/);
+    assert.match(html, /Hosted Embedded Signup/);
+    assert.match(html, /Login for Business \(página\)/);
+    assert.match(html, /wabaMetaEsResolveConnectMethod/);
     assert.doesNotMatch(html, /wabaMetaEsBuildLfbContinueUrl/);
     assert.doesNotMatch(html, /wabaMetaEsResumeLfbAfterReauth/);
     assert.doesNotMatch(html, /meta_es_lfb/);
@@ -322,10 +330,18 @@ describe("meta-es-fb-login", () => {
           return null;
         },
       }),
-      true,
+      false,
     );
     assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120" }), false);
-    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120" }), true);
+    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120" }), false);
+    assert.equal(shouldUseMetaEsPageRedirect({ method: "hosted" }), true);
+    assert.equal(shouldUseMetaEsPageRedirect({ method: "lfb" }), true);
+    assert.equal(shouldUseMetaEsPageRedirect({ method: "sdk" }), false);
+    assert.equal(resolveMetaEsConnectMethod(""), "sdk");
+    assert.equal(parseMetaEsConnectMethod("HOSTED"), "hosted");
+    assert.equal(metaEsConnectMethodUsesPageRedirect("hosted"), true);
+    assert.equal(metaEsConnectMethodUsesLoginForBusiness("lfb"), true);
+    assert.equal(metaEsConnectMethodUsesLoginForBusiness("hosted"), false);
     const returned = parseMetaEsOauthReturn("?code=AQC123&state=abc123&waba_id=waba-9");
     assert.equal(returned.code, "AQC123");
     assert.equal(returned.state, "abc123");

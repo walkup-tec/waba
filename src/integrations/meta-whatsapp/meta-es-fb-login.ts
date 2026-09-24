@@ -274,18 +274,43 @@ export function isAdsPowerLikeBrowser(input: {
 }
 
 /**
- * Popup do FB.login no AdsPower cai em Recurso indisponível (query criptografada).
- * Chrome nativo completa o mesmo config_id. No AdsPower (e em qualquer browser
- * que hooka window.open) o login vai na mesma aba, via dialog/oauth documentado.
+ * Popup do FB.login no AdsPower caía em Recurso indisponível (query criptografada).
+ * O dialog/oauth em página (web/www) também: a Meta reescreve para
+ * web.facebook.com e o Login do Facebook fica indisponível (etapa 2, 162000).
+ * O método fica explícito no Laboratório — não forçar LFB por UA.
  */
+export const META_ES_CONNECT_METHODS = ["sdk", "hosted", "lfb"] as const;
+export type MetaEsConnectMethod = (typeof META_ES_CONNECT_METHODS)[number];
+export const META_ES_CONNECT_METHOD_STORAGE_KEY = "waba-meta-es-connect-method";
+
+export function parseMetaEsConnectMethod(raw: unknown): MetaEsConnectMethod | "" {
+  const value = String(raw || "").trim().toLowerCase();
+  if (value === "sdk" || value === "hosted" || value === "lfb") return value;
+  return "";
+}
+
+export function resolveMetaEsConnectMethod(stored?: unknown): MetaEsConnectMethod {
+  return parseMetaEsConnectMethod(stored) || "sdk";
+}
+
+export function metaEsConnectMethodUsesPageRedirect(method: MetaEsConnectMethod): boolean {
+  return method === "hosted" || method === "lfb";
+}
+
+export function metaEsConnectMethodUsesLoginForBusiness(method: MetaEsConnectMethod): boolean {
+  return method === "lfb";
+}
+
 export function shouldUseMetaEsPageRedirect(input: {
   userAgent?: string;
   windowOpen?: unknown;
   globals?: Record<string, unknown> | null;
   preferPage?: boolean;
+  method?: unknown;
 }): boolean {
   if (input.preferPage === true) return true;
-  return isAdsPowerLikeBrowser(input);
+  const method = parseMetaEsConnectMethod(input.method) || resolveMetaEsConnectMethod();
+  return metaEsConnectMethodUsesPageRedirect(method);
 }
 
 export function createMetaEsOauthState(): string {
