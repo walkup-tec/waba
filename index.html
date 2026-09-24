@@ -23648,7 +23648,7 @@
                         <option value="sdk">SDK da Meta (FB.login)</option>
                       </select>
                       <p class="meta-es-connect-method-hint">
-                        No AdsPower, SunBrowser é o Chrome. A lista Chrome 153/152 é a versão do kernel. Feche o perfil, deixe SunBrowser + Chrome 153 e alinhe o User-Agent à mesma versão. Depois, Hosted ES e Começar.
+                        O Começar (etapa 3) neste AdsPower abre Login criptografado e a Meta mostra Recurso indisponível, mesmo com SunBrowser Chrome 153 e User-Agent 153. Conclua Conectar Portfólio no Google Chrome, na mesma conta Facebook deste perfil.
                       </p>
                     </div>
                     <div
@@ -41129,9 +41129,15 @@
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
           if (method === "hosted") {
-            metaTpSetStatus(
-              "Informe a senha se a Meta pedir. Na tela do WhatsApp, clique em Começar. Esse fluxo não usa Página do Facebook.",
-            );
+            if (typeof window.wabaMetaEsIsAdsPowerBrowser === "function" && window.wabaMetaEsIsAdsPowerBrowser()) {
+              metaTpSetStatus(
+                "Etapas 1 e 2 podem abrir neste AdsPower. O Começar (etapa 3) a Meta recusa aqui (Login criptografado). Feche essa tela, abra o Laboratório no Google Chrome com a mesma conta Facebook e conclua Conectar Portfólio. Esse fluxo não usa Página do Facebook.",
+              );
+            } else {
+              metaTpSetStatus(
+                "Informe a senha se a Meta pedir. Na tela do WhatsApp, clique em Começar. Esse fluxo não usa Página do Facebook.",
+              );
+            }
           } else if (method === "lfb") {
             metaTpSetStatus(
               "Informe a senha na janela da Meta e conecte ao Grupo Walkup App na mesma janela. Esse fluxo não usa Página do Facebook.",

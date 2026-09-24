@@ -230,8 +230,9 @@ function isAdsPowerLikeBrowser(input) {
  * O dialog/oauth em página (web/www) também: a Meta reescreve para
  * web.facebook.com e o Login do Facebook fica indisponível (etapa 2, 162000).
  * O método fica explícito no Laboratório — não forçar LFB por UA.
- * No AdsPower atual, SunBrowser é o Chromium; Chrome 153 na lista é a versão do kernel
- * (help.adspower.com/docs/creating_browser_profiles). Não existe kernel «Chrome» separado.
+ * No AdsPower (SunBrowser Chromium, mesmo com UA = kernel 153) o Começar do
+ * Hosted ES abre dialog/oauth criptografado e a Meta devolve Recurso indisponível.
+ * O grant da app conclui no Google Chrome com a mesma conta Facebook.
  */
 exports.META_ES_CONNECT_METHODS = ["sdk", "hosted", "lfb"];
 exports.META_ES_CONNECT_METHOD_STORAGE_KEY = "waba-meta-es-connect-method-v2";

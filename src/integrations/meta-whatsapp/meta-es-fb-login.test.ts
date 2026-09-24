@@ -189,8 +189,7 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /SDK da Meta \(FB\.login\)/);
     assert.match(html, /Hosted Embedded Signup/);
     assert.match(html, /Login for Business \(página\)/);
-    assert.match(html, /SunBrowser é o Chrome/);
-    assert.match(html, /alinhe o User-Agent/);
+    assert.match(html, /Conclua Conectar Portfólio no Google Chrome/);
     assert.doesNotMatch(html, /não SunBrowser/);
     assert.doesNotMatch(html, /wabaMetaEsShouldBlockUntilChromeKernel/);
     assert.doesNotMatch(html, /id="meta-es-chrome-kernel"/);
