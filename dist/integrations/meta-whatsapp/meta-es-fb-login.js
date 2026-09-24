@@ -38,6 +38,7 @@ exports.isMetaEsFacebookMessageOrigin = isMetaEsFacebookMessageOrigin;
 exports.parseMetaEsFacebookOauthMessage = parseMetaEsFacebookOauthMessage;
 exports.buildMetaEsOauthDialogUrl = buildMetaEsOauthDialogUrl;
 exports.metaEsOauthPopupFeatures = metaEsOauthPopupFeatures;
+exports.buildMetaEsLoginForBusinessDialogUrl = buildMetaEsLoginForBusinessDialogUrl;
 exports.buildMetaEsOauthLaunchUrl = buildMetaEsOauthLaunchUrl;
 exports.parseMetaEsOauthReturn = parseMetaEsOauthReturn;
 exports.stripMetaEsOauthSearch = stripMetaEsOauthSearch;
@@ -303,11 +304,47 @@ function metaEsOauthPopupFeatures() {
     return "popup=yes,width=1100,height=820,scrollbars=yes,resizable=yes,toolbar=yes,location=yes,menubar=no";
 }
 /**
- * Senha em reauth.php; next = Hosted ES (não Business Suite, não dialog/oauth).
- * Sem Página: o onboard do WhatsApp é o fluxo da doc; /latest/settings exige Página.
+ * Login for Business em display=page (doc LFB / ES), sem JS SDK.
+ * redirect_uri = origem da DRAX (Valid OAuth: https://waba.draxsistemas.com.br/).
+ * Sem sdk=joey / xd_arbiter — isso foi a letra E/H e caiu em Recurso indisponível
+ * com «Login OAuth no navegador incorporado» desligado.
+ * Hosted ES Começar ainda abre um 2º popup dialog/oauth; este next evita esse popup.
+ */
+function buildMetaEsLoginForBusinessDialogUrl(input) {
+    const appId = String(input.appId || "").trim();
+    const configId = String(input.configId || "").trim();
+    const siteOrigin = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
+    if (!appId || !configId || !siteOrigin)
+        return null;
+    const version = String(input.graphVersion || exports.META_ES_JS_SDK_GRAPH_VERSION).trim() || exports.META_ES_JS_SDK_GRAPH_VERSION;
+    const businessId = String(input.setup?.business?.id || input.businessId || "").trim();
+    const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || input.wabaId || "").trim();
+    const setup = buildMetaEsSetupPrefill({ businessId, wabaId });
+    const parsed = new URL(`${exports.META_ES_ONBOARD_ORIGIN}/${version}/dialog/oauth`);
+    parsed.searchParams.set("client_id", appId);
+    parsed.searchParams.set("redirect_uri", siteOrigin);
+    parsed.searchParams.set("response_type", "code");
+    parsed.searchParams.set("override_default_response_type", "true");
+    parsed.searchParams.set("config_id", configId);
+    parsed.searchParams.set("display", "page");
+    parsed.searchParams.set("extras", JSON.stringify({ setup }));
+    const state = String(input.state || "").trim();
+    if (state)
+        parsed.searchParams.set("state", state);
+    void input.cbt;
+    return parsed.toString();
+}
+/**
+ * Senha em reauth.php.
+ * Chrome: next = Hosted ES (Começar funciona).
+ * AdsPower (loginForBusiness): next = LFB display=page na mesma janela —
+ * o Começar ainda gera encrypted_query_string mesmo com OAuth em navegador
+ * incorporado ligado; o 2º popup é o que falha.
  */
 function buildMetaEsOauthLaunchUrl(input) {
-    const dialog = buildMetaEsOauthDialogUrl(input);
+    const dialog = input.loginForBusiness
+        ? buildMetaEsLoginForBusinessDialogUrl(input)
+        : buildMetaEsOauthDialogUrl(input);
     const appId = String(input.appId || "").trim();
     if (!dialog || !appId)
         return null;
