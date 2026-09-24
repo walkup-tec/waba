@@ -88,8 +88,8 @@ export const META_ES_OAUTH_STORAGE_KEY = "waba-meta-es-oauth";
 /** Host do reauth (senha). www dispara _rdc + encrypted_query_string. */
 export const META_ES_OAUTH_HOST = "web.facebook.com";
 
-/** LaunchBridge do Embedded Signup. dialog/oauth com config_id ES vira Recurso indisponível. */
-export const META_ES_ONBOARD_ORIGIN = "https://business.facebook.com";
+/** LaunchBridge no mesmo host da senha. business.facebook.com faz o Começar ir a dialog/oauth com _rdc. */
+export const META_ES_ONBOARD_ORIGIN = "https://web.facebook.com";
 export const META_ES_ONBOARD_PATH = "/messaging/whatsapp/onboard/";
 
 /**
@@ -340,6 +340,7 @@ export function buildMetaEsOauthDialogUrl(input: {
   graphVersion?: string;
   setup?: MetaEsSetupPrefill;
   businessId?: string;
+  wabaId?: string;
   state?: string;
   display?: "page" | "popup";
   cbt?: string | number;
@@ -348,22 +349,20 @@ export function buildMetaEsOauthDialogUrl(input: {
   const configId = String(input.configId || "").trim();
   const siteOrigin = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
   if (!appId || !configId || !siteOrigin) return null;
-  const setup = buildMetaEsSetupPrefill({
-    businessId: input.setup?.business?.id,
-    wabaId: input.setup?.whatsAppBusinessAccount?.ids,
-  });
-  // Hosted ES (App Dashboard → View onboarding): só app_id + config_id + extras.
-  // response_type / override_default_response_type / redirect_uri são do FB.login;
-  // no LaunchBridge o Começar monta dialog/oauth → Recurso indisponível no AdsPower.
+  const businessId = String(
+    input.setup?.business?.id || input.businessId || "",
+  ).trim();
+  const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || input.wabaId || "").trim();
+  const setup: MetaEsSetupPrefill = { ...buildMetaEsSetupPrefill({ businessId, wabaId }) };
+  // Hosted ES: o select de portfólio ignora só o query business_id. extras.setup.business
+  // preenche o header. FB.login continua sem extras só com BM (buildMetaEsFbLoginOptions).
+  if (businessId && !setup.business) setup.business = { id: businessId };
   const parsed = new URL(`${META_ES_ONBOARD_ORIGIN}${META_ES_ONBOARD_PATH}`);
   parsed.searchParams.set("app_id", appId);
   parsed.searchParams.set("config_id", configId);
   parsed.searchParams.set("extras", JSON.stringify({ setup }));
   const state = String(input.state || "").trim();
   if (state) parsed.searchParams.set("state", state);
-  const businessId = String(
-    setup.business?.id || input.businessId || input.setup?.business?.id || "",
-  ).trim();
   if (businessId) {
     parsed.searchParams.set("business_id", businessId);
     parsed.searchParams.set("global_scope_id", businessId);

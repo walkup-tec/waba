@@ -27848,15 +27848,36 @@
           );
           if (!appId || !configId || !siteOrigin) return "";
           var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
-          var extras = options && options.extras ? options.extras : { setup: {} };
-          var parsed = new URL("https://business.facebook.com/messaging/whatsapp/onboard/");
+          var extras = options && options.extras ? JSON.parse(JSON.stringify(options.extras)) : { setup: {} };
+          if (!extras.setup || typeof extras.setup !== "object") extras.setup = {};
+          var parsed = new URL("https://web.facebook.com/messaging/whatsapp/onboard/");
           parsed.searchParams.set("app_id", appId);
           parsed.searchParams.set("config_id", configId);
-          parsed.searchParams.set("response_type", "code");
-          parsed.searchParams.set("override_default_response_type", "true");
-          parsed.searchParams.set("redirect_uri", siteOrigin);
+
+          var businessId = String(
+            (extras.setup && extras.setup.business && extras.setup.business.id) ||
+              (input && input.businessId) ||
+              (input && input.setup && input.setup.business && input.setup.business.id) ||
+              ""
+          ).trim();
+          var wabaId = String(
+            (extras.setup && extras.setup.whatsAppBusinessAccount && extras.setup.whatsAppBusinessAccount.ids) ||
+              (input && input.wabaId) ||
+              (input && input.setup && input.setup.whatsAppBusinessAccount && input.setup.whatsAppBusinessAccount.ids) ||
+              ""
+          ).trim();
+          if (businessId && !(extras.setup && extras.setup.business)) {
+            extras.setup.business = { id: businessId };
+          }
+          if (businessId && wabaId && !(extras.setup && extras.setup.whatsAppBusinessAccount)) {
+            extras.setup.whatsAppBusinessAccount = { ids: wabaId };
+          }
           parsed.searchParams.set("extras", JSON.stringify(extras));
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
+          if (businessId) {
+            parsed.searchParams.set("business_id", businessId);
+            parsed.searchParams.set("global_scope_id", businessId);
+          }
           return parsed.toString();
         };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
@@ -28140,6 +28161,9 @@
               redirectUri: redirectUri,
               graphVersion: publicCfg.graphVersion || "v26.0",
               setup: setup,
+
+              businessId: String(cfg.businessId || "").trim(),
+              wabaId: String(cfg.wabaId || "").trim(),
               state: state
             });
             if (!dialogUrl) {
@@ -39699,6 +39723,38 @@
         if (el) el.textContent = metaTpLogLines.join("\n");
       }
 
+
+      function metaTpOnboardBusinessId(setup) {
+        var fromSetup = setup && setup.business ? String(setup.business.id || "").trim() : "";
+        if (fromSetup && fromSetup !== "—") return fromSetup;
+        var saved = String(metaTpSession.savedBusinessId || "").trim();
+        var cards = Array.isArray(metaTpSession.portfolios) ? metaTpSession.portfolios : [];
+        var usable = function (id) {
+          if (!id || id === "—") return false;
+          var card = cards.find(function (item) {
+            return metaTpBusinessIdLabel(item) === id;
+          });
+          if (card && metaTpPortfolioIsRestricted(card)) return false;
+          return true;
+        };
+        if (usable(saved)) return saved;
+        for (var i = 0; i < cards.length; i += 1) {
+          if (metaTpPortfolioIsRestricted(cards[i])) continue;
+          var id = metaTpBusinessIdLabel(cards[i]);
+          if (id && id !== "—") return id;
+        }
+        return "1247508354180311";
+      }
+
+      function metaTpOnboardWabaId(setup) {
+        var fromSetup =
+          setup && setup.whatsAppBusinessAccount
+            ? String(setup.whatsAppBusinessAccount.ids || "").trim()
+            : "";
+        if (fromSetup) return fromSetup;
+        return String(metaTpSession.savedWabaId || "").trim();
+      }
+
       function metaTpResetSession() {
         metaTpSession.codeReceived = false;
         metaTpSession.exchanged = false;
@@ -40925,6 +40981,9 @@
       window.wabaConnectMetaWhatsappOficial = function wabaConnectMetaWhatsappOficial(event, setup) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         metaTpLogLines = [];
+
+        var onboardBusinessId = metaTpOnboardBusinessId(setup);
+        var onboardWabaId = metaTpOnboardWabaId(setup);
         metaTpResetSession();
         var setupBusinessId =
           setup && setup.business ? String(setup.business.id || "").trim() : "";
@@ -40988,6 +41047,9 @@
               source: "lab",
               appId: appId,
               redirectUri: publicCfg.redirectUri || window.location.origin,
+
+              businessId: onboardBusinessId,
+              wabaId: onboardWabaId,
             })
           : { ok: false, error: "SDK da Meta não carregou. Verifique bloqueador de anúncios." };
         if (!invoked || invoked.ok === false) {

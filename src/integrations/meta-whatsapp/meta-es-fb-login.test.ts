@@ -154,8 +154,7 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /wabaMetaEsBuildOauthLaunchUrl/);
     assert.match(html, /wabaMetaEsResumeLabOauthReturn/);
     assert.match(html, /wabaMetaEsOpenFacebook/);
-    assert.match(html, /messaging\/whatsapp\/onboard/);
-    assert.match(html, /business\.facebook\.com/);
+    assert.match(html, /https:\/\/web\.facebook\.com\/messaging\/whatsapp\/onboard\//);
     assert.match(html, /wabaMetaEsDeliverOauthReturn/);
     assert.match(html, /wabaMetaEsParseFacebookOauthMessage/);
     assert.match(html, /popup=yes/);
@@ -172,6 +171,8 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /global_scope_id/);
     assert.match(html, /onboardBusinessId = metaTpOnboardBusinessId/);
     assert.match(html, /businessId: onboardBusinessId/);
+    assert.match(html, /function metaTpOnboardWabaId/);
+    assert.match(html, /wabaId: onboardWabaId/);
   });
 
   it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {
@@ -186,7 +187,7 @@ describe("meta-es-fb-login", () => {
     });
     assert.ok(dialog);
     const parsed = new URL(dialog);
-    assert.equal(parsed.hostname, "business.facebook.com");
+    assert.equal(parsed.hostname, "web.facebook.com");
     assert.equal(parsed.pathname, "/messaging/whatsapp/onboard/");
     assert.equal(parsed.searchParams.get("app_id"), "1279182514183979");
     assert.equal(parsed.searchParams.get("config_id"), "1590195526041278");
@@ -223,8 +224,8 @@ describe("meta-es-fb-login", () => {
     const suiteOnlyParsed = new URL(suiteOnly);
     assert.equal(suiteOnlyParsed.searchParams.get("business_id"), "1588459689692010");
     assert.equal(suiteOnlyParsed.searchParams.get("global_scope_id"), "1588459689692010");
-    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /"setup":\{\}/);
-    assert.doesNotMatch(String(suiteOnlyParsed.searchParams.get("extras") || ""), /1588459689692010/);
+    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /1588459689692010/);
+    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /"setup"/);
     assert.equal(isMetaEsFacebookMessageOrigin("https://web.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://business.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://staticxx.facebook.com"), true);
@@ -254,7 +255,7 @@ describe("meta-es-fb-login", () => {
     assert.equal(launchParsed.searchParams.get("signed_next"), "1");
     assert.match(String(launchParsed.searchParams.get("next") || ""), /config_id=1590195526041278/);
     assert.match(String(launchParsed.searchParams.get("next") || ""), /messaging\/whatsapp\/onboard/);
-    assert.match(String(launchParsed.searchParams.get("next") || ""), /business\.facebook\.com/);
+    assert.match(String(launchParsed.searchParams.get("next") || ""), /web\.facebook\.com/);
     assert.doesNotMatch(String(launchParsed.searchParams.get("next") || ""), /dialog\/oauth/);
     assert.doesNotMatch(launch, /www\.facebook\.com/);
     assert.equal(
