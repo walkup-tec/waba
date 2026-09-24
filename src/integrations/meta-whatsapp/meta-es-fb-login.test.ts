@@ -10,6 +10,7 @@ import {
   buildMetaEsOauthDialogUrl,
   buildMetaEsOauthLaunchUrl,
   buildMetaEsLoginForBusinessDialogUrl,
+  buildMetaEsLfbContinueUrl,
   buildMetaEsSetupPrefill,
   configIdLast4,
   isGenericFacebookOauthUrl,
@@ -172,10 +173,14 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /wabaMetaEsBuildPartnerShareUrl/);
     assert.doesNotMatch(html, /latest\/settings\/whatsapp_accounts/);
     assert.match(html, /wabaMetaEsBuildLoginForBusinessUrl/);
+    assert.match(html, /wabaMetaEsBuildLfbContinueUrl/);
+    assert.match(html, /wabaMetaEsResumeLfbAfterReauth/);
     assert.match(html, /wabaMetaEsStrictOauthRedirectUri/);
     assert.doesNotMatch(html, /sdk=joey/);
     assert.match(html, /Esse fluxo não usa Página do Facebook/);
     assert.match(html, /loginForBusiness: true/);
+    assert.match(html, /meta_es_lfb/);
+    assert.match(html, /lfb=continue/);
   });
 
   it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {
@@ -275,11 +280,17 @@ describe("meta-es-fb-login", () => {
     assert.equal(adsLaunchParsed.hostname, "web.facebook.com");
     assert.equal(adsLaunchParsed.pathname, "/login/reauth.php");
     const adsNext = String(adsLaunchParsed.searchParams.get("next") || "");
-    assert.match(adsNext, /www\.facebook\.com/);
-    assert.match(adsNext, /dialog\/oauth/);
-    assert.match(adsNext, /config_id=1590195526041278/);
-    assert.match(adsNext, /display=page/);
-    assert.match(adsNext, /redirect_uri=https%3A%2F%2Fwaba\.draxsistemas\.com\.br%2F/);
+    const continueUrl = buildMetaEsLfbContinueUrl(
+      "https://waba.draxsistemas.com.br/",
+      "abc123",
+    );
+    assert.equal(adsNext, continueUrl);
+    assert.match(adsNext, /waba\.draxsistemas\.com\.br/);
+    assert.match(adsNext, /meta_es_lfb=1/);
+    assert.match(adsNext, /state=abc123/);
+    assert.doesNotMatch(adsNext, /dialog\/oauth/);
+    assert.doesNotMatch(adsNext, /web\.facebook\.com/);
+    assert.doesNotMatch(adsNext, /www\.facebook\.com/);
     assert.doesNotMatch(adsNext, /messaging\/whatsapp\/onboard/);
     assert.doesNotMatch(adsNext, /whatsapp_accounts/);
     assert.doesNotMatch(adsNext, /xd_arbiter/);

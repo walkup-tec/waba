@@ -27890,9 +27890,21 @@
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
           return parsed.toString();
         };
+        window.wabaMetaEsBuildLfbContinueUrl = function (redirectUri, state) {
+          var base = window.wabaMetaEsStrictOauthRedirectUri(redirectUri);
+          var token = String(state || "").trim();
+          if (!base || !token) return "";
+          var parsed = new URL(base);
+          parsed.searchParams.set("meta_es_lfb", "1");
+          parsed.searchParams.set("state", token);
+          return parsed.toString();
+        };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
           var dialog = input && input.loginForBusiness
-            ? window.wabaMetaEsBuildLoginForBusinessUrl(input)
+            ? (window.wabaMetaEsBuildLfbContinueUrl(
+                String((input && input.redirectUri) || "") || window.location.origin,
+                String((input && input.state) || "")
+              ) || window.wabaMetaEsBuildLoginForBusinessUrl(input))
             : window.wabaMetaEsBuildOauthDialogUrl(input);
           var appId = String(input && input.appId || "").trim();
           if (!dialog || !appId) return "";
@@ -28012,7 +28024,8 @@
               "session_info",
               "waba_id",
               "phone_number_id",
-              "business_id"
+              "business_id",
+              "meta_es_lfb"
             ].forEach(function (key) {
               params.delete(key);
             });
@@ -28022,6 +28035,45 @@
           } catch (e) {
             /* noop */
           }
+        };
+        window.wabaMetaEsResumeLfbAfterReauth = function () {
+          if (window.__WABA_META_ES_LFB_RESUME) return true;
+          var params;
+          try {
+            params = new URLSearchParams(window.location.search || "");
+          } catch (e) {
+            return false;
+          }
+          if (params.get("meta_es_lfb") !== "1") return false;
+          var pending = null;
+          try {
+            pending = window.wabaMetaEsReadPendingOauth() || {};
+          } catch (e2) {
+            pending = {};
+          }
+          var publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
+          var appId = String((pending && pending.appId) || publicCfg.appId || "").trim();
+          var configId = String((pending && pending.configId) || publicCfg.configId || "").trim();
+          var redirectUri = window.wabaMetaEsStrictOauthRedirectUri(
+            String((pending && pending.redirectUri) || publicCfg.redirectUri || "") || window.location.origin
+          );
+          var lfb = window.wabaMetaEsBuildLoginForBusinessUrl({
+            appId: appId,
+            configId: configId,
+            redirectUri: redirectUri,
+            graphVersion: String((pending && pending.graphVersion) || publicCfg.graphVersion || "v26.0"),
+            setup: pending && pending.setup,
+            state: String((pending && pending.state) || params.get("state") || "")
+          });
+          if (!lfb) return false;
+          window.__WABA_META_ES_LFB_RESUME = true;
+          try {
+            window.wabaMetaEsStripOauthSearch();
+          } catch (e3) {
+            /* noop */
+          }
+          window.location.replace(lfb);
+          return true;
         };
         window.wabaMetaEsCaptureOauthReturn = function () {
           var parsed = window.wabaMetaEsParseOauthReturn(window.location.search);
@@ -28185,13 +28237,16 @@
               redirectUri: redirectUri,
               siteOrigin: redirectUri,
               setup: setup || {},
+              appId: appId,
+              configId: options.config_id,
+              graphVersion: publicCfg.graphVersion || "v26.0",
               ts: Date.now()
             });
             console.info(
               "[META][ES][PAGE_REDIRECT]",
               "host=web.facebook.com",
               "reauth=true",
-              "lfb=true",
+              "lfb=continue",
               "onboard=false",
               "configIdPresent=true",
               "open=new-window"
@@ -28257,6 +28312,7 @@
             window.wabaMetaEsResumeLabOauthReturn();
           }
         });
+        window.wabaMetaEsResumeLfbAfterReauth();
         window.wabaMetaEsCaptureOauthReturn();
       })();
 
@@ -28269,6 +28325,9 @@
         function applyMetaEsConfig(cfg) {
           window.__META_TP_CONFIG = cfg;
           window.__META_ES_CONFIG = cfg;
+          if (typeof window.wabaMetaEsResumeLfbAfterReauth === "function") {
+            window.wabaMetaEsResumeLfbAfterReauth();
+          }
           window.fbAsyncInit = function () {
             if (typeof FB !== "undefined" && cfg.appId) {
               FB.init({

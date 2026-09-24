@@ -40,6 +40,7 @@ exports.parseMetaEsFacebookOauthMessage = parseMetaEsFacebookOauthMessage;
 exports.buildMetaEsOauthDialogUrl = buildMetaEsOauthDialogUrl;
 exports.metaEsOauthPopupFeatures = metaEsOauthPopupFeatures;
 exports.buildMetaEsLoginForBusinessDialogUrl = buildMetaEsLoginForBusinessDialogUrl;
+exports.buildMetaEsLfbContinueUrl = buildMetaEsLfbContinueUrl;
 exports.buildMetaEsOauthLaunchUrl = buildMetaEsOauthLaunchUrl;
 exports.parseMetaEsOauthReturn = parseMetaEsOauthReturn;
 exports.stripMetaEsOauthSearch = stripMetaEsOauthSearch;
@@ -360,15 +361,32 @@ function buildMetaEsLoginForBusinessDialogUrl(input) {
     return parsed.toString();
 }
 /**
- * Senha em reauth.php.
+ * Depois da senha o SunBrowser não pode cair em web.facebook.com/dialog/oauth:
+ * o signed_next do reauth copia o host da senha e o LFB vira Login do Facebook
+ * (Recurso indisponível, mesmo com config_id e redirect_uri estrito).
+ * next volta ao DRAX; o Laboratório então abre o LFB em www.facebook.com.
+ */
+function buildMetaEsLfbContinueUrl(redirectUri, state) {
+    const base = metaEsStrictOauthRedirectUri(redirectUri);
+    const token = String(state || "").trim();
+    if (!base || !token)
+        return null;
+    const parsed = new URL(base);
+    parsed.searchParams.set("meta_es_lfb", "1");
+    parsed.searchParams.set("state", token);
+    return parsed.toString();
+}
+/**
+ * Senha em reauth.php (web.facebook.com).
  * Sem loginForBusiness: next = Hosted ES.
- * Com loginForBusiness: next = LFB display=page na mesma janela.
+ * Com loginForBusiness: next = DRAX ?meta_es_lfb=1 — não o dialog/oauth.
  * O Laboratório sempre envia loginForBusiness=true: o SunBrowser spoofa UA
  * de Chrome e a detecção AdsPower falhou no marker 134800 (Hosted ES + Começar).
  */
 function buildMetaEsOauthLaunchUrl(input) {
     const dialog = input.loginForBusiness
-        ? buildMetaEsLoginForBusinessDialogUrl(input)
+        ? buildMetaEsLfbContinueUrl(input.redirectUri, String(input.state || "")) ||
+            buildMetaEsLoginForBusinessDialogUrl(input)
         : buildMetaEsOauthDialogUrl(input);
     const appId = String(input.appId || "").trim();
     if (!dialog || !appId)
@@ -443,6 +461,7 @@ function stripMetaEsOauthSearch(search) {
         "waba_id",
         "phone_number_id",
         "business_id",
+        "meta_es_lfb",
     ].forEach((key) => params.delete(key));
     const next = params.toString();
     return next ? `?${next}` : "";
