@@ -281,7 +281,7 @@ export function isAdsPowerLikeBrowser(input: {
  */
 export const META_ES_CONNECT_METHODS = ["sdk", "hosted", "lfb"] as const;
 export type MetaEsConnectMethod = (typeof META_ES_CONNECT_METHODS)[number];
-export const META_ES_CONNECT_METHOD_STORAGE_KEY = "waba-meta-es-connect-method";
+export const META_ES_CONNECT_METHOD_STORAGE_KEY = "waba-meta-es-connect-method-v2";
 
 export function parseMetaEsConnectMethod(raw: unknown): MetaEsConnectMethod | "" {
   const value = String(raw || "").trim().toLowerCase();
@@ -290,7 +290,7 @@ export function parseMetaEsConnectMethod(raw: unknown): MetaEsConnectMethod | ""
 }
 
 export function resolveMetaEsConnectMethod(stored?: unknown): MetaEsConnectMethod {
-  return parseMetaEsConnectMethod(stored) || "sdk";
+  return parseMetaEsConnectMethod(stored) || "hosted";
 }
 
 export function metaEsConnectMethodUsesPageRedirect(method: MetaEsConnectMethod): boolean {

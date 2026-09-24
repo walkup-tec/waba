@@ -3755,6 +3755,13 @@
           padding: 8px 10px;
           font-size: 13px;
         }
+        .meta-es-connect-method-hint {
+          margin: 0;
+          max-width: 420px;
+          font-size: 12px;
+          line-height: 1.35;
+          color: #94a3b8;
+        }
         .meta-connect-progress {
           display: flex;
           align-items: flex-start;
@@ -23636,10 +23643,13 @@
                     <div class="meta-es-connect-method">
                       <label for="meta-es-connect-method">Método neste perfil</label>
                       <select id="meta-es-connect-method" aria-label="Método de conexão Meta neste perfil">
-                        <option value="sdk">SDK da Meta (FB.login)</option>
-                        <option value="hosted">Hosted Embedded Signup</option>
+                        <option value="hosted" selected>Hosted Embedded Signup</option>
                         <option value="lfb">Login for Business (página)</option>
+                        <option value="sdk">SDK da Meta (FB.login)</option>
                       </select>
+                      <p class="meta-es-connect-method-hint">
+                        Etapas 1 e 2 neste perfil: Hosted ES. A etapa 3 é o Começar — o SunBrowser abre Login criptografado. Se falhar, use o kernel Chrome deste mesmo perfil AdsPower e clique Começar de novo.
+                      </p>
                     </div>
                     <div
                       id="meta-tp-connect-progress"
@@ -27828,7 +27838,7 @@
           var method = window.wabaMetaEsResolveConnectMethod();
           return method === "hosted" || method === "lfb";
         };
-        window.WABA_META_ES_CONNECT_METHOD_KEY = "waba-meta-es-connect-method";
+        window.WABA_META_ES_CONNECT_METHOD_KEY = "waba-meta-es-connect-method-v2";
         window.wabaMetaEsParseConnectMethod = function (raw) {
           var value = String(raw || "").trim().toLowerCase();
           if (value === "sdk" || value === "hosted" || value === "lfb") return value;
@@ -27841,10 +27851,10 @@
           } catch (e) {
             stored = "";
           }
-          return stored || "sdk";
+          return stored || "hosted";
         };
         window.wabaMetaEsWriteConnectMethod = function (raw) {
-          var method = window.wabaMetaEsParseConnectMethod(raw) || "sdk";
+          var method = window.wabaMetaEsParseConnectMethod(raw) || "hosted";
           try {
             localStorage.setItem(window.WABA_META_ES_CONNECT_METHOD_KEY, method);
           } catch (e) {
@@ -41053,7 +41063,7 @@
         const method =
           typeof window.wabaMetaEsResolveConnectMethod === "function"
             ? window.wabaMetaEsResolveConnectMethod()
-            : "sdk";
+            : "hosted";
         const preferPage = method === "hosted" || method === "lfb";
         const sdkReady = typeof FB !== "undefined" && typeof FB.login === "function";
         if (typeof window.wabaMetaEsLogStart === "function") {

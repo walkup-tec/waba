@@ -181,9 +181,13 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /Esse fluxo não usa Página do Facebook/);
     assert.match(html, /loginForBusiness: loginForBusiness/);
     assert.match(html, /id="meta-es-connect-method"/);
+    assert.match(html, /waba-meta-es-connect-method-v2/);
+    assert.match(html, /option value="hosted" selected/);
+    assert.match(html, /return stored \|\| "hosted"/);
     assert.match(html, /SDK da Meta \(FB\.login\)/);
     assert.match(html, /Hosted Embedded Signup/);
     assert.match(html, /Login for Business \(página\)/);
+    assert.match(html, /kernel Chrome/);
     assert.match(html, /wabaMetaEsResolveConnectMethod/);
     assert.doesNotMatch(html, /wabaMetaEsBuildLfbContinueUrl/);
     assert.doesNotMatch(html, /wabaMetaEsResumeLfbAfterReauth/);
@@ -330,14 +334,21 @@ describe("meta-es-fb-login", () => {
           return null;
         },
       }),
+      true,
+    );
+    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120" }), true);
+    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120" }), true);
+    assert.equal(
+      shouldUseMetaEsPageRedirect({
+        method: "sdk",
+        userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120",
+      }),
       false,
     );
-    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120" }), false);
-    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120" }), false);
     assert.equal(shouldUseMetaEsPageRedirect({ method: "hosted" }), true);
     assert.equal(shouldUseMetaEsPageRedirect({ method: "lfb" }), true);
     assert.equal(shouldUseMetaEsPageRedirect({ method: "sdk" }), false);
-    assert.equal(resolveMetaEsConnectMethod(""), "sdk");
+    assert.equal(resolveMetaEsConnectMethod(""), "hosted");
     assert.equal(parseMetaEsConnectMethod("HOSTED"), "hosted");
     assert.equal(metaEsConnectMethodUsesPageRedirect("hosted"), true);
     assert.equal(metaEsConnectMethodUsesLoginForBusiness("lfb"), true);

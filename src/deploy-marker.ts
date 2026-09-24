@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-24-163200-ES-CONNECT-METHODS";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-24-165000-ES-HOSTED-DEFAULT";

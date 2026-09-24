@@ -229,7 +229,7 @@ function isAdsPowerLikeBrowser(input) {
  * O método fica explícito no Laboratório — não forçar LFB por UA.
  */
 exports.META_ES_CONNECT_METHODS = ["sdk", "hosted", "lfb"];
-exports.META_ES_CONNECT_METHOD_STORAGE_KEY = "waba-meta-es-connect-method";
+exports.META_ES_CONNECT_METHOD_STORAGE_KEY = "waba-meta-es-connect-method-v2";
 function parseMetaEsConnectMethod(raw) {
     const value = String(raw || "").trim().toLowerCase();
     if (value === "sdk" || value === "hosted" || value === "lfb")
@@ -237,7 +237,7 @@ function parseMetaEsConnectMethod(raw) {
     return "";
 }
 function resolveMetaEsConnectMethod(stored) {
-    return parseMetaEsConnectMethod(stored) || "sdk";
+    return parseMetaEsConnectMethod(stored) || "hosted";
 }
 function metaEsConnectMethodUsesPageRedirect(method) {
     return method === "hosted" || method === "lfb";
