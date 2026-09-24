@@ -282,7 +282,7 @@ export function isAdsPowerLikeBrowser(input: {
  */
 export const META_ES_CHROME_KERNEL_STORAGE_KEY = "waba-meta-es-chrome-kernel";
 export const META_ES_CHROME_KERNEL_REQUIRED_MESSAGE =
-  "O Começar (etapa 3) neste SunBrowser abre Login criptografado e a Meta mostra Recurso indisponível. Feche este navegador. No AdsPower, abra o mesmo perfil com kernel Chrome. Recarregue o Laboratório, marque «Este perfil já está no kernel Chrome» e clique Conectar Portfólio.";
+  "Este perfil ainda está no SunBrowser. Em Visão Geral o Browser Kernel tem de ser Chrome, sem a palavra SunBrowser — «SunBrowser (Chrome 153)» continua SunBrowser. Feche o navegador, troque o kernel, abra o perfil de novo, marque a caixa e clique Conectar Portfólio.";
 
 export function shouldBlockMetaEsUntilChromeKernel(input: {
   adsPowerLike: boolean;

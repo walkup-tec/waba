@@ -23660,11 +23660,11 @@
                         <option value="sdk">SDK da Meta (FB.login)</option>
                       </select>
                       <p class="meta-es-connect-method-hint">
-                        O Começar (etapa 3) neste SunBrowser abre Login criptografado e a Meta mostra Recurso indisponível. Abra este mesmo perfil no kernel Chrome do AdsPower, marque a caixa e conecte de novo.
+                        Em Visão Geral, Browser Kernel não pode ser «SunBrowser (Chrome 153)»: o 153 entre parênteses é máscara, ainda é SunBrowser. Troque para Chrome, feche o perfil, abra de novo e só então clique em Começar.
                       </p>
                       <label class="meta-es-chrome-kernel">
                         <input id="meta-es-chrome-kernel" type="checkbox" />
-                        <span>Este perfil já está no kernel Chrome</span>
+                        <span>Browser Kernel deste perfil é Chrome (não SunBrowser)</span>
                       </label>
                     </div>
                     <div
@@ -27861,7 +27861,7 @@
         };
         window.WABA_META_ES_CHROME_KERNEL_KEY = "waba-meta-es-chrome-kernel";
         window.WABA_META_ES_CHROME_KERNEL_REQUIRED_MESSAGE =
-          "O Começar (etapa 3) neste SunBrowser abre Login criptografado e a Meta mostra Recurso indisponível. Feche este navegador. No AdsPower, abra o mesmo perfil com kernel Chrome. Recarregue o Laboratório, marque «Este perfil já está no kernel Chrome» e clique Conectar Portfólio.";
+          "Este perfil ainda está no SunBrowser. Em Visão Geral o Browser Kernel tem de ser Chrome, sem a palavra SunBrowser — «SunBrowser (Chrome 153)» continua SunBrowser. Feche o navegador, troque o kernel, abra o perfil de novo, marque a caixa e clique Conectar Portfólio.";
         window.wabaMetaEsChromeKernelConfirmed = function () {
           var el = document.getElementById("meta-es-chrome-kernel");
           return Boolean(el && el.checked);
@@ -41128,7 +41128,7 @@
         ) {
           metaTpSetStatus(
             window.WABA_META_ES_CHROME_KERNEL_REQUIRED_MESSAGE ||
-              "Abra este perfil AdsPower com kernel Chrome, marque a caixa e clique de novo em Conectar Portfólio.",
+              "Abra este perfil AdsPower com Browser Kernel Chrome (não SunBrowser) e clique de novo em Conectar Portfólio.",
           );
           return false;
         }

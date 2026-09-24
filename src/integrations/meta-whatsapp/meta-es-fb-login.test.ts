@@ -190,11 +190,12 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /SDK da Meta \(FB\.login\)/);
     assert.match(html, /Hosted Embedded Signup/);
     assert.match(html, /Login for Business \(página\)/);
-    assert.match(html, /kernel Chrome/);
+    assert.match(html, /Browser Kernel/);
     assert.match(html, /WABA_META_ES_CHROME_KERNEL_REQUIRED_MESSAGE/);
     assert.match(html, /wabaMetaEsShouldBlockUntilChromeKernel/);
     assert.match(html, /id="meta-es-chrome-kernel"/);
-    assert.match(html, /Este perfil já está no kernel Chrome/);
+    assert.match(html, /SunBrowser \(Chrome 153\)/);
+    assert.match(html, /Browser Kernel deste perfil é Chrome \(não SunBrowser\)/);
     assert.match(html, /Na tela do WhatsApp, clique em Começar/);
     assert.match(html, /wabaMetaEsResolveConnectMethod/);
     assert.doesNotMatch(html, /wabaMetaEsBuildLfbContinueUrl/);
