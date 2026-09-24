@@ -15,7 +15,7 @@
  * Login for Business / ES v4 não renderiza no path /v22.0/.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_ES_SDK_XD_ARBITER = exports.META_ES_ONBOARD_PATH = exports.META_ES_ONBOARD_ORIGIN = exports.META_ES_OAUTH_HOST = exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
+exports.META_ES_SDK_XD_ARBITER = exports.META_ES_ONBOARD_PATH = exports.META_ES_ONBOARD_ORIGIN = exports.META_ES_LFB_ORIGIN = exports.META_ES_OAUTH_HOST = exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
 exports.readMetaConfigIdFromEnv = readMetaConfigIdFromEnv;
 exports.resolveMetaEsJsSdkGraphVersion = resolveMetaEsJsSdkGraphVersion;
 exports.resolveMetaEsConfigId = resolveMetaEsConfigId;
@@ -62,8 +62,10 @@ exports.META_ES_LEGACY_EXCHANGE_PATHS = [
     "/waba-embedded-signup-exchange",
 ];
 exports.META_ES_OAUTH_STORAGE_KEY = "waba-meta-es-oauth";
-/** Host do reauth (senha). www dispara _rdc + encrypted_query_string. */
+/** Host do reauth (senha). Dialog/oauth neste host a Meta criptografa (_rdc). */
 exports.META_ES_OAUTH_HOST = "web.facebook.com";
+/** Login for Business no AdsPower: neste host o dialog NÃO vira encrypted_query_string. */
+exports.META_ES_LFB_ORIGIN = "https://business.facebook.com";
 /** LaunchBridge do Embedded Signup. Só existe em business.facebook.com — web.facebook.com devolve página indisponível. */
 exports.META_ES_ONBOARD_ORIGIN = "https://business.facebook.com";
 exports.META_ES_ONBOARD_PATH = "/messaging/whatsapp/onboard/";
@@ -302,10 +304,9 @@ function buildMetaEsOauthDialogUrl(input) {
     return parsed.toString();
 }
 /**
- * Login for Business na mesma janela da senha (display=page).
- * É a tela “Conecte sua conta facilmente a Grupo Walkup App” do Chrome.
- * Sem scope — scope vira Login do Facebook e Recurso indisponível.
- * Mesmo host do reauth (web.facebook.com) para não disparar _rdc.
+ * Login for Business (“Conecte sua conta a Grupo Walkup App”).
+ * web.facebook.com/dialog/oauth a Meta 302 → encrypted_query_string + _rdc
+ * (Recurso indisponível no AdsPower). business.facebook.com mantém config_id.
  */
 function buildMetaEsLoginForBusinessDialogUrl(input) {
     const appId = String(input.appId || "").trim();
@@ -313,45 +314,32 @@ function buildMetaEsLoginForBusinessDialogUrl(input) {
     const siteOrigin = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
     if (!appId || !configId || !siteOrigin)
         return null;
-    const host = siteHostFromMetaEsOrigin(siteOrigin);
     const version = String(input.graphVersion || exports.META_ES_JS_SDK_GRAPH_VERSION).trim() || exports.META_ES_JS_SDK_GRAPH_VERSION;
     const businessId = String(input.setup?.business?.id || input.businessId || "").trim();
     const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || input.wabaId || "").trim();
     const setup = buildMetaEsSetupPrefill({ businessId, wabaId });
-    const state = String(input.state || "").trim();
-    const cb = `f${(state || createMetaEsOauthState()).slice(0, 16)}`;
-    const sdkRedirect = `${exports.META_ES_SDK_XD_ARBITER}#cb=${cb}&origin=${encodeURIComponent(siteOrigin)}&domain=${host}&relation=opener`;
-    const parsed = new URL(`https://${exports.META_ES_OAUTH_HOST}/${version}/dialog/oauth`);
+    const parsed = new URL(`${exports.META_ES_LFB_ORIGIN}/${version}/dialog/oauth`);
     parsed.searchParams.set("client_id", appId);
-    parsed.searchParams.set("redirect_uri", sdkRedirect);
-    parsed.searchParams.set("channel_url", `${exports.META_ES_SDK_XD_ARBITER}#origin=${encodeURIComponent(siteOrigin)}&domain=${host}&relation=parent.parent`);
-    parsed.searchParams.set("fallback_redirect_uri", siteOrigin);
+    parsed.searchParams.set("redirect_uri", siteOrigin);
     parsed.searchParams.set("response_type", "code");
     parsed.searchParams.set("override_default_response_type", "true");
     parsed.searchParams.set("config_id", configId);
     parsed.searchParams.set("display", "page");
-    parsed.searchParams.set("sdk", "joey");
-    parsed.searchParams.set("ret", "login");
-    parsed.searchParams.set("cbt", String(input.cbt ?? Date.now()));
-    parsed.searchParams.set("origin", "1");
-    if (host)
-        parsed.searchParams.set("domain", host);
-    parsed.searchParams.set("locale", "pt_BR");
-    parsed.searchParams.set("e2e", "{}");
-    parsed.searchParams.set("version", version);
     parsed.searchParams.set("extras", JSON.stringify({ setup }));
+    const state = String(input.state || "").trim();
     if (state)
         parsed.searchParams.set("state", state);
+    void input.cbt;
     return parsed.toString();
 }
 function metaEsOauthPopupFeatures() {
     return "popup=yes,width=1100,height=820,scrollbars=yes,resizable=yes,toolbar=yes,location=yes,menubar=no";
 }
 /**
- * Senha em login/reauth.php.
- * Chrome: next = Hosted ES (Começar funciona).
- * AdsPower: next = Login for Business na mesma janela (Começar abre janela
- * nova que o SunBrowser transforma em Recurso indisponível).
+ * Senha em login/reauth.php (web.facebook.com).
+ * Chrome: next = Hosted ES.
+ * AdsPower: next = Login for Business em business.facebook.com (não em web,
+ * onde a Meta criptografa o dialog e o SunBrowser cai em Recurso indisponível).
  */
 function buildMetaEsOauthLaunchUrl(input) {
     const dialog = input.loginForBusiness

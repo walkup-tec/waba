@@ -170,6 +170,7 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /wabaMetaEsArmSdkAfterReauth/);
     assert.doesNotMatch(html, /Não clique em Começar/);
     assert.match(html, /wabaMetaEsBuildLoginForBusinessUrl/);
+    assert.match(html, /business\.facebook\.com\/" \+ version \+ "\/dialog\/oauth/);
     assert.match(html, /wabaMetaEsIsAdsPowerBrowser\(\)/);
     assert.match(html, /clique em Começar/);
     assert.match(html, /Conecte sua conta a Grupo Walkup App/);
@@ -267,16 +268,16 @@ describe("meta-es-fb-login", () => {
     });
     assert.ok(lfb);
     const lfbParsed = new URL(lfb);
-    assert.equal(lfbParsed.hostname, "web.facebook.com");
+    assert.equal(lfbParsed.hostname, "business.facebook.com");
     assert.equal(lfbParsed.pathname, "/v26.0/dialog/oauth");
     assert.equal(lfbParsed.searchParams.get("client_id"), "1279182514183979");
     assert.equal(lfbParsed.searchParams.get("config_id"), "1590195526041278");
     assert.equal(lfbParsed.searchParams.get("response_type"), "code");
     assert.equal(lfbParsed.searchParams.get("override_default_response_type"), "true");
     assert.equal(lfbParsed.searchParams.get("display"), "page");
-    assert.equal(lfbParsed.searchParams.get("sdk"), "joey");
+    assert.equal(lfbParsed.searchParams.get("sdk"), null);
     assert.equal(lfbParsed.searchParams.get("scope"), null);
-    assert.match(String(lfbParsed.searchParams.get("redirect_uri") || ""), /xd_arbiter/);
+    assert.equal(lfbParsed.searchParams.get("redirect_uri"), "https://waba.draxsistemas.com.br");
     const adsLaunch = buildMetaEsOauthLaunchUrl({
       appId: "1279182514183979",
       configId: "1590195526041278",
@@ -288,9 +289,14 @@ describe("meta-es-fb-login", () => {
     assert.ok(adsLaunch);
     const adsLaunchParsed = new URL(adsLaunch);
     assert.equal(adsLaunchParsed.pathname, "/login/reauth.php");
-    assert.match(String(adsLaunchParsed.searchParams.get("next") || ""), /dialog\/oauth/);
-    assert.match(String(adsLaunchParsed.searchParams.get("next") || ""), /config_id=1590195526041278/);
-    assert.doesNotMatch(String(adsLaunchParsed.searchParams.get("next") || ""), /[?&]scope=/);
+    const adsNext = String(adsLaunchParsed.searchParams.get("next") || "");
+    assert.match(adsNext, /business\.facebook\.com/);
+    assert.match(adsNext, /dialog\/oauth/);
+    assert.match(adsNext, /config_id=1590195526041278/);
+    assert.doesNotMatch(adsNext, /web\.facebook\.com/);
+    assert.doesNotMatch(adsNext, /encrypted_query_string/);
+    assert.doesNotMatch(adsNext, /[?&]scope=/);
+    assert.doesNotMatch(adsNext, /sdk=joey/);
     assert.equal(
       shouldUseMetaEsPageRedirect({ preferPage: true }),
       true,
