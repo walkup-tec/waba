@@ -88,8 +88,8 @@ export const META_ES_OAUTH_STORAGE_KEY = "waba-meta-es-oauth";
 /** Host do reauth (senha). www dispara _rdc + encrypted_query_string. */
 export const META_ES_OAUTH_HOST = "web.facebook.com";
 
-/** LaunchBridge no mesmo host da senha. business.facebook.com faz o Começar ir a dialog/oauth com _rdc. */
-export const META_ES_ONBOARD_ORIGIN = "https://web.facebook.com";
+/** LaunchBridge do Embedded Signup. Só existe em business.facebook.com — web.facebook.com devolve página indisponível. */
+export const META_ES_ONBOARD_ORIGIN = "https://business.facebook.com";
 export const META_ES_ONBOARD_PATH = "/messaging/whatsapp/onboard/";
 
 /**

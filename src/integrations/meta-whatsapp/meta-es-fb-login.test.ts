@@ -154,7 +154,7 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /wabaMetaEsBuildOauthLaunchUrl/);
     assert.match(html, /wabaMetaEsResumeLabOauthReturn/);
     assert.match(html, /wabaMetaEsOpenFacebook/);
-    assert.match(html, /https:\/\/web\.facebook\.com\/messaging\/whatsapp\/onboard\//);
+    assert.match(html, /https:\/\/business\.facebook\.com\/messaging\/whatsapp\/onboard\//);
     assert.match(html, /wabaMetaEsDeliverOauthReturn/);
     assert.match(html, /wabaMetaEsParseFacebookOauthMessage/);
     assert.match(html, /popup=yes/);
@@ -187,7 +187,7 @@ describe("meta-es-fb-login", () => {
     });
     assert.ok(dialog);
     const parsed = new URL(dialog);
-    assert.equal(parsed.hostname, "web.facebook.com");
+    assert.equal(parsed.hostname, "business.facebook.com");
     assert.equal(parsed.pathname, "/messaging/whatsapp/onboard/");
     assert.equal(parsed.searchParams.get("app_id"), "1279182514183979");
     assert.equal(parsed.searchParams.get("config_id"), "1590195526041278");
@@ -255,7 +255,7 @@ describe("meta-es-fb-login", () => {
     assert.equal(launchParsed.searchParams.get("signed_next"), "1");
     assert.match(String(launchParsed.searchParams.get("next") || ""), /config_id=1590195526041278/);
     assert.match(String(launchParsed.searchParams.get("next") || ""), /messaging\/whatsapp\/onboard/);
-    assert.match(String(launchParsed.searchParams.get("next") || ""), /web\.facebook\.com/);
+    assert.match(String(launchParsed.searchParams.get("next") || ""), /business\.facebook\.com/);
     assert.doesNotMatch(String(launchParsed.searchParams.get("next") || ""), /dialog\/oauth/);
     assert.doesNotMatch(launch, /www\.facebook\.com/);
     assert.equal(

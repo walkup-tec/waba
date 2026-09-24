@@ -27850,7 +27850,7 @@
           var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
           var extras = options && options.extras ? JSON.parse(JSON.stringify(options.extras)) : { setup: {} };
           if (!extras.setup || typeof extras.setup !== "object") extras.setup = {};
-          var parsed = new URL("https://web.facebook.com/messaging/whatsapp/onboard/");
+          var parsed = new URL("https://business.facebook.com/messaging/whatsapp/onboard/");
           parsed.searchParams.set("app_id", appId);
           parsed.searchParams.set("config_id", configId);
 
