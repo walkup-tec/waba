@@ -3762,18 +3762,6 @@
           line-height: 1.35;
           color: #94a3b8;
         }
-        .meta-es-chrome-kernel {
-          display: flex;
-          align-items: flex-start;
-          gap: 8px;
-          max-width: 420px;
-          font-size: 12px;
-          line-height: 1.35;
-          color: #cbd5e1;
-        }
-        .meta-es-chrome-kernel input {
-          margin-top: 2px;
-        }
         .meta-connect-progress {
           display: flex;
           align-items: flex-start;
@@ -23660,12 +23648,8 @@
                         <option value="sdk">SDK da Meta (FB.login)</option>
                       </select>
                       <p class="meta-es-connect-method-hint">
-                        Em Visão Geral, Browser Kernel não pode ser «SunBrowser (Chrome 153)»: o 153 entre parênteses é máscara, ainda é SunBrowser. Troque para Chrome, feche o perfil, abra de novo e só então clique em Começar.
+                        No AdsPower, SunBrowser é o Chrome. A lista Chrome 153/152 é a versão do kernel. Feche o perfil, deixe SunBrowser + Chrome 153 e alinhe o User-Agent à mesma versão. Depois, Hosted ES e Começar.
                       </p>
-                      <label class="meta-es-chrome-kernel">
-                        <input id="meta-es-chrome-kernel" type="checkbox" />
-                        <span>Browser Kernel deste perfil é Chrome (não SunBrowser)</span>
-                      </label>
                     </div>
                     <div
                       id="meta-tp-connect-progress"
@@ -27859,36 +27843,6 @@
           if (window.adsPower || window.__adspower || window.Adspower) return true;
           return !window.wabaMetaEsIsNativeWindowOpen();
         };
-        window.WABA_META_ES_CHROME_KERNEL_KEY = "waba-meta-es-chrome-kernel";
-        window.WABA_META_ES_CHROME_KERNEL_REQUIRED_MESSAGE =
-          "Este perfil ainda está no SunBrowser. Em Visão Geral o Browser Kernel tem de ser Chrome, sem a palavra SunBrowser — «SunBrowser (Chrome 153)» continua SunBrowser. Feche o navegador, troque o kernel, abra o perfil de novo, marque a caixa e clique Conectar Portfólio.";
-        window.wabaMetaEsChromeKernelConfirmed = function () {
-          var el = document.getElementById("meta-es-chrome-kernel");
-          return Boolean(el && el.checked);
-        };
-        window.wabaMetaEsShouldBlockUntilChromeKernel = function () {
-          if (typeof window.wabaMetaEsIsAdsPowerBrowser === "function" && !window.wabaMetaEsIsAdsPowerBrowser()) {
-            return false;
-          }
-          return !window.wabaMetaEsChromeKernelConfirmed();
-        };
-        window.wabaMetaEsBindChromeKernel = function () {
-          var el = document.getElementById("meta-es-chrome-kernel");
-          if (!el || el.getAttribute("data-bound") === "1") return;
-          el.setAttribute("data-bound", "1");
-          try {
-            el.checked = localStorage.getItem(window.WABA_META_ES_CHROME_KERNEL_KEY) === "1";
-          } catch (e) {
-            /* noop */
-          }
-          el.addEventListener("change", function () {
-            try {
-              localStorage.setItem(window.WABA_META_ES_CHROME_KERNEL_KEY, el.checked ? "1" : "0");
-            } catch (e2) {
-              /* noop */
-            }
-          });
-        };
         window.wabaMetaEsShouldUsePageRedirect = function (preferPage) {
           if (preferPage === true) return true;
           var method = window.wabaMetaEsResolveConnectMethod();
@@ -28396,7 +28350,6 @@
         });
         window.wabaMetaEsCaptureOauthReturn();
         window.wabaMetaEsBindConnectMethod();
-        window.wabaMetaEsBindChromeKernel();
       })();
 
       (function initMetaEmbeddedSignupSdk() {
@@ -41117,21 +41070,10 @@
         const appId = String(publicCfg.appId || "").trim();
         const configId = String(publicCfg.configId || "").trim();
         if (typeof window.wabaMetaEsBindConnectMethod === "function") window.wabaMetaEsBindConnectMethod();
-        if (typeof window.wabaMetaEsBindChromeKernel === "function") window.wabaMetaEsBindChromeKernel();
         const method =
           typeof window.wabaMetaEsResolveConnectMethod === "function"
             ? window.wabaMetaEsResolveConnectMethod()
             : "hosted";
-        if (
-          typeof window.wabaMetaEsShouldBlockUntilChromeKernel === "function" &&
-          window.wabaMetaEsShouldBlockUntilChromeKernel()
-        ) {
-          metaTpSetStatus(
-            window.WABA_META_ES_CHROME_KERNEL_REQUIRED_MESSAGE ||
-              "Abra este perfil AdsPower com Browser Kernel Chrome (não SunBrowser) e clique de novo em Conectar Portfólio.",
-          );
-          return false;
-        }
         const preferPage = method === "hosted" || method === "lfb";
         const sdkReady = typeof FB !== "undefined" && typeof FB.login === "function";
         if (typeof window.wabaMetaEsLogStart === "function") {

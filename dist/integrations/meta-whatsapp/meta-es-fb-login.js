@@ -15,7 +15,7 @@
  * Login for Business / ES v4 não renderiza no path /v22.0/.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_ES_CONNECT_METHOD_STORAGE_KEY = exports.META_ES_CONNECT_METHODS = exports.META_ES_CHROME_KERNEL_REQUIRED_MESSAGE = exports.META_ES_CHROME_KERNEL_STORAGE_KEY = exports.META_ES_SDK_XD_ARBITER = exports.META_ES_LFB_ORIGIN = exports.META_ES_ONBOARD_PATH = exports.META_ES_ONBOARD_ORIGIN = exports.META_ES_OAUTH_HOST = exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
+exports.META_ES_CONNECT_METHOD_STORAGE_KEY = exports.META_ES_CONNECT_METHODS = exports.META_ES_SDK_XD_ARBITER = exports.META_ES_LFB_ORIGIN = exports.META_ES_ONBOARD_PATH = exports.META_ES_ONBOARD_ORIGIN = exports.META_ES_OAUTH_HOST = exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
 exports.readMetaConfigIdFromEnv = readMetaConfigIdFromEnv;
 exports.resolveMetaEsJsSdkGraphVersion = resolveMetaEsJsSdkGraphVersion;
 exports.resolveMetaEsConfigId = resolveMetaEsConfigId;
@@ -32,7 +32,6 @@ exports.resolveMetaEsRedirectUri = resolveMetaEsRedirectUri;
 exports.metaEsStrictOauthRedirectUri = metaEsStrictOauthRedirectUri;
 exports.isNativeWindowOpen = isNativeWindowOpen;
 exports.isAdsPowerLikeBrowser = isAdsPowerLikeBrowser;
-exports.shouldBlockMetaEsUntilChromeKernel = shouldBlockMetaEsUntilChromeKernel;
 exports.parseMetaEsConnectMethod = parseMetaEsConnectMethod;
 exports.resolveMetaEsConnectMethod = resolveMetaEsConnectMethod;
 exports.metaEsConnectMethodUsesPageRedirect = metaEsConnectMethodUsesPageRedirect;
@@ -227,19 +226,12 @@ function isAdsPowerLikeBrowser(input) {
     return false;
 }
 /**
- * Começar (etapa 3) no SunBrowser abre dialog/oauth criptografado → Recurso indisponível.
- * O Laboratório só segue depois que o operador confirma kernel Chrome no mesmo perfil.
- */
-exports.META_ES_CHROME_KERNEL_STORAGE_KEY = "waba-meta-es-chrome-kernel";
-exports.META_ES_CHROME_KERNEL_REQUIRED_MESSAGE = "Este perfil ainda está no SunBrowser. Em Visão Geral o Browser Kernel tem de ser Chrome, sem a palavra SunBrowser — «SunBrowser (Chrome 153)» continua SunBrowser. Feche o navegador, troque o kernel, abra o perfil de novo, marque a caixa e clique Conectar Portfólio.";
-function shouldBlockMetaEsUntilChromeKernel(input) {
-    return Boolean(input.adsPowerLike) && !input.chromeKernelConfirmed;
-}
-/**
  * Popup do FB.login no AdsPower caía em Recurso indisponível (query criptografada).
  * O dialog/oauth em página (web/www) também: a Meta reescreve para
  * web.facebook.com e o Login do Facebook fica indisponível (etapa 2, 162000).
  * O método fica explícito no Laboratório — não forçar LFB por UA.
+ * No AdsPower atual, SunBrowser é o Chromium; Chrome 153 na lista é a versão do kernel
+ * (help.adspower.com/docs/creating_browser_profiles). Não existe kernel «Chrome» separado.
  */
 exports.META_ES_CONNECT_METHODS = ["sdk", "hosted", "lfb"];
 exports.META_ES_CONNECT_METHOD_STORAGE_KEY = "waba-meta-es-connect-method-v2";

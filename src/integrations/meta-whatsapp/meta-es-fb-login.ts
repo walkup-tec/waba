@@ -277,25 +277,12 @@ export function isAdsPowerLikeBrowser(input: {
 }
 
 /**
- * Começar (etapa 3) no SunBrowser abre dialog/oauth criptografado → Recurso indisponível.
- * O Laboratório só segue depois que o operador confirma kernel Chrome no mesmo perfil.
- */
-export const META_ES_CHROME_KERNEL_STORAGE_KEY = "waba-meta-es-chrome-kernel";
-export const META_ES_CHROME_KERNEL_REQUIRED_MESSAGE =
-  "Este perfil ainda está no SunBrowser. Em Visão Geral o Browser Kernel tem de ser Chrome, sem a palavra SunBrowser — «SunBrowser (Chrome 153)» continua SunBrowser. Feche o navegador, troque o kernel, abra o perfil de novo, marque a caixa e clique Conectar Portfólio.";
-
-export function shouldBlockMetaEsUntilChromeKernel(input: {
-  adsPowerLike: boolean;
-  chromeKernelConfirmed: boolean;
-}): boolean {
-  return Boolean(input.adsPowerLike) && !input.chromeKernelConfirmed;
-}
-
-/**
  * Popup do FB.login no AdsPower caía em Recurso indisponível (query criptografada).
  * O dialog/oauth em página (web/www) também: a Meta reescreve para
  * web.facebook.com e o Login do Facebook fica indisponível (etapa 2, 162000).
  * O método fica explícito no Laboratório — não forçar LFB por UA.
+ * No AdsPower atual, SunBrowser é o Chromium; Chrome 153 na lista é a versão do kernel
+ * (help.adspower.com/docs/creating_browser_profiles). Não existe kernel «Chrome» separado.
  */
 export const META_ES_CONNECT_METHODS = ["sdk", "hosted", "lfb"] as const;
 export type MetaEsConnectMethod = (typeof META_ES_CONNECT_METHODS)[number];
