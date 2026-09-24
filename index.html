@@ -11999,8 +11999,17 @@
         border-radius: 12px;
       }
 
+      #tab-admin-assinantes .panel,
+      #tab-admin-assinantes .aquecedor-section,
+      #tab-admin-assinantes .admin-assinantes-block {
+        max-width: 100%;
+        min-width: 0;
+      }
+
       #admin-subscribers-table-wrap {
-        overflow-x: visible;
+        overflow-x: auto;
+        max-width: 100%;
+        box-sizing: border-box;
       }
 
       #admin-financeiro-table-wrap {
@@ -12024,7 +12033,58 @@
       }
 
       #admin-subscribers-list-table {
-        min-width: 100%;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        table-layout: fixed;
+      }
+
+      #admin-subscribers-list-table thead th,
+      #admin-subscribers-list-table tbody td {
+        padding: 8px 8px;
+        overflow: hidden;
+      }
+
+      #admin-subscribers-list-table thead th {
+        white-space: normal;
+        line-height: 1.25;
+        hyphens: auto;
+      }
+
+      #admin-subscribers-list-table .admin-subscribers-name,
+      #admin-subscribers-list-table .admin-subscribers-email {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        white-space: normal;
+      }
+
+      #admin-subscribers-list-table .admin-subscribers-origin-col {
+        width: 12%;
+        overflow: hidden;
+      }
+
+      #admin-subscribers-list-table .admin-subscribers-origin {
+        white-space: normal;
+        max-width: 100%;
+      }
+
+      #admin-subscribers-list-table .admin-subscribers-origin-label {
+        overflow-wrap: anywhere;
+      }
+
+      #admin-subscribers-list-table .admin-subscribers-visible-col {
+        width: 72px;
+      }
+
+      #admin-subscribers-list-table .admin-subscribers-num {
+        width: 7.5%;
+        white-space: nowrap;
+      }
+
+      #admin-subscribers-list-table .admin-subscribers-actions-col,
+      #admin-subscribers-list-table td.admin-subscribers-actions {
+        width: 122px;
+        overflow: visible;
       }
 
       .admin-subscribers-table tbody td code,
@@ -27792,18 +27852,11 @@
           var parsed = new URL("https://business.facebook.com/messaging/whatsapp/onboard/");
           parsed.searchParams.set("app_id", appId);
           parsed.searchParams.set("config_id", configId);
+          parsed.searchParams.set("response_type", "code");
+          parsed.searchParams.set("override_default_response_type", "true");
+          parsed.searchParams.set("redirect_uri", siteOrigin);
           parsed.searchParams.set("extras", JSON.stringify(extras));
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
-          var businessId = String(
-            (extras.setup && extras.setup.business && extras.setup.business.id) ||
-              (input && input.businessId) ||
-              (input && input.setup && input.setup.business && input.setup.business.id) ||
-              ""
-          ).trim();
-          if (businessId) {
-            parsed.searchParams.set("business_id", businessId);
-            parsed.searchParams.set("global_scope_id", businessId);
-          }
           return parsed.toString();
         };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
@@ -28087,7 +28140,6 @@
               redirectUri: redirectUri,
               graphVersion: publicCfg.graphVersion || "v26.0",
               setup: setup,
-              businessId: String(cfg.businessId || "").trim(),
               state: state
             });
             if (!dialogUrl) {
@@ -39647,28 +39699,6 @@
         if (el) el.textContent = metaTpLogLines.join("\n");
       }
 
-      function metaTpOnboardBusinessId(setup) {
-        var fromSetup = setup && setup.business ? String(setup.business.id || "").trim() : "";
-        if (fromSetup && fromSetup !== "—") return fromSetup;
-        var saved = String(metaTpSession.savedBusinessId || "").trim();
-        var cards = Array.isArray(metaTpSession.portfolios) ? metaTpSession.portfolios : [];
-        var usable = function (id) {
-          if (!id || id === "—") return false;
-          var card = cards.find(function (item) {
-            return metaTpBusinessIdLabel(item) === id;
-          });
-          if (card && metaTpPortfolioIsRestricted(card)) return false;
-          return true;
-        };
-        if (usable(saved)) return saved;
-        for (var i = 0; i < cards.length; i += 1) {
-          if (metaTpPortfolioIsRestricted(cards[i])) continue;
-          var id = metaTpBusinessIdLabel(cards[i]);
-          if (id && id !== "—") return id;
-        }
-        return "1247508354180311";
-      }
-
       function metaTpResetSession() {
         metaTpSession.codeReceived = false;
         metaTpSession.exchanged = false;
@@ -40895,7 +40925,6 @@
       window.wabaConnectMetaWhatsappOficial = function wabaConnectMetaWhatsappOficial(event, setup) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         metaTpLogLines = [];
-        var onboardBusinessId = metaTpOnboardBusinessId(setup);
         metaTpResetSession();
         var setupBusinessId =
           setup && setup.business ? String(setup.business.id || "").trim() : "";
@@ -40959,7 +40988,6 @@
               source: "lab",
               appId: appId,
               redirectUri: publicCfg.redirectUri || window.location.origin,
-              businessId: onboardBusinessId,
             })
           : { ok: false, error: "SDK da Meta não carregou. Verifique bloqueador de anúncios." };
         if (!invoked || invoked.ok === false) {
