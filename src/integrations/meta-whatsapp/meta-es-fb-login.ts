@@ -400,20 +400,19 @@ export function metaEsOauthPopupFeatures(): string {
 }
 
 /**
- * Senha em login/reauth.php (web.facebook.com).
- * Chrome: next = Hosted ES (Começar funciona).
- * AdsPower (e UA spoofado de Chrome): next = Gerenciador WhatsApp.
- * dialog/oauth no SunBrowser sempre vira encrypted_query_string e Recurso indisponível.
+ * Chrome (sem partnerShare): senha em reauth.php, next = Hosted ES.
+ * AdsPower: Gerenciador WhatsApp direto. reauth.php?next=whatsapp_accounts
+ * a Meta recusa (“Sorry, something went wrong”).
  */
 export function buildMetaEsOauthLaunchUrl(
   input: MetaEsOauthDialogInput,
 ): string | null {
-  const dialog =
-    input.partnerShare || input.loginForBusiness
-      ? buildMetaEsPartnerShareUrl({
-          businessId: String(input.setup?.business?.id || input.businessId || "").trim(),
-        })
-      : buildMetaEsOauthDialogUrl(input);
+  if (input.partnerShare || input.loginForBusiness) {
+    return buildMetaEsPartnerShareUrl({
+      businessId: String(input.setup?.business?.id || input.businessId || "").trim(),
+    });
+  }
+  const dialog = buildMetaEsOauthDialogUrl(input);
   const appId = String(input.appId || "").trim();
   if (!dialog || !appId) return null;
   const reauth = new URL(`https://${META_ES_OAUTH_HOST}/login/reauth.php`);

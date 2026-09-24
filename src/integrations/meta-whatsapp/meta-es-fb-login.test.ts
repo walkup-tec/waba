@@ -274,13 +274,12 @@ describe("meta-es-fb-login", () => {
     });
     assert.ok(adsLaunch);
     const adsLaunchParsed = new URL(adsLaunch);
-    assert.equal(adsLaunchParsed.pathname, "/login/reauth.php");
-    const adsNext = String(adsLaunchParsed.searchParams.get("next") || "");
-    assert.match(adsNext, /business\.facebook\.com/);
-    assert.match(adsNext, /whatsapp_accounts/);
-    assert.doesNotMatch(adsNext, /dialog\/oauth/);
-    assert.doesNotMatch(adsNext, /web\.facebook\.com/);
-    assert.doesNotMatch(adsNext, /encrypted_query_string/);
+    assert.equal(adsLaunchParsed.hostname, "business.facebook.com");
+    assert.equal(adsLaunchParsed.pathname, "/latest/settings/whatsapp_accounts");
+    assert.doesNotMatch(adsLaunch, /reauth\.php/);
+    assert.doesNotMatch(adsLaunch, /dialog\/oauth/);
+    assert.doesNotMatch(adsLaunch, /web\.facebook\.com/);
+    assert.doesNotMatch(adsLaunch, /encrypted_query_string/);
     assert.equal(
       shouldUseMetaEsPageRedirect({ preferPage: true }),
       true,

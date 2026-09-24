@@ -27870,14 +27870,7 @@
               (setup && setup.business && setup.business.id) ||
               ""
           ).trim();
-          var dialog = window.wabaMetaEsBuildPartnerShareUrl({ businessId: businessId });
-          var appId = String(input && input.appId || "").trim();
-          if (!dialog || !appId) return "";
-          var reauth = new URL("https://web.facebook.com/login/reauth.php");
-          reauth.searchParams.set("app_id", appId);
-          reauth.searchParams.set("signed_next", "1");
-          reauth.searchParams.set("next", dialog);
-          return reauth.toString();
+          return window.wabaMetaEsBuildPartnerShareUrl({ businessId: businessId });
         };
         window.wabaMetaEsCreateOauthState = function () {
           var bytes = new Uint8Array(16);
@@ -28165,10 +28158,9 @@
             });
             console.info(
               "[META][ES][PAGE_REDIRECT]",
-              "host=web.facebook.com",
-              "reauth=true",
-              "onboard=true",
-              "configIdPresent=true",
+              "host=business.facebook.com",
+              "reauth=false",
+              "whatsappAccounts=true",
               "open=new-window"
             );
             var opened = window.wabaMetaEsOpenFacebook(dialogUrl);
@@ -41007,7 +40999,7 @@
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
           metaTpSetStatus(
-            "Informe a senha na janela da Meta. No AdsPower o Login for Business (dialog/oauth) a Meta recusa. Depois da senha abra a conta WhatsApp no Gerenciador, compartilhe com o portfólio Walkup 4141369862822598 e volte aqui em Atualizar.",
+            "No AdsPower abriu o Gerenciador de contas WhatsApp. Compartilhe a WABA com o portfólio Walkup 4141369862822598 e volte aqui em Atualizar. Não use o Login for Business (dialog/oauth) — o SunBrowser recusa.",
           );
         }
         return false;
