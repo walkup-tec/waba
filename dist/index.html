@@ -27760,6 +27760,27 @@
           if (!base) return raw;
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
+        window.WABA_META_ES_AFTER_REAUTH_MS = 8000;
+        window.wabaMetaEsArmSdkAfterReauth = function (callback, options) {
+          window.__WABA_META_ES_AFTER_REAUTH = {
+            at: Date.now(),
+            callback: callback,
+            options: options
+          };
+        };
+        window.wabaMetaEsClearSdkAfterReauth = function () {
+          window.__WABA_META_ES_AFTER_REAUTH = null;
+        };
+        window.wabaMetaEsTrySdkAfterReauth = function (callback, options) {
+          var pending = window.__WABA_META_ES_AFTER_REAUTH;
+          if (!pending) return false;
+          if (Date.now() - pending.at < window.WABA_META_ES_AFTER_REAUTH_MS) return false;
+          if (typeof FB === "undefined" || typeof FB.login !== "function") return false;
+          window.__WABA_META_ES_AFTER_REAUTH = null;
+          console.info("[META][ES][FB_LOGIN]", "afterReauth=true", "configIdPresent=true");
+          FB.login(callback || pending.callback, options || pending.options);
+          return true;
+        };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
           "A Meta recusou o Login for Business neste navegador. No AdsPower o Facebook abre em uma nova janela/aba do mesmo perfil (o Laboratório permanece). Feche a janela da Meta, volte ao Laboratório e clique de novo em Conectar Portfólio.";
         window.wabaMetaEsLast4 = function (id) {
@@ -27848,32 +27869,18 @@
           );
           if (!appId || !configId || !siteOrigin) return "";
           var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
-          var extras = options && options.extras ? JSON.parse(JSON.stringify(options.extras)) : { setup: {} };
-          if (!extras.setup || typeof extras.setup !== "object") extras.setup = {};
           var parsed = new URL("https://business.facebook.com/messaging/whatsapp/onboard/");
           parsed.searchParams.set("app_id", appId);
           parsed.searchParams.set("config_id", configId);
-
+          var extras = options && options.extras ? JSON.parse(JSON.stringify(options.extras)) : { setup: {} };
+          parsed.searchParams.set("extras", JSON.stringify(extras));
+          if (input && input.state) parsed.searchParams.set("state", String(input.state));
           var businessId = String(
-            (extras.setup && extras.setup.business && extras.setup.business.id) ||
-              (input && input.businessId) ||
+            (input && input.businessId) ||
+              (extras.setup && extras.setup.business && extras.setup.business.id) ||
               (input && input.setup && input.setup.business && input.setup.business.id) ||
               ""
           ).trim();
-          var wabaId = String(
-            (extras.setup && extras.setup.whatsAppBusinessAccount && extras.setup.whatsAppBusinessAccount.ids) ||
-              (input && input.wabaId) ||
-              (input && input.setup && input.setup.whatsAppBusinessAccount && input.setup.whatsAppBusinessAccount.ids) ||
-              ""
-          ).trim();
-          if (businessId && !(extras.setup && extras.setup.business)) {
-            extras.setup.business = { id: businessId };
-          }
-          if (businessId && wabaId && !(extras.setup && extras.setup.whatsAppBusinessAccount)) {
-            extras.setup.whatsAppBusinessAccount = { ids: wabaId };
-          }
-          parsed.searchParams.set("extras", JSON.stringify(extras));
-          if (input && input.state) parsed.searchParams.set("state", String(input.state));
           if (businessId) {
             parsed.searchParams.set("business_id", businessId);
             parsed.searchParams.set("global_scope_id", businessId);
@@ -28144,6 +28151,9 @@
           }
           window.__WABA_META_ES_LOGIN_OPTIONS = options;
           window.__WABA_META_ES_LOGIN_CB = callback;
+          if (typeof window.wabaMetaEsTrySdkAfterReauth === "function" && window.wabaMetaEsTrySdkAfterReauth(callback, options)) {
+            return { ok: true, mode: "popup", afterReauth: true };
+          }
           var cfg = extra || {};
           var publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
           var preferPage = cfg.preferPage === true || window.wabaMetaEsShouldUsePageRedirect(cfg.preferPage);
@@ -28188,6 +28198,9 @@
             var opened = window.wabaMetaEsOpenFacebook(dialogUrl);
             if (!opened || opened.ok === false) {
               return { ok: false, error: String((opened && opened.error) || "Não foi possível abrir o Facebook.") };
+            }
+            if (typeof window.wabaMetaEsArmSdkAfterReauth === "function") {
+              window.wabaMetaEsArmSdkAfterReauth(callback, options);
             }
             return { ok: true, mode: "popup" };
           }
@@ -41055,8 +41068,12 @@
         if (!invoked || invoked.ok === false) {
           window.__wabaMetaTechSignupActive = false;
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
+        } else if (invoked.afterReauth) {
+          metaTpSetStatus("Wizard do WhatsApp aberto a partir do Laboratório.");
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
-          metaTpSetStatus("Facebook aberto em nova janela/aba. O Laboratório permanece aqui.");
+          metaTpSetStatus(
+            "Informe a senha na janela da Meta. Depois volte aqui e clique de novo em Conectar Portfólio. Não clique em Começar — a Meta abre um Login que o AdsPower recusa.",
+          );
         }
         return false;
       };

@@ -353,10 +353,7 @@ export function buildMetaEsOauthDialogUrl(input: {
     input.setup?.business?.id || input.businessId || "",
   ).trim();
   const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || input.wabaId || "").trim();
-  const setup: MetaEsSetupPrefill = { ...buildMetaEsSetupPrefill({ businessId, wabaId }) };
-  // Hosted ES: o select de portfólio ignora só o query business_id. extras.setup.business
-  // preenche o header. FB.login continua sem extras só com BM (buildMetaEsFbLoginOptions).
-  if (businessId && !setup.business) setup.business = { id: businessId };
+  const setup = buildMetaEsSetupPrefill({ businessId, wabaId });
   const parsed = new URL(`${META_ES_ONBOARD_ORIGIN}${META_ES_ONBOARD_PATH}`);
   parsed.searchParams.set("app_id", appId);
   parsed.searchParams.set("config_id", configId);

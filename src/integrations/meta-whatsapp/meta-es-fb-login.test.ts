@@ -172,7 +172,9 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /onboardBusinessId = metaTpOnboardBusinessId/);
     assert.match(html, /businessId: onboardBusinessId/);
     assert.match(html, /function metaTpOnboardWabaId/);
-    assert.match(html, /wabaId: onboardWabaId/);
+    assert.match(html, /wabaMetaEsTrySdkAfterReauth/);
+    assert.match(html, /wabaMetaEsArmSdkAfterReauth/);
+    assert.match(html, /Não clique em Começar/);
   });
 
   it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {
@@ -224,8 +226,8 @@ describe("meta-es-fb-login", () => {
     const suiteOnlyParsed = new URL(suiteOnly);
     assert.equal(suiteOnlyParsed.searchParams.get("business_id"), "1588459689692010");
     assert.equal(suiteOnlyParsed.searchParams.get("global_scope_id"), "1588459689692010");
-    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /1588459689692010/);
-    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /"setup"/);
+    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /"setup":\{\}/);
+    assert.doesNotMatch(String(suiteOnlyParsed.searchParams.get("extras") || ""), /1588459689692010/);
     assert.equal(isMetaEsFacebookMessageOrigin("https://web.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://business.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://staticxx.facebook.com"), true);
