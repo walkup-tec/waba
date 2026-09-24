@@ -27760,29 +27760,8 @@
           if (!base) return raw;
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
-        window.WABA_META_ES_AFTER_REAUTH_MS = 8000;
-        window.wabaMetaEsArmSdkAfterReauth = function (callback, options) {
-          window.__WABA_META_ES_AFTER_REAUTH = {
-            at: Date.now(),
-            callback: callback,
-            options: options
-          };
-        };
-        window.wabaMetaEsClearSdkAfterReauth = function () {
-          window.__WABA_META_ES_AFTER_REAUTH = null;
-        };
-        window.wabaMetaEsTrySdkAfterReauth = function (callback, options) {
-          var pending = window.__WABA_META_ES_AFTER_REAUTH;
-          if (!pending) return false;
-          if (Date.now() - pending.at < window.WABA_META_ES_AFTER_REAUTH_MS) return false;
-          if (typeof FB === "undefined" || typeof FB.login !== "function") return false;
-          window.__WABA_META_ES_AFTER_REAUTH = null;
-          console.info("[META][ES][FB_LOGIN]", "afterReauth=true", "configIdPresent=true");
-          FB.login(callback || pending.callback, options || pending.options);
-          return true;
-        };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
-          "A Meta recusou o Login for Business neste navegador. No AdsPower o Facebook abre em uma nova janela/aba do mesmo perfil (o Laboratório permanece). Feche a janela da Meta, volte ao Laboratório e clique de novo em Conectar Portfólio.";
+          "A Meta recusou o Login for Business neste navegador. No AdsPower o Facebook abre em uma nova janela/aba do mesmo perfil (o Laboratório permanece). Depois da senha, clique em Começar — a próxima tela é Conecte sua conta a Grupo Walkup App, igual ao Chrome.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
@@ -27875,16 +27854,6 @@
           var extras = options && options.extras ? JSON.parse(JSON.stringify(options.extras)) : { setup: {} };
           parsed.searchParams.set("extras", JSON.stringify(extras));
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
-          var businessId = String(
-            (input && input.businessId) ||
-              (extras.setup && extras.setup.business && extras.setup.business.id) ||
-              (input && input.setup && input.setup.business && input.setup.business.id) ||
-              ""
-          ).trim();
-          if (businessId) {
-            parsed.searchParams.set("business_id", businessId);
-            parsed.searchParams.set("global_scope_id", businessId);
-          }
           return parsed.toString();
         };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
@@ -28151,9 +28120,6 @@
           }
           window.__WABA_META_ES_LOGIN_OPTIONS = options;
           window.__WABA_META_ES_LOGIN_CB = callback;
-          if (typeof window.wabaMetaEsTrySdkAfterReauth === "function" && window.wabaMetaEsTrySdkAfterReauth(callback, options)) {
-            return { ok: true, mode: "popup", afterReauth: true };
-          }
           var cfg = extra || {};
           var publicCfg = window.__META_TP_CONFIG || window.__META_ES_CONFIG || {};
           var preferPage = cfg.preferPage === true || window.wabaMetaEsShouldUsePageRedirect(cfg.preferPage);
@@ -28171,9 +28137,6 @@
               redirectUri: redirectUri,
               graphVersion: publicCfg.graphVersion || "v26.0",
               setup: setup,
-
-              businessId: String(cfg.businessId || "").trim(),
-              wabaId: String(cfg.wabaId || "").trim(),
               state: state
             });
             if (!dialogUrl) {
@@ -28198,9 +28161,6 @@
             var opened = window.wabaMetaEsOpenFacebook(dialogUrl);
             if (!opened || opened.ok === false) {
               return { ok: false, error: String((opened && opened.error) || "Não foi possível abrir o Facebook.") };
-            }
-            if (typeof window.wabaMetaEsArmSdkAfterReauth === "function") {
-              window.wabaMetaEsArmSdkAfterReauth(callback, options);
             }
             return { ok: true, mode: "popup" };
           }
@@ -39737,37 +39697,6 @@
       }
 
 
-      function metaTpOnboardBusinessId(setup) {
-        var fromSetup = setup && setup.business ? String(setup.business.id || "").trim() : "";
-        if (fromSetup && fromSetup !== "—") return fromSetup;
-        var saved = String(metaTpSession.savedBusinessId || "").trim();
-        var cards = Array.isArray(metaTpSession.portfolios) ? metaTpSession.portfolios : [];
-        var usable = function (id) {
-          if (!id || id === "—") return false;
-          var card = cards.find(function (item) {
-            return metaTpBusinessIdLabel(item) === id;
-          });
-          if (card && metaTpPortfolioIsRestricted(card)) return false;
-          return true;
-        };
-        if (usable(saved)) return saved;
-        for (var i = 0; i < cards.length; i += 1) {
-          if (metaTpPortfolioIsRestricted(cards[i])) continue;
-          var id = metaTpBusinessIdLabel(cards[i]);
-          if (id && id !== "—") return id;
-        }
-        return "1247508354180311";
-      }
-
-      function metaTpOnboardWabaId(setup) {
-        var fromSetup =
-          setup && setup.whatsAppBusinessAccount
-            ? String(setup.whatsAppBusinessAccount.ids || "").trim()
-            : "";
-        if (fromSetup) return fromSetup;
-        return String(metaTpSession.savedWabaId || "").trim();
-      }
-
       function metaTpResetSession() {
         metaTpSession.codeReceived = false;
         metaTpSession.exchanged = false;
@@ -40995,8 +40924,6 @@
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         metaTpLogLines = [];
 
-        var onboardBusinessId = metaTpOnboardBusinessId(setup);
-        var onboardWabaId = metaTpOnboardWabaId(setup);
         metaTpResetSession();
         var setupBusinessId =
           setup && setup.business ? String(setup.business.id || "").trim() : "";
@@ -41060,19 +40987,14 @@
               source: "lab",
               appId: appId,
               redirectUri: publicCfg.redirectUri || window.location.origin,
-
-              businessId: onboardBusinessId,
-              wabaId: onboardWabaId,
             })
           : { ok: false, error: "SDK da Meta não carregou. Verifique bloqueador de anúncios." };
         if (!invoked || invoked.ok === false) {
           window.__wabaMetaTechSignupActive = false;
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
-        } else if (invoked.afterReauth) {
-          metaTpSetStatus("Wizard do WhatsApp aberto a partir do Laboratório.");
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
           metaTpSetStatus(
-            "Informe a senha na janela da Meta. Depois volte aqui e clique de novo em Conectar Portfólio. Não clique em Começar — a Meta abre um Login que o AdsPower recusa.",
+            "Informe a senha na janela da Meta. Quando aparecer o Grupo Walkup App, clique em Começar. A próxima tela é Conecte sua conta a Grupo Walkup App — igual ao Chrome.",
           );
         }
         return false;

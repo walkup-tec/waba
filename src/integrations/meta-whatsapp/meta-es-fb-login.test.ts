@@ -167,14 +167,13 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /searchParams.set\("response_type", "code"\)/);
     assert.doesNotMatch(html, /searchParams.set\("override_default_response_type"/);
     assert.doesNotMatch(html, /searchParams.set\("redirect_uri", siteOrigin\)/);
-    assert.match(html, /function metaTpOnboardBusinessId/);
-    assert.match(html, /global_scope_id/);
-    assert.match(html, /onboardBusinessId = metaTpOnboardBusinessId/);
-    assert.match(html, /businessId: onboardBusinessId/);
-    assert.match(html, /function metaTpOnboardWabaId/);
-    assert.match(html, /wabaMetaEsTrySdkAfterReauth/);
-    assert.match(html, /wabaMetaEsArmSdkAfterReauth/);
-    assert.match(html, /Não clique em Começar/);
+    assert.doesNotMatch(html, /global_scope_id/);
+    assert.doesNotMatch(html, /function metaTpOnboardBusinessId/);
+    assert.doesNotMatch(html, /wabaMetaEsTrySdkAfterReauth/);
+    assert.doesNotMatch(html, /wabaMetaEsArmSdkAfterReauth/);
+    assert.doesNotMatch(html, /Não clique em Começar/);
+    assert.match(html, /clique em Começar/);
+    assert.match(html, /Conecte sua conta a Grupo Walkup App/);
   });
 
   it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {
@@ -211,8 +210,8 @@ describe("meta-es-fb-login", () => {
     });
     assert.ok(withPortfolio);
     const withPortfolioParsed = new URL(withPortfolio);
-    assert.equal(withPortfolioParsed.searchParams.get("business_id"), "1588459689692010");
-    assert.equal(withPortfolioParsed.searchParams.get("global_scope_id"), "1588459689692010");
+    assert.equal(withPortfolioParsed.searchParams.get("business_id"), null);
+    assert.equal(withPortfolioParsed.searchParams.get("global_scope_id"), null);
     assert.equal(withPortfolioParsed.searchParams.get("response_type"), null);
     assert.equal(withPortfolioParsed.searchParams.get("redirect_uri"), null);
     assert.match(String(withPortfolioParsed.searchParams.get("extras") || ""), /1588459689692010/);
@@ -224,8 +223,8 @@ describe("meta-es-fb-login", () => {
     });
     assert.ok(suiteOnly);
     const suiteOnlyParsed = new URL(suiteOnly);
-    assert.equal(suiteOnlyParsed.searchParams.get("business_id"), "1588459689692010");
-    assert.equal(suiteOnlyParsed.searchParams.get("global_scope_id"), "1588459689692010");
+    assert.equal(suiteOnlyParsed.searchParams.get("business_id"), null);
+    assert.equal(suiteOnlyParsed.searchParams.get("global_scope_id"), null);
     assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /"setup":\{\}/);
     assert.doesNotMatch(String(suiteOnlyParsed.searchParams.get("extras") || ""), /1588459689692010/);
     assert.equal(isMetaEsFacebookMessageOrigin("https://web.facebook.com"), true);

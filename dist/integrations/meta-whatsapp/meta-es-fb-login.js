@@ -273,6 +273,13 @@ function parseMetaEsFacebookOauthMessage(data) {
     }
     return null;
 }
+/**
+ * Hosted ES igual ao Chrome: app_id, config_id, extras={"setup":{}}, state.
+ * O Começar abre Login for Business (web.facebook.com/v26.0/dialog/oauth
+ * com encrypted_query_string) — “Conecte sua conta facilmente a Grupo Walkup App”.
+ * Não colocar business_id / global_scope_id nesta URL: o Chrome não usa e o
+ * Começar no AdsPower deixa de mintar esse Login.
+ */
 function buildMetaEsOauthDialogUrl(input) {
     const appId = String(input.appId || "").trim();
     const configId = String(input.configId || "").trim();
@@ -289,10 +296,6 @@ function buildMetaEsOauthDialogUrl(input) {
     const state = String(input.state || "").trim();
     if (state)
         parsed.searchParams.set("state", state);
-    if (businessId) {
-        parsed.searchParams.set("business_id", businessId);
-        parsed.searchParams.set("global_scope_id", businessId);
-    }
     void input.display;
     void input.cbt;
     void input.graphVersion;
@@ -302,8 +305,8 @@ function metaEsOauthPopupFeatures() {
     return "popup=yes,width=1100,height=820,scrollbars=yes,resizable=yes,toolbar=yes,location=yes,menubar=no";
 }
 /**
- * Senha: login/reauth.php. Depois: LaunchBridge onboard, não dialog/oauth.
- * dialog/oauth com config_id ES devolve Recurso indisponível (Login do Facebook).
+ * Senha: login/reauth.php. Depois: Hosted ES (igual ao Chrome).
+ * O Começar da Meta abre o Login for Business (dialog/oauth criptografado).
  */
 function buildMetaEsOauthLaunchUrl(input) {
     const dialog = buildMetaEsOauthDialogUrl(input);
