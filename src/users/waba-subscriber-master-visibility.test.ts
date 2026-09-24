@@ -4,9 +4,11 @@ import {
   WALKUP_MASTER_EMAIL,
   canViewerSeeSubscriber,
   defaultVisibleToMastersOnRegister,
+  isEduardoMaster,
   isWalkupMasterEmail,
   resolveSubscriberOrigin,
   resolveVisibleMasterProfitPercents,
+  shouldSkipEduardoCampaignEvoNotify,
 } from "./waba-subscriber-master-visibility";
 
 const EDUARDO = "eduardo.master@exemplo.com";
@@ -79,5 +81,22 @@ describe("origem e visibilidade do assinante para masters", () => {
       shown.map((item) => item.sharePercent),
       [50, 50],
     );
+  });
+
+  it("assinante oculto: só o Eduardo fica de fora da EVO de nova campanha", () => {
+    const eduardo = { email: EDUARDO, fullName: "Eduardo Silva", role: "master" };
+    const walkup = {
+      email: WALKUP_MASTER_EMAIL,
+      fullName: "Walkup",
+      role: "master",
+    };
+    const hidden = { email: "site@x.com", visibleToMasters: false };
+    const shown = { email: "site@x.com", visibleToMasters: true };
+    assert.equal(isEduardoMaster(eduardo), true);
+    assert.equal(isEduardoMaster(walkup), false);
+    assert.equal(shouldSkipEduardoCampaignEvoNotify(eduardo, hidden), true);
+    assert.equal(shouldSkipEduardoCampaignEvoNotify(walkup, hidden), false);
+    assert.equal(shouldSkipEduardoCampaignEvoNotify(eduardo, shown), false);
+    assert.equal(shouldSkipEduardoCampaignEvoNotify(eduardo, null), false);
   });
 });

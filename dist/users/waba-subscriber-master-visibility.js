@@ -4,11 +4,34 @@
  * walkup@walkuptec.com.br sempre vê todos e controla o liga/desliga.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resolveVisibleMasterProfitPercents = exports.resolveSubscriberOrigin = exports.canViewerSeeSubscriber = exports.defaultVisibleToMastersOnRegister = exports.isSubscriberVisibleToMasters = exports.isWalkupMasterEmail = exports.WALKUP_MASTER_EMAIL = void 0;
+exports.resolveVisibleMasterProfitPercents = exports.resolveSubscriberOrigin = exports.canViewerSeeSubscriber = exports.defaultVisibleToMastersOnRegister = exports.isSubscriberVisibleToMasters = exports.shouldSkipEduardoCampaignEvoNotify = exports.isEduardoMaster = exports.isWalkupMasterEmail = exports.WALKUP_MASTER_EMAIL = void 0;
 exports.WALKUP_MASTER_EMAIL = "walkup@walkuptec.com.br";
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const isWalkupMasterEmail = (email) => normalizeEmail(email) === exports.WALKUP_MASTER_EMAIL;
 exports.isWalkupMasterEmail = isWalkupMasterEmail;
+const isEduardoMaster = (user) => {
+    const email = normalizeEmail(String(user.email || ""));
+    const fromEnv = normalizeEmail(String(process.env.WABA_EDUARDO_MASTER_EMAIL || ""));
+    if (fromEnv.includes("@") && email === fromEnv)
+        return true;
+    const role = String(user.role || "").trim().toLowerCase();
+    if (role && role !== "master")
+        return false;
+    return /\beduardo\b/i.test(String(user.fullName || ""));
+};
+exports.isEduardoMaster = isEduardoMaster;
+/**
+ * Campanha de assinante com Visível desligado: Eduardo não recebe EVO.
+ * Walkup e os demais masters continuam na lista.
+ */
+const shouldSkipEduardoCampaignEvoNotify = (master, subscriber) => {
+    if (!subscriber)
+        return false;
+    if ((0, exports.isSubscriberVisibleToMasters)(subscriber))
+        return false;
+    return (0, exports.isEduardoMaster)(master);
+};
+exports.shouldSkipEduardoCampaignEvoNotify = shouldSkipEduardoCampaignEvoNotify;
 const isSubscriberVisibleToMasters = (subscriber) => {
     if (!subscriber)
         return false;

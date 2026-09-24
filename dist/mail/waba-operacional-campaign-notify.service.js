@@ -9,6 +9,7 @@ const waba_mail_delivery_1 = require("./waba-mail-delivery");
 const waba_app_url_1 = require("./waba-app-url");
 const waba_operacional_campaign_whatsapp_service_1 = require("./waba-operacional-campaign-whatsapp.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
+const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const formatCreatedAtLabel = (iso) => {
     const value = String(iso ?? "").trim();
     if (!value)
@@ -165,6 +166,14 @@ const notifyAssignedOperacionalAndMasters = async (intake) => {
     const masters = userService.listMasterUsers();
     console.log(`[mail] campanha ${intake.id} (${apiKindLabel}/${notifyEvent}): WhatsApp para operacional ${assignedEmail} e ${masters.length} master(s) (1 envio por número).`);
     for (const master of masters) {
+        if ((0, waba_subscriber_master_visibility_1.shouldSkipEduardoCampaignEvoNotify)(master, subscriber)) {
+            recipients.push(buildSkippedRecipient({
+                role: "master",
+                user: master,
+                message: "Assinante oculto (Visível desligado): Eduardo não recebe EVO.",
+            }));
+            continue;
+        }
         const masterWhatsapp = String(master.whatsapp ?? "").trim();
         const phoneKey = notifyWhatsAppPhoneKey(masterWhatsapp);
         if (!phoneKey) {

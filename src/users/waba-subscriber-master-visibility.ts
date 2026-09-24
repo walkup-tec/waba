@@ -36,6 +36,36 @@ export type ResolvedSubscriberOrigin = {
 export const isWalkupMasterEmail = (email: string): boolean =>
   normalizeEmail(email) === WALKUP_MASTER_EMAIL;
 
+export const isEduardoMaster = (user: {
+  email?: string | null;
+  fullName?: string | null;
+  role?: string | null;
+}): boolean => {
+  const email = normalizeEmail(String(user.email || ""));
+  const fromEnv = normalizeEmail(String(process.env.WABA_EDUARDO_MASTER_EMAIL || ""));
+  if (fromEnv.includes("@") && email === fromEnv) return true;
+  const role = String(user.role || "").trim().toLowerCase();
+  if (role && role !== "master") return false;
+  return /\beduardo\b/i.test(String(user.fullName || ""));
+};
+
+/**
+ * Campanha de assinante com Visível desligado: Eduardo não recebe EVO.
+ * Walkup e os demais masters continuam na lista.
+ */
+export const shouldSkipEduardoCampaignEvoNotify = (
+  master: {
+    email?: string | null;
+    fullName?: string | null;
+    role?: string | null;
+  },
+  subscriber: MasterVisibilitySubscriber | null | undefined,
+): boolean => {
+  if (!subscriber) return false;
+  if (isSubscriberVisibleToMasters(subscriber)) return false;
+  return isEduardoMaster(master);
+};
+
 export const isSubscriberVisibleToMasters = (
   subscriber: MasterVisibilitySubscriber | null | undefined,
 ): boolean => {

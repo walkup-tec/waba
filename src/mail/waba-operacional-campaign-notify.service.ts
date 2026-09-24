@@ -16,6 +16,7 @@ import { buildOperacionalAdminCampaignDeepLink } from "./waba-app-url";
 import { deliverOperacionalNewCampaignWhatsApp, deliverMasterBmInoperanteCampaignWhatsApp } from "./waba-operacional-campaign-whatsapp.service";
 import type { WabaWhatsAppDeliveryStatus } from "./waba-welcome-whatsapp.service";
 import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
+import { shouldSkipEduardoCampaignEvoNotify } from "../users/waba-subscriber-master-visibility";
 
 export type OperacionalNotifyRecipientRole = "operacional" | "master";
 
@@ -225,6 +226,16 @@ const notifyAssignedOperacionalAndMasters = async (
   );
 
   for (const master of masters) {
+    if (shouldSkipEduardoCampaignEvoNotify(master, subscriber)) {
+      recipients.push(
+        buildSkippedRecipient({
+          role: "master",
+          user: master,
+          message: "Assinante oculto (Visível desligado): Eduardo não recebe EVO.",
+        }),
+      );
+      continue;
+    }
     const masterWhatsapp = String(master.whatsapp ?? "").trim();
     const phoneKey = notifyWhatsAppPhoneKey(masterWhatsapp);
     if (!phoneKey) {
