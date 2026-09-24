@@ -8,6 +8,7 @@ import {
   META_ES_UNAVAILABLE_MESSAGE,
   buildMetaEsFbLoginOptions,
   buildMetaEsOauthDialogUrl,
+  buildMetaEsLoginForBusinessDialogUrl,
   buildMetaEsOauthLaunchUrl,
   buildMetaEsSetupPrefill,
   configIdLast4,
@@ -164,14 +165,12 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /troque web\.facebook\.com/);
     assert.doesNotMatch(html, /Parceiros → Adicionar/);
     assert.doesNotMatch(html, /window\.location\.assign\(dialogUrl\)/);
-    assert.doesNotMatch(html, /searchParams.set\("response_type", "code"\)/);
-    assert.doesNotMatch(html, /searchParams.set\("override_default_response_type"/);
-    assert.doesNotMatch(html, /searchParams.set\("redirect_uri", siteOrigin\)/);
-    assert.doesNotMatch(html, /global_scope_id/);
     assert.doesNotMatch(html, /function metaTpOnboardBusinessId/);
     assert.doesNotMatch(html, /wabaMetaEsTrySdkAfterReauth/);
     assert.doesNotMatch(html, /wabaMetaEsArmSdkAfterReauth/);
     assert.doesNotMatch(html, /Não clique em Começar/);
+    assert.match(html, /wabaMetaEsBuildLoginForBusinessUrl/);
+    assert.match(html, /wabaMetaEsIsAdsPowerBrowser\(\)/);
     assert.match(html, /clique em Começar/);
     assert.match(html, /Conecte sua conta a Grupo Walkup App/);
   });
@@ -259,6 +258,39 @@ describe("meta-es-fb-login", () => {
     assert.match(String(launchParsed.searchParams.get("next") || ""), /business\.facebook\.com/);
     assert.doesNotMatch(String(launchParsed.searchParams.get("next") || ""), /dialog\/oauth/);
     assert.doesNotMatch(launch, /www\.facebook\.com/);
+    const lfb = buildMetaEsLoginForBusinessDialogUrl({
+      appId: "1279182514183979",
+      configId: "1590195526041278",
+      redirectUri: "https://waba.draxsistemas.com.br/",
+      state: "abc123",
+      cbt: "1",
+    });
+    assert.ok(lfb);
+    const lfbParsed = new URL(lfb);
+    assert.equal(lfbParsed.hostname, "web.facebook.com");
+    assert.equal(lfbParsed.pathname, "/v26.0/dialog/oauth");
+    assert.equal(lfbParsed.searchParams.get("client_id"), "1279182514183979");
+    assert.equal(lfbParsed.searchParams.get("config_id"), "1590195526041278");
+    assert.equal(lfbParsed.searchParams.get("response_type"), "code");
+    assert.equal(lfbParsed.searchParams.get("override_default_response_type"), "true");
+    assert.equal(lfbParsed.searchParams.get("display"), "page");
+    assert.equal(lfbParsed.searchParams.get("sdk"), "joey");
+    assert.equal(lfbParsed.searchParams.get("scope"), null);
+    assert.match(String(lfbParsed.searchParams.get("redirect_uri") || ""), /xd_arbiter/);
+    const adsLaunch = buildMetaEsOauthLaunchUrl({
+      appId: "1279182514183979",
+      configId: "1590195526041278",
+      redirectUri: "https://waba.draxsistemas.com.br/",
+      state: "abc123",
+      loginForBusiness: true,
+      cbt: "1",
+    });
+    assert.ok(adsLaunch);
+    const adsLaunchParsed = new URL(adsLaunch);
+    assert.equal(adsLaunchParsed.pathname, "/login/reauth.php");
+    assert.match(String(adsLaunchParsed.searchParams.get("next") || ""), /dialog\/oauth/);
+    assert.match(String(adsLaunchParsed.searchParams.get("next") || ""), /config_id=1590195526041278/);
+    assert.doesNotMatch(String(adsLaunchParsed.searchParams.get("next") || ""), /[?&]scope=/);
     assert.equal(
       shouldUseMetaEsPageRedirect({ preferPage: true }),
       true,

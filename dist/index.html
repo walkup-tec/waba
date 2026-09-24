@@ -27761,7 +27761,7 @@
           return raw.charAt(0) === "/" ? base + raw : base + "/" + raw;
         };
         window.WABA_META_ES_LOGIN_BLOCKED_MESSAGE =
-          "A Meta recusou o Login for Business neste navegador. No AdsPower o Facebook abre em uma nova janela/aba do mesmo perfil (o Laboratório permanece). Depois da senha, clique em Começar — a próxima tela é Conecte sua conta a Grupo Walkup App, igual ao Chrome.";
+          "A Meta recusou o Login for Business neste navegador. No AdsPower o Facebook abre em uma nova janela/aba do mesmo perfil (o Laboratório permanece). Depois da senha, a mesma janela deve mostrar Conecte sua conta a Grupo Walkup App.";
         window.wabaMetaEsLast4 = function (id) {
           var s = String(id || "").trim();
           return s.length >= 4 ? s.slice(-4) : "";
@@ -27856,8 +27856,63 @@
           if (input && input.state) parsed.searchParams.set("state", String(input.state));
           return parsed.toString();
         };
+        window.wabaMetaEsBuildLoginForBusinessUrl = function (input) {
+          var appId = String(input && input.appId || "").trim();
+          var configId = String(input && input.configId || "").trim();
+          var siteOrigin = window.wabaMetaEsNormalizeRedirectUri(
+            String((input && input.redirectUri) || "") || window.location.origin
+          );
+          if (!appId || !configId || !siteOrigin) return "";
+          var host = window.wabaMetaEsSiteHost(siteOrigin);
+          var version = String((input && input.graphVersion) || "v26.0").trim() || "v26.0";
+          var options = window.wabaMetaEsBuildLoginOptions(configId, input && input.setup);
+          var extras = options && options.extras ? JSON.parse(JSON.stringify(options.extras)) : { setup: {} };
+          var state = String((input && input.state) || "").trim();
+          var cb = "f" + (state || window.wabaMetaEsCreateOauthState()).slice(0, 16);
+          var arbiter = window.WABA_META_ES_SDK_XD_ARBITER;
+          var sdkRedirect =
+            arbiter +
+            "#cb=" +
+            cb +
+            "&origin=" +
+            encodeURIComponent(siteOrigin) +
+            "&domain=" +
+            host +
+            "&relation=opener";
+          var parsed = new URL("https://web.facebook.com/" + version + "/dialog/oauth");
+          parsed.searchParams.set("client_id", appId);
+          parsed.searchParams.set("redirect_uri", sdkRedirect);
+          parsed.searchParams.set(
+            "channel_url",
+            arbiter +
+              "#origin=" +
+              encodeURIComponent(siteOrigin) +
+              "&domain=" +
+              host +
+              "&relation=parent.parent"
+          );
+          parsed.searchParams.set("fallback_redirect_uri", siteOrigin);
+          parsed.searchParams.set("response_type", "code");
+          parsed.searchParams.set("override_default_response_type", "true");
+          parsed.searchParams.set("config_id", configId);
+          parsed.searchParams.set("display", "page");
+          parsed.searchParams.set("sdk", "joey");
+          parsed.searchParams.set("ret", "login");
+          parsed.searchParams.set("cbt", String((input && input.cbt) || Date.now()));
+          parsed.searchParams.set("origin", "1");
+          if (host) parsed.searchParams.set("domain", host);
+          parsed.searchParams.set("locale", "pt_BR");
+          parsed.searchParams.set("e2e", "{}");
+          parsed.searchParams.set("version", version);
+          parsed.searchParams.set("extras", JSON.stringify(extras));
+          if (state) parsed.searchParams.set("state", state);
+          return parsed.toString();
+        };
         window.wabaMetaEsBuildOauthLaunchUrl = function (input) {
-          var dialog = window.wabaMetaEsBuildOauthDialogUrl(input);
+          var adsPower = window.wabaMetaEsIsAdsPowerBrowser();
+          var dialog = adsPower
+            ? window.wabaMetaEsBuildLoginForBusinessUrl(input)
+            : window.wabaMetaEsBuildOauthDialogUrl(input);
           var appId = String(input && input.appId || "").trim();
           if (!dialog || !appId) return "";
           var reauth = new URL("https://web.facebook.com/login/reauth.php");
@@ -40993,8 +41048,12 @@
           window.__wabaMetaTechSignupActive = false;
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
+          var adsPower =
+            typeof window.wabaMetaEsIsAdsPowerBrowser === "function" && window.wabaMetaEsIsAdsPowerBrowser();
           metaTpSetStatus(
-            "Informe a senha na janela da Meta. Quando aparecer o Grupo Walkup App, clique em Começar. A próxima tela é Conecte sua conta a Grupo Walkup App — igual ao Chrome.",
+            adsPower
+              ? "Informe a senha na janela da Meta. A próxima tela é Conecte sua conta a Grupo Walkup App — o mesmo passo 3 do Chrome, na mesma janela (no AdsPower o Começar abre um Login que a Meta recusa)."
+              : "Informe a senha na janela da Meta. Quando aparecer o Grupo Walkup App, clique em Começar. A próxima tela é Conecte sua conta a Grupo Walkup App.",
           );
         }
         return false;

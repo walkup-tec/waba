@@ -37,6 +37,7 @@ exports.siteHostFromMetaEsOrigin = siteHostFromMetaEsOrigin;
 exports.isMetaEsFacebookMessageOrigin = isMetaEsFacebookMessageOrigin;
 exports.parseMetaEsFacebookOauthMessage = parseMetaEsFacebookOauthMessage;
 exports.buildMetaEsOauthDialogUrl = buildMetaEsOauthDialogUrl;
+exports.buildMetaEsLoginForBusinessDialogUrl = buildMetaEsLoginForBusinessDialogUrl;
 exports.metaEsOauthPopupFeatures = metaEsOauthPopupFeatures;
 exports.buildMetaEsOauthLaunchUrl = buildMetaEsOauthLaunchUrl;
 exports.parseMetaEsOauthReturn = parseMetaEsOauthReturn;
@@ -275,10 +276,9 @@ function parseMetaEsFacebookOauthMessage(data) {
 }
 /**
  * Hosted ES igual ao Chrome: app_id, config_id, extras={"setup":{}}, state.
- * O Começar abre Login for Business (web.facebook.com/v26.0/dialog/oauth
- * com encrypted_query_string) — “Conecte sua conta facilmente a Grupo Walkup App”.
- * Não colocar business_id / global_scope_id nesta URL: o Chrome não usa e o
- * Começar no AdsPower deixa de mintar esse Login.
+ * No Chrome o Começar abre Login for Business. No AdsPower o Começar abre
+ * uma janela nova; o SunBrowser reescreve dialog/oauth e a Meta entrega
+ * Login do Facebook (Recurso indisponível).
  */
 function buildMetaEsOauthDialogUrl(input) {
     const appId = String(input.appId || "").trim();
@@ -301,15 +301,62 @@ function buildMetaEsOauthDialogUrl(input) {
     void input.graphVersion;
     return parsed.toString();
 }
+/**
+ * Login for Business na mesma janela da senha (display=page).
+ * É a tela “Conecte sua conta facilmente a Grupo Walkup App” do Chrome.
+ * Sem scope — scope vira Login do Facebook e Recurso indisponível.
+ * Mesmo host do reauth (web.facebook.com) para não disparar _rdc.
+ */
+function buildMetaEsLoginForBusinessDialogUrl(input) {
+    const appId = String(input.appId || "").trim();
+    const configId = String(input.configId || "").trim();
+    const siteOrigin = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
+    if (!appId || !configId || !siteOrigin)
+        return null;
+    const host = siteHostFromMetaEsOrigin(siteOrigin);
+    const version = String(input.graphVersion || exports.META_ES_JS_SDK_GRAPH_VERSION).trim() || exports.META_ES_JS_SDK_GRAPH_VERSION;
+    const businessId = String(input.setup?.business?.id || input.businessId || "").trim();
+    const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || input.wabaId || "").trim();
+    const setup = buildMetaEsSetupPrefill({ businessId, wabaId });
+    const state = String(input.state || "").trim();
+    const cb = `f${(state || createMetaEsOauthState()).slice(0, 16)}`;
+    const sdkRedirect = `${exports.META_ES_SDK_XD_ARBITER}#cb=${cb}&origin=${encodeURIComponent(siteOrigin)}&domain=${host}&relation=opener`;
+    const parsed = new URL(`https://${exports.META_ES_OAUTH_HOST}/${version}/dialog/oauth`);
+    parsed.searchParams.set("client_id", appId);
+    parsed.searchParams.set("redirect_uri", sdkRedirect);
+    parsed.searchParams.set("channel_url", `${exports.META_ES_SDK_XD_ARBITER}#origin=${encodeURIComponent(siteOrigin)}&domain=${host}&relation=parent.parent`);
+    parsed.searchParams.set("fallback_redirect_uri", siteOrigin);
+    parsed.searchParams.set("response_type", "code");
+    parsed.searchParams.set("override_default_response_type", "true");
+    parsed.searchParams.set("config_id", configId);
+    parsed.searchParams.set("display", "page");
+    parsed.searchParams.set("sdk", "joey");
+    parsed.searchParams.set("ret", "login");
+    parsed.searchParams.set("cbt", String(input.cbt ?? Date.now()));
+    parsed.searchParams.set("origin", "1");
+    if (host)
+        parsed.searchParams.set("domain", host);
+    parsed.searchParams.set("locale", "pt_BR");
+    parsed.searchParams.set("e2e", "{}");
+    parsed.searchParams.set("version", version);
+    parsed.searchParams.set("extras", JSON.stringify({ setup }));
+    if (state)
+        parsed.searchParams.set("state", state);
+    return parsed.toString();
+}
 function metaEsOauthPopupFeatures() {
     return "popup=yes,width=1100,height=820,scrollbars=yes,resizable=yes,toolbar=yes,location=yes,menubar=no";
 }
 /**
- * Senha: login/reauth.php. Depois: Hosted ES (igual ao Chrome).
- * O Começar da Meta abre o Login for Business (dialog/oauth criptografado).
+ * Senha em login/reauth.php.
+ * Chrome: next = Hosted ES (Começar funciona).
+ * AdsPower: next = Login for Business na mesma janela (Começar abre janela
+ * nova que o SunBrowser transforma em Recurso indisponível).
  */
 function buildMetaEsOauthLaunchUrl(input) {
-    const dialog = buildMetaEsOauthDialogUrl(input);
+    const dialog = input.loginForBusiness
+        ? buildMetaEsLoginForBusinessDialogUrl(input)
+        : buildMetaEsOauthDialogUrl(input);
     const appId = String(input.appId || "").trim();
     if (!dialog || !appId)
         return null;
