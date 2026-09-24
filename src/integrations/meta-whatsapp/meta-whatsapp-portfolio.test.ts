@@ -33,6 +33,7 @@ import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity, writePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 import { applyLocalPhoneIdentities, listPhoneInboxChannels, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
 import { hideBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
+import { catalogBackfillBusinessIds, catalogBusinessLabel } from "./meta-whatsapp-known-owned-wabas";
 
 describe("meta portfolio mapper", () => {
   it("mapeia card do portfólio sem vazar token", () => {
@@ -3467,6 +3468,77 @@ describe("meta portfolio service", () => {
       assert.equal(flaviane?.hidden, false);
     } finally {
       for (const id of catalogIds) unhideBusiness(hideTenant, id);
+    }
+  });
+
+  it("Sander, Marilza, Flaviane e Natally ficam em Ativas mesmo se a Graph omitir o objeto", async () => {
+    const hideAuth: WabaRequestAuth = { email: "ativas-omit@exemplo.com", role: "subscriber" };
+    const hideTenant = deriveStableMetaTenantId("ativas-omit@exemplo.com");
+    const catalogIds = catalogBackfillBusinessIds();
+    for (const id of catalogIds) unhideBusiness(hideTenant, id);
+    hideBusiness(hideTenant, "1041827648719609", "BAN Drax Sistemas");
+    hideBusiness(hideTenant, "4141369862822598", "Grupo Walkup");
+    hideBusiness(hideTenant, "1247508354180311", "Grupo Walkup App");
+    hideBusiness(hideTenant, "1759044748332124", "André Aguiar");
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup-ativas-omit",
+      tenantId: hideTenant,
+      ownerEmail: "ativas-omit@exemplo.com",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup-ativas-omit"),
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    try {
+      const assets = await service.listPortfolioAssets(hideAuth, { fresh: true });
+      const ativas = (assets.portfolios || []).filter((item) => item.hidden !== true);
+      const restritas = (assets.portfolios || []).filter((item) => item.hidden === true);
+      for (const id of catalogIds) {
+        const card = ativas.find((item) => item.id === id);
+        assert.equal(card?.hidden, false, id);
+        assert.equal(card?.name, catalogBusinessLabel(id));
+      }
+      assert.equal(ativas.length >= catalogIds.length, true);
+      assert.equal(restritas.length >= 1, true);
+      assert.equal(
+        ativas.some((item) => item.id === "4141369862822598"),
+        false,
+      );
+    } finally {
+      for (const id of catalogIds) unhideBusiness(hideTenant, id);
+      unhideBusiness(hideTenant, "1041827648719609");
+      unhideBusiness(hideTenant, "4141369862822598");
+      unhideBusiness(hideTenant, "1247508354180311");
+      unhideBusiness(hideTenant, "1759044748332124");
     }
   });
 

@@ -109,13 +109,38 @@ function withLocalIdentities(tenantId, assets) {
         numbers: localizeNumbers(assets.numbers || [], assets.portfolio?.name || assets.portfolio?.primaryPageName, assets.portfolio?.hidden === true, assets.portfolio?.id),
     };
 }
+/** Cards Ativas dos BMs de cliente mesmo se me/businesses, cache ou cooldown omitirem o GET. */
+function catalogBackfillPlaceholderCards(existing) {
+    const out = [];
+    for (const id of (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)()) {
+        if (existing.some((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), id)))
+            continue;
+        const name = (0, meta_whatsapp_known_owned_wabas_1.catalogBusinessLabel)(id) || null;
+        if (!name)
+            continue;
+        out.push({
+            id,
+            name,
+            primaryPageId: null,
+            primaryPageName: null,
+            profilePictureUrl: null,
+            wabaId: null,
+            hidden: false,
+            numbers: [],
+        });
+    }
+    return out;
+}
 function markHiddenPortfolioAssets(tenantId, assets) {
     const hiddenRows = (0, meta_whatsapp_hidden_business_store_1.listHiddenBusinesses)(tenantId);
     const isHiddenId = (value) => hiddenRows.some((row) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(value || ""), row.id));
-    const portfolios = (assets.portfolios || []).map((item) => ({
-        ...item,
-        hidden: isHiddenId(String(item.id || "")) && !(0, meta_whatsapp_known_owned_wabas_1.isCatalogBackfillBusiness)(String(item.id || "")),
-    }));
+    const portfolios = [
+        ...(assets.portfolios || []).map((item) => ({
+            ...item,
+            hidden: isHiddenId(String(item.id || "")) && !(0, meta_whatsapp_known_owned_wabas_1.isCatalogBackfillBusiness)(String(item.id || "")),
+        })),
+        ...catalogBackfillPlaceholderCards(assets.portfolios || []),
+    ];
     for (const row of hiddenRows) {
         if ((0, meta_whatsapp_known_owned_wabas_1.isCatalogBackfillBusiness)(row.id))
             continue;
@@ -1987,11 +2012,12 @@ class MetaWhatsappConnectionService {
         const kept = hydrated.filter((item) => !item.leftManager);
         const fromConnections = kept.map((item) => item.card);
         const fromDirectory = kept.flatMap((item) => item.directory || []);
-        const cards = await fillEmptyAdminPortfolioCards(withHydrateLimits(this.graph), tenantId, (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)([
+        const merged = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)([
             ...selectPage.cards,
             ...fromConnections,
             ...fromDirectory,
-        ]).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard), writeTokens);
+        ]);
+        const cards = await fillEmptyAdminPortfolioCards(withHydrateLimits(this.graph), tenantId, [...merged, ...catalogBackfillPlaceholderCards(merged)].filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard), writeTokens);
         if (leftIds.length && typeof repo.disconnectOne === "function") {
             for (const connectionId of leftIds) {
                 try {

@@ -70,6 +70,7 @@ import {
   businessIdsToReopenAfterFalseLeftManager,
   catalogAgencyBusinessIds,
   catalogBackfillBusinessIds,
+  catalogBusinessLabel,
   isCatalogBackfillBusiness,
   isWithdrawnInboxDisplayPhone,
 } from "./meta-whatsapp-known-owned-wabas";
@@ -250,6 +251,27 @@ function withLocalIdentities(
   };
 }
 
+/** Cards Ativas dos BMs de cliente mesmo se me/businesses, cache ou cooldown omitirem o GET. */
+function catalogBackfillPlaceholderCards(existing: MetaPortfolioPublic[]): MetaPortfolioPublic[] {
+  const out: MetaPortfolioPublic[] = [];
+  for (const id of catalogBackfillBusinessIds()) {
+    if (existing.some((item) => metaBusinessIdsMatch(String(item.id || ""), id))) continue;
+    const name = catalogBusinessLabel(id) || null;
+    if (!name) continue;
+    out.push({
+      id,
+      name,
+      primaryPageId: null,
+      primaryPageName: null,
+      profilePictureUrl: null,
+      wabaId: null,
+      hidden: false,
+      numbers: [],
+    });
+  }
+  return out;
+}
+
 function markHiddenPortfolioAssets(
   tenantId: string,
   assets: MetaPortfolioAssetsPublic,
@@ -257,10 +279,13 @@ function markHiddenPortfolioAssets(
   const hiddenRows = listHiddenBusinesses(tenantId);
   const isHiddenId = (value: string) =>
     hiddenRows.some((row) => metaBusinessIdsMatch(String(value || ""), row.id));
-  const portfolios = (assets.portfolios || []).map((item) => ({
-    ...item,
-    hidden: isHiddenId(String(item.id || "")) && !isCatalogBackfillBusiness(String(item.id || "")),
-  }));
+  const portfolios = [
+    ...(assets.portfolios || []).map((item) => ({
+      ...item,
+      hidden: isHiddenId(String(item.id || "")) && !isCatalogBackfillBusiness(String(item.id || "")),
+    })),
+    ...catalogBackfillPlaceholderCards(assets.portfolios || []),
+  ];
   for (const row of hiddenRows) {
     if (isCatalogBackfillBusiness(row.id)) continue;
     if (portfolios.some((item) => metaBusinessIdsMatch(String(item.id || ""), row.id))) continue;
@@ -2389,14 +2414,15 @@ export class MetaWhatsappConnectionService {
     const kept = hydrated.filter((item) => !item.leftManager);
     const fromConnections = kept.map((item) => item.card);
     const fromDirectory = kept.flatMap((item) => item.directory || []);
+    const merged = dedupePortfolioCards([
+      ...selectPage.cards,
+      ...fromConnections,
+      ...fromDirectory,
+    ]);
     const cards = await fillEmptyAdminPortfolioCards(
       withHydrateLimits(this.graph),
       tenantId,
-      dedupePortfolioCards([
-        ...selectPage.cards,
-        ...fromConnections,
-        ...fromDirectory,
-      ]).filter(isRenderablePortfolioCard),
+      [...merged, ...catalogBackfillPlaceholderCards(merged)].filter(isRenderablePortfolioCard),
       writeTokens,
     );
     if (leftIds.length && typeof repo.disconnectOne === "function") {
