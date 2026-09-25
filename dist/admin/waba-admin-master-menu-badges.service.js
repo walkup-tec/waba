@@ -6,6 +6,7 @@ const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-int
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_support_ticket_repository_1 = require("../support/waba-support-ticket.repository");
 const waba_system_user_repository_1 = require("../users/waba-system-user.repository");
+const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const waba_admin_master_menu_badges_repository_1 = require("./waba-admin-master-menu-badges.repository");
 const isAfterSeenAt = (itemAt, seenAt) => {
     const at = String(itemAt ?? "").trim();
@@ -28,12 +29,13 @@ class WabaAdminMasterMenuBadgesService {
     }
     getBadges(masterEmail) {
         const seen = this.seenRepository.getSeenMap(masterEmail);
+        const byEmail = this.subscribersByEmail();
         return {
-            "admin-assinantes": this.countNewSubscribers(seen["admin-assinantes"] ?? null),
-            "admin-campanhas": this.countNewCampaigns(seen["admin-campanhas"] ?? null),
+            "admin-assinantes": this.countNewSubscribers(masterEmail, seen["admin-assinantes"] ?? null, byEmail),
+            "admin-campanhas": this.countNewCampaigns(masterEmail, seen["admin-campanhas"] ?? null, byEmail),
             "admin-usuarios": this.countNewUsers(seen["admin-usuarios"] ?? null),
-            "admin-financeiro": this.countNewFinanceiroItems(seen["admin-financeiro"] ?? null),
-            "admin-chamados": this.countNewOpenTickets(seen["admin-chamados"] ?? null),
+            "admin-financeiro": this.countNewFinanceiroItems(masterEmail, seen["admin-financeiro"] ?? null, byEmail),
+            "admin-chamados": this.countNewOpenTickets(masterEmail, seen["admin-chamados"] ?? null, byEmail),
         };
     }
     markSeen(masterEmail, menuKey) {
@@ -63,28 +65,47 @@ class WabaAdminMasterMenuBadgesService {
             seenAt: this.seenRepository.getSeenMap(masterEmail),
         };
     }
-    countNewSubscribers(seenAt) {
-        return this.subscriberRepository.list().filter((item) => isAfterSeenAt(item.createdAt, seenAt))
-            .length;
+    subscribersByEmail() {
+        const map = new Map();
+        for (const item of this.subscriberRepository.list()) {
+            const email = String(item.email || "").trim().toLowerCase();
+            if (email)
+                map.set(email, item);
+        }
+        return map;
     }
-    countNewCampaigns(seenAt) {
-        return this.intakeRepository.listAll().filter((item) => isAfterSeenAt(item.createdAt, seenAt))
-            .length;
+    viewerCanSeeOwner(viewerEmail, ownerEmail, byEmail) {
+        const owner = String(ownerEmail || "").trim().toLowerCase();
+        return (0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(viewerEmail, byEmail.get(owner) ?? null);
+    }
+    countNewSubscribers(viewerEmail, seenAt, byEmail) {
+        return this.subscriberRepository
+            .list()
+            .filter((item) => this.viewerCanSeeOwner(viewerEmail, item.email, byEmail))
+            .filter((item) => isAfterSeenAt(item.createdAt, seenAt)).length;
+    }
+    countNewCampaigns(viewerEmail, seenAt, byEmail) {
+        return this.intakeRepository
+            .listAll()
+            .filter((item) => this.viewerCanSeeOwner(viewerEmail, item.ownerEmail, byEmail))
+            .filter((item) => isAfterSeenAt(item.createdAt, seenAt)).length;
     }
     countNewUsers(seenAt) {
         return this.userRepository.list().filter((item) => isAfterSeenAt(item.createdAt, seenAt)).length;
     }
-    countNewFinanceiroItems(seenAt) {
+    countNewFinanceiroItems(viewerEmail, seenAt, byEmail) {
         return this.orderRepository
             .list()
             .filter((order) => order.product === "waba-disparos")
             .filter((order) => order.status === "pending_payment")
+            .filter((order) => this.viewerCanSeeOwner(viewerEmail, order.ownerEmail, byEmail))
             .filter((order) => isAfterSeenAt(order.createdAt, seenAt)).length;
     }
-    countNewOpenTickets(seenAt) {
+    countNewOpenTickets(viewerEmail, seenAt, byEmail) {
         return this.ticketRepository
             .list()
             .filter((ticket) => ticket.status === "open")
+            .filter((ticket) => this.viewerCanSeeOwner(viewerEmail, ticket.ownerEmail, byEmail))
             .filter((ticket) => isAfterSeenAt(ticket.submittedAt || ticket.createdAt, seenAt)).length;
     }
 }
