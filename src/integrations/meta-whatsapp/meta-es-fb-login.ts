@@ -92,11 +92,7 @@ export const META_ES_OAUTH_HOST = "web.facebook.com";
 export const META_ES_ONBOARD_ORIGIN = "https://business.facebook.com";
 export const META_ES_ONBOARD_PATH = "/messaging/whatsapp/onboard/";
 
-/**
- * Host documentado do Login for Business (dialog/oauth).
- * business.facebook.com/v26.0/dialog/oauth com config_id em claro ainda
- * devolveu Recurso indisponível no SunBrowser (marker 135200).
- */
+/** Host documentado do Login for Business (dialog/oauth). */
 export const META_ES_LFB_ORIGIN = "https://www.facebook.com";
 
 /**
@@ -130,7 +126,6 @@ export function buildMetaEsSetupPrefill(input: {
   const businessId = String(input.businessId || "").trim();
   const wabaId = String(input.wabaId || "").trim();
   // Prefill só no fluxo «adicionar número»: BM + WABA juntos.
-  // Só BM (card AdsPower com WABA —) quebra o Login for Business (Recurso indisponível).
   if (businessId && wabaId) {
     setup.business = { id: businessId };
     setup.whatsAppBusinessAccount = { ids: wabaId };
@@ -194,10 +189,7 @@ export function isGenericFacebookOauthUrl(url: string): boolean {
 }
 
 /**
- * Não reescrever o dialog/oauth do JS SDK.
- * No Chrome o wizard funciona em web.facebook.com com app_id/cbt.
- * Trocar para www e injetar query no popup do AdsPower gera encrypted_query_string
- * e Recurso indisponível. O AdsPower usa o dialog construído (buildMetaEsOauthDialogUrl).
+ * Não reescrever o dialog/oauth do JS SDK. No Chrome o wizard usa FB.login.
  */
 export function rewriteMetaEsOauthUrl(
   rawUrl: string,
@@ -260,53 +252,7 @@ export function isNativeWindowOpen(openFn: unknown): boolean {
   }
 }
 
-export function isAdsPowerLikeBrowser(input: {
-  userAgent?: string;
-  windowOpen?: unknown;
-  globals?: Record<string, unknown> | null;
-  userAgentData?: { brands?: Array<{ brand?: string }> } | null;
-}): boolean {
-  const ua = String(input.userAgent || "");
-  if (/AdsPower|SunBrowser|ADSPower/i.test(ua)) return true;
-  const brands = input.userAgentData?.brands || [];
-  if (brands.some((item) => /AdsPower|SunBrowser/i.test(String(item?.brand || "")))) return true;
-  const globals = input.globals || {};
-  if (globals.adsPower || globals.__adspower || globals.Adspower) return true;
-  if (input.windowOpen !== undefined && !isNativeWindowOpen(input.windowOpen)) return true;
-  return false;
-}
-
-/**
- * Popup do FB.login no AdsPower caía em Recurso indisponível (query criptografada).
- * O dialog/oauth em página (web/www) também: a Meta reescreve para
- * web.facebook.com e o Login do Facebook fica indisponível (etapa 2, 162000).
- * O método fica explícito no Laboratório — não forçar LFB por UA.
- * No AdsPower (SunBrowser Chromium, mesmo com UA = kernel 153) o Começar do
- * Hosted ES abre dialog/oauth criptografado e a Meta devolve Recurso indisponível.
- * O grant da app conclui no Google Chrome com a mesma conta Facebook.
- */
-export const META_ES_CONNECT_METHODS = ["sdk", "hosted", "lfb"] as const;
-export type MetaEsConnectMethod = (typeof META_ES_CONNECT_METHODS)[number];
-export const META_ES_CONNECT_METHOD_STORAGE_KEY = "waba-meta-es-connect-method-v2";
-
-export function parseMetaEsConnectMethod(raw: unknown): MetaEsConnectMethod | "" {
-  const value = String(raw || "").trim().toLowerCase();
-  if (value === "sdk" || value === "hosted" || value === "lfb") return value;
-  return "";
-}
-
-export function resolveMetaEsConnectMethod(stored?: unknown): MetaEsConnectMethod {
-  return parseMetaEsConnectMethod(stored) || "hosted";
-}
-
-export function metaEsConnectMethodUsesPageRedirect(method: MetaEsConnectMethod): boolean {
-  return method === "hosted" || method === "lfb";
-}
-
-export function metaEsConnectMethodUsesLoginForBusiness(method: MetaEsConnectMethod): boolean {
-  return method === "lfb";
-}
-
+/** Página completa só quando o caller pede; o Laboratório usa FB.login (Chrome). */
 export function shouldUseMetaEsPageRedirect(input: {
   userAgent?: string;
   windowOpen?: unknown;
@@ -314,9 +260,11 @@ export function shouldUseMetaEsPageRedirect(input: {
   preferPage?: boolean;
   method?: unknown;
 }): boolean {
-  if (input.preferPage === true) return true;
-  const method = parseMetaEsConnectMethod(input.method) || resolveMetaEsConnectMethod();
-  return metaEsConnectMethodUsesPageRedirect(method);
+  void input.userAgent;
+  void input.windowOpen;
+  void input.globals;
+  void input.method;
+  return input.preferPage === true;
 }
 
 export function createMetaEsOauthState(): string {
@@ -400,7 +348,7 @@ export type MetaEsOauthDialogInput = {
   state?: string;
   display?: "page" | "popup";
   cbt?: string | number;
-  /** AdsPower: senha e LFB no mesmo www.facebook.com (next do reauth tem de ser facebook.com). */
+  /** LFB em www.facebook.com: o next do reauth tem de ser facebook.com. */
   loginForBusiness?: boolean;
 };
 
@@ -437,8 +385,6 @@ export function metaEsOauthPopupFeatures(): string {
 
 /**
  * Login for Business em display=page (doc LFB), sem JS SDK.
- * Host: www.facebook.com — business.facebook.com/dialog/oauth com config_id
- * visível ainda caiu em Recurso indisponível (SunBrowser, marker 135200).
  * redirect_uri com barra final: Valid OAuth + Strict Mode no App Dashboard.
  */
 export function buildMetaEsLoginForBusinessDialogUrl(
@@ -471,9 +417,9 @@ export function buildMetaEsLoginForBusinessDialogUrl(
  * Senha em reauth.php.
  * Sem loginForBusiness: web.facebook.com → Hosted ES.
  * Com loginForBusiness: www.facebook.com → LFB no mesmo host.
- * next fora do facebook.com (ex.: DRAX) é ignorado e a Meta abre home.php
- * (SunBrowser, marker 161200). signed_next copia o host da senha: senha no
- * web + LFB no www vira web.facebook.com/dialog/oauth (Recurso indisponível).
+ * next fora do facebook.com (ex.: DRAX) é ignorado e a Meta abre home.php.
+ * signed_next copia o host da senha: senha no web + LFB no www vira
+ * web.facebook.com/dialog/oauth (Recurso indisponível).
  */
 export function buildMetaEsOauthLaunchUrl(
   input: MetaEsOauthDialogInput,
@@ -571,7 +517,7 @@ export function isLegacyExchangePath(path: string): boolean {
   return META_ES_LEGACY_EXCHANGE_PATHS.some((item) => raw.includes(item));
 }
 
-/** web.facebook.com + #_rdc é redirect da Meta, não um recurso nativo do AdsPower. */
+/** web.facebook.com + #_rdc é redirect da Meta. */
 export function describeMetaEsBrowserSurface(input: {
   userAgent?: string;
   userAgentData?: { mobile?: boolean; platform?: string } | null;
@@ -580,24 +526,21 @@ export function describeMetaEsBrowserSurface(input: {
 }): {
   mobileHint: boolean;
   platform: string;
-  adsPowerNativeWebHost: false;
-  adsPowerLike: boolean;
   usePageRedirect: boolean;
 } {
   const ua = String(input.userAgent || "");
   const chMobile = Boolean(input.userAgentData && input.userAgentData.mobile === true);
   const uaMobile = /Mobile|iPhone|iPad|Android.+Mobile|IEMobile/i.test(ua);
-  const adsPowerLike = isAdsPowerLikeBrowser({
-    userAgent: ua,
-    windowOpen: input.windowOpen,
-    globals: input.globals,
-  });
+  void input.windowOpen;
+  void input.globals;
   return {
     mobileHint: chMobile || uaMobile,
     platform: String(input.userAgentData?.platform || "").trim(),
-    adsPowerNativeWebHost: false,
-    adsPowerLike,
-    usePageRedirect: adsPowerLike,
+    usePageRedirect: shouldUseMetaEsPageRedirect({
+      userAgent: ua,
+      windowOpen: input.windowOpen,
+      globals: input.globals,
+    }),
   };
 }
 
@@ -628,7 +571,7 @@ export function planMetaEsTechProviderClick(configId: string): MetaEsClickPlan {
   return {
     callFbInit: false,
     openGenericOauthUrl: false,
-    openPageRedirect: true,
+    openPageRedirect: false,
     loginOptions: buildMetaEsFbLoginOptions(configId),
     configPath: META_ES_TECH_PROVIDER_PATHS.config,
     startPath: META_ES_TECH_PROVIDER_PATHS.start,

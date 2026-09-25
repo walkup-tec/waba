@@ -142,8 +142,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
 
   /**
    * Callback de API (sessão autenticada).
-   * AdsPower: o login é redirect na mesma aba; o browser volta para a SPA com `code`.
-   * GET em HTML só devolve a home com a query; o POST autenticado troca o code.
+   * GET em HTML devolve a home com `code` na query; o POST autenticado troca o code.
    */
   app.get("/integrations/meta/whatsapp/callback", async (req: Request, res: Response) => {
     const accept = String(req.headers.accept || "");

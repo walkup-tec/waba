@@ -26,11 +26,6 @@ import {
   resolveFbLoginOptionsForAttempt,
   resolveMetaEsConfigId,
   resolveMetaEsJsSdkGraphVersion,
-  resolveMetaEsConnectMethod,
-  parseMetaEsConnectMethod,
-  metaEsConnectMethodUsesPageRedirect,
-  metaEsConnectMethodUsesLoginForBusiness,
-  isAdsPowerLikeBrowser,
   shouldOpenMetaEsPopup,
   shouldUseMetaEsPageRedirect,
   toPublicMetaEsConfig,
@@ -58,7 +53,7 @@ describe("meta-es-fb-login", () => {
     });
     const plan = planMetaEsTechProviderClick("1467449278208212");
     assert.equal(plan.callFbInit, false);
-    assert.equal(plan.openPageRedirect, true);
+    assert.equal(plan.openPageRedirect, false);
     assert.equal(plan.loginOptions?.config_id, "1467449278208212");
   });
 
@@ -153,9 +148,7 @@ describe("meta-es-fb-login", () => {
   it("login recusado pela Meta não pede Testador nem Parceiros", () => {
     const html = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
     assert.match(html, /WABA_META_ES_LOGIN_BLOCKED_MESSAGE/);
-    assert.match(html, /janela\/aba nova|nova janela\/aba/);
-    assert.match(html, /AdsPower/);
-    assert.match(html, /Grupo Walkup App/);
+    assert.match(html, /O navegador bloqueou a nova janela/);
     assert.match(html, /wabaMetaEsBuildOauthDialogUrl/);
     assert.match(html, /wabaMetaEsBuildOauthLaunchUrl/);
     assert.match(html, /wabaMetaEsResumeLabOauthReturn/);
@@ -165,6 +158,7 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /wabaMetaEsParseFacebookOauthMessage/);
     assert.match(html, /popup=yes/);
     assert.match(html, /window\.open\(url, "_blank"\)/);
+    assert.doesNotMatch(html, /AdsPower|SunBrowser|whatsapp-adspower|wabaAdsPower|wabaStartAdsPower/);
     assert.doesNotMatch(html, /adicione a conta deste perfil AdsPower como Testador/);
     assert.doesNotMatch(html, /Data Use Checkup/);
     assert.doesNotMatch(html, /troque web\.facebook\.com/);
@@ -182,26 +176,28 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /sdk=joey/);
     assert.match(html, /Esse fluxo não usa Página do Facebook/);
     assert.match(html, /loginForBusiness: loginForBusiness/);
-    assert.match(html, /id="meta-es-connect-method"/);
-    assert.match(html, /waba-meta-es-connect-method-v2/);
-    assert.match(html, /option value="hosted" selected/);
-    assert.match(html, /return stored \|\| "hosted"/);
-    assert.match(html, /SDK da Meta \(FB\.login\)/);
-    assert.match(html, /Hosted Embedded Signup/);
-    assert.match(html, /Login for Business \(página\)/);
-    assert.match(html, /Conclua Conectar Portfólio no Google Chrome/);
+    assert.doesNotMatch(html, /id="meta-es-connect-method"/);
+    assert.doesNotMatch(html, /waba-meta-es-connect-method-v2/);
+    assert.doesNotMatch(html, /wabaMetaEsResolveConnectMethod/);
+    assert.doesNotMatch(html, /option value="hosted" selected/);
+    assert.doesNotMatch(html, /return stored \|\| "hosted"/);
+    assert.doesNotMatch(html, /SDK da Meta \(FB\.login\)/);
+    assert.doesNotMatch(html, /Hosted Embedded Signup/);
+    assert.doesNotMatch(html, /Login for Business \(página\)/);
+    assert.doesNotMatch(html, /Conclua Conectar Portfólio no Google Chrome/);
     assert.doesNotMatch(html, /não SunBrowser/);
     assert.doesNotMatch(html, /wabaMetaEsShouldBlockUntilChromeKernel/);
     assert.doesNotMatch(html, /id="meta-es-chrome-kernel"/);
-    assert.match(html, /Na tela do WhatsApp, clique em Começar/);
-    assert.match(html, /wabaMetaEsResolveConnectMethod/);
+    assert.doesNotMatch(html, /Na tela do WhatsApp, clique em Começar/);
     assert.doesNotMatch(html, /wabaMetaEsBuildLfbContinueUrl/);
     assert.doesNotMatch(html, /wabaMetaEsResumeLfbAfterReauth/);
     assert.doesNotMatch(html, /meta_es_lfb/);
     assert.doesNotMatch(html, /lfb=continue/);
+    assert.match(html, /const preferPage = false/);
+    assert.match(html, /FB\.login\(callback, options\)/);
   });
 
-  it("não reescreve web.facebook.com do SDK; AdsPower abre o wizard em janela nova", () => {
+  it("não reescreve web.facebook.com do SDK; o Laboratório usa FB.login", () => {
     const raw =
       "https://web.facebook.com/v26.0/dialog/oauth?app_id=1279182514183979&cbt=1790173659109&channel_url=https%3A%2F%2Fstaticxx.facebook.com%2Fx%2Fconnect%2Fxd_arbiter";
     assert.equal(rewriteMetaEsOauthUrl(raw, { configId: "1590195526041278" }), raw);
@@ -340,32 +336,11 @@ describe("meta-es-fb-login", () => {
           return null;
         },
       }),
-      true,
-    );
-    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120" }), true);
-    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120" }), true);
-    assert.equal(
-      shouldUseMetaEsPageRedirect({
-        method: "sdk",
-        userAgent: "Mozilla/5.0 AdsPower SunBrowser Chrome/120",
-      }),
       false,
     );
-    assert.equal(shouldUseMetaEsPageRedirect({ method: "hosted" }), true);
-    assert.equal(shouldUseMetaEsPageRedirect({ method: "lfb" }), true);
-    assert.equal(shouldUseMetaEsPageRedirect({ method: "sdk" }), false);
-    assert.equal(resolveMetaEsConnectMethod(""), "hosted");
-    assert.equal(parseMetaEsConnectMethod("HOSTED"), "hosted");
-    assert.equal(metaEsConnectMethodUsesPageRedirect("hosted"), true);
-    assert.equal(metaEsConnectMethodUsesLoginForBusiness("lfb"), true);
-    assert.equal(metaEsConnectMethodUsesLoginForBusiness("hosted"), false);
-    assert.equal(
-      isAdsPowerLikeBrowser({
-        userAgent: "Mozilla/5.0 Chrome/120",
-        userAgentData: { brands: [{ brand: "SunBrowser" }] },
-      }),
-      true,
-    );
+    assert.equal(shouldUseMetaEsPageRedirect({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120" }), false);
+    assert.equal(shouldUseMetaEsPageRedirect({}), false);
+    assert.equal(shouldUseMetaEsPageRedirect({ preferPage: false }), false);
     const returned = parseMetaEsOauthReturn("?code=AQC123&state=abc123&waba_id=waba-9");
     assert.equal(returned.code, "AQC123");
     assert.equal(returned.state, "abc123");
@@ -374,8 +349,7 @@ describe("meta-es-fb-login", () => {
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120",
       userAgentData: { mobile: false, platform: "Windows" },
     });
-    assert.equal(surface.adsPowerNativeWebHost, false);
-    assert.equal(surface.adsPowerLike, false);
+    assert.equal(surface.usePageRedirect, false);
     assert.equal(surface.mobileHint, false);
   });
 
