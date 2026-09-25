@@ -1863,8 +1863,14 @@ class MetaWhatsappConnectionService {
             }
             const pending = (0, meta_whatsapp_portfolio_graph_cache_1.readPortfolioGraphInflight)(tenant.tenantId);
             if (pending) {
-                const raw = await pending;
-                return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(raw.portfolios || [], requested));
+                try {
+                    const raw = await pending;
+                    return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(raw.portfolios || [], requested));
+                }
+                catch {
+                    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-graph-failed", { tenantId: tenant.tenantId, reason: "inflight" });
+                    return localizeAndHidePortfolioAssets(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
+                }
             }
         }
         const work = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail);
@@ -1875,6 +1881,10 @@ class MetaWhatsappConnectionService {
             if ((0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)())
                 (0, meta_whatsapp_portfolio_graph_cache_1.writeCachedPortfolioGraph)(tenant.tenantId, raw);
             return localizeAndHidePortfolioAssets(tenant.tenantId, raw);
+        }
+        catch {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-graph-failed", { tenantId: tenant.tenantId, reason: "graph" });
+            return localizeAndHidePortfolioAssets(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
         }
         finally {
             (0, meta_whatsapp_portfolio_graph_cache_1.clearPortfolioGraphInflight)(tenant.tenantId);

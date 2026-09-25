@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-25-143000-eduardo-menu-badges-visivel";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-25-152000-PORTFOLIO-PERSIST";

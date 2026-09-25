@@ -17,6 +17,9 @@ describe("progresso ao lado de Conectar Portfólio", () => {
     assert.match(html, /Conexão concluída com sucesso/);
     assert.match(html, /wabaEnsureMetaPortfolioLoad/);
     assert.match(html, /timeoutMs: 28000/);
+    assert.match(html, /function metaTpResetSession\(opts\)/);
+    assert.match(html, /keepPortfolios: true/);
+    assert.match(html, /function metaTpReloadPortfoliosAfterConnect/);
     assert.doesNotMatch(html, /metaTpPortfolioPage === "ativas" && !ativas.length && restritas.length/);
     assert.match(html, /meta-connect-progress-check/);
   });

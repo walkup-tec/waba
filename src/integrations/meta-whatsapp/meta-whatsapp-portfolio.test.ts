@@ -3542,6 +3542,44 @@ describe("meta portfolio service", () => {
     }
   });
 
+  it("se a Graph falhar, os portfólios gravados no Laboratório continuam na lista", async () => {
+    const persistAuth: WabaRequestAuth = { email: "persist-fallback@exemplo.com", role: "subscriber" };
+    const persistTenant = deriveStableMetaTenantId("persist-fallback@exemplo.com");
+    const sander = {
+      ...connectedRow(),
+      id: "conn-persist-fallback",
+      tenantId: persistTenant,
+      ownerEmail: "persist-fallback@exemplo.com",
+      metaBusinessId: "1588459689692010",
+      wabaId: "waba-sander-persist",
+      displayPhoneNumber: "+55 61 99999-0001",
+      verifiedName: "Sander",
+      accessTokenEncrypted: encryptMetaToken("token-persist-fallback"),
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [sander];
+        },
+        async findOpenByTenant() {
+          return sander;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      async () => {
+        throw new Error("graph down");
+      },
+    );
+    const assets = await service.listPortfolioAssets(persistAuth, { fresh: true });
+    const card = (assets.portfolios || []).find((item) => item.id === "1588459689692010");
+    assert.equal(card?.hidden, false);
+    assert.equal(card?.wabaId, "waba-sander-persist");
+    assert.equal(
+      (card?.numbers || []).some((item) => item.displayPhoneNumber === "+55 61 99999-0001"),
+      true,
+    );
+  });
+
   it("lista BM criado no administrador via /owned_businesses da agência", async () => {
     const drax = {
       ...connectedRow(),

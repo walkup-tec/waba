@@ -39523,20 +39523,22 @@
       }
 
 
-      function metaTpResetSession() {
+      function metaTpResetSession(opts) {
+        const keepPortfolios = Boolean(opts && opts.keepPortfolios);
         metaTpSession.codeReceived = false;
         metaTpSession.exchanged = false;
         metaTpSession.wabaId = "";
         metaTpSession.phoneNumberId = "";
         metaTpSession.businessId = "";
+        metaTpSession.finishEvent = "";
+        metaTpSession.advancing = false;
+        metaTpSession.addNumber = false;
+        if (keepPortfolios) return;
         metaTpSession.savedBusinessId = "";
         metaTpSession.savedWabaId = "";
         metaTpSession.portfolioPrimaryPageId = "";
         metaTpSession.numbers = [];
         metaTpSession.portfolios = [];
-        metaTpSession.finishEvent = "";
-        metaTpSession.advancing = false;
-        metaTpSession.addNumber = false;
       }
 
       const metaTpEditState = {
@@ -40381,7 +40383,9 @@
             if (response.status === 502 || response.status === 504) {
               metaTpSetStatus("O servidor não concluiu a leitura dos números a tempo. Clique de novo em Atualizar.");
             }
-            if (!silent && !force) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+            if (!silent && !force && !metaTpHasVisiblePortfolios()) {
+              metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+            }
             return;
           }
           const next = metaTpAssetsFingerprint(payload);
@@ -40396,7 +40400,9 @@
           if (aborted) {
             metaTpSetStatus("O servidor não concluiu a leitura dos números a tempo. Clique de novo em Atualizar.");
           }
-          if (!silent && !force) metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+          if (!silent && !force && !metaTpHasVisiblePortfolios()) {
+            metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+          }
         }
         })();
         try {
@@ -40404,6 +40410,15 @@
         } finally {
           metaTpPortfolioInflight = null;
         }
+      }
+
+      async function metaTpReloadPortfoliosAfterConnect() {
+        await metaTpLoadPortfolio({ silent: true });
+        if (!metaTpHasVisiblePortfolios()) {
+          await metaTpLoadPortfolio({ silent: true, force: true });
+          return;
+        }
+        void metaTpLoadPortfolio({ silent: true, force: true });
       }
 
       function metaTpStartLiveSync() {
@@ -40683,7 +40698,7 @@
             metaTpSetStatus("");
             metaTpLog(metaTpFormatPublicStatus(payload));
             metaTpAdvanceConnectProgress(2);
-            await metaTpLoadPortfolio({ force: true });
+            await metaTpReloadPortfoliosAfterConnect();
           }
 
           if (metaTpSession.exchanged && metaTpSession.wabaId && metaTpSession.phoneNumberId) {
@@ -40694,7 +40709,7 @@
             });
             if (!response.ok || payload.ok === false) {
               metaTpLog("Graph validation falhou");
-              await metaTpLoadPortfolio({ force: true });
+              await metaTpReloadPortfoliosAfterConnect();
               if (metaTpHasVisiblePortfolios()) {
                 metaTpSetStatus("");
                 metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
@@ -40710,7 +40725,7 @@
             metaTpSetStatus("");
             metaTpLog(metaTpFormatPublicStatus(payload));
             metaTpAdvanceConnectProgress(2);
-            await metaTpLoadPortfolio({ force: true });
+            await metaTpReloadPortfoliosAfterConnect();
             if (payload.status === "connected" || payload.status === "pending_confirmation") {
               const sub = await metaTpFetchJson("/integrations/meta/whatsapp/subscribe-webhooks", {
                 method: "POST",
@@ -40730,7 +40745,7 @@
           }
           if (metaTpSession.exchanged && !metaTpSession.wabaId) {
             metaTpLog("token sem waba_id do postMessage; lendo portfólio na Graph");
-            await metaTpLoadPortfolio({ force: true });
+            await metaTpReloadPortfoliosAfterConnect();
             if (metaTpHasVisiblePortfolios()) {
               metaTpSetStatus("");
               metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
@@ -40750,7 +40765,7 @@
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         metaTpLogLines = [];
 
-        metaTpResetSession();
+        metaTpResetSession({ keepPortfolios: true });
         var setupBusinessId =
           setup && setup.business ? String(setup.business.id || "").trim() : "";
         var setupWabaId =
@@ -41135,7 +41150,7 @@
             return true;
           }
           if (typeof window.wabaOpenLabTab === "function") window.wabaOpenLabTab("whatsapp-oficial");
-          metaTpResetSession();
+          metaTpResetSession({ keepPortfolios: true });
           window.__wabaMetaTechSignupActive = true;
           metaTpSession.codeReceived = true;
           metaTpSession._code = parsed.code;
