@@ -251,7 +251,7 @@ function buildCampaignPerformanceDashboardHtml(input) {
               <article class="camp-report-metric camp-report-metric--read">
                 <span class="camp-report-metric-label">Lidos</span>
                 <span class="camp-report-metric-value">${formatNumber(metrics.read)}</span>
-                <span class="camp-report-metric-hint">Quantas mensagens foram abertas.</span>
+                <span class="camp-report-metric-hint">Mensagens com check <svg class="camp-report-wa-ticks camp-report-wa-ticks--read" viewBox="0 0 16 15" aria-hidden="true" focusable="false"><path fill="currentColor" d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.88a.32.32 0 0 1-.484.032l-.358-.325a.32.32 0 0 0-.484.032l-.378.48a.418.418 0 0 0 .036.54l1.32 1.267a.32.32 0 0 0 .484-.034l6.272-8.048a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.88a.32.32 0 0 1-.484.032L1.892 7.77a.366.366 0 0 0-.516.005l-.423.433a.364.364 0 0 0 .006.514l3.255 3.185a.32.32 0 0 0 .484-.033l6.272-8.048a.365.365 0 0 0-.063-.51z"/></svg> de leitura no WhatsApp</span>
               </article>
               <article class="camp-report-metric camp-report-metric--failed">
                 <span class="camp-report-metric-label">Falhados</span>
@@ -418,6 +418,7 @@ const SUBSCRIBER_REPORT_CSS = `
       vertical-align: -0.08em;
       color: #53bdeb;
     }
+    .camp-report-wa-ticks--read { color: #25d366; }
     .camp-report-metric--leads .camp-report-metric-value { color: #93c5fd; }
     .camp-report-metric--sent .camp-report-metric-value { color: #f8fafc; }
     .camp-report-metric--delivered .camp-report-metric-value { color: #fb923c; }
