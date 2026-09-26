@@ -647,6 +647,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             source: report?.source || "manual",
             showClicks,
             timeline: (0, waba_campaign_report_timeline_1.collectIntakeReportTimeline)(intake),
+            clickEvidence: (0, waba_campaign_report_read_overrides_1.resolveCampaignClickEvidence)(intake.campaignName, intake.createdAt, report, intake.id),
             indicators,
             message: report
                 ? showClicks

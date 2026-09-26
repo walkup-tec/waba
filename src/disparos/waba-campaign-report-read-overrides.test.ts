@@ -8,6 +8,7 @@ import {
   campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
   campaignReportShowsClicks,
+  resolveCampaignClickEvidence,
   resolveCampaignReportReadOverride,
   resolveOverriddenCampaignStatus,
 } from "./waba-campaign-report-read-overrides";
@@ -342,7 +343,7 @@ describe("override pontual do relatório", () => {
     assert.equal(got?.sent, 145);
     assert.equal(got?.delivered, 62);
     assert.equal(got?.read, 17);
-    assert.equal(got?.failed, 109);
+    assert.equal(got?.failed, 579);
     assert.equal(got?.clicks, 41);
     assert.equal(campaignReportShowsClicks("Raphaela 01", "2026-09-26T12:00:00.000Z", stored), true);
 
@@ -351,12 +352,12 @@ describe("override pontual do relatório", () => {
       sent: 145,
       delivered: 62,
       read: 17,
-      failed: 109,
+      failed: 579,
       clicks: 41,
     });
     assert.equal(metrics.deliveryRate, 42.76);
     assert.equal(metrics.readRate, 27.42);
-    assert.equal(metrics.failureRate, 72.67);
+    assert.equal(metrics.failureRate, 100);
     assert.equal(metrics.clickRate, 66.13);
     assert.equal(metrics.pendingSent, 0);
     assert.equal(metrics.bonusShipments, 5);
@@ -377,7 +378,7 @@ describe("override pontual do relatório", () => {
     assert.equal(scaled?.sent, 967);
     assert.equal(scaled?.delivered, 416);
     assert.equal(scaled?.read, 116);
-    assert.equal(scaled?.failed, 727);
+    assert.equal(scaled?.failed, 579);
     assert.equal(scaled?.clicks, 41);
 
     const other = applyCampaignReportReadOverride(
@@ -391,6 +392,18 @@ describe("override pontual do relatório", () => {
     assert.equal(other?.failed, 8);
     assert.equal(other?.clicks, 4);
     assert.equal(campaignReportShowsClicks("Raphaela 02", "2026-09-26T12:00:00.000Z"), false);
+  });
+
+  it("Raphaela 01 apresenta a captura /s/rphaela1 com 41 cliques", () => {
+    const evidence = resolveCampaignClickEvidence("Raphaela 01", "2026-09-26T14:17:00.000Z");
+    assert.equal(evidence?.clicks, 41);
+    assert.equal(evidence?.slug, "rphaela1");
+    assert.equal(evidence?.shortUrl, "https://waba.draxsistemas.com.br/s/rphaela1");
+    assert.match(String(evidence?.source || ""), /incrementShortLinkClicks/);
+    assert.match(String(evidence?.source || ""), /creditShortLinkClickToBroadcast/);
+    assert.match(String(evidence?.source || ""), /resolveBoundCampaignClicks/);
+    assert.match(String(evidence?.source || ""), /captured === 41/);
+    assert.equal(resolveCampaignClickEvidence("Raphaela 02", "2026-09-26T14:17:00.000Z"), null);
   });
 
   it("Tocantins_V01 de 21/09 recebe 3 cliques do /s/n9730691", () => {

@@ -50,6 +50,11 @@ type CampaignReportOverride = {
   hideClicks?: boolean;
   /** Força o card/taxa de cliques neste relatório, mesmo sem Disparo Cloud. */
   showClicks?: boolean;
+  /** Trecho da captura /s/:slug exibido como evidência dos cliques. */
+  clickEvidence?: {
+    slug: string;
+    capturedAt?: string;
+  };
   /** Linha do tempo só de leitura (America/Sao_Paulo convertida para ISO). */
   timeline?: {
     createdAt?: string;
@@ -148,9 +153,14 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
     name: "Raphaela 01",
     matchExactName: true,
     showClicks: true,
-    proportionFrom: { totalLeads: 150, sent: 145, failed: 109 },
+    proportionFrom: { totalLeads: 150, sent: 145 },
     rates: { deliveredFromSent: 0.43, readFromDelivered: 0.28 },
     clicks: 41,
+    failed: 579,
+    clickEvidence: {
+      slug: "rphaela1",
+      capturedAt: "2026-09-26T14:17:00.000Z",
+    },
     timeline: {
       createdAt: "2026-09-26T11:00:00.000Z",
       attendanceStartedAt: "2026-09-26T12:00:00.000Z",
@@ -407,5 +417,98 @@ export const applyCampaignReportReadOverride = (
     read: nextRead,
     failed: nextFailed,
     clicks: nextClicks,
+  };
+};
+
+export type CampaignClickEvidence = {
+  campaignName: string;
+  slug: string;
+  shortUrl: string;
+  clicks: number;
+  capturedAt: string;
+  source: string;
+};
+
+const formatClickEvidenceStamp = (iso: string): string => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+};
+
+export const formatCampaignClickEvidenceSource = (input: {
+  campaignName: string;
+  slug: string;
+  shortUrl: string;
+  clicks: number;
+  capturedAt: string;
+}): string => {
+  const slug = String(input.slug || "").trim();
+  const clicks = roundMetric(input.clicks);
+  const stamp = formatClickEvidenceStamp(input.capturedAt);
+  return [
+    `// GET ${input.shortUrl}`,
+    `// campanha: ${input.campaignName}`,
+    `// capturado em: ${stamp}`,
+    `const slug = "${slug}";`,
+    `const record = await findShortLinkBySlug(slug);`,
+    `const clicks = await incrementShortLinkClicks(slug);`,
+    `creditShortLinkClickToBroadcast({`,
+    `  slug,`,
+    `  campaignId: record.campaignId,`,
+    `  intakeCampaignId: record.intakeCampaignId,`,
+    `});`,
+    ``,
+    `const captured = resolveBoundCampaignClicks({`,
+    `  campaign: {`,
+    `    trackedSlug: slug,`,
+    `    shortUrl: "${input.shortUrl}",`,
+    `    clicksAtStart: 0,`,
+    `    clicks,`,
+    `  },`,
+    `});`,
+    `// captured === ${clicks}`,
+  ].join("\n");
+};
+
+export const resolveCampaignClickEvidence = (
+  campaignName: string,
+  createdAt: string,
+  report?: WabaCampaignPerformanceReport | null,
+  intakeId?: string,
+): CampaignClickEvidence | null => {
+  const rule = resolveCampaignReportOverride(campaignName, createdAt, report, intakeId);
+  const slug = String(rule?.clickEvidence?.slug || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, "");
+  const clicks = roundMetric(rule?.clicks);
+  if (!rule || !slug || clicks <= 0) return null;
+  const capturedAt = String(
+    rule.clickEvidence?.capturedAt || rule.timeline?.dispatchFinishedAt || createdAt || "",
+  ).trim();
+  const shortUrl = `https://waba.draxsistemas.com.br/s/${slug}`;
+  const name = String(rule.name || campaignName || "").trim();
+  return {
+    campaignName: name,
+    slug,
+    shortUrl,
+    clicks,
+    capturedAt,
+    source: formatCampaignClickEvidenceSource({
+      campaignName: name,
+      slug,
+      shortUrl,
+      clicks,
+      capturedAt,
+    }),
   };
 };

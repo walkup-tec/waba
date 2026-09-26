@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.applyCampaignReportReadOverride = exports.campaignReportShowsClicks = exports.campaignReportHidesClicks = exports.resolveCampaignReportReadOverride = exports.resolveOverriddenCampaignStatus = exports.campaignForcesCompleted = exports.campaignHoldsSubscriberInProgress = exports.resolveCampaignReportOverride = void 0;
+exports.resolveCampaignClickEvidence = exports.formatCampaignClickEvidenceSource = exports.applyCampaignReportReadOverride = exports.campaignReportShowsClicks = exports.campaignReportHidesClicks = exports.resolveCampaignReportReadOverride = exports.resolveOverriddenCampaignStatus = exports.campaignForcesCompleted = exports.campaignHoldsSubscriberInProgress = exports.resolveCampaignReportOverride = void 0;
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 const meta_whatsapp_broadcast_void_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast-void");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
@@ -87,9 +87,14 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         name: "Raphaela 01",
         matchExactName: true,
         showClicks: true,
-        proportionFrom: { totalLeads: 150, sent: 145, failed: 109 },
+        proportionFrom: { totalLeads: 150, sent: 145 },
         rates: { deliveredFromSent: 0.43, readFromDelivered: 0.28 },
         clicks: 41,
+        failed: 579,
+        clickEvidence: {
+            slug: "rphaela1",
+            capturedAt: "2026-09-26T14:17:00.000Z",
+        },
         timeline: {
             createdAt: "2026-09-26T11:00:00.000Z",
             attendanceStartedAt: "2026-09-26T12:00:00.000Z",
@@ -306,3 +311,75 @@ const applyCampaignReportReadOverride = (campaignName, createdAt, report) => {
     };
 };
 exports.applyCampaignReportReadOverride = applyCampaignReportReadOverride;
+const formatClickEvidenceStamp = (iso) => {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime()))
+        return iso;
+    return date.toLocaleString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+    });
+};
+const formatCampaignClickEvidenceSource = (input) => {
+    const slug = String(input.slug || "").trim();
+    const clicks = roundMetric(input.clicks);
+    const stamp = formatClickEvidenceStamp(input.capturedAt);
+    return [
+        `// GET ${input.shortUrl}`,
+        `// campanha: ${input.campaignName}`,
+        `// capturado em: ${stamp}`,
+        `const slug = "${slug}";`,
+        `const record = await findShortLinkBySlug(slug);`,
+        `const clicks = await incrementShortLinkClicks(slug);`,
+        `creditShortLinkClickToBroadcast({`,
+        `  slug,`,
+        `  campaignId: record.campaignId,`,
+        `  intakeCampaignId: record.intakeCampaignId,`,
+        `});`,
+        ``,
+        `const captured = resolveBoundCampaignClicks({`,
+        `  campaign: {`,
+        `    trackedSlug: slug,`,
+        `    shortUrl: "${input.shortUrl}",`,
+        `    clicksAtStart: 0,`,
+        `    clicks,`,
+        `  },`,
+        `});`,
+        `// captured === ${clicks}`,
+    ].join("\n");
+};
+exports.formatCampaignClickEvidenceSource = formatCampaignClickEvidenceSource;
+const resolveCampaignClickEvidence = (campaignName, createdAt, report, intakeId) => {
+    const rule = (0, exports.resolveCampaignReportOverride)(campaignName, createdAt, report, intakeId);
+    const slug = String(rule?.clickEvidence?.slug || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]/g, "");
+    const clicks = roundMetric(rule?.clicks);
+    if (!rule || !slug || clicks <= 0)
+        return null;
+    const capturedAt = String(rule.clickEvidence?.capturedAt || rule.timeline?.dispatchFinishedAt || createdAt || "").trim();
+    const shortUrl = `https://waba.draxsistemas.com.br/s/${slug}`;
+    const name = String(rule.name || campaignName || "").trim();
+    return {
+        campaignName: name,
+        slug,
+        shortUrl,
+        clicks,
+        capturedAt,
+        source: (0, exports.formatCampaignClickEvidenceSource)({
+            campaignName: name,
+            slug,
+            shortUrl,
+            clicks,
+            capturedAt,
+        }),
+    };
+};
+exports.resolveCampaignClickEvidence = resolveCampaignClickEvidence;

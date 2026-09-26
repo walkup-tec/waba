@@ -31,7 +31,9 @@ import {
   applyCampaignReportReadOverride,
   campaignReportHidesClicks,
   campaignReportShowsClicks,
+  resolveCampaignClickEvidence,
   resolveOverriddenCampaignStatus,
+  type CampaignClickEvidence,
 } from "../disparos/waba-campaign-report-read-overrides";
 import {
   collectIntakeReportTimeline,
@@ -151,6 +153,7 @@ export type OperacionalCampaignReportView = {
   liveFromMeta: boolean;
   report: OperacionalCampaignReportInput | null;
   timeline: ReturnType<typeof collectIntakeReportTimeline>;
+  clickEvidence?: CampaignClickEvidence | null;
 };
 
 export type OperacionalCampaignDetail = OperacionalCampaignListItem & {
@@ -665,6 +668,12 @@ export class WabaOperacionalCampanhasService {
       },
       // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
       timeline: collectIntakeReportTimeline(intake),
+      clickEvidence: resolveCampaignClickEvidence(
+        intake.campaignName,
+        intake.createdAt,
+        report,
+        intake.id,
+      ),
     };
   }
 

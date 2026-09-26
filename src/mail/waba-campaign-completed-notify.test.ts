@@ -65,6 +65,7 @@ describe("aviso de campanha finalizada", () => {
     assert.match(html, /Quantas mensagens foram abertas\./);
     assert.match(html, /Números sem WhatsApp, recusa ou bloqueio\./);
     assert.match(html, /Quantos clicaram no botão\./);
+    assert.doesNotMatch(html, /Captura de cliques do botão/);
     assert.match(html, /camp-report-pie-legend[\s\S]*Entregues[\s\S]*Lidos[\s\S]*Cliques/);
     assert.doesNotMatch(html, /Enviados \(pendentes\)/);
     assert.match(html, /782/);

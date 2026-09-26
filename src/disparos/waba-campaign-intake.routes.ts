@@ -37,6 +37,7 @@ import {
   campaignReportHidesClicks,
   campaignReportShowsClicks,
   campaignHoldsSubscriberInProgress,
+  resolveCampaignClickEvidence,
   resolveOverriddenCampaignStatus,
 } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
@@ -834,6 +835,12 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       source: report?.source || "manual",
       showClicks,
       timeline: collectIntakeReportTimeline(intake),
+      clickEvidence: resolveCampaignClickEvidence(
+        intake.campaignName,
+        intake.createdAt,
+        report,
+        intake.id,
+      ),
       indicators,
       message: report
         ? showClicks
