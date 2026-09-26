@@ -10164,36 +10164,6 @@
         color: rgba(148, 163, 184, 0.72);
       }
 
-      .camp-report-click-evidence {
-        display: grid;
-        gap: 8px;
-        padding: 14px;
-        border-radius: 12px;
-        border: 1px solid rgba(52, 211, 153, 0.22);
-        background: rgba(15, 23, 42, 0.72);
-      }
-
-      .camp-report-click-evidence-note {
-        margin: 0;
-        font-size: 0.72rem;
-        line-height: 1.45;
-        color: #64748b;
-      }
-
-      .camp-report-click-evidence-code {
-        margin: 0;
-        padding: 12px 14px;
-        overflow: auto;
-        border-radius: 10px;
-        background: #020617;
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        color: #86efac;
-        font-size: 0.72rem;
-        line-height: 1.45;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        white-space: pre;
-      }
-
       .camp-report-timeline {
         display: grid;
         gap: 14px;
@@ -52339,18 +52309,6 @@
                   <span class="camp-report-rate-value">${formatCampaignReportPercent(metrics.clickRate)}</span>
                 </article>`
           : "";
-        const clickEvidence = options.clickEvidence && typeof options.clickEvidence === "object"
-          ? options.clickEvidence
-          : null;
-        const clickEvidenceSource = String(clickEvidence?.source || "").trim();
-        const clickEvidenceHtml = clickEvidenceSource
-          ? `
-          <section class="camp-report-click-evidence">
-            <h4 class="camp-report-block-title">Captura de cliques do botão</h4>
-            <p class="camp-report-click-evidence-note">Registro do encurtador ${escapeReportHtml(String(clickEvidence.shortUrl || ""))} · ${formatAdminCampanhasReportNumber(clickEvidence.clicks)} cliques.</p>
-            <pre class="camp-report-click-evidence-code"><code>${escapeReportHtml(clickEvidenceSource)}</code></pre>
-          </section>`
-          : "";
 
         const messageCountSection = hideMessageMetrics
           ? ""
@@ -52431,7 +52389,6 @@
             </section>
           </div>
           <p class="camp-report-formula-legend">${formulaLegend}</p>
-          ${clickEvidenceHtml}
         `;
       }
 
@@ -52481,7 +52438,6 @@
               hideMessageMetrics: !adminCampanhasReportReadOnly,
               showClicks: adminCampanhasReportShowClicks,
               reportSource: adminCampanhasReportSource,
-              clickEvidence: data.clickEvidence,
             }
           );
         if (timelineHost) {
@@ -63376,7 +63332,6 @@
             isFinalized: true,
             showClicks,
             reportSource: String(data.source || "").trim(),
-            clickEvidence: data.clickEvidence,
           }
         );
       }

@@ -396,7 +396,6 @@ class WabaOperacionalCampanhasService {
             },
             // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
             timeline: (0, waba_campaign_report_timeline_1.collectIntakeReportTimeline)(intake),
-            clickEvidence: (0, waba_campaign_report_read_overrides_1.resolveCampaignClickEvidence)(intake.campaignName, intake.createdAt, report, intake.id),
         };
     }
     async saveCampaignReport(campaignId, body, staff) {

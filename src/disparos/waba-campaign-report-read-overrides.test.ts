@@ -8,7 +8,6 @@ import {
   campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
   campaignReportShowsClicks,
-  resolveCampaignClickEvidence,
   resolveCampaignReportReadOverride,
   resolveOverriddenCampaignStatus,
 } from "./waba-campaign-report-read-overrides";
@@ -392,18 +391,6 @@ describe("override pontual do relatório", () => {
     assert.equal(other?.failed, 8);
     assert.equal(other?.clicks, 4);
     assert.equal(campaignReportShowsClicks("Raphaela 02", "2026-09-26T12:00:00.000Z"), false);
-  });
-
-  it("Raphaela 01 apresenta a captura /s/rphaela1 com 41 cliques", () => {
-    const evidence = resolveCampaignClickEvidence("Raphaela 01", "2026-09-26T14:17:00.000Z");
-    assert.equal(evidence?.clicks, 41);
-    assert.equal(evidence?.slug, "rphaela1");
-    assert.equal(evidence?.shortUrl, "https://waba.draxsistemas.com.br/s/rphaela1");
-    assert.match(String(evidence?.source || ""), /incrementShortLinkClicks/);
-    assert.match(String(evidence?.source || ""), /creditShortLinkClickToBroadcast/);
-    assert.match(String(evidence?.source || ""), /resolveBoundCampaignClicks/);
-    assert.match(String(evidence?.source || ""), /captured === 41/);
-    assert.equal(resolveCampaignClickEvidence("Raphaela 02", "2026-09-26T14:17:00.000Z"), null);
   });
 
   it("Tocantins_V01 de 21/09 recebe 3 cliques do /s/n9730691", () => {

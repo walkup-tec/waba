@@ -204,15 +204,6 @@ function buildCampaignPerformanceDashboardHtml(input) {
         : "Progresso = 100% (campanha finalizada pelo operacional).";
     const clickFormula = showClicks ? " · Taxa de cliques = Cliques ÷ Entregues × 100" : "";
     const formulaLegend = `${finalizedLegend} Taxa de entrega = Entregues ÷ Enviados × 100 · Taxa de leitura = Lidos ÷ Entregues × 100 · Taxa de falha = Falhados ÷ Total de Leads × 100${clickFormula} · Créditos bonificados = Total de Leads − Enviados (creditados na próxima compra).`;
-    const clickEvidence = input.clickEvidence;
-    const clickEvidenceHtml = clickEvidence?.source
-        ? `
-          <section class="camp-report-click-evidence">
-            <h4 class="camp-report-block-title">Captura de cliques do botão</h4>
-            <p class="camp-report-click-evidence-note">Registro do encurtador ${escapeHtml(clickEvidence.shortUrl)} · ${formatNumber(clickEvidence.clicks)} cliques.</p>
-            <pre class="camp-report-click-evidence-code"><code>${escapeHtml(clickEvidence.source)}</code></pre>
-          </section>`
-        : "";
     const clicksCard = showClicks
         ? `
               <article class="camp-report-metric camp-report-metric--clicks">
@@ -308,7 +299,6 @@ function buildCampaignPerformanceDashboardHtml(input) {
             </section>
           </div>
           <p class="camp-report-formula-legend">${formulaLegend}</p>
-          ${clickEvidenceHtml}
         `;
 }
 const SUBSCRIBER_REPORT_CSS = `
@@ -487,22 +477,6 @@ const SUBSCRIBER_REPORT_CSS = `
       margin: 0; padding-top: 4px; font-size: 0.72rem; line-height: 1.55;
       color: rgba(148, 163, 184, 0.72);
     }
-    .camp-report-click-evidence {
-      display: grid; gap: 8px; padding: 14px; border-radius: 12px;
-      border: 1px solid rgba(52, 211, 153, 0.22);
-      background: rgba(15, 23, 42, 0.72);
-    }
-    .camp-report-click-evidence-note {
-      margin: 0; font-size: 0.72rem; line-height: 1.45; color: #64748b;
-    }
-    .camp-report-click-evidence-code {
-      margin: 0; padding: 12px 14px; overflow: auto;
-      border-radius: 10px; background: #020617;
-      border: 1px solid rgba(148, 163, 184, 0.16);
-      color: #86efac; font-size: 0.72rem; line-height: 1.45;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      white-space: pre;
-    }
     .camp-report-reimbursement {
       display: grid; gap: 4px; padding: 12px 14px; border-radius: 12px;
       border: 1px solid rgba(56, 189, 248, 0.28);
@@ -625,7 +599,6 @@ function buildCampaignReportSnapshotModel(intake) {
         clicks: Math.max(0, Math.round(Number(report?.clicks ?? 0)), boundClicks),
         showClicks,
         reportSource: String(report?.source || "").trim(),
-        clickEvidence: (0, waba_campaign_report_read_overrides_1.resolveCampaignClickEvidence)(intake.campaignName, intake.createdAt, report, intake.id),
     };
 }
 function buildCampaignReportSnapshotHtml(input) {
