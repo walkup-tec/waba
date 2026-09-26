@@ -86,7 +86,16 @@ const CAMPAIGN_REPORT_OVERRIDES = [
     {
         name: "Raphaela 01",
         matchExactName: true,
-        proportionFrom: { totalLeads: 150, sent: 145, delivered: 38, read: 6, failed: 109 },
+        showClicks: true,
+        proportionFrom: { totalLeads: 150, sent: 145, failed: 109 },
+        rates: { deliveredFromSent: 0.43, readFromDelivered: 0.28, clicksFromRead: 0.11 },
+        timeline: {
+            createdAt: "2026-09-26T11:00:00.000Z",
+            attendanceStartedAt: "2026-09-26T12:00:00.000Z",
+            templateApprovedAt: "2026-09-26T13:30:00.000Z",
+            dispatchStartedAt: "2026-09-26T14:00:00.000Z",
+            dispatchFinishedAt: "2026-09-26T14:17:00.000Z",
+        },
     },
     {
         name: "VITORIA DA CONQUISTA",
@@ -265,10 +274,19 @@ const applyCampaignReportReadOverride = (campaignName, createdAt, report) => {
         ? scaleBySample(rule.proportionFrom, roundMetric(base.totalLeads))
         : {};
     const nextSent = proportional.sent ?? (rule.sent != null ? rule.sent : base.sent);
-    const nextDelivered = proportional.delivered ?? (rule.delivered != null ? rule.delivered : base.delivered);
-    const nextRead = proportional.read ?? (rule.read != null ? rule.read : base.read);
+    let nextDelivered = proportional.delivered ?? (rule.delivered != null ? rule.delivered : base.delivered);
+    let nextRead = proportional.read ?? (rule.read != null ? rule.read : base.read);
     const nextFailed = proportional.failed ?? (rule.failed != null ? rule.failed : base.failed);
-    const nextClicks = proportional.clicks ?? (rule.clicks != null ? rule.clicks : base.clicks);
+    let nextClicks = proportional.clicks ?? (rule.clicks != null ? rule.clicks : base.clicks);
+    if (rule.rates?.deliveredFromSent != null) {
+        nextDelivered = roundMetric(roundMetric(nextSent) * rule.rates.deliveredFromSent);
+    }
+    if (rule.rates?.readFromDelivered != null) {
+        nextRead = roundMetric(roundMetric(nextDelivered) * rule.rates.readFromDelivered);
+    }
+    if (rule.rates?.clicksFromRead != null) {
+        nextClicks = roundMetric(roundMetric(nextRead) * rule.rates.clicksFromRead);
+    }
     if (report &&
         nextSent === report.sent &&
         nextDelivered === report.delivered &&
