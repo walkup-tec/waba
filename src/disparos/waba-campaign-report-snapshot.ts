@@ -156,38 +156,34 @@ function buildCampaignPerformanceDashboardHtml(input: CampaignReportSnapshotInpu
   const showClicks = input.showClicks === true;
   const reportSource = String(input.reportSource || "").trim();
   const campaignName = String(input.campaignName || "").trim();
-  const pieBase = Math.max(metrics.totalLeads, 1);
   const pieLegend: PieSegment[] = [
     {
       label: "Entregues",
       value: metrics.delivered,
-      pct: (metrics.delivered / pieBase) * 100,
+      pct: 0,
       color: "#fb923c",
     },
     {
-      label: "Falhados",
-      value: metrics.failed,
-      pct: (metrics.failed / pieBase) * 100,
-      color: "#f87171",
+      label: "Lidos",
+      value: metrics.read,
+      pct: 0,
+      color: "#c084fc",
+    },
+    {
+      label: "Cliques",
+      value: metrics.clicks,
+      pct: 0,
+      color: "#34d399",
     },
   ];
-  if (metrics.bonusShipments > 0) {
-    pieLegend.push({
-      label: "Créditos bonificados",
-      value: metrics.bonusShipments,
-      pct: (metrics.bonusShipments / pieBase) * 100,
-      color: "#38bdf8",
-    });
+  const pieBase = Math.max(
+    pieLegend.reduce((sum, item) => sum + Math.max(0, item.value), 0),
+    1,
+  );
+  for (const item of pieLegend) {
+    item.pct = (item.value / pieBase) * 100;
   }
-  if (metrics.pendingSent > 0) {
-    pieLegend.push({
-      label: "Enviados (pendentes)",
-      value: metrics.pendingSent,
-      pct: (metrics.pendingSent / pieBase) * 100,
-      color: "#64748b",
-    });
-  }
-  const pieGradient = buildCampaignPieGradient(pieLegend, metrics.totalLeads);
+  const pieGradient = buildCampaignPieGradient(pieLegend, pieBase);
   const subtitle = campaignName
     ? `<p class="confirm-text" style="margin:0 0 4px">${escapeHtml(campaignName)}</p>`
     : "";
@@ -215,6 +211,7 @@ function buildCampaignPerformanceDashboardHtml(input: CampaignReportSnapshotInpu
               <article class="camp-report-metric camp-report-metric--clicks">
                 <span class="camp-report-metric-label">Cliques</span>
                 <span class="camp-report-metric-value">${formatNumber(metrics.clicks)}</span>
+                <span class="camp-report-metric-hint">Quantos clicaram no botão.</span>
               </article>`
     : "";
   const clickRateCard = showClicks
@@ -242,22 +239,27 @@ function buildCampaignPerformanceDashboardHtml(input: CampaignReportSnapshotInpu
               <article class="camp-report-metric camp-report-metric--leads">
                 <span class="camp-report-metric-label">Total de Leads</span>
                 <span class="camp-report-metric-value">${formatNumber(metrics.totalLeads)}</span>
+                <span class="camp-report-metric-hint">Qtde. números listados na campanha.</span>
               </article>
               <article class="camp-report-metric camp-report-metric--sent">
                 <span class="camp-report-metric-label">Enviados</span>
                 <span class="camp-report-metric-value">${formatNumber(metrics.sent)}</span>
+                <span class="camp-report-metric-hint">Quantas mensagens o WhatsApp aceitou mandar.</span>
               </article>
               <article class="camp-report-metric camp-report-metric--delivered">
                 <span class="camp-report-metric-label">Entregues</span>
                 <span class="camp-report-metric-value">${formatNumber(metrics.delivered)}</span>
+                <span class="camp-report-metric-hint">Quantas chegaram de fato no celular.</span>
               </article>
               <article class="camp-report-metric camp-report-metric--read">
                 <span class="camp-report-metric-label">Lidos</span>
                 <span class="camp-report-metric-value">${formatNumber(metrics.read)}</span>
+                <span class="camp-report-metric-hint">Quantas mensagens foram abertas.</span>
               </article>
               <article class="camp-report-metric camp-report-metric--failed">
                 <span class="camp-report-metric-label">Falhados</span>
                 <span class="camp-report-metric-value">${formatNumber(metrics.failed)}</span>
+                <span class="camp-report-metric-hint">Números sem WhatsApp, recusa ou bloqueio.</span>
               </article>
               ${clicksCard}
             </div>
@@ -394,8 +396,9 @@ const SUBSCRIBER_REPORT_CSS = `
       border: 1px solid rgba(148, 163, 184, 0.2);
       display: grid;
       gap: 6px;
-      min-height: 78px;
+      min-height: 96px;
       min-width: 0;
+      align-content: start;
     }
     .camp-report-metric-label {
       font-size: 0.72rem;
@@ -405,6 +408,14 @@ const SUBSCRIBER_REPORT_CSS = `
       letter-spacing: 0.04em;
     }
     .camp-report-metric-value { font-size: 1.55rem; font-weight: 800; line-height: 1.1; }
+    .camp-report-metric-hint {
+      font-size: 0.62rem;
+      font-weight: 500;
+      line-height: 1.3;
+      color: #64748b;
+      text-transform: none;
+      letter-spacing: 0;
+    }
     .camp-report-metric--leads .camp-report-metric-value { color: #93c5fd; }
     .camp-report-metric--sent .camp-report-metric-value { color: #f8fafc; }
     .camp-report-metric--delivered .camp-report-metric-value { color: #fb923c; }
