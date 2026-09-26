@@ -425,7 +425,7 @@ const SUBSCRIBER_REPORT_CSS = `
       height: 0.88em;
       margin: 0 0.12em;
       vertical-align: -0.08em;
-      color: #53bdeb;
+      color: inherit;
     }
     .camp-report-wa-ticks--read { color: #25d366; }
     .camp-report-metric--leads .camp-report-metric-value { color: #93c5fd; }
