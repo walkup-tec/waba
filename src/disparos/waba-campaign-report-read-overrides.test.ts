@@ -327,7 +327,7 @@ describe("override pontual do relatório", () => {
     assert.equal(differentTotals?.clicks, 0);
   });
 
-  it("Raphaela 01 aplica 43% de entrega, 28% de lidos e 11% de cliques sobre os lidos", () => {
+  it("Raphaela 01 aplica 43% de entrega, 28% de lidos e 41 cliques", () => {
     const stored = report({
       totalLeads: 150,
       sent: 150,
@@ -343,7 +343,7 @@ describe("override pontual do relatório", () => {
     assert.equal(got?.delivered, 62);
     assert.equal(got?.read, 17);
     assert.equal(got?.failed, 109);
-    assert.equal(got?.clicks, 2);
+    assert.equal(got?.clicks, 41);
     assert.equal(campaignReportShowsClicks("Raphaela 01", "2026-09-26T12:00:00.000Z", stored), true);
 
     const metrics = computeCampaignPerformanceMetrics({
@@ -352,12 +352,12 @@ describe("override pontual do relatório", () => {
       delivered: 62,
       read: 17,
       failed: 109,
-      clicks: 2,
+      clicks: 41,
     });
     assert.equal(metrics.deliveryRate, 42.76);
     assert.equal(metrics.readRate, 27.42);
     assert.equal(metrics.failureRate, 72.67);
-    assert.equal(metrics.clickRate, 3.23);
+    assert.equal(metrics.clickRate, 66.13);
     assert.equal(metrics.pendingSent, 0);
     assert.equal(metrics.bonusShipments, 5);
 
@@ -378,7 +378,7 @@ describe("override pontual do relatório", () => {
     assert.equal(scaled?.delivered, 416);
     assert.equal(scaled?.read, 116);
     assert.equal(scaled?.failed, 727);
-    assert.equal(scaled?.clicks, 13);
+    assert.equal(scaled?.clicks, 41);
 
     const other = applyCampaignReportReadOverride(
       "Raphaela 02",
