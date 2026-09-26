@@ -84,6 +84,11 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         showClicks: true,
     },
     {
+        name: "Raphaela 01",
+        matchExactName: true,
+        proportionFrom: { totalLeads: 150, sent: 145, delivered: 38, read: 6, failed: 109 },
+    },
+    {
         name: "VITORIA DA CONQUISTA",
         matchExactName: true,
         forceCompleted: true,
@@ -140,6 +145,19 @@ const roundMetric = (value) => {
     if (!Number.isFinite(parsed) || parsed < 0)
         return 0;
     return parsed;
+};
+const scaleBySample = (sample, totalLeads) => {
+    const sampleLeads = roundMetric(sample.totalLeads);
+    if (sampleLeads <= 0 || totalLeads <= 0)
+        return {};
+    const scale = (value) => value == null ? undefined : Math.round((totalLeads * value) / sampleLeads);
+    return {
+        sent: scale(sample.sent),
+        delivered: scale(sample.delivered),
+        read: scale(sample.read),
+        failed: scale(sample.failed),
+        clicks: scale(sample.clicks),
+    };
 };
 const fingerprintMatches = (report, fingerprint) => {
     if (roundMetric(report.totalLeads) !== fingerprint.totalLeads)
@@ -243,11 +261,14 @@ const applyCampaignReportReadOverride = (campaignName, createdAt, report) => {
         filledAt: "",
         filledByEmail: "",
     };
-    const nextSent = rule.sent != null ? rule.sent : base.sent;
-    const nextDelivered = rule.delivered != null ? rule.delivered : base.delivered;
-    const nextRead = rule.read != null ? rule.read : base.read;
-    const nextFailed = rule.failed != null ? rule.failed : base.failed;
-    const nextClicks = rule.clicks != null ? rule.clicks : base.clicks;
+    const proportional = rule.proportionFrom
+        ? scaleBySample(rule.proportionFrom, roundMetric(base.totalLeads))
+        : {};
+    const nextSent = proportional.sent ?? (rule.sent != null ? rule.sent : base.sent);
+    const nextDelivered = proportional.delivered ?? (rule.delivered != null ? rule.delivered : base.delivered);
+    const nextRead = proportional.read ?? (rule.read != null ? rule.read : base.read);
+    const nextFailed = proportional.failed ?? (rule.failed != null ? rule.failed : base.failed);
+    const nextClicks = proportional.clicks ?? (rule.clicks != null ? rule.clicks : base.clicks);
     if (report &&
         nextSent === report.sent &&
         nextDelivered === report.delivered &&

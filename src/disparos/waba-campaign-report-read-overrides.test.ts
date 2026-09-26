@@ -327,6 +327,67 @@ describe("override pontual do relatório", () => {
     assert.equal(differentTotals?.clicks, 0);
   });
 
+  it("Raphaela 01 aplica a proporcionalidade 150/145/38/6/109 no total de leads", () => {
+    const stored = report({
+      totalLeads: 150,
+      sent: 150,
+      delivered: 140,
+      read: 90,
+      failed: 8,
+      clicks: 4,
+      source: "meta_lab",
+    });
+    const got = applyCampaignReportReadOverride("Raphaela 01", "2026-09-25T12:00:00.000Z", stored);
+    assert.equal(got?.totalLeads, 150);
+    assert.equal(got?.sent, 145);
+    assert.equal(got?.delivered, 38);
+    assert.equal(got?.read, 6);
+    assert.equal(got?.failed, 109);
+    assert.equal(got?.clicks, 4);
+
+    const metrics = computeCampaignPerformanceMetrics({
+      totalLeads: 150,
+      sent: 145,
+      delivered: 38,
+      read: 6,
+      failed: 109,
+    });
+    assert.equal(metrics.deliveryRate, 26.21);
+    assert.equal(metrics.readRate, 15.79);
+    assert.equal(metrics.failureRate, 72.67);
+    assert.equal(metrics.pendingSent, 0);
+    assert.equal(metrics.bonusShipments, 5);
+
+    const scaled = applyCampaignReportReadOverride(
+      "Raphaela 01",
+      "2026-09-25T12:00:00.000Z",
+      report({
+        totalLeads: 1000,
+        sent: 1000,
+        delivered: 800,
+        read: 400,
+        failed: 10,
+        clicks: 20,
+      }),
+    );
+    assert.equal(scaled?.totalLeads, 1000);
+    assert.equal(scaled?.sent, 967);
+    assert.equal(scaled?.delivered, 253);
+    assert.equal(scaled?.read, 40);
+    assert.equal(scaled?.failed, 727);
+    assert.equal(scaled?.clicks, 20);
+
+    const other = applyCampaignReportReadOverride(
+      "Raphaela 02",
+      "2026-09-25T12:00:00.000Z",
+      report({ totalLeads: 150, sent: 150, delivered: 140, read: 90, failed: 8, clicks: 4 }),
+    );
+    assert.equal(other?.sent, 150);
+    assert.equal(other?.delivered, 140);
+    assert.equal(other?.read, 90);
+    assert.equal(other?.failed, 8);
+  });
+
   it("Tocantins_V01 de 21/09 recebe 3 cliques do /s/n9730691", () => {
     const created = "2026-09-21T14:20:00.000Z";
     const stored = report({
