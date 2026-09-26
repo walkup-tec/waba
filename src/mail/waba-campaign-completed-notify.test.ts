@@ -61,7 +61,9 @@ describe("aviso de campanha finalizada", () => {
     assert.match(html, /Progresso/);
     assert.match(html, /Qtde\. números listados na campanha\./);
     assert.match(html, /Quantas mensagens o WhatsApp aceitou mandar\./);
-    assert.match(html, /Quantas chegaram de fato no celular\./);
+    assert.match(html, /Mensagens com check/);
+    assert.match(html, /camp-report-wa-ticks/);
+    assert.match(html, /de entregue no WhatsApp/);
     assert.match(html, /Quantas mensagens foram abertas\./);
     assert.match(html, /Números sem WhatsApp, recusa ou bloqueio\./);
     assert.match(html, /Quantos clicaram no botão\./);
