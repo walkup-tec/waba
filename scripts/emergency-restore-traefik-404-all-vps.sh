@@ -49,6 +49,25 @@ log "--- guard logs SV/Soma (últimas 5 cada) ---"
 tail -5 /var/log/sinal-verde-overlay-guard.log 2>/dev/null | tee -a "$LOG" || true
 tail -5 /var/log/soma-crm-overlay-guard.log 2>/dev/null | tee -a "$LOG" || true
 
+# Traefik 0/1 / :80/:443 vazios: patch de YAML não serve. Subir o proxy primeiro.
+REP=$(docker service ls --filter name=easypanel-traefik --format '{{.Replicas}}' 2>/dev/null | head -1 || echo '?')
+if [[ "$REP" != "1/1" ]] || ! ss -tln 2>/dev/null | grep -qE ':443 '; then
+  log "Traefik down (replicas=${REP}, :443 ausente) — bootstrap ANTES de patch YAML"
+  if [[ -x /root/traefik-easypanel-bootstrap-vps.sh ]]; then
+    bash /root/traefik-easypanel-bootstrap-vps.sh run >>"$LOG" 2>&1 || true
+  else
+    timeout 120 docker service update --update-failure-action continue --force easypanel-traefik >>"$LOG" 2>&1 || true
+  fi
+  for i in $(seq 1 18); do
+    sleep 5
+    if [[ "$(docker service ls --filter name=easypanel-traefik --format '{{.Replicas}}' 2>/dev/null | head -1)" == "1/1" ]] \
+      && ss -tln 2>/dev/null | grep -qE ':443 '; then
+      log "Traefik 1/1 + :443 após bootstrap"
+      break
+    fi
+  done
+fi
+
 log "=========== RESTAURAÇÃO ==========="
 
 # 1) main.yaml: se ausente/vazio/desbalanceado/sem wabadisparos => restaurar melhor bak
