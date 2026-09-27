@@ -1374,7 +1374,7 @@ describe("meta portfolio service", () => {
       },
     };
     const graph = async (input: { path: string }) => {
-      if (input.path === "phone-1" || input.path.endsWith("/whatsapp_business_profile")) {
+      if (input.path.endsWith("/whatsapp_business_profile")) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
       if (input.path === "1247508354180311" || input.path === "waba-1") {
@@ -1419,6 +1419,95 @@ describe("meta portfolio service", () => {
     const numbers = (assets.portfolios || []).flatMap((item) => item.numbers || []);
     assert.ok(numbers.some((item) => String(item.phoneNumberId || "") === "phone-1"));
     assert.ok(listedFromConnections(assets.portfolios).length >= 1);
+  });
+
+  it("mostra em análise no chip ativo quando a lista omite name_status e o perfil atrasa", async () => {
+    const row = {
+      ...connectedRow(),
+      status: "connected" as const,
+      phoneNumberId: "1272575335948086",
+      displayPhoneNumber: "+55 11 95285-5135",
+      verifiedName: "DRAX 02",
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [row];
+      },
+      async findOpenByTenant() {
+        return row;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path.endsWith("/whatsapp_business_profile")) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      if (input.path === "1272575335948086") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1272575335948086",
+            verified_name: "DRAX 02",
+            name_status: "PENDING_REVIEW",
+            new_display_name: "DRAX 02",
+            new_name_status: "PENDING_REVIEW",
+          },
+        };
+      }
+      if (input.path === "1247508354180311" || input.path === "waba-1") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: input.path,
+            name: "Grupo Walkup",
+            owner_business_info: { id: "1247508354180311", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "1272575335948086",
+                display_phone_number: "+55 11 95285-5135",
+                verified_name: "DRAX 02",
+                status: "CONNECTED",
+                code_verification_status: "VERIFIED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const started = Date.now();
+    const assets = await service.listPortfolioAssets(auth);
+    const elapsed = Date.now() - started;
+    assert.ok(elapsed < 3500, `lista bloqueou ${elapsed}ms no perfil da Graph`);
+    const chip = (assets.portfolios || [])
+      .flatMap((item) => item.numbers || [])
+      .find((item) => String(item.phoneNumberId || "") === "1272575335948086");
+    assert.ok(chip);
+    assert.equal(chip?.uiStatus, "ativo");
+    assert.equal(chip?.requestedName, "DRAX 02");
+    assert.equal(chip?.nameSyncStatus, "pending");
+    assert.equal(
+      phoneNumberCardName({
+        verifiedName: chip?.verifiedName,
+        requestedName: chip?.requestedName,
+        nameSyncStatus: chip?.nameSyncStatus,
+      }),
+      "DRAX 02",
+    );
   });
 
   it("leituras simultâneas com fresh compartilham a Graph em voo", async () => {

@@ -981,29 +981,28 @@ async function hydrateOpenConnection(
     const extra = await fetchPhoneNodes(g, token, missingKnownIds);
     merged = unionPortfolioNumbers(merged, mapMetaPhoneListToPortfolioNumbers({ data: extra }));
   }
-  const pending = merged.filter((row) => row.uiStatus !== "ativo");
-  const active = merged.filter((row) => row.uiStatus === "ativo");
-  const extraWork = Promise.all([
-    active.length
-      ? attachPhoneBusinessProfiles(g, token, active, tenantId, card.name)
-      : Promise.resolve([] as MetaPortfolioNumberPublic[]),
-    pending.length
-      ? attachPhoneNameStatuses(g, token, pending, card.name)
-      : Promise.resolve([] as MetaPortfolioNumberPublic[]),
-  ]);
-  const extra = await raceWithTimeout(extraWork, HYDRATE_NAME_PROFILE_BUDGET_MS);
-  let hydratePartial = false;
-  let numbers: MetaPortfolioNumberPublic[];
-  if (extra) {
-    numbers = unionPortfolioNumbers(extra[0], extra[1]);
-  } else {
-    hydratePartial = true;
-    numbers = merged;
-    logMetaWhatsappSafe("portfolio-hydrate-name-budget", {
-      tenantId,
-      connectionId: open.id,
-      listed: merged.length,
-    });
+  const needsName = merged.filter((row) => !row.nameStatus && !row.newNameStatus);
+  let numbers = merged;
+  const hydratePartial = false;
+  if (needsName.length) {
+    const named = await attachPhoneNameStatuses(g, token, needsName, card.name);
+    numbers = unionPortfolioNumbers(merged, named);
+  }
+  const active = numbers.filter((row) => row.uiStatus === "ativo");
+  if (active.length) {
+    const withProfiles = await raceWithTimeout(
+      attachPhoneBusinessProfiles(g, token, active, tenantId, card.name),
+      HYDRATE_NAME_PROFILE_BUDGET_MS,
+    );
+    if (withProfiles) {
+      numbers = unionPortfolioNumbers(numbers, withProfiles);
+    } else {
+      logMetaWhatsappSafe("portfolio-hydrate-profile-budget", {
+        tenantId,
+        connectionId: open.id,
+        listed: numbers.length,
+      });
+    }
   }
   if (fromThisBm.size) {
     numbers = numbers.filter((row) => {

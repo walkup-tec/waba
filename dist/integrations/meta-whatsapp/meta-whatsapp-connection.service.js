@@ -758,30 +758,26 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
         const extra = await fetchPhoneNodes(g, token, missingKnownIds);
         merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: extra }));
     }
-    const pending = merged.filter((row) => row.uiStatus !== "ativo");
-    const active = merged.filter((row) => row.uiStatus === "ativo");
-    const extraWork = Promise.all([
-        active.length
-            ? attachPhoneBusinessProfiles(g, token, active, tenantId, card.name)
-            : Promise.resolve([]),
-        pending.length
-            ? attachPhoneNameStatuses(g, token, pending, card.name)
-            : Promise.resolve([]),
-    ]);
-    const extra = await raceWithTimeout(extraWork, HYDRATE_NAME_PROFILE_BUDGET_MS);
-    let hydratePartial = false;
-    let numbers;
-    if (extra) {
-        numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(extra[0], extra[1]);
+    const needsName = merged.filter((row) => !row.nameStatus && !row.newNameStatus);
+    let numbers = merged;
+    const hydratePartial = false;
+    if (needsName.length) {
+        const named = await attachPhoneNameStatuses(g, token, needsName, card.name);
+        numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, named);
     }
-    else {
-        hydratePartial = true;
-        numbers = merged;
-        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-hydrate-name-budget", {
-            tenantId,
-            connectionId: open.id,
-            listed: merged.length,
-        });
+    const active = numbers.filter((row) => row.uiStatus === "ativo");
+    if (active.length) {
+        const withProfiles = await raceWithTimeout(attachPhoneBusinessProfiles(g, token, active, tenantId, card.name), HYDRATE_NAME_PROFILE_BUDGET_MS);
+        if (withProfiles) {
+            numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(numbers, withProfiles);
+        }
+        else {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-hydrate-profile-budget", {
+                tenantId,
+                connectionId: open.id,
+                listed: numbers.length,
+            });
+        }
     }
     if (fromThisBm.size) {
         numbers = numbers.filter((row) => {
