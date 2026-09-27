@@ -136,13 +136,10 @@ function catalogBackfillPlaceholderCards(tenantId, existing) {
 function markHiddenPortfolioAssets(tenantId, assets) {
     const hiddenRows = (0, meta_whatsapp_hidden_business_store_1.listHiddenBusinesses)(tenantId);
     const isHiddenId = (value) => hiddenRows.some((row) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(value || ""), row.id));
-    const portfolios = [
-        ...(assets.portfolios || []).map((item) => ({
-            ...item,
-            hidden: isHiddenId(String(item.id || "")),
-        })),
-        ...catalogBackfillPlaceholderCards(tenantId, assets.portfolios || []),
-    ];
+    const portfolios = (assets.portfolios || []).map((item) => ({
+        ...item,
+        hidden: isHiddenId(String(item.id || "")),
+    }));
     for (const row of hiddenRows) {
         if (portfolios.some((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), row.id)))
             continue;
@@ -158,11 +155,13 @@ function markHiddenPortfolioAssets(tenantId, assets) {
         });
     }
     const active = portfolios.filter((item) => !item.hidden);
+    const withNumbers = active.filter(cardHasListedNumbers);
     const requested = String(assets.selectedConnectionId || assets.portfolio?.id || "");
-    const selected = active.find((item) => item.connectionId === requested) ||
-        active.find((item) => item.id && (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id), requested)) ||
-        active[0] ||
+    const pick = (list) => list.find((item) => item.connectionId === requested) ||
+        list.find((item) => item.id && (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id), requested)) ||
+        list[0] ||
         null;
+    const selected = pick(withNumbers) || pick(active);
     return {
         ...assets,
         portfolios,
@@ -186,9 +185,11 @@ function localizeAndHidePortfolioAssets(tenantId, assets) {
     return markHiddenPortfolioAssets(tenantId, withLocalIdentities(tenantId, assets));
 }
 function assetsFromPortfolioCards(cards, requested) {
-    const selected = cards.find((item) => item.connectionId === requested) ||
-        cards.find((item) => item.id && item.id === requested) ||
-        cards[0];
+    const withNumbers = cards.filter(cardHasListedNumbers);
+    const pick = (list) => list.find((item) => item.connectionId === requested) ||
+        list.find((item) => item.id && item.id === requested) ||
+        list[0];
+    const selected = pick(withNumbers) || pick(cards);
     const selectedNumbers = selected?.numbers || [];
     return {
         portfolios: cards,
@@ -342,7 +343,6 @@ async function cacheGraphBusinessPhoto(tenantId, businessId, url) {
 const HYDRATE_GRAPH = { maxAttempts: 1, timeoutMs: 8000 };
 const HYDRATE_PHONE_BUDGET_MS = 18000;
 const HYDRATE_NAME_PROFILE_BUDGET_MS = 2500;
-const LIST_FANOUT_DEADLINE_MS = 20000;
 const LIST_FAST_STORED_MS = 4000;
 const OFFICIAL_NAME_GRAPH_TIMEOUT_MS = 4000;
 async function raceWithTimeout(work, timeoutMs) {
@@ -361,8 +361,24 @@ async function raceWithTimeout(work, timeoutMs) {
             clearTimeout(timer);
     }
 }
-function assetsHaveVisiblePortfolios(assets) {
-    return (assets?.portfolios || []).some((item) => (0, meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard)(item) && item.hidden !== true);
+function cardHasListedNumbers(card) {
+    return (card?.numbers || []).some((row) => Boolean(String(row.displayPhoneNumber || row.phoneNumberId || "").trim()));
+}
+function assetsHaveListedNumbers(assets) {
+    return (assets?.portfolios || []).some((item) => item.hidden !== true && (0, meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard)(item) && cardHasListedNumbers(item));
+}
+/** Só pinta o gravado se as Ativas de catálogo (Marilza/Flaviane/Sander) já tiverem chip. */
+function assetsCoverActiveCatalog(tenantId, assets) {
+    if (!assetsHaveListedNumbers(assets))
+        return false;
+    for (const id of (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)()) {
+        if ((0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, id))
+            continue;
+        const card = (assets?.portfolios || []).find((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), id));
+        if (!card || card.hidden === true || !cardHasListedNumbers(card))
+            return false;
+    }
+    return true;
 }
 function withHydrateLimits(graph) {
     return (input) => graph({
@@ -1989,14 +2005,14 @@ class MetaWhatsappConnectionService {
         const localize = (raw) => localizeAndHidePortfolioAssets(tenant.tenantId, raw);
         if (pending) {
             const stored = await storedPromise;
-            if (assetsHaveVisiblePortfolios(stored) && !opts?.fresh) {
+            if (!opts?.fresh && assetsCoverActiveCatalog(tenant.tenantId, stored)) {
                 const fast = await raceWithTimeout(pending, LIST_FAST_STORED_MS);
                 if (fast) {
                     return localize(assetsFromPortfolioCards(fast.portfolios || [], requested));
                 }
                 (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-stored-fast", {
                     tenantId: tenant.tenantId,
-                    reason: "inflight",
+                    reason: "inflight-numbers",
                 });
                 return localize(stored);
             }
@@ -2019,7 +2035,7 @@ class MetaWhatsappConnectionService {
         const useCache = (0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)() && !opts?.fresh;
         if (useCache) {
             const cached = (0, meta_whatsapp_portfolio_graph_cache_1.readCachedPortfolioGraph)(tenant.tenantId);
-            if (cached?.portfolios?.length) {
+            if (cached?.portfolios?.length && assetsHaveListedNumbers(cached)) {
                 return localize(assetsFromPortfolioCards(cached.portfolios, requested));
             }
         }
@@ -2028,7 +2044,7 @@ class MetaWhatsappConnectionService {
         (0, meta_whatsapp_portfolio_graph_cache_1.setPortfolioGraphInflight)(tenant.tenantId, work);
         void loaded
             .then((row) => {
-            if ((0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)() && !row.graphPartial && (row.assets.portfolios || []).length) {
+            if ((0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)() && !row.graphPartial && assetsHaveListedNumbers(row.assets)) {
                 (0, meta_whatsapp_portfolio_graph_cache_1.writeCachedPortfolioGraph)(tenant.tenantId, row.assets);
             }
         })
@@ -2038,13 +2054,13 @@ class MetaWhatsappConnectionService {
         }).catch(() => undefined);
         try {
             const stored = await storedPromise;
-            if (assetsHaveVisiblePortfolios(stored) && !opts?.fresh) {
+            if (!opts?.fresh && assetsCoverActiveCatalog(tenant.tenantId, stored)) {
                 const fast = await raceWithTimeout(work, LIST_FAST_STORED_MS);
                 if (fast)
                     return localize(fast);
                 (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-stored-fast", {
                     tenantId: tenant.tenantId,
-                    reason: "graph",
+                    reason: "graph-numbers",
                 });
                 return localize(stored);
             }
@@ -2144,7 +2160,6 @@ class MetaWhatsappConnectionService {
         return assetsFromPortfolioCards(cards, requested);
     }
     async loadPortfolioGraphAssets(tenantId, requested, actorEmail = "") {
-        const startedAt = Date.now();
         const repo = this.repository;
         if (typeof repo.reopenLeftManagerForBusinesses === "function") {
             try {
@@ -2200,17 +2215,7 @@ class MetaWhatsappConnectionService {
         ]);
         let graphPartial = hydrated.some((item) => item.hydratePartial);
         const seeds = [...merged, ...catalogBackfillPlaceholderCards(tenantId, merged)].filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
-        let cards = seeds;
-        if (Date.now() - startedAt < LIST_FANOUT_DEADLINE_MS) {
-            cards = await fillEmptyAdminPortfolioCards(withHydrateLimits(this.graph), tenantId, seeds, writeTokens);
-        }
-        else {
-            graphPartial = true;
-            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-hydrate-fanout-budget", {
-                tenantId,
-                cards: seeds.length,
-            });
-        }
+        const cards = await fillEmptyAdminPortfolioCards(withHydrateLimits(this.graph), tenantId, seeds, writeTokens);
         if (leftIds.length && typeof repo.disconnectOne === "function") {
             for (const connectionId of leftIds) {
                 try {

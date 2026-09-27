@@ -1575,6 +1575,7 @@ describe("meta portfolio service", () => {
   });
 
   it("devolve o portfólio gravado sem esperar a Graph terminar", async () => {
+    for (const id of catalogBackfillBusinessIds()) hideBusiness(tenantId, id, "catalog-wait");
     const row = { ...connectedRow(), status: "connected" as const };
     const repo = {
       async listOpenByTenant() {
@@ -1607,8 +1608,139 @@ describe("meta portfolio service", () => {
       assert.ok((card?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
     } finally {
       hang = false;
+      for (const id of catalogBackfillBusinessIds()) unhideBusiness(tenantId, id);
       await new Promise((resolve) => setTimeout(resolve, 80));
     }
+  });
+
+  it("espera a Graph e lista os números das Ativas quando o gravado ainda não tem chip", async () => {
+    const row = {
+      ...connectedRow(),
+      displayPhoneNumber: null,
+      phoneNumberId: "",
+      status: "connected" as const,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [row];
+      },
+      async findOpenByTenant() {
+        return row;
+      },
+    };
+    const sanderPhones = [
+      {
+        id: "phone-sander-ativas",
+        display_phone_number: "+55 61 99999-0001",
+        verified_name: "Sander",
+        status: "CONNECTED",
+        code_verification_status: "VERIFIED",
+      },
+    ];
+    const flavianePhones = [
+      {
+        id: "phone-flaviane-ativas",
+        display_phone_number: "+55 11 98888-0002",
+        verified_name: "Flaviane",
+        status: "CONNECTED",
+        code_verification_status: "VERIFIED",
+      },
+    ];
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "1247508354180311", name: "Grupo Walkup App" },
+              { id: "1588459689692010", name: "61.687.659 sander roosevelt de souza" },
+              { id: "962298516898955", name: "60.845.972 Flaviane Ferreira Trindade" },
+            ],
+          },
+        };
+      }
+      if (input.path === "1247508354180311" || input.path === "waba-1") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: input.path,
+            name: "Grupo Walkup App",
+            owner_business_info: { id: "1247508354180311", name: "Grupo Walkup App" },
+          },
+        };
+      }
+      if (input.path === "1588459689692010") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1588459689692010",
+            name: "61.687.659 sander roosevelt de souza",
+            owned_whatsapp_business_accounts: {
+              data: [{ id: "waba-sander-ativas", name: "Sander", phone_numbers: { data: sanderPhones } }],
+            },
+          },
+        };
+      }
+      if (input.path === "962298516898955") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "962298516898955",
+            name: "60.845.972 Flaviane Ferreira Trindade",
+            owned_whatsapp_business_accounts: {
+              data: [{ id: "waba-flaviane-ativas", name: "Flaviane", phone_numbers: { data: flavianePhones } }],
+            },
+          },
+        };
+      }
+      if (input.path === "1588459689692010/owned_whatsapp_business_accounts") {
+        return { ok: true, status: 200, json: { data: [{ id: "waba-sander-ativas", name: "Sander" }] } };
+      }
+      if (input.path === "962298516898955/owned_whatsapp_business_accounts") {
+        return { ok: true, status: 200, json: { data: [{ id: "waba-flaviane-ativas", name: "Flaviane" }] } };
+      }
+      if (input.path === "waba-sander-ativas/phone_numbers") {
+        return { ok: true, status: 200, json: { data: sanderPhones } };
+      }
+      if (input.path === "waba-flaviane-ativas/phone_numbers") {
+        return { ok: true, status: 200, json: { data: flavianePhones } };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-walkup-ativas",
+                display_phone_number: "+55 51 8200-1279",
+                verified_name: "Walkup",
+                status: "CONNECTED",
+                code_verification_status: "VERIFIED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const sander = (assets.portfolios || []).find((item) => item.id === "1588459689692010");
+    const flaviane = (assets.portfolios || []).find((item) => item.id === "962298516898955");
+    assert.equal(sander?.hidden, false);
+    assert.equal(flaviane?.hidden, false);
+    assert.ok((sander?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("99999-0001")));
+    assert.ok((flaviane?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("98888-0002")));
+    assert.ok((assets.numbers || []).some((item) => String(item.displayPhoneNumber || "").trim()));
   });
 
   it("mostra no card o nome, a foto e o pedido de nome que a Meta já tem", async () => {

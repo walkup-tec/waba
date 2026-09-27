@@ -39550,6 +39550,16 @@
         return Boolean(list.querySelector(".meta-portfolio-card:not(.is-skeleton)"));
       }
 
+      function metaTpHasListedNumbers() {
+        const bundles = metaTpSession.portfolios || [];
+        return bundles.some(function (item) {
+          if (!item || item.hidden === true) return false;
+          return (item.numbers || []).some(function (row) {
+            return Boolean(String((row && (row.displayPhoneNumber || row.phoneNumberId)) || "").trim());
+          });
+        });
+      }
+
       function metaTpPaintConnectProgress(index) {
         const els = metaTpConnectProgressEls();
         const current = Math.max(0, Math.min(META_TP_CONNECT_STEPS.length - 1, Number(index) || 0));
@@ -39604,14 +39614,14 @@
         if (els.bar) els.bar.hidden = true;
         if (els.steps) els.steps.hidden = true;
         const ok = options.ok !== false;
-        const hasPortfolios = options.hasPortfolios === true || metaTpHasVisiblePortfolios();
+        const hasPortfolios = options.hasPortfolios === true || metaTpHasListedNumbers();
         if (ok && hasPortfolios) {
           els.root.classList.add("is-success");
           if (els.title) els.title.textContent = "Conexão concluída com sucesso";
           return;
         }
         if (ok) {
-          if (els.title) els.title.textContent = String(options.message || "Nenhum portfólio conectado ainda.");
+          if (els.title) els.title.textContent = String(options.message || "Ainda lendo os números na Meta. Aguarde ou clique em Atualizar.");
           return;
         }
         els.root.classList.add("is-error");
@@ -39621,7 +39631,7 @@
       }
 
       window.wabaEnsureMetaPortfolioLoad = function wabaEnsureMetaPortfolioLoad() {
-        if (metaTpHasVisiblePortfolios()) {
+        if (metaTpHasListedNumbers()) {
           metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
           return false;
         }
@@ -40388,10 +40398,17 @@
         metaTpSyncPortfolioPageNav(bundles);
         const visible = metaTpFilterPortfoliosByPage(bundles, metaTpPortfolioPage);
         const savedBiz = String(metaTpSession.savedBusinessId || "").trim();
+        const cardHasNumbers = function (item) {
+          return (item.numbers || []).some(function (row) {
+            return Boolean(String((row && (row.displayPhoneNumber || row.phoneNumberId)) || "").trim());
+          });
+        };
+        const withNumbers = visible.filter(cardHasNumbers);
+        const saved = visible.find(function (item) {
+          return metaTpBusinessIdLabel(item) === savedBiz;
+        });
         const selected =
-          visible.find(function (item) {
-            return metaTpBusinessIdLabel(item) === savedBiz;
-          }) || visible[0];
+          (saved && cardHasNumbers(saved) ? saved : null) || withNumbers[0] || saved || visible[0];
         const selectedBiz = selected ? metaTpBusinessIdLabel(selected) : "";
         if (selected && selectedBiz !== "—") metaTpSession.savedBusinessId = selectedBiz;
         if (selected) {
@@ -40476,7 +40493,7 @@
           } catch {
             /* a carga anterior não bloqueia o Atualizar */
           }
-          if (metaTpHasVisiblePortfolios()) return;
+          if (metaTpHasListedNumbers()) return;
         }
         metaTpPortfolioInflight = (async function () {
         const enabled =
@@ -40526,12 +40543,12 @@
 
       async function metaTpReloadPortfoliosAfterConnect() {
         var attempt = 0;
-        while (attempt < 8) {
+        while (attempt < 12) {
           await metaTpLoadPortfolio({ silent: true });
-          if (metaTpHasVisiblePortfolios()) return;
+          if (metaTpHasListedNumbers()) return;
           attempt += 1;
           await new Promise(function (resolve) {
-            window.setTimeout(resolve, 1200);
+            window.setTimeout(resolve, 1500);
           });
         }
       }
@@ -40618,7 +40635,7 @@
           if (connected === "connected" || connected === "conectado") {
             if (typeof window.wabaMetaLabSetStep === "function") window.wabaMetaLabSetStep(4);
           }
-          metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasVisiblePortfolios() });
+          metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasListedNumbers() });
         } catch (_err) {
           metaTpFinishConnectProgress({
             ok: false,
@@ -40731,10 +40748,10 @@
           metaTpStartConnectProgress();
           metaTpAdvanceConnectProgress(2);
           await metaTpLoadPortfolio({ silent: true });
-          if (!metaTpHasVisiblePortfolios()) {
+          if (!metaTpHasListedNumbers()) {
             await metaTpLoadPortfolio({ silent: true, force: true });
           }
-          metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasVisiblePortfolios() });
+          metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasListedNumbers() });
         } catch {
           metaTpSetStatus("Não foi possível atualizar os portfólios.");
           metaTpFinishConnectProgress({ ok: false, message: "Não foi possível atualizar os portfólios." });
@@ -40828,7 +40845,7 @@
             if (!response.ok || payload.ok === false) {
               metaTpLog("Graph validation falhou");
               await metaTpReloadPortfoliosAfterConnect();
-              if (metaTpHasVisiblePortfolios()) {
+              if (metaTpHasListedNumbers()) {
                 metaTpSetStatus("");
                 metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
                 window.__wabaMetaTechSignupActive = false;
@@ -40860,14 +40877,14 @@
               }
               window.__wabaMetaTechSignupActive = false;
             }
-            if (!metaTpHasVisiblePortfolios()) {
+            if (!metaTpHasListedNumbers()) {
               await metaTpReloadPortfoliosAfterConnect();
             }
           }
           if (metaTpSession.exchanged && !metaTpSession.wabaId) {
             metaTpLog("token sem waba_id do postMessage; lendo portfólio na Graph");
             await metaTpReloadPortfoliosAfterConnect();
-            if (metaTpHasVisiblePortfolios()) {
+            if (metaTpHasListedNumbers()) {
               metaTpSetStatus("");
               metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
               window.__wabaMetaTechSignupActive = false;
@@ -40875,7 +40892,7 @@
             }
           }
           if (metaTpConnectProgressActive) {
-            metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasVisiblePortfolios() });
+            metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasListedNumbers() });
           }
         } finally {
           metaTpSession.advancing = false;
