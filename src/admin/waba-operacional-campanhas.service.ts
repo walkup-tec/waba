@@ -17,11 +17,6 @@ import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { canViewerSeeSubscriber } from "../users/waba-subscriber-master-visibility";
 import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
 import {
-  formatOperacionalDispatchesApisLabel,
-  operacionalServesDispatchesApi,
-  resolveOperacionalDispatchesApis,
-} from "../users/waba-operacional-dispatches-apis";
-import {
   formatOperacionalSegmentsLabel,
   resolveOperacionalSegments,
 } from "../users/waba-operacional-segments";
@@ -382,10 +377,6 @@ export class WabaOperacionalCampanhasService {
     intake: WabaCampaignIntake,
     staff: OperacionalCampanhasStaffContext,
   ): boolean {
-    if (staff.role === "operacional") {
-      const assigned = normalizeEmail(intake.assignedOperacionalEmail ?? "");
-      if (assigned && assigned === normalizeEmail(staff.email)) return true;
-    }
     if (!this.matchesStaffApiFilter(intake, staff)) return false;
     if (!this.matchesStaffSegmentFilter(intake, staff)) return false;
     if (staff.role === "master" || isWabaMasterEmail(staff.email) || staff.role === "suporte") {
@@ -1061,14 +1052,7 @@ export class WabaOperacionalCampanhasService {
   listTransferOperacionais(
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
-  ): Array<{
-    email: string;
-    fullName: string;
-    segment: string;
-    segmentLabel: string;
-    eligible: boolean;
-    ineligibleReason?: string;
-  }> {
+  ): Array<{ email: string; fullName: string; segment: string; segmentLabel: string }> {
     if (staff.role !== "master" && !isWabaMasterEmail(staff.email)) {
       throw new Error("Somente master pode listar operacionais para transferência.");
     }
@@ -1080,50 +1064,18 @@ export class WabaOperacionalCampanhasService {
     const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
     const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
     const current = normalizeEmail(intake.assignedOperacionalEmail ?? "");
-    const apiLabel = WABA_DISPATCHES_API_LABELS[apiKind] || apiKind;
-    const segmentLabel = WABA_SUBSCRIBER_SEGMENT_LABELS[subscriberSegment] || subscriberSegment;
-    const neededSegment = subscriberSegment === "bets" ? "bets" : "outros";
-    const supplierRows = Array.isArray(this.splitService.getConfig().suppliers)
-      ? this.splitService.getConfig().suppliers
-      : [];
     return this.systemUserService
-      .listPublicUsers()
-      .filter((user) => user.role === "operacional" && normalizeEmail(user.email) !== current)
+      .listOperacionalUsersForCampaign(apiKind, subscriberSegment)
+      .filter((user) => normalizeEmail(user.email) !== current)
       .map((user) => {
-        const email = normalizeEmail(user.email);
-        const servesApi = operacionalServesDispatchesApi(user, apiKind);
-        const servesSegment = operacionalCanServeSubscriberCampaign(subscriberSegment, user);
-        const hasSupplierRow = supplierRows.some(
-          (row) =>
-            row.active !== false &&
-            normalizeEmail(row.systemUserEmail) === email &&
-            (row.apiKind === "alternativa" ? "alternativa" : "oficial") === apiKind &&
-            (row.segment === "bets" ? "bets" : "outros") === neededSegment,
-        );
-        const eligible = hasSupplierRow || (servesApi && servesSegment);
-        const reasons: string[] = [];
-        if (!eligible) {
-          if (!servesApi) {
-            const configured = formatOperacionalDispatchesApisLabel(resolveOperacionalDispatchesApis(user));
-            reasons.push(`não atende ${apiLabel} (cadastro: ${configured})`);
-          }
-          if (!servesSegment && !hasSupplierRow) {
-            reasons.push(`sem linha de fornecedor ${segmentLabel}`);
-          }
-        }
         const segments = resolveOperacionalSegments(user);
         return {
-          email,
+          email: normalizeEmail(user.email),
           fullName: String(user.fullName || user.email).trim() || user.email,
           segment: segments[0] ?? "outros",
           segmentLabel: formatOperacionalSegmentsLabel(segments),
-          eligible,
-          ineligibleReason: reasons.join(" · ") || undefined,
         };
       })
-      .sort((a, b) => {
-        if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
-        return a.fullName.localeCompare(b.fullName, "pt-BR");
-      });
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
   }
 }

@@ -51279,11 +51279,7 @@
               const email = String(item?.email || "").trim().toLowerCase();
               const name = String(item?.fullName || email).trim() || email;
               const segment = String(item?.segmentLabel || "").trim();
-              const reason = String(item?.ineligibleReason || "").trim();
-              const parts = [name && email && name.toLowerCase() !== email ? `${name} (${email})` : name];
-              if (segment) parts.push(`· ${segment}`);
-              if (reason) parts.push(`— ${reason}`);
-              const label = parts.join(" ");
+              const label = segment ? `${name} (${segment})` : name;
               return `<option value="${escapeAdminHtml(email)}">${escapeAdminHtml(label)}</option>`;
             }),
           ].join("");

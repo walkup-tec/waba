@@ -14,7 +14,9 @@ import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.reposit
 import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import {
+  formatOperacionalDispatchesApisLabel,
   operacionalServesDispatchesApi,
+  resolveOperacionalDispatchesApis,
 } from "../users/waba-operacional-dispatches-apis";
 import {
   operacionalCanServeSubscriberCampaign,
@@ -123,12 +125,9 @@ export class WabaCampaignSupplierAssignmentService {
       const operacional = this.systemUserService.getByEmail(email);
       if (!operacional || operacional.role !== "operacional") continue;
       const apiKind = this.resolveIntakeApiKind(intake);
-      if (!operacionalServesDispatchesApi(operacional, apiKind)) continue;
       const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-      const neededSegment = subscriberSegment === "bets" ? "bets" : "outros";
-      const rowSegment = supplier.segment === "bets" ? "bets" : "outros";
-      const rowMatchesCampaign = rowSegment === neededSegment;
-      if (!rowMatchesCampaign && !operacionalCanServeSubscriberCampaign(subscriberSegment, operacional)) {
+      if (!operacionalServesDispatchesApi(operacional, apiKind)) continue;
+      if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional)) {
         continue;
       }
       return supplier;
@@ -187,10 +186,11 @@ export class WabaCampaignSupplierAssignmentService {
 
   ensureInitialAssignment(intake: WabaCampaignIntake): WabaCampaignIntake {
     if (normalizeEmail(intake.assignedOperacionalEmail ?? "")) return intake;
+    const forcedEmail = forcedOperacionalEmailForCampaignOwner(intake.ownerEmail);
     const supplier = this.pickNextSupplier(intake, new Set());
     if (!supplier) return intake;
     return this.assignToSupplier(intake, supplier, "initial", {
-      bypassEligibility: true,
+      bypassEligibility: Boolean(forcedEmail),
     });
   }
 
@@ -214,9 +214,7 @@ export class WabaCampaignSupplierAssignmentService {
       return { intake, reassigned: false, exhausted: true };
     }
 
-    const updated = this.assignToSupplier(intake, next, reason, {
-      bypassEligibility: true,
-    });
+    const updated = this.assignToSupplier(intake, next, reason);
     scheduleOperacionalStaffNotifyOnCampaignAssigned(updated);
     const finalIntake = this.intakeRepository.getById(updated.id) ?? updated;
     return { intake: finalIntake, reassigned: true, exhausted: false };
@@ -331,7 +329,17 @@ export class WabaCampaignSupplierAssignmentService {
     }
 
     const apiKind = this.resolveIntakeApiKind(intake);
+    if (!operacionalServesDispatchesApi(operacional, apiKind)) {
+      throw new Error(
+        `Operacional não atende API ${apiKind} (configurado: ${formatOperacionalDispatchesApisLabel(resolveOperacionalDispatchesApis(operacional))}).`,
+      );
+    }
+
     const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+    if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional)) {
+      throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
+    }
+
     const supplierSegment = subscriberSegment === "bets" ? "bets" : "outros";
     const config = this.splitService.getConfig();
     const suppliers = Array.isArray(config.suppliers) ? config.suppliers : [];
@@ -362,9 +370,7 @@ export class WabaCampaignSupplierAssignmentService {
       };
     }
 
-    const updated = this.assignToSupplier(intake, supplier, "manual_master", {
-      bypassEligibility: true,
-    });
+    const updated = this.assignToSupplier(intake, supplier, "manual_master");
     const now = new Date().toISOString();
     const cleared = this.intakeRepository.updateById(updated.id, {
       bmInoperanteRegisteredAt: undefined,
