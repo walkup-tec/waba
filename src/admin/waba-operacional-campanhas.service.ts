@@ -16,6 +16,7 @@ import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { canViewerSeeSubscriber } from "../users/waba-subscriber-master-visibility";
 import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
+import { operacionalServesDispatchesApi } from "../users/waba-operacional-dispatches-apis";
 import {
   formatOperacionalSegmentsLabel,
   resolveOperacionalSegments,
@@ -66,6 +67,11 @@ import {
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
 import { operacionalCanServeSubscriberCampaign } from "../services/waba-campaign-operacional-segment-rules";
+import {
+  financeiroServesCampaign,
+  listFinanceiroSegmentsForEmail,
+  mergeOperacionalSegmentLists,
+} from "../services/waba-campaign-supplier-segments";
 import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import { notifyCampaignErrorReportedEmail } from "../mail/waba-mail-delivery";
@@ -377,6 +383,10 @@ export class WabaOperacionalCampanhasService {
     intake: WabaCampaignIntake,
     staff: OperacionalCampanhasStaffContext,
   ): boolean {
+    if (staff.role === "operacional") {
+      const assigned = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+      if (assigned && assigned === normalizeEmail(staff.email)) return true;
+    }
     if (!this.matchesStaffApiFilter(intake, staff)) return false;
     if (!this.matchesStaffSegmentFilter(intake, staff)) return false;
     if (staff.role === "master" || isWabaMasterEmail(staff.email) || staff.role === "suporte") {
@@ -1064,13 +1074,35 @@ export class WabaOperacionalCampanhasService {
     const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
     const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
     const current = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+    const supplierRows = Array.isArray(this.splitService.getConfig().suppliers)
+      ? this.splitService.getConfig().suppliers
+      : [];
     return this.systemUserService
-      .listOperacionalUsersForCampaign(apiKind, subscriberSegment)
-      .filter((user) => normalizeEmail(user.email) !== current)
+      .listPublicUsers()
+      .filter((user) => {
+        if (user.role !== "operacional") return false;
+        const email = normalizeEmail(user.email);
+        if (!email || email === current) return false;
+        const hasFinanceiroRow = financeiroServesCampaign(
+          supplierRows,
+          email,
+          apiKind,
+          subscriberSegment,
+        );
+        if (hasFinanceiroRow) return true;
+        return (
+          operacionalServesDispatchesApi(user, apiKind) &&
+          operacionalCanServeSubscriberCampaign(subscriberSegment, user)
+        );
+      })
       .map((user) => {
-        const segments = resolveOperacionalSegments(user);
+        const email = normalizeEmail(user.email);
+        const segments = mergeOperacionalSegmentLists(
+          listFinanceiroSegmentsForEmail(supplierRows, email),
+          resolveOperacionalSegments(user),
+        );
         return {
-          email: normalizeEmail(user.email),
+          email,
           fullName: String(user.fullName || user.email).trim() || user.email,
           segment: segments[0] ?? "outros",
           segmentLabel: formatOperacionalSegmentsLabel(segments),

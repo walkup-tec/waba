@@ -14,6 +14,7 @@ const waba_campaign_spreadsheet_util_1 = require("../disparos/waba-campaign-spre
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
+const waba_operacional_dispatches_apis_1 = require("../users/waba-operacional-dispatches-apis");
 const waba_operacional_segments_1 = require("../users/waba-operacional-segments");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
 const waba_campaign_report_read_overrides_1 = require("../disparos/waba-campaign-report-read-overrides");
@@ -28,6 +29,7 @@ const waba_campaign_report_metrics_1 = require("../disparos/waba-campaign-report
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_campaign_operacional_segment_rules_1 = require("../services/waba-campaign-operacional-segment-rules");
+const waba_campaign_supplier_segments_1 = require("../services/waba-campaign-supplier-segments");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
@@ -156,6 +158,11 @@ class WabaOperacionalCampanhasService {
         return (0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(this.resolveSubscriberSegmentForIntake(intake), filter);
     }
     matchesStaffCampaignFilter(intake, staff) {
+        if (staff.role === "operacional") {
+            const assigned = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+            if (assigned && assigned === normalizeEmail(staff.email))
+                return true;
+        }
         if (!this.matchesStaffApiFilter(intake, staff))
             return false;
         if (!this.matchesStaffSegmentFilter(intake, staff))
@@ -700,13 +707,28 @@ class WabaOperacionalCampanhasService {
         const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
         const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
         const current = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+        const supplierRows = Array.isArray(this.splitService.getConfig().suppliers)
+            ? this.splitService.getConfig().suppliers
+            : [];
         return this.systemUserService
-            .listOperacionalUsersForCampaign(apiKind, subscriberSegment)
-            .filter((user) => normalizeEmail(user.email) !== current)
+            .listPublicUsers()
+            .filter((user) => {
+            if (user.role !== "operacional")
+                return false;
+            const email = normalizeEmail(user.email);
+            if (!email || email === current)
+                return false;
+            const hasFinanceiroRow = (0, waba_campaign_supplier_segments_1.financeiroServesCampaign)(supplierRows, email, apiKind, subscriberSegment);
+            if (hasFinanceiroRow)
+                return true;
+            return ((0, waba_operacional_dispatches_apis_1.operacionalServesDispatchesApi)(user, apiKind) &&
+                (0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, user));
+        })
             .map((user) => {
-            const segments = (0, waba_operacional_segments_1.resolveOperacionalSegments)(user);
+            const email = normalizeEmail(user.email);
+            const segments = (0, waba_campaign_supplier_segments_1.mergeOperacionalSegmentLists)((0, waba_campaign_supplier_segments_1.listFinanceiroSegmentsForEmail)(supplierRows, email), (0, waba_operacional_segments_1.resolveOperacionalSegments)(user));
             return {
-                email: normalizeEmail(user.email),
+                email,
                 fullName: String(user.fullName || user.email).trim() || user.email,
                 segment: segments[0] ?? "outros",
                 segmentLabel: (0, waba_operacional_segments_1.formatOperacionalSegmentsLabel)(segments),

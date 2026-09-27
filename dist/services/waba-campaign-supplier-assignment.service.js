@@ -10,6 +10,7 @@ const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.rep
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_operacional_dispatches_apis_1 = require("../users/waba-operacional-dispatches-apis");
 const waba_campaign_operacional_segment_rules_1 = require("./waba-campaign-operacional-segment-rules");
+const waba_campaign_supplier_segments_1 = require("./waba-campaign-supplier-segments");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 const waba_campaign_intake_constants_1 = require("../disparos/waba-campaign-intake.constants");
 exports.CAMPAIGN_START_OVERDUE_MS = 24 * 60 * 60 * 1000;
@@ -99,7 +100,8 @@ class WabaCampaignSupplierAssignmentService {
             const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
             if (!(0, waba_operacional_dispatches_apis_1.operacionalServesDispatchesApi)(operacional, apiKind))
                 continue;
-            if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
+            const rowMatchesCampaign = (0, waba_campaign_supplier_segments_1.toSupplierSegment)(supplier.segment) === (0, waba_campaign_supplier_segments_1.toCampaignSupplierSegment)(subscriberSegment);
+            if (!rowMatchesCampaign && !(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
                 continue;
             }
             return supplier;
@@ -125,7 +127,9 @@ class WabaCampaignSupplierAssignmentService {
                 throw new Error("Fornecedor sem usuário operacional válido.");
             }
             const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-            if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
+            const rowMatchesCampaign = (0, waba_campaign_supplier_segments_1.toSupplierSegment)(supplier.segment) === (0, waba_campaign_supplier_segments_1.toCampaignSupplierSegment)(subscriberSegment);
+            if (!rowMatchesCampaign &&
+                !(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
                 throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
             }
         }
@@ -285,16 +289,19 @@ class WabaCampaignSupplierAssignmentService {
             throw new Error("Usuário operacional não encontrado.");
         }
         const apiKind = this.resolveIntakeApiKind(intake);
-        if (!(0, waba_operacional_dispatches_apis_1.operacionalServesDispatchesApi)(operacional, apiKind)) {
-            throw new Error(`Operacional não atende API ${apiKind} (configurado: ${(0, waba_operacional_dispatches_apis_1.formatOperacionalDispatchesApisLabel)((0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(operacional))}).`);
-        }
         const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-        if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
-            throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
-        }
-        const supplierSegment = subscriberSegment === "bets" ? "bets" : "outros";
+        const supplierSegment = (0, waba_campaign_supplier_segments_1.toCampaignSupplierSegment)(subscriberSegment);
         const config = this.splitService.getConfig();
         const suppliers = Array.isArray(config.suppliers) ? config.suppliers : [];
+        const hasFinanceiroRow = (0, waba_campaign_supplier_segments_1.financeiroServesCampaign)(suppliers, operacionalEmail, apiKind, subscriberSegment);
+        if (!hasFinanceiroRow) {
+            if (!(0, waba_operacional_dispatches_apis_1.operacionalServesDispatchesApi)(operacional, apiKind)) {
+                throw new Error(`Operacional não atende API ${apiKind} (configurado: ${(0, waba_operacional_dispatches_apis_1.formatOperacionalDispatchesApisLabel)((0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(operacional))}).`);
+            }
+            if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
+                throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
+            }
+        }
         let supplier = suppliers.find((row) => normalizeEmail(row.systemUserEmail) === operacionalEmail &&
             row.apiKind === apiKind &&
             (row.segment || "outros") === supplierSegment) ??
