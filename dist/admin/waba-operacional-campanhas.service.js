@@ -228,9 +228,7 @@ class WabaOperacionalCampanhasService {
             status === "completed" &&
             pendingPayout;
         const baseDisplay = toDisplayStatus(status, laboratorioAttended, broadcastProgress);
-        const displayStatus = pendingPayout
-            ? `${baseDisplay} · pagamento pendente`
-            : baseDisplay;
+        const displayStatus = status === "completed" ? "Campanha Finalizada" : baseDisplay;
         return {
             id: intake.id,
             subscriberId: subscriber?.id ?? "—",

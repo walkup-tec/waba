@@ -27105,9 +27105,9 @@
 
     <div id="admin-campanhas-evidence-overlay" class="confirm-overlay" aria-hidden="true">
       <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="admin-campanhas-evidence-title">
-        <div class="confirm-title" id="admin-campanhas-evidence-title">Print dos indicadores</div>
+        <div class="confirm-title" id="admin-campanhas-evidence-title">Print do seu relatório</div>
         <p class="confirm-text">
-          Anexe um print da tela com os indicadores da campanha. Sem essa evidência a campanha não é finalizada e o pagamento não segue para aprovação do master.
+          Anexe o print do relatório do seu sistema local, após isso o split de pagamento fará a transferência do seu pagamento.
         </p>
         <label class="admin-campanhas-evidence-file">
           <span>Arquivo (JPEG, PNG ou WebP, até 8 MB)</span>
@@ -27120,7 +27120,7 @@
             Voltar
           </button>
           <button id="admin-campanhas-evidence-submit-btn" class="instance-action-btn btn-qrcode enabled" type="button">
-            Enviar evidência e finalizar
+            Enviar print
           </button>
         </div>
       </div>
@@ -51526,10 +51526,6 @@
             const campaignName = escapeAdminHtml(item?.campaignName || "—");
             const envios = Number(item?.plannedSendCount || 0);
             const statusBadge = renderAdminCampanhasStatusBadge(item?.status, item?.displayStatus);
-            const payoutBadge =
-              String(item?.payoutApprovalStatus || "") === "pending_master"
-                ? `<span class="admin-campanhas-status-badge admin-campanhas-status-badge--payout-pending">Pagamento pendente</span>`
-                : "";
             const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
             const endedAt = escapeAdminHtml(item?.endedAtLabel || "—");
             const campaignId = escapeAdminHtml(item?.id || "");
@@ -51603,7 +51599,7 @@
                 <td>${operadorLabel}</td>
                 <td>${campaignName}</td>
                 <td class="admin-subscribers-num">${envios}</td>
-                <td>${statusBadge}${payoutBadge}</td>
+                <td>${statusBadge}</td>
                 <td>${createdAt}</td>
                 <td>${endedAt}</td>
                 <td>
@@ -52923,7 +52919,7 @@
           return;
         }
         const submitBtn = document.getElementById("admin-campanhas-evidence-submit-btn");
-        const previousLabel = submitBtn?.textContent || "Enviar evidência e finalizar";
+        const previousLabel = submitBtn?.textContent || "Enviar print";
         if (submitBtn) {
           submitBtn.textContent = "Enviando…";
           submitBtn.setAttribute("disabled", "true");
