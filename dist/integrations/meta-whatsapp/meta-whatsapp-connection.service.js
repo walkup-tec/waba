@@ -341,6 +341,25 @@ async function cacheGraphBusinessPhoto(tenantId, businessId, url) {
 }
 const HYDRATE_GRAPH = { maxAttempts: 1, timeoutMs: 8000 };
 const HYDRATE_PHONE_BUDGET_MS = 18000;
+const HYDRATE_NAME_PROFILE_BUDGET_MS = 2500;
+const LIST_FANOUT_DEADLINE_MS = 20000;
+const OFFICIAL_NAME_GRAPH_TIMEOUT_MS = 4000;
+async function raceWithTimeout(work, timeoutMs) {
+    let timer;
+    const guarded = work.then((value) => value, () => null);
+    try {
+        return await Promise.race([
+            guarded,
+            new Promise((resolve) => {
+                timer = setTimeout(() => resolve(null), Math.max(0, timeoutMs));
+            }),
+        ]);
+    }
+    finally {
+        if (timer)
+            clearTimeout(timer);
+    }
+}
 function withHydrateLimits(graph) {
     return (input) => graph({
         ...input,
@@ -741,13 +760,29 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
     }
     const pending = merged.filter((row) => row.uiStatus !== "ativo");
     const active = merged.filter((row) => row.uiStatus === "ativo");
-    const withProfiles = active.length
-        ? await attachPhoneBusinessProfiles(g, token, active, tenantId, card.name)
-        : [];
-    const withNameStatus = pending.length
-        ? await attachPhoneNameStatuses(g, token, pending, card.name)
-        : [];
-    let numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(withProfiles, withNameStatus);
+    const extraWork = Promise.all([
+        active.length
+            ? attachPhoneBusinessProfiles(g, token, active, tenantId, card.name)
+            : Promise.resolve([]),
+        pending.length
+            ? attachPhoneNameStatuses(g, token, pending, card.name)
+            : Promise.resolve([]),
+    ]);
+    const extra = await raceWithTimeout(extraWork, HYDRATE_NAME_PROFILE_BUDGET_MS);
+    let hydratePartial = false;
+    let numbers;
+    if (extra) {
+        numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(extra[0], extra[1]);
+    }
+    else {
+        hydratePartial = true;
+        numbers = merged;
+        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-hydrate-name-budget", {
+            tenantId,
+            connectionId: open.id,
+            listed: merged.length,
+        });
+    }
     if (fromThisBm.size) {
         numbers = numbers.filter((row) => {
             const id = String(row.phoneNumberId || "").trim();
@@ -768,6 +803,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
         },
         directory,
         connectionId: open.id,
+        hydratePartial,
     };
 }
 /** WABAs (management) e chips (messaging) liberados no token — Embedded Signup manage-accounts. */
@@ -1390,6 +1426,26 @@ async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {
     return (0, meta_whatsapp_phone_identity_store_1.localPhonePhotoUrl)(phoneNumberId, saved) || local;
 }
 async function applyPhoneNameFields(graph, token, row, placeholderName) {
+    if (row.nameStatus || row.newNameStatus) {
+        const nameSync = (0, meta_whatsapp_portfolio_map_1.resolvePhoneNameSync)({
+            verifiedName: row.verifiedName,
+            nameStatus: row.nameStatus,
+            newDisplayName: row.newDisplayName,
+            newNameStatus: row.newNameStatus,
+            placeholderName,
+        });
+        return {
+            ...row,
+            requestedName: nameSync.requestedName,
+            nameSyncStatus: nameSync.nameSyncStatus,
+            nameNeedsRegister: nameSync.nameNeedsRegister,
+            canActivate: (0, meta_whatsapp_portfolio_map_1.canActivateMetaPhoneNumber)((0, meta_whatsapp_portfolio_map_1.resolveMetaPhoneUiStatus)({
+                metaStatus: row.metaStatus,
+                codeVerificationStatus: row.codeVerificationStatus,
+                healthCanSend: row.healthCanSend,
+            }), nameSync.nameNeedsRegister),
+        };
+    }
     const nameNode = await graph({
         token,
         method: "GET",
@@ -1520,6 +1576,14 @@ function rememberOfficialPhoneDisplayName(tenantId, phoneNumberId) {
         // Identidade local não pode abortar o cadastro do número.
     }
 }
+function queueOfficialPhoneDisplayName(graph, input) {
+    void requestOfficialPhoneDisplayName(graph, input).catch(() => {
+        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-default-name-skip", {
+            tenantId: input.tenantId,
+            reason: "queue",
+        });
+    });
+}
 async function requestOfficialPhoneDisplayName(graph, input) {
     rememberOfficialPhoneDisplayName(input.tenantId, input.phoneNumberId);
     const phoneId = String(input.phoneNumberId || "").trim();
@@ -1531,6 +1595,8 @@ async function requestOfficialPhoneDisplayName(graph, input) {
             method: "GET",
             path: phoneId,
             query: { fields: meta_whatsapp_portfolio_map_1.META_PHONE_NAME_FIELDS },
+            maxAttempts: 1,
+            timeoutMs: OFFICIAL_NAME_GRAPH_TIMEOUT_MS,
         });
         if (node.ok) {
             const names = (0, meta_whatsapp_portfolio_map_1.mapPhoneNameFields)(node.json);
@@ -1548,6 +1614,8 @@ async function requestOfficialPhoneDisplayName(graph, input) {
         method: "POST",
         path: phoneId,
         query: { new_display_name: meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME },
+        maxAttempts: 1,
+        timeoutMs: OFFICIAL_NAME_GRAPH_TIMEOUT_MS,
     });
     if (!renamed.ok) {
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-default-name-failed", {
@@ -1755,7 +1823,7 @@ class MetaWhatsappConnectionService {
                 try {
                     const token = this.decrypt(row.accessTokenEncrypted);
                     if (token) {
-                        await requestOfficialPhoneDisplayName(this.graph, {
+                        queueOfficialPhoneDisplayName(this.graph, {
                             token,
                             tenantId: tenant.tenantId,
                             phoneNumberId,
@@ -1793,7 +1861,7 @@ class MetaWhatsappConnectionService {
                 try {
                     const token = this.decrypt(open.accessTokenEncrypted);
                     if (token) {
-                        await requestOfficialPhoneDisplayName(this.graph, {
+                        queueOfficialPhoneDisplayName(this.graph, {
                             token,
                             tenantId: tenant.tenantId,
                             phoneNumberId: connectedPhone,
@@ -1904,16 +1972,11 @@ class MetaWhatsappConnectionService {
             hasQuality: Boolean(connected.qualityRating),
             status: connected.status,
         });
-        try {
-            await requestOfficialPhoneDisplayName(this.graph, {
-                token,
-                tenantId: tenant.tenantId,
-                phoneNumberId,
-            });
-        }
-        catch {
-            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-default-name-skip", { tenantId: tenant.tenantId });
-        }
+        queueOfficialPhoneDisplayName(this.graph, {
+            token,
+            tenantId: tenant.tenantId,
+            phoneNumberId,
+        });
         return toMetaWhatsappPublicConnection(connected);
     }
     async listPortfolioAssets(auth, opts) {
@@ -1921,6 +1984,17 @@ class MetaWhatsappConnectionService {
         const requested = String(opts?.connectionId || "").trim();
         if (opts?.fresh)
             (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
+        const pending = (0, meta_whatsapp_portfolio_graph_cache_1.readPortfolioGraphInflight)(tenant.tenantId);
+        if (pending) {
+            try {
+                const raw = await pending;
+                return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(raw.portfolios || [], requested));
+            }
+            catch {
+                (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-graph-failed", { tenantId: tenant.tenantId, reason: "inflight" });
+                return localizeAndHidePortfolioAssets(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
+            }
+        }
         if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
             const stale = (0, meta_whatsapp_portfolio_graph_cache_1.readStaleCachedPortfolioGraph)(tenant.tenantId);
             if (stale?.portfolios?.length) {
@@ -1934,26 +2008,19 @@ class MetaWhatsappConnectionService {
             if (cached?.portfolios?.length) {
                 return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(cached.portfolios, requested));
             }
-            const pending = (0, meta_whatsapp_portfolio_graph_cache_1.readPortfolioGraphInflight)(tenant.tenantId);
-            if (pending) {
-                try {
-                    const raw = await pending;
-                    return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(raw.portfolios || [], requested));
-                }
-                catch {
-                    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-graph-failed", { tenantId: tenant.tenantId, reason: "inflight" });
-                    return localizeAndHidePortfolioAssets(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
-                }
-            }
         }
-        const work = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail);
-        if (useCache)
-            (0, meta_whatsapp_portfolio_graph_cache_1.setPortfolioGraphInflight)(tenant.tenantId, work);
+        const loaded = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail);
+        let graphPartial = false;
+        const work = loaded.then((row) => {
+            graphPartial = row.graphPartial;
+            return row.assets;
+        });
+        (0, meta_whatsapp_portfolio_graph_cache_1.setPortfolioGraphInflight)(tenant.tenantId, work);
         try {
-            const raw = await work;
-            if ((0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)())
-                (0, meta_whatsapp_portfolio_graph_cache_1.writeCachedPortfolioGraph)(tenant.tenantId, raw);
-            return localizeAndHidePortfolioAssets(tenant.tenantId, raw);
+            const assets = await work;
+            if ((0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)() && !graphPartial)
+                (0, meta_whatsapp_portfolio_graph_cache_1.writeCachedPortfolioGraph)(tenant.tenantId, assets);
+            return localizeAndHidePortfolioAssets(tenant.tenantId, assets);
         }
         catch {
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-graph-failed", { tenantId: tenant.tenantId, reason: "graph" });
@@ -2051,6 +2118,7 @@ class MetaWhatsappConnectionService {
         return assetsFromPortfolioCards(cards, requested);
     }
     async loadPortfolioGraphAssets(tenantId, requested, actorEmail = "") {
+        const startedAt = Date.now();
         const repo = this.repository;
         if (typeof repo.reopenLeftManagerForBusinesses === "function") {
             try {
@@ -2076,10 +2144,13 @@ class MetaWhatsappConnectionService {
             : [await this.repository.findOpenByTenant(tenantId)].filter((item) => Boolean(item));
         if (!rows.length) {
             return {
-                portfolios: [],
-                selectedConnectionId: null,
-                portfolio: null,
-                numbers: [],
+                assets: {
+                    portfolios: [],
+                    selectedConnectionId: null,
+                    portfolio: null,
+                    numbers: [],
+                },
+                graphPartial: false,
             };
         }
         const writeTokens = collectPortfolioWriteTokens(rows, this.decrypt);
@@ -2101,7 +2172,19 @@ class MetaWhatsappConnectionService {
             ...fromConnections,
             ...fromDirectory,
         ]);
-        const cards = await fillEmptyAdminPortfolioCards(withHydrateLimits(this.graph), tenantId, [...merged, ...catalogBackfillPlaceholderCards(tenantId, merged)].filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard), writeTokens);
+        let graphPartial = hydrated.some((item) => item.hydratePartial);
+        const seeds = [...merged, ...catalogBackfillPlaceholderCards(tenantId, merged)].filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+        let cards = seeds;
+        if (Date.now() - startedAt < LIST_FANOUT_DEADLINE_MS) {
+            cards = await fillEmptyAdminPortfolioCards(withHydrateLimits(this.graph), tenantId, seeds, writeTokens);
+        }
+        else {
+            graphPartial = true;
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-hydrate-fanout-budget", {
+                tenantId,
+                cards: seeds.length,
+            });
+        }
         if (leftIds.length && typeof repo.disconnectOne === "function") {
             for (const connectionId of leftIds) {
                 try {
@@ -2122,8 +2205,9 @@ class MetaWhatsappConnectionService {
             hasBusiness: Boolean(raw.portfolio?.id),
             numbers: raw.numbers.length,
             leftManager: leftIds.length,
+            graphPartial,
         });
-        return raw;
+        return { assets: raw, graphPartial };
     }
     async registerPhoneFromAuth(auth, input) {
         const tenant = requireTenant(auth);
@@ -2237,16 +2321,11 @@ class MetaWhatsappConnectionService {
                 (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-register-confirm-skip", { tenantId: tenant.tenantId });
             }
         }
-        try {
-            await requestOfficialPhoneDisplayName(this.graph, {
-                token,
-                tenantId: tenant.tenantId,
-                phoneNumberId,
-            });
-        }
-        catch {
-            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-default-name-skip", { tenantId: tenant.tenantId });
-        }
+        queueOfficialPhoneDisplayName(this.graph, {
+            token,
+            tenantId: tenant.tenantId,
+            phoneNumberId,
+        });
         (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
         return this.listPortfolioAssets(auth, { fresh: true });
     }

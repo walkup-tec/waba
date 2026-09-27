@@ -40494,14 +40494,11 @@
         try {
           const { response, payload } = await metaTpFetchJson(
             "/integrations/meta/whatsapp/portfolio" + (force ? "?fresh=1" : ""),
-            { timeoutMs: 28000 },
+            { timeoutMs: 40000 },
           );
           if (!response.ok || payload.ok === false) {
             if (response.status === 502 || response.status === 504) {
-              metaTpSetStatus("O servidor não concluiu a leitura dos números a tempo. Clique de novo em Atualizar.");
-            }
-            if (!silent && !force && !metaTpHasVisiblePortfolios()) {
-              metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+              metaTpSetStatus("Ainda lendo os números na Meta. Aguarde ou clique em Atualizar.");
             }
             return;
           }
@@ -40515,10 +40512,7 @@
             Boolean(err && err.name === "AbortError") ||
             /aborted|AbortError/i.test(String((err && err.message) || ""));
           if (aborted) {
-            metaTpSetStatus("O servidor não concluiu a leitura dos números a tempo. Clique de novo em Atualizar.");
-          }
-          if (!silent && !force && !metaTpHasVisiblePortfolios()) {
-            metaTpRenderPortfolio({ portfolio: null, numbers: [] });
+            metaTpSetStatus("Ainda lendo os números na Meta. Aguarde ou clique em Atualizar.");
           }
         }
         })();
@@ -40531,11 +40525,10 @@
 
       async function metaTpReloadPortfoliosAfterConnect() {
         await metaTpLoadPortfolio({ silent: true });
-        if (!metaTpHasVisiblePortfolios()) {
-          await metaTpLoadPortfolio({ silent: true, force: true });
-          return;
-        }
-        void metaTpLoadPortfolio({ silent: true, force: true });
+        if (metaTpHasVisiblePortfolios()) return;
+        await metaTpLoadPortfolio({ silent: true });
+        if (metaTpHasVisiblePortfolios()) return;
+        await metaTpLoadPortfolio({ silent: true, force: true });
       }
 
       function metaTpStartLiveSync() {
@@ -40858,6 +40851,12 @@
                 metaTpLog("webhooks: " + String(sub.payload.error || "falha"));
               }
               window.__wabaMetaTechSignupActive = false;
+            }
+            if (!metaTpHasVisiblePortfolios()) {
+              await new Promise(function (resolve) {
+                window.setTimeout(resolve, 1600);
+              });
+              await metaTpLoadPortfolio({ silent: true });
             }
           }
           if (metaTpSession.exchanged && !metaTpSession.wabaId) {

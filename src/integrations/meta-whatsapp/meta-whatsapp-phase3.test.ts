@@ -204,6 +204,12 @@ const oauthFail = {
   },
 };
 
+async function flushQueuedGraph(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe("meta-whatsapp phase 3", () => {
   const previous = {
     appId: process.env.META_APP_ID,
@@ -387,6 +393,7 @@ describe("meta-whatsapp phase 3", () => {
       phoneNumberId: "phone-drax-2",
       businessId: "1041827648719609",
     });
+    await flushQueuedGraph();
     assert.equal(
       namePosts.some(
         (item) =>
@@ -543,7 +550,9 @@ describe("meta-whatsapp phase 3", () => {
       phoneNumberId: "phone-1",
       businessId: "bm-1",
     });
+    await flushQueuedGraph();
     const confirmed = await service.confirmFromAuth(authA);
+    await flushQueuedGraph();
     assert.equal(confirmed.status, "connected");
     assert.equal(confirmed.connected, true);
     assert.equal(confirmed.qualityRating, "GREEN");
@@ -557,6 +566,7 @@ describe("meta-whatsapp phase 3", () => {
       "POST:phone-1",
     ]);
     const again = await service.confirmFromAuth(authA);
+    await flushQueuedGraph();
     assert.equal(again.status, "connected");
     assert.equal(graphCalls.length, 8);
   });

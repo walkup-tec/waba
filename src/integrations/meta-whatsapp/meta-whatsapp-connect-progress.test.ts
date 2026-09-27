@@ -16,10 +16,12 @@ describe("progresso ao lado de Conectar Portfólio", () => {
     assert.match(html, /Listando os números do WhatsApp/);
     assert.match(html, /Conexão concluída com sucesso/);
     assert.match(html, /wabaEnsureMetaPortfolioLoad/);
-    assert.match(html, /timeoutMs: 28000/);
+    assert.match(html, /timeoutMs: 40000/);
     assert.match(html, /function metaTpResetSession\(opts\)/);
     assert.match(html, /keepPortfolios: true/);
     assert.match(html, /function metaTpReloadPortfoliosAfterConnect/);
+    assert.match(html, /Ainda lendo os números na Meta/);
+    assert.doesNotMatch(html, /O servidor não concluiu a leitura dos números a tempo/);
     assert.doesNotMatch(html, /metaTpPortfolioPage === "ativas" && !ativas.length && restritas.length/);
     assert.match(html, /meta-connect-progress-check/);
   });

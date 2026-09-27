@@ -38,6 +38,7 @@ import {
   catalogBusinessLabel,
   isCatalogBackfillBusiness,
 } from "./meta-whatsapp-known-owned-wabas";
+import { clearPortfolioGraphCacheForTests } from "./meta-whatsapp-portfolio-graph-cache";
 
 describe("meta portfolio mapper", () => {
   it("mapeia card do portfólio sem vazar token", () => {
@@ -1255,6 +1256,7 @@ describe("meta portfolio service", () => {
   afterEach(() => {
     purgePortfolioIdentity(tenantId);
     purgePhoneIdentities(tenantId);
+    clearPortfolioGraphCacheForTests();
   });
 
   beforeEach(() => {
@@ -1359,6 +1361,128 @@ describe("meta portfolio service", () => {
     assert.ok(graphCalls.includes("me/businesses"));
     assert.ok(graphCalls.includes("1247508354180311"));
     assert.ok(graphCalls.includes("waba-1/phone_numbers"));
+  });
+
+  it("devolve os números mesmo se o status de nome e o perfil atrasarem na Graph", async () => {
+    const row = { ...connectedRow(), status: "connected" as const };
+    const repo = {
+      async listOpenByTenant() {
+        return [row];
+      },
+      async findOpenByTenant() {
+        return row;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "phone-1" || input.path.endsWith("/whatsapp_business_profile")) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      if (input.path === "1247508354180311" || input.path === "waba-1") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: input.path,
+            name: "Grupo Walkup",
+            owner_business_info: { id: "1247508354180311", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-1",
+                display_phone_number: "+55 51 8200-1279",
+                verified_name: "Walkup",
+                status: "CONNECTED",
+                code_verification_status: "VERIFIED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const started = Date.now();
+    const assets = await service.listPortfolioAssets(auth);
+    const elapsed = Date.now() - started;
+    assert.ok(elapsed < 3500, `lista bloqueou ${elapsed}ms no extra da Graph`);
+    const numbers = (assets.portfolios || []).flatMap((item) => item.numbers || []);
+    assert.ok(numbers.some((item) => String(item.phoneNumberId || "") === "phone-1"));
+    assert.ok(listedFromConnections(assets.portfolios).length >= 1);
+  });
+
+  it("leituras simultâneas com fresh compartilham a Graph em voo", async () => {
+    const row = { ...connectedRow(), status: "connected" as const };
+    let phoneListCalls = 0;
+    const repo = {
+      async listOpenByTenant() {
+        return [row];
+      },
+      async findOpenByTenant() {
+        return row;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      if (input.path === "waba-1/phone_numbers") phoneListCalls += 1;
+      if (input.path === "1247508354180311" || input.path === "waba-1") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: input.path,
+            name: "Grupo Walkup",
+            owner_business_info: { id: "1247508354180311", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-1",
+                display_phone_number: "+55 51 8200-1279",
+                verified_name: "Walkup",
+                status: "CONNECTED",
+                code_verification_status: "VERIFIED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const [first, second] = await Promise.all([
+      service.listPortfolioAssets(auth, { fresh: true }),
+      service.listPortfolioAssets(auth, { fresh: true }),
+    ]);
+    assert.equal(
+      listedFromConnections(first.portfolios).some((item) => String(item.id || "") === "1247508354180311"),
+      true,
+    );
+    assert.equal(
+      listedFromConnections(second.portfolios).some((item) => String(item.id || "") === "1247508354180311"),
+      true,
+    );
+    assert.equal(phoneListCalls, 3);
   });
 
   it("mostra no card o nome, a foto e o pedido de nome que a Meta já tem", async () => {
