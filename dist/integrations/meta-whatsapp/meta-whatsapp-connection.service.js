@@ -367,19 +367,6 @@ function cardHasListedNumbers(card) {
 function assetsHaveListedNumbers(assets) {
     return (assets?.portfolios || []).some((item) => item.hidden !== true && (0, meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard)(item) && cardHasListedNumbers(item));
 }
-/** Só pinta o gravado se as Ativas de catálogo (Marilza/Flaviane/Sander) já tiverem chip. */
-function assetsCoverActiveCatalog(tenantId, assets) {
-    if (!assetsHaveListedNumbers(assets))
-        return false;
-    for (const id of (0, meta_whatsapp_known_owned_wabas_1.catalogBackfillBusinessIds)()) {
-        if ((0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, id))
-            continue;
-        const card = (assets?.portfolios || []).find((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), id));
-        if (!card || card.hidden === true || !cardHasListedNumbers(card))
-            return false;
-    }
-    return true;
-}
 function withHydrateLimits(graph) {
     return (input) => graph({
         ...input,
@@ -2005,7 +1992,7 @@ class MetaWhatsappConnectionService {
         const localize = (raw) => localizeAndHidePortfolioAssets(tenant.tenantId, raw);
         if (pending) {
             const stored = await storedPromise;
-            if (!opts?.fresh && assetsCoverActiveCatalog(tenant.tenantId, stored)) {
+            if (!opts?.fresh && assetsHaveListedNumbers(stored)) {
                 const fast = await raceWithTimeout(pending, LIST_FAST_STORED_MS);
                 if (fast) {
                     return localize(assetsFromPortfolioCards(fast.portfolios || [], requested));
@@ -2054,7 +2041,7 @@ class MetaWhatsappConnectionService {
         }).catch(() => undefined);
         try {
             const stored = await storedPromise;
-            if (!opts?.fresh && assetsCoverActiveCatalog(tenant.tenantId, stored)) {
+            if (!opts?.fresh && assetsHaveListedNumbers(stored)) {
                 const fast = await raceWithTimeout(work, LIST_FAST_STORED_MS);
                 if (fast)
                     return localize(fast);

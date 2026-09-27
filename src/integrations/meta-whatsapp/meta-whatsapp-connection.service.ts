@@ -553,20 +553,6 @@ function assetsHaveListedNumbers(assets: MetaPortfolioAssetsPublic | null | unde
   );
 }
 
-/** Só pinta o gravado se as Ativas de catálogo (Marilza/Flaviane/Sander) já tiverem chip. */
-function assetsCoverActiveCatalog(
-  tenantId: string,
-  assets: MetaPortfolioAssetsPublic | null | undefined,
-): boolean {
-  if (!assetsHaveListedNumbers(assets)) return false;
-  for (const id of catalogBackfillBusinessIds()) {
-    if (isHiddenBusiness(tenantId, id)) continue;
-    const card = (assets?.portfolios || []).find((item) => metaBusinessIdsMatch(String(item.id || ""), id));
-    if (!card || card.hidden === true || !cardHasListedNumbers(card)) return false;
-  }
-  return true;
-}
-
 function withHydrateLimits(graph: MetaConnectionGraphCaller): MetaConnectionGraphCaller {
   return (input) =>
     graph({
@@ -2390,7 +2376,7 @@ export class MetaWhatsappConnectionService {
 
     if (pending) {
       const stored = await storedPromise;
-      if (!opts?.fresh && assetsCoverActiveCatalog(tenant.tenantId, stored)) {
+      if (!opts?.fresh && assetsHaveListedNumbers(stored)) {
         const fast = await raceWithTimeout(pending, LIST_FAST_STORED_MS);
         if (fast) {
           return localize(assetsFromPortfolioCards(fast.portfolios || [], requested));
@@ -2438,7 +2424,7 @@ export class MetaWhatsappConnectionService {
     }).catch(() => undefined);
     try {
       const stored = await storedPromise;
-      if (!opts?.fresh && assetsCoverActiveCatalog(tenant.tenantId, stored)) {
+      if (!opts?.fresh && assetsHaveListedNumbers(stored)) {
         const fast = await raceWithTimeout(work, LIST_FAST_STORED_MS);
         if (fast) return localize(fast);
         logMetaWhatsappSafe("portfolio-list-stored-fast", {

@@ -39618,6 +39618,7 @@
         if (ok && hasPortfolios) {
           els.root.classList.add("is-success");
           if (els.title) els.title.textContent = "Conexão concluída com sucesso";
+          metaTpSetStatus("");
           return;
         }
         if (ok) {
@@ -39630,9 +39631,15 @@
         }
       }
 
+      function metaTpSyncConnectProgressFromAssets() {
+        if (!metaTpHasListedNumbers()) return;
+        metaTpSetStatus("");
+        metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
+      }
+
       window.wabaEnsureMetaPortfolioLoad = function wabaEnsureMetaPortfolioLoad() {
         if (metaTpHasListedNumbers()) {
-          metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
+          metaTpSyncConnectProgressFromAssets();
           return false;
         }
         if (metaTpConnectProgressActive) return false;
@@ -40407,8 +40414,7 @@
         const saved = visible.find(function (item) {
           return metaTpBusinessIdLabel(item) === savedBiz;
         });
-        const selected =
-          (saved && cardHasNumbers(saved) ? saved : null) || withNumbers[0] || saved || visible[0];
+        const selected = saved || withNumbers[0] || visible[0];
         const selectedBiz = selected ? metaTpBusinessIdLabel(selected) : "";
         if (selected && selectedBiz !== "—") metaTpSession.savedBusinessId = selectedBiz;
         if (selected) {
@@ -40419,6 +40425,7 @@
           return all.concat(Array.isArray(item.numbers) ? item.numbers : []);
         }, []);
         metaTpRenderPortfolioCards(visible, selectedBiz === "—" ? "" : selectedBiz);
+        metaTpSyncConnectProgressFromAssets();
         if (typeof metaTplBroadcastFillWabas === "function") metaTplBroadcastFillWabas();
         if (typeof metaTplBroadcastRefreshWabasFromMeta === "function") void metaTplBroadcastRefreshWabasFromMeta();
         if (typeof metaTplBroadcastFillNumbers === "function") metaTplBroadcastFillNumbers();
@@ -40515,7 +40522,7 @@
             { timeoutMs: 40000 },
           );
           if (!response.ok || payload.ok === false) {
-            if (response.status === 502 || response.status === 504) {
+            if ((response.status === 502 || response.status === 504) && !metaTpHasListedNumbers()) {
               metaTpSetStatus("Ainda lendo os números na Meta. Aguarde ou clique em Atualizar.");
             }
             return;
@@ -40529,7 +40536,7 @@
           const aborted =
             Boolean(err && err.name === "AbortError") ||
             /aborted|AbortError/i.test(String((err && err.message) || ""));
-          if (aborted) {
+          if (aborted && !metaTpHasListedNumbers()) {
             metaTpSetStatus("Ainda lendo os números na Meta. Aguarde ou clique em Atualizar.");
           }
         }
@@ -41174,7 +41181,7 @@
           !target.closest("[data-meta-hide-portfolio]")
         ) {
           const nextId = String(portfolioCard.getAttribute("data-meta-portfolio-id") || "").trim();
-          if (nextId && nextId !== String(metaTpSession.savedBusinessId || "").trim()) {
+          if (nextId) {
             metaTpSession.savedBusinessId = nextId;
             const selected = (metaTpSession.portfolios || []).find(function (item) {
               return metaTpBusinessIdLabel(item) === nextId;

@@ -21,6 +21,9 @@ describe("progresso ao lado de Conectar Portfólio", () => {
     assert.match(html, /keepPortfolios: true/);
     assert.match(html, /function metaTpReloadPortfoliosAfterConnect/);
     assert.match(html, /function metaTpHasListedNumbers/);
+    assert.match(html, /function metaTpSyncConnectProgressFromAssets/);
+    assert.match(html, /const selected = saved \|\| withNumbers\[0\] \|\| visible\[0\];/);
+    assert.doesNotMatch(html, /saved && cardHasNumbers\(saved\)/);
     assert.match(html, /while \(attempt < 12\)/);
     assert.match(html, /Ainda lendo os números na Meta/);
     assert.doesNotMatch(html, /O servidor não concluiu a leitura dos números a tempo/);
