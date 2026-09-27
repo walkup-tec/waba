@@ -1,5 +1,7 @@
 # Estado atual
 
+Split de pagamento: operadores manuais precisam de print + aprovação do master. Laboratório Cloud permanece automático no fechamento do relatório Meta. Marker `DEPLOY-2026-09-27-010500-PAYOUT-MASTER-APPROVAL`.
+
 Concluído no laboratório Meta:
 
 - tabela unificada de templates de todos os portfólios;

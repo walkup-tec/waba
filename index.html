@@ -9844,6 +9844,63 @@
         z-index: 2200;
       }
 
+      #admin-campanhas-evidence-overlay.confirm-overlay {
+        z-index: 2300;
+      }
+
+      .admin-campanhas-payout-evidence {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(15, 23, 42, 0.45);
+      }
+
+      .admin-campanhas-payout-evidence-title {
+        margin: 0 0 6px;
+        font-size: 0.92rem;
+        color: #e2e8f0;
+      }
+
+      .admin-campanhas-payout-evidence-meta {
+        margin: 0 0 10px;
+        font-size: 0.78rem;
+        color: rgba(148, 163, 184, 0.92);
+      }
+
+      .admin-campanhas-payout-evidence-img {
+        display: block;
+        width: 100%;
+        max-height: 360px;
+        object-fit: contain;
+        border-radius: 10px;
+        background: rgba(2, 6, 23, 0.55);
+      }
+
+      .admin-campanhas-evidence-file {
+        display: grid;
+        gap: 8px;
+        margin: 12px 0 10px;
+        color: #cbd5e1;
+        font-size: 0.86rem;
+      }
+
+      .admin-campanhas-evidence-file input {
+        color: #e2e8f0;
+      }
+
+      .admin-campanhas-payout-evidence-error {
+        margin: 8px 0 0;
+        color: #fca5a5;
+        font-size: 0.82rem;
+      }
+
+      .admin-campanhas-status-badge--payout-pending {
+        margin-left: 6px;
+        background: rgba(251, 191, 36, 0.16);
+        color: #fbbf24;
+      }
+
       .camp-report-modal {
         width: min(96vw, 1120px) !important;
         max-width: 1120px !important;
@@ -27027,12 +27084,43 @@
         </div>
         <div id="admin-campanhas-report-timeline" class="camp-report-timeline-host" aria-live="polite"></div>
         <div id="admin-campanhas-report-dashboard" class="camp-report-dashboard" aria-live="polite"></div>
+        <div id="admin-campanhas-payout-evidence-block" class="admin-campanhas-payout-evidence" hidden>
+          <h3 class="admin-campanhas-payout-evidence-title">Evidência do operador</h3>
+          <p id="admin-campanhas-payout-evidence-meta" class="admin-campanhas-payout-evidence-meta"></p>
+          <img id="admin-campanhas-payout-evidence-img" class="admin-campanhas-payout-evidence-img" alt="Print dos indicadores da campanha" />
+        </div>
         <div class="confirm-actions">
           <button id="admin-campanhas-report-cancel-btn" class="instance-action-btn" type="button">
             Fechar
           </button>
+          <button id="admin-campanhas-approve-payout-btn" class="instance-action-btn btn-qrcode enabled" type="button" hidden>
+            Aprovar pagamento
+          </button>
           <button id="admin-campanhas-report-save-btn" class="instance-action-btn btn-qrcode enabled" type="submit" form="admin-campanhas-report-form">
             Campanha Finalizada
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="admin-campanhas-evidence-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="admin-campanhas-evidence-title">
+        <div class="confirm-title" id="admin-campanhas-evidence-title">Print dos indicadores</div>
+        <p class="confirm-text">
+          Anexe um print da tela com os indicadores da campanha. Sem essa evidência a campanha não é finalizada e o pagamento não segue para aprovação do master.
+        </p>
+        <label class="admin-campanhas-evidence-file">
+          <span>Arquivo (JPEG, PNG ou WebP, até 8 MB)</span>
+          <input id="admin-campanhas-evidence-input" type="file" accept="image/jpeg,image/png,image/webp" />
+        </label>
+        <img id="admin-campanhas-evidence-preview" class="admin-campanhas-payout-evidence-img" alt="Prévia do print" hidden />
+        <p id="admin-campanhas-evidence-error" class="admin-campanhas-payout-evidence-error" hidden></p>
+        <div class="confirm-actions">
+          <button id="admin-campanhas-evidence-cancel-btn" class="instance-action-btn" type="button">
+            Voltar
+          </button>
+          <button id="admin-campanhas-evidence-submit-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+            Enviar evidência e finalizar
           </button>
         </div>
       </div>
@@ -50985,6 +51073,8 @@
       let adminCampanhasReportShowClicks = false;
       let adminCampanhasReportClicks = 0;
       let adminCampanhasReportSource = "";
+      let adminCampanhasPendingReportMetrics = null;
+      let adminCampanhasEvidenceObjectUrl = "";
       let adminCampanhasActiveBucket = "open";
       let adminCampanhasPlanFilter = "all";
       let adminCampanhasStatusFilter = "all";
@@ -51432,6 +51522,10 @@
             const campaignName = escapeAdminHtml(item?.campaignName || "—");
             const envios = Number(item?.plannedSendCount || 0);
             const statusBadge = renderAdminCampanhasStatusBadge(item?.status, item?.displayStatus);
+            const payoutBadge =
+              String(item?.payoutApprovalStatus || "") === "pending_master"
+                ? `<span class="admin-campanhas-status-badge admin-campanhas-status-badge--payout-pending">Pagamento pendente</span>`
+                : "";
             const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
             const endedAt = escapeAdminHtml(item?.endedAtLabel || "—");
             const campaignId = escapeAdminHtml(item?.id || "");
@@ -51505,7 +51599,7 @@
                 <td>${operadorLabel}</td>
                 <td>${campaignName}</td>
                 <td class="admin-subscribers-num">${envios}</td>
-                <td>${statusBadge}</td>
+                <td>${statusBadge}${payoutBadge}</td>
                 <td>${createdAt}</td>
                 <td>${endedAt}</td>
                 <td>
@@ -52143,7 +52237,10 @@
         adminCampanhasReportShowClicks = false;
         adminCampanhasReportClicks = 0;
         adminCampanhasReportSource = "";
+        adminCampanhasPendingReportMetrics = null;
         setAdminCampanhasReportReadOnly(false);
+        renderAdminCampanhasPayoutEvidence(null);
+        closeAdminCampanhasEvidenceModal();
       }
 
       function formatAdminCampanhasReportNumber(value) {
@@ -52555,6 +52652,10 @@
             syncAdminCampanhasReportSaveEnabled();
           }
         }
+        const approveBtn = document.getElementById("admin-campanhas-approve-payout-btn");
+        if (approveBtn && !adminCampanhasReportReadOnly) {
+          approveBtn.hidden = true;
+        }
         if (entry) {
           entry.hidden = adminCampanhasReportReadOnly;
         }
@@ -52617,6 +52718,7 @@
         adminCampanhasReportTimelinePayload = data;
         setAdminCampanhasReportReadOnly(Boolean(data.isReadOnly));
         renderAdminCampanhasReportUnified(data);
+        renderAdminCampanhasPayoutEvidence(data);
         if (!adminCampanhasReportReadOnly) syncAdminCampanhasReportSaveEnabled();
       }
 
@@ -52681,24 +52783,156 @@
           return;
         }
         const body = parsed.metrics;
+        adminCampanhasPendingReportMetrics = body;
+        openAdminCampanhasEvidenceModal();
+      }
 
-        const saveBtn = document.getElementById("admin-campanhas-report-save-btn");
-        const previousLabel = saveBtn?.textContent || "Campanha Finalizada";
-        if (saveBtn) {
-          saveBtn.textContent = "Finalizando…";
-          saveBtn.setAttribute("disabled", "true");
+      function setAdminCampanhasEvidenceError(message) {
+        const el = document.getElementById("admin-campanhas-evidence-error");
+        if (!el) return;
+        const text = String(message || "").trim();
+        el.textContent = text;
+        el.hidden = !text;
+      }
+
+      function revokeAdminCampanhasEvidencePreview() {
+        if (adminCampanhasEvidenceObjectUrl) {
+          URL.revokeObjectURL(adminCampanhasEvidenceObjectUrl);
+          adminCampanhasEvidenceObjectUrl = "";
         }
+      }
 
+      function openAdminCampanhasEvidenceModal() {
+        const overlay = document.getElementById("admin-campanhas-evidence-overlay");
+        const input = document.getElementById("admin-campanhas-evidence-input");
+        const preview = document.getElementById("admin-campanhas-evidence-preview");
+        if (input) input.value = "";
+        if (preview) {
+          preview.hidden = true;
+          preview.removeAttribute("src");
+        }
+        revokeAdminCampanhasEvidencePreview();
+        setAdminCampanhasEvidenceError("");
+        overlay?.classList.add("open");
+        overlay?.setAttribute("aria-hidden", "false");
+      }
+
+      function closeAdminCampanhasEvidenceModal() {
+        const overlay = document.getElementById("admin-campanhas-evidence-overlay");
+        const input = document.getElementById("admin-campanhas-evidence-input");
+        const preview = document.getElementById("admin-campanhas-evidence-preview");
+        overlay?.classList.remove("open");
+        overlay?.setAttribute("aria-hidden", "true");
+        if (input) input.value = "";
+        if (preview) {
+          preview.hidden = true;
+          preview.removeAttribute("src");
+        }
+        revokeAdminCampanhasEvidencePreview();
+        setAdminCampanhasEvidenceError("");
+      }
+
+      function onAdminCampanhasEvidenceFileChange() {
+        const input = document.getElementById("admin-campanhas-evidence-input");
+        const preview = document.getElementById("admin-campanhas-evidence-preview");
+        const file = input?.files?.[0];
+        revokeAdminCampanhasEvidencePreview();
+        setAdminCampanhasEvidenceError("");
+        if (!file || !preview) {
+          if (preview) {
+            preview.hidden = true;
+            preview.removeAttribute("src");
+          }
+          return;
+        }
+        adminCampanhasEvidenceObjectUrl = URL.createObjectURL(file);
+        preview.src = adminCampanhasEvidenceObjectUrl;
+        preview.hidden = false;
+      }
+
+      function renderAdminCampanhasPayoutEvidence(payload) {
+        const block = document.getElementById("admin-campanhas-payout-evidence-block");
+        const img = document.getElementById("admin-campanhas-payout-evidence-img");
+        const meta = document.getElementById("admin-campanhas-payout-evidence-meta");
+        const approveBtn = document.getElementById("admin-campanhas-approve-payout-btn");
+        const approval = payload?.payoutApproval && typeof payload.payoutApproval === "object"
+          ? payload.payoutApproval
+          : null;
+        const canApprove = Boolean(payload?.canApprovePayout);
+        if (approveBtn) {
+          approveBtn.hidden = !canApprove;
+          approveBtn.removeAttribute("disabled");
+          approveBtn.textContent = "Aprovar pagamento";
+        }
+        if (!block || !img || !meta) return;
+        if (!approval?.evidenceUrl) {
+          block.hidden = true;
+          img.removeAttribute("src");
+          meta.textContent = "";
+          return;
+        }
+        const status = String(approval.status || "");
+        const uploadedAt = String(approval.uploadedAt || "").trim();
+        const approvedAt = String(approval.approvedAt || "").trim();
+        const statusLabel =
+          status === "approved"
+            ? "Pagamento aprovado"
+            : "Aguardando aprovação do master";
+        const when = approvedAt || uploadedAt;
+        let whenLabel = "";
+        if (when) {
+          const date = new Date(when);
+          if (!Number.isNaN(date.getTime())) {
+            whenLabel = date.toLocaleString("pt-BR", {
+              timeZone: "America/Sao_Paulo",
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+          }
+        }
+        meta.textContent = whenLabel ? `${statusLabel} · ${whenLabel}` : statusLabel;
+        img.src = resolveWabaPublicPath(approval.evidenceUrl);
+        block.hidden = false;
+      }
+
+      async function submitAdminCampanhasEvidenceAndFinalize() {
+        const campaignId = adminCampanhasReportCampaignId;
+        const metrics = adminCampanhasPendingReportMetrics;
+        const input = document.getElementById("admin-campanhas-evidence-input");
+        const file = input?.files?.[0];
+        if (!campaignId || !metrics) {
+          setAdminCampanhasEvidenceError("Preencha os indicadores antes de enviar o print.");
+          return;
+        }
+        if (!file) {
+          setAdminCampanhasEvidenceError("Anexe o print da tela com os indicadores da campanha.");
+          return;
+        }
+        const submitBtn = document.getElementById("admin-campanhas-evidence-submit-btn");
+        const previousLabel = submitBtn?.textContent || "Enviar evidência e finalizar";
+        if (submitBtn) {
+          submitBtn.textContent = "Enviando…";
+          submitBtn.setAttribute("disabled", "true");
+        }
+        setAdminCampanhasEvidenceError("");
         try {
+          const formData = new FormData();
+          formData.append("sent", String(metrics.sent));
+          formData.append("delivered", String(metrics.delivered));
+          formData.append("read", String(metrics.read));
+          formData.append("failed", String(metrics.failed));
+          formData.append("evidence", file, file.name);
           const response = await fetchAdminOperacionalJson(
             `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/relatorio`,
             {
               method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
+              body: formData,
             },
-            20000,
-            3
+            30000,
+            2
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -52715,16 +52949,63 @@
               adminCampanhasCache.unshift(savedCampaign);
             }
           }
+          closeAdminCampanhasEvidenceModal();
           closeAdminCampanhasReportModal();
-          showToast("Campanha finalizada com sucesso.", "success", 2800);
+          showToast(
+            "Campanha finalizada. O pagamento será feito após a aprovação do master.",
+            "success",
+            3200
+          );
           await loadAdminCampanhas();
           setAdminCampanhasBucket("finalized");
         } catch (error) {
+          setAdminCampanhasEvidenceError(error?.message || "Falha ao finalizar campanha.");
           showToast(error?.message || "Falha ao finalizar campanha.", "error");
         } finally {
-          if (saveBtn) {
-            saveBtn.textContent = previousLabel;
-            saveBtn.removeAttribute("disabled");
+          if (submitBtn) {
+            submitBtn.textContent = previousLabel;
+            submitBtn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      async function approveAdminCampanhasPayout() {
+        const campaignId = adminCampanhasReportCampaignId;
+        if (!campaignId) return;
+        const approveBtn = document.getElementById("admin-campanhas-approve-payout-btn");
+        const previousLabel = approveBtn?.textContent || "Aprovar pagamento";
+        if (approveBtn) {
+          approveBtn.textContent = "Aprovando…";
+          approveBtn.setAttribute("disabled", "true");
+        }
+        try {
+          const response = await fetchAdminOperacionalJson(
+            `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/aprovar-pagamento`,
+            { method: "POST" },
+            30000,
+            2
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível aprovar o pagamento.");
+          }
+          showToast("Pagamento aprovado. O split Pix foi disparado.", "success", 3200);
+          const reportResponse = await fetchAdminOperacionalJson(
+            `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/relatorio`,
+            {},
+            15000,
+            2
+          );
+          const reportPayload = await reportResponse.json().catch(() => ({}));
+          if (reportResponse.ok) {
+            fillAdminCampanhasReportForm(reportPayload);
+          }
+          await loadAdminCampanhas();
+        } catch (error) {
+          showToast(error?.message || "Falha ao aprovar pagamento.", "error");
+          if (approveBtn) {
+            approveBtn.textContent = previousLabel;
+            approveBtn.removeAttribute("disabled");
           }
         }
       }
@@ -53018,6 +53299,28 @@
 
         document.getElementById("admin-campanhas-report-cancel-btn")?.addEventListener("click", () => {
           closeAdminCampanhasReportModal();
+        });
+
+        document.getElementById("admin-campanhas-approve-payout-btn")?.addEventListener("click", () => {
+          void approveAdminCampanhasPayout();
+        });
+
+        document.getElementById("admin-campanhas-evidence-cancel-btn")?.addEventListener("click", () => {
+          closeAdminCampanhasEvidenceModal();
+        });
+
+        document.getElementById("admin-campanhas-evidence-submit-btn")?.addEventListener("click", () => {
+          void submitAdminCampanhasEvidenceAndFinalize();
+        });
+
+        document.getElementById("admin-campanhas-evidence-input")?.addEventListener("change", () => {
+          onAdminCampanhasEvidenceFileChange();
+        });
+
+        document.getElementById("admin-campanhas-evidence-overlay")?.addEventListener("click", (event) => {
+          if (event.target?.id === "admin-campanhas-evidence-overlay") {
+            closeAdminCampanhasEvidenceModal();
+          }
         });
 
         document.getElementById("admin-campanhas-report-overlay")?.addEventListener("click", (event) => {

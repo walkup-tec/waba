@@ -1,11 +1,28 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaOperacionalCampanhasRoutes = void 0;
+const multer_1 = __importDefault(require("multer"));
 const waba_staff_menu_auth_1 = require("../auth/waba-staff-menu-auth");
 const waba_operacional_campanhas_service_1 = require("./waba-operacional-campanhas.service");
 const waba_campaign_intake_vitoria_short_url_1 = require("../disparos/waba-campaign-intake-vitoria-short-url");
+const waba_campaign_payout_approval_1 = require("../disparos/waba-campaign-payout-approval");
 const OPERACIONAL_CAMPANHAS_MENU_ID = "admin-campanhas";
 const operacionalCampanhasService = new waba_operacional_campanhas_service_1.WabaOperacionalCampanhasService();
+const uploadPayoutEvidence = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: waba_campaign_payout_approval_1.PAYOUT_EVIDENCE_MAX_BYTES, files: 1 },
+    fileFilter: (_req, file, cb) => {
+        const mime = String(file.mimetype || "").trim().toLowerCase();
+        if (mime === "image/jpeg" || mime === "image/jpg" || mime === "image/png" || mime === "image/webp") {
+            cb(null, true);
+            return;
+        }
+        cb(new Error(waba_campaign_payout_approval_1.PAYOUT_EVIDENCE_INVALID_TYPE_MESSAGE));
+    },
+});
 const rejectOperacionalCampanhasAccess = (req, res) => (0, waba_staff_menu_auth_1.rejectUnlessStaffMenu)(req, res, OPERACIONAL_CAMPANHAS_MENU_ID);
 const rejectIfIndicadorMutation = (auth, res) => {
     if (auth.role === "indicador") {
@@ -154,24 +171,82 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             });
         }
     });
-    app.put("/admin/operacional/campanhas/:id/relatorio", async (req, res) => {
+    app.put("/admin/operacional/campanhas/:id/relatorio", (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        if (rejectIfIndicadorMutation(auth, res))
+            return;
+        uploadPayoutEvidence.single("evidence")(req, res, async (err) => {
+            if (err) {
+                const limitErr = err instanceof multer_1.default.MulterError && err.code === "LIMIT_FILE_SIZE";
+                return res.status(400).json({
+                    error: limitErr
+                        ? "O print deve ter no máximo 8 MB."
+                        : err instanceof Error
+                            ? err.message
+                            : "Não foi possível receber o print da campanha.",
+                });
+            }
+            try {
+                const body = (req.body ?? {});
+                const file = req.file;
+                const campaign = await operacionalCampanhasService.saveCampaignReport(req.params.id, body, {
+                    email: auth.email,
+                    role: auth.role,
+                }, file
+                    ? {
+                        buffer: file.buffer,
+                        originalName: file.originalname,
+                        mimeType: file.mimetype,
+                    }
+                    : null);
+                return res.status(200).json({ ok: true, campaign });
+            }
+            catch (error) {
+                return res.status(400).json({
+                    error: error instanceof Error ? error.message : "Não foi possível salvar o relatório.",
+                });
+            }
+        });
+    });
+    app.get("/admin/operacional/campanhas/:id/evidencia", (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        const download = operacionalCampanhasService.resolvePayoutEvidenceDownload(req.params.id, {
+            email: auth.email,
+            role: auth.role,
+        });
+        if (!download) {
+            return res.status(404).json({ error: "Evidência da campanha não encontrada." });
+        }
+        res.setHeader("Content-Type", download.mimeType);
+        res.setHeader("Content-Disposition", `inline; filename="${download.fileName}"`);
+        return res.sendFile(download.filePath);
+    });
+    app.post("/admin/operacional/campanhas/:id/aprovar-pagamento", async (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)
             return;
         if (rejectIfIndicadorMutation(auth, res))
             return;
         try {
-            const body = (req.body ?? {});
-            const campaign = await operacionalCampanhasService.saveCampaignReport(req.params.id, body, {
+            const campaign = await operacionalCampanhasService.approveCampaignPayout(req.params.id, {
                 email: auth.email,
                 role: auth.role,
             });
             return res.status(200).json({ ok: true, campaign });
         }
         catch (error) {
-            return res.status(400).json({
-                error: error instanceof Error ? error.message : "Não foi possível salvar o relatório.",
-            });
+            const message = error instanceof Error ? error.message : "Não foi possível aprovar o pagamento.";
+            const status = /Somente|já foi aprovado|não está aguardando|Laboratório|Finalize|não foi encontrada/i.test(message)
+                ? 400
+                : 500;
+            if (status >= 500) {
+                console.error("[operacional/campanhas/aprovar-pagamento] erro:", error);
+            }
+            return res.status(status).json({ error: message });
         }
     });
     app.post("/admin/operacional/campanhas/:id/bm-inoperante", async (req, res) => {

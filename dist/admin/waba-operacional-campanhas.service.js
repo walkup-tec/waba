@@ -23,6 +23,7 @@ const waba_campaign_intake_short_url_1 = require("../disparos/waba-campaign-inta
 const waba_campaign_intake_vitoria_short_url_1 = require("../disparos/waba-campaign-intake-vitoria-short-url");
 const waba_campaign_report_read_overrides_2 = require("../disparos/waba-campaign-report-read-overrides");
 const waba_campaign_report_finalize_service_1 = require("../disparos/waba-campaign-report-finalize.service");
+const waba_campaign_payout_approval_1 = require("../disparos/waba-campaign-payout-approval");
 const waba_campaign_report_metrics_1 = require("../disparos/waba-campaign-report-metrics");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
@@ -213,6 +214,16 @@ class WabaOperacionalCampanhasService {
         const canTransferOperacional = isMaster && (status === "generated" || status === "in_progress");
         const readOnly = staff?.role === "indicador";
         const endedAt = resolveOperacionalCampaignEndedAt(intake, broadcastProgress?.sendFinishedAt);
+        const pendingPayout = (0, waba_campaign_payout_approval_1.isPendingMasterPayoutApproval)(intake.payoutApproval);
+        const approvedPayout = (0, waba_campaign_payout_approval_1.isApprovedMasterPayoutApproval)(intake.payoutApproval);
+        const canApprovePayout = Boolean(isMaster) &&
+            !laboratorioAttended &&
+            status === "completed" &&
+            pendingPayout;
+        const baseDisplay = toDisplayStatus(status, laboratorioAttended, broadcastProgress);
+        const displayStatus = pendingPayout
+            ? `${baseDisplay} · pagamento pendente`
+            : baseDisplay;
         return {
             id: intake.id,
             subscriberId: subscriber?.id ?? "—",
@@ -226,7 +237,7 @@ class WabaOperacionalCampanhasService {
             plannedSendCount,
             importedLineCount,
             status,
-            displayStatus: toDisplayStatus(status, laboratorioAttended, broadcastProgress),
+            displayStatus,
             needsConfiguration: isCampaignAwaitingConfiguration(status),
             canStartCampaign: !readOnly && status === "generated",
             canFillReport: !readOnly && !laboratorioAttended && (status === "in_progress" || status === "completed"),
@@ -239,6 +250,9 @@ class WabaOperacionalCampanhasService {
             assignedOperacionalEmail,
             assignedOperacionalName: assignedOperacionalName || "—",
             canTransferOperacional: !readOnly && canTransferOperacional,
+            payoutApprovalStatus: pendingPayout ? "pending_master" : approvedPayout ? "approved" : null,
+            hasPayoutEvidence: Boolean(String(intake.payoutApproval?.evidenceStoredPath || "").trim()),
+            canApprovePayout,
             readOnly,
             createdAt: intake.createdAt,
             createdAtLabel: formatDateLabel(intake.createdAt),
@@ -367,6 +381,19 @@ class WabaOperacionalCampanhasService {
             : (0, waba_campaign_intake_short_url_1.resolveOperacionalManualReportClicks)({ overrideClicks, trackedClicks });
         const hasSavedReport = Boolean(String(intake.performanceReport?.filledAt || "").trim());
         const prefillManualMetrics = laboratorioAttended || hasSavedReport;
+        const pendingPayout = (0, waba_campaign_payout_approval_1.isPendingMasterPayoutApproval)(intake.payoutApproval);
+        const isMaster = staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email);
+        const payoutApproval = intake.payoutApproval?.evidenceStoredPath
+            ? {
+                status: intake.payoutApproval.status,
+                evidenceFileName: intake.payoutApproval.evidenceFileName,
+                evidenceUrl: `/admin/operacional/campanhas/${encodeURIComponent(intake.id)}/evidencia`,
+                uploadedAt: intake.payoutApproval.uploadedAt,
+                uploadedByEmail: intake.payoutApproval.uploadedByEmail,
+                approvedAt: intake.payoutApproval.approvedAt || null,
+                approvedByEmail: intake.payoutApproval.approvedByEmail || null,
+            }
+            : null;
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,
@@ -396,9 +423,11 @@ class WabaOperacionalCampanhasService {
             },
             // Mesma linha do tempo do relatório do assinante (criação → atendimento → template → disparo).
             timeline: (0, waba_campaign_report_timeline_1.collectIntakeReportTimeline)(intake),
+            payoutApproval,
+            canApprovePayout: isMaster && !laboratorioAttended && status === "completed" && pendingPayout,
         };
     }
-    async saveCampaignReport(campaignId, body, staff) {
+    async saveCampaignReport(campaignId, body, staff, evidence) {
         this.assertCanMutateCampaigns(staff);
         await (0, waba_campaign_intake_vitoria_short_url_1.ensureVitoriaDaConquistaIntakeShortUrlByCampaignId)(campaignId);
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
@@ -427,6 +456,7 @@ class WabaOperacionalCampanhasService {
             metrics: { ...parsed, clicks },
             filledByEmail: staff.email,
             source: "manual",
+            payoutEvidence: evidence,
             intakeRepository: this.intakeRepository,
             bonusService: this.bonusService,
             splitService: this.splitService,
@@ -434,6 +464,46 @@ class WabaOperacionalCampanhasService {
         const detail = this.getCampaignDetail(updated.id, staff);
         if (!detail)
             throw new Error("Não foi possível salvar o relatório.");
+        return detail;
+    }
+    async approveCampaignPayout(campaignId, staff) {
+        if (staff.role !== "master" && !(0, waba_auth_service_1.isWabaMasterEmail)(staff.email)) {
+            throw new Error("Somente usuários master podem aprovar o pagamento.");
+        }
+        const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
+        if ((0, waba_campaign_laboratorio_attended_1.campaignAttendedByLaboratorioStaff)(intake)) {
+            throw new Error("Campanhas do Laboratório Cloud não passam por aprovação de pagamento.");
+        }
+        const status = normalizeStoredStatus(intake.status);
+        if (status !== "completed") {
+            throw new Error("Finalize o relatório da campanha antes de aprovar o pagamento.");
+        }
+        if ((0, waba_campaign_payout_approval_1.isApprovedMasterPayoutApproval)(intake.payoutApproval)) {
+            throw new Error("O pagamento desta campanha já foi aprovado.");
+        }
+        if (!(0, waba_campaign_payout_approval_1.isPendingMasterPayoutApproval)(intake.payoutApproval)) {
+            throw new Error("Esta campanha não está aguardando aprovação de pagamento.");
+        }
+        if (!String(intake.payoutApproval?.evidenceStoredPath || "").trim()) {
+            throw new Error("A evidência do relatório não foi encontrada.");
+        }
+        const settlement = await this.splitService.payoutSupplierForCompletedCampaign(intake);
+        const now = new Date().toISOString();
+        const updated = this.intakeRepository.updateById(campaignId, {
+            payoutApproval: {
+                ...intake.payoutApproval,
+                status: "approved",
+                approvedAt: now,
+                approvedByEmail: normalizeEmail(staff.email),
+            },
+            ...(settlement?.id ? { supplierPayoutSettlementId: settlement.id } : {}),
+            updatedAt: now,
+        });
+        if (!updated)
+            throw new Error("Não foi possível aprovar o pagamento.");
+        const detail = this.getCampaignDetail(updated.id, staff);
+        if (!detail)
+            throw new Error("Não foi possível aprovar o pagamento.");
         return detail;
     }
     reportCampaignError(campaignId, justificationRaw, staff) {
@@ -491,6 +561,19 @@ class WabaOperacionalCampanhasService {
         return {
             filePath: intake.imageStoredPath,
             fileName,
+        };
+    }
+    resolvePayoutEvidenceDownload(intakeId, staff) {
+        const intake = this.intakeRepository.getById(intakeId);
+        if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
+            return null;
+        const storedPath = String(intake.payoutApproval?.evidenceStoredPath || "").trim();
+        if (!storedPath || !(0, node_fs_1.existsSync)(storedPath))
+            return null;
+        return {
+            filePath: storedPath,
+            fileName: String(intake.payoutApproval?.evidenceFileName || "").trim() || node_path_1.default.basename(storedPath),
+            mimeType: String(intake.payoutApproval?.evidenceMimeType || "").trim() || "image/jpeg",
         };
     }
     resolveWhatsappLogoDownload(intakeId, staff) {

@@ -36,6 +36,20 @@ export type WabaCampaignPerformanceReport = {
   filledByEmail: string;
 };
 
+export type WabaCampaignPayoutApprovalStatus = "pending_master" | "approved";
+
+/** Aprovação master do split para campanhas manuais (não Laboratório Cloud). */
+export type WabaCampaignPayoutApproval = {
+  status: WabaCampaignPayoutApprovalStatus;
+  evidenceFileName: string;
+  evidenceStoredPath: string;
+  evidenceMimeType?: string;
+  uploadedAt: string;
+  uploadedByEmail: string;
+  approvedAt?: string;
+  approvedByEmail?: string;
+};
+
 export type WabaCampaignOperacionalNotifyAudit = {
   attemptedAt: string;
   apiKind: WabaDispatchesApiKind;
@@ -116,6 +130,8 @@ export type WabaCampaignIntake = {
   masterOverdueAlertSentAt?: string;
   /** Settlement PIX do fornecedor após finalizar campanha. */
   supplierPayoutSettlementId?: string;
+  /** Evidência + aprovação master do split (operadores manuais). Laboratório Cloud não usa. */
+  payoutApproval?: WabaCampaignPayoutApproval;
   /** Operacional registrou BM inoperante e aguarda retorno (fila esgotada). */
   bmInoperanteRegisteredAt?: string;
   /** Chave idempotente do cliente (evita duplicar campanha em retry/timeout). */

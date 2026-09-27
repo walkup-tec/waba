@@ -9,9 +9,14 @@ import { resolveIntakeApiKindFromIntake } from "./waba-dispatches-api-kind";
 import {
   WabaCampaignIntakeRepository,
   type WabaCampaignIntake,
+  type WabaCampaignPayoutApproval,
   type WabaCampaignPerformanceReport,
 } from "./waba-campaign-intake.repository";
 import { normalizeCampaignIntakeStatus } from "./waba-campaign-intake-status";
+import {
+  persistCampaignPayoutEvidence,
+  type PayoutEvidenceUpload,
+} from "./waba-campaign-payout-approval";
 
 const normalizeEmail = (value: string): string => String(value || "").trim().toLowerCase();
 
@@ -28,6 +33,7 @@ export function finalizeIntakePerformanceReport(input: {
   metrics: FinalizeIntakeReportMetrics;
   filledByEmail: string;
   source: "manual" | "meta_lab";
+  payoutEvidence?: PayoutEvidenceUpload | null;
   intakeRepository?: WabaCampaignIntakeRepository;
   bonusService?: WabaDisparosBonusService;
   splitService?: WabaFinanceiroSplitService;
@@ -66,10 +72,26 @@ export function finalizeIntakePerformanceReport(input: {
   const bonusShipments = Math.max(0, totalLeads - performanceReport.sent);
   const creditFunding =
     normalizeCampaignCreditFunding(intake.creditFunding) ?? buildLegacyBonusOnlyCreditFunding(totalLeads);
+  const filledByEmail =
+    normalizeEmail(input.filledByEmail) || (input.source === "meta_lab" ? "meta-lab" : "");
+  const deferSupplierPayout = input.source === "manual";
+  let payoutApproval: WabaCampaignPayoutApproval | undefined;
+  if (deferSupplierPayout) {
+    const stored = persistCampaignPayoutEvidence(input.campaignId, input.payoutEvidence);
+    payoutApproval = {
+      status: "pending_master",
+      evidenceFileName: stored.evidenceFileName,
+      evidenceStoredPath: stored.evidenceStoredPath,
+      evidenceMimeType: stored.evidenceMimeType,
+      uploadedAt: now,
+      uploadedByEmail: filledByEmail,
+    };
+  }
   const updated = intakeRepository.updateById(input.campaignId, {
     performanceReport,
     status: "completed",
     creditFunding,
+    ...(payoutApproval ? { payoutApproval } : {}),
     updatedAt: now,
   });
   if (!updated) throw new Error("Não foi possível salvar o relatório.");
@@ -89,13 +111,15 @@ export function finalizeIntakePerformanceReport(input: {
     campaignName: completedIntake.campaignName,
     intake: completedIntake,
   });
-  void splitService.payoutSupplierForCompletedCampaign(completedIntake).then((settlement) => {
-    if (settlement?.id) {
-      intakeRepository.updateById(input.campaignId, {
-        supplierPayoutSettlementId: settlement.id,
-        updatedAt: new Date().toISOString(),
-      });
-    }
-  });
+  if (!deferSupplierPayout) {
+    void splitService.payoutSupplierForCompletedCampaign(completedIntake).then((settlement) => {
+      if (settlement?.id) {
+        intakeRepository.updateById(input.campaignId, {
+          supplierPayoutSettlementId: settlement.id,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    });
+  }
   return completedIntake;
 }

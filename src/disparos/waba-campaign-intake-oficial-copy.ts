@@ -194,6 +194,7 @@ export function buildOfficialCampaignDuplicate(
   delete clone.assignmentHistory;
   delete clone.masterOverdueAlertSentAt;
   delete clone.supplierPayoutSettlementId;
+  delete clone.payoutApproval;
   delete clone.bmInoperanteRegisteredAt;
   delete clone.responseShortUrl;
   delete clone.responseShortSlug;

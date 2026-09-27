@@ -28,3 +28,8 @@
 - O relatório final permanece **unificado** (uma campanha Cloud / um intake).
 - Números selecionados ficam ocupados até a finalização e geração do relatório.
 
+## Split de pagamento ao operador
+
+- **Laboratório Cloud API:** o split Pix Asaas continua disparando quando o relatório Meta é finalizado automaticamente. Não pede print nem aprovação do master.
+- **Demais operadores:** ao clicar em Campanha Finalizada, o operador envia um print dos indicadores. A campanha fica finalizada e o pagamento fica pendente. O master vê o relatório + evidência e clica em **Aprovar pagamento**. Só então o sistema dispara o split para todas as partes.
+

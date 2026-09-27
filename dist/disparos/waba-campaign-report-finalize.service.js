@@ -8,6 +8,7 @@ const waba_campaign_completed_notify_service_1 = require("../mail/waba-campaign-
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
+const waba_campaign_payout_approval_1 = require("./waba-campaign-payout-approval");
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 function finalizeIntakePerformanceReport(input) {
     const intakeRepository = input.intakeRepository || new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
@@ -43,10 +44,25 @@ function finalizeIntakePerformanceReport(input) {
     };
     const bonusShipments = Math.max(0, totalLeads - performanceReport.sent);
     const creditFunding = (0, waba_campaign_credit_funding_1.normalizeCampaignCreditFunding)(intake.creditFunding) ?? (0, waba_campaign_credit_funding_1.buildLegacyBonusOnlyCreditFunding)(totalLeads);
+    const filledByEmail = normalizeEmail(input.filledByEmail) || (input.source === "meta_lab" ? "meta-lab" : "");
+    const deferSupplierPayout = input.source === "manual";
+    let payoutApproval;
+    if (deferSupplierPayout) {
+        const stored = (0, waba_campaign_payout_approval_1.persistCampaignPayoutEvidence)(input.campaignId, input.payoutEvidence);
+        payoutApproval = {
+            status: "pending_master",
+            evidenceFileName: stored.evidenceFileName,
+            evidenceStoredPath: stored.evidenceStoredPath,
+            evidenceMimeType: stored.evidenceMimeType,
+            uploadedAt: now,
+            uploadedByEmail: filledByEmail,
+        };
+    }
     const updated = intakeRepository.updateById(input.campaignId, {
         performanceReport,
         status: "completed",
         creditFunding,
+        ...(payoutApproval ? { payoutApproval } : {}),
         updatedAt: now,
     });
     if (!updated)
@@ -61,13 +77,15 @@ function finalizeIntakePerformanceReport(input) {
         campaignName: completedIntake.campaignName,
         intake: completedIntake,
     });
-    void splitService.payoutSupplierForCompletedCampaign(completedIntake).then((settlement) => {
-        if (settlement?.id) {
-            intakeRepository.updateById(input.campaignId, {
-                supplierPayoutSettlementId: settlement.id,
-                updatedAt: new Date().toISOString(),
-            });
-        }
-    });
+    if (!deferSupplierPayout) {
+        void splitService.payoutSupplierForCompletedCampaign(completedIntake).then((settlement) => {
+            if (settlement?.id) {
+                intakeRepository.updateById(input.campaignId, {
+                    supplierPayoutSettlementId: settlement.id,
+                    updatedAt: new Date().toISOString(),
+                });
+            }
+        });
+    }
     return completedIntake;
 }

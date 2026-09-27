@@ -593,8 +593,14 @@ function isDisparosCampaignCreatePost(req: express.Request) {
 
 /** Multipart não pode passar pelo express.json/urlencoded — corrompe o stream antes do multer. */
 function shouldSkipBodyParserForMultipart(req: express.Request) {
-  if (req.method !== "POST") return false;
   const p = String(req.path || "").replace(/\/+$/, "") || "/";
+  if (
+    (req.method === "POST" || req.method === "PUT") &&
+    /^\/admin\/operacional\/campanhas\/[^/]+\/relatorio$/.test(p)
+  ) {
+    return String(req.headers["content-type"] || "").includes("multipart/form-data");
+  }
+  if (req.method !== "POST") return false;
   // Intake do wizard é sempre multipart; não depender só do Content-Type (proxies podem alterá-lo).
   if (p === "/disparos/campanhas/intake") return true;
   if (p === "/disparos/messenger-images") return true;
