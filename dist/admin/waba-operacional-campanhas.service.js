@@ -14,6 +14,7 @@ const waba_campaign_spreadsheet_util_1 = require("../disparos/waba-campaign-spre
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
+const waba_operacional_dispatches_apis_1 = require("../users/waba-operacional-dispatches-apis");
 const waba_operacional_segments_1 = require("../users/waba-operacional-segments");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
 const waba_campaign_report_read_overrides_1 = require("../disparos/waba-campaign-report-read-overrides");
@@ -156,6 +157,11 @@ class WabaOperacionalCampanhasService {
         return (0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(this.resolveSubscriberSegmentForIntake(intake), filter);
     }
     matchesStaffCampaignFilter(intake, staff) {
+        if (staff.role === "operacional") {
+            const assigned = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+            if (assigned && assigned === normalizeEmail(staff.email))
+                return true;
+        }
         if (!this.matchesStaffApiFilter(intake, staff))
             return false;
         if (!this.matchesStaffSegmentFilter(intake, staff))
@@ -700,19 +706,49 @@ class WabaOperacionalCampanhasService {
         const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
         const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
         const current = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+        const apiLabel = waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[apiKind] || apiKind;
+        const segmentLabel = waba_subscriber_segment_1.WABA_SUBSCRIBER_SEGMENT_LABELS[subscriberSegment] || subscriberSegment;
+        const neededSegment = subscriberSegment === "bets" ? "bets" : "outros";
+        const supplierRows = Array.isArray(this.splitService.getConfig().suppliers)
+            ? this.splitService.getConfig().suppliers
+            : [];
         return this.systemUserService
-            .listOperacionalUsersForCampaign(apiKind, subscriberSegment)
-            .filter((user) => normalizeEmail(user.email) !== current)
+            .listPublicUsers()
+            .filter((user) => user.role === "operacional" && normalizeEmail(user.email) !== current)
             .map((user) => {
+            const email = normalizeEmail(user.email);
+            const servesApi = (0, waba_operacional_dispatches_apis_1.operacionalServesDispatchesApi)(user, apiKind);
+            const servesSegment = (0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, user);
+            const hasSupplierRow = supplierRows.some((row) => row.active !== false &&
+                normalizeEmail(row.systemUserEmail) === email &&
+                (row.apiKind === "alternativa" ? "alternativa" : "oficial") === apiKind &&
+                (row.segment === "bets" ? "bets" : "outros") === neededSegment);
+            const eligible = hasSupplierRow || (servesApi && servesSegment);
+            const reasons = [];
+            if (!eligible) {
+                if (!servesApi) {
+                    const configured = (0, waba_operacional_dispatches_apis_1.formatOperacionalDispatchesApisLabel)((0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(user));
+                    reasons.push(`não atende ${apiLabel} (cadastro: ${configured})`);
+                }
+                if (!servesSegment && !hasSupplierRow) {
+                    reasons.push(`sem linha de fornecedor ${segmentLabel}`);
+                }
+            }
             const segments = (0, waba_operacional_segments_1.resolveOperacionalSegments)(user);
             return {
-                email: normalizeEmail(user.email),
+                email,
                 fullName: String(user.fullName || user.email).trim() || user.email,
                 segment: segments[0] ?? "outros",
                 segmentLabel: (0, waba_operacional_segments_1.formatOperacionalSegmentsLabel)(segments),
+                eligible,
+                ineligibleReason: reasons.join(" · ") || undefined,
             };
         })
-            .sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
+            .sort((a, b) => {
+            if (a.eligible !== b.eligible)
+                return a.eligible ? -1 : 1;
+            return a.fullName.localeCompare(b.fullName, "pt-BR");
+        });
     }
 }
 exports.WabaOperacionalCampanhasService = WabaOperacionalCampanhasService;

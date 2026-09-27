@@ -51279,7 +51279,11 @@
               const email = String(item?.email || "").trim().toLowerCase();
               const name = String(item?.fullName || email).trim() || email;
               const segment = String(item?.segmentLabel || "").trim();
-              const label = segment ? `${name} (${segment})` : name;
+              const reason = String(item?.ineligibleReason || "").trim();
+              const parts = [name && email && name.toLowerCase() !== email ? `${name} (${email})` : name];
+              if (segment) parts.push(`· ${segment}`);
+              if (reason) parts.push(`— ${reason}`);
+              const label = parts.join(" ");
               return `<option value="${escapeAdminHtml(email)}">${escapeAdminHtml(label)}</option>`;
             }),
           ].join("");
@@ -51516,8 +51520,12 @@
             const planTypeKind = resolveAdminCampanhaApiKind(item);
             const planType = renderWabaApiKindLabelHtml(planTypeKind);
             const segmentLabel = escapeAdminHtml(item?.subscriberSegmentLabel || "White");
+            const opName = String(item?.assignedOperacionalName || "").trim();
+            const opEmail = String(item?.assignedOperacionalEmail || "").trim();
             const operadorLabel = escapeAdminHtml(
-              item?.assignedOperacionalName || item?.assignedOperacionalEmail || "—"
+              opName && opEmail && opName.toLowerCase() !== opEmail.toLowerCase()
+                ? `${opName} (${opEmail})`
+                : opName || opEmail || "—"
             );
             const campaignName = escapeAdminHtml(item?.campaignName || "—");
             const envios = Number(item?.plannedSendCount || 0);
@@ -51729,7 +51737,14 @@
               renderAdminCampanhasDetailField(
                 "Operador atribuído",
                 escapeAdminHtml(
-                  campaign.assignedOperacionalName || campaign.assignedOperacionalEmail || "—"
+                  (() => {
+                    const name = String(campaign.assignedOperacionalName || "").trim();
+                    const email = String(campaign.assignedOperacionalEmail || "").trim();
+                    if (name && email && name.toLowerCase() !== email.toLowerCase()) {
+                      return `${name} (${email})`;
+                    }
+                    return name || email || "—";
+                  })()
                 )
               ),
               renderAdminCampanhasDetailField(

@@ -96,10 +96,13 @@ class WabaCampaignSupplierAssignmentService {
             if (!operacional || operacional.role !== "operacional")
                 continue;
             const apiKind = this.resolveIntakeApiKind(intake);
-            const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
             if (!(0, waba_operacional_dispatches_apis_1.operacionalServesDispatchesApi)(operacional, apiKind))
                 continue;
-            if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
+            const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+            const neededSegment = subscriberSegment === "bets" ? "bets" : "outros";
+            const rowSegment = supplier.segment === "bets" ? "bets" : "outros";
+            const rowMatchesCampaign = rowSegment === neededSegment;
+            if (!rowMatchesCampaign && !(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
                 continue;
             }
             return supplier;
@@ -148,12 +151,11 @@ class WabaCampaignSupplierAssignmentService {
     ensureInitialAssignment(intake) {
         if (normalizeEmail(intake.assignedOperacionalEmail ?? ""))
             return intake;
-        const forcedEmail = (0, waba_campaign_intake_constants_1.forcedOperacionalEmailForCampaignOwner)(intake.ownerEmail);
         const supplier = this.pickNextSupplier(intake, new Set());
         if (!supplier)
             return intake;
         return this.assignToSupplier(intake, supplier, "initial", {
-            bypassEligibility: Boolean(forcedEmail),
+            bypassEligibility: true,
         });
     }
     async reassignCampaign(intakeId, reason) {
@@ -172,7 +174,9 @@ class WabaCampaignSupplierAssignmentService {
             await this.maybeSendMasterOverdueAlert(intake);
             return { intake, reassigned: false, exhausted: true };
         }
-        const updated = this.assignToSupplier(intake, next, reason);
+        const updated = this.assignToSupplier(intake, next, reason, {
+            bypassEligibility: true,
+        });
         (0, waba_operacional_campaign_notify_service_1.scheduleOperacionalStaffNotifyOnCampaignAssigned)(updated);
         const finalIntake = this.intakeRepository.getById(updated.id) ?? updated;
         return { intake: finalIntake, reassigned: true, exhausted: false };
@@ -285,13 +289,7 @@ class WabaCampaignSupplierAssignmentService {
             throw new Error("Usuário operacional não encontrado.");
         }
         const apiKind = this.resolveIntakeApiKind(intake);
-        if (!(0, waba_operacional_dispatches_apis_1.operacionalServesDispatchesApi)(operacional, apiKind)) {
-            throw new Error(`Operacional não atende API ${apiKind} (configurado: ${(0, waba_operacional_dispatches_apis_1.formatOperacionalDispatchesApisLabel)((0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(operacional))}).`);
-        }
         const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-        if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
-            throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
-        }
         const supplierSegment = subscriberSegment === "bets" ? "bets" : "outros";
         const config = this.splitService.getConfig();
         const suppliers = Array.isArray(config.suppliers) ? config.suppliers : [];
@@ -313,7 +311,9 @@ class WabaCampaignSupplierAssignmentService {
                 active: true,
             };
         }
-        const updated = this.assignToSupplier(intake, supplier, "manual_master");
+        const updated = this.assignToSupplier(intake, supplier, "manual_master", {
+            bypassEligibility: true,
+        });
         const now = new Date().toISOString();
         const cleared = this.intakeRepository.updateById(updated.id, {
             bmInoperanteRegisteredAt: undefined,
