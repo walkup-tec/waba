@@ -35,6 +35,7 @@ describe("Laboratório Conexão: nome de exibição padrão ao adicionar número
     assert.match(phoneProfileSrc, /META_WHATSAPP_DEFAULT_DISPLAY_NAME = "Relacionamento e Atendimento"/);
     assert.match(connectionSrc, /new_display_name: META_WHATSAPP_DEFAULT_DISPLAY_NAME/);
     assert.match(connectionSrc, /rememberOfficialPhoneDisplayName/);
+    assert.match(html, /displayName: "Relacionamento e Atendimento"/);
   });
 });
 

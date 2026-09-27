@@ -71,7 +71,6 @@ import {
   catalogAgencyBusinessIds,
   catalogBackfillBusinessIds,
   catalogBusinessLabel,
-  isCatalogBackfillBusiness,
   isWithdrawnInboxDisplayPhone,
 } from "./meta-whatsapp-known-owned-wabas";
 import {
@@ -252,9 +251,13 @@ function withLocalIdentities(
 }
 
 /** Cards Ativas dos BMs de cliente mesmo se me/businesses, cache ou cooldown omitirem o GET. */
-function catalogBackfillPlaceholderCards(existing: MetaPortfolioPublic[]): MetaPortfolioPublic[] {
+function catalogBackfillPlaceholderCards(
+  tenantId: string,
+  existing: MetaPortfolioPublic[],
+): MetaPortfolioPublic[] {
   const out: MetaPortfolioPublic[] = [];
   for (const id of catalogBackfillBusinessIds()) {
+    if (isHiddenBusiness(tenantId, id)) continue;
     if (existing.some((item) => metaBusinessIdsMatch(String(item.id || ""), id))) continue;
     const name = catalogBusinessLabel(id) || null;
     if (!name) continue;
@@ -282,12 +285,11 @@ function markHiddenPortfolioAssets(
   const portfolios = [
     ...(assets.portfolios || []).map((item) => ({
       ...item,
-      hidden: isHiddenId(String(item.id || "")) && !isCatalogBackfillBusiness(String(item.id || "")),
+      hidden: isHiddenId(String(item.id || "")),
     })),
-    ...catalogBackfillPlaceholderCards(assets.portfolios || []),
+    ...catalogBackfillPlaceholderCards(tenantId, assets.portfolios || []),
   ];
   for (const row of hiddenRows) {
-    if (isCatalogBackfillBusiness(row.id)) continue;
     if (portfolios.some((item) => metaBusinessIdsMatch(String(item.id || ""), row.id))) continue;
     portfolios.push({
       id: row.id,
@@ -962,7 +964,10 @@ async function hydrateOpenConnection(
   const withProfiles = active.length
     ? await attachPhoneBusinessProfiles(g, token, active, tenantId, card.name)
     : [];
-  let numbers = unionPortfolioNumbers(withProfiles, pending);
+  const withNameStatus = pending.length
+    ? await attachPhoneNameStatuses(g, token, pending, card.name)
+    : [];
+  let numbers = unionPortfolioNumbers(withProfiles, withNameStatus);
   if (fromThisBm.size) {
     numbers = numbers.filter((row) => {
       const id = String(row.phoneNumberId || "").trim();
@@ -1583,7 +1588,7 @@ async function fillEmptyAdminPortfolioCards(
   const out = cards.map((card) => ({ ...card, numbers: (card.numbers || []).slice() }));
   const empty = out.filter((card) => {
     const bm = String(card.id || "").trim();
-    if (!bm || (isHiddenBusiness(tenantId, bm) && !isCatalogBackfillBusiness(bm))) return false;
+    if (!bm || isHiddenBusiness(tenantId, bm)) return false;
     return !(card.numbers || []).some((row) =>
       String(row.displayPhoneNumber || row.phoneNumberId || "").trim(),
     );
@@ -1667,6 +1672,72 @@ async function cacheGraphPhonePhoto(
   return localPhonePhotoUrl(phoneNumberId, saved) || local;
 }
 
+async function applyPhoneNameFields(
+  graph: MetaConnectionGraphCaller,
+  token: string,
+  row: MetaPortfolioNumberPublic,
+  placeholderName?: string | null,
+): Promise<MetaPortfolioNumberPublic> {
+  const nameNode = await graph({
+    token,
+    method: "GET",
+    path: row.phoneNumberId,
+    query: { fields: META_PHONE_NAME_FIELDS },
+  });
+  const named = nameNode.ok
+    ? mapPhoneNameFields(nameNode.json)
+    : {
+        verifiedName: null,
+        nameStatus: null,
+        newDisplayName: null,
+        newNameStatus: null,
+      };
+  const verifiedName = named.verifiedName || row.verifiedName;
+  const nameStatus = named.nameStatus || row.nameStatus;
+  const newDisplayName = named.newDisplayName || row.newDisplayName;
+  const newNameStatus = named.newNameStatus || row.newNameStatus;
+  const nameSync = resolvePhoneNameSync({
+    verifiedName,
+    nameStatus,
+    newDisplayName,
+    newNameStatus,
+    placeholderName,
+  });
+  return {
+    ...row,
+    verifiedName,
+    nameStatus,
+    newDisplayName,
+    newNameStatus,
+    requestedName: nameSync.requestedName,
+    nameSyncStatus: nameSync.nameSyncStatus,
+    nameNeedsRegister: nameSync.nameNeedsRegister,
+    canActivate: canActivateMetaPhoneNumber(
+      resolveMetaPhoneUiStatus({
+        metaStatus: row.metaStatus,
+        codeVerificationStatus: row.codeVerificationStatus,
+        healthCanSend: row.healthCanSend,
+      }),
+      nameSync.nameNeedsRegister,
+    ),
+  };
+}
+
+async function attachPhoneNameStatuses(
+  graph: MetaConnectionGraphCaller,
+  token: string,
+  numbers: MetaPortfolioNumberPublic[],
+  placeholderName?: string | null,
+): Promise<MetaPortfolioNumberPublic[]> {
+  if (!numbers.length) return numbers;
+  const limited = numbers.slice(0, 20);
+  const rest = numbers.slice(20);
+  const named = await Promise.all(
+    limited.map((row) => applyPhoneNameFields(graph, token, row, placeholderName)),
+  );
+  return rest.length ? named.concat(rest) : named;
+}
+
 async function attachPhoneBusinessProfiles(
   graph: MetaConnectionGraphCaller,
   token: string,
@@ -1679,13 +1750,8 @@ async function attachPhoneBusinessProfiles(
   const rest = numbers.slice(20);
   const withProfiles = await Promise.all(
     limited.map(async (row) => {
-      const [nameNode, profile] = await Promise.all([
-        graph({
-          token,
-          method: "GET",
-          path: row.phoneNumberId,
-          query: { fields: META_PHONE_NAME_FIELDS },
-        }),
+      const [named, profile] = await Promise.all([
+        applyPhoneNameFields(graph, token, row, placeholderName),
         graph({
           token,
           method: "GET",
@@ -1693,47 +1759,15 @@ async function attachPhoneBusinessProfiles(
           query: { fields: "about,address,description,email,profile_picture_url,vertical" },
         }),
       ]);
-      const named = nameNode.ok ? mapPhoneNameFields(nameNode.json) : {
-        verifiedName: null,
-        nameStatus: null,
-        newDisplayName: null,
-        newNameStatus: null,
-      };
-      const verifiedName = named.verifiedName || row.verifiedName;
-      const nameStatus = named.nameStatus || row.nameStatus;
-      const newDisplayName = named.newDisplayName || row.newDisplayName;
-      const newNameStatus = named.newNameStatus || row.newNameStatus;
-      const nameSync = resolvePhoneNameSync({
-        verifiedName,
-        nameStatus,
-        newDisplayName,
-        newNameStatus,
-        placeholderName,
-      });
       const mapped = profile.ok ? mapWhatsappBusinessProfile(profile.json) : null;
-      const localPhoto = await cacheGraphPhonePhoto(tenantId, row.phoneNumberId, mapped?.profilePictureUrl || null);
+      const localPhoto = await cacheGraphPhonePhoto(tenantId, named.phoneNumberId, mapped?.profilePictureUrl || null);
       return {
-        ...row,
-        verifiedName,
-        nameStatus,
-        newDisplayName,
-        newNameStatus,
-        requestedName: nameSync.requestedName,
-        nameSyncStatus: nameSync.nameSyncStatus,
-        nameNeedsRegister: nameSync.nameNeedsRegister,
-        canActivate: canActivateMetaPhoneNumber(
-          resolveMetaPhoneUiStatus({
-            metaStatus: row.metaStatus,
-            codeVerificationStatus: row.codeVerificationStatus,
-            healthCanSend: row.healthCanSend,
-          }),
-          nameSync.nameNeedsRegister,
-        ),
+        ...named,
         profilePictureUrl: localPhoto || safePublicPhotoUrl(mapped?.profilePictureUrl),
-        vertical: mapped?.vertical ?? row.vertical,
-        description: mapped?.description ?? row.description,
-        address: mapped?.address ?? row.address,
-        email: mapped?.email ?? row.email,
+        vertical: mapped?.vertical ?? named.vertical,
+        description: mapped?.description ?? named.description,
+        address: mapped?.address ?? named.address,
+        email: mapped?.email ?? named.email,
       };
     }),
   );
@@ -1804,25 +1838,49 @@ function rememberOfficialPhoneDisplayName(tenantId: string, phoneNumberId: strin
 
 async function requestOfficialPhoneDisplayName(
   graph: MetaConnectionGraphCaller,
-  input: { token: string; tenantId: string; phoneNumberId: string; currentVerifiedName?: string | null },
+  input: { token: string; tenantId: string; phoneNumberId: string },
 ): Promise<void> {
   rememberOfficialPhoneDisplayName(input.tenantId, input.phoneNumberId);
-  if (namesEqual(input.currentVerifiedName, META_WHATSAPP_DEFAULT_DISPLAY_NAME)) return;
+  const phoneId = String(input.phoneNumberId || "").trim();
+  if (!phoneId || !input.token) return;
+  try {
+    const node = await graph({
+      token: input.token,
+      method: "GET",
+      path: phoneId,
+      query: { fields: META_PHONE_NAME_FIELDS },
+    });
+    if (node.ok) {
+      const names = mapPhoneNameFields(node.json);
+      if (
+        namesEqual(names.verifiedName, META_WHATSAPP_DEFAULT_DISPLAY_NAME) ||
+        namesEqual(names.newDisplayName, META_WHATSAPP_DEFAULT_DISPLAY_NAME)
+      ) {
+        return;
+      }
+    }
+  } catch {
+    // Sem o GET ainda tentamos o POST — o nome do chip antigo da conexão não vale.
+  }
   const renamed = await graph({
     token: input.token,
     method: "POST",
-    path: input.phoneNumberId,
+    path: phoneId,
     query: { new_display_name: META_WHATSAPP_DEFAULT_DISPLAY_NAME },
   });
   if (!renamed.ok) {
     logMetaWhatsappSafe("phone-default-name-failed", {
       tenantId: input.tenantId,
+      phoneNumberId: phoneId,
       status: renamed.status,
       graphCode: renamed.graphCode,
     });
     return;
   }
-  logMetaWhatsappSafe("phone-default-name-requested", { tenantId: input.tenantId });
+  logMetaWhatsappSafe("phone-default-name-requested", {
+    tenantId: input.tenantId,
+    phoneNumberId: phoneId,
+  });
 }
 
 function inboxPhoneDigits(value: string | null | undefined): string {
@@ -2058,6 +2116,21 @@ export class MetaWhatsappConnectionService {
       }
       if (phoneNumberId) {
         rememberOfficialPhoneDisplayName(tenant.tenantId, phoneNumberId);
+        try {
+          const token = this.decrypt(row.accessTokenEncrypted);
+          if (token) {
+            await requestOfficialPhoneDisplayName(this.graph, {
+              token,
+              tenantId: tenant.tenantId,
+              phoneNumberId,
+            });
+          }
+        } catch {
+          logMetaWhatsappSafe("phone-default-name-skip", {
+            tenantId: tenant.tenantId,
+            reason: "attach",
+          });
+        }
       }
       if (businessId) {
         unhideBusiness(tenant.tenantId, businessId);
@@ -2076,7 +2149,27 @@ export class MetaWhatsappConnectionService {
     const tenant = requireTenant(auth);
     const open = await this.repository.findOpenByTenant(tenant.tenantId);
     if (!open) throw new MetaWhatsappError("no_pending_connection");
-    if (open.status === "connected") return toMetaWhatsappPublicConnection(open);
+    if (open.status === "connected") {
+      const connectedPhone = String(open.phoneNumberId || "").trim();
+      if (connectedPhone) {
+        try {
+          const token = this.decrypt(open.accessTokenEncrypted);
+          if (token) {
+            await requestOfficialPhoneDisplayName(this.graph, {
+              token,
+              tenantId: tenant.tenantId,
+              phoneNumberId: connectedPhone,
+            });
+          }
+        } catch {
+          logMetaWhatsappSafe("phone-default-name-skip", {
+            tenantId: tenant.tenantId,
+            reason: "already_connected",
+          });
+        }
+      }
+      return toMetaWhatsappPublicConnection(open);
+    }
     const wabaId = String(open.wabaId || "").trim();
     const phoneNumberId = String(open.phoneNumberId || "").trim();
     if (!wabaId || !phoneNumberId) {
@@ -2177,7 +2270,6 @@ export class MetaWhatsappConnectionService {
         token,
         tenantId: tenant.tenantId,
         phoneNumberId,
-        currentVerifiedName: connected.verifiedName,
       });
     } catch {
       logMetaWhatsappSafe("phone-default-name-skip", { tenantId: tenant.tenantId });
@@ -2191,9 +2283,6 @@ export class MetaWhatsappConnectionService {
   ): Promise<MetaPortfolioAssetsPublic> {
     const tenant = requireTenant(auth);
     const requested = String(opts?.connectionId || "").trim();
-    for (const id of catalogBackfillBusinessIds()) {
-      if (isHiddenBusiness(tenant.tenantId, id)) unhideBusiness(tenant.tenantId, id);
-    }
     if (opts?.fresh) invalidateCachedPortfolioGraph(tenant.tenantId);
     if (isMetaGraphUploadCooldown()) {
       const stale = readStaleCachedPortfolioGraph(tenant.tenantId);
@@ -2332,7 +2421,8 @@ export class MetaWhatsappConnectionService {
       }
     }
     markPhoneIdentitiesRestrictedForBusiness(tenant.tenantId, businessId, openRows);
-    const assets = await this.listPortfolioAssets(auth);
+    invalidateCachedPortfolioGraph(tenant.tenantId);
+    const assets = await this.listPortfolioAssets(auth, { fresh: true });
     const card = (assets.portfolios || []).find((item) => metaBusinessIdsMatch(String(item.id || ""), businessId));
     if (card?.name) hideBusiness(tenant.tenantId, businessId, card.name);
     logMetaWhatsappSafe("portfolio-business-hidden", {
@@ -2436,7 +2526,7 @@ export class MetaWhatsappConnectionService {
     const cards = await fillEmptyAdminPortfolioCards(
       withHydrateLimits(this.graph),
       tenantId,
-      [...merged, ...catalogBackfillPlaceholderCards(merged)].filter(isRenderablePortfolioCard),
+      [...merged, ...catalogBackfillPlaceholderCards(tenantId, merged)].filter(isRenderablePortfolioCard),
       writeTokens,
     );
     if (leftIds.length && typeof repo.disconnectOne === "function") {
@@ -2585,7 +2675,6 @@ export class MetaWhatsappConnectionService {
         token,
         tenantId: tenant.tenantId,
         phoneNumberId,
-        currentVerifiedName: open.verifiedName,
       });
     } catch {
       logMetaWhatsappSafe("phone-default-name-skip", { tenantId: tenant.tenantId });

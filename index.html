@@ -27697,7 +27697,13 @@
         window.wabaMetaEsBuildLoginOptions = function (configId, setup) {
           var id = String(configId || "").trim();
           if (!id) return null;
-          var extrasSetup = {};
+          var extrasSetup = {
+            phone: {
+              displayName: "Relacionamento e Atendimento",
+              category: "OTHER",
+              description: "Atendimento via WhatsApp."
+            }
+          };
           var businessId =
             setup && setup.business ? String(setup.business.id || "").trim() : "";
           var wabaId =

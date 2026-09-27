@@ -1,21 +1,6 @@
 "use strict";
-/**
- * Contrato do Facebook Login for Business / Embedded Signup.
- * Manter o JS inline de index.html alinhado com este módulo.
- *
- * Docs:
- * - https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation/
- * - https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/versions
- * - https://developers.facebook.com/docs/facebook-login/facebook-login-for-business/
- * - https://developers.facebook.com/docs/graph-api/guides/versioning/
- * - https://developers.facebook.com/docs/javascript/reference/FB.init/
- *
- * Embedded Signup v4: extras só com `setup` (objeto vazio ou prefill).
- * FB.init deve usar a Graph latest: o dialog/oauth é versionado e o wizard
- * Login for Business / ES v4 não renderiza no path /v22.0/.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.META_ES_SDK_XD_ARBITER = exports.META_ES_LFB_ORIGIN = exports.META_ES_ONBOARD_PATH = exports.META_ES_ONBOARD_ORIGIN = exports.META_ES_OAUTH_HOST = exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
+exports.META_ES_OFFICIAL_PHONE_PROFILE = exports.META_ES_SDK_XD_ARBITER = exports.META_ES_LFB_ORIGIN = exports.META_ES_ONBOARD_PATH = exports.META_ES_ONBOARD_ORIGIN = exports.META_ES_OAUTH_HOST = exports.META_ES_OAUTH_STORAGE_KEY = exports.META_ES_LEGACY_EXCHANGE_PATHS = exports.META_ES_TECH_PROVIDER_PATHS = exports.META_ES_UNAVAILABLE_MESSAGE = exports.META_ES_JS_SDK_GRAPH_VERSION = void 0;
 exports.readMetaConfigIdFromEnv = readMetaConfigIdFromEnv;
 exports.resolveMetaEsJsSdkGraphVersion = resolveMetaEsJsSdkGraphVersion;
 exports.resolveMetaEsConfigId = resolveMetaEsConfigId;
@@ -46,6 +31,22 @@ exports.isLegacyExchangePath = isLegacyExchangePath;
 exports.describeMetaEsBrowserSurface = describeMetaEsBrowserSurface;
 exports.toPublicMetaEsConfig = toPublicMetaEsConfig;
 exports.planMetaEsTechProviderClick = planMetaEsTechProviderClick;
+const meta_whatsapp_phone_profile_1 = require("./meta-whatsapp-phone-profile");
+/**
+ * Contrato do Facebook Login for Business / Embedded Signup.
+ * Manter o JS inline de index.html alinhado com este módulo.
+ *
+ * Docs:
+ * - https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation/
+ * - https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/versions
+ * - https://developers.facebook.com/docs/facebook-login/facebook-login-for-business/
+ * - https://developers.facebook.com/docs/graph-api/guides/versioning/
+ * - https://developers.facebook.com/docs/javascript/reference/FB.init/
+ *
+ * Embedded Signup v4: extras só com `setup` (objeto vazio ou prefill).
+ * FB.init deve usar a Graph latest: o dialog/oauth é versionado e o wizard
+ * Login for Business / ES v4 não renderiza no path /v22.0/.
+ */
 exports.META_ES_JS_SDK_GRAPH_VERSION = "v26.0";
 exports.META_ES_UNAVAILABLE_MESSAGE = "Configuração do WhatsApp Embedded Signup indisponível.";
 exports.META_ES_TECH_PROVIDER_PATHS = {
@@ -86,11 +87,18 @@ function configIdLast4(configId) {
     const id = String(configId || "").trim();
     return id.length >= 4 ? id.slice(-4) : "";
 }
+exports.META_ES_OFFICIAL_PHONE_PROFILE = {
+    displayName: meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME,
+    category: "OTHER",
+    description: "Atendimento via WhatsApp.",
+};
 function buildMetaEsSetupPrefill(input) {
-    const setup = {};
+    const setup = {
+        phone: { ...exports.META_ES_OFFICIAL_PHONE_PROFILE },
+    };
     const businessId = String(input.businessId || "").trim();
     const wabaId = String(input.wabaId || "").trim();
-    // Prefill só no fluxo «adicionar número»: BM + WABA juntos.
+    // Prefill de BM/WABA só no fluxo «adicionar número»: os dois juntos.
     if (businessId && wabaId) {
         setup.business = { id: businessId };
         setup.whatsAppBusinessAccount = { ids: wabaId };

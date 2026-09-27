@@ -48,6 +48,7 @@ exports.META_BUSINESS_IDENTITY_FIELDS = "id,name,profile_picture_uri,primary_pag
 exports.META_BUSINESS_IDENTITY_FIELDS_MINIMAL = "id,name,profile_picture_uri,primary_page{id,name}";
 exports.META_OWNED_PAGES_FIELDS = "id,name,picture";
 const NAME_READY = new Set(["APPROVED", "AVAILABLE_WITHOUT_REVIEW"]);
+const NAME_PENDING = new Set(["PENDING_REVIEW", "PENDING"]);
 function asRecord(value) {
     return value && typeof value === "object" ? value : {};
 }
@@ -255,31 +256,58 @@ function isStaleDefaultDisplayNameRequest(input) {
         return false;
     return true;
 }
+function nameStatusKey(value) {
+    return String(value || "").trim().toUpperCase();
+}
+function isNamePendingStatus(value) {
+    return NAME_PENDING.has(nameStatusKey(value));
+}
+function resolveIncomingNameReview(incoming, reviewStatus) {
+    if (reviewStatus === "DECLINED") {
+        return { requestedName: incoming, nameSyncStatus: "declined", nameNeedsRegister: false };
+    }
+    if (NAME_READY.has(reviewStatus)) {
+        return { requestedName: incoming, nameSyncStatus: "ready", nameNeedsRegister: true };
+    }
+    return { requestedName: incoming, nameSyncStatus: "pending", nameNeedsRegister: false };
+}
 function resolvePhoneNameSync(input) {
     const verified = text(input.verifiedName);
-    const rawIncoming = text(input.newDisplayName) || text(input.localName);
-    const incoming = isStaleDefaultDisplayNameRequest({
-        verifiedName: verified,
-        incomingName: rawIncoming,
-        placeholderName: input.placeholderName,
-    })
-        ? null
-        : rawIncoming;
-    const newStatus = String(input.newNameStatus || "").trim().toUpperCase();
+    const liveStatus = nameStatusKey(input.nameStatus);
+    const newStatus = nameStatusKey(input.newNameStatus);
+    const graphIncoming = text(input.newDisplayName);
+    const pendingVerified = !graphIncoming && verified && isNamePendingStatus(liveStatus) ? verified : null;
+    const localIncoming = text(input.localName);
+    const incomingRaw = graphIncoming || pendingVerified || localIncoming;
+    const reviewStatus = graphIncoming
+        ? newStatus || liveStatus
+        : pendingVerified
+            ? liveStatus
+            : newStatus;
+    let incoming = incomingRaw;
+    if (incoming &&
+        isStaleDefaultDisplayNameRequest({
+            verifiedName: verified,
+            incomingName: incoming,
+            placeholderName: input.placeholderName,
+        }) &&
+        !isNamePendingStatus(reviewStatus)) {
+        incoming = null;
+    }
     if (!incoming && !verified) {
         return { requestedName: null, nameSyncStatus: null, nameNeedsRegister: false };
     }
     if (incoming && namesEqual(incoming, verified)) {
+        if (isNamePendingStatus(reviewStatus) || reviewStatus === "DECLINED") {
+            return resolveIncomingNameReview(incoming, reviewStatus);
+        }
         return { requestedName: null, nameSyncStatus: "applied", nameNeedsRegister: false };
     }
     if (incoming && !namesEqual(incoming, verified)) {
-        if (newStatus === "DECLINED") {
-            return { requestedName: incoming, nameSyncStatus: "declined", nameNeedsRegister: false };
-        }
-        if (NAME_READY.has(newStatus)) {
-            return { requestedName: incoming, nameSyncStatus: "ready", nameNeedsRegister: true };
-        }
-        return { requestedName: incoming, nameSyncStatus: "pending", nameNeedsRegister: false };
+        return resolveIncomingNameReview(incoming, reviewStatus);
+    }
+    if (verified && isNamePendingStatus(liveStatus)) {
+        return { requestedName: verified, nameSyncStatus: "pending", nameNeedsRegister: false };
     }
     return { requestedName: null, nameSyncStatus: verified ? "applied" : null, nameNeedsRegister: false };
 }

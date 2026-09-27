@@ -1,3 +1,5 @@
+import { META_WHATSAPP_DEFAULT_DISPLAY_NAME } from "./meta-whatsapp-phone-profile";
+
 /**
  * Contrato do Facebook Login for Business / Embedded Signup.
  * Manter o JS inline de index.html alinhado com este módulo.
@@ -37,6 +39,11 @@ export const META_ES_LEGACY_EXCHANGE_PATHS = [
 export type MetaEsSetupPrefill = {
   business?: { id: string };
   whatsAppBusinessAccount?: { ids: string };
+  phone?: {
+    displayName: string;
+    category: string;
+    description: string;
+  };
 };
 
 export type MetaEsFbLoginOptions = {
@@ -118,14 +125,22 @@ export function configIdLast4(configId: string): string {
   return id.length >= 4 ? id.slice(-4) : "";
 }
 
+export const META_ES_OFFICIAL_PHONE_PROFILE = {
+  displayName: META_WHATSAPP_DEFAULT_DISPLAY_NAME,
+  category: "OTHER",
+  description: "Atendimento via WhatsApp.",
+} as const;
+
 export function buildMetaEsSetupPrefill(input: {
   businessId?: string;
   wabaId?: string;
 }): MetaEsSetupPrefill {
-  const setup: MetaEsSetupPrefill = {};
+  const setup: MetaEsSetupPrefill = {
+    phone: { ...META_ES_OFFICIAL_PHONE_PROFILE },
+  };
   const businessId = String(input.businessId || "").trim();
   const wabaId = String(input.wabaId || "").trim();
-  // Prefill só no fluxo «adicionar número»: BM + WABA juntos.
+  // Prefill de BM/WABA só no fluxo «adicionar número»: os dois juntos.
   if (businessId && wabaId) {
     setup.business = { id: businessId };
     setup.whatsAppBusinessAccount = { ids: wabaId };

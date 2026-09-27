@@ -5,6 +5,7 @@ import { MetaWhatsappConnectionService, stripMetaSecrets } from "./meta-whatsapp
 import { MetaWhatsappError, toPublicMetaError } from "./meta-whatsapp-errors";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import { hideBusiness, isHiddenBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
+import { META_WHATSAPP_DEFAULT_DISPLAY_NAME } from "./meta-whatsapp-phone-profile";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
 import type { AttachClaimedAssetsInput, UpsertPendingTokenInput } from "./meta-whatsapp-connection.repository";
@@ -193,6 +194,8 @@ const oauthOk = {
   }),
 };
 
+const graphNoop = async () => ({ ok: false, status: 400, json: { error: { message: "noop" } } });
+
 const oauthFail = {
   exchangeEmbeddedSignupCode: async () => {
     const error = new Error("Falha ao trocar código por token na Meta.") as Error & { detail?: string };
@@ -268,7 +271,7 @@ describe("meta-whatsapp phase 3", () => {
   it("exchange não grava META_BUSINESS_ID do env como business do cliente", async () => {
     process.env.META_BUSINESS_ID = "999999999999999";
     const repo = new FakeMetaRepo();
-    const service = new MetaWhatsappConnectionService(repo as any, oauthOk);
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graphNoop as any);
     await service.exchangeCodeAndStore(authA, { code: "ok-code" });
     assert.equal(repo.rows[0].metaBusinessId, null);
     const tenantA = deriveStableMetaTenantId(authA.email);
@@ -287,7 +290,7 @@ describe("meta-whatsapp phase 3", () => {
 
   it("segundo portfólio não sobrescreve token nem WABA do primeiro", async () => {
     const repo = new FakeMetaRepo();
-    const service = new MetaWhatsappConnectionService(repo as any, oauthOk);
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graphNoop as any);
     await service.exchangeCodeAndStore(authA, { code: "ok-code" });
     await service.attachSessionAssets(authA, {
       wabaId: "1247508354180311",
@@ -346,6 +349,54 @@ describe("meta-whatsapp phase 3", () => {
     assert.equal(confirmed.status, "connected");
   });
 
+  it("número novo em BM já conectado pede Relacionamento e Atendimento mesmo se o chip antigo já tem esse nome", async () => {
+    const repo = new FakeMetaRepo();
+    const namePosts: Array<{ path: string; query?: Record<string, string> }> = [];
+    const graph = async (input: { path: string; method?: string; query?: Record<string, string> }) => {
+      if (input.method === "POST" && input.query?.new_display_name) {
+        namePosts.push({ path: input.path, query: input.query });
+        return { ok: true, status: 200, json: { success: true } };
+      }
+      if (input.path === "phone-drax-2") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "phone-drax-2",
+            verified_name: "DRAX 02",
+            new_display_name: "DRAX 02",
+            new_name_status: "PENDING_REVIEW",
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { id: input.path } };
+    };
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graph as any);
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    await service.attachSessionAssets(authA, {
+      wabaId: "1247508354180311",
+      phoneNumberId: "phone-drax",
+      businessId: "1041827648719609",
+      verifiedName: META_WHATSAPP_DEFAULT_DISPLAY_NAME,
+    });
+    repo.rows[0].status = "connected";
+    repo.rows[0].verifiedName = META_WHATSAPP_DEFAULT_DISPLAY_NAME;
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    await service.attachSessionAssets(authA, {
+      wabaId: "1247508354180311",
+      phoneNumberId: "phone-drax-2",
+      businessId: "1041827648719609",
+    });
+    assert.equal(
+      namePosts.some(
+        (item) =>
+          item.path === "phone-drax-2" &&
+          item.query?.new_display_name === META_WHATSAPP_DEFAULT_DISPLAY_NAME,
+      ),
+      true,
+    );
+  });
+
   it("depois do SMS a Graph atrasada não derruba a conexão gravada", async () => {
     const repo = new FakeMetaRepo();
     const graph = async (input: { path: string }) => {
@@ -384,7 +435,7 @@ describe("meta-whatsapp phase 3", () => {
 
   it("dois tenants diferentes não acessam a mesma conexão", async () => {
     const repo = new FakeMetaRepo();
-    const service = new MetaWhatsappConnectionService(repo as any, oauthOk);
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graphNoop as any);
     await service.exchangeCodeAndStore(authA, { code: "ok-code" });
     await service.attachSessionAssets(authA, {
       wabaId: "waba-a",
@@ -429,7 +480,7 @@ describe("meta-whatsapp phase 3", () => {
 
   it("resposta pública e erros não contém campos sensíveis", async () => {
     const repo = new FakeMetaRepo();
-    const service = new MetaWhatsappConnectionService(repo as any, oauthOk);
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graphNoop as any);
     const stored = await service.exchangeCodeAndStore(authA, { code: "ok-code" });
     const claimed = await service.attachSessionAssets(authA, {
       wabaId: "111",
@@ -497,10 +548,17 @@ describe("meta-whatsapp phase 3", () => {
     assert.equal(confirmed.connected, true);
     assert.equal(confirmed.qualityRating, "GREEN");
     assert.equal(confirmed.verifiedName, "Loja");
-    assert.deepEqual(graphCalls, ["GET:waba-1", "GET:phone-1", "POST:phone-1"]);
+    assert.deepEqual(graphCalls, [
+      "GET:phone-1",
+      "POST:phone-1",
+      "GET:waba-1",
+      "GET:phone-1",
+      "GET:phone-1",
+      "POST:phone-1",
+    ]);
     const again = await service.confirmFromAuth(authA);
     assert.equal(again.status, "connected");
-    assert.equal(graphCalls.length, 3);
+    assert.equal(graphCalls.length, 8);
   });
 
   it("Graph 401 não marca connected", async () => {

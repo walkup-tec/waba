@@ -11,6 +11,7 @@ import {
   buildMetaEsOauthLaunchUrl,
   buildMetaEsLoginForBusinessDialogUrl,
   buildMetaEsSetupPrefill,
+  META_ES_OFFICIAL_PHONE_PROFILE,
   configIdLast4,
   isGenericFacebookOauthUrl,
   rewriteMetaEsOauthUrl,
@@ -38,7 +39,7 @@ describe("meta-es-fb-login", () => {
     assert.equal(options.config_id, "1467449278208212");
     assert.equal(options.response_type, "code");
     assert.equal(options.override_default_response_type, true);
-    assert.deepEqual(options.extras, { setup: {} });
+    assert.deepEqual(options.extras, { setup: { phone: { ...META_ES_OFFICIAL_PHONE_PROFILE } } });
     assert.equal("sessionInfoVersion" in options.extras, false);
     const prefill = buildMetaEsSetupPrefill({
       businessId: "1247508354180311",
@@ -47,9 +48,11 @@ describe("meta-es-fb-login", () => {
     const withSetup = buildMetaEsFbLoginOptions("1467449278208212", prefill);
     assert.equal(withSetup?.extras.setup.business?.id, "1247508354180311");
     assert.equal(withSetup?.extras.setup.whatsAppBusinessAccount?.ids, "waba-1");
-    assert.deepEqual(buildMetaEsSetupPrefill({ businessId: "1588459689692010" }), {});
+    assert.deepEqual(buildMetaEsSetupPrefill({ businessId: "1588459689692010" }), {
+      phone: { ...META_ES_OFFICIAL_PHONE_PROFILE },
+    });
     assert.deepEqual(buildMetaEsFbLoginOptions("1467449278208212", { business: { id: "1588459689692010" } })?.extras, {
-      setup: {},
+      setup: { phone: { ...META_ES_OFFICIAL_PHONE_PROFILE } },
     });
     const plan = planMetaEsTechProviderClick("1467449278208212");
     assert.equal(plan.callFbInit, false);
@@ -74,7 +77,7 @@ describe("meta-es-fb-login", () => {
     assert.equal(second.config_id, "1467449278208212");
     assert.equal(second.response_type, "code");
     assert.equal(second.override_default_response_type, true);
-    assert.deepEqual(second.extras, { setup: {} });
+    assert.deepEqual(second.extras, { setup: { phone: { ...META_ES_OFFICIAL_PHONE_PROFILE } } });
   });
 
   it("fluxo novo não chama OAuth genérico", () => {
@@ -217,7 +220,7 @@ describe("meta-es-fb-login", () => {
     assert.equal(parsed.searchParams.get("override_default_response_type"), null);
     assert.equal(parsed.searchParams.get("redirect_uri"), null);
     assert.equal(parsed.searchParams.get("state"), "abc123");
-    assert.match(String(parsed.searchParams.get("extras") || ""), /"setup":\{\}/);
+    assert.match(String(parsed.searchParams.get("extras") || ""), /Relacionamento e Atendimento/);
     assert.equal("sessionInfoVersion" in JSON.parse(String(parsed.searchParams.get("extras"))), false);
     assert.doesNotMatch(dialog, /dialog\/oauth/);
     const withPortfolio = buildMetaEsOauthDialogUrl({
@@ -246,7 +249,7 @@ describe("meta-es-fb-login", () => {
     const suiteOnlyParsed = new URL(suiteOnly);
     assert.equal(suiteOnlyParsed.searchParams.get("business_id"), null);
     assert.equal(suiteOnlyParsed.searchParams.get("global_scope_id"), null);
-    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /"setup":\{\}/);
+    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /Relacionamento e Atendimento/);
     assert.doesNotMatch(String(suiteOnlyParsed.searchParams.get("extras") || ""), /1588459689692010/);
     assert.equal(isMetaEsFacebookMessageOrigin("https://web.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://business.facebook.com"), true);
@@ -362,5 +365,6 @@ describe("meta-es-fb-login", () => {
     );
     assert.doesNotMatch(html, /if \(metaTpSession\.savedBusinessId\) setup\.business/);
     assert.match(html, /if \(businessId && wabaId\) \{\s*\n\s*extrasSetup\.business/);
+    assert.match(html, /phone: \{\s*\n\s*displayName: "Relacionamento e Atendimento"/);
   });
 });

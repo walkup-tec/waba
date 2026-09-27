@@ -33,7 +33,11 @@ import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity, writePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 import { applyLocalPhoneIdentities, listPhoneInboxChannels, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
 import { hideBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
-import { catalogBackfillBusinessIds, catalogBusinessLabel } from "./meta-whatsapp-known-owned-wabas";
+import {
+  catalogBackfillBusinessIds,
+  catalogBusinessLabel,
+  isCatalogBackfillBusiness,
+} from "./meta-whatsapp-known-owned-wabas";
 
 describe("meta portfolio mapper", () => {
   it("mapeia card do portfólio sem vazar token", () => {
@@ -887,6 +891,42 @@ describe("meta portfolio mapper", () => {
     );
   });
 
+  it("mostra em análise quando a Meta ainda revisa o próprio verified_name (DRAX 02)", () => {
+    const pendingName = resolvePhoneNameSync({
+      verifiedName: "DRAX 02",
+      nameStatus: "PENDING_REVIEW",
+      newDisplayName: null,
+      newNameStatus: null,
+    });
+    assert.equal(pendingName.requestedName, "DRAX 02");
+    assert.equal(pendingName.nameSyncStatus, "pending");
+    const samePending = resolvePhoneNameSync({
+      verifiedName: "DRAX 02",
+      nameStatus: "PENDING_REVIEW",
+      newDisplayName: "DRAX 02",
+      newNameStatus: "PENDING_REVIEW",
+    });
+    assert.equal(samePending.requestedName, "DRAX 02");
+    assert.equal(samePending.nameSyncStatus, "pending");
+    const row = mapMetaPhoneToPortfolioNumber({
+      id: "1272575335948086",
+      display_phone_number: "+55 11 95285-5135",
+      verified_name: "DRAX 02",
+      status: "CONNECTED",
+      name_status: "PENDING_REVIEW",
+    });
+    assert.equal(row?.requestedName, "DRAX 02");
+    assert.equal(row?.nameSyncStatus, "pending");
+    assert.equal(
+      phoneNumberCardName({
+        verifiedName: row?.verifiedName,
+        requestedName: row?.requestedName,
+        nameSyncStatus: row?.nameSyncStatus,
+      }),
+      "DRAX 02",
+    );
+  });
+
   it("marca em_disparo só quando o id está ocupado", () => {
     const rows = mapMetaPhoneListToPortfolioNumbers(
       {
@@ -1187,6 +1227,10 @@ describe("meta portfolio service", () => {
   };
   const auth: WabaRequestAuth = { email: "portfolio@exemplo.com", role: "subscriber" };
   const tenantId = deriveStableMetaTenantId("portfolio@exemplo.com");
+
+  function listedFromConnections<T extends { id?: string | null }>(portfolios: T[] | undefined): T[] {
+    return (portfolios || []).filter((item) => !isCatalogBackfillBusiness(String(item.id || "")));
+  }
 
   before(() => {
     process.env.META_APP_ID = "1279182514183979";
@@ -3388,43 +3432,26 @@ describe("meta portfolio service", () => {
     unhideBusiness(hideTenant, "1999000111222333");
   });
 
-  it("Sander, Marilza e Flaviane ficam em Ativas mesmo se o store as marcou ocultas", async () => {
-    const hideAuth: WabaRequestAuth = { email: "ativas-catalog@exemplo.com", role: "subscriber" };
-    const hideTenant = deriveStableMetaTenantId("ativas-catalog@exemplo.com");
-    const catalogIds = ["1588459689692010", "4681844838758316", "962298516898955"] as const;
-    for (const id of catalogIds) {
-      unhideBusiness(hideTenant, id);
-      hideBusiness(hideTenant, id, "Oculto por engano");
-    }
+  it("Ocultar BM de catálogo (Natally) vai para Restritas e o Atualizar não devolve", async () => {
+    const hideAuth: WabaRequestAuth = { email: "hide-natally@exemplo.com", role: "subscriber" };
+    const hideTenant = deriveStableMetaTenantId("hide-natally@exemplo.com");
+    const natallyId = "1832926164812406";
+    for (const id of catalogBackfillBusinessIds()) unhideBusiness(hideTenant, id);
     const walkup = {
       ...connectedRow(),
-      id: "conn-walkup-ativas",
+      id: "conn-walkup-hide-natally",
       tenantId: hideTenant,
-      ownerEmail: "ativas-catalog@exemplo.com",
+      ownerEmail: "hide-natally@exemplo.com",
       metaBusinessId: "4141369862822598",
       wabaId: "1014470201624992",
-      accessTokenEncrypted: encryptMetaToken("token-walkup-ativas"),
+      accessTokenEncrypted: encryptMetaToken("token-walkup-hide-natally"),
     };
     const graph = async (input: { path: string }) => {
-      if (input.path === "1588459689692010") {
+      if (input.path === natallyId) {
         return {
           ok: true,
           status: 200,
-          json: { id: "1588459689692010", name: "61.687.659 sander roosevelt de souza" },
-        };
-      }
-      if (input.path === "4681844838758316") {
-        return {
-          ok: true,
-          status: 200,
-          json: { id: "4681844838758316", name: "60.846.306 Marilza de Castro" },
-        };
-      }
-      if (input.path === "962298516898955") {
-        return {
-          ok: true,
-          status: 200,
-          json: { id: "962298516898955", name: "60.845.972 Flaviane Ferreira Trindade" },
+          json: { id: natallyId, name: "52.797.696 Natally Carissia Muniz Bezerra" },
         };
       }
       if (input.path === "1014470201624992") {
@@ -3456,18 +3483,23 @@ describe("meta portfolio service", () => {
       graph as any,
     );
     try {
-      const assets = await service.listPortfolioAssets(hideAuth, { fresh: true });
-      const sander = (assets.portfolios || []).find((item) => item.id === "1588459689692010");
-      const marilza = (assets.portfolios || []).find((item) => item.id === "4681844838758316");
-      const flaviane = (assets.portfolios || []).find((item) => item.id === "962298516898955");
-      assert.equal(sander?.name, "61.687.659 sander roosevelt de souza");
-      assert.equal(marilza?.name, "60.846.306 Marilza de Castro");
-      assert.equal(flaviane?.name, "60.845.972 Flaviane Ferreira Trindade");
-      assert.equal(sander?.hidden, false);
-      assert.equal(marilza?.hidden, false);
-      assert.equal(flaviane?.hidden, false);
+      const listed = await service.listPortfolioAssets(hideAuth, { fresh: true });
+      assert.equal(
+        (listed.portfolios || []).find((item) => item.id === natallyId)?.hidden,
+        false,
+      );
+      const hidden = await service.hidePortfolioBusiness(hideAuth, natallyId);
+      const hiddenCard = (hidden.portfolios || []).find((item) => item.id === natallyId);
+      assert.equal(hiddenCard?.hidden, true);
+      assert.equal(hiddenCard?.name, "52.797.696 Natally Carissia Muniz Bezerra");
+      assert.equal(
+        (hidden.portfolios || []).filter((item) => !item.hidden).some((item) => item.id === natallyId),
+        false,
+      );
+      const again = await service.listPortfolioAssets(hideAuth, { fresh: true });
+      assert.equal((again.portfolios || []).find((item) => item.id === natallyId)?.hidden, true);
     } finally {
-      for (const id of catalogIds) unhideBusiness(hideTenant, id);
+      for (const id of catalogBackfillBusinessIds()) unhideBusiness(hideTenant, id);
     }
   });
 
@@ -4072,7 +4104,7 @@ describe("meta portfolio service", () => {
       graph as any,
     );
     const assets = await service.listPortfolioAssets(auth, { connectionId: "conn-drax" });
-    assert.equal((assets.portfolios || []).length, 2);
+    assert.equal(listedFromConnections(assets.portfolios).length, 2);
     assert.equal(assets.portfolio?.id, "1041827648719609");
     assert.notEqual(assets.portfolio?.id, "1247508354180311");
     assert.ok(assets.numbers.some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
@@ -4187,7 +4219,7 @@ describe("meta portfolio service", () => {
     const assets = await service.listPortfolioAssets(auth, { connectionId: "conn-quantum-a" });
     const card = (assets.portfolios || []).find((item) => item.id === "3887084984861602");
     assert.ok(card);
-    assert.equal((assets.portfolios || []).length, 1);
+    assert.equal(listedFromConnections(assets.portfolios).length, 1);
     assert.equal((card?.numbers || []).length, 2);
     assert.ok((card?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("95213-1900")));
     assert.ok((card?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("90000-2222")));
@@ -5482,9 +5514,10 @@ describe("meta portfolio service", () => {
       graph as any,
     );
     const assets = await service.listPortfolioAssets(auth);
-    assert.equal((assets.portfolios || []).length, 1);
-    assert.equal(assets.portfolios?.[0]?.id, "1041827648719609");
-    assert.equal(assets.portfolios?.[0]?.connectionId, "conn-drax");
+    const listed = listedFromConnections(assets.portfolios);
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0]?.id, "1041827648719609");
+    assert.equal(listed[0]?.connectionId, "conn-drax");
   });
 
   it("traz nome, ID, página e foto da Meta e não lista WABA como portfólio", async () => {
@@ -5565,7 +5598,7 @@ describe("meta portfolio service", () => {
       graph as any,
     );
     const assets = await service.listPortfolioAssets(auth);
-    const cards = assets.portfolios || [];
+    const cards = listedFromConnections(assets.portfolios);
     assert.equal(cards.length, 1);
     assert.equal(cards[0]?.id, "1041827648719609");
     assert.notEqual(cards[0]?.id, "1247508354180311");
@@ -5618,7 +5651,8 @@ describe("meta portfolio service", () => {
       graph as any,
     );
     const assets = await service.listPortfolioAssets(auth);
-    const numbers = (assets.portfolios || [])[0]?.numbers || [];
+    const numbers =
+      listedFromConnections(assets.portfolios).find((item) => item.id === "1041827648719609")?.numbers || [];
     assert.equal(numbers.length, 1);
     assert.ok(String(numbers[0]?.displayPhoneNumber || "").includes("8200-1279"));
     assert.ok(!numbers.some((item) => item.phoneNumberId === "1350439411479507"));
@@ -5697,7 +5731,7 @@ describe("meta portfolio service", () => {
       graph as any,
     );
     const assets = await service.listPortfolioAssets(auth);
-    const cards = assets.portfolios || [];
+    const cards = listedFromConnections(assets.portfolios);
     const draxCard = cards.find((item) => item.id === "1041827648719609");
     const walkupCard = cards.find((item) => item.id === "4141369862822598");
     assert.equal(cards.length, 2);
