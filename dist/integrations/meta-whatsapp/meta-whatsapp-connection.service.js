@@ -343,6 +343,7 @@ const HYDRATE_GRAPH = { maxAttempts: 1, timeoutMs: 8000 };
 const HYDRATE_PHONE_BUDGET_MS = 18000;
 const HYDRATE_NAME_PROFILE_BUDGET_MS = 2500;
 const LIST_FANOUT_DEADLINE_MS = 20000;
+const LIST_FAST_STORED_MS = 4000;
 const OFFICIAL_NAME_GRAPH_TIMEOUT_MS = 4000;
 async function raceWithTimeout(work, timeoutMs) {
     let timer;
@@ -359,6 +360,9 @@ async function raceWithTimeout(work, timeoutMs) {
         if (timer)
             clearTimeout(timer);
     }
+}
+function assetsHaveVisiblePortfolios(assets) {
+    return (assets?.portfolios || []).some((item) => (0, meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard)(item) && item.hidden !== true);
 }
 function withHydrateLimits(graph) {
     return (input) => graph({
@@ -1978,52 +1982,78 @@ class MetaWhatsappConnectionService {
     async listPortfolioAssets(auth, opts) {
         const tenant = requireTenant(auth);
         const requested = String(opts?.connectionId || "").trim();
-        if (opts?.fresh)
-            (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
         const pending = (0, meta_whatsapp_portfolio_graph_cache_1.readPortfolioGraphInflight)(tenant.tenantId);
+        if (opts?.fresh && !pending)
+            (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
+        const storedPromise = this.loadStoredPortfolioAssets(tenant.tenantId, requested);
+        const localize = (raw) => localizeAndHidePortfolioAssets(tenant.tenantId, raw);
         if (pending) {
+            const stored = await storedPromise;
+            if (assetsHaveVisiblePortfolios(stored) && !opts?.fresh) {
+                const fast = await raceWithTimeout(pending, LIST_FAST_STORED_MS);
+                if (fast) {
+                    return localize(assetsFromPortfolioCards(fast.portfolios || [], requested));
+                }
+                (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-stored-fast", {
+                    tenantId: tenant.tenantId,
+                    reason: "inflight",
+                });
+                return localize(stored);
+            }
             try {
                 const raw = await pending;
-                return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(raw.portfolios || [], requested));
+                return localize(assetsFromPortfolioCards(raw.portfolios || [], requested));
             }
             catch {
                 (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-graph-failed", { tenantId: tenant.tenantId, reason: "inflight" });
-                return localizeAndHidePortfolioAssets(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
+                return localize(stored);
             }
         }
         if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
             const stale = (0, meta_whatsapp_portfolio_graph_cache_1.readStaleCachedPortfolioGraph)(tenant.tenantId);
             if (stale?.portfolios?.length) {
-                return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(stale.portfolios, requested));
+                return localize(assetsFromPortfolioCards(stale.portfolios, requested));
             }
-            return localizeAndHidePortfolioAssets(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
+            return localize(await storedPromise);
         }
         const useCache = (0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)() && !opts?.fresh;
         if (useCache) {
             const cached = (0, meta_whatsapp_portfolio_graph_cache_1.readCachedPortfolioGraph)(tenant.tenantId);
             if (cached?.portfolios?.length) {
-                return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(cached.portfolios, requested));
+                return localize(assetsFromPortfolioCards(cached.portfolios, requested));
             }
         }
         const loaded = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail);
-        let graphPartial = false;
-        const work = loaded.then((row) => {
-            graphPartial = row.graphPartial;
-            return row.assets;
-        });
+        const work = loaded.then((row) => row.assets);
         (0, meta_whatsapp_portfolio_graph_cache_1.setPortfolioGraphInflight)(tenant.tenantId, work);
+        void loaded
+            .then((row) => {
+            if ((0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)() && !row.graphPartial && (row.assets.portfolios || []).length) {
+                (0, meta_whatsapp_portfolio_graph_cache_1.writeCachedPortfolioGraph)(tenant.tenantId, row.assets);
+            }
+        })
+            .catch(() => undefined);
+        void work.finally(() => {
+            (0, meta_whatsapp_portfolio_graph_cache_1.clearPortfolioGraphInflight)(tenant.tenantId);
+        }).catch(() => undefined);
         try {
+            const stored = await storedPromise;
+            if (assetsHaveVisiblePortfolios(stored) && !opts?.fresh) {
+                const fast = await raceWithTimeout(work, LIST_FAST_STORED_MS);
+                if (fast)
+                    return localize(fast);
+                (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-stored-fast", {
+                    tenantId: tenant.tenantId,
+                    reason: "graph",
+                });
+                return localize(stored);
+            }
             const assets = await work;
-            if ((0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)() && !graphPartial)
-                (0, meta_whatsapp_portfolio_graph_cache_1.writeCachedPortfolioGraph)(tenant.tenantId, assets);
-            return localizeAndHidePortfolioAssets(tenant.tenantId, assets);
+            return localize(assets);
         }
         catch {
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-list-graph-failed", { tenantId: tenant.tenantId, reason: "graph" });
-            return localizeAndHidePortfolioAssets(tenant.tenantId, await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
-        }
-        finally {
-            (0, meta_whatsapp_portfolio_graph_cache_1.clearPortfolioGraphInflight)(tenant.tenantId);
+            return localize(await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
         }
     }
     /**

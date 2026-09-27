@@ -1574,6 +1574,43 @@ describe("meta portfolio service", () => {
     assert.equal(phoneListCalls, 3);
   });
 
+  it("devolve o portfólio gravado sem esperar a Graph terminar", async () => {
+    const row = { ...connectedRow(), status: "connected" as const };
+    const repo = {
+      async listOpenByTenant() {
+        return [row];
+      },
+      async findOpenByTenant() {
+        return row;
+      },
+    };
+    let hang = true;
+    const graph = async () => {
+      const started = Date.now();
+      while (hang && Date.now() - started < 8000) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const started = Date.now();
+    try {
+      const assets = await service.listPortfolioAssets(auth);
+      const elapsed = Date.now() - started;
+      assert.ok(elapsed < 5000, `lista esperou a Graph ${elapsed}ms`);
+      const card = listedFromConnections(assets.portfolios)[0];
+      assert.equal(card?.id, "1247508354180311");
+      assert.ok((card?.numbers || []).some((item) => String(item.displayPhoneNumber || "").includes("8200-1279")));
+    } finally {
+      hang = false;
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+  });
+
   it("mostra no card o nome, a foto e o pedido de nome que a Meta já tem", async () => {
     const repo = {
       async findOpenByTenant() {

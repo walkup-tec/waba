@@ -20,8 +20,13 @@ describe("progresso ao lado de Conectar Portfólio", () => {
     assert.match(html, /function metaTpResetSession\(opts\)/);
     assert.match(html, /keepPortfolios: true/);
     assert.match(html, /function metaTpReloadPortfoliosAfterConnect/);
+    assert.match(html, /while \(attempt < 8\)/);
     assert.match(html, /Ainda lendo os números na Meta/);
     assert.doesNotMatch(html, /O servidor não concluiu a leitura dos números a tempo/);
+    assert.match(
+      html,
+      /if \(!metaTpHasVisiblePortfolios\(\)\) \{\s*await metaTpLoadPortfolio\(\{ silent: true, force: true \}\)/,
+    );
     assert.doesNotMatch(html, /metaTpPortfolioPage === "ativas" && !ativas.length && restritas.length/);
     assert.match(html, /meta-connect-progress-check/);
   });

@@ -520,6 +520,7 @@ const HYDRATE_GRAPH = { maxAttempts: 1, timeoutMs: 8000 } as const;
 const HYDRATE_PHONE_BUDGET_MS = 18_000;
 const HYDRATE_NAME_PROFILE_BUDGET_MS = 2_500;
 const LIST_FANOUT_DEADLINE_MS = 20_000;
+const LIST_FAST_STORED_MS = 4_000;
 const OFFICIAL_NAME_GRAPH_TIMEOUT_MS = 4_000;
 
 async function raceWithTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T | null> {
@@ -538,6 +539,10 @@ async function raceWithTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+function assetsHaveVisiblePortfolios(assets: MetaPortfolioAssetsPublic | null | undefined): boolean {
+  return (assets?.portfolios || []).some((item) => isRenderablePortfolioCard(item) && item.hidden !== true);
 }
 
 function withHydrateLimits(graph: MetaConnectionGraphCaller): MetaConnectionGraphCaller {
@@ -2355,59 +2360,76 @@ export class MetaWhatsappConnectionService {
   ): Promise<MetaPortfolioAssetsPublic> {
     const tenant = requireTenant(auth);
     const requested = String(opts?.connectionId || "").trim();
-    if (opts?.fresh) invalidateCachedPortfolioGraph(tenant.tenantId);
     const pending = readPortfolioGraphInflight(tenant.tenantId);
+    if (opts?.fresh && !pending) invalidateCachedPortfolioGraph(tenant.tenantId);
+    const storedPromise = this.loadStoredPortfolioAssets(tenant.tenantId, requested);
+    const localize = (raw: MetaPortfolioAssetsPublic) =>
+      localizeAndHidePortfolioAssets(tenant.tenantId, raw);
+
     if (pending) {
+      const stored = await storedPromise;
+      if (assetsHaveVisiblePortfolios(stored) && !opts?.fresh) {
+        const fast = await raceWithTimeout(pending, LIST_FAST_STORED_MS);
+        if (fast) {
+          return localize(assetsFromPortfolioCards(fast.portfolios || [], requested));
+        }
+        logMetaWhatsappSafe("portfolio-list-stored-fast", {
+          tenantId: tenant.tenantId,
+          reason: "inflight",
+        });
+        return localize(stored);
+      }
       try {
         const raw = await pending;
-        return localizeAndHidePortfolioAssets(
-          tenant.tenantId,
-          assetsFromPortfolioCards(raw.portfolios || [], requested),
-        );
+        return localize(assetsFromPortfolioCards(raw.portfolios || [], requested));
       } catch {
         logMetaWhatsappSafe("portfolio-list-graph-failed", { tenantId: tenant.tenantId, reason: "inflight" });
-        return localizeAndHidePortfolioAssets(
-          tenant.tenantId,
-          await this.loadStoredPortfolioAssets(tenant.tenantId, requested),
-        );
+        return localize(stored);
       }
     }
     if (isMetaGraphUploadCooldown()) {
       const stale = readStaleCachedPortfolioGraph(tenant.tenantId);
       if (stale?.portfolios?.length) {
-        return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(stale.portfolios, requested));
+        return localize(assetsFromPortfolioCards(stale.portfolios, requested));
       }
-      return localizeAndHidePortfolioAssets(
-        tenant.tenantId,
-        await this.loadStoredPortfolioAssets(tenant.tenantId, requested),
-      );
+      return localize(await storedPromise);
     }
     const useCache = shouldUsePortfolioGraphCache() && !opts?.fresh;
     if (useCache) {
       const cached = readCachedPortfolioGraph(tenant.tenantId);
       if (cached?.portfolios?.length) {
-        return localizeAndHidePortfolioAssets(tenant.tenantId, assetsFromPortfolioCards(cached.portfolios, requested));
+        return localize(assetsFromPortfolioCards(cached.portfolios, requested));
       }
     }
     const loaded = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail);
-    let graphPartial = false;
-    const work = loaded.then((row) => {
-      graphPartial = row.graphPartial;
-      return row.assets;
-    });
+    const work = loaded.then((row) => row.assets);
     setPortfolioGraphInflight(tenant.tenantId, work);
+    void loaded
+      .then((row) => {
+        if (shouldUsePortfolioGraphCache() && !row.graphPartial && (row.assets.portfolios || []).length) {
+          writeCachedPortfolioGraph(tenant.tenantId, row.assets);
+        }
+      })
+      .catch(() => undefined);
+    void work.finally(() => {
+      clearPortfolioGraphInflight(tenant.tenantId);
+    }).catch(() => undefined);
     try {
+      const stored = await storedPromise;
+      if (assetsHaveVisiblePortfolios(stored) && !opts?.fresh) {
+        const fast = await raceWithTimeout(work, LIST_FAST_STORED_MS);
+        if (fast) return localize(fast);
+        logMetaWhatsappSafe("portfolio-list-stored-fast", {
+          tenantId: tenant.tenantId,
+          reason: "graph",
+        });
+        return localize(stored);
+      }
       const assets = await work;
-      if (shouldUsePortfolioGraphCache() && !graphPartial) writeCachedPortfolioGraph(tenant.tenantId, assets);
-      return localizeAndHidePortfolioAssets(tenant.tenantId, assets);
+      return localize(assets);
     } catch {
       logMetaWhatsappSafe("portfolio-list-graph-failed", { tenantId: tenant.tenantId, reason: "graph" });
-      return localizeAndHidePortfolioAssets(
-        tenant.tenantId,
-        await this.loadStoredPortfolioAssets(tenant.tenantId, requested),
-      );
-    } finally {
-      clearPortfolioGraphInflight(tenant.tenantId);
+      return localize(await this.loadStoredPortfolioAssets(tenant.tenantId, requested));
     }
   }
 

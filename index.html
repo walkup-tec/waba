@@ -40476,6 +40476,7 @@
           } catch {
             /* a carga anterior não bloqueia o Atualizar */
           }
+          if (metaTpHasVisiblePortfolios()) return;
         }
         metaTpPortfolioInflight = (async function () {
         const enabled =
@@ -40524,11 +40525,15 @@
       }
 
       async function metaTpReloadPortfoliosAfterConnect() {
-        await metaTpLoadPortfolio({ silent: true });
-        if (metaTpHasVisiblePortfolios()) return;
-        await metaTpLoadPortfolio({ silent: true });
-        if (metaTpHasVisiblePortfolios()) return;
-        await metaTpLoadPortfolio({ silent: true, force: true });
+        var attempt = 0;
+        while (attempt < 8) {
+          await metaTpLoadPortfolio({ silent: true });
+          if (metaTpHasVisiblePortfolios()) return;
+          attempt += 1;
+          await new Promise(function (resolve) {
+            window.setTimeout(resolve, 1200);
+          });
+        }
       }
 
       function metaTpStartLiveSync() {
@@ -40725,7 +40730,10 @@
         try {
           metaTpStartConnectProgress();
           metaTpAdvanceConnectProgress(2);
-          await metaTpLoadPortfolio({ silent: true, force: true });
+          await metaTpLoadPortfolio({ silent: true });
+          if (!metaTpHasVisiblePortfolios()) {
+            await metaTpLoadPortfolio({ silent: true, force: true });
+          }
           metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasVisiblePortfolios() });
         } catch {
           metaTpSetStatus("Não foi possível atualizar os portfólios.");
@@ -40853,10 +40861,7 @@
               window.__wabaMetaTechSignupActive = false;
             }
             if (!metaTpHasVisiblePortfolios()) {
-              await new Promise(function (resolve) {
-                window.setTimeout(resolve, 1600);
-              });
-              await metaTpLoadPortfolio({ silent: true });
+              await metaTpReloadPortfoliosAfterConnect();
             }
           }
           if (metaTpSession.exchanged && !metaTpSession.wabaId) {
