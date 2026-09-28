@@ -145,6 +145,11 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
     showClicks: true,
   },
   {
+    name: "Raphaela 01",
+    matchExactName: true,
+    showClicks: true,
+  },
+  {
     name: "VITORIA DA CONQUISTA",
     matchExactName: true,
     forceCompleted: true,
@@ -339,6 +344,17 @@ export const campaignReportShowsClicks = (
   report?: WabaCampaignPerformanceReport | null,
 ): boolean => Boolean(resolveCampaignReportOverride(campaignName, createdAt, report)?.showClicks);
 
+const ruleOverridesMetrics = (rule: CampaignReportOverride): boolean =>
+  Boolean(
+    rule.proportionFrom ||
+      rule.rates ||
+      rule.sent != null ||
+      rule.delivered != null ||
+      rule.read != null ||
+      rule.failed != null ||
+      rule.clicks != null,
+  );
+
 export const applyCampaignReportReadOverride = (
   campaignName: string,
   createdAt: string,
@@ -346,6 +362,7 @@ export const applyCampaignReportReadOverride = (
 ): WabaCampaignPerformanceReport | null | undefined => {
   const rule = resolveCampaignReportOverride(campaignName, createdAt, report);
   if (!rule) return report;
+  if (!ruleOverridesMetrics(rule)) return report;
 
   const base: WabaCampaignPerformanceReport = report || {
     totalLeads: 0,

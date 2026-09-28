@@ -8,6 +8,7 @@ import {
   campaignHoldsSubscriberInProgress,
   campaignReportHidesClicks,
   campaignReportShowsClicks,
+  resolveCampaignReportOverride,
   resolveCampaignReportReadOverride,
   resolveOverriddenCampaignStatus,
 } from "./waba-campaign-report-read-overrides";
@@ -327,24 +328,23 @@ describe("override pontual do relatório", () => {
     assert.equal(differentTotals?.clicks, 0);
   });
 
-  it("Raphaela 01 não aplica overlay: o operador informa os indicadores reais", () => {
+  it("Raphaela 01 mostra o card de cliques sem forçar os 41 do overlay", () => {
     const stored = report({
       totalLeads: 5000,
       sent: 4800,
       delivered: 4100,
       read: 1200,
       failed: 80,
-      clicks: 12,
+      clicks: 41,
       source: "manual",
     });
     const got = applyCampaignReportReadOverride("Raphaela 01", "2026-09-24T19:38:00.000Z", stored);
     assert.equal(got, stored);
-    assert.equal(got?.sent, 4800);
-    assert.equal(got?.delivered, 4100);
-    assert.equal(got?.read, 1200);
-    assert.equal(got?.failed, 80);
-    assert.equal(got?.clicks, 12);
-    assert.equal(campaignReportShowsClicks("Raphaela 01", "2026-09-24T19:38:00.000Z", stored), false);
+    assert.equal(got?.clicks, 41);
+    const rule = resolveCampaignReportOverride("Raphaela 01", "2026-09-24T19:38:00.000Z", stored);
+    assert.equal(rule?.showClicks, true);
+    assert.equal(rule?.clicks, undefined);
+    assert.equal(campaignReportShowsClicks("Raphaela 01", "2026-09-24T19:38:00.000Z", stored), true);
     assert.equal(
       resolveOverriddenCampaignStatus("Raphaela 01", "2026-09-24T19:38:00.000Z", "generated"),
       "generated",
@@ -353,6 +353,9 @@ describe("override pontual do relatório", () => {
       applyCampaignReportReadOverride("Raphaela 01", "2026-09-24T19:38:00.000Z", null),
       null,
     );
+    const zeroed = report({ clicks: 0 });
+    assert.equal(applyCampaignReportReadOverride("Raphaela 01", "2026-09-24T19:38:00.000Z", zeroed), zeroed);
+    assert.equal(zeroed.clicks, 0);
   });
 
   it("Tocantins_V01 de 21/09 recebe 3 cliques do /s/n9730691", () => {

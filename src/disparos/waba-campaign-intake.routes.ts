@@ -37,6 +37,7 @@ import {
   campaignReportHidesClicks,
   campaignReportShowsClicks,
   campaignHoldsSubscriberInProgress,
+  resolveCampaignReportOverride,
   resolveOverriddenCampaignStatus,
 } from "./waba-campaign-report-read-overrides";
 import { campaignAttendedByLaboratorioStaff } from "./waba-campaign-laboratorio-attended";
@@ -77,6 +78,8 @@ import { formatScheduledSendLabel, parseScheduledSendAt } from "./waba-campaign-
 import { publicBaseHintsFromExpressRequest } from "../lib/waba-public-base-url";
 import {
   createCampaignIntakeTrackedShortUrl,
+  resolveIntakeTrackedShortUrlClicks,
+  resolveOperacionalManualReportClicks,
   shouldCreateIntakeTrackedShortUrl,
 } from "./waba-campaign-intake-short-url";
 import {
@@ -743,7 +746,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
     }
   });
 
-  app.get("/disparos/campanhas/intake/:id/relatorio", (req, res) => {
+  app.get("/disparos/campanhas/intake/:id/relatorio", async (req, res) => {
     const auth = resolveRequestAuth(req);
     if (!auth.email) {
       return res.status(401).json({ error: "Faça login para ver o relatório." });
@@ -793,6 +796,25 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       (laboratorioAttended &&
         report?.source === "meta_lab" &&
         !campaignReportHidesClicks(intake.campaignName, intake.createdAt, report));
+    const overrideClicks = resolveCampaignReportOverride(
+      intake.campaignName,
+      intake.createdAt,
+      report,
+      intake.id,
+    )?.clicks;
+    let trackedClicks = 0;
+    if (showClicks && !laboratorioAttended) {
+      try {
+        trackedClicks = await resolveIntakeTrackedShortUrlClicks(intake);
+      } catch {
+        trackedClicks = 0;
+      }
+    }
+    const clicks = showClicks
+      ? laboratorioAttended
+        ? Math.max(0, Math.round(Number(report?.clicks || 0)))
+        : resolveOperacionalManualReportClicks({ overrideClicks, trackedClicks })
+      : 0;
     const metrics = report
       ? computeCampaignPerformanceMetrics({
           totalLeads: report.totalLeads,
@@ -800,9 +822,15 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           delivered: report.delivered,
           read: report.read,
           failed: report.failed,
-          clicks: showClicks ? report.clicks : 0,
+          clicks,
         })
       : null;
+    const clickIndicators = showClicks
+      ? {
+          cliques: metrics?.clicks ?? clicks,
+          taxaCliques: metrics?.clickRate ?? 0,
+        }
+      : {};
     const indicators = report
       ? {
           totalLeads: report.totalLeads,
@@ -810,12 +838,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           entregues: report.delivered,
           lidos: report.read,
           falhados: report.failed,
-          ...(showClicks
-            ? {
-                cliques: metrics?.clicks ?? 0,
-                taxaCliques: metrics?.clickRate ?? 0,
-              }
-            : {}),
+          ...clickIndicators,
         }
       : {
           totalLeads: 0,
@@ -823,6 +846,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           entregues: 0,
           lidos: 0,
           falhados: 0,
+          ...clickIndicators,
         };
 
     return res.status(200).json({
