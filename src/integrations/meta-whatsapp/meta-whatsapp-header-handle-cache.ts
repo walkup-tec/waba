@@ -98,7 +98,20 @@ export function isResumableUploadHandle(handle: string): boolean {
   const value = String(handle || "").trim();
   if (!value || /^https?:\/\//i.test(value)) return false;
   if (/lookaside\.|fbcdn\.net/i.test(value)) return false;
+  if (/[\n\r]/.test(value)) return false;
   return /^[0-9]+[:;]/.test(value);
+}
+
+/** O Lab às vezes junta vários 4:: com quebra de linha; a Graph só aceita um. */
+export function normalizeResumableUploadHandle(handle: string): string {
+  const parts = String(handle || "")
+    .split(/[\n\r]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  for (const part of parts) {
+    if (isResumableUploadHandle(part)) return part;
+  }
+  return "";
 }
 
 export function pickReusableHeaderHandle(input: {

@@ -6,6 +6,8 @@ import { after, before, describe, it } from "node:test";
 import {
   clearHeaderHandleCacheForTests,
   headerFileSha256,
+  isResumableUploadHandle,
+  normalizeResumableUploadHandle,
   pickReusableHeaderHandle,
   readCachedHeaderHandle,
   writeCachedHeaderHandle,
@@ -71,5 +73,16 @@ describe("cache de handle de cabeçalho", () => {
     });
     assert.equal(picked.resumable, "4::jandira-old");
     assert.equal(picked.any, "4::jandira-old");
+  });
+
+  it("usa só o primeiro handle 4:: quando o Lab junta vários com quebra de linha", () => {
+    const stacked =
+      "4:aGVhZGVyLnBuZw==:aW1hZ2UvcG5n:aaa\n4:aGVhZGVyLnBuZw==:aW1hZ2UvcG5n:bbb\n4:aGVhZGVyLnBuZw==:aW1hZ2UvcG5n:ccc";
+    assert.equal(isResumableUploadHandle(stacked), false);
+    assert.equal(
+      normalizeResumableUploadHandle(stacked),
+      "4:aGVhZGVyLnBuZw==:aW1hZ2UvcG5n:aaa",
+    );
+    assert.equal(isResumableUploadHandle("4::abc"), true);
   });
 });

@@ -546,6 +546,34 @@ describe("Assistente IA de templates Utility", () => {
     assert.ok(calls.every((item) => item.wabaId === "2301051607405249"));
   });
 
+  it("interrompe o lote a tempo do Traefik e devolve JSON das opções que faltaram", async () => {
+    const email = "ai-submit-budget@example.com";
+    const previousBudget = process.env.META_TEMPLATE_AI_SUBMIT_BUDGET_MS;
+    process.env.META_TEMPLATE_AI_SUBMIT_BUDGET_MS = "4000";
+    const calls: string[] = [];
+    const { service } = serviceFor(email, utilityOutput(), {
+      async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+        calls.push(String(input.name || ""));
+        await new Promise((resolve) => setTimeout(resolve, 4500));
+        return { id: `local-${String(input.name)}`, status: "PENDING" };
+      },
+    });
+    try {
+      await service.generateFromAuth(
+        { email, role: "subscriber" },
+        { connectionId: "conn-utility", baseText: "Atualização da solicitação existente." },
+      );
+      const result = await service.submitAllFromAuth({ email, role: "subscriber" }, submitShell());
+      assert.equal(calls.length, 1);
+      assert.equal(result.submitted, 1);
+      assert.equal(result.failed, 2);
+      assert.match(String(result.results.find((row) => !row.ok)?.error || ""), /demorou/i);
+    } finally {
+      if (previousBudget === undefined) delete process.env.META_TEMPLATE_AI_SUBMIT_BUDGET_MS;
+      else process.env.META_TEMPLATE_AI_SUBMIT_BUDGET_MS = previousBudget;
+    }
+  });
+
   it("limita chamadas por tenant e usuário", async () => {
     const email = "ai-rate-limit@example.com";
     const { service } = serviceFor(email, utilityOutput());

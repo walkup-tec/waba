@@ -131,5 +131,7 @@ async function createWabaMessageTemplate(input) {
         method: "POST",
         path: `${input.wabaId}/message_templates`,
         body: input.body,
+        timeoutMs: input.timeoutMs ?? 8000,
+        maxAttempts: input.maxAttempts ?? 1,
     });
 }

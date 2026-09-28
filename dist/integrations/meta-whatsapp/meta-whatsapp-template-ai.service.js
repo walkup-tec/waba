@@ -120,6 +120,9 @@ function safeHost(url) {
         return "";
     }
 }
+function submitAllBudgetMs() {
+    return Math.max(4000, Math.min(25000, Number(process.env.META_TEMPLATE_AI_SUBMIT_BUDGET_MS || 22000)));
+}
 function isEnabled() {
     const raw = String(process.env.META_TEMPLATE_AI_ENABLED || "").trim().toLowerCase();
     if (raw === "0" || raw === "false" || raw === "off")
@@ -501,8 +504,8 @@ class MetaWhatsappTemplateAiService {
             }
         }
         const headerHandles = (0, meta_whatsapp_template_ai_shell_1.parseTemplateAiHeaderHandles)(input);
-        const fallbackHandle = String(input?.headerHandle || input?.header_handle || "").trim();
-        const firstHandle = headerHandles[portfolios[0].id] || fallbackHandle;
+        const fallbackHandle = (0, meta_whatsapp_header_handle_cache_1.normalizeResumableUploadHandle)(String(input?.headerHandle || input?.header_handle || ""));
+        const firstHandle = (0, meta_whatsapp_header_handle_cache_1.normalizeResumableUploadHandle)(headerHandles[portfolios[0].id] || "") || fallbackHandle;
         const shell = (0, meta_whatsapp_template_ai_shell_1.parseMetaTemplateAiShell)({
             ...input,
             headerHandle: firstHandle,
@@ -558,9 +561,11 @@ class MetaWhatsappTemplateAiService {
         };
         if (anyPending.length && shell.hasLinkButton)
             await ensureMetaButtonUrl();
+        const deadlineAt = Date.now() + submitAllBudgetMs();
+        const budgetError = "A Meta demorou neste envio. As opções já aceitas não precisam ser reenviadas. Clique em Enviar de novo só para as que faltaram.";
         for (const target of submitTargets) {
             const { connection, wabaId, portfolioName } = target;
-            const handle = headerHandles[connection.id] || firstHandle;
+            const handle = (0, meta_whatsapp_header_handle_cache_1.normalizeResumableUploadHandle)(headerHandles[connection.id] || "") || firstHandle;
             for (let index = 0; index < analysisResult.options.length; index += 1) {
                 const option = analysisResult.options[index];
                 const name = (0, meta_whatsapp_template_ai_shell_1.templateNameForOption)(shell.modelName, index);
@@ -574,6 +579,21 @@ class MetaWhatsappTemplateAiService {
                         status: local.status || "ALREADY_SUBMITTED",
                         templateId: local.id,
                         error: null,
+                        connectionId: connection.id,
+                        portfolioName,
+                        wabaId,
+                    });
+                    continue;
+                }
+                if (Date.now() >= deadlineAt) {
+                    results.push({
+                        index,
+                        name,
+                        ok: false,
+                        alreadySubmitted: false,
+                        status: null,
+                        templateId: null,
+                        error: budgetError,
                         connectionId: connection.id,
                         portfolioName,
                         wabaId,

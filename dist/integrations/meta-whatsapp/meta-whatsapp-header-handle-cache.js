@@ -10,6 +10,7 @@ exports.writeCachedHeaderHandle = writeCachedHeaderHandle;
 exports.clearHeaderHandleCacheForTests = clearHeaderHandleCacheForTests;
 exports.isHeaderUploadAppRateLimit = isHeaderUploadAppRateLimit;
 exports.isResumableUploadHandle = isResumableUploadHandle;
+exports.normalizeResumableUploadHandle = normalizeResumableUploadHandle;
 exports.pickReusableHeaderHandle = pickReusableHeaderHandle;
 const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
@@ -102,7 +103,21 @@ function isResumableUploadHandle(handle) {
         return false;
     if (/lookaside\.|fbcdn\.net/i.test(value))
         return false;
+    if (/[\n\r]/.test(value))
+        return false;
     return /^[0-9]+[:;]/.test(value);
+}
+/** O Lab às vezes junta vários 4:: com quebra de linha; a Graph só aceita um. */
+function normalizeResumableUploadHandle(handle) {
+    const parts = String(handle || "")
+        .split(/[\n\r]+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+    for (const part of parts) {
+        if (isResumableUploadHandle(part))
+            return part;
+    }
+    return "";
 }
 function pickReusableHeaderHandle(input) {
     const sha = headerFileSha256(input.bytes);

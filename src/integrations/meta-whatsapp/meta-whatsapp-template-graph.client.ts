@@ -175,6 +175,8 @@ export async function createWabaMessageTemplate(input: {
   wabaId: string;
   body: Record<string, unknown>;
   graph?: TemplateGraphCaller;
+  timeoutMs?: number;
+  maxAttempts?: number;
 }): Promise<MetaGraphJsonResult> {
   const graph = input.graph || callMetaGraphJson;
   return graph({
@@ -182,5 +184,7 @@ export async function createWabaMessageTemplate(input: {
     method: "POST",
     path: `${input.wabaId}/message_templates`,
     body: input.body,
+    timeoutMs: input.timeoutMs ?? 8_000,
+    maxAttempts: input.maxAttempts ?? 1,
   });
 }
