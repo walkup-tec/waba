@@ -1975,6 +1975,79 @@ describe("Assistente IA de templates Utility", () => {
     }
   });
 
+  it("upload da Flaviane pending_token usa o token connected da agência, não o pending", async () => {
+    const email = "header-flaviane-agency@example.com";
+    const pending = connection(email, {
+      id: "44493911-2c56-463d-9056-20282635f54b",
+      status: "pending_token",
+      wabaId: "",
+      metaBusinessId: "962298516898955",
+      accessTokenEncrypted: "enc-pending",
+    });
+    const drax = connection(email, {
+      id: "conn-drax-agency",
+      wabaId: "1636793994538054",
+      metaBusinessId: "1041827648719609",
+      accessTokenEncrypted: "enc-drax",
+    });
+    const previousAppId = process.env.META_APP_ID;
+    process.env.META_APP_ID = "app-test-header-flaviane-agency";
+    const { clearHeaderHandleCacheForTests } = await import("./meta-whatsapp-header-handle-cache");
+    clearHeaderHandleCacheForTests();
+    const tokens: string[] = [];
+    const service = new MetaWhatsappTemplateAiService(
+      {
+        async findByIdForTenant(tenantId: string, id: string) {
+          if (tenantId !== pending.tenantId) return null;
+          if (id === pending.id) return pending;
+          if (id === drax.id) return drax;
+          return null;
+        },
+        async listOpenByTenant(tenantId: string) {
+          return tenantId === pending.tenantId ? [pending, drax] : [];
+        },
+      } as any,
+      {} as any,
+      async () => ({ value: utilityOutput(), model: "gpt-test", responseId: "r", latencyMs: 1 }),
+      {
+        async findReusableHeaderHandleForBytes() {
+          return { resumable: "", any: "" };
+        },
+      } as any,
+      (encrypted: string) => (encrypted === "enc-pending" ? "token-pending" : "token-drax"),
+      async (input: { token?: string }) => {
+        tokens.push(String(input.token || ""));
+        if (input.token === "token-pending") throw new Error("pending_token não deve ir à Graph");
+        return { handle: "4::drax-header" };
+      },
+    );
+    const tinyPng = Buffer.concat([
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+      Buffer.from(`flaviane-header-${Date.now()}-${Math.random()}`),
+    ]);
+    try {
+      const uploaded = await service.uploadHeaderMediaFromAuth(
+        { email, role: "subscriber" },
+        {
+          connectionId: pending.id,
+          mediaFormat: "IMAGE",
+          fileName: "logo.png",
+          mime: "image/png",
+          bytes: tinyPng,
+        },
+      );
+      assert.equal(uploaded.handle, "4::drax-header");
+      assert.deepEqual(tokens, ["token-drax"]);
+    } finally {
+      clearHeaderHandleCacheForTests();
+      if (previousAppId === undefined) delete process.env.META_APP_ID;
+      else process.env.META_APP_ID = previousAppId;
+    }
+  });
+
 });
 
 describe("OpenAI Responses com Structured Outputs", () => {

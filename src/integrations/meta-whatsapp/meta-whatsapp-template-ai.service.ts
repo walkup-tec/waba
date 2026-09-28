@@ -914,14 +914,23 @@ export class MetaWhatsappTemplateAiService {
     const repo = this.connections as MetaWhatsappConnectionRepository;
     const openRows =
       typeof repo.listOpenByTenant === "function" ? await repo.listOpenByTenant(tenant.tenantId) : [];
-    const candidates: MetaWhatsappConnectionRecord[] = [preferred];
-    for (const row of openRows) {
-      if (row.id === preferred.id) continue;
-      if (row.disconnectedAt) continue;
-      if (row.status !== "connected" && row.status !== "pending_confirmation") continue;
-      if (!String(row.wabaId || "").trim()) continue;
+    const writer = await this.pickSubmitWriter(
+      tenant.tenantId,
+      preferred,
+      String(preferred.wabaId || ""),
+    );
+    const candidates: MetaWhatsappConnectionRecord[] = [];
+    const seen = new Set<string>();
+    const pushCandidate = (row: MetaWhatsappConnectionRecord | null | undefined) => {
+      if (!row || seen.has(row.id) || row.disconnectedAt) return;
+      if (!isUsableTemplateConnection(row)) return;
+      seen.add(row.id);
       candidates.push(row);
-    }
+    };
+    pushCandidate(writer);
+    pushCandidate(preferred);
+    for (const row of openRows) pushCandidate(row);
+    if (!candidates.length) throw new MetaWhatsappError("not_connected");
 
     let lastError: unknown = null;
     for (const candidate of candidates) {

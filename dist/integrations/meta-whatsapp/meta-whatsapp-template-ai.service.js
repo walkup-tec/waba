@@ -724,18 +724,23 @@ class MetaWhatsappTemplateAiService {
         }
         const repo = this.connections;
         const openRows = typeof repo.listOpenByTenant === "function" ? await repo.listOpenByTenant(tenant.tenantId) : [];
-        const candidates = [preferred];
-        for (const row of openRows) {
-            if (row.id === preferred.id)
-                continue;
-            if (row.disconnectedAt)
-                continue;
-            if (row.status !== "connected" && row.status !== "pending_confirmation")
-                continue;
-            if (!String(row.wabaId || "").trim())
-                continue;
+        const writer = await this.pickSubmitWriter(tenant.tenantId, preferred, String(preferred.wabaId || ""));
+        const candidates = [];
+        const seen = new Set();
+        const pushCandidate = (row) => {
+            if (!row || seen.has(row.id) || row.disconnectedAt)
+                return;
+            if (!isUsableTemplateConnection(row))
+                return;
+            seen.add(row.id);
             candidates.push(row);
-        }
+        };
+        pushCandidate(writer);
+        pushCandidate(preferred);
+        for (const row of openRows)
+            pushCandidate(row);
+        if (!candidates.length)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
         let lastError = null;
         for (const candidate of candidates) {
             let token = "";
