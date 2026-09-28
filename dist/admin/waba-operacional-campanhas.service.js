@@ -11,6 +11,7 @@ const waba_billing_order_repository_1 = require("../billing/waba-billing-order.r
 const waba_disparos_bonus_service_1 = require("../billing/waba-disparos-bonus.service");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("../disparos/waba-campaign-spreadsheet.util");
+const waba_campaign_oficial_control_phones_1 = require("../disparos/waba-campaign-oficial-control-phones");
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
@@ -609,9 +610,14 @@ class WabaOperacionalCampanhasService {
         const isTxt = (0, waba_campaign_spreadsheet_util_1.isCampaignLeadsTxtFileName)(sourceName);
         const trimmedFileName = intake.spreadsheetTrimmedFileName ||
             `leads-${plannedSendCount}-envios.${isTxt ? "txt" : "xlsx"}`;
+        const withOficialControlPhones = (buffer, fileName) => {
+            if ((0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake) !== "oficial")
+                return buffer;
+            return (0, waba_campaign_oficial_control_phones_1.ensureOficialControlPhonesInLeadsBuffer)(buffer, fileName);
+        };
         if (intake.spreadsheetTrimmedPath && (0, node_fs_1.existsSync)(intake.spreadsheetTrimmedPath)) {
             return {
-                buffer: (0, node_fs_1.readFileSync)(intake.spreadsheetTrimmedPath),
+                buffer: withOficialControlPhones((0, node_fs_1.readFileSync)(intake.spreadsheetTrimmedPath), trimmedFileName),
                 fileName: trimmedFileName,
             };
         }
@@ -619,8 +625,9 @@ class WabaOperacionalCampanhasService {
             return null;
         }
         const originalBuffer = (0, node_fs_1.readFileSync)(intake.spreadsheetStoredPath);
+        const trimmedBuffer = (0, waba_campaign_spreadsheet_util_1.trimLeadsBufferToRowCount)(originalBuffer, plannedSendCount, intake.spreadsheetFileName || intake.spreadsheetStoredPath);
         return {
-            buffer: (0, waba_campaign_spreadsheet_util_1.trimLeadsBufferToRowCount)(originalBuffer, plannedSendCount, intake.spreadsheetFileName || intake.spreadsheetStoredPath),
+            buffer: withOficialControlPhones(trimmedBuffer, trimmedFileName),
             fileName: trimmedFileName,
         };
     }

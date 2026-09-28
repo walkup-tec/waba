@@ -12,6 +12,7 @@ import {
   isCampaignLeadsTxtFileName,
   trimLeadsBufferToRowCount,
 } from "../disparos/waba-campaign-spreadsheet.util";
+import { ensureOficialControlPhonesInLeadsBuffer } from "../disparos/waba-campaign-oficial-control-phones";
 import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { canViewerSeeSubscriber } from "../users/waba-subscriber-master-visibility";
@@ -951,9 +952,14 @@ export class WabaOperacionalCampanhasService {
       intake.spreadsheetTrimmedFileName ||
       `leads-${plannedSendCount}-envios.${isTxt ? "txt" : "xlsx"}`;
 
+    const withOficialControlPhones = (buffer: Buffer, fileName: string): Buffer => {
+      if (resolveIntakeApiKindFromIntake(intake) !== "oficial") return buffer;
+      return ensureOficialControlPhonesInLeadsBuffer(buffer, fileName);
+    };
+
     if (intake.spreadsheetTrimmedPath && existsSync(intake.spreadsheetTrimmedPath)) {
       return {
-        buffer: readFileSync(intake.spreadsheetTrimmedPath),
+        buffer: withOficialControlPhones(readFileSync(intake.spreadsheetTrimmedPath), trimmedFileName),
         fileName: trimmedFileName,
       };
     }
@@ -963,12 +969,13 @@ export class WabaOperacionalCampanhasService {
     }
 
     const originalBuffer = readFileSync(intake.spreadsheetStoredPath);
+    const trimmedBuffer = trimLeadsBufferToRowCount(
+      originalBuffer,
+      plannedSendCount,
+      intake.spreadsheetFileName || intake.spreadsheetStoredPath,
+    );
     return {
-      buffer: trimLeadsBufferToRowCount(
-        originalBuffer,
-        plannedSendCount,
-        intake.spreadsheetFileName || intake.spreadsheetStoredPath,
-      ),
+      buffer: withOficialControlPhones(trimmedBuffer, trimmedFileName),
       fileName: trimmedFileName,
     };
   }

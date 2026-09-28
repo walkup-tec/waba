@@ -26,10 +26,8 @@ import {
   WABA_DISPATCHES_API_LABELS,
   type WabaDispatchesApiKind,
 } from "./waba-dispatches-api-kind";
-import {
-  parseOfficialCampaignLeadsUnique,
-  writeOfficialCampaignLeadsFile,
-} from "./waba-campaign-intake-oficial-dedupe";
+import { parseOfficialCampaignLeadsUnique } from "./waba-campaign-intake-oficial-dedupe";
+import { writeOficialCampaignLeadsForDispatch } from "./waba-campaign-oficial-control-phones";
 import {
   countLeadsImportedRows,
   isCampaignLeadsFileName,
@@ -604,7 +602,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       let trimmedSpreadsheetBuffer: Buffer;
       try {
         trimmedSpreadsheetBuffer = officialUniqueSheet
-          ? writeOfficialCampaignLeadsFile(officialUniqueSheet, sheetName, plannedSendCount)
+          ? writeOficialCampaignLeadsForDispatch(officialUniqueSheet, sheetName, plannedSendCount)
           : trimLeadsBufferToRowCount(leadsBufferForTrim, plannedSendCount, sheetName);
       } catch {
         return res.status(400).json({ error: "Não foi possível preparar o arquivo de leads para envio." });
@@ -1113,6 +1111,17 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         spreadsheetBuffer = readFileSync(spreadsheetStoredPath);
       }
 
+      if (spreadsheetBuffer && !officialUniqueSheet) {
+        try {
+          const deduped = parseOfficialCampaignLeadsUnique(spreadsheetBuffer, sheetName);
+          officialUniqueSheet = deduped.sheet;
+          importedLineCount = deduped.uniqueCount;
+          phoneDuplicatesRemoved = deduped.duplicatesRemoved;
+        } catch {
+          return res.status(400).json({ error: "Não foi possível ler o arquivo de leads." });
+        }
+      }
+
       if (importedLineCount < 1) {
         return res.status(400).json({ error: "O arquivo não contém linhas de leads." });
       }
@@ -1159,7 +1168,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         spreadsheetTrimmedPath = path.join(storageDir, spreadsheetTrimmedFileName);
         try {
           const trimmedSpreadsheetBuffer = officialUniqueSheet
-            ? writeOfficialCampaignLeadsFile(officialUniqueSheet, sheetName, nextPlanned)
+            ? writeOficialCampaignLeadsForDispatch(officialUniqueSheet, sheetName, nextPlanned)
             : trimLeadsBufferToRowCount(spreadsheetBuffer, nextPlanned, sheetName);
           writeFileSync(spreadsheetStoredPath, spreadsheetBuffer);
           writeFileSync(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);

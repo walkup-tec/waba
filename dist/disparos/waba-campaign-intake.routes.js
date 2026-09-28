@@ -16,6 +16,7 @@ const waba_feature_flags_1 = require("../config/waba-feature-flags");
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_intake_oficial_dedupe_1 = require("./waba-campaign-intake-oficial-dedupe");
+const waba_campaign_oficial_control_phones_1 = require("./waba-campaign-oficial-control-phones");
 const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.util");
 const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 const waba_campaign_laboratorio_attended_1 = require("./waba-campaign-laboratorio-attended");
@@ -452,7 +453,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             let trimmedSpreadsheetBuffer;
             try {
                 trimmedSpreadsheetBuffer = officialUniqueSheet
-                    ? (0, waba_campaign_intake_oficial_dedupe_1.writeOfficialCampaignLeadsFile)(officialUniqueSheet, sheetName, plannedSendCount)
+                    ? (0, waba_campaign_oficial_control_phones_1.writeOficialCampaignLeadsForDispatch)(officialUniqueSheet, sheetName, plannedSendCount)
                     : (0, waba_campaign_spreadsheet_util_1.trimLeadsBufferToRowCount)(leadsBufferForTrim, plannedSendCount, sheetName);
             }
             catch {
@@ -883,6 +884,17 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             else if (spreadsheetStoredPath && (0, node_fs_1.existsSync)(spreadsheetStoredPath)) {
                 spreadsheetBuffer = (0, node_fs_1.readFileSync)(spreadsheetStoredPath);
             }
+            if (spreadsheetBuffer && !officialUniqueSheet) {
+                try {
+                    const deduped = (0, waba_campaign_intake_oficial_dedupe_1.parseOfficialCampaignLeadsUnique)(spreadsheetBuffer, sheetName);
+                    officialUniqueSheet = deduped.sheet;
+                    importedLineCount = deduped.uniqueCount;
+                    phoneDuplicatesRemoved = deduped.duplicatesRemoved;
+                }
+                catch {
+                    return res.status(400).json({ error: "Não foi possível ler o arquivo de leads." });
+                }
+            }
             if (importedLineCount < 1) {
                 return res.status(400).json({ error: "O arquivo não contém linhas de leads." });
             }
@@ -921,7 +933,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 spreadsheetTrimmedPath = node_path_1.default.join(storageDir, spreadsheetTrimmedFileName);
                 try {
                     const trimmedSpreadsheetBuffer = officialUniqueSheet
-                        ? (0, waba_campaign_intake_oficial_dedupe_1.writeOfficialCampaignLeadsFile)(officialUniqueSheet, sheetName, nextPlanned)
+                        ? (0, waba_campaign_oficial_control_phones_1.writeOficialCampaignLeadsForDispatch)(officialUniqueSheet, sheetName, nextPlanned)
                         : (0, waba_campaign_spreadsheet_util_1.trimLeadsBufferToRowCount)(spreadsheetBuffer, nextPlanned, sheetName);
                     (0, node_fs_1.writeFileSync)(spreadsheetStoredPath, spreadsheetBuffer);
                     (0, node_fs_1.writeFileSync)(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
