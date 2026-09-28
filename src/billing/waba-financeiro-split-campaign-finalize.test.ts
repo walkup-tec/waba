@@ -270,4 +270,34 @@ describe("Split inicia só após finalizar campanha nova", () => {
     const supplierLine = settlement?.lines.find((line) => line.lineKind === "supplier");
     assert.equal(supplierLine?.shipmentCount, 1000);
   });
+
+  it("Sem Split pula o PIX do fornecedor e mantém o valor dos sócios", async () => {
+    seedFinanceiro();
+    const { WabaBillingOrderRepository } = await import("./waba-billing-order.repository");
+    const { WabaFinanceiroSplitService } = await import("./waba-financeiro-split.service");
+    const orders = new WabaBillingOrderRepository();
+    const order = paidOrder({
+      id: "order-sem-split",
+      asaasExternalReference: "waba:order-sem-split",
+    });
+    orders.create(order);
+    const split = new WabaFinanceiroSplitService();
+    assert.equal(await split.settleAndPayoutPaidOrder(order), null);
+
+    const settlement = await split.payoutSupplierForCompletedCampaign(
+      completedIntake({ id: "camp-sem-split", createdAt: "2026-09-17T14:00:00.000Z" }),
+      { skipSupplier: true },
+    );
+    assert.ok(settlement);
+    const supplierLine = settlement?.lines.find((line) => line.lineKind === "supplier");
+    assert.equal(supplierLine?.payoutStatus, "skipped");
+    assert.equal(supplierLine?.amountCents, 19000);
+    const partners = settlement?.lines.filter((line) => line.lineKind === "partner") ?? [];
+    assert.equal(partners.length, 2);
+    assert.equal(
+      partners.reduce((sum, line) => sum + line.amountCents, 0),
+      10702,
+    );
+    assert.ok(partners.every((line) => line.payoutStatus === "pending"));
+  });
 });

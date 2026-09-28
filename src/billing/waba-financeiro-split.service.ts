@@ -1272,7 +1272,47 @@ export class WabaFinanceiroSplitService {
     }
   }
 
-  async payoutSupplierForCompletedCampaign(intake: WabaCampaignIntake): Promise<FinanceiroSplitSettlement | null> {
+  private skipSupplierPayoutOnSettlement(
+    settlement: FinanceiroSplitSettlement,
+  ): FinanceiroSplitSettlement {
+    const lines = settlement.lines.map((line) => {
+      if (line.lineKind !== "supplier") return line;
+      if (line.payoutStatus === "paid") return line;
+      return {
+        ...line,
+        payoutStatus: "skipped" as const,
+        failureReason: "Sem Split: pagamento do fornecedor/operador não autorizado.",
+      };
+    });
+    return this.settlementRepository.save({
+      ...settlement,
+      lines,
+      payoutStatus: deriveSettlementPayoutStatus(lines),
+    });
+  }
+
+  private async payCompletedCampaignSettlement(
+    settlement: FinanceiroSplitSettlement,
+    supplier: SplitSupplier,
+    billableCount: number,
+    campaignIntakeId: string,
+    skipSupplier: boolean,
+    mode: "full" | "supplier",
+  ): Promise<FinanceiroSplitSettlement> {
+    if (skipSupplier) {
+      const skipped = this.skipSupplierPayoutOnSettlement(settlement);
+      return this.executeFullSettlementPayout(skipped);
+    }
+    if (mode === "full") {
+      return this.executeFullSettlementPayout(settlement);
+    }
+    return this.ensureSupplierPayoutOnSettlement(settlement, supplier, billableCount, campaignIntakeId);
+  }
+
+  async payoutSupplierForCompletedCampaign(
+    intake: WabaCampaignIntake,
+    options?: { skipSupplier?: boolean },
+  ): Promise<FinanceiroSplitSettlement | null> {
     if (intake.status !== "completed") return null;
     if (isWabaMetricsExcludedOwnerEmail(intake.ownerEmail)) return null;
 
@@ -1286,8 +1326,10 @@ export class WabaFinanceiroSplitService {
     const billableCount = resolveBillableCountForSupplierSplit(intake);
     if (billableCount <= 0) return null;
 
+    const skipSupplier = options?.skipSupplier === true;
     const supplier = this.resolveSupplierForCampaignIntake(intake);
-    if (!supplier?.pixKey) return null;
+    if (!supplier) return null;
+    if (!skipSupplier && !supplier.pixKey) return null;
 
     this.absorbSyntheticCampaignSupplierSettlements();
     this.syncDeferredOrderSettlementsForIntake(intake, supplier);
@@ -1326,14 +1368,35 @@ export class WabaFinanceiroSplitService {
           billableCount,
           intake.id,
         );
-        return this.executeFullSettlementPayout(recalculated);
+        return this.payCompletedCampaignSettlement(
+          recalculated,
+          supplier,
+          billableCount,
+          intake.id,
+          skipSupplier,
+          "full",
+        );
       }
-      return this.ensureSupplierPayoutOnSettlement(target, supplier, billableCount, intake.id);
+      return this.payCompletedCampaignSettlement(
+        target,
+        supplier,
+        billableCount,
+        intake.id,
+        skipSupplier,
+        "supplier",
+      );
     }
 
     if (linked && this.isCampaignSupplierOrderId(linked.orderId)) {
       if (isWabaMetricsExcludedOwnerEmail(linked.ownerEmail)) return null;
-      return this.ensureSupplierPayoutOnSettlement(linked, supplier, billableCount, intake.id);
+      return this.payCompletedCampaignSettlement(
+        linked,
+        supplier,
+        billableCount,
+        intake.id,
+        skipSupplier,
+        "supplier",
+      );
     }
 
     const unpaidOrder = this.findPaidOrderAwaitingCampaignSplit(intake);
@@ -1351,7 +1414,14 @@ export class WabaFinanceiroSplitService {
         billableCount,
         intake.id,
       );
-      return this.executeFullSettlementPayout(recalculated);
+      return this.payCompletedCampaignSettlement(
+        recalculated,
+        supplier,
+        billableCount,
+        intake.id,
+        skipSupplier,
+        "full",
+      );
     }
 
     const orderId = this.buildCampaignSupplierOrderId(intake.id);
@@ -1370,7 +1440,7 @@ export class WabaFinanceiroSplitService {
         amountCents: supplierCostCents,
         shipmentCount: billableCount,
         costPerShipmentCents,
-        payoutStatus: "pending",
+        payoutStatus: skipSupplier ? "skipped" : "pending",
       },
     ];
 
@@ -1394,6 +1464,13 @@ export class WabaFinanceiroSplitService {
       payoutStatus: deriveSettlementPayoutStatus(lines),
     });
 
-    return this.ensureSupplierPayoutOnSettlement(fallback, supplier, billableCount, intake.id);
+    return this.payCompletedCampaignSettlement(
+      fallback,
+      supplier,
+      billableCount,
+      intake.id,
+      skipSupplier,
+      "supplier",
+    );
   }
 }

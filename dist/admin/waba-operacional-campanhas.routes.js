@@ -249,6 +249,30 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             return res.status(status).json({ error: message });
         }
     });
+    app.post("/admin/operacional/campanhas/:id/sem-split", async (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        if (rejectIfIndicadorMutation(auth, res))
+            return;
+        try {
+            const campaign = await operacionalCampanhasService.approveCampaignPayout(req.params.id, {
+                email: auth.email,
+                role: auth.role,
+            }, { skipSupplier: true });
+            return res.status(200).json({ ok: true, campaign });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível concluir o Sem Split.";
+            const status = /Somente|já foi aprovado|não está aguardando|Laboratório|Finalize|não foi encontrada/i.test(message)
+                ? 400
+                : 500;
+            if (status >= 500) {
+                console.error("[operacional/campanhas/sem-split] erro:", error);
+            }
+            return res.status(status).json({ error: message });
+        }
+    });
     app.post("/admin/operacional/campanhas/:id/bm-inoperante", async (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)

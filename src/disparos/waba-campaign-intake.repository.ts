@@ -48,6 +48,8 @@ export type WabaCampaignPayoutApproval = {
   uploadedByEmail: string;
   approvedAt?: string;
   approvedByEmail?: string;
+  /** Master fechou sem PIX ao fornecedor/operador; sócios seguem no split. */
+  skipSupplier?: boolean;
 };
 
 export type WabaCampaignOperacionalNotifyAudit = {

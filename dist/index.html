@@ -27093,6 +27093,9 @@
           <button id="admin-campanhas-report-cancel-btn" class="instance-action-btn" type="button">
             Fechar
           </button>
+          <button id="admin-campanhas-skip-split-btn" class="instance-action-btn" type="button" hidden title="Paga somente os sócios. Não transfere ao fornecedor/operador.">
+            Sem Split
+          </button>
           <button id="admin-campanhas-approve-payout-btn" class="instance-action-btn btn-qrcode enabled" type="button" hidden>
             Aprovar pagamento
           </button>
@@ -52694,8 +52697,12 @@
           }
         }
         const approveBtn = document.getElementById("admin-campanhas-approve-payout-btn");
+        const skipSplitBtn = document.getElementById("admin-campanhas-skip-split-btn");
         if (approveBtn && !adminCampanhasReportReadOnly) {
           approveBtn.hidden = true;
+        }
+        if (skipSplitBtn && !adminCampanhasReportReadOnly) {
+          skipSplitBtn.hidden = true;
         }
         if (entry) {
           entry.hidden = adminCampanhasReportReadOnly;
@@ -52896,6 +52903,7 @@
         const img = document.getElementById("admin-campanhas-payout-evidence-img");
         const meta = document.getElementById("admin-campanhas-payout-evidence-meta");
         const approveBtn = document.getElementById("admin-campanhas-approve-payout-btn");
+        const skipSplitBtn = document.getElementById("admin-campanhas-skip-split-btn");
         const approval = payload?.payoutApproval && typeof payload.payoutApproval === "object"
           ? payload.payoutApproval
           : null;
@@ -52904,6 +52912,11 @@
           approveBtn.hidden = !canApprove;
           approveBtn.removeAttribute("disabled");
           approveBtn.textContent = "Aprovar pagamento";
+        }
+        if (skipSplitBtn) {
+          skipSplitBtn.hidden = !canApprove;
+          skipSplitBtn.removeAttribute("disabled");
+          skipSplitBtn.textContent = "Sem Split";
         }
         if (!block || !img || !meta) return;
         if (!approval?.evidenceUrl) {
@@ -52915,9 +52928,12 @@
         const status = String(approval.status || "");
         const uploadedAt = String(approval.uploadedAt || "").trim();
         const approvedAt = String(approval.approvedAt || "").trim();
+        const skipSupplier = Boolean(approval.skipSupplier);
         const statusLabel =
           status === "approved"
-            ? "Pagamento aprovado"
+            ? skipSupplier
+              ? "Sem Split — sócios pagos, sem pagamento ao fornecedor"
+              : "Pagamento aprovado"
             : "Aguardando aprovação do master";
         const when = approvedAt || uploadedAt;
         let whenLabel = "";
@@ -53010,27 +53026,45 @@
         }
       }
 
-      async function approveAdminCampanhasPayout() {
+      async function approveAdminCampanhasPayout(options) {
         const campaignId = adminCampanhasReportCampaignId;
         if (!campaignId) return;
+        const skipSupplier = Boolean(options?.skipSupplier);
+        if (skipSupplier) {
+          const confirmed = window.confirm(
+            "Sem Split: a campanha fica finalizada sem pagar o fornecedor/operador. Somente os sócios recebem o Pix. Continuar?"
+          );
+          if (!confirmed) return;
+        }
         const approveBtn = document.getElementById("admin-campanhas-approve-payout-btn");
-        const previousLabel = approveBtn?.textContent || "Aprovar pagamento";
-        if (approveBtn) {
-          approveBtn.textContent = "Aprovando…";
-          approveBtn.setAttribute("disabled", "true");
+        const skipSplitBtn = document.getElementById("admin-campanhas-skip-split-btn");
+        const activeBtn = skipSupplier ? skipSplitBtn : approveBtn;
+        if (approveBtn) approveBtn.setAttribute("disabled", "true");
+        if (skipSplitBtn) skipSplitBtn.setAttribute("disabled", "true");
+        if (activeBtn) {
+          activeBtn.textContent = skipSupplier ? "Processando…" : "Aprovando…";
         }
         try {
-          const response = await fetchAdminOperacionalJson(
-            `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/aprovar-pagamento`,
-            { method: "POST" },
-            30000,
-            2
-          );
+          const path = skipSupplier
+            ? `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/sem-split`
+            : `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/aprovar-pagamento`;
+          const response = await fetchAdminOperacionalJson(path, { method: "POST" }, 30000, 2);
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
-            throw new Error(payload.error || "Não foi possível aprovar o pagamento.");
+            throw new Error(
+              payload.error ||
+                (skipSupplier
+                  ? "Não foi possível concluir o Sem Split."
+                  : "Não foi possível aprovar o pagamento.")
+            );
           }
-          showToast("Pagamento aprovado. O split Pix foi disparado.", "success", 3200);
+          showToast(
+            skipSupplier
+              ? "Sem Split: sócios pagos. Fornecedor/operador não recebeu."
+              : "Pagamento aprovado. O split Pix foi disparado.",
+            "success",
+            3200
+          );
           const reportResponse = await fetchAdminOperacionalJson(
             `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/relatorio`,
             {},
@@ -53043,10 +53077,17 @@
           }
           await loadAdminCampanhas();
         } catch (error) {
-          showToast(error?.message || "Falha ao aprovar pagamento.", "error");
+          showToast(
+            error?.message || (skipSupplier ? "Falha no Sem Split." : "Falha ao aprovar pagamento."),
+            "error"
+          );
           if (approveBtn) {
-            approveBtn.textContent = previousLabel;
+            approveBtn.textContent = "Aprovar pagamento";
             approveBtn.removeAttribute("disabled");
+          }
+          if (skipSplitBtn) {
+            skipSplitBtn.textContent = "Sem Split";
+            skipSplitBtn.removeAttribute("disabled");
           }
         }
       }
@@ -53344,6 +53385,9 @@
 
         document.getElementById("admin-campanhas-approve-payout-btn")?.addEventListener("click", () => {
           void approveAdminCampanhasPayout();
+        });
+        document.getElementById("admin-campanhas-skip-split-btn")?.addEventListener("click", () => {
+          void approveAdminCampanhasPayout({ skipSupplier: true });
         });
 
         document.getElementById("admin-campanhas-evidence-cancel-btn")?.addEventListener("click", () => {

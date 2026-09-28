@@ -397,6 +397,7 @@ class WabaOperacionalCampanhasService {
                 uploadedByEmail: intake.payoutApproval.uploadedByEmail,
                 approvedAt: intake.payoutApproval.approvedAt || null,
                 approvedByEmail: intake.payoutApproval.approvedByEmail || null,
+                skipSupplier: Boolean(intake.payoutApproval.skipSupplier),
             }
             : null;
         return {
@@ -471,7 +472,7 @@ class WabaOperacionalCampanhasService {
             throw new Error("Não foi possível salvar o relatório.");
         return detail;
     }
-    async approveCampaignPayout(campaignId, staff) {
+    async approveCampaignPayout(campaignId, staff, options) {
         if (staff.role !== "master" && !(0, waba_auth_service_1.isWabaMasterEmail)(staff.email)) {
             throw new Error("Somente usuários master podem aprovar o pagamento.");
         }
@@ -492,7 +493,8 @@ class WabaOperacionalCampanhasService {
         if (!String(intake.payoutApproval?.evidenceStoredPath || "").trim()) {
             throw new Error("A evidência do relatório não foi encontrada.");
         }
-        const settlement = await this.splitService.payoutSupplierForCompletedCampaign(intake);
+        const skipSupplier = options?.skipSupplier === true;
+        const settlement = await this.splitService.payoutSupplierForCompletedCampaign(intake, skipSupplier ? { skipSupplier: true } : undefined);
         const now = new Date().toISOString();
         const updated = this.intakeRepository.updateById(campaignId, {
             payoutApproval: {
@@ -500,6 +502,7 @@ class WabaOperacionalCampanhasService {
                 status: "approved",
                 approvedAt: now,
                 approvedByEmail: normalizeEmail(staff.email),
+                skipSupplier,
             },
             ...(settlement?.id ? { supplierPayoutSettlementId: settlement.id } : {}),
             updatedAt: now,

@@ -137,11 +137,14 @@ describe("aprovação master do split operacional", () => {
     mkdirSync(path.dirname(row.payoutApproval!.evidenceStoredPath), { recursive: true });
     writeFileSync(row.payoutApproval!.evidenceStoredPath, PNG);
     seed([row]);
-    const paid: string[] = [];
+    const paid: { id: string; skipSupplier?: boolean }[] = [];
     const service = new WabaOperacionalCampanhasService();
     (service as unknown as { splitService: WabaFinanceiroSplitService }).splitService = {
-      payoutSupplierForCompletedCampaign: async (intake: WabaCampaignIntake) => {
-        paid.push(intake.id);
+      payoutSupplierForCompletedCampaign: async (
+        intake: WabaCampaignIntake,
+        options?: { skipSupplier?: boolean },
+      ) => {
+        paid.push({ id: intake.id, skipSupplier: options?.skipSupplier });
         return { id: "set-approved" };
       },
     } as unknown as WabaFinanceiroSplitService;
@@ -151,7 +154,7 @@ describe("aprovação master do split operacional", () => {
     });
     assert.equal(detail.payoutApprovalStatus, "approved");
     assert.equal(detail.canApprovePayout, false);
-    assert.deepEqual(paid, ["camp-manual-1"]);
+    assert.deepEqual(paid, [{ id: "camp-manual-1", skipSupplier: undefined }]);
     const stored = new WabaCampaignIntakeRepository().getById("camp-manual-1");
     assert.equal(stored?.payoutApproval?.status, "approved");
     assert.equal(stored?.payoutApproval?.approvedByEmail, "master@exemplo.com");
@@ -204,5 +207,44 @@ describe("aprovação master do split operacional", () => {
         }),
       { message: "O pagamento desta campanha já foi aprovado." },
     );
+  });
+
+  it("master Sem Split não dispara PIX do fornecedor", async () => {
+    const row = completedManual({ id: "camp-sem-split" });
+    row.payoutApproval = {
+      ...row.payoutApproval!,
+      evidenceStoredPath: path.join(
+        process.cwd(),
+        "data",
+        "campaign-intakes",
+        "camp-sem-split",
+        "payout-evidence.png",
+      ),
+    };
+    mkdirSync(path.dirname(row.payoutApproval.evidenceStoredPath), { recursive: true });
+    writeFileSync(row.payoutApproval.evidenceStoredPath, PNG);
+    seed([row]);
+    const paid: { id: string; skipSupplier?: boolean }[] = [];
+    const service = new WabaOperacionalCampanhasService();
+    (service as unknown as { splitService: WabaFinanceiroSplitService }).splitService = {
+      payoutSupplierForCompletedCampaign: async (
+        intake: WabaCampaignIntake,
+        options?: { skipSupplier?: boolean },
+      ) => {
+        paid.push({ id: intake.id, skipSupplier: options?.skipSupplier });
+        return { id: "set-sem-split" };
+      },
+    } as unknown as WabaFinanceiroSplitService;
+    const detail = await service.approveCampaignPayout(
+      "camp-sem-split",
+      { email: "master@exemplo.com", role: "master" },
+      { skipSupplier: true },
+    );
+    assert.equal(detail.payoutApprovalStatus, "approved");
+    assert.equal(detail.canApprovePayout, false);
+    assert.deepEqual(paid, [{ id: "camp-sem-split", skipSupplier: true }]);
+    const stored = new WabaCampaignIntakeRepository().getById("camp-sem-split");
+    assert.equal(stored?.payoutApproval?.status, "approved");
+    assert.equal(stored?.payoutApproval?.skipSupplier, true);
   });
 });

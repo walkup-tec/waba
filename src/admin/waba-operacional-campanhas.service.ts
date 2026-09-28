@@ -173,6 +173,7 @@ export type OperacionalCampaignReportView = {
     uploadedByEmail: string;
     approvedAt: string | null;
     approvedByEmail: string | null;
+    skipSupplier: boolean;
   } | null;
   canApprovePayout: boolean;
 };
@@ -685,6 +686,7 @@ export class WabaOperacionalCampanhasService {
           uploadedByEmail: intake.payoutApproval.uploadedByEmail,
           approvedAt: intake.payoutApproval.approvedAt || null,
           approvedByEmail: intake.payoutApproval.approvedByEmail || null,
+          skipSupplier: Boolean(intake.payoutApproval.skipSupplier),
         }
       : null;
     return {
@@ -783,6 +785,7 @@ export class WabaOperacionalCampanhasService {
   async approveCampaignPayout(
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
+    options?: { skipSupplier?: boolean },
   ): Promise<OperacionalCampaignDetail> {
     if (staff.role !== "master" && !isWabaMasterEmail(staff.email)) {
       throw new Error("Somente usuários master podem aprovar o pagamento.");
@@ -805,7 +808,11 @@ export class WabaOperacionalCampanhasService {
       throw new Error("A evidência do relatório não foi encontrada.");
     }
 
-    const settlement = await this.splitService.payoutSupplierForCompletedCampaign(intake);
+    const skipSupplier = options?.skipSupplier === true;
+    const settlement = await this.splitService.payoutSupplierForCompletedCampaign(
+      intake,
+      skipSupplier ? { skipSupplier: true } : undefined,
+    );
     const now = new Date().toISOString();
     const updated = this.intakeRepository.updateById(campaignId, {
       payoutApproval: {
@@ -813,6 +820,7 @@ export class WabaOperacionalCampanhasService {
         status: "approved",
         approvedAt: now,
         approvedByEmail: normalizeEmail(staff.email),
+        skipSupplier,
       },
       ...(settlement?.id ? { supplierPayoutSettlementId: settlement.id } : {}),
       updatedAt: now,

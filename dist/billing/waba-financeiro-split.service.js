@@ -1028,7 +1028,35 @@ class WabaFinanceiroSplitService {
             return settlement;
         }
     }
-    async payoutSupplierForCompletedCampaign(intake) {
+    skipSupplierPayoutOnSettlement(settlement) {
+        const lines = settlement.lines.map((line) => {
+            if (line.lineKind !== "supplier")
+                return line;
+            if (line.payoutStatus === "paid")
+                return line;
+            return {
+                ...line,
+                payoutStatus: "skipped",
+                failureReason: "Sem Split: pagamento do fornecedor/operador não autorizado.",
+            };
+        });
+        return this.settlementRepository.save({
+            ...settlement,
+            lines,
+            payoutStatus: (0, waba_financeiro_split_settlement_repository_1.deriveSettlementPayoutStatus)(lines),
+        });
+    }
+    async payCompletedCampaignSettlement(settlement, supplier, billableCount, campaignIntakeId, skipSupplier, mode) {
+        if (skipSupplier) {
+            const skipped = this.skipSupplierPayoutOnSettlement(settlement);
+            return this.executeFullSettlementPayout(skipped);
+        }
+        if (mode === "full") {
+            return this.executeFullSettlementPayout(settlement);
+        }
+        return this.ensureSupplierPayoutOnSettlement(settlement, supplier, billableCount, campaignIntakeId);
+    }
+    async payoutSupplierForCompletedCampaign(intake, options) {
         if (intake.status !== "completed")
             return null;
         if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(intake.ownerEmail))
@@ -1040,8 +1068,11 @@ class WabaFinanceiroSplitService {
         const billableCount = (0, waba_campaign_credit_funding_1.resolveBillableCountForSupplierSplit)(intake);
         if (billableCount <= 0)
             return null;
+        const skipSupplier = options?.skipSupplier === true;
         const supplier = this.resolveSupplierForCampaignIntake(intake);
-        if (!supplier?.pixKey)
+        if (!supplier)
+            return null;
+        if (!skipSupplier && !supplier.pixKey)
             return null;
         this.absorbSyntheticCampaignSupplierSettlements();
         this.syncDeferredOrderSettlementsForIntake(intake, supplier);
@@ -1068,14 +1099,14 @@ class WabaFinanceiroSplitService {
                 return null;
             if (usesDeliveredRule) {
                 const recalculated = this.recalculateUnpaidSettlementForCampaign(target, supplier, billableCount, intake.id);
-                return this.executeFullSettlementPayout(recalculated);
+                return this.payCompletedCampaignSettlement(recalculated, supplier, billableCount, intake.id, skipSupplier, "full");
             }
-            return this.ensureSupplierPayoutOnSettlement(target, supplier, billableCount, intake.id);
+            return this.payCompletedCampaignSettlement(target, supplier, billableCount, intake.id, skipSupplier, "supplier");
         }
         if (linked && this.isCampaignSupplierOrderId(linked.orderId)) {
             if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(linked.ownerEmail))
                 return null;
-            return this.ensureSupplierPayoutOnSettlement(linked, supplier, billableCount, intake.id);
+            return this.payCompletedCampaignSettlement(linked, supplier, billableCount, intake.id, skipSupplier, "supplier");
         }
         const unpaidOrder = this.findPaidOrderAwaitingCampaignSplit(intake);
         if (unpaidOrder) {
@@ -1089,7 +1120,7 @@ class WabaFinanceiroSplitService {
             if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(created.ownerEmail))
                 return null;
             const recalculated = this.recalculateUnpaidSettlementForCampaign(created, supplier, billableCount, intake.id);
-            return this.executeFullSettlementPayout(recalculated);
+            return this.payCompletedCampaignSettlement(recalculated, supplier, billableCount, intake.id, skipSupplier, "full");
         }
         const orderId = this.buildCampaignSupplierOrderId(intake.id);
         const costPerShipmentCents = Math.max(0, Math.round(Number(supplier.costPerShipmentCents ?? 0)));
@@ -1107,7 +1138,7 @@ class WabaFinanceiroSplitService {
                 amountCents: supplierCostCents,
                 shipmentCount: billableCount,
                 costPerShipmentCents,
-                payoutStatus: "pending",
+                payoutStatus: skipSupplier ? "skipped" : "pending",
             },
         ];
         const fallback = this.settlementRepository.create({
@@ -1129,7 +1160,7 @@ class WabaFinanceiroSplitService {
             lines,
             payoutStatus: (0, waba_financeiro_split_settlement_repository_1.deriveSettlementPayoutStatus)(lines),
         });
-        return this.ensureSupplierPayoutOnSettlement(fallback, supplier, billableCount, intake.id);
+        return this.payCompletedCampaignSettlement(fallback, supplier, billableCount, intake.id, skipSupplier, "supplier");
     }
 }
 exports.WabaFinanceiroSplitService = WabaFinanceiroSplitService;
