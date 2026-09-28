@@ -1,3 +1,5 @@
+import { isDeviceCloudProductEnabled } from "../config/waba-feature-flags";
+
 export type WabaMenuSection =
   | "nao-oficial"
   | "oficial"
@@ -310,17 +312,27 @@ export const WABA_TECH_PROVIDER_MENU_IDS = [
   "whatsapp-bots",
 ] as const;
 
+export const isRetiredWabaMenuId = (menuId: string): boolean => {
+  const id = String(menuId ?? "").trim();
+  if (id === "dispositivos" && !isDeviceCloudProductEnabled()) return true;
+  return false;
+};
+
+const visibleMenuRegistry = (): WabaMenuDefinition[] =>
+  WABA_MENU_REGISTRY.filter((item) => !isRetiredWabaMenuId(item.id));
+
 export const listWabaMenuDefinitions = (): WabaMenuDefinition[] =>
-  WABA_MENU_REGISTRY.map((item) => ({ ...item }));
+  visibleMenuRegistry().map((item) => ({ ...item }));
 
 export const getWabaMenuById = (menuId: string): WabaMenuDefinition | null => {
   const id = String(menuId ?? "").trim();
+  if (isRetiredWabaMenuId(id)) return null;
   return WABA_MENU_REGISTRY.find((item) => item.id === id) ?? null;
 };
 
 export const getWabaMenusByTab = (tab: string): WabaMenuDefinition[] => {
   const normalized = String(tab ?? "").trim();
-  return WABA_MENU_REGISTRY.filter((item) => item.tab === normalized);
+  return visibleMenuRegistry().filter((item) => item.tab === normalized);
 };
 
-export const listWabaMenuIds = (): string[] => WABA_MENU_REGISTRY.map((item) => item.id);
+export const listWabaMenuIds = (): string[] => visibleMenuRegistry().map((item) => item.id);

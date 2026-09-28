@@ -33,6 +33,7 @@ export type WabaClientFeatureFlags = {
   alternativaNumbersPurchase: boolean;
   alternativaProduct?: boolean;
   metaOfficialPortfolioLab?: boolean;
+  deviceCloudProduct?: boolean;
 };
 
 export type WabaClientRuntimeInject = {
@@ -95,6 +96,7 @@ export function injectRuntimeIntoIndexHtml(
       alternativaNumbersPurchase: false,
       alternativaProduct: false,
       metaOfficialPortfolioLab: false,
+      deviceCloudProduct: false,
     },
   );
   const deployResilienceEnabled =

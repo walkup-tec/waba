@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.listWabaMenuIds = exports.getWabaMenusByTab = exports.getWabaMenuById = exports.listWabaMenuDefinitions = exports.WABA_TECH_PROVIDER_MENU_IDS = exports.WABA_SUBSCRIBER_DISPAROS_MENU_IDS = exports.WABA_MENU_REGISTRY = exports.WABA_MENU_SECTION_LABELS = void 0;
+exports.listWabaMenuIds = exports.getWabaMenusByTab = exports.getWabaMenuById = exports.listWabaMenuDefinitions = exports.isRetiredWabaMenuId = exports.WABA_TECH_PROVIDER_MENU_IDS = exports.WABA_SUBSCRIBER_DISPAROS_MENU_IDS = exports.WABA_MENU_REGISTRY = exports.WABA_MENU_SECTION_LABELS = void 0;
+const waba_feature_flags_1 = require("../config/waba-feature-flags");
 exports.WABA_MENU_SECTION_LABELS = {
     "nao-oficial": "Aquecedor",
     oficial: "Disparos",
@@ -286,17 +287,27 @@ exports.WABA_TECH_PROVIDER_MENU_IDS = [
     "whatsapp-inbox",
     "whatsapp-bots",
 ];
-const listWabaMenuDefinitions = () => exports.WABA_MENU_REGISTRY.map((item) => ({ ...item }));
+const isRetiredWabaMenuId = (menuId) => {
+    const id = String(menuId ?? "").trim();
+    if (id === "dispositivos" && !(0, waba_feature_flags_1.isDeviceCloudProductEnabled)())
+        return true;
+    return false;
+};
+exports.isRetiredWabaMenuId = isRetiredWabaMenuId;
+const visibleMenuRegistry = () => exports.WABA_MENU_REGISTRY.filter((item) => !(0, exports.isRetiredWabaMenuId)(item.id));
+const listWabaMenuDefinitions = () => visibleMenuRegistry().map((item) => ({ ...item }));
 exports.listWabaMenuDefinitions = listWabaMenuDefinitions;
 const getWabaMenuById = (menuId) => {
     const id = String(menuId ?? "").trim();
+    if ((0, exports.isRetiredWabaMenuId)(id))
+        return null;
     return exports.WABA_MENU_REGISTRY.find((item) => item.id === id) ?? null;
 };
 exports.getWabaMenuById = getWabaMenuById;
 const getWabaMenusByTab = (tab) => {
     const normalized = String(tab ?? "").trim();
-    return exports.WABA_MENU_REGISTRY.filter((item) => item.tab === normalized);
+    return visibleMenuRegistry().filter((item) => item.tab === normalized);
 };
 exports.getWabaMenusByTab = getWabaMenusByTab;
-const listWabaMenuIds = () => exports.WABA_MENU_REGISTRY.map((item) => item.id);
+const listWabaMenuIds = () => visibleMenuRegistry().map((item) => item.id);
 exports.listWabaMenuIds = listWabaMenuIds;

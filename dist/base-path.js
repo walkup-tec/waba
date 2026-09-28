@@ -79,6 +79,7 @@ function injectRuntimeIntoIndexHtml(html, opts) {
         alternativaNumbersPurchase: false,
         alternativaProduct: false,
         metaOfficialPortfolioLab: false,
+        deviceCloudProduct: false,
     });
     const deployResilienceEnabled = typeof opts.deployResilienceEnabled === "boolean"
         ? opts.deployResilienceEnabled

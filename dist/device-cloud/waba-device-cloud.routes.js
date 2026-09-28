@@ -9,6 +9,7 @@ const multer_1 = __importDefault(require("multer"));
 const waba_request_auth_1 = require("../auth/waba-request-auth");
 const waba_device_cloud_service_1 = require("./waba-device-cloud.service");
 const waba_device_cloud_phone_service_1 = require("./waba-device-cloud-phone.service");
+const waba_feature_flags_1 = require("../config/waba-feature-flags");
 const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
 const DEVICE_CLOUD_MEDIA_MAX_BYTES = 5 * 1024 * 1024;
 const DEVICE_CLOUD_MEDIA_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -36,6 +37,10 @@ function isDeviceCloudProductionProfile() {
     return env !== "v01";
 }
 function requireDeviceCloudUser(req, res) {
+    if (!(0, waba_feature_flags_1.isDeviceCloudProductEnabled)()) {
+        res.status(404).json({ error: waba_feature_flags_1.DEVICE_CLOUD_PRODUCT_UNAVAILABLE_MESSAGE });
+        return null;
+    }
     if (!isDeviceCloudProductionProfile()) {
         res.status(403).json({ error: "Device Cloud disponível apenas no perfil production." });
         return null;

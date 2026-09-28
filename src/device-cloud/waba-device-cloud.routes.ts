@@ -10,6 +10,10 @@ import {
   resolveDeviceCloudRegisteredPhone,
   saveDeviceCloudRegisteredPhone,
 } from "./waba-device-cloud-phone.service";
+import {
+  DEVICE_CLOUD_PRODUCT_UNAVAILABLE_MESSAGE,
+  isDeviceCloudProductEnabled,
+} from "../config/waba-feature-flags";
 
 const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
 const DEVICE_CLOUD_MEDIA_MAX_BYTES = 5 * 1024 * 1024;
@@ -40,6 +44,10 @@ function isDeviceCloudProductionProfile(): boolean {
 }
 
 function requireDeviceCloudUser(req: Request, res: Response): { email: string } | null {
+  if (!isDeviceCloudProductEnabled()) {
+    res.status(404).json({ error: DEVICE_CLOUD_PRODUCT_UNAVAILABLE_MESSAGE });
+    return null;
+  }
   if (!isDeviceCloudProductionProfile()) {
     res.status(403).json({ error: "Device Cloud disponível apenas no perfil production." });
     return null;

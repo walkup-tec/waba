@@ -10,6 +10,11 @@ export type WabaFeatureFlags = {
   alternativaProduct: boolean;
   /** Card de portfólio + lista/ativação de números oficiais no Laboratório. */
   metaOfficialPortfolioLab: boolean;
+  /**
+   * Menu Dispositivos / Device Cloud (celulares virtuais no Aquecedor).
+   * Desligado: menu, rotas e permissões somem; JSON e serviço ficam no disco para rollback.
+   */
+  deviceCloudProduct: boolean;
 };
 
 const parseTruthy = (raw: string): boolean | null => {
@@ -50,11 +55,22 @@ export function isMetaOfficialPortfolioLabEnabled(env: NodeJS.ProcessEnv = proce
   return true;
 }
 
+export const DEVICE_CLOUD_PRODUCT_UNAVAILABLE_MESSAGE =
+  "O menu Dispositivos não está mais disponível.";
+
+/** Device Cloud / Dispositivos: desligado por padrão. Rollback: WABA_DEVICE_CLOUD_PRODUCT_ENABLED=1. */
+export function isDeviceCloudProductEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const explicit = parseTruthy(String(env.WABA_DEVICE_CLOUD_PRODUCT_ENABLED ?? ""));
+  if (explicit !== null) return explicit;
+  return false;
+}
+
 export function getWabaFeatureFlags(): WabaFeatureFlags {
   return {
     alternativaNumbersPurchase: isAlternativaNumbersPurchaseEnabled(),
     alternativaProduct: isAlternativaProductEnabled(),
     metaOfficialPortfolioLab: isMetaOfficialPortfolioLabEnabled(),
+    deviceCloudProduct: isDeviceCloudProductEnabled(),
   };
 }
 

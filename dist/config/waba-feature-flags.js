@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE = void 0;
+exports.DEVICE_CLOUD_PRODUCT_UNAVAILABLE_MESSAGE = exports.ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE = void 0;
 exports.isAlternativaNumbersPurchaseEnabled = isAlternativaNumbersPurchaseEnabled;
 exports.isAlternativaProductEnabled = isAlternativaProductEnabled;
 exports.assertAlternativaProductAllowsApiKind = assertAlternativaProductAllowsApiKind;
 exports.isMetaOfficialPortfolioLabEnabled = isMetaOfficialPortfolioLabEnabled;
+exports.isDeviceCloudProductEnabled = isDeviceCloudProductEnabled;
 exports.getWabaFeatureFlags = getWabaFeatureFlags;
 exports.getWabaFeatureFlagsForClient = getWabaFeatureFlagsForClient;
 exports.describeWabaFeatureFlagsForOps = describeWabaFeatureFlagsForOps;
@@ -45,11 +46,20 @@ function isMetaOfficialPortfolioLabEnabled(env = process.env) {
         return explicit;
     return true;
 }
+exports.DEVICE_CLOUD_PRODUCT_UNAVAILABLE_MESSAGE = "O menu Dispositivos não está mais disponível.";
+/** Device Cloud / Dispositivos: desligado por padrão. Rollback: WABA_DEVICE_CLOUD_PRODUCT_ENABLED=1. */
+function isDeviceCloudProductEnabled(env = process.env) {
+    const explicit = parseTruthy(String(env.WABA_DEVICE_CLOUD_PRODUCT_ENABLED ?? ""));
+    if (explicit !== null)
+        return explicit;
+    return false;
+}
 function getWabaFeatureFlags() {
     return {
         alternativaNumbersPurchase: isAlternativaNumbersPurchaseEnabled(),
         alternativaProduct: isAlternativaProductEnabled(),
         metaOfficialPortfolioLab: isMetaOfficialPortfolioLabEnabled(),
+        deviceCloudProduct: isDeviceCloudProductEnabled(),
     };
 }
 function getWabaFeatureFlagsForClient() {

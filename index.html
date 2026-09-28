@@ -2850,6 +2850,20 @@
         display: none !important;
       }
 
+      body.waba-device-cloud-retired
+        .menu-group-items
+        .tab-button[data-menu-key="dispositivos"],
+      body.waba-device-cloud-retired
+        .mobile-tabs-drawer
+        .tab-button[data-menu-key="dispositivos"],
+      body.waba-device-cloud-retired #tab-dispositivos {
+        display: none !important;
+      }
+
+      .instance-action-btn[data-action="proxy-campanha"] {
+        display: none !important;
+      }
+
       @media (max-width: 720px) {
         body.waba-ui-production .integration-env-toggle {
           flex-wrap: wrap;
@@ -21646,7 +21660,6 @@
 
               <div style="margin-top: 14px" class="muted">
                 Lista (top 100) com o status atual das instâncias.
-                Para disparar em campanha, use <strong>Proteção</strong> — o QRCode normal não liga a Proxy Brasil.
               </div>
 
               <div class="instances-toolbar">
@@ -29040,7 +29053,12 @@
         "whatsapp-automation",
       ];
 
+      function isDeviceCloudProductEnabled() {
+        return window.WABA_FEATURE_FLAGS?.deviceCloudProduct === true;
+      }
+
       function canAccessDeviceCloudMenu() {
+        if (!isDeviceCloudProductEnabled()) return false;
         const profile = String(window.WABA_UI_PROFILE || "").trim().toLowerCase();
         if (profile !== "production") return false;
         const email = String(wabaSessionEmail || "").trim().toLowerCase();
@@ -29062,6 +29080,7 @@
       }
 
       function syncDeviceCloudMenuVisibility() {
+        document.body.classList.toggle("waba-device-cloud-retired", !isDeviceCloudProductEnabled());
         const allowed = canAccessDeviceCloudMenu();
         document.querySelectorAll('[data-menu-key="dispositivos"]').forEach((el) => {
           if (allowed) el.removeAttribute("hidden");
@@ -33219,6 +33238,7 @@
         if (!isProductionUi()) return;
         document.body.classList.add("waba-ui-production");
         document.body.classList.toggle("waba-alternativa-retired", isAlternativaUiRetired());
+        document.body.classList.toggle("waba-device-cloud-retired", !isDeviceCloudProductEnabled());
 
         const naoTitle = document.querySelector(
           '.menu-group[data-menu-group="nao-oficial"] .menu-group-title'
@@ -63162,7 +63182,7 @@
                       const title = !ok
                         ? "Desconectada — Evolution confirmou close"
                         : needsProxy
-                          ? "Conectada sem Proxy Brasil — use «Proteção» em Instâncias e escaneie o QR. Não dispara até a Proxy estar ligada."
+                          ? "Conectada sem Proxy Brasil. Não dispara até a Proxy estar ligada."
                           : "Instância conectada com Proxy Brasil (ativa na campanha)";
                       return `<span class="${cls}" title="${title}">${safe || "—"}</span>`;
                     });
@@ -63181,7 +63201,7 @@
                           ? "A substituição pelos conectados com Proxy Brasil é automática (o vermelho sai da campanha)."
                           : spareConnectedForSwap > 0
                             ? "Há número conectado com Proxy Brasil livre. Use «+ Instâncias» para substituir o vermelho (a campanha não passa do total configurado)."
-                            : "Não há instância livre com Proxy Brasil. Em Instâncias, use «Proteção», escaneie o QR e depois «+ Instâncias»."
+                            : "Não há instância livre com Proxy Brasil."
                     }</div>`;
                   }
                   if (needsMoreInstancesForMinimum) {
@@ -63193,7 +63213,7 @@
                           ? "A substituição por um conectado com Proxy Brasil é automática (o vermelho sai da campanha)."
                           : spareConnectedForSwap > 0
                             ? "Há número conectado com Proxy Brasil livre. Use «+ Instâncias» para substituir o vermelho."
-                            : "Não há instância livre com Proxy Brasil. Em Instâncias, use «Proteção», escaneie o QR e depois «+ Instâncias»."
+                            : "Não há instância livre com Proxy Brasil."
                     }</div>`;
                   }
       
@@ -66542,14 +66562,6 @@
             : isDisconnected || isWaRestricted
               ? "instance-action-btn btn-qrcode enabled"
               : "instance-action-btn btn-qrcode disabled";
-          const needsProxyCampanha = instanceNeedsCampaignProxyReconnect(inst.instanceName);
-          const showProxyCampanha =
-            !reconnectLocked && (usage.useDisparador || needsProxyCampanha);
-          const proxyCampanhaClass = showProxyCampanha
-            ? `instance-action-btn btn-proxy-campanha enabled${
-                needsProxyCampanha ? " btn-proxy-campanha--needed" : ""
-              }`
-            : "instance-action-btn btn-proxy-campanha disabled";
           const deleteClass = actionsLocked
             ? "instance-action-btn btn-delete disabled"
             : "instance-action-btn btn-delete enabled";
@@ -66614,17 +66626,6 @@
                 }" data-number="${inst.originalNumber || ""}" ${
                   reconnectLocked || !(isDisconnected || isWaRestricted) ? "disabled" : ""
                 }>QRCode</button>
-                ${
-                  showProxyCampanha
-                    ? `<button class="${proxyCampanhaClass}" type="button" data-action="proxy-campanha" data-instance="${inst.instanceName}" data-enabled="1" data-connected="${
-                        !isDisconnected ? "1" : "0"
-                      }" data-number="${inst.originalNumber || ""}" title="${
-                        needsProxyCampanha
-                          ? "Conectada sem Proxy Brasil — gera QR para re-parear já com proxy. A sessão atual será encerrada."
-                          : "Gera QR com Proxy Brasil para disparo de campanha. Se o número já estiver conectado, a sessão atual será encerrada."
-                      }">Proteção</button>`
-                    : ""
-                }
                 <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="${
                   actionsLocked ? "0" : "1"
                 }" ${actionsLocked ? "disabled" : ""}>
