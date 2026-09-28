@@ -155,6 +155,11 @@ function pickUsableOpenConnection(open, requested) {
     const matches = open.filter((row) => connectionMatchesRequest(row, requested) && isUsableTemplateConnection(row));
     return matches.find((row) => row.status === "connected") || matches[0] || null;
 }
+function pickCatalogAgencyWriter(open) {
+    const agency = open.filter((row) => isUsableTemplateConnection(row) &&
+        (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)().some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, String(row.metaBusinessId || ""))));
+    return agency.find((row) => row.status === "connected") || agency[0] || null;
+}
 function componentsFromAiOption(option, hasLinkButton = true) {
     const placeholders = [...new Set([...option.body.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1])))].sort((a, b) => a - b);
     const maxPlaceholder = placeholders.length ? Math.max(...placeholders) : 0;
@@ -235,8 +240,17 @@ class MetaWhatsappTemplateAiService {
     }
     async pickSubmitWriter(tenantId, preferred, targetWabaId) {
         const open = await this.listOpenConnections(tenantId);
-        const writers = (0, meta_whatsapp_template_waba_ids_1.pickTemplateWriteConnections)(open.length ? open : [preferred], preferred, targetWabaId);
-        return writers.find((row) => isUsableTemplateConnection(row)) || preferred;
+        const pool = open.length ? open : [preferred];
+        const writers = (0, meta_whatsapp_template_waba_ids_1.pickTemplateWriteConnections)(pool, preferred, targetWabaId);
+        const usable = writers.find((row) => isUsableTemplateConnection(row));
+        if (usable)
+            return usable;
+        const agency = pickCatalogAgencyWriter(pool);
+        if (agency)
+            return agency;
+        return (pool.find((row) => isUsableTemplateConnection(row) && row.status === "connected") ||
+            pool.find((row) => isUsableTemplateConnection(row)) ||
+            preferred);
     }
     async resolveSubmitPortfolios(tenantId, connectionIds) {
         const requested = [...new Set(connectionIds.map((id) => String(id || "").trim()).filter(Boolean))];

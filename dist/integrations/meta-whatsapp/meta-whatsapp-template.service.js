@@ -178,12 +178,14 @@ class MetaWhatsappTemplateService {
         const requested = String(connectionId || "").trim();
         const lookup = async () => {
             let row = null;
+            let requestedRow = null;
             if (!requested) {
                 row = await this.connections.findConnectedByTenant(tenantId);
             }
             else if ((0, meta_whatsapp_template_route_id_1.isPostgresUuid)(requested)) {
                 try {
                     row = await this.connections.findByIdForTenant(tenantId, requested);
+                    requestedRow = row;
                 }
                 catch (error) {
                     const text = String(error?.message || error || "");
@@ -195,11 +197,20 @@ class MetaWhatsappTemplateService {
             if (!isUsableTemplateConnection(row) && requested) {
                 const open = await this.listOpenConnections(tenantId);
                 row = pickUsableOpenConnection(open, requested);
+                if (!isUsableTemplateConnection(row) && requestedRow?.metaBusinessId) {
+                    row = pickUsableOpenConnection(open, String(requestedRow.metaBusinessId));
+                }
                 const repo = this.connections;
                 if (!isUsableTemplateConnection(row) && typeof repo.findByBusinessId === "function") {
                     const byBm = await repo.findByBusinessId(tenantId, requested);
                     if (isUsableTemplateConnection(byBm))
                         row = byBm;
+                }
+                const catalogBm = String(requestedRow?.metaBusinessId || requested).trim();
+                if (!isUsableTemplateConnection(row) && isCatalogAdminBusiness(catalogBm)) {
+                    const agency = open.filter((item) => isUsableTemplateConnection(item) &&
+                        (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)().some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, String(item.metaBusinessId || ""))));
+                    row = agency.find((item) => item.status === "connected") || agency[0] || row;
                 }
             }
             return isUsableTemplateConnection(row) ? row : null;
@@ -271,6 +282,12 @@ class MetaWhatsappTemplateService {
             return primary;
         if ((0, meta_whatsapp_template_waba_ids_1.templatePickerWabaIds)(connection).includes(requested))
             return requested;
+        if ((0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaId)(requested))
+            return primary;
+        const writerBm = String(connection.metaBusinessId || "").trim();
+        if ((0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)().some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, writerBm))) {
+            return requested;
+        }
         return primary;
     }
     async listOpenConnections(tenantId) {

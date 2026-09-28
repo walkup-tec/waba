@@ -53,6 +53,7 @@ import { inspectMetaBroadcastTemplate } from "./meta-whatsapp-broadcast-template
 import {
   businessIdsToReopenAfterFalseLeftManager,
   catalogAdminBusinessIds,
+  catalogAgencyBusinessIds,
   isKnownClientWabaId,
   knownClientWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
@@ -268,11 +269,13 @@ export class MetaWhatsappTemplateService {
     const requested = String(connectionId || "").trim();
     const lookup = async (): Promise<MetaWhatsappConnectionRecord | null> => {
       let row: MetaWhatsappConnectionRecord | null = null;
+      let requestedRow: MetaWhatsappConnectionRecord | null = null;
       if (!requested) {
         row = await this.connections.findConnectedByTenant(tenantId);
       } else if (isPostgresUuid(requested)) {
         try {
           row = await this.connections.findByIdForTenant(tenantId, requested);
+          requestedRow = row;
         } catch (error) {
           const text = String((error as { message?: string })?.message || error || "");
           if (!/invalid input syntax for type uuid/i.test(text)) throw error;
@@ -282,6 +285,9 @@ export class MetaWhatsappTemplateService {
       if (!isUsableTemplateConnection(row) && requested) {
         const open = await this.listOpenConnections(tenantId);
         row = pickUsableOpenConnection(open, requested);
+        if (!isUsableTemplateConnection(row) && requestedRow?.metaBusinessId) {
+          row = pickUsableOpenConnection(open, String(requestedRow.metaBusinessId));
+        }
         const repo = this.connections as {
           findByBusinessId?: (
             tenantId: string,
@@ -291,6 +297,17 @@ export class MetaWhatsappTemplateService {
         if (!isUsableTemplateConnection(row) && typeof repo.findByBusinessId === "function") {
           const byBm = await repo.findByBusinessId(tenantId, requested);
           if (isUsableTemplateConnection(byBm)) row = byBm;
+        }
+        const catalogBm = String(requestedRow?.metaBusinessId || requested).trim();
+        if (!isUsableTemplateConnection(row) && isCatalogAdminBusiness(catalogBm)) {
+          const agency = open.filter(
+            (item) =>
+              isUsableTemplateConnection(item) &&
+              catalogAgencyBusinessIds().some((id) =>
+                metaBusinessIdsMatch(id, String(item.metaBusinessId || "")),
+              ),
+          );
+          row = agency.find((item) => item.status === "connected") || agency[0] || row;
         }
       }
       return isUsableTemplateConnection(row) ? row : null;
@@ -387,6 +404,11 @@ export class MetaWhatsappTemplateService {
     const requested = String(requestedRaw || "").trim();
     if (!requested || requested === primary) return primary;
     if (templatePickerWabaIds(connection).includes(requested)) return requested;
+    if (isKnownClientWabaId(requested)) return primary;
+    const writerBm = String(connection.metaBusinessId || "").trim();
+    if (catalogAgencyBusinessIds().some((id) => metaBusinessIdsMatch(id, writerBm))) {
+      return requested;
+    }
     return primary;
   }
 

@@ -489,6 +489,63 @@ describe("Assistente IA de templates Utility", () => {
     assert.ok(calls.every((item) => item.wabaId === "2301051607405249"));
   });
 
+  it("ao enviar Flaviane pending_token, usa o token connected da agência Drax", async () => {
+    const email = "ai-submit-flaviane-drax@example.com";
+    const calls: Array<Record<string, unknown>> = [];
+    const drax = connection(email, {
+      id: "conn-drax-agency",
+      status: "connected",
+      wabaId: "1636793994538054",
+      metaBusinessId: "1041827648719609",
+      verifiedName: "Drax Sistemas",
+    });
+    const { service } = serviceFor(
+      email,
+      utilityOutput(),
+      {
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(input);
+          return { id: `local-${String(input.name)}`, status: "PENDING" };
+        },
+      },
+      {
+        id: "44493911-2c56-463d-9056-20282635f54b",
+        status: "pending_token",
+        wabaId: "",
+        metaBusinessId: "962298516898955",
+        verifiedName: "",
+        displayPhoneNumber: "",
+      },
+      undefined,
+      undefined,
+      [drax],
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      {
+        connectionId: "44493911-2c56-463d-9056-20282635f54b",
+        baseText: "Atualização da solicitação de BPC já aberta.",
+      },
+    );
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      submitShell({
+        connectionId: "44493911-2c56-463d-9056-20282635f54b",
+        wabaIds: ["2301051607405249"],
+        wabaTargets: [
+          {
+            connectionId: "44493911-2c56-463d-9056-20282635f54b",
+            wabaId: "2301051607405249",
+          },
+        ],
+      }),
+    );
+    assert.equal(result.submitted, 3);
+    assert.equal(calls.length, 3);
+    assert.ok(calls.every((item) => item.connectionId === "conn-drax-agency"));
+    assert.ok(calls.every((item) => item.wabaId === "2301051607405249"));
+  });
+
   it("limita chamadas por tenant e usuário", async () => {
     const email = "ai-rate-limit@example.com";
     const { service } = serviceFor(email, utilityOutput());

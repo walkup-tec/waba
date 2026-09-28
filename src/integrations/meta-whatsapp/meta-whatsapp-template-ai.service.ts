@@ -48,7 +48,7 @@ import {
 } from "./meta-whatsapp-template-ai-option-edit";
 import type { MetaTemplateAiModelOutput, MetaTemplateAiOption, MetaTemplateAiPublicResult } from "./meta-whatsapp-template-ai.types";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
-import { metaBusinessIdsMatch } from "./meta-whatsapp-known-owned-wabas";
+import { catalogAgencyBusinessIds, metaBusinessIdsMatch } from "./meta-whatsapp-known-owned-wabas";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
 import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
 import { pickTemplateWriteConnections } from "./meta-whatsapp-template-waba-ids";
@@ -219,6 +219,17 @@ function pickUsableOpenConnection(
   return matches.find((row) => row.status === "connected") || matches[0] || null;
 }
 
+function pickCatalogAgencyWriter(
+  open: MetaWhatsappConnectionRecord[],
+): MetaWhatsappConnectionRecord | null {
+  const agency = open.filter(
+    (row) =>
+      isUsableTemplateConnection(row) &&
+      catalogAgencyBusinessIds().some((id) => metaBusinessIdsMatch(id, String(row.metaBusinessId || ""))),
+  );
+  return agency.find((row) => row.status === "connected") || agency[0] || null;
+}
+
 function componentsFromAiOption(
   option: MetaTemplateAiOption,
   hasLinkButton = true,
@@ -323,8 +334,17 @@ export class MetaWhatsappTemplateAiService {
     targetWabaId: string,
   ): Promise<MetaWhatsappConnectionRecord> {
     const open = await this.listOpenConnections(tenantId);
-    const writers = pickTemplateWriteConnections(open.length ? open : [preferred], preferred, targetWabaId);
-    return writers.find((row) => isUsableTemplateConnection(row)) || preferred;
+    const pool = open.length ? open : [preferred];
+    const writers = pickTemplateWriteConnections(pool, preferred, targetWabaId);
+    const usable = writers.find((row) => isUsableTemplateConnection(row));
+    if (usable) return usable;
+    const agency = pickCatalogAgencyWriter(pool);
+    if (agency) return agency;
+    return (
+      pool.find((row) => isUsableTemplateConnection(row) && row.status === "connected") ||
+      pool.find((row) => isUsableTemplateConnection(row)) ||
+      preferred
+    );
   }
 
   private async resolveSubmitPortfolios(

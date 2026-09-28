@@ -950,6 +950,45 @@ describe("fase 7 criação e erros Graph", () => {
     );
     assert.equal(posts, 1);
   });
+
+  it("token da agência Drax cadastra na WABA da Flaviane mesmo com pending_token no card", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "44493911-2c56-463d-9056-20282635f54b",
+        status: "pending_token",
+        wabaId: "",
+        metaBusinessId: "962298516898955",
+        verifiedName: null,
+        displayPhoneNumber: null,
+      }),
+      connectedRow({
+        id: "conn-drax",
+        wabaId: "1636793994538054",
+        metaBusinessId: "1041827648719609",
+        verifiedName: "Drax Sistemas",
+      }),
+    );
+    const paths: string[] = [];
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      new FakeTemplates() as any,
+      async (input) => {
+        paths.push(String(input.path || ""));
+        assert.equal(input.method, "POST");
+        return graphJson({ id: "tpl-flaviane", status: "PENDING", category: "UTILITY" });
+      },
+      () => "plain-token",
+    );
+    const created = await service.createFromAuth(auth(EMAIL_A), {
+      ...VALID_CREATE,
+      connectionId: "44493911-2c56-463d-9056-20282635f54b",
+      wabaId: "2301051607405249",
+    });
+    assert.equal(paths[0], "2301051607405249/message_templates");
+    assert.equal(created.wabaId, "2301051607405249");
+    assert.equal(created.status, "PENDING");
+  });
 });
 
 describe("fase 7 exclusão Graph", () => {
