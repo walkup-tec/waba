@@ -185,6 +185,7 @@ class MetaWhatsappTemplateService {
         this.decrypt = decrypt;
         this.analyses = analyses;
     }
+    /** Conexão do card/BM. Não remapear para token da agência Drax/Walkup. */
     async requireConnectedWaba(tenantId, connectionId, actorEmail = "") {
         const requested = String(connectionId || "").trim();
         const lookup = async () => {
@@ -409,7 +410,19 @@ class MetaWhatsappTemplateService {
             components,
         };
         const wabaId = await this.resolveCreateWabaId(connection, token, String(body?.wabaId || body?.waba_id || ""));
-        const writers = (0, meta_whatsapp_template_waba_ids_1.pickTemplateWriteConnections)(await this.listOpenConnections(tenant.tenantId), connection, wabaId);
+        const writers = (0, meta_whatsapp_template_waba_ids_1.pickTemplateWriteConnections)(await this.listOpenConnections(tenant.tenantId), connection, wabaId).filter((writer) => (0, meta_whatsapp_template_waba_ids_1.canPostWabaMessageTemplate)(writer, wabaId));
+        if (!writers.length && (0, meta_whatsapp_template_waba_ids_1.canPostWabaMessageTemplate)(connection, wabaId)) {
+            writers.push(connection);
+        }
+        if (!writers.length) {
+            const wabaLabel = (0, meta_whatsapp_known_owned_wabas_1.knownWabaNameForId)(wabaId) || wabaId || "WABA";
+            const error = new meta_whatsapp_errors_1.MetaWhatsappError("template_invalid");
+            error.message =
+                `A Meta recusou o cadastro na ${wabaLabel}. O token desta conexão não gerencia essa WABA. ` +
+                    "Clique em + no portfólio, conecte essa conta e envie de novo só nela. " +
+                    "Os templates já aceitos nas outras WABAs não precisam ser reenviados.";
+            throw error;
+        }
         let result = null;
         for (const writer of writers) {
             try {

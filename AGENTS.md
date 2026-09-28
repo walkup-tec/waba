@@ -87,6 +87,8 @@ Normalização: Guardião de Sistemas (o entrypoint-guard legado não deve opera
 
 EasyPanel e Deploy FTP só veem o GitHub `master`. Em Cloud Agent, não basta `git push origin`.
 
+**Templates (`message_templates`):** rule `.cursor/rules/waba-template-create-bm-token.mdc` — token da BM do card, nunca Drax/Walkup em WABA convidada.
+
 ### Outros agentes do projeto
 
 | Skill | Uso |

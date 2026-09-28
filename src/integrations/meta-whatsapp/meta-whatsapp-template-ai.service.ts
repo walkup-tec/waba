@@ -52,7 +52,10 @@ import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.ty
 import { catalogAgencyBusinessIds, metaBusinessIdsMatch } from "./meta-whatsapp-known-owned-wabas";
 import { logMetaTemplate } from "./meta-whatsapp-template-log";
 import { MetaWhatsappTemplateService } from "./meta-whatsapp-template.service";
-import { pickTemplateWriteConnections } from "./meta-whatsapp-template-waba-ids";
+import {
+  canPostWabaMessageTemplate,
+  pickTemplateWriteConnections,
+} from "./meta-whatsapp-template-waba-ids";
 import { decryptMetaToken } from "./meta-token-crypto";
 import { readMetaAppId } from "./meta-config";
 import { uploadMetaResumableImage } from "./meta-whatsapp-resumable-upload";
@@ -333,6 +336,7 @@ export class MetaWhatsappTemplateAiService {
     return row;
   }
 
+  /** Writer do create: mesmo BM ou o card. Nunca agência em WABA de outra BM. */
   private async pickSubmitWriter(
     tenantId: string,
     preferred: MetaWhatsappConnectionRecord,
@@ -341,7 +345,9 @@ export class MetaWhatsappTemplateAiService {
     const open = await this.listOpenConnections(tenantId);
     const pool = open.length ? open : [preferred];
     const writers = pickTemplateWriteConnections(pool, preferred, targetWabaId);
-    const usable = writers.find((row) => isUsableTemplateConnection(row));
+    const usable = writers.find(
+      (row) => isUsableTemplateConnection(row) && canPostWabaMessageTemplate(row, targetWabaId),
+    );
     if (usable) return usable;
     return preferred;
   }

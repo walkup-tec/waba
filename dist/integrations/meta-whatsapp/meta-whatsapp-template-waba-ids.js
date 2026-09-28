@@ -16,6 +16,7 @@ exports.listDebugTokenManagedWabaIds = listDebugTokenManagedWabaIds;
 exports.listSyncTargetWabaIds = listSyncTargetWabaIds;
 exports.discoverTemplateWabas = discoverTemplateWabas;
 exports.discoverTemplateWabaIds = discoverTemplateWabaIds;
+exports.canPostWabaMessageTemplate = canPostWabaMessageTemplate;
 exports.pickTemplateWriteConnections = pickTemplateWriteConnections;
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_graph_client_1 = require("./meta-whatsapp-graph.client");
@@ -510,6 +511,29 @@ function isOpenTemplateConnection(row) {
     if (row.disconnectedAt)
         return false;
     return row.status === "connected" || row.status === "pending_confirmation";
+}
+/**
+ * POST /{wabaId}/message_templates só com token da BM que administra essa WABA.
+ * Token da agência (Drax/Walkup) não cadastra na WABA de BM convidada (Flaviane).
+ * Cabeçalho `/{appId}/uploads` não usa esta trava.
+ */
+function canPostWabaMessageTemplate(writer, targetWabaId) {
+    const target = String(targetWabaId || "").trim();
+    if (!target)
+        return false;
+    const writerWaba = String(writer.wabaId || "").trim();
+    if (writerWaba && writerWaba === target)
+        return true;
+    const bm = String(writer.metaBusinessId || "").trim();
+    if (!bm)
+        return false;
+    if ((0, meta_whatsapp_known_owned_wabas_1.equivalentOwnedWabaIdsForBusiness)(bm, writerWaba).includes(target))
+        return true;
+    if ((0, meta_whatsapp_known_owned_wabas_1.knownOwnedWabaIdsForBusiness)(bm).includes(target))
+        return true;
+    if ((0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)().some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, bm)))
+        return false;
+    return true;
 }
 /** Token da WABA01 não posta na WABA02 irmã; prefere a conexão cujo wabaId é o destino. */
 function pickTemplateWriteConnections(rows, preferred, targetWabaId) {

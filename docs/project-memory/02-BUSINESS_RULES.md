@@ -8,7 +8,7 @@
 - Filtro de portfólio (padrão: Todos os Portfólios) e busca por nome são só de UI.
 - Na tabela de templates: **Visualizar** abre o modal **Seu modelo**, com a imagem/vídeo de cabeçalho quando existir. **Excluir** abre um modal do sistema (não o `confirm` do navegador): confirmação, depois spinner até a Graph e o banco do tenant responderem. Nome aprovado fica bloqueado 30 dias na Meta. Não há painel nem botão de envio de teste.
 - **Atualizar da Meta** replica a biblioteca Graph do portfólio: upsert do que existe e apaga o local que a Meta já não lista. Listagem truncada não apaga.
-- Criação/sync de templates exige WABA connected (ou pending_confirmation) do portfólio escolhido.
+- Criação Graph de template (`/{wabaId}/message_templates`) usa o token **da BM do card** (`connected`, `pending_confirmation` ou `pending_token` com token). Irmã só se for o **mesmo BM**. Token da agência Drax/Walkup **não** cadastra na WABA de BM convidada (Flaviane). Upload de cabeçalho `/{appId}/uploads` pode usar a agência. Trava: `canPostWabaMessageTemplate`.
 - Botão URL enviado à Graph é a URL curta WABA (`/s/{slug}`), nunca `wa.me`.
 - Todo template criado pelo backend inclui, além do botão do usuário, um `QUICK_REPLY` **Bloquear** só no payload Graph. O painel, o GET público e o preview não mostram esse botão.
 - Laboratório Cloud: BODY Utility com léxico **Olá** + **Informamos que** + **Para** e uma âncora de utilidade (**confirmação**, **status confirmado**, **confirmado**, **aprovado**, **concluído**, **atualizado**, **liberado**). Botões visíveis só **Ver Detalhes**, **Saiba Mais**, **Ver Atualizações**. Depois de gerar, o operador pode **Editar** e **Salvar** cada uma das 3 opções; o texto salvo é o que vai para a Meta. A categoria final é da Meta.

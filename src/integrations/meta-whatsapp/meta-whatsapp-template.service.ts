@@ -20,6 +20,7 @@ import {
   type TemplateGraphCaller,
 } from "./meta-whatsapp-template-graph.client";
 import {
+  canPostWabaMessageTemplate,
   extraWabaIdsFromConnections,
   listDebugTokenManagedWabaIds,
   listSyncTargetWabaIds,
@@ -276,6 +277,7 @@ export class MetaWhatsappTemplateService {
     private readonly analyses = new MetaWhatsappTemplateAiRepository(),
   ) {}
 
+  /** Conexão do card/BM. Não remapear para token da agência Drax/Walkup. */
   async requireConnectedWaba(
     tenantId: string,
     connectionId?: string,
@@ -557,7 +559,19 @@ export class MetaWhatsappTemplateService {
       await this.listOpenConnections(tenant.tenantId),
       connection,
       wabaId,
-    );
+    ).filter((writer) => canPostWabaMessageTemplate(writer, wabaId));
+    if (!writers.length && canPostWabaMessageTemplate(connection, wabaId)) {
+      writers.push(connection);
+    }
+    if (!writers.length) {
+      const wabaLabel = knownWabaNameForId(wabaId) || wabaId || "WABA";
+      const error = new MetaWhatsappError("template_invalid");
+      error.message =
+        `A Meta recusou o cadastro na ${wabaLabel}. O token desta conexão não gerencia essa WABA. ` +
+        "Clique em + no portfólio, conecte essa conta e envie de novo só nela. " +
+        "Os templates já aceitos nas outras WABAs não precisam ser reenviados.";
+      throw error;
+    }
     let result: Awaited<ReturnType<typeof createWabaMessageTemplate>> | null = null;
     for (const writer of writers) {
       try {

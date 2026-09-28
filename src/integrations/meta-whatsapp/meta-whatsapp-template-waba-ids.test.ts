@@ -8,6 +8,7 @@ import {
   isProbablyMessageTemplateRow,
   listSyncTargetWabaIds,
   listTemplatePickerWabas,
+  canPostWabaMessageTemplate,
   pickTemplateWriteConnections,
   templatePickerWabaIds,
   wabaIdentityMatchesBusiness,
@@ -1025,6 +1026,48 @@ describe("pickTemplateWriteConnections", () => {
     assert.deepEqual(
       picked.map((row) => row.id),
       ["conn-waba01"],
+    );
+  });
+});
+
+describe("canPostWabaMessageTemplate", () => {
+  it("token da Drax não cadastra na WABA da Flaviane", () => {
+    assert.equal(
+      canPostWabaMessageTemplate(
+        { wabaId: "1636793994538054", metaBusinessId: "1041827648719609" },
+        "2301051607405249",
+      ),
+      false,
+    );
+  });
+
+  it("token da BM convidada pending_token cadastra na WABA pedida", () => {
+    assert.equal(
+      canPostWabaMessageTemplate(
+        { wabaId: "", metaBusinessId: "962298516898955" },
+        "2301051607405249",
+      ),
+      true,
+    );
+  });
+
+  it("token da Drax cadastra só na WABA da Drax", () => {
+    assert.equal(
+      canPostWabaMessageTemplate(
+        { wabaId: "1636793994538054", metaBusinessId: "1041827648719609" },
+        "1636793994538054",
+      ),
+      true,
+    );
+  });
+
+  it("pending_confirmation da BM convidada cadastra na própria WABA", () => {
+    assert.equal(
+      canPostWabaMessageTemplate(
+        { wabaId: "waba-convidada", metaBusinessId: "bm-convidada" },
+        "waba-convidada",
+      ),
+      true,
     );
   });
 });

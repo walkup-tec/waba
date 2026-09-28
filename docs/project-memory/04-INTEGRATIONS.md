@@ -1,7 +1,7 @@
 # Integrações
 
 - Meta Graph: message templates (criar, listar/paginar, excluir, sync com prune do órfão local, status).
-  Criação: o backend acrescenta `QUICK_REPLY` Bloquear e agrupa URL/PHONE antes dos QR.
+  Criação: `POST /{wabaId}/message_templates` com o token da BM do card; o backend acrescenta `QUICK_REPLY` Bloquear e agrupa URL/PHONE antes dos QR. Token da agência não substitui o da BM convidada.
   Docs: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/components/
   Exclusão: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-management
 - Portfólio / chips: `GET /{WABA_ID}/phone_numbers` com paginação (`limit` + `after`). Várias conexões Embedded Signup do mesmo BM unem chips por `phoneNumberId` (`unionPortfolioNumbers`). Hydrate descobre WABAs via `GET /debug_token` (`granular_scopes.target_ids`, app token) + phones aninhados no BM/`me/businesses` + edges `owned_whatsapp_business_accounts`/`client_whatsapp_business_accounts`, depois une `phone_numbers`. Token ES sozinho em `owned_*` seco costuma falhar. Docs: https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-accounts/, https://developers.facebook.com/docs/facebook-login/guides/access-tokens/debugging/, https://developers.facebook.com/docs/graph-api/reference/whats-app-business-account/phone_numbers/, https://developers.facebook.com/docs/marketing-api/reference/business/

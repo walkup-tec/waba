@@ -241,11 +241,12 @@ class MetaWhatsappTemplateAiService {
         }
         return row;
     }
+    /** Writer do create: mesmo BM ou o card. Nunca agência em WABA de outra BM. */
     async pickSubmitWriter(tenantId, preferred, targetWabaId) {
         const open = await this.listOpenConnections(tenantId);
         const pool = open.length ? open : [preferred];
         const writers = (0, meta_whatsapp_template_waba_ids_1.pickTemplateWriteConnections)(pool, preferred, targetWabaId);
-        const usable = writers.find((row) => isUsableTemplateConnection(row));
+        const usable = writers.find((row) => isUsableTemplateConnection(row) && (0, meta_whatsapp_template_waba_ids_1.canPostWabaMessageTemplate)(row, targetWabaId));
         if (usable)
             return usable;
         return preferred;

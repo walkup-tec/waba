@@ -1036,6 +1036,42 @@ describe("fase 7 criação e erros Graph", () => {
     assert.equal(created.wabaId, "waba-convidada");
     assert.equal(created.connectionId, "conn-convidada");
   });
+
+  it("conexão Drax nunca publica message_templates na WABA da Flaviane", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "conn-drax",
+        wabaId: "1636793994538054",
+        metaBusinessId: "1041827648719609",
+        verifiedName: "Drax Sistemas",
+        accessTokenEncrypted: "v1:enc-drax",
+      }),
+    );
+    const paths: string[] = [];
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      new FakeTemplates() as any,
+      async (input) => {
+        paths.push(String(input.path || ""));
+        return graphJson({ id: "tpl-drax", status: "PENDING", category: "UTILITY" });
+      },
+      () => "token-drax",
+    );
+    try {
+      await service.createFromAuth(auth(EMAIL_A), {
+        ...VALID_CREATE,
+        connectionId: "conn-drax",
+        wabaId: "2301051607405249",
+      });
+    } catch {
+      /* recusa local também vale — o que não pode é o POST na WABA da cliente */
+    }
+    assert.equal(
+      paths.some((path) => path.includes("2301051607405249")),
+      false,
+    );
+  });
 });
 
 describe("fase 7 exclusão Graph", () => {
