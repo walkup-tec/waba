@@ -489,7 +489,7 @@ describe("Assistente IA de templates Utility", () => {
     assert.ok(calls.every((item) => item.wabaId === "2301051607405249"));
   });
 
-  it("ao enviar Flaviane pending_token, usa o token connected da agência Drax", async () => {
+  it("ao enviar Flaviane pending_token, usa o token do card, não o da agência Drax", async () => {
     const email = "ai-submit-flaviane-drax@example.com";
     const calls: Array<Record<string, unknown>> = [];
     const drax = connection(email, {
@@ -542,8 +542,57 @@ describe("Assistente IA de templates Utility", () => {
     );
     assert.equal(result.submitted, 3);
     assert.equal(calls.length, 3);
-    assert.ok(calls.every((item) => item.connectionId === "conn-drax-agency"));
+    assert.ok(calls.every((item) => item.connectionId === "44493911-2c56-463d-9056-20282635f54b"));
+    assert.ok(calls.every((item) => item.connectionId !== "conn-drax-agency"));
     assert.ok(calls.every((item) => item.wabaId === "2301051607405249"));
+  });
+
+  it("ao enviar BM convidada pending_confirmation, usa o card, não a Drax", async () => {
+    const email = "ai-submit-convidada@example.com";
+    const calls: Array<Record<string, unknown>> = [];
+    const drax = connection(email, {
+      id: "conn-drax-agency",
+      status: "connected",
+      wabaId: "1636793994538054",
+      metaBusinessId: "1041827648719609",
+      verifiedName: "Drax Sistemas",
+    });
+    const { service } = serviceFor(
+      email,
+      utilityOutput(),
+      {
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(input);
+          return { id: `local-${String(input.name)}`, status: "PENDING" };
+        },
+      },
+      {
+        id: "conn-convidada",
+        status: "pending_confirmation",
+        wabaId: "waba-convidada",
+        metaBusinessId: "bm-convidada",
+      },
+      undefined,
+      undefined,
+      [drax],
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      { connectionId: "conn-convidada", baseText: "Atualização da solicitação já aberta." },
+    );
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      submitShell({
+        connectionId: "conn-convidada",
+        wabaIds: ["waba-convidada"],
+        wabaTargets: [{ connectionId: "conn-convidada", wabaId: "waba-convidada" }],
+      }),
+    );
+    assert.equal(result.submitted, 3);
+    assert.equal(calls.length, 3);
+    assert.ok(calls.every((item) => item.connectionId === "conn-convidada"));
+    assert.ok(calls.every((item) => item.connectionId !== "conn-drax-agency"));
+    assert.ok(calls.every((item) => item.wabaId === "waba-convidada"));
   });
 
   it("interrompe o lote a tempo do Traefik e devolve JSON das opções que faltaram", async () => {

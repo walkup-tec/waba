@@ -248,6 +248,15 @@ class MetaWhatsappTemplateAiService {
         const usable = writers.find((row) => isUsableTemplateConnection(row));
         if (usable)
             return usable;
+        return preferred;
+    }
+    async pickHeaderWriter(tenantId, preferred, targetWabaId) {
+        const open = await this.listOpenConnections(tenantId);
+        const pool = open.length ? open : [preferred];
+        const writers = (0, meta_whatsapp_template_waba_ids_1.pickTemplateWriteConnections)(pool, preferred, targetWabaId);
+        const usable = writers.find((row) => isUsableTemplateConnection(row));
+        if (usable)
+            return usable;
         const agency = pickCatalogAgencyWriter(pool);
         if (agency)
             return agency;
@@ -744,7 +753,7 @@ class MetaWhatsappTemplateAiService {
         }
         const repo = this.connections;
         const openRows = typeof repo.listOpenByTenant === "function" ? await repo.listOpenByTenant(tenant.tenantId) : [];
-        const writer = await this.pickSubmitWriter(tenant.tenantId, preferred, String(preferred.wabaId || ""));
+        const writer = await this.pickHeaderWriter(tenant.tenantId, preferred, String(preferred.wabaId || ""));
         const candidates = [];
         const seen = new Set();
         const pushCandidate = (row) => {

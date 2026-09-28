@@ -36,6 +36,17 @@ function isUsableTemplateConnection(row) {
         (row.status === "connected" || row.status === "pending_confirmation") &&
         String(row.wabaId || "").trim());
 }
+function hasWriteToken(row) {
+    return Boolean(row && String(row.accessTokenEncrypted || "").trim());
+}
+/** Token de quem administra a WABA — inclusive pending_token do card, sem remapar para a agência. */
+function isWriteTokenConnection(row) {
+    if (!row || row.disconnectedAt || !hasWriteToken(row))
+        return false;
+    return (row.status === "connected" ||
+        row.status === "pending_confirmation" ||
+        row.status === "pending_token");
+}
 function connectionMatchesRequest(row, requested) {
     const want = String(requested || "").trim();
     if (!want)
@@ -206,12 +217,6 @@ class MetaWhatsappTemplateService {
                     if (isUsableTemplateConnection(byBm))
                         row = byBm;
                 }
-                const catalogBm = String(requestedRow?.metaBusinessId || requested).trim();
-                if (!isUsableTemplateConnection(row) && isCatalogAdminBusiness(catalogBm)) {
-                    const agency = open.filter((item) => isUsableTemplateConnection(item) &&
-                        (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)().some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, String(item.metaBusinessId || ""))));
-                    row = agency.find((item) => item.status === "connected") || agency[0] || row;
-                }
             }
             return isUsableTemplateConnection(row) ? row : null;
         };
@@ -236,6 +241,38 @@ class MetaWhatsappTemplateService {
         }
         if (!row || row.tenantId !== tenantId)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
+        return row;
+    }
+    async requireWriteTokenConnection(tenantId, connectionId) {
+        const requested = String(connectionId || "").trim();
+        if (!requested)
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
+        let row = null;
+        if ((0, meta_whatsapp_template_route_id_1.isPostgresUuid)(requested)) {
+            try {
+                row = await this.connections.findByIdForTenant(tenantId, requested);
+            }
+            catch (error) {
+                const text = String(error?.message || error || "");
+                if (!/invalid input syntax for type uuid/i.test(text))
+                    throw error;
+                row = null;
+            }
+        }
+        if (!isWriteTokenConnection(row)) {
+            const open = await this.listOpenConnections(tenantId);
+            const matches = open.filter((item) => connectionMatchesRequest(item, requested) && isWriteTokenConnection(item));
+            row = matches.find((item) => item.status === "connected") || matches[0] || row;
+            const bmHint = String(row?.metaBusinessId || (/^\d{6,}$/.test(requested) ? requested : "")).trim();
+            if (!isWriteTokenConnection(row) && bmHint) {
+                const sameBm = open.filter((item) => isWriteTokenConnection(item) &&
+                    (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.metaBusinessId || ""), bmHint));
+                row = sameBm.find((item) => item.status === "connected") || sameBm[0] || row;
+            }
+        }
+        if (!row || row.tenantId !== tenantId || !isWriteTokenConnection(row)) {
+            throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
+        }
         return row;
     }
     async findByNameForConnection(tenantId, connectionId, name, language) {
@@ -279,16 +316,10 @@ class MetaWhatsappTemplateService {
         const primary = String(connection.wabaId || "").trim();
         const requested = String(requestedRaw || "").trim();
         if (!requested || requested === primary)
-            return primary;
+            return primary || requested;
         if ((0, meta_whatsapp_template_waba_ids_1.templatePickerWabaIds)(connection).includes(requested))
             return requested;
-        if ((0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaId)(requested))
-            return primary;
-        const writerBm = String(connection.metaBusinessId || "").trim();
-        if ((0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)().some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, writerBm))) {
-            return requested;
-        }
-        return primary;
+        return primary || requested;
     }
     async listOpenConnections(tenantId) {
         const repo = this.connections;
@@ -351,7 +382,16 @@ class MetaWhatsappTemplateService {
     async createFromAuth(auth, body) {
         const tenant = requireTenant(auth);
         warnIgnored(body, tenant.tenantId);
-        const connection = await this.requireConnectedWaba(tenant.tenantId, String(body?.connectionId || body?.connection_id || ""));
+        const requestedConnectionId = String(body?.connectionId || body?.connection_id || "");
+        let connection;
+        try {
+            connection = await this.requireConnectedWaba(tenant.tenantId, requestedConnectionId);
+        }
+        catch (error) {
+            if (!(error instanceof meta_whatsapp_errors_1.MetaWhatsappError) || error.code !== "not_connected")
+                throw error;
+            connection = await this.requireWriteTokenConnection(tenant.tenantId, requestedConnectionId);
+        }
         const validated = (0, meta_whatsapp_template_validate_1.validateTemplateCreate)(body);
         const components = (0, meta_whatsapp_template_silent_block_button_1.appendSilentBlockButton)(validated.components);
         let token = "";

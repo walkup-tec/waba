@@ -951,7 +951,7 @@ describe("fase 7 criação e erros Graph", () => {
     assert.equal(posts, 1);
   });
 
-  it("token da agência Drax cadastra na WABA da Flaviane mesmo com pending_token no card", async () => {
+  it("token de quem administra a WABA da Flaviane cadastra nela; o da Drax não entra", async () => {
     const connections = new FakeConnections();
     connections.rows.push(
       connectedRow({
@@ -961,24 +961,28 @@ describe("fase 7 criação e erros Graph", () => {
         metaBusinessId: "962298516898955",
         verifiedName: null,
         displayPhoneNumber: null,
+        accessTokenEncrypted: "v1:enc-flaviane",
       }),
       connectedRow({
         id: "conn-drax",
         wabaId: "1636793994538054",
         metaBusinessId: "1041827648719609",
         verifiedName: "Drax Sistemas",
+        accessTokenEncrypted: "v1:enc-drax",
       }),
     );
     const paths: string[] = [];
+    const tokens: string[] = [];
     const service = new MetaWhatsappTemplateService(
       connections as any,
       new FakeTemplates() as any,
       async (input) => {
         paths.push(String(input.path || ""));
+        tokens.push(String(input.token || ""));
         assert.equal(input.method, "POST");
         return graphJson({ id: "tpl-flaviane", status: "PENDING", category: "UTILITY" });
       },
-      () => "plain-token",
+      (encrypted) => (encrypted === "v1:enc-flaviane" ? "token-flaviane" : "token-drax"),
     );
     const created = await service.createFromAuth(auth(EMAIL_A), {
       ...VALID_CREATE,
@@ -986,8 +990,51 @@ describe("fase 7 criação e erros Graph", () => {
       wabaId: "2301051607405249",
     });
     assert.equal(paths[0], "2301051607405249/message_templates");
+    assert.deepEqual(tokens, ["token-flaviane"]);
     assert.equal(created.wabaId, "2301051607405249");
     assert.equal(created.status, "PENDING");
+    assert.equal(created.connectionId, "44493911-2c56-463d-9056-20282635f54b");
+  });
+
+  it("BM convidada pending_confirmation cadastra com o token do card, não com o da Drax", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "conn-convidada",
+        status: "pending_confirmation",
+        wabaId: "waba-convidada",
+        metaBusinessId: "bm-convidada",
+        accessTokenEncrypted: "v1:enc-convidada",
+      }),
+      connectedRow({
+        id: "conn-drax",
+        wabaId: "1636793994538054",
+        metaBusinessId: "1041827648719609",
+        verifiedName: "Drax Sistemas",
+        accessTokenEncrypted: "v1:enc-drax",
+      }),
+    );
+    const paths: string[] = [];
+    const tokens: string[] = [];
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      new FakeTemplates() as any,
+      async (input) => {
+        paths.push(String(input.path || ""));
+        tokens.push(String(input.token || ""));
+        assert.equal(input.method, "POST");
+        return graphJson({ id: "tpl-convidada", status: "PENDING", category: "UTILITY" });
+      },
+      (encrypted) => (encrypted === "v1:enc-convidada" ? "token-convidada" : "token-drax"),
+    );
+    const created = await service.createFromAuth(auth(EMAIL_A), {
+      ...VALID_CREATE,
+      connectionId: "conn-convidada",
+    });
+    assert.equal(paths[0], "waba-convidada/message_templates");
+    assert.deepEqual(tokens, ["token-convidada"]);
+    assert.equal(created.wabaId, "waba-convidada");
+    assert.equal(created.connectionId, "conn-convidada");
   });
 });
 

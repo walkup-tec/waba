@@ -343,6 +343,19 @@ export class MetaWhatsappTemplateAiService {
     const writers = pickTemplateWriteConnections(pool, preferred, targetWabaId);
     const usable = writers.find((row) => isUsableTemplateConnection(row));
     if (usable) return usable;
+    return preferred;
+  }
+
+  private async pickHeaderWriter(
+    tenantId: string,
+    preferred: MetaWhatsappConnectionRecord,
+    targetWabaId: string,
+  ): Promise<MetaWhatsappConnectionRecord> {
+    const open = await this.listOpenConnections(tenantId);
+    const pool = open.length ? open : [preferred];
+    const writers = pickTemplateWriteConnections(pool, preferred, targetWabaId);
+    const usable = writers.find((row) => isUsableTemplateConnection(row));
+    if (usable) return usable;
     const agency = pickCatalogAgencyWriter(pool);
     if (agency) return agency;
     return (
@@ -942,7 +955,7 @@ export class MetaWhatsappTemplateAiService {
     const repo = this.connections as MetaWhatsappConnectionRepository;
     const openRows =
       typeof repo.listOpenByTenant === "function" ? await repo.listOpenByTenant(tenant.tenantId) : [];
-    const writer = await this.pickSubmitWriter(
+    const writer = await this.pickHeaderWriter(
       tenant.tenantId,
       preferred,
       String(preferred.wabaId || ""),
