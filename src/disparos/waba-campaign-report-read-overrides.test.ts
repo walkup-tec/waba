@@ -327,70 +327,32 @@ describe("override pontual do relatório", () => {
     assert.equal(differentTotals?.clicks, 0);
   });
 
-  it("Raphaela 01 aplica 43% de entrega, 28% de lidos e 41 cliques", () => {
+  it("Raphaela 01 não aplica overlay: o operador informa os indicadores reais", () => {
     const stored = report({
-      totalLeads: 150,
-      sent: 150,
-      delivered: 140,
-      read: 90,
-      failed: 8,
-      clicks: 4,
-      source: "meta_lab",
+      totalLeads: 5000,
+      sent: 4800,
+      delivered: 4100,
+      read: 1200,
+      failed: 80,
+      clicks: 12,
+      source: "manual",
     });
-    const got = applyCampaignReportReadOverride("Raphaela 01", "2026-09-26T12:00:00.000Z", stored);
-    assert.equal(got?.totalLeads, 150);
-    assert.equal(got?.sent, 145);
-    assert.equal(got?.delivered, 62);
-    assert.equal(got?.read, 17);
-    assert.equal(got?.failed, 579);
-    assert.equal(got?.clicks, 41);
-    assert.equal(campaignReportShowsClicks("Raphaela 01", "2026-09-26T12:00:00.000Z", stored), true);
-
-    const metrics = computeCampaignPerformanceMetrics({
-      totalLeads: 150,
-      sent: 145,
-      delivered: 62,
-      read: 17,
-      failed: 579,
-      clicks: 41,
-    });
-    assert.equal(metrics.deliveryRate, 42.76);
-    assert.equal(metrics.readRate, 27.42);
-    assert.equal(metrics.failureRate, 100);
-    assert.equal(metrics.clickRate, 66.13);
-    assert.equal(metrics.pendingSent, 0);
-    assert.equal(metrics.bonusShipments, 5);
-
-    const scaled = applyCampaignReportReadOverride(
-      "Raphaela 01",
-      "2026-09-26T12:00:00.000Z",
-      report({
-        totalLeads: 1000,
-        sent: 1000,
-        delivered: 800,
-        read: 400,
-        failed: 10,
-        clicks: 20,
-      }),
+    const got = applyCampaignReportReadOverride("Raphaela 01", "2026-09-24T19:38:00.000Z", stored);
+    assert.equal(got, stored);
+    assert.equal(got?.sent, 4800);
+    assert.equal(got?.delivered, 4100);
+    assert.equal(got?.read, 1200);
+    assert.equal(got?.failed, 80);
+    assert.equal(got?.clicks, 12);
+    assert.equal(campaignReportShowsClicks("Raphaela 01", "2026-09-24T19:38:00.000Z", stored), false);
+    assert.equal(
+      resolveOverriddenCampaignStatus("Raphaela 01", "2026-09-24T19:38:00.000Z", "generated"),
+      "generated",
     );
-    assert.equal(scaled?.totalLeads, 1000);
-    assert.equal(scaled?.sent, 967);
-    assert.equal(scaled?.delivered, 416);
-    assert.equal(scaled?.read, 116);
-    assert.equal(scaled?.failed, 579);
-    assert.equal(scaled?.clicks, 41);
-
-    const other = applyCampaignReportReadOverride(
-      "Raphaela 02",
-      "2026-09-26T12:00:00.000Z",
-      report({ totalLeads: 150, sent: 150, delivered: 140, read: 90, failed: 8, clicks: 4 }),
+    assert.equal(
+      applyCampaignReportReadOverride("Raphaela 01", "2026-09-24T19:38:00.000Z", null),
+      null,
     );
-    assert.equal(other?.sent, 150);
-    assert.equal(other?.delivered, 140);
-    assert.equal(other?.read, 90);
-    assert.equal(other?.failed, 8);
-    assert.equal(other?.clicks, 4);
-    assert.equal(campaignReportShowsClicks("Raphaela 02", "2026-09-26T12:00:00.000Z"), false);
   });
 
   it("Tocantins_V01 de 21/09 recebe 3 cliques do /s/n9730691", () => {

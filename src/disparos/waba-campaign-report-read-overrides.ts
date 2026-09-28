@@ -145,22 +145,6 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
     showClicks: true,
   },
   {
-    name: "Raphaela 01",
-    matchExactName: true,
-    showClicks: true,
-    proportionFrom: { totalLeads: 150, sent: 145 },
-    rates: { deliveredFromSent: 0.43, readFromDelivered: 0.28 },
-    clicks: 41,
-    failed: 579,
-    timeline: {
-      createdAt: "2026-09-26T11:00:00.000Z",
-      attendanceStartedAt: "2026-09-26T12:00:00.000Z",
-      templateApprovedAt: "2026-09-26T13:30:00.000Z",
-      dispatchStartedAt: "2026-09-26T14:00:00.000Z",
-      dispatchFinishedAt: "2026-09-26T14:17:00.000Z",
-    },
-  },
-  {
     name: "VITORIA DA CONQUISTA",
     matchExactName: true,
     forceCompleted: true,

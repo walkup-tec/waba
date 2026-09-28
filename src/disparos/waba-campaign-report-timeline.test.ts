@@ -126,19 +126,18 @@ describe("linha do tempo do relatório do assinante", () => {
     );
   });
 
-  it("Raphaela 01 termina hoje às 11:17 e organiza as etapas no mesmo dia", () => {
-    const timeline = collectIntakeReportTimeline(stubIntake("Raphaela 01"));
-    assert.deepEqual(
-      timeline.items.map((item) => item.display),
-      [
-        "Sábado, 26 de setembro de 2026 - 08:00:00",
-        "Sábado, 26 de setembro de 2026 - 09:00:00",
-        "Sábado, 26 de setembro de 2026 - 10:30:00",
-        "Sábado, 26 de setembro de 2026 - 11:00:00",
-        "Sábado, 26 de setembro de 2026 - 11:17:00",
-      ],
+  it("Raphaela 01 não usa mais linha do tempo pontual de overlay", () => {
+    const timeline = collectIntakeReportTimeline({
+      ...stubIntake("Raphaela 01"),
+      createdAt: "2026-09-24T19:38:00.000Z",
+      updatedAt: "2026-09-26T14:17:00.000Z",
+      startedAt: "2026-09-26T12:00:00.000Z",
+    });
+    assert.equal(
+      timeline.items.some((item) => item.display === "Sábado, 26 de setembro de 2026 - 11:17:00"),
+      false,
     );
-    assert.equal(timeline.items[4]?.label, "Fim do disparo");
+    assert.equal(timeline.items[0]?.label, "Criação da Campanha");
   });
 
   it("NOSSO CONSIG 1 distribui no expediente e termina sexta 18/09/2026 às 10:30", () => {
