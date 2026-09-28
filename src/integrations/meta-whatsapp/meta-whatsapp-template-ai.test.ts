@@ -130,16 +130,32 @@ function serviceFor(
   connectionOverrides: Partial<MetaWhatsappConnectionRecord> = {},
   createButtonShortUrl?: (input: { destinationUrl: string; tenantId: string }) => Promise<string>,
   onOpenAi?: (request: { input: string; instructions: string }) => void,
+  extraRows: MetaWhatsappConnectionRecord[] = [],
 ) {
   const row = connection(email, connectionOverrides);
+  const rows = [row, ...extraRows];
   const stored: Array<Record<string, unknown>> = [];
   let savedResult: MetaTemplateAiModelOutput | null = null;
   return {
     stored,
+    row,
     service: new MetaWhatsappTemplateAiService(
       {
         async findByIdForTenant(tenantId: string, id: string) {
-          return tenantId === row.tenantId && id === row.id ? row : null;
+          return rows.find((item) => item.tenantId === tenantId && item.id === id) || null;
+        },
+        async listOpenByTenant(tenantId: string) {
+          return rows.filter((item) => item.tenantId === tenantId && !item.disconnectedAt);
+        },
+        async findByBusinessId(tenantId: string, businessId: string) {
+          return (
+            rows.find(
+              (item) =>
+                item.tenantId === tenantId &&
+                String(item.metaBusinessId || "") === String(businessId || "") &&
+                !item.disconnectedAt,
+            ) || null
+          );
         },
       } as any,
       {
@@ -148,8 +164,8 @@ function serviceFor(
           savedResult = input.result as MetaTemplateAiModelOutput;
           return "analysis-1";
         },
-        async findForSubmission(tenantId: string, connectionId: string, analysisId: string) {
-          if (tenantId !== row.tenantId || connectionId !== row.id || analysisId !== "analysis-1" || !savedResult) {
+        async findForSubmission(tenantId: string, _connectionId: string, analysisId: string) {
+          if (tenantId !== row.tenantId || analysisId !== "analysis-1" || !savedResult) {
             return null;
           }
           return {
@@ -326,6 +342,151 @@ describe("Assistente IA de templates Utility", () => {
       { connectionId: "conn-utility", baseText: "Atualização de solicitação existente." },
     );
     assert.equal(result.options.length, 3);
+  });
+
+  it("gera opções para pending_token com token mesmo sem WABA gravada no banco", async () => {
+    const email = "ai-flaviane-pending@example.com";
+    const { service, stored } = serviceFor(email, utilityOutput(), undefined, {
+      id: "44493911-2c56-463d-9056-20282635f54b",
+      status: "pending_token",
+      wabaId: "",
+      metaBusinessId: "962298516898955",
+      verifiedName: "60.845.972 Flaviane Ferreira Trindade",
+    });
+    const result = await service.generateFromAuth(
+      { email, role: "subscriber" },
+      {
+        connectionId: "44493911-2c56-463d-9056-20282635f54b",
+        baseText: "BPC/LOAS: 1 salário mínimo por mês. Teve o BPC negado?",
+      },
+    );
+    assert.equal(result.options.length, 3);
+    assert.equal(stored[0]?.connectionId, "44493911-2c56-463d-9056-20282635f54b");
+  });
+
+  it("pending_token sem WABA usa a conexão connected do mesmo BM", async () => {
+    const email = "ai-flaviane-sibling@example.com";
+    const pending = connection(email, {
+      id: "44493911-2c56-463d-9056-20282635f54b",
+      status: "pending_token",
+      wabaId: "",
+      metaBusinessId: "962298516898955",
+      verifiedName: "60.845.972 Flaviane Ferreira Trindade",
+    });
+    const sibling = connection(email, {
+      id: "conn-flaviane-connected",
+      status: "connected",
+      wabaId: "2301051607405249",
+      metaBusinessId: "962298516898955",
+      verifiedName: "Flaviane conectada",
+    });
+    const { service, stored } = serviceFor(
+      email,
+      utilityOutput(),
+      undefined,
+      pending,
+      undefined,
+      undefined,
+      [sibling],
+    );
+    const result = await service.generateFromAuth(
+      { email, role: "subscriber" },
+      {
+        connectionId: "44493911-2c56-463d-9056-20282635f54b",
+        baseText: "Atualização da solicitação de BPC já aberta.",
+      },
+    );
+    assert.equal(result.options.length, 3);
+    assert.equal(result.connectionId, "conn-flaviane-connected");
+    assert.equal(stored[0]?.connectionId, "conn-flaviane-connected");
+    assert.equal(stored[0]?.wabaId, "2301051607405249");
+  });
+
+  it("pending_token de outro tenant continua not_connected", async () => {
+    const email = "ai-pending-other-tenant@example.com";
+    const { service } = serviceFor(email, utilityOutput(), undefined, {
+      status: "pending_token",
+      wabaId: "",
+    });
+    await assert.rejects(
+      () =>
+        service.generateFromAuth(
+          { email: "intruso@example.com", role: "subscriber" },
+          { connectionId: "conn-utility", baseText: "Atualização de solicitação." },
+        ),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "not_connected",
+    );
+  });
+
+  it("pending_token sem token e sem irmã connected continua not_connected", async () => {
+    const email = "ai-pending-empty@example.com";
+    const { service } = serviceFor(email, utilityOutput(), undefined, {
+      status: "pending_token",
+      wabaId: "",
+      accessTokenEncrypted: "",
+    });
+    await assert.rejects(
+      () =>
+        service.generateFromAuth(
+          { email, role: "subscriber" },
+          { connectionId: "conn-utility", baseText: "Atualização de solicitação." },
+        ),
+      (error: unknown) => error instanceof MetaWhatsappError && error.code === "not_connected",
+    );
+  });
+
+  it("ao enviar, troca pending_token pela conexão connected do mesmo BM", async () => {
+    const email = "ai-submit-flaviane-writer@example.com";
+    const calls: Array<Record<string, unknown>> = [];
+    const sibling = connection(email, {
+      id: "conn-flaviane-connected",
+      status: "connected",
+      wabaId: "2301051607405249",
+      metaBusinessId: "962298516898955",
+    });
+    const { service } = serviceFor(
+      email,
+      utilityOutput(),
+      {
+        async createFromAuth(_auth: unknown, input: Record<string, unknown>) {
+          calls.push(input);
+          return { id: `local-${String(input.name)}`, status: "PENDING" };
+        },
+      },
+      {
+        id: "44493911-2c56-463d-9056-20282635f54b",
+        status: "pending_token",
+        wabaId: "",
+        metaBusinessId: "962298516898955",
+      },
+      undefined,
+      undefined,
+      [sibling],
+    );
+    await service.generateFromAuth(
+      { email, role: "subscriber" },
+      {
+        connectionId: "44493911-2c56-463d-9056-20282635f54b",
+        baseText: "Atualização da solicitação de BPC já aberta.",
+      },
+    );
+    const result = await service.submitAllFromAuth(
+      { email, role: "subscriber" },
+      submitShell({
+        connectionId: "44493911-2c56-463d-9056-20282635f54b",
+        wabaIds: ["2301051607405249"],
+        wabaTargets: [
+          {
+            connectionId: "44493911-2c56-463d-9056-20282635f54b",
+            wabaId: "2301051607405249",
+          },
+        ],
+      }),
+    );
+    assert.equal(result.submitted, 3);
+    assert.equal(calls.length, 3);
+    assert.ok(calls.every((item) => item.connectionId === "conn-flaviane-connected"));
+    assert.ok(calls.every((item) => item.wabaId === "2301051607405249"));
   });
 
   it("limita chamadas por tenant e usuário", async () => {

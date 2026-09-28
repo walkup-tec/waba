@@ -19,8 +19,10 @@ const meta_whatsapp_template_ai_schema_1 = require("./meta-whatsapp-template-ai.
 const meta_whatsapp_template_ai_shell_1 = require("./meta-whatsapp-template-ai-shell");
 const meta_whatsapp_template_ai_utility_shape_1 = require("./meta-whatsapp-template-ai-utility-shape");
 const meta_whatsapp_template_ai_option_edit_1 = require("./meta-whatsapp-template-ai-option-edit");
+const meta_whatsapp_known_owned_wabas_1 = require("./meta-whatsapp-known-owned-wabas");
 const meta_whatsapp_template_log_1 = require("./meta-whatsapp-template-log");
 const meta_whatsapp_template_service_1 = require("./meta-whatsapp-template.service");
+const meta_whatsapp_template_waba_ids_1 = require("./meta-whatsapp-template-waba-ids");
 const meta_token_crypto_1 = require("./meta-token-crypto");
 const meta_config_1 = require("./meta-config");
 const meta_whatsapp_resumable_upload_1 = require("./meta-whatsapp-resumable-upload");
@@ -124,6 +126,35 @@ function isEnabled() {
         return false;
     return Boolean(String(process.env.OPENAI_API_KEY || "").trim());
 }
+function hasUsableToken(row) {
+    return Boolean(row && String(row.accessTokenEncrypted || "").trim());
+}
+/** Card do Lab pode apontar para pending_token com token (fan-out do catálogo). */
+function isAiReadyConnection(row) {
+    if (!row || row.disconnectedAt || !hasUsableToken(row))
+        return false;
+    return (row.status === "connected" ||
+        row.status === "pending_confirmation" ||
+        row.status === "pending_token");
+}
+function isUsableTemplateConnection(row) {
+    return Boolean(row &&
+        !row.disconnectedAt &&
+        (row.status === "connected" || row.status === "pending_confirmation") &&
+        String(row.wabaId || "").trim());
+}
+function connectionMatchesRequest(row, requested) {
+    const want = String(requested || "").trim();
+    if (!want)
+        return false;
+    if (String(row.id || "").trim() === want)
+        return true;
+    return (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(row.metaBusinessId || ""), want);
+}
+function pickUsableOpenConnection(open, requested) {
+    const matches = open.filter((row) => connectionMatchesRequest(row, requested) && isUsableTemplateConnection(row));
+    return matches.find((row) => row.status === "connected") || matches[0] || null;
+}
 function componentsFromAiOption(option, hasLinkButton = true) {
     const placeholders = [...new Set([...option.body.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1])))].sort((a, b) => a - b);
     const maxPlaceholder = placeholders.length ? Math.max(...placeholders) : 0;
@@ -161,19 +192,51 @@ class MetaWhatsappTemplateAiService {
         this.uploadHeader = uploadHeader;
         this.createButtonShortUrl = createButtonShortUrl;
     }
+    async listOpenConnections(tenantId) {
+        const repo = this.connections;
+        if (typeof repo.listOpenByTenant === "function") {
+            return repo.listOpenByTenant(tenantId);
+        }
+        return [];
+    }
     async requirePortfolio(tenantId, connectionId) {
         const id = String(connectionId || "").trim();
         if (!id)
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload");
-        const row = await this.connections.findByIdForTenant(tenantId, id);
-        if (!row ||
-            row.tenantId !== tenantId ||
-            (row.status !== "connected" && row.status !== "pending_confirmation") ||
-            row.disconnectedAt ||
-            !row.wabaId) {
+        let row = null;
+        try {
+            row = await this.connections.findByIdForTenant(tenantId, id);
+        }
+        catch (error) {
+            const text = String(error?.message || error || "");
+            if (!/invalid input syntax for type uuid/i.test(text))
+                throw error;
+            row = null;
+        }
+        if (!isUsableTemplateConnection(row)) {
+            const open = await this.listOpenConnections(tenantId);
+            const sibling = pickUsableOpenConnection(open, id) ||
+                (row?.metaBusinessId ? pickUsableOpenConnection(open, String(row.metaBusinessId)) : null);
+            if (sibling)
+                row = sibling;
+            const repo = this.connections;
+            const bmHint = String((isUsableTemplateConnection(row) ? "" : row?.metaBusinessId) ||
+                (/^\d{6,}$/.test(id) ? id : "")).trim();
+            if (!isUsableTemplateConnection(row) && bmHint && typeof repo.findByBusinessId === "function") {
+                const byBm = await repo.findByBusinessId(tenantId, bmHint);
+                if (isUsableTemplateConnection(byBm))
+                    row = byBm;
+            }
+        }
+        if (!row || row.tenantId !== tenantId || !isAiReadyConnection(row)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
         }
         return row;
+    }
+    async pickSubmitWriter(tenantId, preferred, targetWabaId) {
+        const open = await this.listOpenConnections(tenantId);
+        const writers = (0, meta_whatsapp_template_waba_ids_1.pickTemplateWriteConnections)(open.length ? open : [preferred], preferred, targetWabaId);
+        return writers.find((row) => isUsableTemplateConnection(row)) || preferred;
     }
     async resolveSubmitPortfolios(tenantId, connectionIds) {
         const requested = [...new Set(connectionIds.map((id) => String(id || "").trim()).filter(Boolean))];
@@ -280,7 +343,7 @@ class MetaWhatsappTemplateAiService {
             analysisId = await this.analyses.create({
                 tenantId: tenant.tenantId,
                 connectionId: connection.id,
-                wabaId: String(connection.wabaId),
+                wabaId: String(connection.wabaId || ""),
                 createdBy: auth.email,
                 baseText,
                 language,
@@ -307,7 +370,7 @@ class MetaWhatsappTemplateAiService {
             ...result,
             analysisId,
             connectionId: connection.id,
-            wabaId: String(connection.wabaId),
+            wabaId: String(connection.wabaId || ""),
             language,
             model: ai.model,
             policyVersion: meta_whatsapp_template_ai_prompt_1.META_TEMPLATE_AI_POLICY_VERSION,
@@ -505,8 +568,9 @@ class MetaWhatsappTemplateAiService {
                 }
                 try {
                     const buttonUrl = shell.hasLinkButton ? await ensureMetaButtonUrl() : "";
+                    const writer = await this.pickSubmitWriter(tenant.tenantId, connection, wabaId);
                     const template = await this.templates.createFromAuth(auth, {
-                        connectionId: connection.id,
+                        connectionId: writer.id,
                         wabaId,
                         aiAnalysisId: analysisId,
                         aiOptionIndex: index,
