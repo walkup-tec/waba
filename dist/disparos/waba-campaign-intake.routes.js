@@ -572,7 +572,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             return res.status(500).json({ error: "Erro ao carregar campanhas geradas. Tente novamente." });
         }
     });
-    app.get("/disparos/campanhas/intake/:id/relatorio", (req, res) => {
+    app.get("/disparos/campanhas/intake/:id/relatorio", async (req, res) => {
         const auth = resolveRequestAuth(req);
         if (!auth.email) {
             return res.status(401).json({ error: "Faça login para ver o relatório." });
@@ -607,6 +607,21 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             (laboratorioAttended &&
                 report?.source === "meta_lab" &&
                 !(0, waba_campaign_report_read_overrides_1.campaignReportHidesClicks)(intake.campaignName, intake.createdAt, report));
+        const overrideClicks = (0, waba_campaign_report_read_overrides_1.resolveCampaignReportOverride)(intake.campaignName, intake.createdAt, report, intake.id)?.clicks;
+        let trackedClicks = 0;
+        if (showClicks && !laboratorioAttended) {
+            try {
+                trackedClicks = await (0, waba_campaign_intake_short_url_1.resolveIntakeTrackedShortUrlClicks)(intake);
+            }
+            catch {
+                trackedClicks = 0;
+            }
+        }
+        const clicks = showClicks
+            ? laboratorioAttended
+                ? Math.max(0, Math.round(Number(report?.clicks || 0)))
+                : (0, waba_campaign_intake_short_url_1.resolveOperacionalManualReportClicks)({ overrideClicks, trackedClicks })
+            : 0;
         const metrics = report
             ? (0, waba_campaign_performance_metrics_1.computeCampaignPerformanceMetrics)({
                 totalLeads: report.totalLeads,
@@ -614,9 +629,15 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 delivered: report.delivered,
                 read: report.read,
                 failed: report.failed,
-                clicks: showClicks ? report.clicks : 0,
+                clicks,
             })
             : null;
+        const clickIndicators = showClicks
+            ? {
+                cliques: metrics?.clicks ?? clicks,
+                taxaCliques: metrics?.clickRate ?? 0,
+            }
+            : {};
         const indicators = report
             ? {
                 totalLeads: report.totalLeads,
@@ -624,12 +645,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 entregues: report.delivered,
                 lidos: report.read,
                 falhados: report.failed,
-                ...(showClicks
-                    ? {
-                        cliques: metrics?.clicks ?? 0,
-                        taxaCliques: metrics?.clickRate ?? 0,
-                    }
-                    : {}),
+                ...clickIndicators,
             }
             : {
                 totalLeads: 0,
@@ -637,6 +653,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 entregues: 0,
                 lidos: 0,
                 falhados: 0,
+                ...clickIndicators,
             };
         return res.status(200).json({
             campaignName: intake.campaignName,

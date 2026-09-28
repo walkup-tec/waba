@@ -87,17 +87,6 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         name: "Raphaela 01",
         matchExactName: true,
         showClicks: true,
-        proportionFrom: { totalLeads: 150, sent: 145 },
-        rates: { deliveredFromSent: 0.43, readFromDelivered: 0.28 },
-        clicks: 41,
-        failed: 579,
-        timeline: {
-            createdAt: "2026-09-26T11:00:00.000Z",
-            attendanceStartedAt: "2026-09-26T12:00:00.000Z",
-            templateApprovedAt: "2026-09-26T13:30:00.000Z",
-            dispatchStartedAt: "2026-09-26T14:00:00.000Z",
-            dispatchFinishedAt: "2026-09-26T14:17:00.000Z",
-        },
     },
     {
         name: "VITORIA DA CONQUISTA",
@@ -257,9 +246,18 @@ const campaignReportHidesClicks = (campaignName, createdAt, report) => Boolean((
 exports.campaignReportHidesClicks = campaignReportHidesClicks;
 const campaignReportShowsClicks = (campaignName, createdAt, report) => Boolean((0, exports.resolveCampaignReportOverride)(campaignName, createdAt, report)?.showClicks);
 exports.campaignReportShowsClicks = campaignReportShowsClicks;
+const ruleOverridesMetrics = (rule) => Boolean(rule.proportionFrom ||
+    rule.rates ||
+    rule.sent != null ||
+    rule.delivered != null ||
+    rule.read != null ||
+    rule.failed != null ||
+    rule.clicks != null);
 const applyCampaignReportReadOverride = (campaignName, createdAt, report) => {
     const rule = (0, exports.resolveCampaignReportOverride)(campaignName, createdAt, report);
     if (!rule)
+        return report;
+    if (!ruleOverridesMetrics(rule))
         return report;
     const base = report || {
         totalLeads: 0,
