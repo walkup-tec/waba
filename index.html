@@ -2814,17 +2814,25 @@
         letter-spacing: 0.01em;
       }
 
-      body.waba-ui-production:not(.waba-subscriber-bets-segment)
+      body.waba-ui-production:not(.waba-subscriber-bets-segment):not(.waba-alternativa-retired)
         .integration-env-btn[data-integration-env="alternativa"] {
         display: inline-flex;
       }
 
       body.waba-ui-production.waba-subscriber-bets-segment
         .integration-env-btn[data-integration-env="alternativa"],
+      body.waba-ui-production.waba-alternativa-retired
+        .integration-env-btn[data-integration-env="alternativa"],
       body.waba-ui-production.waba-subscriber-bets-segment
         .menu-group-items
         .tab-button[data-menu-key="disparo-evo"],
+      body.waba-ui-production.waba-alternativa-retired
+        .menu-group-items
+        .tab-button[data-menu-key="disparo-evo"],
       body.waba-ui-production.waba-subscriber-bets-segment
+        .mobile-tabs-drawer
+        .tab-button[data-menu-key="disparo-evo"],
+      body.waba-ui-production.waba-alternativa-retired
         .mobile-tabs-drawer
         .tab-button[data-menu-key="disparo-evo"],
       body.waba-ui-production.waba-disparo-evo-menu-hidden
@@ -2834,7 +2842,11 @@
         .mobile-tabs-drawer
         .tab-button[data-menu-key="disparo-evo"],
       body.waba-subscriber-bets-segment .disparos-pricing-lane[data-disparos-api="alternativa"],
-      body.waba-subscriber-bets-segment #disparos-credits-api-alternativa {
+      body.waba-alternativa-retired .disparos-pricing-lane[data-disparos-api="alternativa"],
+      body.waba-subscriber-bets-segment #disparos-credits-api-alternativa,
+      body.waba-alternativa-retired #disparos-credits-api-alternativa,
+      body.waba-alternativa-retired #disparos-resumo-alternativa-disponiveis,
+      body.waba-alternativa-retired .disparos-resumo-plan-name[data-waba-api-kind="alternativa"] {
         display: none !important;
       }
 
@@ -31883,7 +31895,7 @@
 
       function shouldShowDisparoEvoMenu() {
         if (!isProductionUi()) return false;
-        if (isBetsSubscriberAccount()) return false;
+        if (shouldHideAlternativaProductUi()) return false;
         if (isStaffRole(wabaAuthRole) && wabaAuthRole !== "master") {
           return hasStaffMenuAccess("disparo-evo");
         }
@@ -32141,7 +32153,9 @@
         }
         if (alternativaBtn) {
           const showAlternativa =
-            isProductionUi() && showOficial && !isBetsSubscriberAccount();
+            isProductionUi() &&
+            showOficial &&
+            !shouldHideAlternativaProductUi();
           alternativaBtn.hidden = !showAlternativa;
           alternativaBtn.style.display = showAlternativa ? "" : "none";
           alternativaBtn.toggleAttribute("disabled", !showAlternativa);
@@ -32582,6 +32596,18 @@
         return window.WABA_FEATURE_FLAGS?.alternativaNumbersPurchase === true;
       }
 
+      function isAlternativaProductEnabled() {
+        return window.WABA_FEATURE_FLAGS?.alternativaProduct === true;
+      }
+
+      function isAlternativaUiRetired() {
+        return !isAlternativaProductEnabled();
+      }
+
+      function shouldHideAlternativaProductUi() {
+        return isBetsSubscriberAccount() || isAlternativaUiRetired();
+      }
+
       function applyAlternativaNumbersPurchaseUi() {
         const enabled = isAlternativaNumbersPurchaseEnabled();
         const comprarTab = document.querySelector('.dis-number-source-tab[data-source="comprar"]');
@@ -32805,7 +32831,7 @@
 
       function normalizeIntegrationEnv(env) {
         const raw = String(env || "").trim().toLowerCase();
-        if (isBetsSubscriberAccount() && raw === "alternativa") return "oficial";
+        if (shouldHideAlternativaProductUi() && raw === "alternativa") return "oficial";
         if (raw === "alternativa") return "alternativa";
         if (raw === "oficial") return "oficial";
         return "nao-oficial";
@@ -32816,7 +32842,7 @@
       }
 
       function enforceBetsSubscriberIntegrationEnv() {
-        if (!isBetsSubscriberAccount()) return;
+        if (!shouldHideAlternativaProductUi()) return;
 
         syncDisparoEvoMenuVisibility();
 
@@ -32868,7 +32894,7 @@
       }
 
       function selectDisparosApiKind(kind) {
-        if (isBetsSubscriberAccount() && kind === "alternativa") {
+        if (shouldHideAlternativaProductUi() && kind === "alternativa") {
           return selectDisparosApiKind("oficial");
         }
         const normalized = kind === "alternativa" ? "alternativa" : "oficial";
@@ -33192,6 +33218,7 @@
         }
         if (!isProductionUi()) return;
         document.body.classList.add("waba-ui-production");
+        document.body.classList.toggle("waba-alternativa-retired", isAlternativaUiRetired());
 
         const naoTitle = document.querySelector(
           '.menu-group[data-menu-group="nao-oficial"] .menu-group-title'
@@ -33207,7 +33234,7 @@
         } catch {
           /* ignore */
         }
-        if (isBetsSubscriberAccount() && saved === "alternativa") {
+        if (shouldHideAlternativaProductUi() && saved === "alternativa") {
           saved = "oficial";
           try {
             localStorage.setItem("waba.integration.env", "oficial");
@@ -33474,12 +33501,32 @@
         }
       }
 
+      function syncRetiredAlternativaAdminFields() {
+        const retired = isAlternativaUiRetired();
+        document
+          .querySelectorAll(
+            'input[name="admin-user-operacional-api"][value="alternativa"], input[name="admin-user-edit-operacional-api"][value="alternativa"]'
+          )
+          .forEach((el) => {
+            const wrap = el.closest("label") || el.parentElement;
+            if (wrap) wrap.hidden = retired;
+          });
+        const bonus = document.getElementById("admin-bonus-api-kind");
+        if (bonus) {
+          const opt = bonus.querySelector('option[value="alternativa"]');
+          if (opt) opt.hidden = retired;
+          if (retired && bonus.value === "alternativa") bonus.value = "oficial";
+        }
+      }
+
       function syncDisparosPricingBoardForSegment() {
-        const hideAlternativa = isBetsSubscriberAccount();
+        const hideAlternativa = shouldHideAlternativaProductUi();
+        document.body.classList.toggle("waba-alternativa-retired", isAlternativaUiRetired());
         document.querySelectorAll('.disparos-pricing-lane[data-disparos-api="alternativa"]').forEach((lane) => {
           lane.hidden = hideAlternativa;
         });
-        document.body.classList.toggle("waba-subscriber-bets-segment", hideAlternativa);
+        document.body.classList.toggle("waba-subscriber-bets-segment", isBetsSubscriberAccount());
+        syncRetiredAlternativaAdminFields();
         if (hideAlternativa) {
           document
             .querySelectorAll('.disparos-pricing-lane[data-disparos-api="alternativa"]')
@@ -56715,8 +56762,14 @@
       }
 
       function openDisparosPricingModal(apiKind) {
-        if (isBetsSubscriberAccount() && apiKind === "alternativa") {
-          showToast("Assinantes do segmento Black contratam créditos apenas na API Oficial.", "warning", 5200);
+        if (shouldHideAlternativaProductUi() && apiKind === "alternativa") {
+          showToast(
+            isBetsSubscriberAccount()
+              ? "Assinantes do segmento Black contratam créditos apenas na API Oficial."
+              : "A API Alternativa não está mais disponível. Utilize a API Oficial.",
+            "warning",
+            5200
+          );
           apiKind = "oficial";
         }
         disparosBillingSelectedKind = apiKind;
@@ -69546,9 +69599,11 @@
             const env = normalizeIntegrationEnv(
               btn.getAttribute("data-integration-env") || "nao-oficial"
             );
-            if (isBetsSubscriberAccount() && env === "alternativa") {
+            if (shouldHideAlternativaProductUi() && env === "alternativa") {
               showToast(
-                "Assinantes do segmento Black utilizam apenas a API Oficial.",
+                isBetsSubscriberAccount()
+                  ? "Assinantes do segmento Black utilizam apenas a API Oficial."
+                  : "A API Alternativa não está mais disponível. Utilize a API Oficial.",
                 "warning",
                 5200
               );

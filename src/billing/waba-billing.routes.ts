@@ -1,7 +1,7 @@
 import type { Express, Request } from "express";
 import { readWabaSessionCookie, resolveSessionRole, verifyWabaSessionToken } from "../auth/waba-auth.service";
 import { WABA_ENV } from "../load-env";
-import { isAlternativaNumbersPurchaseEnabled } from "../config/waba-feature-flags";
+import { isAlternativaNumbersPurchaseEnabled, isAlternativaProductEnabled } from "../config/waba-feature-flags";
 import { AsaasTransferAuthService } from "./asaas-transfer-auth.service";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { WabaBillingService } from "./waba-billing.service";
@@ -66,6 +66,7 @@ const isAuthorizedAsaasTransferWebhook = (req: Request): boolean => {
 };
 
 const isAlternativaNumbersSimulationEnabled = (): boolean => {
+  if (!isAlternativaProductEnabled()) return false;
   const runtime = String(process.env.RUNTIME_MODE ?? "").trim().toLowerCase();
   return WABA_ENV === "v02" || runtime === "development";
 };
@@ -270,7 +271,7 @@ export const registerWabaBillingRoutes = (app: Express) => {
   });
 
   app.post("/billing/alternativa-numbers/checkout", async (req, res) => {
-    if (!isAlternativaNumbersPurchaseEnabled()) {
+    if (!isAlternativaProductEnabled() || !isAlternativaNumbersPurchaseEnabled()) {
       return res.status(403).json({ error: "Compra de números indisponível neste ambiente." });
     }
     try {
@@ -302,7 +303,7 @@ export const registerWabaBillingRoutes = (app: Express) => {
   });
 
   app.post("/billing/alternativa-numbers/activate", async (req, res) => {
-    if (!isAlternativaNumbersPurchaseEnabled()) {
+    if (!isAlternativaProductEnabled() || !isAlternativaNumbersPurchaseEnabled()) {
       return res.status(403).json({ error: "Ativação de números da fazenda indisponível neste ambiente." });
     }
     try {

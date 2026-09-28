@@ -12,6 +12,10 @@ import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.ser
 import { WabaMasterDisparosPolicyService } from "../users/waba-master-disparos-policy.service";
 import { isBetsSubscriberEmail } from "../subscribers/waba-subscriber-segment";
 import {
+  ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE,
+  isAlternativaProductEnabled,
+} from "../config/waba-feature-flags";
+import {
   resolveCampaignIntakeStorageDir,
   WabaCampaignIntakeRepository,
   type WabaCampaignIntake,
@@ -357,6 +361,7 @@ const listAvailableApiKindsForEmail = (ownerEmail: string): WabaDispatchesApiKin
   const betsOnlyOficial = isBetsSubscriberEmail(email);
   for (const kind of ["oficial", "alternativa"] as const) {
     if (betsOnlyOficial && kind === "alternativa") continue;
+    if (!isAlternativaProductEnabled() && kind === "alternativa") continue;
     if (disparosCreditsService.getRemainingShipmentsForApi(email, kind) > 0) {
       kinds.push(kind);
     }
@@ -370,6 +375,13 @@ const parseRequestedApiKind = (
 ): { apiKind: WabaDispatchesApiKind; error?: string } => {
   const email = ownerEmail.trim().toLowerCase();
   const requested = normalizeDispatchesApiKind(body.apiKind);
+
+  if (requested === "alternativa" && !isAlternativaProductEnabled()) {
+    return {
+      apiKind: "oficial",
+      error: ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE,
+    };
+  }
 
   if (isBetsSubscriberEmail(email) && requested === "alternativa") {
     return {

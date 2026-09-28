@@ -75,7 +75,11 @@ window.WABA_BASE_PATH="${safe}";
 </script>`;
 }
 function injectRuntimeIntoIndexHtml(html, opts) {
-    const featureFlagsJson = JSON.stringify(opts.featureFlags ?? { alternativaNumbersPurchase: false, metaOfficialPortfolioLab: false });
+    const featureFlagsJson = JSON.stringify(opts.featureFlags ?? {
+        alternativaNumbersPurchase: false,
+        alternativaProduct: false,
+        metaOfficialPortfolioLab: false,
+    });
     const deployResilienceEnabled = typeof opts.deployResilienceEnabled === "boolean"
         ? opts.deployResilienceEnabled
         : resolveDeployResilienceForClient();

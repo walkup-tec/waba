@@ -3,6 +3,11 @@ import { WABA_ENV } from "../load-env";
 export type WabaFeatureFlags = {
   /** Compra/ativação de números da fazenda (API não oficial via pool master). */
   alternativaNumbersPurchase: boolean;
+  /**
+   * Produto API Alternativa (créditos, wizard, menu Disparo EVO, bônus).
+   * Desligado: novas operações recusam alternativa; campanhas antigas continuam no motor/split.
+   */
+  alternativaProduct: boolean;
   /** Card de portfólio + lista/ativação de números oficiais no Laboratório. */
   metaOfficialPortfolioLab: boolean;
 };
@@ -21,6 +26,23 @@ export function isAlternativaNumbersPurchaseEnabled(): boolean {
   return false;
 }
 
+export const ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE =
+  "A API Alternativa não está mais disponível. Utilize a API Oficial.";
+
+/** Produto API Alternativa: desligado por padrão. Rollback: WABA_ALTERNATIVA_PRODUCT_ENABLED=1. */
+export function isAlternativaProductEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const explicit = parseTruthy(String(env.WABA_ALTERNATIVA_PRODUCT_ENABLED ?? ""));
+  if (explicit !== null) return explicit;
+  return false;
+}
+
+export function assertAlternativaProductAllowsApiKind(apiKind: string): void {
+  const kind = String(apiKind || "").trim().toLowerCase();
+  if (kind === "alternativa" && !isAlternativaProductEnabled()) {
+    throw new Error(ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE);
+  }
+}
+
 /** Telas de portfólio/números oficiais no Laboratório. */
 export function isMetaOfficialPortfolioLabEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const explicit = parseTruthy(String(env.WABA_META_OFFICIAL_PORTFOLIO_LAB ?? ""));
@@ -31,6 +53,7 @@ export function isMetaOfficialPortfolioLabEnabled(env: NodeJS.ProcessEnv = proce
 export function getWabaFeatureFlags(): WabaFeatureFlags {
   return {
     alternativaNumbersPurchase: isAlternativaNumbersPurchaseEnabled(),
+    alternativaProduct: isAlternativaProductEnabled(),
     metaOfficialPortfolioLab: isMetaOfficialPortfolioLabEnabled(),
   };
 }

@@ -9,6 +9,7 @@ import { isOrderCreditsActive } from "../billing/waba-disparos-order-shipments";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import { WabaCleisonOficialBalanceRepair } from "../billing/waba-cleison-oficial-balance-repair";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
+import { assertAlternativaProductAllowsApiKind } from "../config/waba-feature-flags";
 
 export type BonusEnviosValidityMode = "12h" | "24h" | "custom" | "lifetime";
 
@@ -198,6 +199,7 @@ export class WabaAdminBonusEnviosService {
     if (!apiKind) {
       throw new Error("Selecione o tipo de plano (API Oficial ou API Alternativa).");
     }
+    assertAlternativaProductAllowsApiKind(apiKind);
 
     const segment = String(subscriber.segment ?? "outros").trim().toLowerCase();
     if (segment === "bets" && apiKind === "alternativa") {

@@ -12,6 +12,7 @@ const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
 const waba_master_disparos_policy_service_1 = require("../users/waba-master-disparos-policy.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
+const waba_feature_flags_1 = require("../config/waba-feature-flags");
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_intake_oficial_dedupe_1 = require("./waba-campaign-intake-oficial-dedupe");
@@ -244,6 +245,8 @@ const listAvailableApiKindsForEmail = (ownerEmail) => {
     for (const kind of ["oficial", "alternativa"]) {
         if (betsOnlyOficial && kind === "alternativa")
             continue;
+        if (!(0, waba_feature_flags_1.isAlternativaProductEnabled)() && kind === "alternativa")
+            continue;
         if (disparosCreditsService.getRemainingShipmentsForApi(email, kind) > 0) {
             kinds.push(kind);
         }
@@ -253,6 +256,12 @@ const listAvailableApiKindsForEmail = (ownerEmail) => {
 const parseRequestedApiKind = (body, ownerEmail) => {
     const email = ownerEmail.trim().toLowerCase();
     const requested = (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(body.apiKind);
+    if (requested === "alternativa" && !(0, waba_feature_flags_1.isAlternativaProductEnabled)()) {
+        return {
+            apiKind: "oficial",
+            error: waba_feature_flags_1.ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE,
+        };
+    }
     if ((0, waba_subscriber_segment_1.isBetsSubscriberEmail)(email) && requested === "alternativa") {
         return {
             apiKind: "oficial",

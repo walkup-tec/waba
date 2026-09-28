@@ -1,6 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE = void 0;
 exports.isAlternativaNumbersPurchaseEnabled = isAlternativaNumbersPurchaseEnabled;
+exports.isAlternativaProductEnabled = isAlternativaProductEnabled;
+exports.assertAlternativaProductAllowsApiKind = assertAlternativaProductAllowsApiKind;
 exports.isMetaOfficialPortfolioLabEnabled = isMetaOfficialPortfolioLabEnabled;
 exports.getWabaFeatureFlags = getWabaFeatureFlags;
 exports.getWabaFeatureFlagsForClient = getWabaFeatureFlagsForClient;
@@ -21,6 +24,20 @@ function isAlternativaNumbersPurchaseEnabled() {
         return explicit;
     return false;
 }
+exports.ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE = "A API Alternativa não está mais disponível. Utilize a API Oficial.";
+/** Produto API Alternativa: desligado por padrão. Rollback: WABA_ALTERNATIVA_PRODUCT_ENABLED=1. */
+function isAlternativaProductEnabled(env = process.env) {
+    const explicit = parseTruthy(String(env.WABA_ALTERNATIVA_PRODUCT_ENABLED ?? ""));
+    if (explicit !== null)
+        return explicit;
+    return false;
+}
+function assertAlternativaProductAllowsApiKind(apiKind) {
+    const kind = String(apiKind || "").trim().toLowerCase();
+    if (kind === "alternativa" && !isAlternativaProductEnabled()) {
+        throw new Error(exports.ALTERNATIVA_PRODUCT_UNAVAILABLE_MESSAGE);
+    }
+}
 /** Telas de portfólio/números oficiais no Laboratório. */
 function isMetaOfficialPortfolioLabEnabled(env = process.env) {
     const explicit = parseTruthy(String(env.WABA_META_OFFICIAL_PORTFOLIO_LAB ?? ""));
@@ -31,6 +48,7 @@ function isMetaOfficialPortfolioLabEnabled(env = process.env) {
 function getWabaFeatureFlags() {
     return {
         alternativaNumbersPurchase: isAlternativaNumbersPurchaseEnabled(),
+        alternativaProduct: isAlternativaProductEnabled(),
         metaOfficialPortfolioLab: isMetaOfficialPortfolioLabEnabled(),
     };
 }

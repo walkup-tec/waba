@@ -31,6 +31,7 @@ export type WabaUiProfile = "production" | "full" | "baseline";
 
 export type WabaClientFeatureFlags = {
   alternativaNumbersPurchase: boolean;
+  alternativaProduct?: boolean;
   metaOfficialPortfolioLab?: boolean;
 };
 
@@ -90,7 +91,11 @@ export function injectRuntimeIntoIndexHtml(
   }
 ): string {
   const featureFlagsJson = JSON.stringify(
-    opts.featureFlags ?? { alternativaNumbersPurchase: false, metaOfficialPortfolioLab: false },
+    opts.featureFlags ?? {
+      alternativaNumbersPurchase: false,
+      alternativaProduct: false,
+      metaOfficialPortfolioLab: false,
+    },
   );
   const deployResilienceEnabled =
     typeof opts.deployResilienceEnabled === "boolean"

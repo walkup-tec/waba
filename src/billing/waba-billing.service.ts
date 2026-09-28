@@ -38,6 +38,7 @@ import {
   wabaPricingService,
 } from "./waba-pricing.service";
 import { WabaIndicatorCommissionService } from "../indicators/waba-indicator-commission.service";
+import { assertAlternativaProductAllowsApiKind } from "../config/waba-feature-flags";
 
 export type CreateAlternativaNumbersCheckoutInput = {
   customerName: string;
@@ -237,6 +238,7 @@ export class WabaBillingService {
     if (apiKind !== "oficial" && apiKind !== "alternativa") {
       throw new Error("Selecione API Oficial ou API Alternativa.");
     }
+    assertAlternativaProductAllowsApiKind(apiKind);
     const segment = getSubscriberSegmentByEmail(String(input.ownerEmail ?? ""));
     if (segment === "bets" && apiKind === "alternativa") {
       throw new Error("Assinantes do segmento Black contratam créditos apenas na API Oficial.");
@@ -271,6 +273,7 @@ export class WabaBillingService {
     if (apiKind !== "oficial" && apiKind !== "alternativa") {
       throw new Error("Selecione API Oficial ou API Alternativa.");
     }
+    assertAlternativaProductAllowsApiKind(apiKind);
 
     const customerName = String(input.customerName ?? "").trim();
     if (customerName.length < 2) {

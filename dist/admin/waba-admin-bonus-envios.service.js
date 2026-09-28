@@ -8,6 +8,7 @@ const waba_disparos_order_shipments_1 = require("../billing/waba-disparos-order-
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
 const waba_cleison_oficial_balance_repair_1 = require("../billing/waba-cleison-oficial-balance-repair");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
+const waba_feature_flags_1 = require("../config/waba-feature-flags");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const addHours = (iso, hours) => {
     const date = new Date(iso);
@@ -129,6 +130,7 @@ class WabaAdminBonusEnviosService {
         if (!apiKind) {
             throw new Error("Selecione o tipo de plano (API Oficial ou API Alternativa).");
         }
+        (0, waba_feature_flags_1.assertAlternativaProductAllowsApiKind)(apiKind);
         const segment = String(subscriber.segment ?? "outros").trim().toLowerCase();
         if (segment === "bets" && apiKind === "alternativa") {
             throw new Error("Assinantes do segmento Black recebem créditos apenas na API Oficial.");

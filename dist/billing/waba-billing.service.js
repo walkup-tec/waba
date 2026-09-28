@@ -15,6 +15,7 @@ const waba_coupon_service_1 = require("./waba-coupon.service");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const waba_pricing_service_1 = require("./waba-pricing.service");
 const waba_indicator_commission_service_1 = require("../indicators/waba-indicator-commission.service");
+const waba_feature_flags_1 = require("../config/waba-feature-flags");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const normalizeDigits = (value) => value.replace(/\D/g, "");
 const formatDueDate = (daysAhead) => (0, asaas_pix_qr_1.formatDueDateInBrazil)(daysAhead);
@@ -141,6 +142,7 @@ class WabaBillingService {
         if (apiKind !== "oficial" && apiKind !== "alternativa") {
             throw new Error("Selecione API Oficial ou API Alternativa.");
         }
+        (0, waba_feature_flags_1.assertAlternativaProductAllowsApiKind)(apiKind);
         const segment = (0, waba_subscriber_segment_1.getSubscriberSegmentByEmail)(String(input.ownerEmail ?? ""));
         if (segment === "bets" && apiKind === "alternativa") {
             throw new Error("Assinantes do segmento Black contratam créditos apenas na API Oficial.");
@@ -172,6 +174,7 @@ class WabaBillingService {
         if (apiKind !== "oficial" && apiKind !== "alternativa") {
             throw new Error("Selecione API Oficial ou API Alternativa.");
         }
+        (0, waba_feature_flags_1.assertAlternativaProductAllowsApiKind)(apiKind);
         const customerName = String(input.customerName ?? "").trim();
         if (customerName.length < 2) {
             throw new Error("Informe o nome completo.");

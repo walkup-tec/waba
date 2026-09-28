@@ -55,6 +55,8 @@ const isAuthorizedAsaasTransferWebhook = (req) => {
     return received.length > 0 && expectedTokens.includes(received);
 };
 const isAlternativaNumbersSimulationEnabled = () => {
+    if (!(0, waba_feature_flags_1.isAlternativaProductEnabled)())
+        return false;
     const runtime = String(process.env.RUNTIME_MODE ?? "").trim().toLowerCase();
     return load_env_1.WABA_ENV === "v02" || runtime === "development";
 };
@@ -247,7 +249,7 @@ const registerWabaBillingRoutes = (app) => {
         }
     });
     app.post("/billing/alternativa-numbers/checkout", async (req, res) => {
-        if (!(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+        if (!(0, waba_feature_flags_1.isAlternativaProductEnabled)() || !(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
             return res.status(403).json({ error: "Compra de números indisponível neste ambiente." });
         }
         try {
@@ -279,7 +281,7 @@ const registerWabaBillingRoutes = (app) => {
         }
     });
     app.post("/billing/alternativa-numbers/activate", async (req, res) => {
-        if (!(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+        if (!(0, waba_feature_flags_1.isAlternativaProductEnabled)() || !(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
             return res.status(403).json({ error: "Ativação de números da fazenda indisponível neste ambiente." });
         }
         try {
