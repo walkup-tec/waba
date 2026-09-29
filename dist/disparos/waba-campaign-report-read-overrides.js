@@ -98,6 +98,13 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         failed: 246,
         clicks: 22,
         showClicks: true,
+        timeline: {
+            createdAt: "2026-09-25T14:23:02.000Z",
+            attendanceStartedAt: "2026-09-25T16:29:15.000Z",
+            templateApprovedAt: "2026-09-28T20:29:15.000Z",
+            dispatchStartedAt: "2026-09-29T13:29:15.000Z",
+            dispatchFinishedAt: "2026-09-29T18:22:15.000Z",
+        },
     },
     {
         name: "VITORIA DA CONQUISTA",

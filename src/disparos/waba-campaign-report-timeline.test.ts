@@ -112,6 +112,20 @@ describe("linha do tempo do relatório do assinante", () => {
     );
   });
 
+  it("Primeiro disparo - agenda pessoal Pelli usa a linha do tempo pontual em Brasília", () => {
+    const timeline = collectIntakeReportTimeline(stubIntake("Primeiro disparo - agenda pessoal Pelli"));
+    assert.deepEqual(
+      timeline.items.map((item) => item.display),
+      [
+        "Sexta-feira, 25 de setembro de 2026 - 11:23:02",
+        "Sexta-feira, 25 de setembro de 2026 - 13:29:15",
+        "Segunda-feira, 28 de setembro de 2026 - 17:29:15",
+        "Terça-feira, 29 de setembro de 2026 - 10:29:15",
+        "Terça-feira, 29 de setembro de 2026 - 15:22:15",
+      ],
+    );
+  });
+
   it("VITORIA DA CONQUISTA usa a linha do tempo pontual em Brasília", () => {
     const timeline = collectIntakeReportTimeline(stubIntake("VITORIA DA CONQUISTA"));
     assert.deepEqual(
