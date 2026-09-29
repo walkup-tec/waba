@@ -4683,10 +4683,29 @@
           border-color: #34d399;
         }
         .meta-tpl-broadcast-split-foot { margin-top: 8px; }
+        .meta-tpl-broadcast-test-card {
+          margin-top: 16px;
+          padding: 14px 16px 16px;
+          border-radius: 14px;
+          border: 1px solid rgba(52, 211, 153, 0.22);
+          background: linear-gradient(145deg, rgba(16, 185, 129, 0.08), rgba(15, 23, 42, 0.55));
+        }
+        .meta-tpl-broadcast-test-card .panel-header { margin-bottom: 6px; }
+        .meta-tpl-broadcast-test-grid {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 8px;
+          margin: 10px 0 12px;
+        }
+        .meta-tpl-broadcast-test-actions { margin-top: 0; }
 
         @media (max-width: 720px) {
           .meta-tpl-broadcast-grid.disparos-grid-2 { grid-template-columns: 1fr; }
           .meta-tpl-broadcast-template-row { grid-template-columns: 1fr; }
+          .meta-tpl-broadcast-test-grid { grid-template-columns: 1fr; }
+        }
+        @media (min-width: 721px) and (max-width: 1100px) {
+          .meta-tpl-broadcast-test-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
         .meta-tpl-ai-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
         .meta-tpl-ai-head strong { display:block; font-size:14px; color:#f8fafc; }
@@ -24050,6 +24069,41 @@
                 <button id="meta-tpl-broadcast-start" type="button" class="instance-action-btn btn-qrcode enabled">Iniciar disparo</button>
               </div>
               <p id="meta-tpl-broadcast-status" class="muted" role="status" aria-live="polite" style="margin:10px 0 0;"></p>
+              <div class="meta-tpl-broadcast-test-card" id="meta-tpl-broadcast-test-card">
+                <div class="panel-header">
+                  <div class="panel-title">Envio de teste</div>
+                  <span class="muted">Cloud API · 1 a 5 números</span>
+                </div>
+                <p class="muted" style="margin:0 0 4px;">
+                  Envia o template aprovado e usa o número Ativo já marcado acima. Preencha de 1 a 5 WhatsApp; campos vazios não entram no teste. Não ocupa o número e não usa a planilha nem a campanha do assinante.
+                </p>
+                <div class="meta-tpl-broadcast-test-grid">
+                  <div class="aquecedor-field">
+                    <label for="meta-tpl-broadcast-test-phone-1">Número 1</label>
+                    <input id="meta-tpl-broadcast-test-phone-1" type="tel" inputmode="numeric" autocomplete="off" value="5199666841" aria-label="WhatsApp de teste 1" />
+                  </div>
+                  <div class="aquecedor-field">
+                    <label for="meta-tpl-broadcast-test-phone-2">Número 2</label>
+                    <input id="meta-tpl-broadcast-test-phone-2" type="tel" inputmode="numeric" autocomplete="off" value="5193388993" aria-label="WhatsApp de teste 2" />
+                  </div>
+                  <div class="aquecedor-field">
+                    <label for="meta-tpl-broadcast-test-phone-3">Número 3</label>
+                    <input id="meta-tpl-broadcast-test-phone-3" type="tel" inputmode="numeric" autocomplete="off" value="5197462102" aria-label="WhatsApp de teste 3" />
+                  </div>
+                  <div class="aquecedor-field">
+                    <label for="meta-tpl-broadcast-test-phone-4">Número 4</label>
+                    <input id="meta-tpl-broadcast-test-phone-4" type="tel" inputmode="numeric" autocomplete="off" value="5193388993" aria-label="WhatsApp de teste 4" />
+                  </div>
+                  <div class="aquecedor-field">
+                    <label for="meta-tpl-broadcast-test-phone-5">Número 5</label>
+                    <input id="meta-tpl-broadcast-test-phone-5" type="tel" inputmode="numeric" autocomplete="off" value="5182242910" aria-label="WhatsApp de teste 5" />
+                  </div>
+                </div>
+                <div class="disparos-inline-actions meta-tpl-broadcast-test-actions" style="flex-wrap:wrap; gap:8px;">
+                  <button id="meta-tpl-broadcast-test-start" type="button" class="instance-action-btn btn-qrcode enabled">Disparar Teste</button>
+                </div>
+                <p id="meta-tpl-broadcast-test-status" class="muted" role="status" aria-live="polite" style="margin:10px 0 0;"></p>
+              </div>
               <div class="meta-tpl-broadcast-history" id="meta-tpl-broadcast-history">
                 <table class="meta-tpl-lab-table" aria-label="Campanhas iniciadas no Disparo Cloud">
                   <thead>
@@ -43691,6 +43745,7 @@
       let metaTplBroadcastCampaignId = "";
       let metaTplBroadcastPoll = 0;
       let metaTplBroadcastStarting = false;
+      let metaTplBroadcastTesting = false;
 
       async function metaTplBroadcastWaitUntilHealthy() {
         for (let attempt = 1; attempt <= 8; attempt += 1) {
@@ -45482,6 +45537,107 @@
         }
       }
 
+      function metaTplBroadcastCollectTestPhones() {
+        const phones = [];
+        for (let index = 1; index <= 5; index += 1) {
+          const el = metaTplBroadcastEl("meta-tpl-broadcast-test-phone-" + index);
+          const value = String((el && el.value) || "").trim();
+          if (value) phones.push(value);
+        }
+        return phones;
+      }
+
+      function metaTplBroadcastSetTestStatus(text) {
+        const el = metaTplBroadcastEl("meta-tpl-broadcast-test-status");
+        if (el) el.textContent = text || "";
+      }
+
+      function metaTplBroadcastTestSummary(payload) {
+        const total = Number((payload && payload.total) || 0);
+        const sent = Number((payload && payload.sent) || 0);
+        const failed = Number((payload && payload.failed) || 0);
+        const results = (payload && payload.results) || [];
+        if (total < 1) return "Nenhum número de teste foi enviado.";
+        if (failed < 1) {
+          return "Teste enviado para " + String(sent) + " número" + (sent === 1 ? "" : "s") + ". A Meta aceitou todos.";
+        }
+        const failedRows = results.filter(function (row) { return row && row.ok === false; });
+        const first = failedRows[0] || {};
+        const detail = String(first.error || "falha no envio").trim();
+        const wa = String(first.waId || "").trim();
+        return (
+          "Teste: " +
+          String(sent) +
+          " aceito" +
+          (sent === 1 ? "" : "s") +
+          ", " +
+          String(failed) +
+          (failed === 1 ? " falhou" : " falharam") +
+          (wa ? " (" + wa + (detail ? ": " + detail : "") + ")" : detail ? " (" + detail + ")" : "") +
+          "."
+        );
+      }
+
+      async function metaTplBroadcastStartTest() {
+        if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
+          const phones = metaTplBroadcastCollectTestPhones();
+          metaTplBroadcastSetTestStatus(
+            phones.length
+              ? "Preview — teste para " + String(phones.length) + " número(s). Nada foi enviado à Meta."
+              : "Informe de 1 a 5 números de WhatsApp para o envio de teste.",
+          );
+          return;
+        }
+        if (metaTplBroadcastInspect && metaTplBroadcastInspect.headerNeedsFile) {
+          metaTplBroadcastSetTestStatus("Envie a foto do topo deste template antes do teste. A Meta não reusa o link de exemplo.");
+          return;
+        }
+        if (!String((metaTplBroadcastEl("meta-tpl-broadcast-template") || {}).value || "").trim()) {
+          metaTplBroadcastSetTestStatus("Selecione um template aprovado.");
+          return;
+        }
+        const phoneNumberIds = metaTplBroadcastSelectedPhoneNumberIds();
+        if (!phoneNumberIds.length) {
+          metaTplBroadcastSetTestStatus("Selecione ao menos um número Ativo e disponível.");
+          return;
+        }
+        const phones = metaTplBroadcastCollectTestPhones();
+        if (!phones.length) {
+          metaTplBroadcastSetTestStatus("Informe de 1 a 5 números de WhatsApp para o envio de teste.");
+          return;
+        }
+        if (metaTplBroadcastTesting) return;
+        metaTplBroadcastTesting = true;
+        const testBtn = metaTplBroadcastEl("meta-tpl-broadcast-test-start");
+        if (testBtn) testBtn.setAttribute("disabled", "disabled");
+        metaTplBroadcastSetTestStatus("Enviando teste Cloud para " + String(phones.length) + " número" + (phones.length === 1 ? "" : "s") + "…");
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/broadcast/test", {
+            method: "POST",
+            body: JSON.stringify({
+              connectionId: metaTplBroadcastSelectedTemplateConnectionId(),
+              templateId: String((metaTplBroadcastEl("meta-tpl-broadcast-template") || {}).value || ""),
+              phoneNumberId: phoneNumberIds[0],
+              phoneNumberIds: phoneNumberIds,
+              phones: phones,
+            }),
+          });
+          metaTplBroadcastSetTestStatus(metaTplBroadcastTestSummary(payload));
+        } catch (error) {
+          const message = error && error.message ? error.message : "Não foi possível enviar o teste.";
+          metaTplBroadcastSetTestStatus(message);
+          metaTplLabPresentError({
+            source: "meta-broadcast-test",
+            title: "Erro ao disparar teste Cloud",
+            message: message,
+            error: error,
+          });
+        } finally {
+          metaTplBroadcastTesting = false;
+          if (testBtn) testBtn.removeAttribute("disabled");
+        }
+      }
+
       window.wabaLoadMetaTemplatesLab = async function wabaLoadMetaTemplatesLab(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         if (typeof isMetaDisparoCloudUiPreview === "function" && isMetaDisparoCloudUiPreview()) {
@@ -46040,6 +46196,9 @@
       });
       document.getElementById("meta-tpl-broadcast-start")?.addEventListener("click", function () {
         metaTplBroadcastStart();
+      });
+      document.getElementById("meta-tpl-broadcast-test-start")?.addEventListener("click", function () {
+        metaTplBroadcastStartTest();
       });
       document.getElementById("meta-tpl-lab-status-filter")?.addEventListener("change", function () {
         metaTplLabRenderTable();

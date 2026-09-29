@@ -992,5 +992,36 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             }
         });
     });
+    app.post("/integrations/meta/whatsapp/broadcast/test", async (req, res) => {
+        try {
+            if (!(0, waba_feature_flags_1.isMetaOfficialPortfolioLabEnabled)()) {
+                return sendPublic(res, 404, {
+                    ok: false,
+                    error: "Recurso indisponível neste ambiente.",
+                    code: "config_invalid",
+                });
+            }
+            warnClientTenantClaim(req);
+            const body = req.body && typeof req.body === "object" ? req.body : {};
+            const rawPhoneIds = body.phoneNumberIds ?? body.phone_number_ids ?? body.phoneNumberId ?? body.phone_number_id;
+            const phoneNumberIds = Array.isArray(rawPhoneIds)
+                ? rawPhoneIds.map((item) => String(item || "").trim()).filter(Boolean)
+                : String(rawPhoneIds || "")
+                    .split(/[\s,;]+/)
+                    .map((item) => item.trim())
+                    .filter(Boolean);
+            const result = await broadcastService.testFromAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
+                connectionId: String(body.connectionId || body.connection_id || ""),
+                templateId: String(body.templateId || body.template_id || ""),
+                phoneNumberId: phoneNumberIds[0] || String(body.phoneNumberId || body.phone_number_id || ""),
+                phoneNumberIds,
+                phones: body.phones ?? body.numeros ?? body,
+            });
+            return sendPublic(res, 200, { ok: true, ...result });
+        }
+        catch (error) {
+            return handleMetaError(res, error);
+        }
+    });
 };
 exports.registerMetaWhatsappIntegrationRoutes = registerMetaWhatsappIntegrationRoutes;

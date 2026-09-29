@@ -44,6 +44,7 @@ const meta_whatsapp_conversation_repository_1 = require("./meta-whatsapp-convers
 const meta_whatsapp_message_repository_1 = require("./meta-whatsapp-message.repository");
 const meta_whatsapp_inbox_broadcast_persist_1 = require("./meta-whatsapp-inbox-broadcast-persist");
 const meta_whatsapp_inbox_template_preview_1 = require("./meta-whatsapp-inbox-template-preview");
+const meta_whatsapp_broadcast_test_phones_1 = require("./meta-whatsapp-broadcast-test-phones");
 const running = new Set();
 let resumeWatchdogTimer = null;
 function isCloudBroadcastSendLoopAlive(campaignId) {
@@ -576,6 +577,103 @@ class MetaWhatsappBroadcastService {
             });
         }
         return (0, meta_whatsapp_broadcast_store_1.publicBroadcastCampaign)(campaign);
+    }
+    /**
+     * Envio Cloud de teste: 1 a 5 números preenchidos, template e número Ativo da tela.
+     * Não ocupa número, não cria campanha e não exige planilha nem campanha do assinante.
+     */
+    async testFromAuth(auth, input) {
+        const tenant = requireTenant(auth);
+        const parsed = (0, meta_whatsapp_broadcast_test_phones_1.parseMetaBroadcastTestPhones)(input.phones);
+        if (!parsed.ok)
+            fail("invalid_recipient", parsed.error);
+        const connectionId = String(input.connectionId || "").trim();
+        const loaded = await this.loadApprovedTemplate(tenant.tenantId, connectionId, String(input.templateId || "").trim());
+        const { bindings: phoneBindings } = await this.requireActivePhoneBindings(auth, (0, meta_whatsapp_broadcast_split_1.normalizeBroadcastPhoneNumberIds)(input.phoneNumberIds?.length ? input.phoneNumberIds : [String(input.phoneNumberId || "")]));
+        await this.assertTemplateOnPhoneBindings({
+            tenantId: tenant.tenantId,
+            templateName: loaded.template.name,
+            templateLanguage: loaded.template.language,
+            templateConnectionId: loaded.connection.id,
+            templateWabaId: loaded.connection.wabaId,
+            bindings: phoneBindings,
+        });
+        const sending = phoneBindings[0];
+        if (!sending)
+            fail("invalid_payload", "Selecione ao menos um número Ativo e disponível.");
+        const headerByPhone = await this.resolveHeaderMediaForBindings({
+            tenantId: tenant.tenantId,
+            bindings: [sending],
+            templateId: loaded.template.id,
+            metaTemplateId: loaded.template.metaTemplateId,
+            templateName: loaded.template.name,
+            language: loaded.template.language,
+            components: loaded.template.components,
+            inspect: loaded.inspect,
+        });
+        const header = headerByPhone[sending.phoneNumberId] ?? null;
+        const buttonSlug = loaded.inspect.urlButton?.hasVariable
+            ? loaded.inspect.urlButton.slug || "teste"
+            : undefined;
+        const results = [];
+        for (let index = 0; index < parsed.waIds.length; index += 1) {
+            const waId = parsed.waIds[index];
+            const lead = {
+                waId,
+                nome: "Teste",
+                numero: waId,
+                texto: "Teste",
+                status: "queued",
+                phoneNumberId: sending.phoneNumberId,
+                connectionId: sending.connectionId,
+            };
+            try {
+                const sent = await this.provider.sendTemplate({
+                    tenantId: tenant.tenantId,
+                    to: waId,
+                    templateName: loaded.template.name,
+                    language: loaded.template.language,
+                    connectionId: sending.connectionId,
+                    phoneNumberId: sending.phoneNumberId,
+                    preferConnectionToken: true,
+                    components: this.buildComponents({
+                        inspect: loaded.inspect,
+                        lead,
+                        header,
+                        buttonSlug,
+                    }),
+                });
+                results.push({ waId, ok: true, wamid: sent.messageId || undefined });
+            }
+            catch (error) {
+                results.push({
+                    waId,
+                    ok: false,
+                    error: error instanceof Error ? error.message.slice(0, 180) : "send_failed",
+                });
+            }
+            if (index < parsed.waIds.length - 1 && this.delayMs > 0) {
+                await sleep(this.delayMs);
+            }
+        }
+        const sent = results.filter((row) => row.ok).length;
+        const failed = results.length - sent;
+        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("broadcast-test", {
+            tenantId: tenant.tenantId,
+            templateName: loaded.template.name,
+            total: results.length,
+            sent,
+            failed,
+        });
+        return {
+            templateName: loaded.template.name,
+            language: loaded.template.language,
+            phoneNumberId: sending.phoneNumberId,
+            sent,
+            failed,
+            total: results.length,
+            results,
+        };
     }
     async runCampaign(campaignId, tenantId, ctx) {
         if (running.has(campaignId))
