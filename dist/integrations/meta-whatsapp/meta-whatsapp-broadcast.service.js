@@ -8,6 +8,7 @@ const node_crypto_1 = require("node:crypto");
 const meta_token_crypto_1 = require("./meta-token-crypto");
 const meta_whatsapp_errors_1 = require("./meta-whatsapp-errors");
 const meta_whatsapp_tenant_1 = require("./meta-whatsapp-tenant");
+const meta_whatsapp_connection_types_1 = require("./meta-whatsapp-connection.types");
 const meta_whatsapp_connection_repository_1 = require("./meta-whatsapp-connection.repository");
 const meta_whatsapp_connection_service_1 = require("./meta-whatsapp-connection.service");
 const meta_whatsapp_template_repository_1 = require("./meta-whatsapp-template.repository");
@@ -109,10 +110,7 @@ class MetaWhatsappBroadcastService {
             fail("invalid_payload", "Selecione o portfólio e um template aprovado.");
         }
         const connection = await this.connections.findByIdForTenant(tenantId, connId);
-        if (!connection ||
-            connection.tenantId !== tenantId ||
-            (connection.status !== "connected" && connection.status !== "pending_confirmation") ||
-            !connection.wabaId) {
+        if (!(0, meta_whatsapp_connection_types_1.isOfficialWabaConnection)(connection, tenantId)) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
         }
         const template = await this.templates.findByIdForTenant(tenantId, tplId);

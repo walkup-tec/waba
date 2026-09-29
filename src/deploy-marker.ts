@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-29-PELLI-REPORT-FINALIZED";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-09-29-BROADCAST-PENDING-TOKEN";

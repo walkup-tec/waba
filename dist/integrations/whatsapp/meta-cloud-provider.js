@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetaCloudProvider = void 0;
+const meta_whatsapp_connection_types_1 = require("../meta-whatsapp/meta-whatsapp-connection.types");
 const meta_whatsapp_connection_repository_1 = require("../meta-whatsapp/meta-whatsapp-connection.repository");
 const meta_token_crypto_1 = require("../meta-whatsapp/meta-token-crypto");
 const meta_whatsapp_graph_messages_client_1 = require("../meta-whatsapp/meta-whatsapp-graph-messages.client");
@@ -148,33 +149,19 @@ class MetaCloudProvider {
         const phone = String(phoneNumberId || "").trim();
         if (options?.preferConnectionToken && connId) {
             row = await this.connections.findByIdForTenant(tenantId, connId);
-            const usable = Boolean(row) &&
-                row.tenantId === tenantId &&
-                !row.disconnectedAt &&
-                Boolean(row.phoneNumberId) &&
-                (row.status === "connected" || row.status === "pending_confirmation");
-            if (!usable || !row)
+            if (!(0, meta_whatsapp_connection_types_1.isOfficialSendConnection)(row, tenantId, phone))
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
             return row;
         }
         if (phone) {
             row = await this.connections.findConnectedByPhoneNumberId(phone);
-            const usableByPhone = Boolean(row) &&
-                row.tenantId === tenantId &&
-                !row.disconnectedAt &&
-                (row.status === "connected" || row.status === "pending_confirmation");
-            if (usableByPhone && row)
+            if ((0, meta_whatsapp_connection_types_1.isOfficialSendConnection)(row, tenantId, phone))
                 return row;
             row = null;
         }
         if (connId) {
             row = await this.connections.findByIdForTenant(tenantId, connId);
-            const usable = Boolean(row) &&
-                row.tenantId === tenantId &&
-                !row.disconnectedAt &&
-                Boolean(row.phoneNumberId) &&
-                (row.status === "connected" || row.status === "pending_confirmation");
-            if (!usable || !row)
+            if (!(0, meta_whatsapp_connection_types_1.isOfficialSendConnection)(row, tenantId, phone))
                 throw new meta_whatsapp_errors_1.MetaWhatsappError("not_connected");
             return row;
         }

@@ -1,4 +1,7 @@
-import type { MetaWhatsappConnectionRecord } from "../meta-whatsapp/meta-whatsapp-connection.types";
+import {
+  isOfficialSendConnection,
+  type MetaWhatsappConnectionRecord,
+} from "../meta-whatsapp/meta-whatsapp-connection.types";
 import { MetaWhatsappConnectionRepository } from "../meta-whatsapp/meta-whatsapp-connection.repository";
 import { decryptMetaToken } from "../meta-whatsapp/meta-token-crypto";
 import {
@@ -225,34 +228,17 @@ export class MetaCloudProvider implements WhatsAppProvider {
     const phone = String(phoneNumberId || "").trim();
     if (options?.preferConnectionToken && connId) {
       row = await this.connections.findByIdForTenant(tenantId, connId);
-      const usable =
-        Boolean(row) &&
-        row!.tenantId === tenantId &&
-        !row!.disconnectedAt &&
-        Boolean(row!.phoneNumberId) &&
-        (row!.status === "connected" || row!.status === "pending_confirmation");
-      if (!usable || !row) throw new MetaWhatsappError("not_connected");
+      if (!isOfficialSendConnection(row, tenantId, phone)) throw new MetaWhatsappError("not_connected");
       return row;
     }
     if (phone) {
       row = await this.connections.findConnectedByPhoneNumberId(phone);
-      const usableByPhone =
-        Boolean(row) &&
-        row!.tenantId === tenantId &&
-        !row!.disconnectedAt &&
-        (row!.status === "connected" || row!.status === "pending_confirmation");
-      if (usableByPhone && row) return row;
+      if (isOfficialSendConnection(row, tenantId, phone)) return row;
       row = null;
     }
     if (connId) {
       row = await this.connections.findByIdForTenant(tenantId, connId);
-      const usable =
-        Boolean(row) &&
-        row!.tenantId === tenantId &&
-        !row!.disconnectedAt &&
-        Boolean(row!.phoneNumberId) &&
-        (row!.status === "connected" || row!.status === "pending_confirmation");
-      if (!usable || !row) throw new MetaWhatsappError("not_connected");
+      if (!isOfficialSendConnection(row, tenantId, phone)) throw new MetaWhatsappError("not_connected");
       return row;
     }
     row = await this.connections.findConnectedByTenant(tenantId);

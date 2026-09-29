@@ -4,6 +4,7 @@ import type { WabaPublicBaseRequestHints } from "../../lib/waba-public-base-url"
 import { decryptMetaToken } from "./meta-token-crypto";
 import { logMetaWhatsappSafe, MetaWhatsappError, type MetaWhatsappErrorCode } from "./meta-whatsapp-errors";
 import { resolveMetaWhatsappTenant } from "./meta-whatsapp-tenant";
+import { isOfficialWabaConnection } from "./meta-whatsapp-connection.types";
 import { MetaWhatsappConnectionRepository } from "./meta-whatsapp-connection.repository";
 import { MetaWhatsappConnectionService } from "./meta-whatsapp-connection.service";
 import { MetaWhatsappTemplateRepository } from "./meta-whatsapp-template.repository";
@@ -192,12 +193,7 @@ export class MetaWhatsappBroadcastService {
       fail("invalid_payload", "Selecione o portfólio e um template aprovado.");
     }
     const connection = await this.connections.findByIdForTenant(tenantId, connId);
-    if (
-      !connection ||
-      connection.tenantId !== tenantId ||
-      (connection.status !== "connected" && connection.status !== "pending_confirmation") ||
-      !connection.wabaId
-    ) {
+    if (!isOfficialWabaConnection(connection, tenantId)) {
       throw new MetaWhatsappError("not_connected");
     }
     const template = await this.templates.findByIdForTenant(tenantId, tplId);
