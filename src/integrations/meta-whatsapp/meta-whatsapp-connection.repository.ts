@@ -278,6 +278,69 @@ export class MetaWhatsappConnectionRepository {
     return mapRow(asRow(data));
   }
 
+  /**
+   * BM convidada adicionada por ID: cria conexão própria, sem reutilizar pending_token de outro card.
+   */
+  async ensureInvitedBusinessConnection(input: {
+    tenantId: string;
+    ownerEmail: string;
+    actorEmail: string;
+    metaBusinessId: string;
+    wabaId?: string | null;
+    phoneNumberId?: string | null;
+    displayPhoneNumber?: string | null;
+    verifiedName?: string | null;
+    accessTokenEncrypted: string;
+    tokenType?: string;
+    tokenExpiresAt?: string | null;
+  }): Promise<MetaWhatsappConnectionRecord> {
+    const businessId = String(input.metaBusinessId || "").trim();
+    const existing = await this.findByBusinessId(input.tenantId, businessId);
+    if (existing) {
+      if (existing.status === "connected") {
+        const needsWaba = !String(existing.wabaId || "").trim() && String(input.wabaId || "").trim();
+        const needsPhone = !String(existing.phoneNumberId || "").trim() && String(input.phoneNumberId || "").trim();
+        if (!needsWaba && !needsPhone) return existing;
+      }
+      return this.attachClaimedAssets(input.tenantId, existing.id, {
+        wabaId: input.wabaId,
+        phoneNumberId: input.phoneNumberId,
+        metaBusinessId: businessId,
+        displayPhoneNumber: input.displayPhoneNumber,
+        verifiedName: input.verifiedName,
+        accessTokenEncrypted: existing.status === "connected" ? undefined : input.accessTokenEncrypted,
+        tokenType: input.tokenType,
+        tokenExpiresAt: input.tokenExpiresAt,
+        actorEmail: input.actorEmail,
+      });
+    }
+    const now = new Date().toISOString();
+    const wabaId = String(input.wabaId || "").trim() || null;
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .insert({
+        tenant_id: input.tenantId,
+        owner_email: input.ownerEmail,
+        access_token_encrypted: input.accessTokenEncrypted,
+        token_type: input.tokenType || "bearer",
+        token_expires_at: input.tokenExpiresAt || null,
+        meta_business_id: businessId,
+        waba_id: wabaId,
+        phone_number_id: String(input.phoneNumberId || "").trim() || null,
+        display_phone_number: String(input.displayPhoneNumber || "").trim() || null,
+        verified_name: String(input.verifiedName || "").trim() || null,
+        status: wabaId ? "pending_confirmation" : "pending_token",
+        created_by: input.actorEmail,
+        updated_by: input.actorEmail,
+        created_at: now,
+        updated_at: now,
+      })
+      .select(COLUMNS)
+      .single();
+    if (error) throw new Error(error.message);
+    return mapRow(asRow(data));
+  }
+
   async listInboxConnections(tenantId: string): Promise<MetaWhatsappConnectionRecord[]> {
     const id = String(tenantId || "").trim();
     if (!id) return [];
