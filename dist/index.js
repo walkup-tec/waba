@@ -108,6 +108,7 @@ const waba_system_user_service_1 = require("./users/waba-system-user.service");
 const waba_campaign_intake_routes_1 = require("./disparos/waba-campaign-intake.routes");
 const waba_campaign_intake_clone_1 = require("./disparos/waba-campaign-intake-clone");
 const waba_campaign_report_force_complete_1 = require("./disparos/waba-campaign-report-force-complete");
+const waba_campaign_pelli_reopen_aifocus_1 = require("./disparos/waba-campaign-pelli-reopen-aifocus");
 const waba_financeiro_split_manual_paid_1 = require("./billing/waba-financeiro-split-manual-paid");
 const waba_campaign_completed_notify_service_1 = require("./mail/waba-campaign-completed-notify.service");
 const waba_campaign_intake_vitoria_short_url_1 = require("./disparos/waba-campaign-intake-vitoria-short-url");
@@ -14324,6 +14325,8 @@ const httpServer = app.listen(PORT, () => {
         console.log(`[campanhas] URL curta Vitoria da Conquista: ${vitoriaShortUrl.message}`);
         const forcedReportComplete = (0, waba_campaign_report_force_complete_1.runForcedCampaignReportCompleteOneshot)();
         console.log(`[campanhas] relatório pontual finalizado: ${forcedReportComplete.message}`);
+        const pelliReopen = (0, waba_campaign_pelli_reopen_aifocus_1.runPelliReopenAifocusOneshot)();
+        console.log(`[campanhas] Pelli fila aifocus: ${pelliReopen.message}`);
         const manualBankPaidSplit = (0, waba_financeiro_split_manual_paid_1.runManualBankPaidSplitOneshot)();
         console.log(`[financeiro] repasse manual no banco: ${manualBankPaidSplit.message}`);
         const completedNotifyTest = await (0, waba_campaign_completed_notify_service_1.runVitoriaCompletedNotifyTestOneshot)();

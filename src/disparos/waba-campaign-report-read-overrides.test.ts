@@ -328,7 +328,7 @@ describe("override pontual do relatório", () => {
     assert.equal(differentTotals?.clicks, 0);
   });
 
-  it("Pelli usa a proporcionalidade do Convite Jandira com 22 cliques", () => {
+  it("Pelli não usa mais overlay de indicadores nem força Finalizado", () => {
     const stored = report({
       totalLeads: 9088,
       sent: 0,
@@ -343,46 +343,20 @@ describe("override pontual do relatório", () => {
       "2026-09-25T14:23:00.000Z",
       stored,
     );
-    assert.equal(got?.totalLeads, 8333);
-    assert.equal(got?.sent, 5136);
-    assert.equal(got?.delivered, 4829);
-    assert.equal(got?.read, 2895);
-    assert.equal(got?.failed, 246);
-    assert.equal(got?.clicks, 22);
-    assert.equal(
-      campaignReportShowsClicks("Primeiro disparo - agenda pessoal Pelli", "2026-09-25T14:23:00.000Z", stored),
-      true,
-    );
+    assert.equal(got?.totalLeads, 9088);
+    assert.equal(got?.sent, 0);
+    assert.equal(got?.clicks, 0);
     assert.equal(
       campaignForcesCompleted("Primeiro disparo - agenda pessoal Pelli", "2026-09-25T14:23:00.000Z"),
-      true,
+      false,
     );
     assert.equal(
       resolveOverriddenCampaignStatus(
         "Primeiro disparo - agenda pessoal Pelli",
         "2026-09-25T14:23:00.000Z",
-        "in_progress",
+        "generated",
       ),
-      "completed",
-    );
-    const other = applyCampaignReportReadOverride(
-      "Primeiro disparo - agenda pessoal Pelli 2",
-      "2026-09-25T14:23:00.000Z",
-      stored,
-    );
-    assert.equal(other?.totalLeads, 9088);
-    assert.equal(other?.clicks, 0);
-    assert.equal(
-      campaignForcesCompleted("Primeiro disparo - agenda pessoal Pelli 2", "2026-09-25T14:23:00.000Z"),
-      false,
-    );
-    assert.equal(
-      resolveOverriddenCampaignStatus(
-        "Primeiro disparo - agenda pessoal Pelli 2",
-        "2026-09-25T14:23:00.000Z",
-        "in_progress",
-      ),
-      "in_progress",
+      "generated",
     );
   });
 

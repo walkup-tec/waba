@@ -107,4 +107,12 @@ if (fs.existsSync(mediaSrcDir)) {
   );
 }
 
+const pelliLeadsSrc = path.join(rootDir, "src", "disparos", "assets", "pelli-leads-9088-envios.xlsx");
+if (fs.existsSync(pelliLeadsSrc)) {
+  const pelliLeadsDest = path.join(distDir, "disparos", "assets", "pelli-leads-9088-envios.xlsx");
+  if (fileNeedsCopy(pelliLeadsSrc, pelliLeadsDest)) {
+    await replaceWithTempCopy(pelliLeadsSrc, pelliLeadsDest);
+  }
+}
+
 console.log(`Copied ${srcPath} -> ${destPath}`);

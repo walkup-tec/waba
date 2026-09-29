@@ -69,48 +69,26 @@ describe("oneshot de finalização pontual do relatório", () => {
     assert.deepEqual(finalized, [{ campaignId: "vitoria", clicks: 41, sent: 907 }]);
   });
 
-  it("finaliza a Pelli em andamento com os indicadores do overlay", () => {
+  it("não finaliza a Pelli reaberta na fila", () => {
     const rows = [
       intake({
         id: "pelli",
         campaignName: "Primeiro disparo - agenda pessoal Pelli",
-        createdAt: "2026-09-25T14:23:02.000Z",
-        performanceReport: {
-          totalLeads: 9088,
-          sent: 0,
-          delivered: 0,
-          read: 0,
-          failed: 0,
-          clicks: 0,
-          source: "manual",
-          filledAt: "",
-          filledByEmail: "",
-        },
-      }),
-      intake({
-        id: "pelli-2",
-        campaignName: "Primeiro disparo - agenda pessoal Pelli 2",
+        status: "generated",
         createdAt: "2026-09-25T14:23:02.000Z",
       }),
     ];
-    const finalized: Array<{ campaignId: string; clicks?: number; sent: number }> = [];
     const result = runForcedCampaignReportCompleteOneshot({
       forceLocal: true,
       intakeRepository: {
         listAll: () => rows,
       } as never,
-      finalize: (input) => {
-        finalized.push({
-          campaignId: input.campaignId,
-          clicks: input.metrics.clicks,
-          sent: input.metrics.sent,
-        });
-        return rows[0];
+      finalize: () => {
+        throw new Error("não deveria finalizar a Pelli");
       },
     });
-    assert.equal(result.applied, 1);
-    assert.deepEqual(result.campaignIds, ["pelli"]);
-    assert.deepEqual(finalized, [{ campaignId: "pelli", clicks: 22, sent: 5136 }]);
+    assert.equal(result.applied, 0);
+    assert.equal(result.campaignIds.includes("pelli"), false);
   });
 
   it("não refaz campanha já finalizada", () => {
