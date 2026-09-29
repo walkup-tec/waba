@@ -353,6 +353,18 @@ describe("override pontual do relatório", () => {
       campaignReportShowsClicks("Primeiro disparo - agenda pessoal Pelli", "2026-09-25T14:23:00.000Z", stored),
       true,
     );
+    assert.equal(
+      campaignForcesCompleted("Primeiro disparo - agenda pessoal Pelli", "2026-09-25T14:23:00.000Z"),
+      true,
+    );
+    assert.equal(
+      resolveOverriddenCampaignStatus(
+        "Primeiro disparo - agenda pessoal Pelli",
+        "2026-09-25T14:23:00.000Z",
+        "in_progress",
+      ),
+      "completed",
+    );
     const other = applyCampaignReportReadOverride(
       "Primeiro disparo - agenda pessoal Pelli 2",
       "2026-09-25T14:23:00.000Z",
@@ -360,6 +372,18 @@ describe("override pontual do relatório", () => {
     );
     assert.equal(other?.totalLeads, 9088);
     assert.equal(other?.clicks, 0);
+    assert.equal(
+      campaignForcesCompleted("Primeiro disparo - agenda pessoal Pelli 2", "2026-09-25T14:23:00.000Z"),
+      false,
+    );
+    assert.equal(
+      resolveOverriddenCampaignStatus(
+        "Primeiro disparo - agenda pessoal Pelli 2",
+        "2026-09-25T14:23:00.000Z",
+        "in_progress",
+      ),
+      "in_progress",
+    );
   });
 
   it("Raphaela 01 mostra o card de cliques sem forçar os 41 do overlay", () => {

@@ -153,6 +153,7 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
   {
     name: "Primeiro disparo - agenda pessoal Pelli",
     matchExactName: true,
+    forceCompleted: true,
     totalLeads: 8333,
     sent: 5136,
     delivered: 4829,
