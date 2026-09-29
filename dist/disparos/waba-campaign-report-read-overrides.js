@@ -89,6 +89,17 @@ const CAMPAIGN_REPORT_OVERRIDES = [
         showClicks: true,
     },
     {
+        name: "Primeiro disparo - agenda pessoal Pelli",
+        matchExactName: true,
+        totalLeads: 8333,
+        sent: 5136,
+        delivered: 4829,
+        read: 2895,
+        failed: 246,
+        clicks: 22,
+        showClicks: true,
+    },
+    {
         name: "VITORIA DA CONQUISTA",
         matchExactName: true,
         forceCompleted: true,
@@ -248,6 +259,7 @@ const campaignReportShowsClicks = (campaignName, createdAt, report) => Boolean((
 exports.campaignReportShowsClicks = campaignReportShowsClicks;
 const ruleOverridesMetrics = (rule) => Boolean(rule.proportionFrom ||
     rule.rates ||
+    rule.totalLeads != null ||
     rule.sent != null ||
     rule.delivered != null ||
     rule.read != null ||
@@ -271,8 +283,9 @@ const applyCampaignReportReadOverride = (campaignName, createdAt, report) => {
         filledByEmail: "",
     };
     const proportional = rule.proportionFrom
-        ? scaleBySample(rule.proportionFrom, roundMetric(base.totalLeads))
+        ? scaleBySample(rule.proportionFrom, roundMetric(rule.totalLeads ?? base.totalLeads))
         : {};
+    const nextTotalLeads = rule.totalLeads != null ? rule.totalLeads : base.totalLeads;
     const nextSent = proportional.sent ?? (rule.sent != null ? rule.sent : base.sent);
     let nextDelivered = proportional.delivered ?? (rule.delivered != null ? rule.delivered : base.delivered);
     let nextRead = proportional.read ?? (rule.read != null ? rule.read : base.read);
@@ -288,6 +301,7 @@ const applyCampaignReportReadOverride = (campaignName, createdAt, report) => {
         nextClicks = roundMetric(roundMetric(nextRead) * rule.rates.clicksFromRead);
     }
     if (report &&
+        nextTotalLeads === report.totalLeads &&
         nextSent === report.sent &&
         nextDelivered === report.delivered &&
         nextRead === report.read &&
@@ -297,6 +311,7 @@ const applyCampaignReportReadOverride = (campaignName, createdAt, report) => {
     }
     return {
         ...base,
+        totalLeads: nextTotalLeads,
         sent: nextSent,
         delivered: nextDelivered,
         read: nextRead,

@@ -42,6 +42,7 @@ type CampaignReportOverride = {
   /** Recorte de referência: as taxas entram nos indicadores na mesma razão do total de leads. */
   proportionFrom?: CampaignReportSample;
   rates?: CampaignReportRates;
+  totalLeads?: number;
   sent?: number;
   delivered?: number;
   read?: number;
@@ -147,6 +148,17 @@ const CAMPAIGN_REPORT_OVERRIDES: CampaignReportOverride[] = [
   {
     name: "Raphaela 01",
     matchExactName: true,
+    showClicks: true,
+  },
+  {
+    name: "Primeiro disparo - agenda pessoal Pelli",
+    matchExactName: true,
+    totalLeads: 8333,
+    sent: 5136,
+    delivered: 4829,
+    read: 2895,
+    failed: 246,
+    clicks: 22,
     showClicks: true,
   },
   {
@@ -348,6 +360,7 @@ const ruleOverridesMetrics = (rule: CampaignReportOverride): boolean =>
   Boolean(
     rule.proportionFrom ||
       rule.rates ||
+      rule.totalLeads != null ||
       rule.sent != null ||
       rule.delivered != null ||
       rule.read != null ||
@@ -376,8 +389,9 @@ export const applyCampaignReportReadOverride = (
     filledByEmail: "",
   };
   const proportional = rule.proportionFrom
-    ? scaleBySample(rule.proportionFrom, roundMetric(base.totalLeads))
+    ? scaleBySample(rule.proportionFrom, roundMetric(rule.totalLeads ?? base.totalLeads))
     : {};
+  const nextTotalLeads = rule.totalLeads != null ? rule.totalLeads : base.totalLeads;
   const nextSent = proportional.sent ?? (rule.sent != null ? rule.sent : base.sent);
   let nextDelivered = proportional.delivered ?? (rule.delivered != null ? rule.delivered : base.delivered);
   let nextRead = proportional.read ?? (rule.read != null ? rule.read : base.read);
@@ -394,6 +408,7 @@ export const applyCampaignReportReadOverride = (
   }
   if (
     report &&
+    nextTotalLeads === report.totalLeads &&
     nextSent === report.sent &&
     nextDelivered === report.delivered &&
     nextRead === report.read &&
@@ -404,6 +419,7 @@ export const applyCampaignReportReadOverride = (
   }
   return {
     ...base,
+    totalLeads: nextTotalLeads,
     sent: nextSent,
     delivered: nextDelivered,
     read: nextRead,

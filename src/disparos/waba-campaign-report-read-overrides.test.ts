@@ -328,6 +328,40 @@ describe("override pontual do relatório", () => {
     assert.equal(differentTotals?.clicks, 0);
   });
 
+  it("Pelli usa a proporcionalidade do Convite Jandira com 22 cliques", () => {
+    const stored = report({
+      totalLeads: 9088,
+      sent: 0,
+      delivered: 0,
+      read: 0,
+      failed: 0,
+      clicks: 0,
+      source: "manual",
+    });
+    const got = applyCampaignReportReadOverride(
+      "Primeiro disparo - agenda pessoal Pelli",
+      "2026-09-25T14:23:00.000Z",
+      stored,
+    );
+    assert.equal(got?.totalLeads, 8333);
+    assert.equal(got?.sent, 5136);
+    assert.equal(got?.delivered, 4829);
+    assert.equal(got?.read, 2895);
+    assert.equal(got?.failed, 246);
+    assert.equal(got?.clicks, 22);
+    assert.equal(
+      campaignReportShowsClicks("Primeiro disparo - agenda pessoal Pelli", "2026-09-25T14:23:00.000Z", stored),
+      true,
+    );
+    const other = applyCampaignReportReadOverride(
+      "Primeiro disparo - agenda pessoal Pelli 2",
+      "2026-09-25T14:23:00.000Z",
+      stored,
+    );
+    assert.equal(other?.totalLeads, 9088);
+    assert.equal(other?.clicks, 0);
+  });
+
   it("Raphaela 01 mostra o card de cliques sem forçar os 41 do overlay", () => {
     const stored = report({
       totalLeads: 5000,
