@@ -1925,6 +1925,83 @@ describe("fase 7 sync", () => {
     assert.equal(connections.rows[0].status, "connected");
     assert.equal(connections.rows[0].disconnectedAt, null);
   });
+
+  it("Atualizar da Meta no card pending_token da BM convidada usa o token do card, não o da Drax", async () => {
+    const connections = new FakeConnections();
+    connections.rows.push(
+      connectedRow({
+        id: "44493911-2c56-463d-9056-20282635f54b",
+        status: "pending_token",
+        wabaId: "",
+        metaBusinessId: "962298516898955",
+        verifiedName: null,
+        displayPhoneNumber: null,
+        accessTokenEncrypted: "v1:enc-flaviane",
+      }),
+      connectedRow({
+        id: "conn-drax",
+        wabaId: "1636793994538054",
+        metaBusinessId: "1041827648719609",
+        verifiedName: "Drax Sistemas",
+        accessTokenEncrypted: "v1:enc-drax",
+      }),
+    );
+    const templates = new FakeTemplates();
+    templates.rows.push(
+      templateRow({
+        id: "local-flaviane",
+        connectionId: "44493911-2c56-463d-9056-20282635f54b",
+        wabaId: "2301051607405249",
+        name: "pc_loas_1000_1",
+        status: "PENDING",
+      }),
+    );
+    const paths: string[] = [];
+    const tokens: string[] = [];
+    const service = new MetaWhatsappTemplateService(
+      connections as any,
+      templates as any,
+      async (input) => {
+        paths.push(String(input.path || ""));
+        tokens.push(String(input.token || ""));
+        if (String(input.path || "").includes("1636793994538054")) {
+          throw new Error("token da Drax não deve listar a WABA da Flaviane");
+        }
+        if (input.path === "962298516898955") {
+          return graphJson({
+            owned_whatsapp_business_accounts: {
+              data: [{ id: "2301051607405249", name: "Flaviane" }],
+            },
+          });
+        }
+        if (input.path === "2301051607405249/message_templates") {
+          return graphJson({
+            data: [
+              {
+                id: "tpl-flaviane-sync",
+                name: "pc_loas_1000_1",
+                language: "pt_BR",
+                category: "UTILITY",
+                status: "PENDING",
+                components: [{ type: "BODY", text: "Oi" }],
+              },
+            ],
+          });
+        }
+        return graphJson({ data: [] });
+      },
+      (encrypted) => (encrypted === "v1:enc-flaviane" ? "token-flaviane" : "token-drax"),
+    );
+    const result = await service.syncFromAuth(
+      auth(EMAIL_A),
+      "44493911-2c56-463d-9056-20282635f54b",
+    );
+    assert.equal(result.skippedUnmanaged, undefined);
+    assert.equal(paths.some((path) => path === "2301051607405249/message_templates"), true);
+    assert.ok(tokens.includes("token-flaviane"));
+    assert.equal(tokens.includes("token-drax"), false);
+    assert.equal(templates.rows.some((row) => row.metaTemplateId === "tpl-flaviane-sync"), true);
+  });
 });
 
 describe("fase 7 webhook de template", () => {

@@ -7,17 +7,17 @@ alwaysApply: true
 
 Em 02/09/2026 07:08 e 18/09/2026 08:18 o cadastro na Graph usava o token **do card da BM** (convidada / `pending_confirmation`). Em 28/09 o submit da Flaviane foi remapeado para o token connected da Drax e a Meta recusou `message_templates` em `2301051607405249`.
 
-## Obrigatório no POST `/{wabaId}/message_templates`
+## Obrigatório no POST e GET `/{wabaId}/message_templates`
 
 - Usar o token de **quem administra aquela BM** (o card, `pending_confirmation`, ou `pending_token` com token; irmã só se for **o mesmo BM**).
-- Sem `wabaId` no card, usar a WABA pedida na tela.
+- Sem `wabaId` no card, usar a WABA pedida na tela (create) ou a WABA descoberta/já gravada (Atualizar da Meta).
 - `canPostWabaMessageTemplate` trava token de agência (Drax/Walkup) em WABA de outra BM.
-- Gerar Utility (`pending_token`) e upload de cabeçalho `/{appId}/uploads` podem usar a agência. **Create/submit não.**
+- Gerar Utility (`pending_token`) e upload de cabeçalho `/{appId}/uploads` podem usar a agência. **Create, submit e sync não.**
 
 ## Proibido
 
 - Remapear card de catálogo/BM convidada para conexão Drax/Walkup no create/submit.
-- `requireConnectedWaba` / `pickSubmitWriter` caindo na agência “porque o card é pending_token”.
+- `requireConnectedWaba` / `pickSubmitWriter` / sync caindo na agência “porque o card é pending_token”.
 - Alterar generate ou header para “consertar” o create.
 
 Testes de trava: `canPostWabaMessageTemplate`, fase 7 Flaviane/BM convidada, submit AI sem `conn-drax-agency`.

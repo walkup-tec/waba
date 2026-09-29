@@ -531,7 +531,9 @@ class MetaWhatsappTemplateService {
                 });
                 return emptyPortfolioSyncResult();
             }
-            throw error;
+            if (!(error instanceof meta_whatsapp_errors_1.MetaWhatsappError) || error.code !== "not_connected")
+                throw error;
+            connection = await this.requireWriteTokenConnection(tenant.tenantId, requested);
         }
         if ((0, meta_whatsapp_graph_cooldown_1.isMetaGraphUploadCooldown)()) {
             const limited = new meta_whatsapp_errors_1.MetaWhatsappError("graph_rate_limited");
@@ -552,10 +554,18 @@ class MetaWhatsappTemplateService {
         const primaryWabaId = String(connection.wabaId || "").trim();
         const remainingMs = () => Math.max(0, deadlineAt - Date.now());
         const openRows = await this.listOpenConnections(tenant.tenantId);
+        const localWabaIds = typeof this.templates.listByTenantConnection === "function"
+            ? (await this.templates.listByTenantConnection(tenant.tenantId, connection.id))
+                .map((row) => String(row.wabaId || "").trim())
+                .filter(Boolean)
+            : [];
         const wabaIds = await (0, meta_whatsapp_template_waba_ids_1.listSyncTargetWabaIds)({
             token,
             connection,
-            extraWabaIds: (0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(openRows, connection),
+            extraWabaIds: [
+                ...(0, meta_whatsapp_template_waba_ids_1.extraWabaIdsFromConnections)(openRows, connection),
+                ...localWabaIds,
+            ],
             graph: this.graph,
             timeoutMs: Math.min(4000, Math.max(1500, remainingMs())),
         });
