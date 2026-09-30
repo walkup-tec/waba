@@ -40308,6 +40308,16 @@
         return metaTpFilterPortfoliosByPage(metaTpSession.portfolios || [], "ativas").length;
       }
 
+      function metaTpEmptyActivePortfolios() {
+        return metaTpFilterPortfoliosByPage(metaTpSession.portfolios || [], "ativas").filter(function (item) {
+          const hasWaba = Boolean(String((item && item.wabaId) || "").trim());
+          const hasNums = (item.numbers || []).some(function (row) {
+            return Boolean(String((row && (row.displayPhoneNumber || row.phoneNumberId)) || "").trim());
+          });
+          return !hasWaba || !hasNums;
+        });
+      }
+
       function metaTpPhoneRegion(phone) {
         const digits = String(phone || "").replace(/\D/g, "");
         if (digits.startsWith("55")) return "BR Brasil";
@@ -40796,11 +40806,16 @@
 
       async function metaTpReloadPortfoliosAfterConnect() {
         var attempt = 0;
-        await metaTpLoadPortfolio({ silent: true });
-        while (attempt < 12) {
-          await metaTpLoadPortfolio({ silent: true, force: true });
-          if (metaTpListedActivePortfolioCount() > 1 && metaTpHasListedNumbers()) return;
-          if (metaTpListedActivePortfolioCount() > 1) return;
+        await metaTpLoadPortfolio({ silent: true, force: true });
+        while (attempt < 8) {
+          var empties = metaTpEmptyActivePortfolios();
+          if (!empties.length && metaTpHasListedNumbers()) return;
+          var focus = empties[0] && String(empties[0].id || "").trim();
+          await metaTpLoadPortfolio({
+            silent: true,
+            force: true,
+            businessId: focus || undefined,
+          });
           attempt += 1;
           await new Promise(function (resolve) {
             window.setTimeout(resolve, 1500);

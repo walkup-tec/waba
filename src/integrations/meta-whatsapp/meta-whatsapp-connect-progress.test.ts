@@ -25,13 +25,13 @@ describe("progresso ao lado de Conectar Portfólio", () => {
     assert.match(html, /item.canActivate === true/);
     assert.doesNotMatch(html, /item.canActivate \|\| !ativo/);
     assert.match(html, /function metaTpListedActivePortfolioCount/);
-    assert.match(html, /function metaTpHasListedNumbers/);
+    assert.match(html, /function metaTpEmptyActivePortfolios/);
+    assert.match(html, /while \(attempt < 8\)/);
+    assert.doesNotMatch(html, /if \(metaTpListedActivePortfolioCount\(\) > 1\) return;/);
     assert.match(html, /function metaTpSyncConnectProgressFromAssets/);
     assert.match(html, /const selected = saved \|\| withNumbers\[0\] \|\| visible\[0\];/);
     assert.doesNotMatch(html, /saved && cardHasNumbers\(saved\)/);
-    assert.match(html, /while \(attempt < 12\)/);
     assert.match(html, /await metaTpLoadPortfolio\(\{ silent: true, force: true \}\)/);
-    assert.match(html, /metaTpListedActivePortfolioCount\(\) > 1/);
     assert.doesNotMatch(
       html,
       /await metaTpLoadPortfolio\(\{ silent: true \}\);\s*if \(metaTpHasListedNumbers\(\)\) return;/,
