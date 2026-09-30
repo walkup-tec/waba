@@ -110,6 +110,7 @@ const waba_campaign_intake_clone_1 = require("./disparos/waba-campaign-intake-cl
 const waba_campaign_report_force_complete_1 = require("./disparos/waba-campaign-report-force-complete");
 const waba_campaign_pelli_reopen_aifocus_1 = require("./disparos/waba-campaign-pelli-reopen-aifocus");
 const waba_campaign_intake_original_link_backfill_1 = require("./disparos/waba-campaign-intake-original-link-backfill");
+const waba_campaign_pelli_response_alias_1 = require("./disparos/waba-campaign-pelli-response-alias");
 const waba_financeiro_split_manual_paid_1 = require("./billing/waba-financeiro-split-manual-paid");
 const waba_campaign_completed_notify_service_1 = require("./mail/waba-campaign-completed-notify.service");
 const waba_campaign_intake_vitoria_short_url_1 = require("./disparos/waba-campaign-intake-vitoria-short-url");
@@ -14330,6 +14331,8 @@ const httpServer = app.listen(PORT, () => {
         console.log(`[campanhas] Pelli fila aifocus: ${pelliReopen.message}`);
         const originalLinkBackfill = await (0, waba_campaign_intake_original_link_backfill_1.runOriginalResponseLinkBackfillOneshot)();
         console.log(`[campanhas] link original da cliente: ${originalLinkBackfill.message}`);
+        const pelliAlias = await (0, waba_campaign_pelli_response_alias_1.runPelliResponseAliasOneshot)();
+        console.log(`[campanhas] alias Pelli WhatsApp: ${pelliAlias.message}`);
         const manualBankPaidSplit = (0, waba_financeiro_split_manual_paid_1.runManualBankPaidSplitOneshot)();
         console.log(`[financeiro] repasse manual no banco: ${manualBankPaidSplit.message}`);
         const completedNotifyTest = await (0, waba_campaign_completed_notify_service_1.runVitoriaCompletedNotifyTestOneshot)();

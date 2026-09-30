@@ -14,6 +14,7 @@ import {
   incrementShortLinkClicks,
   normalizeSlug,
   randomSlug,
+  updateShortLinkLongUrl,
 } from "./waba-shortener.repository";
 import { creditShortLinkClickToBroadcast } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 
@@ -31,6 +32,22 @@ function deriveSlugFromLongUrl(longUrl: string): string {
   const clean = rawNonce.replace(/[^a-z0-9]/gi, "").toLowerCase();
   if (clean) return normalizeSlug(`n${clean.slice(-7)}`);
   return randomSlug(7);
+}
+
+export function destinationUrlForShortRedirect(longUrl: string): string {
+  const value = String(longUrl || "").trim();
+  if (!value) return "";
+  try {
+    const parsed = new URL(value);
+    if (!parsed.searchParams.has("_n8n_link_nonce") && !parsed.searchParams.has("_n8n_test_nonce")) {
+      return value;
+    }
+    parsed.searchParams.delete("_n8n_link_nonce");
+    parsed.searchParams.delete("_n8n_test_nonce");
+    return parsed.toString();
+  } catch {
+    return value;
+  }
 }
 
 export async function createWabaShortUrl(
@@ -82,10 +99,10 @@ export async function resolveWabaShortRedirect(slug: string): Promise<string | n
     campaignId: record.campaignId,
     intakeCampaignId: record.intakeCampaignId,
   });
-  return record.longUrl;
+  return destinationUrlForShortRedirect(record.longUrl) || record.longUrl;
 }
 
-export { attachCampaignIdToShortLink, findShortLinkBySlug };
+export { attachCampaignIdToShortLink, findShortLinkBySlug, updateShortLinkLongUrl };
 
 export async function fetchWabaShortUrlClicks(shortUrl: string): Promise<number | null> {
   if (!extractSlugFromPublicShortUrl(shortUrl)) return null;

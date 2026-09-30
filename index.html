@@ -51972,13 +51972,16 @@
           originalResponseLink,
           'data-copy-original-response-link="1"',
         );
+        const materialsFields = [renderAdminCampanhasDetailField("Opções de texto", textOptionsHtml)];
+        if (originalResponseLink) {
+          materialsFields.push(
+            renderAdminCampanhasDetailField("Link original da cliente", originalResponseLinkHtml),
+          );
+        }
+        materialsFields.push(renderAdminCampanhasDetailField("Link de resposta", responseLinkHtml));
 
         if (materialsBody) {
-          materialsBody.innerHTML = [
-            renderAdminCampanhasDetailField("Opções de texto", textOptionsHtml),
-            renderAdminCampanhasDetailField("Link original da cliente", originalResponseLinkHtml),
-            renderAdminCampanhasDetailField("Link de resposta", responseLinkHtml),
-          ].join("");
+          materialsBody.innerHTML = materialsFields.join("");
         }
 
         body.innerHTML = [

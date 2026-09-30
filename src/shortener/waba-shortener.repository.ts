@@ -138,6 +138,33 @@ export async function attachCampaignIdToShortLink(
   return true;
 }
 
+export async function updateShortLinkLongUrl(
+  slug: string,
+  longUrl: string,
+  extras?: { campaignId?: string; intakeCampaignId?: string },
+): Promise<WabaShortLinkRecord | null> {
+  const key = normalizeSlug(slug);
+  const destination = String(longUrl || "").trim();
+  if (!key || !/^https?:\/\//i.test(destination)) return null;
+  const store = await loadStore();
+  const record = slugIndex.get(key);
+  if (!record) return null;
+  let changed = record.longUrl !== destination;
+  record.longUrl = destination;
+  const campaignId = String(extras?.campaignId || "").trim();
+  const intakeCampaignId = String(extras?.intakeCampaignId || "").trim();
+  if (campaignId && record.campaignId !== campaignId) {
+    record.campaignId = campaignId;
+    changed = true;
+  }
+  if (intakeCampaignId && record.intakeCampaignId !== intakeCampaignId) {
+    record.intakeCampaignId = intakeCampaignId;
+    changed = true;
+  }
+  if (changed) await persistStore(store);
+  return record;
+}
+
 export async function findShortLinkByCampaignId(campaignId: string): Promise<WabaShortLinkRecord | null> {
   const id = String(campaignId || "").trim();
   if (!id) return null;

@@ -34,21 +34,7 @@ function isWabaShortAliasUrl(raw) {
     }
 }
 function stripDisparosTrackingNonce(raw) {
-    const value = String(raw || "").trim();
-    if (!value)
-        return "";
-    try {
-        const parsed = new URL(value);
-        if (!parsed.searchParams.has("_n8n_link_nonce") && !parsed.searchParams.has("_n8n_test_nonce")) {
-            return value;
-        }
-        parsed.searchParams.delete("_n8n_link_nonce");
-        parsed.searchParams.delete("_n8n_test_nonce");
-        return parsed.toString();
-    }
-    catch {
-        return value;
-    }
+    return (0, waba_shortener_service_1.destinationUrlForShortRedirect)(raw);
 }
 function normalizeClientOriginalResponseLink(raw) {
     const stripped = stripDisparosTrackingNonce(raw);

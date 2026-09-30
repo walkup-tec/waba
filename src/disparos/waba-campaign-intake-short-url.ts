@@ -1,5 +1,5 @@
 import type { WabaPublicBaseRequestHints } from "../lib/waba-public-base-url";
-import { attachCampaignIdToShortLink } from "../shortener/waba-shortener.service";
+import { attachCampaignIdToShortLink, destinationUrlForShortRedirect } from "../shortener/waba-shortener.service";
 import {
   extractSlugFromPublicShortUrl,
   findShortLinkByCampaignId,
@@ -41,19 +41,7 @@ export function isWabaShortAliasUrl(raw: string): boolean {
 }
 
 export function stripDisparosTrackingNonce(raw: string): string {
-  const value = String(raw || "").trim();
-  if (!value) return "";
-  try {
-    const parsed = new URL(value);
-    if (!parsed.searchParams.has("_n8n_link_nonce") && !parsed.searchParams.has("_n8n_test_nonce")) {
-      return value;
-    }
-    parsed.searchParams.delete("_n8n_link_nonce");
-    parsed.searchParams.delete("_n8n_test_nonce");
-    return parsed.toString();
-  } catch {
-    return value;
-  }
+  return destinationUrlForShortRedirect(raw);
 }
 
 export function normalizeClientOriginalResponseLink(raw: string): string {

@@ -3,7 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.peekWabaShortPublicBaseUrl = exports.findShortLinkBySlug = exports.attachCampaignIdToShortLink = void 0;
+exports.peekWabaShortPublicBaseUrl = exports.updateShortLinkLongUrl = exports.findShortLinkBySlug = exports.attachCampaignIdToShortLink = void 0;
+exports.destinationUrlForShortRedirect = destinationUrlForShortRedirect;
 exports.createWabaShortUrl = createWabaShortUrl;
 exports.resolveWabaShortRedirect = resolveWabaShortRedirect;
 exports.fetchWabaShortUrlClicks = fetchWabaShortUrlClicks;
@@ -14,6 +15,7 @@ Object.defineProperty(exports, "peekWabaShortPublicBaseUrl", { enumerable: true,
 const waba_shortener_repository_1 = require("./waba-shortener.repository");
 Object.defineProperty(exports, "attachCampaignIdToShortLink", { enumerable: true, get: function () { return waba_shortener_repository_1.attachCampaignIdToShortLink; } });
 Object.defineProperty(exports, "findShortLinkBySlug", { enumerable: true, get: function () { return waba_shortener_repository_1.findShortLinkBySlug; } });
+Object.defineProperty(exports, "updateShortLinkLongUrl", { enumerable: true, get: function () { return waba_shortener_repository_1.updateShortLinkLongUrl; } });
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 function buildPublicShortUrl(slug, hints) {
     (0, waba_public_base_url_1.rememberPublicBaseFromRequest)(hints);
@@ -28,6 +30,23 @@ function deriveSlugFromLongUrl(longUrl) {
     if (clean)
         return (0, waba_shortener_repository_1.normalizeSlug)(`n${clean.slice(-7)}`);
     return (0, waba_shortener_repository_1.randomSlug)(7);
+}
+function destinationUrlForShortRedirect(longUrl) {
+    const value = String(longUrl || "").trim();
+    if (!value)
+        return "";
+    try {
+        const parsed = new URL(value);
+        if (!parsed.searchParams.has("_n8n_link_nonce") && !parsed.searchParams.has("_n8n_test_nonce")) {
+            return value;
+        }
+        parsed.searchParams.delete("_n8n_link_nonce");
+        parsed.searchParams.delete("_n8n_test_nonce");
+        return parsed.toString();
+    }
+    catch {
+        return value;
+    }
 }
 async function createWabaShortUrl(longUrl, options = {}) {
     const safeLongUrl = String(longUrl || "").trim();
@@ -70,7 +89,7 @@ async function resolveWabaShortRedirect(slug) {
         campaignId: record.campaignId,
         intakeCampaignId: record.intakeCampaignId,
     });
-    return record.longUrl;
+    return destinationUrlForShortRedirect(record.longUrl) || record.longUrl;
 }
 async function fetchWabaShortUrlClicks(shortUrl) {
     if (!(0, waba_shortener_repository_1.extractSlugFromPublicShortUrl)(shortUrl))

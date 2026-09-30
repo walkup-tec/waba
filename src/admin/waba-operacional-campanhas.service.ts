@@ -201,6 +201,13 @@ export type OperacionalCampaignDetail = OperacionalCampaignListItem & {
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
+export function staffSeesCampaignOriginalResponseLink(
+  staff: OperacionalCampanhasStaffContext | null | undefined,
+): boolean {
+  if (!staff) return false;
+  return staff.role === "master" || isWabaMasterEmail(staff.email);
+}
+
 const formatDateLabel = (iso: string): string => {
   const value = String(iso ?? "").trim();
   if (!value) return "—";
@@ -564,7 +571,9 @@ export class WabaOperacionalCampanhasService {
       hasWhatsappLogo,
       textOptions: intake.textOptions,
       responseLink: resolveCampaignCardResponseLink(intake),
-      responseLinkOriginal: resolveStoredClientOriginalResponseLink(intake),
+      responseLinkOriginal: staffSeesCampaignOriginalResponseLink(staff)
+        ? resolveStoredClientOriginalResponseLink(intake)
+        : "",
       responseShortUrl: String(intake.responseShortUrl ?? "").trim(),
       imageFileName: intake.imageFileName,
       mediaKind: intake.campaignMediaKind === "video" ? "video" : "image",

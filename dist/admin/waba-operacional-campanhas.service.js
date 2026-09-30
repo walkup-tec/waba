@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaOperacionalCampanhasService = exports.CAMPAIGN_START_DEADLINE_MS = void 0;
+exports.staffSeesCampaignOriginalResponseLink = staffSeesCampaignOriginalResponseLink;
 exports.resolveOperacionalCampaignEndedAt = resolveOperacionalCampaignEndedAt;
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
@@ -43,6 +44,11 @@ const meta_whatsapp_broadcast_short_link_1 = require("../integrations/meta-whats
 /** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
 exports.CAMPAIGN_START_DEADLINE_MS = waba_campaign_supplier_assignment_service_1.CAMPAIGN_START_OVERDUE_MS;
 const normalizeEmail = (value) => value.trim().toLowerCase();
+function staffSeesCampaignOriginalResponseLink(staff) {
+    if (!staff)
+        return false;
+    return staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email);
+}
 const formatDateLabel = (iso) => {
     const value = String(iso ?? "").trim();
     if (!value)
@@ -310,7 +316,9 @@ class WabaOperacionalCampanhasService {
             hasWhatsappLogo,
             textOptions: intake.textOptions,
             responseLink: (0, waba_campaign_intake_short_url_1.resolveCampaignCardResponseLink)(intake),
-            responseLinkOriginal: (0, waba_campaign_intake_short_url_1.resolveStoredClientOriginalResponseLink)(intake),
+            responseLinkOriginal: staffSeesCampaignOriginalResponseLink(staff)
+                ? (0, waba_campaign_intake_short_url_1.resolveStoredClientOriginalResponseLink)(intake)
+                : "",
             responseShortUrl: String(intake.responseShortUrl ?? "").trim(),
             imageFileName: intake.imageFileName,
             mediaKind: intake.campaignMediaKind === "video" ? "video" : "image",

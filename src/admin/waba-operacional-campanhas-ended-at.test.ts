@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { WabaCampaignIntake } from "../disparos/waba-campaign-intake.repository";
-import { resolveOperacionalCampaignEndedAt } from "./waba-operacional-campanhas.service";
+import { resolveOperacionalCampaignEndedAt, staffSeesCampaignOriginalResponseLink } from "./waba-operacional-campanhas.service";
 
 const base = {
   id: "camp-1",
@@ -56,5 +56,17 @@ describe("data de término da campanha operacional", () => {
       }),
       "2026-09-18T13:30:00.000Z",
     );
+  });
+
+  it("só o master vê o link original da cliente no card", () => {
+    assert.equal(
+      staffSeesCampaignOriginalResponseLink({ email: "mozart.pmo@gmail.com", role: "master" }),
+      true,
+    );
+    assert.equal(
+      staffSeesCampaignOriginalResponseLink({ email: "aifocusdev@gmail.com", role: "operacional" }),
+      false,
+    );
+    assert.equal(staffSeesCampaignOriginalResponseLink(null), false);
   });
 });
