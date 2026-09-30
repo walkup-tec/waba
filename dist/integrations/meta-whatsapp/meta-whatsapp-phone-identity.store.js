@@ -486,10 +486,11 @@ function applyLocalPhoneIdentities(tenantId, numbers, placeholderName, options) 
                 // Identidade local não pode abortar a listagem.
             }
         }
-        const uiStatus = (0, meta_whatsapp_portfolio_map_1.resolveMetaPhoneUiStatus)({
+        const uiStatus = (0, meta_whatsapp_portfolio_map_1.resolveListedPhoneUiStatus)({
             metaStatus: row.metaStatus,
             codeVerificationStatus: row.codeVerificationStatus,
             healthCanSend: row.healthCanSend,
+            storedUiStatus: identity?.uiStatus || null,
         });
         const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
         const portfolioHidden = options?.hidden === true;

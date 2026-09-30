@@ -204,7 +204,7 @@ export function canActivateMetaPhoneNumber(
   return Boolean(nameNeedsRegister);
 }
 
-function preferMetaPhoneStatus(left: string | null | undefined, right: string | null | undefined): string | null {
+export function preferMetaPhoneStatus(left: string | null | undefined, right: string | null | undefined): string | null {
   const a = text(left);
   const b = text(right);
   const ua = String(a || "").toUpperCase();
@@ -214,6 +214,52 @@ function preferMetaPhoneStatus(left: string | null | undefined, right: string | 
   if (META_PHONE_CONNECTED_STATUSES.has(ua)) return a;
   if (META_PHONE_CONNECTED_STATUSES.has(ub)) return b;
   return a || b;
+}
+
+/**
+ * Une linhas cruas da Graph por id. CONNECTED/banimento não perdem para
+ * uma listagem posterior sem status ou com PENDING (nome em análise).
+ */
+export function mergeMetaPhoneGraphRows(...lists: unknown[][]): unknown[] {
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const list of lists) {
+    for (const row of list) {
+      if (!row || typeof row !== "object") continue;
+      const rec = row as Record<string, unknown>;
+      const id = String(rec.id || "").trim();
+      if (!id) continue;
+      const prev = byId.get(id) || {};
+      const status = preferMetaPhoneStatus(text(prev.status), text(rec.status));
+      const codeVerificationStatus =
+        text(rec.code_verification_status) || text(prev.code_verification_status);
+      byId.set(id, {
+        ...prev,
+        ...rec,
+        id,
+        ...(status ? { status } : {}),
+        ...(codeVerificationStatus ? { code_verification_status: codeVerificationStatus } : {}),
+      });
+    }
+  }
+  return [...byId.values()];
+}
+
+/**
+ * PIN some depois que o número já foi registrado na Cloud.
+ * Graph atrasada (PENDING / sem status) não rebaixa um chip já Ativo,
+ * salvo DISCONNECTED ou banimento.
+ */
+export function resolveListedPhoneUiStatus(input: {
+  metaStatus?: string | null;
+  codeVerificationStatus?: string | null;
+  healthCanSend?: string | null;
+  storedUiStatus?: MetaPortfolioNumberUiStatus | null;
+}): MetaPortfolioNumberUiStatus {
+  const graphUi = resolveMetaPhoneUiStatus(input);
+  if (graphUi === "restrito" || graphUi === "ativo") return graphUi;
+  if (String(input.metaStatus || "").trim().toUpperCase() === "DISCONNECTED") return "pendente";
+  if (input.storedUiStatus === "ativo") return "ativo";
+  return graphUi;
 }
 
 function preferHealthCanSend(left: string | null | undefined, right: string | null | undefined): string | null {

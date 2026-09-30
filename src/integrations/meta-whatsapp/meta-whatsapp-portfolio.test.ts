@@ -11,6 +11,7 @@ import {
   mergePortfolioIdentity,
   mergePortfolioNumbers,
   unionPortfolioNumbers,
+  mergeMetaPhoneGraphRows,
   dedupePortfolioCards,
   isRenderablePortfolioCard,
   isRestrictedPortfolioCard,
@@ -19,6 +20,7 @@ import {
   shouldRefreshCachedPhonePhoto,
   META_BUSINESS_IDENTITY_FIELDS,
   resolvePhoneNameSync,
+  resolveListedPhoneUiStatus,
   isStaleDefaultDisplayNameRequest,
   phoneNumberCardName,
   META_PHONE_NUMBER_LIST_FIELDS,
@@ -692,6 +694,68 @@ describe("meta portfolio mapper", () => {
     assert.equal(rows[0]?.newNameStatus, "APPROVED");
   });
 
+  it("une linhas da Graph sem rebaixar CONNECTED para PENDING", () => {
+    const rows = mergeMetaPhoneGraphRows(
+      [
+        {
+          id: "1272575335948086",
+          display_phone_number: "+55 11 95285-5135",
+          verified_name: "DRAX 02",
+          status: "CONNECTED",
+          code_verification_status: "VERIFIED",
+        },
+      ],
+      [
+        {
+          id: "1272575335948086",
+          display_phone_number: "+55 11 95285-5135",
+          verified_name: "DRAX 02",
+          status: "PENDING",
+          name_status: "PENDING_REVIEW",
+        },
+      ],
+    );
+    assert.equal(rows.length, 1);
+    assert.equal((rows[0] as { status?: string } | undefined)?.status, "CONNECTED");
+    const mapped = mapMetaPhoneToPortfolioNumber(rows[0]);
+    assert.equal(mapped?.uiStatus, "ativo");
+    assert.equal(mapped?.canActivate, false);
+  });
+
+  it("Graph atrasada não pede PIN de novo se o chip já foi ativado", () => {
+    assert.equal(
+      resolveListedPhoneUiStatus({
+        metaStatus: "PENDING",
+        codeVerificationStatus: "VERIFIED",
+        storedUiStatus: "ativo",
+      }),
+      "ativo",
+    );
+    assert.equal(
+      resolveListedPhoneUiStatus({
+        metaStatus: null,
+        storedUiStatus: "ativo",
+      }),
+      "ativo",
+    );
+    assert.equal(
+      resolveListedPhoneUiStatus({
+        metaStatus: "DISCONNECTED",
+        codeVerificationStatus: "VERIFIED",
+        storedUiStatus: "ativo",
+      }),
+      "pendente",
+    );
+    assert.equal(
+      resolveListedPhoneUiStatus({
+        metaStatus: "PENDING",
+        codeVerificationStatus: "VERIFIED",
+        storedUiStatus: "pendente",
+      }),
+      "pendente",
+    );
+  });
+
   it("ao deduplicar o mesmo BM, preserva todos os chips das conexões", () => {
     const cards = dedupePortfolioCards([
       {
@@ -918,6 +982,9 @@ describe("meta portfolio mapper", () => {
     });
     assert.equal(row?.requestedName, "DRAX 02");
     assert.equal(row?.nameSyncStatus, "pending");
+    assert.equal(row?.uiStatus, "ativo");
+    assert.equal(row?.canActivate, false);
+    assert.equal(row?.nameNeedsRegister, false);
     assert.equal(
       phoneNumberCardName({
         verifiedName: row?.verifiedName,
@@ -1036,6 +1103,43 @@ describe("meta portfolio mapper", () => {
     assert.equal(pending[0]?.nameSyncStatus, "pending");
     assert.match(String(pending[0]?.profilePictureUrl || ""), /\/integrations\/meta\/whatsapp\/phone-numbers\/photo/);
     assert.equal(pending[0]?.inboxEnabled, true);
+    purgePhoneIdentities(tenantId);
+  });
+
+  it("não rebaixa para Pendente um chip já ativado quando a Graph omite CONNECTED", () => {
+    const tenantId = deriveStableMetaTenantId("drax02-pin@exemplo.com");
+    purgePhoneIdentities(tenantId);
+    writePhoneIdentity(tenantId, "1272575335948086", { uiStatus: "ativo" });
+    const rows = applyLocalPhoneIdentities(tenantId, [
+      {
+        phoneNumberId: "1272575335948086",
+        displayPhoneNumber: "+55 11 95285-5135",
+        verifiedName: "DRAX 02",
+        qualityRating: null,
+        metaStatus: "PENDING",
+        codeVerificationStatus: "VERIFIED",
+        healthCanSend: null,
+        uiStatus: "pendente",
+        dispatchStatus: "livre",
+        canActivate: true,
+        nameNeedsRegister: false,
+        nameStatus: "PENDING_REVIEW",
+        newDisplayName: null,
+        newNameStatus: null,
+        profilePictureUrl: null,
+        vertical: null,
+        description: null,
+        address: null,
+        email: null,
+        requestedName: "DRAX 02",
+        nameSyncStatus: "pending",
+        photoSyncStatus: null,
+        profileSyncStatus: null,
+        inboxEnabled: false,
+      },
+    ]);
+    assert.equal(rows[0]?.uiStatus, "ativo");
+    assert.equal(rows[0]?.canActivate, false);
     purgePhoneIdentities(tenantId);
   });
 
@@ -1508,6 +1612,89 @@ describe("meta portfolio service", () => {
       }),
       "DRAX 02",
     );
+  });
+
+  it("não pede PIN no DRAX 02 quando a lista omite status e o GET do chip confirma CONNECTED", async () => {
+    const row = {
+      ...connectedRow(),
+      status: "connected" as const,
+      metaBusinessId: "962298516898955",
+      wabaId: "2301051607405249",
+      phoneNumberId: "1272575335948086",
+      displayPhoneNumber: "+55 11 95285-5135",
+      verifiedName: "DRAX 02",
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [row];
+      },
+      async findOpenByTenant() {
+        return row;
+      },
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "1272575335948086") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1272575335948086",
+            display_phone_number: "+55 11 95285-5135",
+            verified_name: "DRAX 02",
+            status: "CONNECTED",
+            code_verification_status: "VERIFIED",
+            name_status: "PENDING_REVIEW",
+            whatsapp_business_account: { id: "2301051607405249" },
+          },
+        };
+      }
+      if (input.path === "962298516898955" || input.path === "2301051607405249") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: input.path,
+            name:
+              input.path === "962298516898955"
+                ? "60.845.972 Flaviane Ferreira Trindade"
+                : "Flaviane",
+            owner_business_info: {
+              id: "962298516898955",
+              name: "60.845.972 Flaviane Ferreira Trindade",
+            },
+          },
+        };
+      }
+      if (input.path.endsWith("/phone_numbers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "1272575335948086",
+                display_phone_number: "+55 11 95285-5135",
+                verified_name: "DRAX 02",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth);
+    const chip = (assets.portfolios || [])
+      .flatMap((item) => item.numbers || [])
+      .find((item) => String(item.phoneNumberId || "") === "1272575335948086");
+    assert.ok(chip);
+    assert.equal(chip?.uiStatus, "ativo");
+    assert.equal(chip?.canActivate, false);
+    assert.equal(chip?.nameNeedsRegister, false);
   });
 
   it("leituras simultâneas com fresh compartilham a Graph em voo", async () => {

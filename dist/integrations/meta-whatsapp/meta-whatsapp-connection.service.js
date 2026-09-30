@@ -775,6 +775,7 @@ async function hydrateOpenConnection(graph, decrypt, tenantId, open, extraWabaId
         const extra = await fetchPhoneNodes(g, token, missingKnownIds);
         merged = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(merged, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: extra }));
     }
+    merged = await confirmPendingPhoneStatusFromGraph(g, [token, ...writeTokens.map((row) => row.token)], merged, primaryWabaId);
     const needsName = merged.filter((row) => !row.nameStatus && !row.newNameStatus);
     let numbers = merged;
     const hydratePartial = false;
@@ -890,6 +891,19 @@ async function fetchPhoneNodes(graph, token, phoneIds, stampWabaId) {
             : row);
     }
     return out;
+}
+/** GET /{phone-id} confirma CONNECTED quando a lista do WABA omite status ou deixa PENDING. */
+async function confirmPendingPhoneStatusFromGraph(graph, tokens, numbers, stampWabaId) {
+    const pendingIds = numbers
+        .filter((row) => String(row.uiStatus || "") === "pendente")
+        .map((row) => String(row.phoneNumberId || "").trim())
+        .filter(Boolean);
+    if (!pendingIds.length)
+        return numbers;
+    const extra = await fetchPhoneNodes(graph, tokens, pendingIds, stampWabaId);
+    if (!extra.length)
+        return numbers;
+    return (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(numbers, (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: extra }));
 }
 function extractWabasAndPhonesFromBusinessNode(node) {
     const row = node && typeof node === "object" ? node : {};
@@ -1136,20 +1150,7 @@ function stampPhoneRowsWithWabaId(rows, wabaId) {
     });
 }
 function mergePhoneNumberRows(...lists) {
-    const byId = new Map();
-    for (const list of lists) {
-        for (const row of list) {
-            if (!row || typeof row !== "object")
-                continue;
-            const rec = row;
-            const id = String(rec.id || "").trim();
-            if (!id)
-                continue;
-            const prev = byId.get(id) || {};
-            byId.set(id, { ...prev, ...rec, id });
-        }
-    }
-    return [...byId.values()];
+    return (0, meta_whatsapp_portfolio_map_1.mergeMetaPhoneGraphRows)(...lists);
 }
 /** Lista todos os chips do WABA. Une catálogo (Pendente) com health/tier/nome dos Ativos. */
 async function listWabaPhoneNumbersPaged(graph, token, wabaId) {
@@ -1407,17 +1408,15 @@ async function fanOutAdminBusinessNumbers(input) {
     }
     if (!wabaIds.size && !phones.length)
         return { wabaIds: [], phones: [] };
-    const alreadyMapped = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: phones });
-    if (alreadyMapped.length)
-        return { wabaIds: [...wabaIds], phones };
+    const listedPhones = [];
     for (const wid of wabaIds) {
         const listed = await listWabaPhoneNumbersForPortfolio(input.graph, wid, input.token, input.writeTokens, bm);
         if (!listed.ok)
             continue;
         for (const row of stampPhoneRowsWithWabaId(listed.json.data, wid))
-            phones.push(row);
+            listedPhones.push(row);
     }
-    return { wabaIds: [...wabaIds], phones };
+    return { wabaIds: [...wabaIds], phones: mergePhoneNumberRows(phones, listedPhones) };
 }
 /**
  * Cards da select (BM administrado / backfill / + ID) não passam por hydrateOpenConnection.
@@ -1600,6 +1599,10 @@ async function fillEmptyAdminPortfolioCards(rawGraph, tenantId, cards, writeToke
                             wabaCount: fanout.wabaIds.length || invited.wabaIds.length,
                             phoneRowCount: (card.numbers || []).length,
                         });
+                    }
+                    const pendingOnCard = (card.numbers || []).filter((row) => String(row.uiStatus || "") === "pendente");
+                    if (pendingOnCard.length) {
+                        card.numbers = await confirmPendingPhoneStatusFromGraph(graph, writeTokens.map((item) => item.token), card.numbers || [], String(card.wabaId || "").trim());
                     }
                     if (cardHasListedNumbers(card) && cardHasListedWaba(card))
                         break;
@@ -2677,6 +2680,12 @@ class MetaWhatsappConnectionService {
             tenantId: tenant.tenantId,
             connectionId: used.id,
         });
+        try {
+            (0, meta_whatsapp_phone_identity_store_1.writePhoneIdentity)(tenant.tenantId, phoneNumberId, { uiStatus: "ativo" });
+        }
+        catch {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("phone-register-identity-skip", { tenantId: tenant.tenantId });
+        }
         if (open.wabaId && open.phoneNumberId && open.status !== "connected" && rows[0]?.id === open.id) {
             try {
                 await this.confirmFromAuth(auth);

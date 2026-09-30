@@ -31,6 +31,7 @@ import {
   mergePortfolioIdentity,
   mapMetaBusinessToPortfolio,
   unionPortfolioNumbers,
+  mergeMetaPhoneGraphRows,
   dedupePortfolioCards,
   isRenderablePortfolioCard,
   businessIdNotWaba,
@@ -1011,6 +1012,12 @@ async function hydrateOpenConnection(
     const extra = await fetchPhoneNodes(g, token, missingKnownIds);
     merged = unionPortfolioNumbers(merged, mapMetaPhoneListToPortfolioNumbers({ data: extra }));
   }
+  merged = await confirmPendingPhoneStatusFromGraph(
+    g,
+    [token, ...writeTokens.map((row) => row.token)],
+    merged,
+    primaryWabaId,
+  );
   const needsName = merged.filter((row) => !row.nameStatus && !row.newNameStatus);
   let numbers = merged;
   const hydratePartial = false;
@@ -1137,6 +1144,23 @@ async function fetchPhoneNodes(
     );
   }
   return out;
+}
+
+/** GET /{phone-id} confirma CONNECTED quando a lista do WABA omite status ou deixa PENDING. */
+async function confirmPendingPhoneStatusFromGraph(
+  graph: MetaConnectionGraphCaller,
+  tokens: string | string[],
+  numbers: MetaPortfolioNumberPublic[],
+  stampWabaId?: string,
+): Promise<MetaPortfolioNumberPublic[]> {
+  const pendingIds = numbers
+    .filter((row) => String(row.uiStatus || "") === "pendente")
+    .map((row) => String(row.phoneNumberId || "").trim())
+    .filter(Boolean);
+  if (!pendingIds.length) return numbers;
+  const extra = await fetchPhoneNodes(graph, tokens, pendingIds, stampWabaId);
+  if (!extra.length) return numbers;
+  return unionPortfolioNumbers(numbers, mapMetaPhoneListToPortfolioNumbers({ data: extra }));
 }
 
 function extractWabasAndPhonesFromBusinessNode(node: unknown): {
@@ -1394,18 +1418,7 @@ function stampPhoneRowsWithWabaId(rows: unknown[], wabaId: string): unknown[] {
 }
 
 function mergePhoneNumberRows(...lists: unknown[][]): unknown[] {
-  const byId = new Map<string, Record<string, unknown>>();
-  for (const list of lists) {
-    for (const row of list) {
-      if (!row || typeof row !== "object") continue;
-      const rec = row as Record<string, unknown>;
-      const id = String(rec.id || "").trim();
-      if (!id) continue;
-      const prev = byId.get(id) || {};
-      byId.set(id, { ...prev, ...rec, id });
-    }
-  }
-  return [...byId.values()];
+  return mergeMetaPhoneGraphRows(...lists);
 }
 
 /** Lista todos os chips do WABA. Une catálogo (Pendente) com health/tier/nome dos Ativos. */
@@ -1687,9 +1700,7 @@ async function fanOutAdminBusinessNumbers(input: {
   }
   if (!wabaIds.size && !phones.length) return { wabaIds: [], phones: [] };
 
-  const alreadyMapped = mapMetaPhoneListToPortfolioNumbers({ data: phones });
-  if (alreadyMapped.length) return { wabaIds: [...wabaIds], phones };
-
+  const listedPhones: unknown[] = [];
   for (const wid of wabaIds) {
     const listed = await listWabaPhoneNumbersForPortfolio(
       input.graph,
@@ -1699,9 +1710,9 @@ async function fanOutAdminBusinessNumbers(input: {
       bm,
     );
     if (!listed.ok) continue;
-    for (const row of stampPhoneRowsWithWabaId(listed.json.data, wid)) phones.push(row);
+    for (const row of stampPhoneRowsWithWabaId(listed.json.data, wid)) listedPhones.push(row);
   }
-  return { wabaIds: [...wabaIds], phones };
+  return { wabaIds: [...wabaIds], phones: mergePhoneNumberRows(phones, listedPhones) };
 }
 
 /**
@@ -1909,6 +1920,17 @@ async function fillEmptyAdminPortfolioCards(
                 wabaCount: fanout.wabaIds.length || invited.wabaIds.length,
                 phoneRowCount: (card.numbers || []).length,
               });
+            }
+            const pendingOnCard = (card.numbers || []).filter(
+              (row) => String(row.uiStatus || "") === "pendente",
+            );
+            if (pendingOnCard.length) {
+              card.numbers = await confirmPendingPhoneStatusFromGraph(
+                graph,
+                writeTokens.map((item) => item.token),
+                card.numbers || [],
+                String(card.wabaId || "").trim(),
+              );
             }
             if (cardHasListedNumbers(card) && cardHasListedWaba(card)) break;
           }
@@ -3149,6 +3171,12 @@ export class MetaWhatsappConnectionService {
       tenantId: tenant.tenantId,
       connectionId: used.id,
     });
+
+    try {
+      writePhoneIdentity(tenant.tenantId, phoneNumberId, { uiStatus: "ativo" });
+    } catch {
+      logMetaWhatsappSafe("phone-register-identity-skip", { tenantId: tenant.tenantId });
+    }
 
     if (open.wabaId && open.phoneNumberId && open.status !== "connected" && rows[0]?.id === open.id) {
       try {

@@ -8,7 +8,7 @@ import type {
   MetaProfileSyncStatus,
 } from "./meta-whatsapp-portfolio.types";
 import { META_WHATSAPP_DEFAULT_DISPLAY_NAME } from "./meta-whatsapp-phone-profile";
-import { namesEqual, resolvePhoneNameSync, resolveMetaPhoneUiStatus, canActivateMetaPhoneNumber } from "./meta-whatsapp-portfolio.map";
+import { namesEqual, resolvePhoneNameSync, resolveListedPhoneUiStatus, canActivateMetaPhoneNumber } from "./meta-whatsapp-portfolio.map";
 import { isHiddenBusiness, listHiddenBusinessIds } from "./meta-whatsapp-hidden-business.store";
 import {
   equivalentOwnedWabaIdsForBusiness,
@@ -607,10 +607,11 @@ export function applyLocalPhoneIdentities(
         // Identidade local não pode abortar a listagem.
       }
     }
-    const uiStatus = resolveMetaPhoneUiStatus({
+    const uiStatus = resolveListedPhoneUiStatus({
       metaStatus: row.metaStatus,
       codeVerificationStatus: row.codeVerificationStatus,
       healthCanSend: row.healthCanSend,
+      storedUiStatus: identity?.uiStatus || null,
     });
     const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
     const portfolioHidden = options?.hidden === true;
