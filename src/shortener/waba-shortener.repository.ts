@@ -138,6 +138,19 @@ export async function attachCampaignIdToShortLink(
   return true;
 }
 
+export async function findShortLinkByCampaignId(campaignId: string): Promise<WabaShortLinkRecord | null> {
+  const id = String(campaignId || "").trim();
+  if (!id) return null;
+  const store = await loadStore();
+  const matches = store.links.filter(
+    (row) =>
+      String(row.campaignId || "").trim() === id || String(row.intakeCampaignId || "").trim() === id,
+  );
+  if (!matches.length) return null;
+  matches.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  return matches[0] || null;
+}
+
 export async function getShortLinkClicksByCampaignId(campaignId: string): Promise<number> {
   const id = String(campaignId || "").trim();
   if (!id) return 0;

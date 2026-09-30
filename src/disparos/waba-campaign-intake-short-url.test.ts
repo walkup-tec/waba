@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 import { MetaWhatsappError } from "../integrations/meta-whatsapp/meta-whatsapp-errors";
 import {
   createCampaignIntakeTrackedShortUrl,
+  persistClientOriginalResponseLink,
   resolveCampaignCardResponseLink,
   resolveOperacionalManualReportClicks,
   resolveOperacionalManualReportShowClicks,
+  resolveStoredClientOriginalResponseLink,
   shouldCreateIntakeTrackedShortUrl,
 } from "./waba-campaign-intake-short-url";
 
@@ -26,6 +28,38 @@ describe("URL curta na criação da campanha Oficial", () => {
     assert.equal(
       resolveCampaignCardResponseLink({ responseLink: "https://site.com/promo" }),
       "https://site.com/promo",
+    );
+  });
+
+  it("guarda o link da cliente e ignora o alias /s", () => {
+    assert.equal(
+      persistClientOriginalResponseLink("", "https://cliente.com/voto?x=1"),
+      "https://cliente.com/voto?x=1",
+    );
+    assert.equal(
+      persistClientOriginalResponseLink(
+        "https://cliente.com/voto",
+        "https://waba.draxsistemas.com.br/s/abc1234",
+      ),
+      "https://cliente.com/voto",
+    );
+    assert.equal(
+      persistClientOriginalResponseLink("", "https://waba.draxsistemas.com.br/s/abc1234"),
+      "",
+    );
+    assert.equal(
+      persistClientOriginalResponseLink(
+        "",
+        "https://cliente.com/voto?_n8n_link_nonce=123-9",
+      ),
+      "https://cliente.com/voto",
+    );
+    assert.equal(
+      resolveStoredClientOriginalResponseLink({
+        responseLink: "https://cliente.com/voto",
+        responseShortUrl: "https://waba.draxsistemas.com.br/s/abc1234",
+      }),
+      "https://cliente.com/voto",
     );
   });
 

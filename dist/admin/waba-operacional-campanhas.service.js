@@ -310,6 +310,7 @@ class WabaOperacionalCampanhasService {
             hasWhatsappLogo,
             textOptions: intake.textOptions,
             responseLink: (0, waba_campaign_intake_short_url_1.resolveCampaignCardResponseLink)(intake),
+            responseLinkOriginal: (0, waba_campaign_intake_short_url_1.resolveStoredClientOriginalResponseLink)(intake),
             responseShortUrl: String(intake.responseShortUrl ?? "").trim(),
             imageFileName: intake.imageFileName,
             mediaKind: intake.campaignMediaKind === "video" ? "video" : "image",

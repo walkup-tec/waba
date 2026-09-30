@@ -133,6 +133,7 @@ describe("URL curta Vitoria da Conquista", () => {
 
       const stored = new WabaCampaignIntakeRepository().getById(CAMPAIGN_ID);
       assert.equal(stored?.responseLink, "https://cliente.com/promocao-vitoria");
+      assert.equal(stored?.responseLinkOriginal, "https://cliente.com/promocao-vitoria");
       assert.equal(stored?.responseShortUrl, "https://wabadisparos.com.br/s/vitoria1");
       assert.equal(stored?.responseShortSlug, "vitoria1");
 

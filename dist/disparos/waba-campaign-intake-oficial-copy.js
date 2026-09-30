@@ -18,6 +18,7 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const data_path_1 = require("../data-path");
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
+const waba_campaign_intake_short_url_1 = require("./waba-campaign-intake-short-url");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
 exports.OFFICIAL_CAMPAIGN_DUPLICATE_STATUSES = ["generated", "error_reported"];
 exports.OFFICIAL_CAMPAIGN_EDIT_STATUSES = ["generated"];
@@ -148,6 +149,7 @@ function buildOfficialCampaignDuplicate(source, options = {}) {
         submissionFingerprint: `duplicate:${source.id}:${nextId}`,
         createdAt: now,
         updatedAt: now,
+        responseLinkOriginal: (0, waba_campaign_intake_short_url_1.persistClientOriginalResponseLink)(source.responseLinkOriginal, source.responseLink),
     };
     delete clone.startedAt;
     delete clone.startedByEmail;
@@ -175,6 +177,7 @@ function toOfficialCampaignEditDetail(intake) {
         whatsappName: intake.whatsappName || "",
         textOptions: intake.textOptions,
         responseLink: intake.responseLink || "",
+        responseLinkOriginal: (0, waba_campaign_intake_short_url_1.persistClientOriginalResponseLink)(intake.responseLinkOriginal, intake.responseLink),
         campaignMediaKind: intake.campaignMediaKind === "video" ? "video" : "image",
         imageFileName: intake.imageFileName || "",
         whatsappLogoFileName: intake.whatsappLogoFileName || "",

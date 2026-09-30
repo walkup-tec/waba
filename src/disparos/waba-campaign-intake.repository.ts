@@ -93,6 +93,8 @@ export type WabaCampaignIntake = {
   textOptions: [string, string, string];
   /** Link de resposta (CTA) informado pelo assinante no wizard. */
   responseLink?: string;
+  /** URL que a cliente digitou, antes do alias `/s` do servidor. Não sobrescreve. */
+  responseLinkOriginal?: string;
   /** URL curta WABA (`/s/{slug}`) gerada na criação da campanha Oficial. */
   responseShortUrl?: string;
   responseShortSlug?: string;

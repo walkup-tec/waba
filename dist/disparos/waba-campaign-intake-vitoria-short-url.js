@@ -56,6 +56,7 @@ async function persistTrackedShortUrl(intake, deps = {}) {
         const updated = intakeRepository.updateById(intake.id, {
             responseShortUrl: created.shortUrl,
             responseShortSlug: created.shortSlug,
+            responseLinkOriginal: (0, waba_campaign_intake_short_url_1.persistClientOriginalResponseLink)(intake.responseLinkOriginal, destinationUrl),
             updatedAt: new Date().toISOString(),
         });
         if (!updated)

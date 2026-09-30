@@ -80,6 +80,7 @@ import { formatScheduledSendLabel, parseScheduledSendAt } from "./waba-campaign-
 import { publicBaseHintsFromExpressRequest } from "../lib/waba-public-base-url";
 import {
   createCampaignIntakeTrackedShortUrl,
+  persistClientOriginalResponseLink,
   resolveIntakeTrackedShortUrlClicks,
   resolveOperacionalManualReportClicks,
   shouldCreateIntakeTrackedShortUrl,
@@ -621,6 +622,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
 
         const now = new Date().toISOString();
         const intakeId = randomUUID();
+        const responseLinkOriginal = persistClientOriginalResponseLink("", responseLink);
         let responseShortUrl = "";
         let responseShortSlug = "";
         if (shouldCreateIntakeTrackedShortUrl(apiKind)) {
@@ -670,6 +672,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           whatsappLogoStoredPath,
           textOptions,
           responseLink,
+          ...(responseLinkOriginal ? { responseLinkOriginal } : {}),
           ...(responseShortUrl ? { responseShortUrl } : {}),
           ...(responseShortSlug ? { responseShortSlug } : {}),
           campaignMediaKind: mediaKind,
@@ -921,6 +924,10 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
 
       const clone = buildOfficialCampaignDuplicate(source);
       clone.plannedSendCount = plannedSendCount;
+      clone.responseLinkOriginal = persistClientOriginalResponseLink(
+        source.responseLinkOriginal,
+        source.responseLink,
+      );
       if (source.responseLink && shouldCreateIntakeTrackedShortUrl("oficial")) {
         try {
           const tracked = await createCampaignIntakeTrackedShortUrl({
@@ -1212,6 +1219,10 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         whatsappName,
         textOptions,
         responseLink,
+        responseLinkOriginal: persistClientOriginalResponseLink(
+          current.responseLinkOriginal,
+          current.responseLinkOriginal || current.responseLink || responseLink,
+        ),
         campaignMediaKind: mediaKind,
         imageFileName,
         imageStoredPath,

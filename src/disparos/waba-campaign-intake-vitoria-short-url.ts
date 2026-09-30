@@ -2,6 +2,7 @@ import { WABA_ENV } from "../load-env";
 import { WabaCampaignIntakeRepository, type WabaCampaignIntake } from "./waba-campaign-intake.repository";
 import {
   createCampaignIntakeTrackedShortUrl,
+  persistClientOriginalResponseLink,
   type CreateCampaignIntakeTrackedShortUrlDeps,
   type CampaignIntakeTrackedShortUrl,
 } from "./waba-campaign-intake-short-url";
@@ -78,6 +79,10 @@ async function persistTrackedShortUrl(
     const updated = intakeRepository.updateById(intake.id, {
       responseShortUrl: created.shortUrl,
       responseShortSlug: created.shortSlug,
+      responseLinkOriginal: persistClientOriginalResponseLink(
+        intake.responseLinkOriginal,
+        destinationUrl,
+      ),
       updatedAt: new Date().toISOString(),
     });
     if (!updated) return null;

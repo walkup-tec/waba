@@ -6,6 +6,7 @@ import {
   resolveIntakeApiKindFromIntake,
   type WabaDispatchesApiKind,
 } from "./waba-dispatches-api-kind";
+import { persistClientOriginalResponseLink } from "./waba-campaign-intake-short-url";
 import { normalizeCampaignIntakeStatus } from "./waba-campaign-intake-status";
 import type { WabaCampaignIntake } from "./waba-campaign-intake.repository";
 
@@ -182,6 +183,10 @@ export function buildOfficialCampaignDuplicate(
     submissionFingerprint: `duplicate:${source.id}:${nextId}`,
     createdAt: now,
     updatedAt: now,
+    responseLinkOriginal: persistClientOriginalResponseLink(
+      source.responseLinkOriginal,
+      source.responseLink,
+    ),
   };
   delete clone.startedAt;
   delete clone.startedByEmail;
@@ -210,6 +215,10 @@ export function toOfficialCampaignEditDetail(intake: WabaCampaignIntake) {
     whatsappName: intake.whatsappName || "",
     textOptions: intake.textOptions,
     responseLink: intake.responseLink || "",
+    responseLinkOriginal: persistClientOriginalResponseLink(
+      intake.responseLinkOriginal,
+      intake.responseLink,
+    ),
     campaignMediaKind: intake.campaignMediaKind === "video" ? "video" : "image",
     imageFileName: intake.imageFileName || "",
     whatsappLogoFileName: intake.whatsappLogoFileName || "",

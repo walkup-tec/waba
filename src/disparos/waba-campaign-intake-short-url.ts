@@ -2,6 +2,7 @@ import type { WabaPublicBaseRequestHints } from "../lib/waba-public-base-url";
 import { attachCampaignIdToShortLink } from "../shortener/waba-shortener.service";
 import {
   extractSlugFromPublicShortUrl,
+  findShortLinkByCampaignId,
   findShortLinkBySlug,
   getShortLinkClicksByCampaignId,
 } from "../shortener/waba-shortener.repository";
@@ -16,7 +17,9 @@ export type CampaignIntakeTrackedShortUrl = {
 
 export type CampaignIntakeShortUrlFields = {
   responseLink?: string | null;
+  responseLinkOriginal?: string | null;
   responseShortUrl?: string | null;
+  responseShortSlug?: string | null;
 };
 
 export function shouldCreateIntakeTrackedShortUrl(apiKind: WabaDispatchesApiKind): boolean {
@@ -25,6 +28,69 @@ export function shouldCreateIntakeTrackedShortUrl(apiKind: WabaDispatchesApiKind
 
 export function resolveCampaignCardResponseLink(intake: CampaignIntakeShortUrlFields): string {
   return String(intake.responseShortUrl || intake.responseLink || "").trim();
+}
+
+export function isWabaShortAliasUrl(raw: string): boolean {
+  const value = String(raw || "").trim();
+  if (!value) return false;
+  try {
+    return /\/s\/[a-z0-9][a-z0-9-_]{2,39}/i.test(new URL(value).pathname);
+  } catch {
+    return /\/s\/[a-z0-9][a-z0-9-_]{2,39}/i.test(value);
+  }
+}
+
+export function stripDisparosTrackingNonce(raw: string): string {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  try {
+    const parsed = new URL(value);
+    if (!parsed.searchParams.has("_n8n_link_nonce") && !parsed.searchParams.has("_n8n_test_nonce")) {
+      return value;
+    }
+    parsed.searchParams.delete("_n8n_link_nonce");
+    parsed.searchParams.delete("_n8n_test_nonce");
+    return parsed.toString();
+  } catch {
+    return value;
+  }
+}
+
+export function normalizeClientOriginalResponseLink(raw: string): string {
+  const stripped = stripDisparosTrackingNonce(raw);
+  if (!stripped || isWabaShortAliasUrl(stripped)) return "";
+  return stripped.slice(0, 2000);
+}
+
+export function persistClientOriginalResponseLink(
+  existing: string | null | undefined,
+  candidate: string | null | undefined,
+): string {
+  const kept = normalizeClientOriginalResponseLink(String(existing || ""));
+  if (kept) return kept;
+  return normalizeClientOriginalResponseLink(String(candidate || ""));
+}
+
+export function resolveStoredClientOriginalResponseLink(intake: CampaignIntakeShortUrlFields): string {
+  return persistClientOriginalResponseLink(intake.responseLinkOriginal, intake.responseLink);
+}
+
+export async function lookupClientOriginalResponseLink(
+  intake: CampaignIntakeShortUrlFields & { id?: string | null },
+): Promise<string> {
+  const stored = resolveStoredClientOriginalResponseLink(intake);
+  if (stored) return stored;
+  const slug =
+    String(intake.responseShortSlug || "").trim() ||
+    extractSlugFromPublicShortUrl(String(intake.responseShortUrl || "")) ||
+    "";
+  if (slug) {
+    const bySlug = await findShortLinkBySlug(slug);
+    const fromSlug = normalizeClientOriginalResponseLink(bySlug?.longUrl || "");
+    if (fromSlug) return fromSlug;
+  }
+  const byCampaign = await findShortLinkByCampaignId(String(intake.id || ""));
+  return normalizeClientOriginalResponseLink(byCampaign?.longUrl || "");
 }
 
 export function resolveOperacionalManualReportShowClicks(input: {

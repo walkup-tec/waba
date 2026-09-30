@@ -203,6 +203,7 @@ import { registerWabaCampaignIntakeRoutes } from "./disparos/waba-campaign-intak
 import { runOptInPtx1000CloneOneshot } from "./disparos/waba-campaign-intake-clone";
 import { runForcedCampaignReportCompleteOneshot } from "./disparos/waba-campaign-report-force-complete";
 import { runPelliReopenAifocusOneshot } from "./disparos/waba-campaign-pelli-reopen-aifocus";
+import { runOriginalResponseLinkBackfillOneshot } from "./disparos/waba-campaign-intake-original-link-backfill";
 import { runManualBankPaidSplitOneshot } from "./billing/waba-financeiro-split-manual-paid";
 import { runVitoriaCompletedNotifyTestOneshot } from "./mail/waba-campaign-completed-notify.service";
 import { runVitoriaDaConquistaShortUrlOneshot } from "./disparos/waba-campaign-intake-vitoria-short-url";
@@ -16705,6 +16706,8 @@ const httpServer = app.listen(PORT, () => {
     console.log(`[campanhas] relatório pontual finalizado: ${forcedReportComplete.message}`);
     const pelliReopen = runPelliReopenAifocusOneshot();
     console.log(`[campanhas] Pelli fila aifocus: ${pelliReopen.message}`);
+    const originalLinkBackfill = await runOriginalResponseLinkBackfillOneshot();
+    console.log(`[campanhas] link original da cliente: ${originalLinkBackfill.message}`);
     const manualBankPaidSplit = runManualBankPaidSplitOneshot();
     console.log(`[financeiro] repasse manual no banco: ${manualBankPaidSplit.message}`);
     const completedNotifyTest = await runVitoriaCompletedNotifyTestOneshot();

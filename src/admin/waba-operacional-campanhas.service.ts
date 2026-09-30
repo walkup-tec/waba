@@ -45,6 +45,7 @@ import {
   resolveIntakeTrackedShortUrlClicks,
   resolveOperacionalManualReportClicks,
   resolveOperacionalManualReportShowClicks,
+  resolveStoredClientOriginalResponseLink,
 } from "../disparos/waba-campaign-intake-short-url";
 import { ensureVitoriaDaConquistaIntakeShortUrlByCampaignId } from "../disparos/waba-campaign-intake-vitoria-short-url";
 import { resolveCampaignReportOverride } from "../disparos/waba-campaign-report-read-overrides";
@@ -186,6 +187,7 @@ export type OperacionalCampaignDetail = OperacionalCampaignListItem & {
   hasWhatsappLogo: boolean;
   textOptions: [string, string, string];
   responseLink: string;
+  responseLinkOriginal: string;
   responseShortUrl: string;
   imageFileName: string;
   mediaKind: "image" | "video";
@@ -562,6 +564,7 @@ export class WabaOperacionalCampanhasService {
       hasWhatsappLogo,
       textOptions: intake.textOptions,
       responseLink: resolveCampaignCardResponseLink(intake),
+      responseLinkOriginal: resolveStoredClientOriginalResponseLink(intake),
       responseShortUrl: String(intake.responseShortUrl ?? "").trim(),
       imageFileName: intake.imageFileName,
       mediaKind: intake.campaignMediaKind === "video" ? "video" : "image",

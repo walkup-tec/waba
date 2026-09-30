@@ -51330,6 +51330,7 @@
       let adminCampanhasDetailSpreadsheetName = "leads-envios.xlsx";
       let adminCampanhasDetailTextOptions = [];
       let adminCampanhasDetailResponseLink = "";
+      let adminCampanhasDetailOriginalResponseLink = "";
       let adminCampanhasReportCampaignId = "";
       let adminCampanhasReportTotalLeads = 0;
       let adminCampanhasReportReadOnly = false;
@@ -51946,27 +51947,36 @@
         `;
 
         const responseLink = String(campaign.responseShortUrl || campaign.responseLink || "").trim();
+        const originalResponseLink = String(campaign.responseLinkOriginal || "").trim();
         adminCampanhasDetailResponseLink = responseLink;
-        const responseLinkHtml = !responseLink
-          ? '<span class="muted">—</span>'
-          : `
+        adminCampanhasDetailOriginalResponseLink = originalResponseLink;
+        const renderCopyableLink = (link, copyAttr) =>
+          !link
+            ? '<span class="muted">—</span>'
+            : `
               <div class="admin-campanhas-text-option">
                 <div class="admin-campanhas-text-option-content">
-                  <a href="${escapeAdminHtml(responseLink)}" target="_blank" rel="noopener noreferrer">${escapeAdminHtml(responseLink)}</a>
+                  <a href="${escapeAdminHtml(link)}" target="_blank" rel="noopener noreferrer">${escapeAdminHtml(link)}</a>
                 </div>
                 <button
                   class="admin-campanhas-copy-btn"
                   type="button"
-                  data-copy-response-link="1"
+                  ${copyAttr}
                 >
                   Copiar
                 </button>
               </div>
             `;
+        const responseLinkHtml = renderCopyableLink(responseLink, 'data-copy-response-link="1"');
+        const originalResponseLinkHtml = renderCopyableLink(
+          originalResponseLink,
+          'data-copy-original-response-link="1"',
+        );
 
         if (materialsBody) {
           materialsBody.innerHTML = [
             renderAdminCampanhasDetailField("Opções de texto", textOptionsHtml),
+            renderAdminCampanhasDetailField("Link original da cliente", originalResponseLinkHtml),
             renderAdminCampanhasDetailField("Link de resposta", responseLinkHtml),
           ].join("");
         }
@@ -52165,6 +52175,7 @@
         adminCampanhasStartBusy = false;
         adminCampanhasDetailTextOptions = [];
         adminCampanhasDetailResponseLink = "";
+        adminCampanhasDetailOriginalResponseLink = "";
         const startBtn = document.getElementById("admin-campanhas-start-btn");
         const bmInoperanteBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
         const reportErrorBtn = document.getElementById("admin-campanhas-report-error-btn");
@@ -52308,6 +52319,20 @@
           showToast("Link copiado.", "success", 2200);
         } catch {
           showToast("Não foi possível copiar o link.", "error");
+        }
+      }
+
+      async function copyAdminCampanhasOriginalResponseLink() {
+        const link = String(adminCampanhasDetailOriginalResponseLink || "").trim();
+        if (!link) {
+          showToast("Link original não encontrado para copiar.", "error");
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(link);
+          showToast("Link original copiado.", "success", 2200);
+        } catch {
+          showToast("Não foi possível copiar o link original.", "error");
         }
       }
 
@@ -53569,6 +53594,10 @@
           if (!copyBtn) return;
           if (copyBtn.hasAttribute("data-copy-response-link")) {
             void copyAdminCampanhasResponseLink();
+            return;
+          }
+          if (copyBtn.hasAttribute("data-copy-original-response-link")) {
+            void copyAdminCampanhasOriginalResponseLink();
             return;
           }
           const optionIndex = Number(copyBtn.getAttribute("data-option-index"));

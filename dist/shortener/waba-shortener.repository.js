@@ -7,6 +7,7 @@ exports.findShortLinkBySlug = findShortLinkBySlug;
 exports.createShortLinkRecord = createShortLinkRecord;
 exports.incrementShortLinkClicks = incrementShortLinkClicks;
 exports.attachCampaignIdToShortLink = attachCampaignIdToShortLink;
+exports.findShortLinkByCampaignId = findShortLinkByCampaignId;
 exports.getShortLinkClicksByCampaignId = getShortLinkClicksByCampaignId;
 exports.peekShortLinkClicksSync = peekShortLinkClicksSync;
 exports.peekShortLinkClicksForBroadcast = peekShortLinkClicksForBroadcast;
@@ -122,6 +123,17 @@ async function attachCampaignIdToShortLink(slug, campaignId, extras) {
         record.intakeCampaignId = intakeId;
     await persistStore(store);
     return true;
+}
+async function findShortLinkByCampaignId(campaignId) {
+    const id = String(campaignId || "").trim();
+    if (!id)
+        return null;
+    const store = await loadStore();
+    const matches = store.links.filter((row) => String(row.campaignId || "").trim() === id || String(row.intakeCampaignId || "").trim() === id);
+    if (!matches.length)
+        return null;
+    matches.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+    return matches[0] || null;
 }
 async function getShortLinkClicksByCampaignId(campaignId) {
     const id = String(campaignId || "").trim();

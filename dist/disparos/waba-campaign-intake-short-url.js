@@ -2,6 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shouldCreateIntakeTrackedShortUrl = shouldCreateIntakeTrackedShortUrl;
 exports.resolveCampaignCardResponseLink = resolveCampaignCardResponseLink;
+exports.isWabaShortAliasUrl = isWabaShortAliasUrl;
+exports.stripDisparosTrackingNonce = stripDisparosTrackingNonce;
+exports.normalizeClientOriginalResponseLink = normalizeClientOriginalResponseLink;
+exports.persistClientOriginalResponseLink = persistClientOriginalResponseLink;
+exports.resolveStoredClientOriginalResponseLink = resolveStoredClientOriginalResponseLink;
+exports.lookupClientOriginalResponseLink = lookupClientOriginalResponseLink;
 exports.resolveOperacionalManualReportShowClicks = resolveOperacionalManualReportShowClicks;
 exports.resolveOperacionalManualReportClicks = resolveOperacionalManualReportClicks;
 exports.resolveIntakeTrackedShortUrlClicks = resolveIntakeTrackedShortUrlClicks;
@@ -15,6 +21,65 @@ function shouldCreateIntakeTrackedShortUrl(apiKind) {
 }
 function resolveCampaignCardResponseLink(intake) {
     return String(intake.responseShortUrl || intake.responseLink || "").trim();
+}
+function isWabaShortAliasUrl(raw) {
+    const value = String(raw || "").trim();
+    if (!value)
+        return false;
+    try {
+        return /\/s\/[a-z0-9][a-z0-9-_]{2,39}/i.test(new URL(value).pathname);
+    }
+    catch {
+        return /\/s\/[a-z0-9][a-z0-9-_]{2,39}/i.test(value);
+    }
+}
+function stripDisparosTrackingNonce(raw) {
+    const value = String(raw || "").trim();
+    if (!value)
+        return "";
+    try {
+        const parsed = new URL(value);
+        if (!parsed.searchParams.has("_n8n_link_nonce") && !parsed.searchParams.has("_n8n_test_nonce")) {
+            return value;
+        }
+        parsed.searchParams.delete("_n8n_link_nonce");
+        parsed.searchParams.delete("_n8n_test_nonce");
+        return parsed.toString();
+    }
+    catch {
+        return value;
+    }
+}
+function normalizeClientOriginalResponseLink(raw) {
+    const stripped = stripDisparosTrackingNonce(raw);
+    if (!stripped || isWabaShortAliasUrl(stripped))
+        return "";
+    return stripped.slice(0, 2000);
+}
+function persistClientOriginalResponseLink(existing, candidate) {
+    const kept = normalizeClientOriginalResponseLink(String(existing || ""));
+    if (kept)
+        return kept;
+    return normalizeClientOriginalResponseLink(String(candidate || ""));
+}
+function resolveStoredClientOriginalResponseLink(intake) {
+    return persistClientOriginalResponseLink(intake.responseLinkOriginal, intake.responseLink);
+}
+async function lookupClientOriginalResponseLink(intake) {
+    const stored = resolveStoredClientOriginalResponseLink(intake);
+    if (stored)
+        return stored;
+    const slug = String(intake.responseShortSlug || "").trim() ||
+        (0, waba_shortener_repository_1.extractSlugFromPublicShortUrl)(String(intake.responseShortUrl || "")) ||
+        "";
+    if (slug) {
+        const bySlug = await (0, waba_shortener_repository_1.findShortLinkBySlug)(slug);
+        const fromSlug = normalizeClientOriginalResponseLink(bySlug?.longUrl || "");
+        if (fromSlug)
+            return fromSlug;
+    }
+    const byCampaign = await (0, waba_shortener_repository_1.findShortLinkByCampaignId)(String(intake.id || ""));
+    return normalizeClientOriginalResponseLink(byCampaign?.longUrl || "");
 }
 function resolveOperacionalManualReportShowClicks(input) {
     return Boolean(input.forceShowClicks) || !input.hideClicks;
