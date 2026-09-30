@@ -239,7 +239,6 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
       const assets = await service.addManualPortfolioBusiness(
         resolveWabaRequestAuth(req),
         String(body.businessId || body.id || ""),
-        String(body.wabaId || body.waba_id || ""),
       );
       return sendPublic(res, 200, { ok: true, ...assets });
     } catch (error) {

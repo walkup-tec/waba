@@ -1719,7 +1719,8 @@ function applyDiscoveredWabasToCard(card, input) {
     const mapped = (0, meta_whatsapp_portfolio_map_1.mapMetaPhoneListToPortfolioNumbers)({ data: input.phones });
     if (!mapped.length && !input.wabaIds.length)
         return false;
-    card.wabaId = String(card.wabaId || "").trim() || input.wabaIds[0] || card.wabaId;
+    const discovered = String(input.wabaIds[0] || "").trim();
+    card.wabaId = discovered || String(card.wabaId || "").trim() || card.wabaId;
     if (mapped.length)
         card.numbers = (0, meta_whatsapp_portfolio_map_1.unionPortfolioNumbers)(card.numbers || [], mapped);
     const ownConnection = String(input.connectionId || "").trim();
@@ -1833,12 +1834,6 @@ function pageIdsFromGraphJson(json) {
                 add(item);
             return;
         }
-        if (typeof value === "string" || typeof value === "number") {
-            const id = String(value).trim();
-            if (id && !ids.includes(id))
-                ids.push(id);
-            return;
-        }
         if (typeof value !== "object")
             return;
         const rec = value;
@@ -1847,7 +1842,7 @@ function pageIdsFromGraphJson(json) {
             return;
         }
         const id = String(rec.id || "").trim();
-        if (id && !ids.includes(id))
+        if (id.length >= 6 && !ids.includes(id))
             ids.push(id);
     };
     add(json);
@@ -2802,25 +2797,13 @@ class MetaWhatsappConnectionService {
     }
     /**
      * GET {business-id} com o token já conectado e guarda o ID para o Atualizar.
-     * Sem WABA inventada — o card pode ficar vazio até colar o ID da WABA.
+     * Sem WABA inventada — o card pode ficar vazio até Integrar Meta.
      */
-    async addManualPortfolioBusiness(auth, rawBusinessId, rawWabaId = "") {
+    async addManualPortfolioBusiness(auth, rawBusinessId) {
         const tenant = requireTenant(auth);
         const businessId = (0, meta_whatsapp_manual_business_store_1.normalizeManualBusinessId)(rawBusinessId);
-        const pastedWabaId = (0, meta_whatsapp_manual_business_store_1.normalizeManualBusinessId)(rawWabaId);
         if (businessId.length < 6) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload", 400, "Informe o ID numérico do portfólio (Business Manager).");
-        }
-        const existing = (0, meta_whatsapp_manual_business_store_1.listManualBusinesses)(tenant.tenantId).find((row) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(row.id, businessId));
-        if (existing && pastedWabaId) {
-            (0, meta_whatsapp_manual_business_store_1.addManualBusiness)(tenant.tenantId, businessId, existing.name, pastedWabaId);
-            (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
-            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-manual-waba-attached", {
-                tenantId: tenant.tenantId,
-                businessId,
-                wabaId: pastedWabaId,
-            });
-            return this.listPortfolioAssets(auth, { fresh: true, businessId });
         }
         const repo = this.repository;
         const rows = typeof repo.listOpenByTenant === "function"
@@ -2848,12 +2831,11 @@ class MetaWhatsappConnectionService {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("invalid_payload", 400, "A Meta não devolveu esse Business Manager com a conexão atual. Confira o ID e se sua conta administra esse BM.");
         }
         (0, meta_whatsapp_hidden_business_store_1.unhideBusiness)(tenant.tenantId, card.id);
-        (0, meta_whatsapp_manual_business_store_1.addManualBusiness)(tenant.tenantId, card.id, card.name, pastedWabaId);
+        (0, meta_whatsapp_manual_business_store_1.addManualBusiness)(tenant.tenantId, card.id, card.name);
         (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
         (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-manual-business-added", {
             tenantId: tenant.tenantId,
             businessId: card.id,
-            wabaId: pastedWabaId || null,
         });
         return this.listPortfolioAssets(auth, { fresh: true, businessId: card.id });
     }

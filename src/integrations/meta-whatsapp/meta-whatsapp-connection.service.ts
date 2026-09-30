@@ -2048,7 +2048,8 @@ function applyDiscoveredWabasToCard(
 ): boolean {
   const mapped = mapMetaPhoneListToPortfolioNumbers({ data: input.phones });
   if (!mapped.length && !input.wabaIds.length) return false;
-  card.wabaId = String(card.wabaId || "").trim() || input.wabaIds[0] || card.wabaId;
+  const discovered = String(input.wabaIds[0] || "").trim();
+  card.wabaId = discovered || String(card.wabaId || "").trim() || card.wabaId;
   if (mapped.length) card.numbers = unionPortfolioNumbers(card.numbers || [], mapped);
   const ownConnection = String(input.connectionId || "").trim();
   if (ownConnection && !card.connectionId) card.connectionId = ownConnection;
@@ -2164,11 +2165,6 @@ function pageIdsFromGraphJson(json: unknown): string[] {
       for (const item of value) add(item);
       return;
     }
-    if (typeof value === "string" || typeof value === "number") {
-      const id = String(value).trim();
-      if (id && !ids.includes(id)) ids.push(id);
-      return;
-    }
     if (typeof value !== "object") return;
     const rec = value as Record<string, unknown>;
     if (Array.isArray(rec.data)) {
@@ -2176,7 +2172,7 @@ function pageIdsFromGraphJson(json: unknown): string[] {
       return;
     }
     const id = String(rec.id || "").trim();
-    if (id && !ids.includes(id)) ids.push(id);
+    if (id.length >= 6 && !ids.includes(id)) ids.push(id);
   };
   add(json);
   return ids;
@@ -3250,35 +3246,20 @@ export class MetaWhatsappConnectionService {
 
   /**
    * GET {business-id} com o token já conectado e guarda o ID para o Atualizar.
-   * Sem WABA inventada — o card pode ficar vazio até colar o ID da WABA.
+   * Sem WABA inventada — o card pode ficar vazio até Integrar Meta.
    */
   async addManualPortfolioBusiness(
     auth: WabaRequestAuth,
     rawBusinessId: string,
-    rawWabaId = "",
   ): Promise<MetaPortfolioAssetsPublic> {
     const tenant = requireTenant(auth);
     const businessId = normalizeManualBusinessId(rawBusinessId);
-    const pastedWabaId = normalizeManualBusinessId(rawWabaId);
     if (businessId.length < 6) {
       throw new MetaWhatsappError(
         "invalid_payload",
         400,
         "Informe o ID numérico do portfólio (Business Manager).",
       );
-    }
-    const existing = listManualBusinesses(tenant.tenantId).find((row) =>
-      metaBusinessIdsMatch(row.id, businessId),
-    );
-    if (existing && pastedWabaId) {
-      addManualBusiness(tenant.tenantId, businessId, existing.name, pastedWabaId);
-      invalidateCachedPortfolioGraph(tenant.tenantId);
-      logMetaWhatsappSafe("portfolio-manual-waba-attached", {
-        tenantId: tenant.tenantId,
-        businessId,
-        wabaId: pastedWabaId,
-      });
-      return this.listPortfolioAssets(auth, { fresh: true, businessId });
     }
     const repo = this.repository as MetaWhatsappConnectionRepository;
     const rows =
@@ -3311,12 +3292,11 @@ export class MetaWhatsappConnectionService {
       );
     }
     unhideBusiness(tenant.tenantId, card.id);
-    addManualBusiness(tenant.tenantId, card.id, card.name, pastedWabaId);
+    addManualBusiness(tenant.tenantId, card.id, card.name);
     invalidateCachedPortfolioGraph(tenant.tenantId);
     logMetaWhatsappSafe("portfolio-manual-business-added", {
       tenantId: tenant.tenantId,
       businessId: card.id,
-      wabaId: pastedWabaId || null,
     });
     return this.listPortfolioAssets(auth, { fresh: true, businessId: card.id });
   }

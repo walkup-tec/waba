@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.normalizeManualBusinessId = normalizeManualBusinessId;
+exports.normalizeManualWabaId = normalizeManualWabaId;
 exports.listManualBusinesses = listManualBusinesses;
 exports.listManualBusinessIds = listManualBusinessIds;
 exports.addManualBusiness = addManualBusiness;
@@ -41,6 +42,15 @@ function writeStore(store) {
 function normalizeManualBusinessId(value) {
     return String(value || "").replace(/\D/g, "");
 }
+function normalizeManualWabaId(value) {
+    const raw = String(value || "").trim();
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length >= 6)
+        return digits;
+    if (/^[A-Za-z0-9_-]{6,}$/.test(raw))
+        return raw;
+    return "";
+}
 function listManualBusinesses(tenantId) {
     const key = String(tenantId || "").trim();
     if (!key)
@@ -48,7 +58,7 @@ function listManualBusinesses(tenantId) {
     const rows = readStore().byTenant[key] || [];
     return rows
         .map((row) => {
-        const wabaId = normalizeManualBusinessId(String(row.wabaId || ""));
+        const wabaId = normalizeManualWabaId(String(row.wabaId || ""));
         return {
             id: normalizeManualBusinessId(row.id),
             name: String(row.name || "").trim(),
@@ -64,7 +74,7 @@ function addManualBusiness(tenantId, businessId, name = "", wabaId = "") {
     const key = String(tenantId || "").trim();
     const id = normalizeManualBusinessId(businessId);
     const label = String(name || "").trim();
-    const storedWaba = normalizeManualBusinessId(wabaId);
+    const storedWaba = normalizeManualWabaId(wabaId);
     if (!key || id.length < 6) {
         throw new Error("ID do portfólio inválido.");
     }
@@ -76,7 +86,7 @@ function addManualBusiness(tenantId, businessId, name = "", wabaId = "") {
         id,
         name: label || prev?.name || "",
         ...(storedWaba || prev?.wabaId
-            ? { wabaId: storedWaba || normalizeManualBusinessId(String(prev?.wabaId || "")) }
+            ? { wabaId: storedWaba || normalizeManualWabaId(String(prev?.wabaId || "")) }
             : {}),
     };
     if (!next.wabaId)

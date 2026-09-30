@@ -48,12 +48,19 @@ describe("meta-es-fb-login", () => {
     const withSetup = buildMetaEsFbLoginOptions("1467449278208212", prefill);
     assert.equal(withSetup?.extras.setup.business?.id, "1247508354180311");
     assert.equal(withSetup?.extras.setup.whatsAppBusinessAccount?.ids, "waba-1");
-    assert.deepEqual(buildMetaEsSetupPrefill({ businessId: "1588459689692010" }), {
+    assert.deepEqual(buildMetaEsSetupPrefill({ businessId: "1067949032654572" }), {
       phone: { ...META_ES_OFFICIAL_PHONE_PROFILE },
+      business: { id: "1067949032654572" },
     });
-    assert.deepEqual(buildMetaEsFbLoginOptions("1467449278208212", { business: { id: "1588459689692010" } })?.extras, {
-      setup: { phone: { ...META_ES_OFFICIAL_PHONE_PROFILE } },
-    });
+    assert.deepEqual(
+      buildMetaEsFbLoginOptions("1467449278208212", { business: { id: "1067949032654572" } })?.extras,
+      {
+        setup: {
+          phone: { ...META_ES_OFFICIAL_PHONE_PROFILE },
+          business: { id: "1067949032654572" },
+        },
+      },
+    );
     const plan = planMetaEsTechProviderClick("1467449278208212");
     assert.equal(plan.callFbInit, false);
     assert.equal(plan.openPageRedirect, false);
@@ -250,7 +257,7 @@ describe("meta-es-fb-login", () => {
     assert.equal(suiteOnlyParsed.searchParams.get("business_id"), null);
     assert.equal(suiteOnlyParsed.searchParams.get("global_scope_id"), null);
     assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /Relacionamento e Atendimento/);
-    assert.doesNotMatch(String(suiteOnlyParsed.searchParams.get("extras") || ""), /1588459689692010/);
+    assert.match(String(suiteOnlyParsed.searchParams.get("extras") || ""), /1588459689692010/);
     assert.equal(isMetaEsFacebookMessageOrigin("https://web.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://business.facebook.com"), true);
     assert.equal(isMetaEsFacebookMessageOrigin("https://staticxx.facebook.com"), true);
@@ -366,5 +373,17 @@ describe("meta-es-fb-login", () => {
     assert.doesNotMatch(html, /if \(metaTpSession\.savedBusinessId\) setup\.business/);
     assert.match(html, /if \(businessId && wabaId\) \{\s*\n\s*extrasSetup\.business/);
     assert.match(html, /phone: \{\s*\n\s*displayName: "Relacionamento e Atendimento"/);
+  });
+
+  it("Integrar Meta abre o Embedded Signup já no BM do card", () => {
+    const html = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
+    assert.match(html, /wabaIntegrateMetaPortfolio/);
+    assert.match(html, /data-meta-integrate-portfolio/);
+    assert.match(html, />Integrar Meta</);
+    assert.match(html, /else if \(businessId\) \{\s*\n\s*extrasSetup\.business = \{ id: businessId \};/);
+    assert.match(
+      html,
+      /return window\.wabaConnectMetaWhatsappOficial\(event, \{ business: \{ id: businessId \} \}\)/,
+    );
   });
 });
