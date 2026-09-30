@@ -10,6 +10,7 @@ import {
   applyPelliReopenToAifocus,
   isPelliAgendaPessoalCampaignName,
   PELLI_REOPEN_CAMPAIGN_NAME,
+  PELLI_REOPEN_IMAGE_FILE_NAME,
   PELLI_REOPEN_OPERACIONAL_EMAIL,
   PELLI_REOPEN_TEXT,
   runPelliReopenAifocusOneshot,
@@ -34,6 +35,22 @@ function writeLeads(filePath: string, phones: string[]) {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), "Leads");
   writeFileSync(filePath, Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" })));
+}
+
+function writeCampaignPng(filePath: string) {
+  const buf = Buffer.alloc(24, 0);
+  buf[0] = 0x89;
+  buf[1] = 0x50;
+  buf[2] = 0x4e;
+  buf[3] = 0x47;
+  buf[4] = 0x0d;
+  buf[5] = 0x0a;
+  buf[6] = 0x1a;
+  buf[7] = 0x0a;
+  buf.write("IHDR", 12, "ascii");
+  buf.writeUInt32BE(1200, 16);
+  buf.writeUInt32BE(628, 20);
+  writeFileSync(filePath, buf);
 }
 
 describe("reabrir Pelli na fila aifocusdev", () => {
@@ -92,9 +109,12 @@ describe("reabrir Pelli na fila aifocusdev", () => {
       );
       const leadsPath = path.join(root, "nova-base.xlsx");
       writeLeads(leadsPath, ["920003149", "920009160", "920003149", "920011000"]);
+      const imagePath = path.join(root, "pelli.png");
+      writeCampaignPng(imagePath);
 
       const result = applyPelliReopenToAifocus({
         leadsPath,
+        imagePath,
         systemUserService: operacional as never,
         voidBroadcast: false,
         now: () => "2026-09-29T22:00:00.000Z",
@@ -116,7 +136,10 @@ describe("reabrir Pelli na fila aifocusdev", () => {
       assert.equal(stored?.textOptions?.[1], PELLI_REOPEN_TEXT);
       assert.equal(stored?.textOptions?.[2], PELLI_REOPEN_TEXT);
       assert.equal(stored?.spreadsheetFileName, "leads-9088-envios.xlsx");
+      assert.equal(stored?.imageFileName, PELLI_REOPEN_IMAGE_FILE_NAME);
+      assert.equal(stored?.campaignMediaKind, "image");
       assert.equal(existsSync(String(stored?.spreadsheetStoredPath || "")), true);
+      assert.equal(existsSync(String(stored?.imageStoredPath || "")), true);
       assert.equal(existsSync(String(stored?.spreadsheetTrimmedPath || "")), true);
       assert.equal(toCampaignIntakeDisplayStatus(stored!.status, "operacional"), "Aguardando configuração");
 
@@ -125,12 +148,77 @@ describe("reabrir Pelli na fila aifocusdev", () => {
 
       const second = applyPelliReopenToAifocus({
         leadsPath,
+        imagePath,
         systemUserService: operacional as never,
         voidBroadcast: false,
         now: () => "2026-09-29T22:05:00.000Z",
       });
       assert.equal(second.ok, true);
       assert.equal(second.skipped, true);
+    } finally {
+      process.chdir(previousCwd);
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("atualiza só a imagem se a Pelli já estiver na fila", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "waba-pelli-image-"));
+    const previousCwd = process.cwd();
+    process.chdir(root);
+    try {
+      const dataDir = path.join(root, "data");
+      const storageDir = path.join(dataDir, "campaign-intakes", CAMPAIGN_ID);
+      mkdirSync(storageDir, { recursive: true });
+      writeFileSync(path.join(storageDir, "foto.jpg"), "old");
+      writeFileSync(
+        path.join(dataDir, "waba-campaign-intakes.json"),
+        JSON.stringify({
+          version: 1,
+          intakes: [
+            {
+              id: CAMPAIGN_ID,
+              ownerEmail: "pelli@example.com",
+              campaignName: PELLI_REOPEN_CAMPAIGN_NAME,
+              regionDdd: "21",
+              textOptions: [PELLI_REOPEN_TEXT, PELLI_REOPEN_TEXT, PELLI_REOPEN_TEXT],
+              imageFileName: "foto.jpg",
+              imageStoredPath: path.join(storageDir, "foto.jpg"),
+              spreadsheetFileName: "leads-9088-envios.xlsx",
+              spreadsheetStoredPath: path.join(storageDir, "leads-9088-envios.xlsx"),
+              importedLineCount: 3,
+              plannedSendCount: 3,
+              apiKind: "oficial",
+              status: "generated",
+              assignedOperacionalEmail: PELLI_REOPEN_OPERACIONAL_EMAIL,
+              createdAt: "2026-09-25T14:23:02.000Z",
+              updatedAt: "2026-09-29T22:00:00.000Z",
+            },
+          ],
+        }),
+        "utf8",
+      );
+      const leadsPath = path.join(root, "nova-base.xlsx");
+      writeLeads(leadsPath, ["920003149", "920009160", "920011000"]);
+      const imagePath = path.join(root, "pelli.png");
+      writeCampaignPng(imagePath);
+
+      const result = applyPelliReopenToAifocus({
+        leadsPath,
+        imagePath,
+        systemUserService: operacional as never,
+        voidBroadcast: false,
+        now: () => "2026-09-30T12:00:00.000Z",
+      });
+      assert.equal(result.ok, true);
+      assert.equal(result.applied, true);
+      assert.match(String(result.message || ""), /Imagem da Pelli atualizada/);
+
+      const stored = new WabaCampaignIntakeRepository().getById(CAMPAIGN_ID);
+      assert.equal(stored?.status, "generated");
+      assert.equal(stored?.assignedOperacionalEmail, PELLI_REOPEN_OPERACIONAL_EMAIL);
+      assert.equal(stored?.imageFileName, PELLI_REOPEN_IMAGE_FILE_NAME);
+      assert.equal(existsSync(String(stored?.imageStoredPath || "")), true);
+      assert.equal(stored?.plannedSendCount, 3);
     } finally {
       process.chdir(previousCwd);
       rmSync(root, { recursive: true, force: true });

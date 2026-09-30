@@ -115,4 +115,12 @@ if (fs.existsSync(pelliLeadsSrc)) {
   }
 }
 
+const pelliImageSrc = path.join(rootDir, "src", "disparos", "assets", "pelli-campaign-image.png");
+if (fs.existsSync(pelliImageSrc)) {
+  const pelliImageDest = path.join(distDir, "disparos", "assets", "pelli-campaign-image.png");
+  if (fileNeedsCopy(pelliImageSrc, pelliImageDest)) {
+    await replaceWithTempCopy(pelliImageSrc, pelliImageDest);
+  }
+}
+
 console.log(`Copied ${srcPath} -> ${destPath}`);

@@ -3,9 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PELLI_REOPEN_TEXT = exports.PELLI_REOPEN_LEADS_FILE_NAME = exports.PELLI_REOPEN_OPERACIONAL_EMAIL = exports.PELLI_REOPEN_CAMPAIGN_NAME = void 0;
+exports.PELLI_REOPEN_TEXT = exports.PELLI_REOPEN_IMAGE_STORED_NAME = exports.PELLI_REOPEN_IMAGE_FILE_NAME = exports.PELLI_REOPEN_LEADS_FILE_NAME = exports.PELLI_REOPEN_OPERACIONAL_EMAIL = exports.PELLI_REOPEN_CAMPAIGN_NAME = void 0;
 exports.isPelliAgendaPessoalCampaignName = isPelliAgendaPessoalCampaignName;
 exports.resolvePelliReopenLeadsPath = resolvePelliReopenLeadsPath;
+exports.resolvePelliReopenImagePath = resolvePelliReopenImagePath;
 exports.applyPelliReopenToAifocus = applyPelliReopenToAifocus;
 exports.runPelliReopenAifocusOneshot = runPelliReopenAifocusOneshot;
 const node_fs_1 = require("node:fs");
@@ -13,12 +14,15 @@ const node_path_1 = __importDefault(require("node:path"));
 const load_env_1 = require("../load-env");
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_campaign_intake_oficial_dedupe_1 = require("./waba-campaign-intake-oficial-dedupe");
+const waba_campaign_intake_media_1 = require("./waba-campaign-intake-media");
 const meta_whatsapp_broadcast_store_1 = require("../integrations/meta-whatsapp/meta-whatsapp-broadcast.store");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-split.service");
 exports.PELLI_REOPEN_CAMPAIGN_NAME = "Primeiro disparo - agenda pessoal Pelli";
 exports.PELLI_REOPEN_OPERACIONAL_EMAIL = "aifocusdev@gmail.com";
 exports.PELLI_REOPEN_LEADS_FILE_NAME = "leads-9088-envios.xlsx";
+exports.PELLI_REOPEN_IMAGE_FILE_NAME = "pelli-agora-e-outra-historia.png";
+exports.PELLI_REOPEN_IMAGE_STORED_NAME = "campaign-image.png";
 exports.PELLI_REOPEN_TEXT = `Olá!
 Trazendo atualizações importantes: 
 Nessa reta final está liberado o seu pedido de voto para todo mundo que conhece e acredita nesse projeto para o Rio!
@@ -40,14 +44,19 @@ const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 function isPelliAgendaPessoalCampaignName(campaignName) {
     return normalizeName(campaignName) === normalizeName(exports.PELLI_REOPEN_CAMPAIGN_NAME);
 }
-function resolvePelliReopenLeadsPath() {
-    const fileName = "pelli-leads-9088-envios.xlsx";
+function resolvePelliAssetPath(fileName) {
     const candidates = [
         node_path_1.default.join(__dirname, "assets", fileName),
         node_path_1.default.join(process.cwd(), "src", "disparos", "assets", fileName),
         node_path_1.default.join(process.cwd(), "dist", "disparos", "assets", fileName),
     ];
     return candidates.find((item) => (0, node_fs_1.existsSync)(item)) || candidates[0];
+}
+function resolvePelliReopenLeadsPath() {
+    return resolvePelliAssetPath("pelli-leads-9088-envios.xlsx");
+}
+function resolvePelliReopenImagePath() {
+    return resolvePelliAssetPath("pelli-campaign-image.png");
 }
 function findPelliIntake(repository) {
     const named = repository.listAll().filter((row) => isPelliAgendaPessoalCampaignName(row.campaignName));
@@ -75,6 +84,45 @@ function alreadyReopened(intake, uniqueCount, text) {
         return false;
     return true;
 }
+function hasPelliCampaignImage(intake) {
+    if (String(intake.imageFileName || "").trim() !== exports.PELLI_REOPEN_IMAGE_FILE_NAME)
+        return false;
+    if (String(intake.campaignMediaKind || "image") === "video")
+        return false;
+    return (0, node_fs_1.existsSync)(String(intake.imageStoredPath || "").trim());
+}
+function replacePelliCampaignImage(repository, intake, imagePath, updatedAt) {
+    if (hasPelliCampaignImage(intake)) {
+        return { ok: true, skipped: true, message: "Imagem da Pelli já estava atualizada" };
+    }
+    if (!(0, node_fs_1.existsSync)(imagePath)) {
+        return { ok: false, message: `Imagem da Pelli ausente: ${imagePath}` };
+    }
+    const buffer = (0, node_fs_1.readFileSync)(imagePath);
+    const mediaCheck = (0, waba_campaign_intake_media_1.validateCampaignIntakeMedia)({
+        kind: "image",
+        buffer,
+        mime: "image/png",
+        fileName: exports.PELLI_REOPEN_IMAGE_FILE_NAME,
+    });
+    if (!mediaCheck.ok) {
+        return { ok: false, message: mediaCheck.error };
+    }
+    const storageDir = (0, waba_campaign_intake_repository_1.resolveCampaignIntakeStorageDir)(intake.id);
+    (0, node_fs_1.mkdirSync)(storageDir, { recursive: true });
+    const imageStoredPath = node_path_1.default.join(storageDir, exports.PELLI_REOPEN_IMAGE_STORED_NAME);
+    (0, node_fs_1.writeFileSync)(imageStoredPath, buffer);
+    const updated = repository.updateById(intake.id, {
+        campaignMediaKind: "image",
+        imageFileName: exports.PELLI_REOPEN_IMAGE_FILE_NAME,
+        imageStoredPath,
+        updatedAt,
+    });
+    if (!updated) {
+        return { ok: false, message: "Não foi possível gravar a imagem da Pelli." };
+    }
+    return { ok: true, applied: true, message: `Imagem da Pelli atualizada (${intake.id})` };
+}
 function resolveSupplierId(intake, operacionalEmail) {
     const apiKind = String(intake.apiKind || "oficial").trim() || "oficial";
     try {
@@ -95,6 +143,7 @@ function applyPelliReopenToAifocus(deps = {}) {
     const systemUserService = deps.systemUserService || new waba_system_user_service_1.WabaSystemUserService();
     const now = deps.now || (() => new Date().toISOString());
     const leadsPath = String(deps.leadsPath || resolvePelliReopenLeadsPath()).trim();
+    const imagePath = String(deps.imagePath || resolvePelliReopenImagePath()).trim();
     const text = exports.PELLI_REOPEN_TEXT;
     const textOptions = [text, text, text];
     const intake = findPelliIntake(repository);
@@ -119,6 +168,20 @@ function applyPelliReopenToAifocus(deps = {}) {
         return { ok: false, campaignId: intake.id, message: "A planilha da Pelli não tem telefones únicos." };
     }
     if (alreadyReopened(intake, uniqueCount, text)) {
+        const image = replacePelliCampaignImage(repository, intake, imagePath, now());
+        if (!image.ok) {
+            return { ok: false, campaignId: intake.id, uniqueCount, plannedSendCount: uniqueCount, message: image.message };
+        }
+        if (image.applied) {
+            return {
+                ok: true,
+                applied: true,
+                campaignId: intake.id,
+                uniqueCount,
+                plannedSendCount: uniqueCount,
+                message: image.message,
+            };
+        }
         return {
             ok: true,
             skipped: true,
@@ -136,6 +199,11 @@ function applyPelliReopenToAifocus(deps = {}) {
     (0, node_fs_1.copyFileSync)(leadsPath, spreadsheetStoredPath);
     (0, node_fs_1.writeFileSync)(spreadsheetTrimmedPath, deduped.buffer);
     const assignedAt = now();
+    const image = replacePelliCampaignImage(repository, intake, imagePath, assignedAt);
+    if (!image.ok) {
+        return { ok: false, campaignId: intake.id, message: image.message };
+    }
+    const current = repository.getById(intake.id) || intake;
     const supplierId = resolveSupplierId(intake, exports.PELLI_REOPEN_OPERACIONAL_EMAIL);
     const history = Array.isArray(intake.assignmentHistory) ? intake.assignmentHistory.slice() : [];
     history.push({
@@ -151,6 +219,9 @@ function applyPelliReopenToAifocus(deps = {}) {
         assignedAt,
         assignmentHistory: history,
         textOptions,
+        campaignMediaKind: "image",
+        imageFileName: current.imageFileName || exports.PELLI_REOPEN_IMAGE_FILE_NAME,
+        imageStoredPath: current.imageStoredPath,
         spreadsheetFileName: exports.PELLI_REOPEN_LEADS_FILE_NAME,
         spreadsheetStoredPath,
         spreadsheetTrimmedFileName: trimmedName,

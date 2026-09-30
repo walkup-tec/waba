@@ -7,6 +7,7 @@ import {
   type WabaCampaignIntake,
 } from "./waba-campaign-intake.repository";
 import { dedupeOfficialCampaignLeadsFile } from "./waba-campaign-intake-oficial-dedupe";
+import { validateCampaignIntakeMedia } from "./waba-campaign-intake-media";
 import { findBroadcastByIntakeCampaignId, voidBroadcastCampaignForRetry } from "../integrations/meta-whatsapp/meta-whatsapp-broadcast.store";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.service";
@@ -14,6 +15,8 @@ import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.ser
 export const PELLI_REOPEN_CAMPAIGN_NAME = "Primeiro disparo - agenda pessoal Pelli";
 export const PELLI_REOPEN_OPERACIONAL_EMAIL = "aifocusdev@gmail.com";
 export const PELLI_REOPEN_LEADS_FILE_NAME = "leads-9088-envios.xlsx";
+export const PELLI_REOPEN_IMAGE_FILE_NAME = "pelli-agora-e-outra-historia.png";
+export const PELLI_REOPEN_IMAGE_STORED_NAME = "campaign-image.png";
 
 export const PELLI_REOPEN_TEXT = `Olá!
 Trazendo atualizações importantes: 
@@ -41,14 +44,21 @@ export function isPelliAgendaPessoalCampaignName(campaignName: string): boolean 
   return normalizeName(campaignName) === normalizeName(PELLI_REOPEN_CAMPAIGN_NAME);
 }
 
-export function resolvePelliReopenLeadsPath(): string {
-  const fileName = "pelli-leads-9088-envios.xlsx";
+function resolvePelliAssetPath(fileName: string): string {
   const candidates = [
     path.join(__dirname, "assets", fileName),
     path.join(process.cwd(), "src", "disparos", "assets", fileName),
     path.join(process.cwd(), "dist", "disparos", "assets", fileName),
   ];
   return candidates.find((item) => existsSync(item)) || candidates[0];
+}
+
+export function resolvePelliReopenLeadsPath(): string {
+  return resolvePelliAssetPath("pelli-leads-9088-envios.xlsx");
+}
+
+export function resolvePelliReopenImagePath(): string {
+  return resolvePelliAssetPath("pelli-campaign-image.png");
 }
 
 export type PelliReopenOneshotResult = {
@@ -64,6 +74,7 @@ export type PelliReopenOneshotResult = {
 export type PelliReopenOneshotDeps = {
   forceLocal?: boolean;
   leadsPath?: string;
+  imagePath?: string;
   intakeRepository?: WabaCampaignIntakeRepository;
   systemUserService?: WabaSystemUserService;
   now?: () => string;
@@ -94,6 +105,50 @@ function alreadyReopened(intake: WabaCampaignIntake, uniqueCount: number, text: 
   return true;
 }
 
+function hasPelliCampaignImage(intake: WabaCampaignIntake): boolean {
+  if (String(intake.imageFileName || "").trim() !== PELLI_REOPEN_IMAGE_FILE_NAME) return false;
+  if (String(intake.campaignMediaKind || "image") === "video") return false;
+  return existsSync(String(intake.imageStoredPath || "").trim());
+}
+
+function replacePelliCampaignImage(
+  repository: WabaCampaignIntakeRepository,
+  intake: WabaCampaignIntake,
+  imagePath: string,
+  updatedAt: string,
+): { ok: boolean; applied?: boolean; skipped?: boolean; message: string } {
+  if (hasPelliCampaignImage(intake)) {
+    return { ok: true, skipped: true, message: "Imagem da Pelli já estava atualizada" };
+  }
+  if (!existsSync(imagePath)) {
+    return { ok: false, message: `Imagem da Pelli ausente: ${imagePath}` };
+  }
+  const buffer = readFileSync(imagePath);
+  const mediaCheck = validateCampaignIntakeMedia({
+    kind: "image",
+    buffer,
+    mime: "image/png",
+    fileName: PELLI_REOPEN_IMAGE_FILE_NAME,
+  });
+  if (!mediaCheck.ok) {
+    return { ok: false, message: mediaCheck.error };
+  }
+  const storageDir = resolveCampaignIntakeStorageDir(intake.id);
+  mkdirSync(storageDir, { recursive: true });
+  const imageStoredPath = path.join(storageDir, PELLI_REOPEN_IMAGE_STORED_NAME);
+  writeFileSync(imageStoredPath, buffer);
+  const updated = repository.updateById(intake.id, {
+    campaignMediaKind: "image",
+    imageFileName: PELLI_REOPEN_IMAGE_FILE_NAME,
+    imageStoredPath,
+    updatedAt,
+  });
+  if (!updated) {
+    return { ok: false, message: "Não foi possível gravar a imagem da Pelli." };
+  }
+  return { ok: true, applied: true, message: `Imagem da Pelli atualizada (${intake.id})` };
+}
+
 function resolveSupplierId(intake: WabaCampaignIntake, operacionalEmail: string): string {
   const apiKind = String(intake.apiKind || "oficial").trim() || "oficial";
   try {
@@ -117,6 +172,7 @@ export function applyPelliReopenToAifocus(deps: PelliReopenOneshotDeps = {}): Pe
   const systemUserService = deps.systemUserService || new WabaSystemUserService();
   const now = deps.now || (() => new Date().toISOString());
   const leadsPath = String(deps.leadsPath || resolvePelliReopenLeadsPath()).trim();
+  const imagePath = String(deps.imagePath || resolvePelliReopenImagePath()).trim();
   const text = PELLI_REOPEN_TEXT;
   const textOptions: [string, string, string] = [text, text, text];
 
@@ -146,6 +202,20 @@ export function applyPelliReopenToAifocus(deps: PelliReopenOneshotDeps = {}): Pe
   }
 
   if (alreadyReopened(intake, uniqueCount, text)) {
+    const image = replacePelliCampaignImage(repository, intake, imagePath, now());
+    if (!image.ok) {
+      return { ok: false, campaignId: intake.id, uniqueCount, plannedSendCount: uniqueCount, message: image.message };
+    }
+    if (image.applied) {
+      return {
+        ok: true,
+        applied: true,
+        campaignId: intake.id,
+        uniqueCount,
+        plannedSendCount: uniqueCount,
+        message: image.message,
+      };
+    }
     return {
       ok: true,
       skipped: true,
@@ -165,6 +235,11 @@ export function applyPelliReopenToAifocus(deps: PelliReopenOneshotDeps = {}): Pe
   writeFileSync(spreadsheetTrimmedPath, deduped.buffer);
 
   const assignedAt = now();
+  const image = replacePelliCampaignImage(repository, intake, imagePath, assignedAt);
+  if (!image.ok) {
+    return { ok: false, campaignId: intake.id, message: image.message };
+  }
+  const current = repository.getById(intake.id) || intake;
   const supplierId = resolveSupplierId(intake, PELLI_REOPEN_OPERACIONAL_EMAIL);
   const history = Array.isArray(intake.assignmentHistory) ? intake.assignmentHistory.slice() : [];
   history.push({
@@ -181,6 +256,9 @@ export function applyPelliReopenToAifocus(deps: PelliReopenOneshotDeps = {}): Pe
     assignedAt,
     assignmentHistory: history,
     textOptions,
+    campaignMediaKind: "image",
+    imageFileName: current.imageFileName || PELLI_REOPEN_IMAGE_FILE_NAME,
+    imageStoredPath: current.imageStoredPath,
     spreadsheetFileName: PELLI_REOPEN_LEADS_FILE_NAME,
     spreadsheetStoredPath,
     spreadsheetTrimmedFileName: trimmedName,
