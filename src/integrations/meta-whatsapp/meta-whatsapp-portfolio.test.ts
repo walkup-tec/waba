@@ -4339,6 +4339,135 @@ describe("meta portfolio service", () => {
     );
   });
 
+  it("BM convidada: owned com id,name 400 e o edge só com id lista o chip nativo", async () => {
+    const buzinaAuth: WabaRequestAuth = { email: "casa-buzina-native@exemplo.com", role: "subscriber" };
+    const buzinaTenant = deriveStableMetaTenantId("casa-buzina-native@exemplo.com");
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup-buzina-native",
+      tenantId: buzinaTenant,
+      ownerEmail: "casa-buzina-native@exemplo.com",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup-buzina-native"),
+    };
+    const rows: MetaWhatsappConnectionRecord[] = [walkup];
+    const nativePhone = {
+      id: "phone-buzina-native",
+      display_phone_number: "+1 555-328-2763",
+      verified_name: "Casa Buzina",
+      status: "CONNECTED",
+      code_verification_status: "VERIFIED",
+    };
+    const graph = async (input: { path: string; token?: string; query?: Record<string, string> }) => {
+      const fields = String(input.query?.fields || "");
+      if (input.path === "1067949032654572") {
+        if (fields.includes("phone_numbers") || fields.includes("{id,name}")) {
+          return { ok: false, status: 400, json: { error: { message: "nested name" } } };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1067949032654572",
+            name: "Casa Buzina",
+            owned_whatsapp_business_accounts: { data: [] },
+            client_whatsapp_business_accounts: { data: [] },
+          },
+        };
+      }
+      if (input.path === "1067949032654572/owned_whatsapp_business_accounts") {
+        if (fields.includes("name")) {
+          return { ok: false, status: 400, json: { error: { message: "fields name" } } };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "waba-buzina-native" }] },
+        };
+      }
+      if (input.path === "waba-buzina-native/phone_numbers") {
+        if (input.token === "token-walkup-buzina-native") {
+          return { ok: false, status: 403, json: { error: { code: 200, message: "not permitted" } } };
+        }
+        return { ok: true, status: 200, json: { data: [nativePhone] } };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const flaviane = {
+      ...connectedRow(),
+      id: "conn-flaviane-for-buzina",
+      tenantId: buzinaTenant,
+      ownerEmail: "casa-buzina-native@exemplo.com",
+      metaBusinessId: "962298516898955",
+      wabaId: "2301051607405249",
+      accessTokenEncrypted: encryptMetaToken("token-flaviane-for-buzina"),
+    };
+    rows.push(flaviane);
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return rows.slice();
+        },
+        async findOpenByTenant() {
+          return rows[0];
+        },
+        async findByBusinessId(_tenant: string, businessId: string) {
+          return rows.find((row) => String(row.metaBusinessId || "") === businessId) || null;
+        },
+        async ensureInvitedBusinessConnection(input: {
+          metaBusinessId: string;
+          wabaId?: string | null;
+          phoneNumberId?: string | null;
+          displayPhoneNumber?: string | null;
+          verifiedName?: string | null;
+          accessTokenEncrypted: string;
+        }) {
+          const existing = rows.find((row) => String(row.metaBusinessId || "") === input.metaBusinessId);
+          if (existing) return existing;
+          const created: MetaWhatsappConnectionRecord = {
+            ...walkup,
+            id: "conn-casa-buzina-native",
+            metaBusinessId: input.metaBusinessId,
+            wabaId: input.wabaId || null,
+            phoneNumberId: input.phoneNumberId || null,
+            displayPhoneNumber: input.displayPhoneNumber || null,
+            verifiedName: input.verifiedName || null,
+            status: input.wabaId ? "pending_confirmation" : "pending_token",
+          };
+          rows.push(created);
+          return created;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.addManualPortfolioBusiness(buzinaAuth, "1067949032654572");
+    const added = (assets.portfolios || []).find((item) => item.id === "1067949032654572");
+    assert.equal(added?.name, "Casa Buzina");
+    assert.equal(added?.wabaId, "waba-buzina-native");
+    assert.equal(
+      (added?.numbers || []).some(
+        (row) => row.phoneNumberId === "phone-buzina-native" && row.displayPhoneNumber === "+1 555-328-2763",
+      ),
+      true,
+    );
+  });
+
   it("Ocultar BM marca o card para Restritas e o Atualizar devolve", async () => {
     const hideAuth: WabaRequestAuth = { email: "hide-bm@exemplo.com", role: "subscriber" };
     const hideTenant = deriveStableMetaTenantId("hide-bm@exemplo.com");
