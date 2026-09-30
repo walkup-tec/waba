@@ -2945,13 +2945,44 @@ export class MetaWhatsappConnectionService {
     const byBusiness = incomingBusinessId
       ? await this.repository.findByBusinessId(tenant.tenantId, incomingBusinessId)
       : null;
-    const mergeIntoConnected = Boolean(
-      byBusiness &&
-        byBusiness.status === "connected" &&
-        pendingToken &&
-        pendingToken.id !== byBusiness.id,
+    const pendingBm = String(pendingToken?.metaBusinessId || "").trim();
+    const pendingConflicts = Boolean(
+      pendingToken &&
+        pendingBm &&
+        incomingBusinessId &&
+        !metaBusinessIdsMatch(pendingBm, incomingBusinessId),
     );
-    const open = mergeIntoConnected && byBusiness ? byBusiness : pendingToken || byBusiness;
+    const mergeIntoExisting = Boolean(
+      byBusiness && pendingToken && pendingToken.id !== byBusiness.id,
+    );
+    let open: MetaWhatsappConnectionRecord | null =
+      mergeIntoExisting && byBusiness
+        ? byBusiness
+        : pendingConflicts
+          ? byBusiness
+          : pendingToken || byBusiness;
+    const repo = this.repository as MetaWhatsappConnectionRepository;
+    if (
+      !open &&
+      incomingBusinessId &&
+      pendingToken &&
+      pendingConflicts &&
+      typeof repo.ensureInvitedBusinessConnection === "function"
+    ) {
+      open = await repo.ensureInvitedBusinessConnection({
+        tenantId: tenant.tenantId,
+        ownerEmail: tenant.ownerEmail,
+        actorEmail: tenant.ownerEmail,
+        metaBusinessId: incomingBusinessId,
+        wabaId: String(input.wabaId || "").trim() || null,
+        phoneNumberId: String(input.phoneNumberId || "").trim() || null,
+        displayPhoneNumber: input.displayPhoneNumber || null,
+        verifiedName: input.verifiedName || null,
+        accessTokenEncrypted: pendingToken.accessTokenEncrypted,
+        tokenType: pendingToken.tokenType,
+        tokenExpiresAt: pendingToken.tokenExpiresAt,
+      });
+    }
     if (!open) {
       throw new MetaWhatsappError("no_pending_connection");
     }
@@ -2968,9 +2999,9 @@ export class MetaWhatsappConnectionService {
         metaBusinessId: businessId || null,
         displayPhoneNumber: input.displayPhoneNumber || open.displayPhoneNumber,
         verifiedName: input.verifiedName || open.verifiedName,
-        accessTokenEncrypted: mergeIntoConnected ? pendingToken?.accessTokenEncrypted || null : null,
-        tokenType: mergeIntoConnected ? pendingToken?.tokenType || null : null,
-        tokenExpiresAt: mergeIntoConnected ? pendingToken?.tokenExpiresAt || null : null,
+        accessTokenEncrypted: mergeIntoExisting ? pendingToken?.accessTokenEncrypted || null : null,
+        tokenType: mergeIntoExisting ? pendingToken?.tokenType || null : null,
+        tokenExpiresAt: mergeIntoExisting ? pendingToken?.tokenExpiresAt || null : null,
         actorEmail: tenant.ownerEmail,
       });
       logMetaWhatsappSafe("assets-claimed", {
@@ -2981,7 +3012,6 @@ export class MetaWhatsappConnectionService {
         hasBusiness: Boolean(row.metaBusinessId),
         status: row.status,
       });
-      const repo = this.repository as MetaWhatsappConnectionRepository;
       if (typeof repo.disconnectEmptyPendingTokens === "function") {
         await repo.disconnectEmptyPendingTokens(tenant.tenantId, tenant.ownerEmail, row.id);
       }
@@ -3005,6 +3035,18 @@ export class MetaWhatsappConnectionService {
       }
       if (businessId) {
         unhideBusiness(tenant.tenantId, businessId);
+      }
+      if (businessId && wabaId) {
+        persistManualCardWaba(tenant.tenantId, {
+          id: businessId,
+          name: null,
+          primaryPageId: null,
+          primaryPageName: null,
+          profilePictureUrl: null,
+          wabaId,
+          hidden: false,
+          numbers: [],
+        });
       }
       invalidateCachedPortfolioGraph(tenant.tenantId);
       return toMetaWhatsappPublicConnection(row);

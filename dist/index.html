@@ -41102,13 +41102,21 @@
             }
           }
 
-          if (metaTpSession.exchanged && metaTpSession.wabaId) {
+          const claimBusinessId = String(
+            metaTpSession.integrateBusiness || metaTpSession.addNumber
+              ? metaTpSession.savedBusinessId || metaTpSession.businessId
+              : metaTpSession.businessId || metaTpSession.savedBusinessId || "",
+          ).trim();
+          if (
+            metaTpSession.exchanged &&
+            (metaTpSession.wabaId || (metaTpSession.integrateBusiness && claimBusinessId))
+          ) {
             const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/complete", {
               method: "POST",
               body: JSON.stringify({
-                wabaId: metaTpSession.wabaId,
+                wabaId: metaTpSession.wabaId || undefined,
                 phoneNumberId: metaTpSession.phoneNumberId || undefined,
-                businessId: metaTpSession.businessId || undefined,
+                businessId: claimBusinessId || metaTpSession.businessId || undefined,
               }),
             });
             if (!response.ok || payload.ok === false) {
@@ -41578,7 +41586,11 @@
           metaTpLog(eventName === "CANCEL" ? "fluxo cancelado" : "erro no Embedded Signup");
           return;
         }
-        if (metaTpSession.wabaId || metaTpSession.phoneNumberId) {
+        if (
+          metaTpSession.wabaId ||
+          metaTpSession.phoneNumberId ||
+          META_TP_FINISH_EVENTS[eventName]
+        ) {
           metaTpTryAdvance();
         }
       });
@@ -41626,6 +41638,17 @@
           if (parsed.wabaId) metaTpSession.wabaId = parsed.wabaId;
           if (parsed.phoneNumberId) metaTpSession.phoneNumberId = parsed.phoneNumberId;
           if (parsed.businessId) metaTpSession.businessId = parsed.businessId;
+          var pendingBiz =
+            pending && pending.setup && pending.setup.business
+              ? String(pending.setup.business.id || "").trim()
+              : "";
+          var pendingWaba =
+            pending && pending.setup && pending.setup.whatsAppBusinessAccount
+              ? String(pending.setup.whatsAppBusinessAccount.ids || "").trim()
+              : "";
+          if (pendingBiz) metaTpSession.savedBusinessId = pendingBiz;
+          if (pendingBiz && pendingWaba) metaTpSession.addNumber = true;
+          else if (pendingBiz) metaTpSession.integrateBusiness = true;
           metaTpLog("retorno OAuth da janela Facebook");
           metaTpSetStatus("Facebook concluído neste perfil. Gravando a WABA no Laboratório…");
           window.__WABA_META_ES_OAUTH_RETURN = null;

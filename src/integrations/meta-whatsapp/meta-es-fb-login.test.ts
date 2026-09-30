@@ -385,5 +385,14 @@ describe("meta-es-fb-login", () => {
       html,
       /return window\.wabaConnectMetaWhatsappOficial\(event, \{ business: \{ id: businessId \} \}\)/,
     );
+    assert.match(html, /const claimBusinessId = String\(/);
+    assert.match(html, /metaTpSession\.integrateBusiness \|\| metaTpSession\.addNumber/);
+    assert.match(
+      html,
+      /metaTpSession\.exchanged &&\s*\n\s*\(metaTpSession\.wabaId \|\| \(metaTpSession\.integrateBusiness && claimBusinessId\)\)/,
+    );
+    assert.match(html, /businessId: claimBusinessId \|\| metaTpSession\.businessId \|\| undefined/);
+    assert.match(html, /META_TP_FINISH_EVENTS\[eventName\]/);
+    assert.match(html, /else if \(pendingBiz\) metaTpSession\.integrateBusiness = true/);
   });
 });

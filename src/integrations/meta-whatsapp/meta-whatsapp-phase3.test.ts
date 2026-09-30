@@ -5,6 +5,7 @@ import { MetaWhatsappConnectionService, stripMetaSecrets } from "./meta-whatsapp
 import { MetaWhatsappError, toPublicMetaError } from "./meta-whatsapp-errors";
 import { deriveStableMetaTenantId } from "./meta-whatsapp-tenant";
 import { hideBusiness, isHiddenBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
+import { addManualBusiness, listManualBusinesses } from "./meta-whatsapp-manual-business.store";
 import { META_WHATSAPP_DEFAULT_DISPLAY_NAME } from "./meta-whatsapp-phone-profile";
 import type { MetaWhatsappConnectionRecord } from "./meta-whatsapp-connection.types";
 import type { WabaRequestAuth } from "../../auth/waba-request-auth";
@@ -179,6 +180,65 @@ class FakeMetaRepo {
       count += 1;
     }
     return count;
+  }
+
+  async ensureInvitedBusinessConnection(input: {
+    tenantId: string;
+    ownerEmail: string;
+    actorEmail: string;
+    metaBusinessId: string;
+    wabaId?: string | null;
+    phoneNumberId?: string | null;
+    displayPhoneNumber?: string | null;
+    verifiedName?: string | null;
+    accessTokenEncrypted: string;
+    tokenType?: string;
+    tokenExpiresAt?: string | null;
+  }): Promise<MetaWhatsappConnectionRecord> {
+    const existing = await this.findByBusinessId(input.tenantId, input.metaBusinessId);
+    if (existing) {
+      return this.attachClaimedAssets(input.tenantId, existing.id, {
+        wabaId: input.wabaId,
+        phoneNumberId: input.phoneNumberId,
+        metaBusinessId: input.metaBusinessId,
+        displayPhoneNumber: input.displayPhoneNumber,
+        verifiedName: input.verifiedName,
+        accessTokenEncrypted: existing.status === "connected" ? undefined : input.accessTokenEncrypted,
+        tokenType: input.tokenType,
+        tokenExpiresAt: input.tokenExpiresAt,
+        actorEmail: input.actorEmail,
+      });
+    }
+    const now = new Date().toISOString();
+    const wabaId = String(input.wabaId || "").trim() || null;
+    const row: MetaWhatsappConnectionRecord = {
+      id: `conn-${this.rows.length + 1}`,
+      tenantId: input.tenantId,
+      ownerEmail: input.ownerEmail,
+      metaBusinessId: input.metaBusinessId,
+      wabaId,
+      phoneNumberId: String(input.phoneNumberId || "").trim() || null,
+      displayPhoneNumber: String(input.displayPhoneNumber || "").trim() || null,
+      verifiedName: String(input.verifiedName || "").trim() || null,
+      accessTokenEncrypted: input.accessTokenEncrypted,
+      tokenType: input.tokenType || "bearer",
+      tokenExpiresAt: input.tokenExpiresAt || null,
+      configId: null,
+      status: wabaId ? "pending_confirmation" : "pending_token",
+      qualityRating: null,
+      messagingLimit: null,
+      lastTokenValidationAt: null,
+      lastWebhookAt: null,
+      lastError: null,
+      createdBy: input.actorEmail,
+      updatedBy: input.actorEmail,
+      createdAt: now,
+      updatedAt: now,
+      connectedAt: null,
+      disconnectedAt: null,
+    };
+    this.rows.push(row);
+    return row;
   }
 }
 
@@ -605,5 +665,75 @@ describe("meta-whatsapp phase 3", () => {
       (error: unknown) => error instanceof MetaWhatsappError && error.code === "persist_failed",
     );
     assert.equal(repo.rows[0].status, "pending_confirmation");
+  });
+
+  it("Integrar Meta grava a WABA no BM do card, não em outro portfólio", async () => {
+    const repo = new FakeMetaRepo();
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graphNoop as any);
+    const tenantA = deriveStableMetaTenantId(authA.email);
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    await service.attachSessionAssets(authA, {
+      wabaId: "1247508354180311",
+      phoneNumberId: "phone-drax",
+      businessId: "1041827648719609",
+    });
+    repo.rows[0].status = "connected";
+    const walkupToken = repo.rows[0].accessTokenEncrypted;
+    addManualBusiness(tenantA, "1067949032654572", "Casa Buzina");
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    const claimed = await service.attachSessionAssets(authA, {
+      wabaId: "waba-buzina-es",
+      phoneNumberId: "phone-buzina-es",
+      businessId: "1067949032654572",
+    });
+    assert.equal(claimed.businessId, "1067949032654572");
+    assert.equal(claimed.wabaId, "waba-buzina-es");
+    const walkup = repo.rows.find((row) => row.metaBusinessId === "1041827648719609");
+    const buzina = repo.rows.find((row) => row.metaBusinessId === "1067949032654572" && !row.disconnectedAt);
+    assert.equal(walkup?.wabaId, "1247508354180311");
+    assert.equal(walkup?.accessTokenEncrypted, walkupToken);
+    assert.equal(walkup?.status, "connected");
+    assert.equal(buzina?.wabaId, "waba-buzina-es");
+    assert.equal(buzina?.phoneNumberId, "phone-buzina-es");
+    const stored = listManualBusinesses(tenantA).find((item) => item.id === "1067949032654572");
+    assert.equal(stored?.wabaId, "waba-buzina-es");
+  });
+
+  it("Integrar Meta funde o token novo na conexão pendente do mesmo BM", async () => {
+    const repo = new FakeMetaRepo();
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graphNoop as any);
+    const tenantA = deriveStableMetaTenantId(authA.email);
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    await service.attachSessionAssets(authA, {
+      wabaId: "1247508354180311",
+      phoneNumberId: "phone-drax",
+      businessId: "1041827648719609",
+    });
+    repo.rows[0].status = "connected";
+    addManualBusiness(tenantA, "1067949032654572", "Casa Buzina");
+    const invited = await repo.ensureInvitedBusinessConnection({
+      tenantId: tenantA,
+      ownerEmail: authA.email,
+      actorEmail: authA.email,
+      metaBusinessId: "1067949032654572",
+      accessTokenEncrypted: "v1:agency-token",
+      tokenType: "bearer",
+      tokenExpiresAt: null,
+    });
+    invited.status = "pending_confirmation";
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    const pending = await repo.latestPendingToken(tenantA);
+    assert.notEqual(pending?.id, invited.id);
+    const claimed = await service.attachSessionAssets(authA, {
+      wabaId: "waba-buzina-es",
+      businessId: "1067949032654572",
+    });
+    assert.equal(claimed.businessId, "1067949032654572");
+    assert.equal(claimed.wabaId, "waba-buzina-es");
+    const buzina = repo.rows.find((row) => row.id === invited.id);
+    assert.equal(buzina?.wabaId, "waba-buzina-es");
+    assert.notEqual(buzina?.accessTokenEncrypted, "v1:agency-token");
+    assert.equal(repo.rows[0].metaBusinessId, "1041827648719609");
+    assert.equal(repo.rows[0].wabaId, "1247508354180311");
   });
 });
