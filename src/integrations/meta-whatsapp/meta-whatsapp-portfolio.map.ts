@@ -174,20 +174,37 @@ export function parseMetaHealthCanSend(json: unknown): string | null {
   return text(health.can_send_message);
 }
 
+function isUnverifiedPhoneCode(value: string | null | undefined): boolean {
+  const code = String(value || "").trim().toUpperCase();
+  return code === "NOT_VERIFIED" || code === "UNVERIFIED" || code === "EXPIRED";
+}
+
+function hasRegisteredDisplayName(value: string | null | undefined): boolean {
+  const name = String(value || "").trim();
+  if (!name) return false;
+  return !namesEqual(name, META_WHATSAPP_DEFAULT_DISPLAY_NAME);
+}
+
 /**
  * status da Graph (CONNECTED/RESTRICTED/BANNED/…).
  * DISCONNECTED mesmo com SMS verificado ainda precisa do PIN de registro Cloud.
  * Só banimento/desativação da Meta esconde o PIN.
  * health_status BLOCKED (APP, template, BUSINESS ou limite) não é banimento do chip.
+ * PENDING + nome real (não o placeholder de número novo) é chip já registrado
+ * com nome em análise — não pede PIN de novo.
  */
 export function resolveMetaPhoneUiStatus(input: {
   metaStatus?: string | null;
   codeVerificationStatus?: string | null;
   healthCanSend?: string | null;
+  verifiedName?: string | null;
 }): MetaPortfolioNumberUiStatus {
   const status = String(input.metaStatus || "").trim().toUpperCase();
   if (META_PHONE_BANNED_STATUSES.has(status)) return "restrito";
   if (META_PHONE_CONNECTED_STATUSES.has(status)) return "ativo";
+  if (status === "DISCONNECTED") return "pendente";
+  if (isUnverifiedPhoneCode(input.codeVerificationStatus)) return "pendente";
+  if (hasRegisteredDisplayName(input.verifiedName)) return "ativo";
   return "pendente";
 }
 
@@ -254,6 +271,7 @@ export function resolveListedPhoneUiStatus(input: {
   codeVerificationStatus?: string | null;
   healthCanSend?: string | null;
   storedUiStatus?: MetaPortfolioNumberUiStatus | null;
+  verifiedName?: string | null;
 }): MetaPortfolioNumberUiStatus {
   const graphUi = resolveMetaPhoneUiStatus(input);
   if (graphUi === "restrito" || graphUi === "ativo") return graphUi;
@@ -599,6 +617,7 @@ export function unionPortfolioNumbers(
         codeVerificationStatus,
         healthCanSend,
         storedUiStatus: storedUi,
+        verifiedName: text(item.verifiedName) || text(prev.verifiedName),
       });
       const nameNeedsRegister = Boolean(item.nameNeedsRegister || prev.nameNeedsRegister);
       byId.set(id, {
@@ -744,6 +763,7 @@ export function mapMetaPhoneToPortfolioNumber(
     metaStatus,
     codeVerificationStatus,
     healthCanSend,
+    verifiedName,
   });
   return {
     phoneNumberId,

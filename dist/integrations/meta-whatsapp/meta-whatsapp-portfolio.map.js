@@ -176,17 +176,35 @@ function parseMetaHealthCanSend(json) {
         return "LIMITED";
     return text(health.can_send_message);
 }
+function isUnverifiedPhoneCode(value) {
+    const code = String(value || "").trim().toUpperCase();
+    return code === "NOT_VERIFIED" || code === "UNVERIFIED" || code === "EXPIRED";
+}
+function hasRegisteredDisplayName(value) {
+    const name = String(value || "").trim();
+    if (!name)
+        return false;
+    return !namesEqual(name, meta_whatsapp_phone_profile_1.META_WHATSAPP_DEFAULT_DISPLAY_NAME);
+}
 /**
  * status da Graph (CONNECTED/RESTRICTED/BANNED/…).
  * DISCONNECTED mesmo com SMS verificado ainda precisa do PIN de registro Cloud.
  * Só banimento/desativação da Meta esconde o PIN.
  * health_status BLOCKED (APP, template, BUSINESS ou limite) não é banimento do chip.
+ * PENDING + nome real (não o placeholder de número novo) é chip já registrado
+ * com nome em análise — não pede PIN de novo.
  */
 function resolveMetaPhoneUiStatus(input) {
     const status = String(input.metaStatus || "").trim().toUpperCase();
     if (META_PHONE_BANNED_STATUSES.has(status))
         return "restrito";
     if (META_PHONE_CONNECTED_STATUSES.has(status))
+        return "ativo";
+    if (status === "DISCONNECTED")
+        return "pendente";
+    if (isUnverifiedPhoneCode(input.codeVerificationStatus))
+        return "pendente";
+    if (hasRegisteredDisplayName(input.verifiedName))
         return "ativo";
     return "pendente";
 }
@@ -517,6 +535,7 @@ function unionPortfolioNumbers(...lists) {
                 codeVerificationStatus,
                 healthCanSend,
                 storedUiStatus: storedUi,
+                verifiedName: text(item.verifiedName) || text(prev.verifiedName),
             });
             const nameNeedsRegister = Boolean(item.nameNeedsRegister || prev.nameNeedsRegister);
             byId.set(id, {
@@ -659,6 +678,7 @@ function mapMetaPhoneToPortfolioNumber(json, busyPhoneIds = new Set()) {
         metaStatus,
         codeVerificationStatus,
         healthCanSend,
+        verifiedName,
     });
     return {
         phoneNumberId,

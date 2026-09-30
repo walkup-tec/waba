@@ -226,7 +226,7 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
                 });
             }
             const body = req.body && typeof req.body === "object" ? req.body : {};
-            const assets = await service.addManualPortfolioBusiness((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(body.businessId || body.id || ""));
+            const assets = await service.addManualPortfolioBusiness((0, waba_request_auth_1.resolveWabaRequestAuth)(req), String(body.businessId || body.id || ""), String(body.wabaId || body.waba_id || ""));
             return sendPublic(res, 200, { ok: true, ...assets });
         }
         catch (error) {

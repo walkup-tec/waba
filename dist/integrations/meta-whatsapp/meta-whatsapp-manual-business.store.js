@@ -47,33 +47,45 @@ function listManualBusinesses(tenantId) {
         return [];
     const rows = readStore().byTenant[key] || [];
     return rows
-        .map((row) => ({
-        id: normalizeManualBusinessId(row.id),
-        name: String(row.name || "").trim(),
-    }))
+        .map((row) => {
+        const wabaId = normalizeManualBusinessId(String(row.wabaId || ""));
+        return {
+            id: normalizeManualBusinessId(row.id),
+            name: String(row.name || "").trim(),
+            ...(wabaId ? { wabaId } : {}),
+        };
+    })
         .filter((row) => row.id.length >= 6);
 }
 function listManualBusinessIds(tenantId) {
     return listManualBusinesses(tenantId).map((row) => row.id);
 }
-function addManualBusiness(tenantId, businessId, name = "") {
+function addManualBusiness(tenantId, businessId, name = "", wabaId = "") {
     const key = String(tenantId || "").trim();
     const id = normalizeManualBusinessId(businessId);
     const label = String(name || "").trim();
+    const storedWaba = normalizeManualBusinessId(wabaId);
     if (!key || id.length < 6) {
         throw new Error("ID do portfólio inválido.");
     }
     const store = readStore();
     const current = store.byTenant[key] || [];
-    const next = { id, name: label };
     const idx = current.findIndex((row) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(row.id, id));
-    if (idx >= 0) {
-        current[idx] = { id, name: label || current[idx].name };
-    }
-    else {
+    const prev = idx >= 0 ? current[idx] : null;
+    const next = {
+        id,
+        name: label || prev?.name || "",
+        ...(storedWaba || prev?.wabaId
+            ? { wabaId: storedWaba || normalizeManualBusinessId(String(prev?.wabaId || "")) }
+            : {}),
+    };
+    if (!next.wabaId)
+        delete next.wabaId;
+    if (idx >= 0)
+        current[idx] = next;
+    else
         current.push(next);
-    }
     store.byTenant[key] = current;
     writeStore(store);
-    return current[idx >= 0 ? idx : current.length - 1];
+    return next;
 }

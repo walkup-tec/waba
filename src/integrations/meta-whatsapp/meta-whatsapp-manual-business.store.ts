@@ -6,6 +6,7 @@ import { metaBusinessIdsMatch } from "./meta-whatsapp-known-owned-wabas";
 export type ManualBusinessRow = {
   id: string;
   name: string;
+  wabaId?: string;
 };
 
 type Store = {
@@ -52,10 +53,14 @@ export function listManualBusinesses(tenantId: string): ManualBusinessRow[] {
   if (!key) return [];
   const rows = readStore().byTenant[key] || [];
   return rows
-    .map((row) => ({
-      id: normalizeManualBusinessId(row.id),
-      name: String(row.name || "").trim(),
-    }))
+    .map((row) => {
+      const wabaId = normalizeManualBusinessId(String(row.wabaId || ""));
+      return {
+        id: normalizeManualBusinessId(row.id),
+        name: String(row.name || "").trim(),
+        ...(wabaId ? { wabaId } : {}),
+      };
+    })
     .filter((row) => row.id.length >= 6);
 }
 
@@ -63,23 +68,34 @@ export function listManualBusinessIds(tenantId: string): string[] {
   return listManualBusinesses(tenantId).map((row) => row.id);
 }
 
-export function addManualBusiness(tenantId: string, businessId: string, name = ""): ManualBusinessRow {
+export function addManualBusiness(
+  tenantId: string,
+  businessId: string,
+  name = "",
+  wabaId = "",
+): ManualBusinessRow {
   const key = String(tenantId || "").trim();
   const id = normalizeManualBusinessId(businessId);
   const label = String(name || "").trim();
+  const storedWaba = normalizeManualBusinessId(wabaId);
   if (!key || id.length < 6) {
     throw new Error("ID do portfólio inválido.");
   }
   const store = readStore();
   const current = store.byTenant[key] || [];
-  const next: ManualBusinessRow = { id, name: label };
   const idx = current.findIndex((row) => metaBusinessIdsMatch(row.id, id));
-  if (idx >= 0) {
-    current[idx] = { id, name: label || current[idx].name };
-  } else {
-    current.push(next);
-  }
+  const prev = idx >= 0 ? current[idx] : null;
+  const next: ManualBusinessRow = {
+    id,
+    name: label || prev?.name || "",
+    ...(storedWaba || prev?.wabaId
+      ? { wabaId: storedWaba || normalizeManualBusinessId(String(prev?.wabaId || "")) }
+      : {}),
+  };
+  if (!next.wabaId) delete next.wabaId;
+  if (idx >= 0) current[idx] = next;
+  else current.push(next);
   store.byTenant[key] = current;
   writeStore(store);
-  return current[idx >= 0 ? idx : current.length - 1];
+  return next;
 }

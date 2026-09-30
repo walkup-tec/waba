@@ -496,6 +496,7 @@ function applyLocalPhoneIdentities(tenantId, numbers, placeholderName, options) 
             codeVerificationStatus: row.codeVerificationStatus,
             healthCanSend: row.healthCanSend,
             storedUiStatus: storedUi,
+            verifiedName: row.verifiedName,
         });
         const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
         const portfolioHidden = options?.hidden === true;
