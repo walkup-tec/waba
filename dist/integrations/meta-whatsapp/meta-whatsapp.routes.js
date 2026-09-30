@@ -262,6 +262,7 @@ const registerMetaWhatsappIntegrationRoutes = (app) => {
             const freshFlag = String(req.query?.fresh || req.query?.refresh || "").trim().toLowerCase();
             const assets = await service.listPortfolioAssets((0, waba_request_auth_1.resolveWabaRequestAuth)(req), {
                 connectionId: String(req.query?.connectionId || ""),
+                businessId: String(req.query?.businessId || req.query?.business_id || ""),
                 fresh: freshFlag === "1" || freshFlag === "true" || freshFlag === "yes",
             });
             return sendPublic(res, 200, { ok: true, ...assets });

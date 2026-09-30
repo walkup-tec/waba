@@ -377,6 +377,18 @@ function cardHasListedNumbers(card) {
 function assetsHaveListedNumbers(assets) {
     return (assets?.portfolios || []).some((item) => item.hidden !== true && (0, meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard)(item) && cardHasListedNumbers(item));
 }
+function cardNeedsWabaOrNumbers(card) {
+    return !cardHasListedNumbers(card) || !cardHasListedWaba(card);
+}
+function focusedBusinessNeedsWaba(assets, businessId) {
+    const bm = String(businessId || "").trim();
+    if (!bm)
+        return false;
+    const card = (assets?.portfolios || []).find((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), bm));
+    if (!card || card.hidden === true)
+        return true;
+    return cardNeedsWabaOrNumbers(card);
+}
 function withHydrateLimits(graph) {
     return (input) => graph({
         ...input,
@@ -969,10 +981,11 @@ async function collectNestedPhonesFromBusiness(graph, token, businessId) {
 async function collectInvitedBusinessWabaRefs(graph, token, businessId) {
     const bm = String(businessId || "").trim();
     if (!bm)
-        return { wabaIds: [], clientWabaIds: [], phones: [] };
+        return { wabaIds: [], clientWabaIds: [], phones: [], childIds: [] };
     const wabaIds = new Set();
     const clientWabaIds = new Set();
     const phones = [];
+    let childIds = [];
     const isAgency = (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)().some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, bm));
     const nestedFieldSets = [
         [
@@ -1024,7 +1037,8 @@ async function collectInvitedBusinessWabaRefs(graph, token, businessId) {
             clientWabaIds.add(id);
     }
     if (!wabaIds.size) {
-        for (const childId of await listBusinessChildIds(graph, token, bm)) {
+        childIds = await listBusinessChildIds(graph, token, bm);
+        for (const childId of childIds) {
             for (const id of await listBusinessWabaIds(graph, token, childId, "owned"))
                 wabaIds.add(id);
             if (!isAgency) {
@@ -1058,7 +1072,7 @@ async function collectInvitedBusinessWabaRefs(graph, token, businessId) {
             }
         }
     }
-    return { wabaIds: [...wabaIds], clientWabaIds: [...clientWabaIds], phones };
+    return { wabaIds: [...wabaIds], clientWabaIds: [...clientWabaIds], phones, childIds };
 }
 async function collectNestedPhonesFromMeBusinesses(graph, token, onlyBusinessId) {
     const fields = [
@@ -1277,20 +1291,41 @@ function addToPartnerBucket(byOwner, ownerId, wabaId, phones = []) {
     for (const phone of phones)
         bucket.phones.push(phone);
 }
-function mergePartnerBuckets(businessId, maps) {
+function mergePartnerBuckets(businessId, maps, extraBusinessIds = []) {
     const merged = emptyPartnerBucket();
-    for (const map of maps) {
-        const bucket = partnerBucketForBusiness(map, businessId);
-        for (const id of bucket.wabaIds) {
-            if ((0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaForBusiness)(businessId, id))
-                continue;
-            if (!merged.wabaIds.includes(id))
-                merged.wabaIds.push(id);
+    const ids = [businessId, ...extraBusinessIds];
+    for (const id of ids) {
+        const bm = String(id || "").trim();
+        if (!bm)
+            continue;
+        for (const map of maps) {
+            const bucket = partnerBucketForBusiness(map, bm);
+            for (const wabaId of bucket.wabaIds) {
+                if ((0, meta_whatsapp_known_owned_wabas_1.isKnownClientWabaForBusiness)(businessId, wabaId))
+                    continue;
+                if (!merged.wabaIds.includes(wabaId))
+                    merged.wabaIds.push(wabaId);
+            }
+            for (const phone of bucket.phones)
+                merged.phones.push(phone);
         }
-        for (const phone of bucket.phones)
-            merged.phones.push(phone);
     }
     return merged;
+}
+function wabaOwnerBusinessIdsFromNode(row) {
+    const rec = row && typeof row === "object" ? row : {};
+    const ids = [];
+    const push = (value) => {
+        const nested = value && typeof value === "object" ? String(value.id || "").trim() : "";
+        if (nested && !ids.includes(nested))
+            ids.push(nested);
+    };
+    push(rec.owner_business_info);
+    push(rec.on_behalf_of_business_info);
+    const mapped = String((0, meta_whatsapp_portfolio_map_1.mapMetaWabaIdentity)(row).businessId || "").trim();
+    if (mapped && !ids.includes(mapped))
+        ids.push(mapped);
+    return ids;
 }
 function takeWabaPhonesFromNode(row, wabaId) {
     const rec = row && typeof row === "object" ? row : {};
@@ -1340,62 +1375,80 @@ async function collectOwnedWabasByBusinessFromMe(graph, token) {
     return byOwner;
 }
 /**
- * WABAs client da agência (Tech Provider) cujo owner_business_info é o BM do card.
+ * WABAs client da agência (Tech Provider) cujo owner ou on_behalf_of é o BM do card.
  * Não usa o edge client do próprio BM — isso misturaria Rio de Janeiro 01 no André.
  */
 async function collectAgencyClientWabasByOwner(graph, token) {
     const byOwner = new Map();
-    const fields = ["id", "name", "owner_business_info{id,name}"].join(",");
+    const fieldSets = [
+        [
+            "id",
+            "name",
+            "owner_business_info{id,name}",
+            "on_behalf_of_business_info{id,name}",
+            `phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}`,
+        ].join(","),
+        ["id", "name", "owner_business_info{id,name}", "on_behalf_of_business_info{id,name}"].join(","),
+        "id,owner_business_info{id},on_behalf_of_business_info{id}",
+        "id",
+    ];
+    const ownerLookupFields = "id,name,owner_business_info{id,name},on_behalf_of_business_info{id,name}";
     for (const agency of (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)()) {
-        const seen = new Set();
-        let after = "";
-        for (let page = 0; page < 20; page += 1) {
-            const query = { fields, limit: "100" };
-            if (after)
-                query.after = after;
-            const res = await graph({
-                token,
-                method: "GET",
-                path: `${agency}/client_whatsapp_business_accounts`,
-                query,
-            });
-            if (!res.ok)
-                break;
-            const batch = Array.isArray(res.json?.data) ? res.json.data : [];
-            for (const row of batch) {
-                const rec = row && typeof row === "object" ? row : {};
-                const wabaId = String(rec.id || "").trim();
-                const owner = rec.owner_business_info;
-                let ownerId = owner && typeof owner === "object"
-                    ? String(owner.id || "").trim()
-                    : "";
-                if (!wabaId)
-                    continue;
-                if (!ownerId) {
-                    const info = await graph({
-                        token,
-                        method: "GET",
-                        path: wabaId,
-                        query: { fields: "id,owner_business_info{id,name}" },
-                    });
-                    const payload = info.ok && info.json && typeof info.json === "object"
-                        ? info.json
-                        : {};
-                    const nested = payload.owner_business_info;
-                    ownerId =
-                        nested && typeof nested === "object"
-                            ? String(nested.id || "").trim()
-                            : "";
-                }
-                if (!ownerId)
-                    continue;
-                addToPartnerBucket(byOwner, ownerId, wabaId, takeWabaPhonesFromNode(row, wabaId));
+        let rows = null;
+        for (const fields of fieldSets) {
+            const collected = [];
+            const seen = new Set();
+            let after = "";
+            let firstOk = false;
+            for (let page = 0; page < 20; page += 1) {
+                const query = { fields, limit: "100" };
+                if (after)
+                    query.after = after;
+                const res = await graph({
+                    token,
+                    method: "GET",
+                    path: `${agency}/client_whatsapp_business_accounts`,
+                    query,
+                });
+                if (!res.ok)
+                    break;
+                firstOk = true;
+                const batch = Array.isArray(res.json?.data) ? res.json.data : [];
+                for (const row of batch)
+                    collected.push(row);
+                const nextAfter = String(res.json?.paging?.cursors?.after || "").trim();
+                if (!nextAfter || nextAfter === after || seen.has(nextAfter) || !batch.length)
+                    break;
+                seen.add(nextAfter);
+                after = nextAfter;
             }
-            const nextAfter = String(res.json?.paging?.cursors?.after || "").trim();
-            if (!nextAfter || nextAfter === after || seen.has(nextAfter) || !batch.length)
+            if (firstOk) {
+                rows = collected;
                 break;
-            seen.add(nextAfter);
-            after = nextAfter;
+            }
+        }
+        if (!rows)
+            continue;
+        for (const row of rows) {
+            const rec = row && typeof row === "object" ? row : {};
+            const wabaId = String(rec.id || "").trim();
+            if (!wabaId)
+                continue;
+            let ownerIds = wabaOwnerBusinessIdsFromNode(row);
+            if (!ownerIds.length) {
+                const info = await graph({
+                    token,
+                    method: "GET",
+                    path: wabaId,
+                    query: { fields: ownerLookupFields },
+                });
+                ownerIds = info.ok ? wabaOwnerBusinessIdsFromNode(info.json) : [];
+            }
+            if (!ownerIds.length)
+                continue;
+            const phones = takeWabaPhonesFromNode(row, wabaId);
+            for (const ownerId of ownerIds)
+                addToPartnerBucket(byOwner, ownerId, wabaId, phones);
         }
     }
     return byOwner;
@@ -1420,17 +1473,18 @@ async function collectDebugWabasByOwner(graph, token) {
             method: "GET",
             path: wabaId,
             query: {
-                fields: `id,name,owner_business_info{id},phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}`,
+                fields: `id,name,owner_business_info{id},on_behalf_of_business_info{id},phone_numbers.limit(100){${meta_whatsapp_portfolio_map_1.META_PHONE_NUMBER_CATALOG_FIELDS}}`,
             },
         });
         if (!res.ok)
             continue;
         const rec = res.json && typeof res.json === "object" ? res.json : {};
-        const owner = rec.owner_business_info;
-        const ownerId = owner && typeof owner === "object" ? String(owner.id || "").trim() : "";
-        if (!ownerId)
+        const ownerIds = wabaOwnerBusinessIdsFromNode(rec);
+        if (!ownerIds.length)
             continue;
-        addToPartnerBucket(byOwner, ownerId, wabaId, takeWabaPhonesFromNode(rec, wabaId));
+        const phones = takeWabaPhonesFromNode(rec, wabaId);
+        for (const ownerId of ownerIds)
+            addToPartnerBucket(byOwner, ownerId, wabaId, phones);
     }
     for (const row of phoneNodes) {
         const rec = row && typeof row === "object" ? row : {};
@@ -1603,9 +1657,10 @@ async function fillEmptyCardPageFromGraph(graph, writeTokens, card) {
 }
 /**
  * Cards da select (BM administrado / backfill / + ID) não passam por hydrateOpenConnection.
- * BM convidada: edge leve owned/client + client da agência por owner. Sem stamp da conexão da agência.
+ * BM convidada: edge leve owned/client + client da agência por owner/on_behalf_of.
+ * WABA/números antes da página, para o card aberto não perder a Graph para o PAGE da Flaviane.
  */
-async function fillEmptyAdminPortfolioCards(rawGraph, tenantId, cards, writeTokens, openRows = []) {
+async function fillEmptyAdminPortfolioCards(rawGraph, tenantId, cards, writeTokens, openRows = [], priorityBusinessId = "") {
     if (!cards.length || !writeTokens.length)
         return cards;
     const graph = withInvitedDiscoverLimits(rawGraph);
@@ -1614,7 +1669,7 @@ async function fillEmptyAdminPortfolioCards(rawGraph, tenantId, cards, writeToke
         const bm = String(card.id || "").trim();
         if (!bm || (0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, bm))
             return false;
-        return !cardHasListedNumbers(card) || !cardHasListedWaba(card) || !cardHasListedPage(card);
+        return cardNeedsWabaOrNumbers(card) || !cardHasListedPage(card);
     });
     if (!empty.length)
         return out;
@@ -1630,47 +1685,65 @@ async function fillEmptyAdminPortfolioCards(rawGraph, tenantId, cards, writeToke
         ]);
         seedByToken.set(token, { row, maps });
     }
-    await Promise.all(empty.map(async (card) => {
+    const priority = String(priorityBusinessId || "").trim();
+    const rank = (card) => priority && (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(card.id || ""), priority) ? 0 : 1;
+    const needsWaba = empty
+        .filter((card) => cardNeedsWabaOrNumbers(card))
+        .sort((left, right) => rank(left) - rank(right));
+    const needsPage = empty.filter((card) => !cardHasListedPage(card));
+    for (const card of empty) {
         const bm = String(card.id || "").trim();
         const ownConnectionId = connectionIdForPortfolioBusiness(openRows, bm);
         if (ownConnectionId && !card.connectionId)
             card.connectionId = ownConnectionId;
+    }
+    for (const card of needsWaba) {
+        const bm = String(card.id || "").trim();
+        const ownConnectionId = connectionIdForPortfolioBusiness(openRows, bm);
         try {
             const isAgency = (0, meta_whatsapp_known_owned_wabas_1.catalogAgencyBusinessIds)().some((id) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(id, bm));
-            if (!(isAgency && cardHasListedWaba(card))) {
-                for (const row of writeTokens) {
-                    const token = String(row.token || "").trim();
-                    if (!token)
-                        continue;
-                    const invited = await collectInvitedBusinessWabaRefs(graph, token, bm);
-                    const seed = mergeInvitedRefsIntoSeed(mergePartnerBuckets(bm, seedByToken.get(token)?.maps || []), bm, invited);
-                    const fanout = await fanOutAdminBusinessNumbers({
-                        graph,
-                        token: row.token,
-                        writeTokens,
+            if (isAgency && cardHasListedWaba(card))
+                continue;
+            for (const row of writeTokens) {
+                const token = String(row.token || "").trim();
+                if (!token)
+                    continue;
+                const invited = await collectInvitedBusinessWabaRefs(graph, token, bm);
+                const seed = mergeInvitedRefsIntoSeed(mergePartnerBuckets(bm, seedByToken.get(token)?.maps || [], invited.childIds), bm, invited);
+                const fanout = await fanOutAdminBusinessNumbers({
+                    graph,
+                    token: row.token,
+                    writeTokens,
+                    businessId: bm,
+                    seed,
+                });
+                if (applyDiscoveredWabasToCard(card, {
+                    wabaIds: fanout.wabaIds.length ? fanout.wabaIds : invited.wabaIds,
+                    phones: fanout.phones,
+                    connectionId: ownConnectionId,
+                })) {
+                    (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-admin-fanout", {
+                        tenantId,
                         businessId: bm,
-                        seed,
+                        wabaCount: fanout.wabaIds.length || invited.wabaIds.length,
+                        phoneRowCount: (card.numbers || []).length,
                     });
-                    if (applyDiscoveredWabasToCard(card, {
-                        wabaIds: fanout.wabaIds.length ? fanout.wabaIds : invited.wabaIds,
-                        phones: fanout.phones,
-                        connectionId: ownConnectionId,
-                    })) {
-                        (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-admin-fanout", {
-                            tenantId,
-                            businessId: bm,
-                            wabaCount: fanout.wabaIds.length || invited.wabaIds.length,
-                            phoneRowCount: (card.numbers || []).length,
-                        });
-                    }
-                    const pendingOnCard = (card.numbers || []).filter((row) => String(row.uiStatus || "") === "pendente");
-                    if (pendingOnCard.length) {
-                        card.numbers = await confirmPendingPhoneStatusFromGraph(graph, writeTokens.map((item) => item.token), card.numbers || [], String(card.wabaId || "").trim());
-                    }
-                    if (cardHasListedNumbers(card) && cardHasListedWaba(card))
-                        break;
                 }
+                const pendingOnCard = (card.numbers || []).filter((item) => String(item.uiStatus || "") === "pendente");
+                if (pendingOnCard.length) {
+                    card.numbers = await confirmPendingPhoneStatusFromGraph(graph, writeTokens.map((item) => item.token), card.numbers || [], String(card.wabaId || "").trim());
+                }
+                if (cardHasListedNumbers(card) && cardHasListedWaba(card))
+                    break;
             }
+        }
+        catch {
+            (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-admin-fanout-failed", { tenantId, businessId: bm });
+        }
+    }
+    for (const card of needsPage) {
+        const bm = String(card.id || "").trim();
+        try {
             await fillEmptyCardPageFromGraph(graph, writeTokens, card);
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-invited-discover", {
                 tenantId,
@@ -1683,7 +1756,7 @@ async function fillEmptyAdminPortfolioCards(rawGraph, tenantId, cards, writeToke
         catch {
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("portfolio-admin-fanout-failed", { tenantId, businessId: bm });
         }
-    }));
+    }
     return out;
 }
 async function cacheGraphPhonePhoto(tenantId, phoneNumberId, url) {
@@ -2263,14 +2336,18 @@ class MetaWhatsappConnectionService {
     async listPortfolioAssets(auth, opts) {
         const tenant = requireTenant(auth);
         const requested = String(opts?.connectionId || "").trim();
+        const focusBusinessId = String(opts?.businessId || "").trim();
         const pending = (0, meta_whatsapp_portfolio_graph_cache_1.readPortfolioGraphInflight)(tenant.tenantId);
         if (opts?.fresh && !pending)
             (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
         const storedPromise = this.loadStoredPortfolioAssets(tenant.tenantId, requested);
         const localize = (raw) => localizeAndHidePortfolioAssets(tenant.tenantId, raw);
+        const canUseStoredFast = (stored) => !opts?.fresh &&
+            assetsHaveListedNumbers(stored) &&
+            !focusedBusinessNeedsWaba(stored, focusBusinessId);
         if (pending) {
             const stored = await storedPromise;
-            if (!opts?.fresh && assetsHaveListedNumbers(stored)) {
+            if (canUseStoredFast(stored)) {
                 const fast = await raceWithTimeout(pending, LIST_FAST_STORED_MS);
                 if (fast) {
                     return localize(assetsFromPortfolioCards(fast.portfolios || [], requested));
@@ -2300,11 +2377,13 @@ class MetaWhatsappConnectionService {
         const useCache = (0, meta_whatsapp_portfolio_graph_cache_1.shouldUsePortfolioGraphCache)() && !opts?.fresh;
         if (useCache) {
             const cached = (0, meta_whatsapp_portfolio_graph_cache_1.readCachedPortfolioGraph)(tenant.tenantId);
-            if (cached?.portfolios?.length && assetsHaveListedNumbers(cached)) {
+            if (cached?.portfolios?.length &&
+                assetsHaveListedNumbers(cached) &&
+                !focusedBusinessNeedsWaba(cached, focusBusinessId)) {
                 return localize(assetsFromPortfolioCards(cached.portfolios, requested));
             }
         }
-        const loaded = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail);
+        const loaded = this.loadPortfolioGraphAssets(tenant.tenantId, requested, tenant.ownerEmail, focusBusinessId);
         const work = loaded.then((row) => row.assets);
         (0, meta_whatsapp_portfolio_graph_cache_1.setPortfolioGraphInflight)(tenant.tenantId, work);
         void loaded
@@ -2319,7 +2398,7 @@ class MetaWhatsappConnectionService {
         }).catch(() => undefined);
         try {
             const stored = await storedPromise;
-            if (!opts?.fresh && assetsHaveListedNumbers(stored)) {
+            if (canUseStoredFast(stored)) {
                 const fast = await raceWithTimeout(work, LIST_FAST_STORED_MS);
                 if (fast)
                     return localize(fast);
@@ -2550,7 +2629,7 @@ class MetaWhatsappConnectionService {
         const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(rows.map((row) => ({ ...cardFromConnection(row), numbers: storedNumbersFromConnection(row) }))).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
         return assetsFromPortfolioCards(cards, requested);
     }
-    async loadPortfolioGraphAssets(tenantId, requested, actorEmail = "") {
+    async loadPortfolioGraphAssets(tenantId, requested, actorEmail = "", priorityBusinessId = "") {
         const repo = this.repository;
         if (typeof repo.reopenLeftManagerForBusinesses === "function") {
             try {
@@ -2606,7 +2685,13 @@ class MetaWhatsappConnectionService {
         ]);
         let graphPartial = hydrated.some((item) => item.hydratePartial);
         const seeds = [...merged, ...catalogBackfillPlaceholderCards(tenantId, merged)].filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
-        const cards = await fillEmptyAdminPortfolioCards(this.graph, tenantId, seeds, writeTokens, rows);
+        const cards = await fillEmptyAdminPortfolioCards(this.graph, tenantId, seeds, writeTokens, rows, priorityBusinessId);
+        if ((0, meta_whatsapp_manual_business_store_1.listManualBusinessIds)(tenantId).some((id) => cards.some((card) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(card.id || ""), id) &&
+            card.hidden !== true &&
+            cardNeedsWabaOrNumbers(card))) ||
+            focusedBusinessNeedsWaba({ portfolios: cards, selectedConnectionId: null, portfolio: null, numbers: [] }, priorityBusinessId)) {
+            graphPartial = true;
+        }
         await this.persistInvitedPortfolioCards({
             tenantId,
             ownerEmail: actorEmail,

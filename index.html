@@ -40617,6 +40617,7 @@
       async function metaTpLoadPortfolio(opts) {
         const silent = Boolean(opts && opts.silent);
         const force = Boolean(opts && opts.force);
+        const businessId = String((opts && opts.businessId) || "").trim();
         if (metaTpPortfolioInflight && !force) return metaTpPortfolioInflight;
         if (force && metaTpPortfolioInflight) {
           try {
@@ -40624,7 +40625,6 @@
           } catch {
             /* a carga anterior não bloqueia o Atualizar */
           }
-          if (metaTpHasListedNumbers()) return;
         }
         metaTpPortfolioInflight = (async function () {
         const enabled =
@@ -40641,9 +40641,12 @@
           metaTpAdvanceConnectProgress(2);
         }
         try {
+          const qs = [];
+          if (force) qs.push("fresh=1");
+          if (businessId) qs.push("businessId=" + encodeURIComponent(businessId));
           const { response, payload } = await metaTpFetchJson(
-            "/integrations/meta/whatsapp/portfolio" + (force ? "?fresh=1" : ""),
-            { timeoutMs: 40000 },
+            "/integrations/meta/whatsapp/portfolio" + (qs.length ? "?" + qs.join("&") : ""),
+            { timeoutMs: force ? 60000 : 40000 },
           );
           if (!response.ok || payload.ok === false) {
             if ((response.status === 502 || response.status === 504) && !metaTpHasListedNumbers()) {
@@ -40878,10 +40881,11 @@
         try {
           metaTpStartConnectProgress();
           metaTpAdvanceConnectProgress(2);
-          await metaTpLoadPortfolio({ silent: true });
-          if (!metaTpHasListedNumbers()) {
-            await metaTpLoadPortfolio({ silent: true, force: true });
-          }
+          await metaTpLoadPortfolio({
+            silent: true,
+            force: true,
+            businessId: String(metaTpSession.savedBusinessId || "").trim(),
+          });
           metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasListedNumbers() });
         } catch {
           metaTpSetStatus("Não foi possível atualizar os portfólios.");
@@ -41312,6 +41316,19 @@
             });
             if (selected) metaTpSession.savedWabaId = String(selected.wabaId || "");
             metaTpRenderPortfolio({ portfolios: metaTpSession.portfolios });
+            const hasWaba = Boolean(selected && String(selected.wabaId || "").trim());
+            const hasNums = Boolean(
+              selected &&
+                (selected.numbers || []).some(function (row) {
+                  return Boolean(String((row && (row.displayPhoneNumber || row.phoneNumberId)) || "").trim());
+                }),
+            );
+            if (!hasWaba || !hasNums) {
+              metaTpSetStatus("Lendo WABA e números deste portfólio na Meta…");
+              void metaTpLoadPortfolio({ silent: true, force: true, businessId: nextId }).then(function () {
+                metaTpSetStatus("");
+              });
+            }
           }
         }
       });
