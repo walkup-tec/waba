@@ -82,6 +82,7 @@ import {
 } from "./meta-whatsapp-known-owned-wabas";
 import {
   addManualBusiness,
+  listManualBusinesses,
   listManualBusinessIds,
   normalizeManualBusinessId,
 } from "./meta-whatsapp-manual-business.store";
@@ -282,6 +283,39 @@ function catalogBackfillPlaceholderCards(
     });
   }
   return out;
+}
+
+function manualPlaceholderCards(
+  tenantId: string,
+  existing: MetaPortfolioPublic[],
+): MetaPortfolioPublic[] {
+  const out: MetaPortfolioPublic[] = [];
+  for (const row of listManualBusinesses(tenantId)) {
+    const id = String(row.id || "").trim();
+    if (!id || isHiddenBusiness(tenantId, id)) continue;
+    if (existing.some((item) => metaBusinessIdsMatch(String(item.id || ""), id))) continue;
+    out.push({
+      id,
+      name: row.name || null,
+      primaryPageId: null,
+      primaryPageName: null,
+      profilePictureUrl: null,
+      wabaId: null,
+      hidden: false,
+      numbers: [],
+    });
+  }
+  return out;
+}
+
+function seedKnownPortfolioCards(
+  tenantId: string,
+  fromRows: MetaPortfolioPublic[],
+): MetaPortfolioPublic[] {
+  const base = dedupePortfolioCards(fromRows).filter(isRenderablePortfolioCard);
+  const manuals = manualPlaceholderCards(tenantId, base);
+  const catalog = catalogBackfillPlaceholderCards(tenantId, [...base, ...manuals]);
+  return dedupePortfolioCards([...base, ...manuals, ...catalog]).filter(isRenderablePortfolioCard);
 }
 
 function markHiddenPortfolioAssets(
@@ -3094,9 +3128,10 @@ export class MetaWhatsappConnectionService {
         : [await this.repository.findOpenByTenant(tenantId)].filter(
             (item): item is MetaWhatsappConnectionRecord => Boolean(item),
           );
-    const cards = dedupePortfolioCards(
+    const cards = seedKnownPortfolioCards(
+      tenantId,
       rows.map((row) => ({ ...cardFromConnection(row), numbers: storedNumbersFromConnection(row) })),
-    ).filter(isRenderablePortfolioCard);
+    );
     return assetsFromPortfolioCards(cards, requested);
   }
 
@@ -3179,9 +3214,7 @@ export class MetaWhatsappConnectionService {
       ...fromDirectory,
     ]);
     let graphPartial = hydrated.some((item) => item.hydratePartial);
-    const seeds = [...merged, ...catalogBackfillPlaceholderCards(tenantId, merged)].filter(
-      isRenderablePortfolioCard,
-    );
+    const seeds = seedKnownPortfolioCards(tenantId, merged);
     const cards = await fillEmptyAdminPortfolioCards(
       this.graph,
       tenantId,

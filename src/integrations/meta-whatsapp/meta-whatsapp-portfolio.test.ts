@@ -35,6 +35,7 @@ import { callMetaGraphJson } from "./meta-whatsapp-graph.client";
 import { purgePortfolioIdentity, writePortfolioIdentity } from "./meta-whatsapp-portfolio-identity.store";
 import { applyLocalPhoneIdentities, listPhoneInboxChannels, purgePhoneIdentities, writePhoneIdentity } from "./meta-whatsapp-phone-identity.store";
 import { hideBusiness, unhideBusiness } from "./meta-whatsapp-hidden-business.store";
+import { addManualBusiness, listManualBusinessIds } from "./meta-whatsapp-manual-business.store";
 import {
   catalogBackfillBusinessIds,
   catalogBusinessLabel,
@@ -1333,8 +1334,16 @@ describe("meta portfolio service", () => {
   const auth: WabaRequestAuth = { email: "portfolio@exemplo.com", role: "subscriber" };
   const tenantId = deriveStableMetaTenantId("portfolio@exemplo.com");
 
-  function listedFromConnections<T extends { id?: string | null }>(portfolios: T[] | undefined): T[] {
-    return (portfolios || []).filter((item) => !isCatalogBackfillBusiness(String(item.id || "")));
+  function listedFromConnections<T extends { id?: string | null; connectionId?: string | null }>(
+    portfolios: T[] | undefined,
+  ): T[] {
+    const manuals = new Set(listManualBusinessIds(tenantId));
+    return (portfolios || []).filter((item) => {
+      const id = String(item.id || "");
+      if (isCatalogBackfillBusiness(id)) return false;
+      if (manuals.has(id)) return false;
+      return true;
+    });
   }
 
   before(() => {
@@ -1796,6 +1805,59 @@ describe("meta portfolio service", () => {
     } finally {
       hang = false;
       for (const id of catalogBackfillBusinessIds()) unhideBusiness(tenantId, id);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+  });
+
+  it("stored-fast já lista catálogo e BMs manuais sem esperar a Graph", async () => {
+    const railAuth: WabaRequestAuth = { email: "rail-fast@exemplo.com", role: "subscriber" };
+    const railTenant = deriveStableMetaTenantId("rail-fast@exemplo.com");
+    for (const id of catalogBackfillBusinessIds()) unhideBusiness(railTenant, id);
+    addManualBusiness(railTenant, "1067949032654572", "Casa Buzina");
+    addManualBusiness(railTenant, "2870826849820822", "Sonia Tupperware Silva");
+    const row = {
+      ...connectedRow(),
+      id: "conn-rail-fast",
+      tenantId: railTenant,
+      ownerEmail: "rail-fast@exemplo.com",
+      status: "connected" as const,
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [row];
+      },
+      async findOpenByTenant() {
+        return row;
+      },
+    };
+    let hang = true;
+    const graph = async () => {
+      const started = Date.now();
+      while (hang && Date.now() - started < 8000) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const started = Date.now();
+    try {
+      const assets = await service.listPortfolioAssets(railAuth);
+      const elapsed = Date.now() - started;
+      assert.ok(elapsed < 5000, `lista esperou a Graph ${elapsed}ms`);
+      const ids = (assets.portfolios || []).map((item) => String(item.id || ""));
+      assert.equal(ids.includes("1247508354180311"), true);
+      assert.equal(ids.includes("1067949032654572"), true);
+      assert.equal(ids.includes("2870826849820822"), true);
+      for (const id of catalogBackfillBusinessIds()) {
+        assert.equal(ids.includes(id), true, `faltou o portfólio ${id}`);
+      }
+      assert.ok(ids.length > 1);
+    } finally {
+      hang = false;
       await new Promise((resolve) => setTimeout(resolve, 80));
     }
   });

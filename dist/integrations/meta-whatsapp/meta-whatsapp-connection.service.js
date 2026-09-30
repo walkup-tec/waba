@@ -135,6 +135,33 @@ function catalogBackfillPlaceholderCards(tenantId, existing) {
     }
     return out;
 }
+function manualPlaceholderCards(tenantId, existing) {
+    const out = [];
+    for (const row of (0, meta_whatsapp_manual_business_store_1.listManualBusinesses)(tenantId)) {
+        const id = String(row.id || "").trim();
+        if (!id || (0, meta_whatsapp_hidden_business_store_1.isHiddenBusiness)(tenantId, id))
+            continue;
+        if (existing.some((item) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(item.id || ""), id)))
+            continue;
+        out.push({
+            id,
+            name: row.name || null,
+            primaryPageId: null,
+            primaryPageName: null,
+            profilePictureUrl: null,
+            wabaId: null,
+            hidden: false,
+            numbers: [],
+        });
+    }
+    return out;
+}
+function seedKnownPortfolioCards(tenantId, fromRows) {
+    const base = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(fromRows).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+    const manuals = manualPlaceholderCards(tenantId, base);
+    const catalog = catalogBackfillPlaceholderCards(tenantId, [...base, ...manuals]);
+    return (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)([...base, ...manuals, ...catalog]).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+}
 function markHiddenPortfolioAssets(tenantId, assets) {
     const hiddenRows = (0, meta_whatsapp_hidden_business_store_1.listHiddenBusinesses)(tenantId);
     const isHiddenId = (value) => hiddenRows.some((row) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(value || ""), row.id));
@@ -2626,7 +2653,7 @@ class MetaWhatsappConnectionService {
         const rows = typeof repo.listOpenByTenant === "function"
             ? await repo.listOpenByTenant(tenantId)
             : [await this.repository.findOpenByTenant(tenantId)].filter((item) => Boolean(item));
-        const cards = (0, meta_whatsapp_portfolio_map_1.dedupePortfolioCards)(rows.map((row) => ({ ...cardFromConnection(row), numbers: storedNumbersFromConnection(row) }))).filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+        const cards = seedKnownPortfolioCards(tenantId, rows.map((row) => ({ ...cardFromConnection(row), numbers: storedNumbersFromConnection(row) })));
         return assetsFromPortfolioCards(cards, requested);
     }
     async loadPortfolioGraphAssets(tenantId, requested, actorEmail = "", priorityBusinessId = "") {
@@ -2684,7 +2711,7 @@ class MetaWhatsappConnectionService {
             ...fromDirectory,
         ]);
         let graphPartial = hydrated.some((item) => item.hydratePartial);
-        const seeds = [...merged, ...catalogBackfillPlaceholderCards(tenantId, merged)].filter(meta_whatsapp_portfolio_map_1.isRenderablePortfolioCard);
+        const seeds = seedKnownPortfolioCards(tenantId, merged);
         const cards = await fillEmptyAdminPortfolioCards(this.graph, tenantId, seeds, writeTokens, rows, priorityBusinessId);
         if ((0, meta_whatsapp_manual_business_store_1.listManualBusinessIds)(tenantId).some((id) => cards.some((card) => (0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(String(card.id || ""), id) &&
             card.hidden !== true &&

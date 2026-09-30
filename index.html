@@ -40192,6 +40192,72 @@
         });
       }
 
+      function metaTpPortfolioItemKey(item) {
+        return String((item && (item.id || item.wabaId)) || "").trim();
+      }
+
+      function metaTpMergePortfolioBundles(previous, incoming) {
+        const prev = previous || [];
+        const next = incoming || [];
+        if (!prev.length) return next.slice();
+        if (!next.length) return prev.slice();
+        const byId = {};
+        const order = [];
+        const remember = function (item, preferIncoming) {
+          const id = metaTpPortfolioItemKey(item);
+          if (!id) {
+            order.push({ kind: "anon", item: item });
+            return;
+          }
+          if (!byId[id]) {
+            byId[id] = item;
+            order.push({ kind: "id", id: id });
+            return;
+          }
+          const cur = byId[id];
+          const incomingNums = preferIncoming ? item.numbers : cur.numbers;
+          const keptNums = preferIncoming ? cur.numbers : item.numbers;
+          byId[id] = Object.assign({}, cur, preferIncoming ? item : {}, {
+            name: (preferIncoming ? item.name : cur.name) || cur.name || item.name || null,
+            wabaId: (preferIncoming ? item.wabaId : cur.wabaId) || cur.wabaId || item.wabaId || null,
+            primaryPageId:
+              (preferIncoming ? item.primaryPageId : cur.primaryPageId) ||
+              cur.primaryPageId ||
+              item.primaryPageId ||
+              null,
+            primaryPageName:
+              (preferIncoming ? item.primaryPageName : cur.primaryPageName) ||
+              cur.primaryPageName ||
+              item.primaryPageName ||
+              null,
+            profilePictureUrl:
+              (preferIncoming ? item.profilePictureUrl : cur.profilePictureUrl) ||
+              cur.profilePictureUrl ||
+              item.profilePictureUrl ||
+              null,
+            connectionId:
+              (preferIncoming ? item.connectionId : cur.connectionId) ||
+              cur.connectionId ||
+              item.connectionId,
+            numbers:
+              incomingNums && incomingNums.length ? incomingNums : keptNums && keptNums.length ? keptNums : [],
+          });
+        };
+        prev.forEach(function (item) {
+          remember(item, false);
+        });
+        next.forEach(function (item) {
+          remember(item, true);
+        });
+        return order.map(function (entry) {
+          return entry.kind === "id" ? byId[entry.id] : entry.item;
+        });
+      }
+
+      function metaTpListedActivePortfolioCount() {
+        return metaTpFilterPortfoliosByPage(metaTpSession.portfolios || [], "ativas").length;
+      }
+
       function metaTpPhoneRegion(phone) {
         const digits = String(phone || "").replace(/\D/g, "");
         if (digits.startsWith("55")) return "BR Brasil";
@@ -40514,7 +40580,10 @@
             : assets && assets.portfolio
               ? assets
               : { portfolios: metaTpSession.portfolios, portfolio: null, numbers: [] };
-        const bundles = metaTpPortfolioBundles(source);
+        const bundles = metaTpMergePortfolioBundles(
+          metaTpSession.portfolios,
+          metaTpPortfolioBundles(source),
+        );
         metaTpSession.portfolios = bundles;
         if (typeof metaTplLabFillPortfolioSelect === "function") metaTplLabFillPortfolioSelect();
         if (!section) return;
@@ -40677,9 +40746,11 @@
 
       async function metaTpReloadPortfoliosAfterConnect() {
         var attempt = 0;
+        await metaTpLoadPortfolio({ silent: true });
         while (attempt < 12) {
-          await metaTpLoadPortfolio({ silent: true });
-          if (metaTpHasListedNumbers()) return;
+          await metaTpLoadPortfolio({ silent: true, force: true });
+          if (metaTpListedActivePortfolioCount() > 1 && metaTpHasListedNumbers()) return;
+          if (metaTpListedActivePortfolioCount() > 1) return;
           attempt += 1;
           await new Promise(function (resolve) {
             window.setTimeout(resolve, 1500);
