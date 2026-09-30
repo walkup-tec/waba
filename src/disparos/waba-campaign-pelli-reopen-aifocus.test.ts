@@ -11,10 +11,14 @@ import {
   isPelliAgendaPessoalCampaignName,
   PELLI_REOPEN_CAMPAIGN_NAME,
   PELLI_REOPEN_IMAGE_FILE_NAME,
+  PELLI_REOPEN_LEADS_FILE_NAME,
   PELLI_REOPEN_OPERACIONAL_EMAIL,
+  PELLI_REOPEN_PLANNED_SEND_COUNT,
   PELLI_REOPEN_TEXT,
+  resolvePelliReopenLeadsPath,
   runPelliReopenAifocusOneshot,
 } from "./waba-campaign-pelli-reopen-aifocus";
+import { dedupeOfficialCampaignLeadsFile } from "./waba-campaign-intake-oficial-dedupe";
 
 const CAMPAIGN_ID = "camp-pelli-agenda";
 
@@ -57,6 +61,23 @@ describe("reabrir Pelli na fila aifocusdev", () => {
   it("reconhece só o nome exato da agenda pessoal Pelli", () => {
     assert.equal(isPelliAgendaPessoalCampaignName(PELLI_REOPEN_CAMPAIGN_NAME), true);
     assert.equal(isPelliAgendaPessoalCampaignName("Primeiro disparo - agenda pessoal Pelli 2"), false);
+    assert.equal(PELLI_REOPEN_PLANNED_SEND_COUNT, 13922);
+    assert.equal(PELLI_REOPEN_LEADS_FILE_NAME, "leads-13922-envios.xlsx");
+  });
+
+  it("a planilha nova fecha em 13922 envios únicos", () => {
+    const leadsPath = resolvePelliReopenLeadsPath();
+    assert.equal(existsSync(leadsPath), true);
+    const deduped = dedupeOfficialCampaignLeadsFile(
+      readFileSync(leadsPath),
+      PELLI_REOPEN_LEADS_FILE_NAME,
+      PELLI_REOPEN_PLANNED_SEND_COUNT,
+    );
+    assert.ok(deduped.uniqueCount >= PELLI_REOPEN_PLANNED_SEND_COUNT);
+    assert.equal(
+      Math.min(deduped.uniqueCount, PELLI_REOPEN_PLANNED_SEND_COUNT),
+      13922,
+    );
   });
 
   it("coloca na fila Aguardando configuração, grava o texto e a planilha e zera indicadores", () => {
@@ -135,7 +156,7 @@ describe("reabrir Pelli na fila aifocusdev", () => {
       assert.equal(stored?.textOptions?.[0], PELLI_REOPEN_TEXT);
       assert.equal(stored?.textOptions?.[1], PELLI_REOPEN_TEXT);
       assert.equal(stored?.textOptions?.[2], PELLI_REOPEN_TEXT);
-      assert.equal(stored?.spreadsheetFileName, "leads-9088-envios.xlsx");
+      assert.equal(stored?.spreadsheetFileName, PELLI_REOPEN_LEADS_FILE_NAME);
       assert.equal(stored?.imageFileName, PELLI_REOPEN_IMAGE_FILE_NAME);
       assert.equal(stored?.campaignMediaKind, "image");
       assert.equal(existsSync(String(stored?.spreadsheetStoredPath || "")), true);
@@ -183,8 +204,8 @@ describe("reabrir Pelli na fila aifocusdev", () => {
               textOptions: [PELLI_REOPEN_TEXT, PELLI_REOPEN_TEXT, PELLI_REOPEN_TEXT],
               imageFileName: "foto.jpg",
               imageStoredPath: path.join(storageDir, "foto.jpg"),
-              spreadsheetFileName: "leads-9088-envios.xlsx",
-              spreadsheetStoredPath: path.join(storageDir, "leads-9088-envios.xlsx"),
+              spreadsheetFileName: PELLI_REOPEN_LEADS_FILE_NAME,
+              spreadsheetStoredPath: path.join(storageDir, PELLI_REOPEN_LEADS_FILE_NAME),
               importedLineCount: 3,
               plannedSendCount: 3,
               apiKind: "oficial",

@@ -14,7 +14,9 @@ import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.ser
 
 export const PELLI_REOPEN_CAMPAIGN_NAME = "Primeiro disparo - agenda pessoal Pelli";
 export const PELLI_REOPEN_OPERACIONAL_EMAIL = "aifocusdev@gmail.com";
-export const PELLI_REOPEN_LEADS_FILE_NAME = "leads-9088-envios.xlsx";
+export const PELLI_REOPEN_PLANNED_SEND_COUNT = 13922;
+export const PELLI_REOPEN_LEADS_ASSET_NAME = "pelli-leads-13922-envios.xlsx";
+export const PELLI_REOPEN_LEADS_FILE_NAME = "leads-13922-envios.xlsx";
 export const PELLI_REOPEN_IMAGE_FILE_NAME = "pelli-agora-e-outra-historia.png";
 export const PELLI_REOPEN_IMAGE_STORED_NAME = "campaign-image.png";
 
@@ -54,7 +56,7 @@ function resolvePelliAssetPath(fileName: string): string {
 }
 
 export function resolvePelliReopenLeadsPath(): string {
-  return resolvePelliAssetPath("pelli-leads-9088-envios.xlsx");
+  return resolvePelliAssetPath(PELLI_REOPEN_LEADS_ASSET_NAME);
 }
 
 export function resolvePelliReopenImagePath(): string {
@@ -195,8 +197,15 @@ export function applyPelliReopenToAifocus(deps: PelliReopenOneshotDeps = {}): Pe
   }
 
   const originalBuffer = readFileSync(leadsPath);
-  const deduped = dedupeOfficialCampaignLeadsFile(originalBuffer, PELLI_REOPEN_LEADS_FILE_NAME);
-  const uniqueCount = Math.max(0, Math.round(Number(deduped.uniqueCount || 0)));
+  const deduped = dedupeOfficialCampaignLeadsFile(
+    originalBuffer,
+    PELLI_REOPEN_LEADS_FILE_NAME,
+    PELLI_REOPEN_PLANNED_SEND_COUNT,
+  );
+  const uniqueCount = Math.min(
+    Math.max(0, Math.round(Number(deduped.uniqueCount || 0))),
+    PELLI_REOPEN_PLANNED_SEND_COUNT,
+  );
   if (uniqueCount < 1) {
     return { ok: false, campaignId: intake.id, message: "A planilha da Pelli não tem telefones únicos." };
   }

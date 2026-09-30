@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PELLI_REOPEN_TEXT = exports.PELLI_REOPEN_IMAGE_STORED_NAME = exports.PELLI_REOPEN_IMAGE_FILE_NAME = exports.PELLI_REOPEN_LEADS_FILE_NAME = exports.PELLI_REOPEN_OPERACIONAL_EMAIL = exports.PELLI_REOPEN_CAMPAIGN_NAME = void 0;
+exports.PELLI_REOPEN_TEXT = exports.PELLI_REOPEN_IMAGE_STORED_NAME = exports.PELLI_REOPEN_IMAGE_FILE_NAME = exports.PELLI_REOPEN_LEADS_FILE_NAME = exports.PELLI_REOPEN_LEADS_ASSET_NAME = exports.PELLI_REOPEN_PLANNED_SEND_COUNT = exports.PELLI_REOPEN_OPERACIONAL_EMAIL = exports.PELLI_REOPEN_CAMPAIGN_NAME = void 0;
 exports.isPelliAgendaPessoalCampaignName = isPelliAgendaPessoalCampaignName;
 exports.resolvePelliReopenLeadsPath = resolvePelliReopenLeadsPath;
 exports.resolvePelliReopenImagePath = resolvePelliReopenImagePath;
@@ -20,7 +20,9 @@ const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-split.service");
 exports.PELLI_REOPEN_CAMPAIGN_NAME = "Primeiro disparo - agenda pessoal Pelli";
 exports.PELLI_REOPEN_OPERACIONAL_EMAIL = "aifocusdev@gmail.com";
-exports.PELLI_REOPEN_LEADS_FILE_NAME = "leads-9088-envios.xlsx";
+exports.PELLI_REOPEN_PLANNED_SEND_COUNT = 13922;
+exports.PELLI_REOPEN_LEADS_ASSET_NAME = "pelli-leads-13922-envios.xlsx";
+exports.PELLI_REOPEN_LEADS_FILE_NAME = "leads-13922-envios.xlsx";
 exports.PELLI_REOPEN_IMAGE_FILE_NAME = "pelli-agora-e-outra-historia.png";
 exports.PELLI_REOPEN_IMAGE_STORED_NAME = "campaign-image.png";
 exports.PELLI_REOPEN_TEXT = `Olá!
@@ -53,7 +55,7 @@ function resolvePelliAssetPath(fileName) {
     return candidates.find((item) => (0, node_fs_1.existsSync)(item)) || candidates[0];
 }
 function resolvePelliReopenLeadsPath() {
-    return resolvePelliAssetPath("pelli-leads-9088-envios.xlsx");
+    return resolvePelliAssetPath(exports.PELLI_REOPEN_LEADS_ASSET_NAME);
 }
 function resolvePelliReopenImagePath() {
     return resolvePelliAssetPath("pelli-campaign-image.png");
@@ -162,8 +164,8 @@ function applyPelliReopenToAifocus(deps = {}) {
         return { ok: false, campaignId: intake.id, message: `Planilha da Pelli ausente: ${leadsPath}` };
     }
     const originalBuffer = (0, node_fs_1.readFileSync)(leadsPath);
-    const deduped = (0, waba_campaign_intake_oficial_dedupe_1.dedupeOfficialCampaignLeadsFile)(originalBuffer, exports.PELLI_REOPEN_LEADS_FILE_NAME);
-    const uniqueCount = Math.max(0, Math.round(Number(deduped.uniqueCount || 0)));
+    const deduped = (0, waba_campaign_intake_oficial_dedupe_1.dedupeOfficialCampaignLeadsFile)(originalBuffer, exports.PELLI_REOPEN_LEADS_FILE_NAME, exports.PELLI_REOPEN_PLANNED_SEND_COUNT);
+    const uniqueCount = Math.min(Math.max(0, Math.round(Number(deduped.uniqueCount || 0))), exports.PELLI_REOPEN_PLANNED_SEND_COUNT);
     if (uniqueCount < 1) {
         return { ok: false, campaignId: intake.id, message: "A planilha da Pelli não tem telefones únicos." };
     }

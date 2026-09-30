@@ -107,12 +107,16 @@ if (fs.existsSync(mediaSrcDir)) {
   );
 }
 
-const pelliLeadsSrc = path.join(rootDir, "src", "disparos", "assets", "pelli-leads-9088-envios.xlsx");
+const pelliLeadsSrc = path.join(rootDir, "src", "disparos", "assets", "pelli-leads-13922-envios.xlsx");
 if (fs.existsSync(pelliLeadsSrc)) {
-  const pelliLeadsDest = path.join(distDir, "disparos", "assets", "pelli-leads-9088-envios.xlsx");
+  const pelliLeadsDest = path.join(distDir, "disparos", "assets", "pelli-leads-13922-envios.xlsx");
   if (fileNeedsCopy(pelliLeadsSrc, pelliLeadsDest)) {
     await replaceWithTempCopy(pelliLeadsSrc, pelliLeadsDest);
   }
+}
+const pelliLeadsLegacy = path.join(distDir, "disparos", "assets", "pelli-leads-9088-envios.xlsx");
+if (fs.existsSync(pelliLeadsLegacy)) {
+  fs.unlinkSync(pelliLeadsLegacy);
 }
 
 const pelliImageSrc = path.join(rootDir, "src", "disparos", "assets", "pelli-campaign-image.png");
