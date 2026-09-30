@@ -407,6 +407,29 @@ cmd_install() {
   systemctl status "$SUPERVISOR_TIMER" --no-pager -l | head -n 8 || true
 }
 
+run_lab_graph_probe() {
+  local container
+  echo "--- lab graph probe ---"
+  if ! curl -fsSL "${REPO_SCRIPTS}/probe-laboratorio-graph.cjs" -o /tmp/probe-laboratorio-graph.cjs; then
+    echo "lab graph probe: download failed"
+    return 0
+  fi
+  sed -i 's/\r$//' /tmp/probe-laboratorio-graph.cjs
+  container="$(docker ps --format '{{.Names}}' | grep -E 'waba.*disparador' | grep -vE 'v02|v01' | head -1 || true)"
+  if [[ -z "$container" ]]; then
+    container="$(docker ps --format '{{.Names}}' | grep -E 'waba.*disparador' | head -1 || true)"
+  fi
+  if [[ -z "$container" ]]; then
+    echo "lab graph probe: container not found"
+    return 0
+  fi
+  echo "lab graph probe container=${container}"
+  docker cp /tmp/probe-laboratorio-graph.cjs "$container:/tmp/probe-laboratorio-graph.cjs"
+  docker exec -w /app "$container" node /tmp/probe-laboratorio-graph.cjs || echo "lab graph probe: node failed"
+  docker exec "$container" rm -f /tmp/probe-laboratorio-graph.cjs || true
+  rm -f /tmp/probe-laboratorio-graph.cjs || true
+}
+
 cmd_status() {
   echo "version=${VERSION}"
   for u in "$WATCH_SERVICE" "$TIMER" "$SUPERVISOR_TIMER"; do
@@ -429,6 +452,7 @@ cmd_status() {
     docker service inspect "$SWARM_SERVICE" --format '{{json .Endpoint.Ports}}' 2>/dev/null | head -c 400 || true
     echo
   fi
+  run_lab_graph_probe_if_flagged || true
 }
 
 case "${1:-}" in
