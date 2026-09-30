@@ -507,10 +507,16 @@ function unionPortfolioNumbers(...lists) {
             const metaStatus = preferMetaPhoneStatus(prev.metaStatus, item.metaStatus);
             const healthCanSend = preferHealthCanSend(prev.healthCanSend, item.healthCanSend);
             const codeVerificationStatus = text(item.codeVerificationStatus) || text(prev.codeVerificationStatus);
-            const uiStatus = resolveMetaPhoneUiStatus({
+            const storedUi = prev.uiStatus === "restrito" || item.uiStatus === "restrito"
+                ? "restrito"
+                : prev.uiStatus === "ativo" || item.uiStatus === "ativo"
+                    ? "ativo"
+                    : prev.uiStatus || item.uiStatus;
+            const uiStatus = resolveListedPhoneUiStatus({
                 metaStatus,
                 codeVerificationStatus,
                 healthCanSend,
+                storedUiStatus: storedUi,
             });
             const nameNeedsRegister = Boolean(item.nameNeedsRegister || prev.nameNeedsRegister);
             byId.set(id, {

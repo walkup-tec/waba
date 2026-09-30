@@ -21,6 +21,9 @@ describe("progresso ao lado de Conectar Portfólio", () => {
     assert.match(html, /keepPortfolios: true/);
     assert.match(html, /function metaTpReloadPortfoliosAfterConnect/);
     assert.match(html, /function metaTpMergePortfolioBundles/);
+    assert.match(html, /function metaTpMergeNumbers/);
+    assert.match(html, /item.canActivate === true/);
+    assert.doesNotMatch(html, /item.canActivate \|\| !ativo/);
     assert.match(html, /function metaTpListedActivePortfolioCount/);
     assert.match(html, /function metaTpHasListedNumbers/);
     assert.match(html, /function metaTpSyncConnectProgressFromAssets/);

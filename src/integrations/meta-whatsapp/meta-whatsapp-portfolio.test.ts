@@ -1144,6 +1144,71 @@ describe("meta portfolio mapper", () => {
     purgePhoneIdentities(tenantId);
   });
 
+  it("não grava Pendente na identidade quando a Graph omite o status do chip já ativo", () => {
+    const tenantId = deriveStableMetaTenantId("drax02-no-poison@exemplo.com");
+    purgePhoneIdentities(tenantId);
+    writePhoneIdentity(tenantId, "1272575335948086", { uiStatus: "ativo" });
+    applyLocalPhoneIdentities(tenantId, [
+      {
+        phoneNumberId: "1272575335948086",
+        displayPhoneNumber: "+55 11 95285-5135",
+        verifiedName: "DRAX 02",
+        qualityRating: null,
+        metaStatus: null,
+        codeVerificationStatus: null,
+        healthCanSend: null,
+        uiStatus: "pendente",
+        dispatchStatus: "livre",
+        canActivate: true,
+        nameNeedsRegister: false,
+        nameStatus: null,
+        newDisplayName: null,
+        newNameStatus: null,
+        profilePictureUrl: null,
+        vertical: null,
+        description: null,
+        address: null,
+        email: null,
+        requestedName: null,
+        nameSyncStatus: null,
+        photoSyncStatus: null,
+        profileSyncStatus: null,
+        inboxEnabled: false,
+      },
+    ]);
+    const rows = applyLocalPhoneIdentities(tenantId, [
+      {
+        phoneNumberId: "1272575335948086",
+        displayPhoneNumber: "+55 11 95285-5135",
+        verifiedName: "DRAX 02",
+        qualityRating: null,
+        metaStatus: null,
+        codeVerificationStatus: null,
+        healthCanSend: null,
+        uiStatus: "pendente",
+        dispatchStatus: "livre",
+        canActivate: true,
+        nameNeedsRegister: false,
+        nameStatus: null,
+        newDisplayName: null,
+        newNameStatus: null,
+        profilePictureUrl: null,
+        vertical: null,
+        description: null,
+        address: null,
+        email: null,
+        requestedName: null,
+        nameSyncStatus: null,
+        photoSyncStatus: null,
+        profileSyncStatus: null,
+        inboxEnabled: false,
+      },
+    ]);
+    assert.equal(rows[0]?.uiStatus, "ativo");
+    assert.equal(rows[0]?.canActivate, false);
+    purgePhoneIdentities(tenantId);
+  });
+
   it("usa o nome do Editar quando a Graph ainda não devolveu new_display_name", () => {
     const tenantId = deriveStableMetaTenantId("nome-card@exemplo.com");
     purgePhoneIdentities(tenantId);
@@ -1704,6 +1769,59 @@ describe("meta portfolio service", () => {
     assert.equal(chip?.uiStatus, "ativo");
     assert.equal(chip?.canActivate, false);
     assert.equal(chip?.nameNeedsRegister, false);
+  });
+
+  it("stored-fast não pede PIN no DRAX 02 se a identidade local já está ativa", async () => {
+    const pinAuth: WabaRequestAuth = { email: "drax02-stored-fast@exemplo.com", role: "subscriber" };
+    const pinTenant = deriveStableMetaTenantId("drax02-stored-fast@exemplo.com");
+    purgePhoneIdentities(pinTenant);
+    writePhoneIdentity(pinTenant, "1272575335948086", { uiStatus: "ativo" });
+    const row = {
+      ...connectedRow(),
+      id: "conn-drax02-stored-fast",
+      tenantId: pinTenant,
+      ownerEmail: "drax02-stored-fast@exemplo.com",
+      status: "pending_confirmation" as const,
+      metaBusinessId: "962298516898955",
+      wabaId: "2301051607405249",
+      phoneNumberId: "1272575335948086",
+      displayPhoneNumber: "+55 11 95285-5135",
+      verifiedName: "DRAX 02",
+    };
+    const repo = {
+      async listOpenByTenant() {
+        return [row];
+      },
+      async findOpenByTenant() {
+        return row;
+      },
+    };
+    let hang = true;
+    const graph = async () => {
+      const started = Date.now();
+      while (hang && Date.now() - started < 8000) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      repo as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    try {
+      const assets = await service.listPortfolioAssets(pinAuth);
+      const chip = (assets.portfolios || [])
+        .flatMap((item) => item.numbers || [])
+        .find((item) => String(item.phoneNumberId || "") === "1272575335948086");
+      assert.ok(chip);
+      assert.equal(chip?.uiStatus, "ativo");
+      assert.equal(chip?.canActivate, false);
+    } finally {
+      hang = false;
+      purgePhoneIdentities(pinTenant);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
   });
 
   it("leituras simultâneas com fresh compartilham a Graph em voo", async () => {
@@ -4699,6 +4817,136 @@ describe("meta portfolio service", () => {
     assert.equal(added?.wabaId, "waba-buzina-behalf");
     assert.equal(
       (added?.numbers || []).some((row) => row.phoneNumberId === "phone-buzina-behalf"),
+      true,
+    );
+  });
+
+  it("BM convidada: client da agência só com o nome Casa Buzina lista WABA e números", async () => {
+    const buzinaAuth: WabaRequestAuth = { email: "casa-buzina-nome@exemplo.com", role: "subscriber" };
+    const buzinaTenant = deriveStableMetaTenantId("casa-buzina-nome@exemplo.com");
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup-buzina-nome",
+      tenantId: buzinaTenant,
+      ownerEmail: "casa-buzina-nome@exemplo.com",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup-buzina-nome"),
+    };
+    const rows: MetaWhatsappConnectionRecord[] = [walkup];
+    const buzinaPhone = {
+      id: "phone-buzina-nome",
+      display_phone_number: "+55 11 98888-0005",
+      verified_name: "Casa Buzina",
+      status: "CONNECTED",
+      code_verification_status: "VERIFIED",
+    };
+    const graph = async (input: { path: string; query?: Record<string, string> }) => {
+      if (input.path === "1067949032654572") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1067949032654572",
+            name: "Casa Buzina",
+            owned_whatsapp_business_accounts: { data: [] },
+            client_whatsapp_business_accounts: { data: [] },
+          },
+        };
+      }
+      if (input.path === "1067949032654572/owned_whatsapp_business_accounts") {
+        return { ok: true, status: 200, json: { data: [] } };
+      }
+      if (input.path === "1067949032654572/client_whatsapp_business_accounts") {
+        return { ok: true, status: 200, json: { data: [] } };
+      }
+      if (input.path === "4141369862822598/client_whatsapp_business_accounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "waba-buzina-nome",
+                name: "Casa Buzina",
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "waba-buzina-nome") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "waba-buzina-nome",
+            name: "Casa Buzina",
+          },
+        };
+      }
+      if (input.path === "waba-buzina-nome/phone_numbers") {
+        return { ok: true, status: 200, json: { data: [buzinaPhone] } };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return rows.slice();
+        },
+        async findOpenByTenant() {
+          return rows[0];
+        },
+        async findByBusinessId(_tenant: string, businessId: string) {
+          return rows.find((row) => String(row.metaBusinessId || "") === businessId) || null;
+        },
+        async ensureInvitedBusinessConnection(input: {
+          metaBusinessId: string;
+          wabaId?: string | null;
+          phoneNumberId?: string | null;
+          displayPhoneNumber?: string | null;
+          verifiedName?: string | null;
+          accessTokenEncrypted: string;
+        }) {
+          const existing = rows.find((row) => String(row.metaBusinessId || "") === input.metaBusinessId);
+          if (existing) return existing;
+          const created: MetaWhatsappConnectionRecord = {
+            ...walkup,
+            id: "conn-casa-buzina-nome",
+            metaBusinessId: input.metaBusinessId,
+            wabaId: input.wabaId || null,
+            phoneNumberId: input.phoneNumberId || null,
+            displayPhoneNumber: input.displayPhoneNumber || null,
+            verifiedName: input.verifiedName || null,
+            status: input.wabaId ? "pending_confirmation" : "pending_token",
+          };
+          rows.push(created);
+          return created;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.addManualPortfolioBusiness(buzinaAuth, "1067949032654572");
+    const added = (assets.portfolios || []).find((item) => item.id === "1067949032654572");
+    assert.equal(added?.name, "Casa Buzina");
+    assert.equal(added?.wabaId, "waba-buzina-nome");
+    assert.equal(
+      (added?.numbers || []).some((row) => row.phoneNumberId === "phone-buzina-nome"),
       true,
     );
   });

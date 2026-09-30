@@ -607,18 +607,26 @@ export function applyLocalPhoneIdentities(
         // Identidade local não pode abortar a listagem.
       }
     }
+    const storedUi =
+      identity?.uiStatus === "restrito" || row.uiStatus === "restrito"
+        ? "restrito"
+        : identity?.uiStatus === "ativo" || row.uiStatus === "ativo"
+          ? "ativo"
+          : identity?.uiStatus || row.uiStatus || null;
     const uiStatus = resolveListedPhoneUiStatus({
       metaStatus: row.metaStatus,
       codeVerificationStatus: row.codeVerificationStatus,
       healthCanSend: row.healthCanSend,
-      storedUiStatus: identity?.uiStatus || null,
+      storedUiStatus: storedUi,
     });
     const localPhoto = localPhonePhotoUrl(row.phoneNumberId, identity);
     const portfolioHidden = options?.hidden === true;
     const businessId = String(options?.businessId || "").replace(/\D/g, "") || null;
+    const persistUi =
+      Boolean(String(row.metaStatus || "").trim()) || uiStatus === "ativo" || uiStatus === "restrito";
     try {
       writePhoneIdentity(tenantId, row.phoneNumberId, {
-        uiStatus,
+        ...(persistUi ? { uiStatus } : {}),
         portfolioHidden,
         ...(businessId ? { businessId } : {}),
       });

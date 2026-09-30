@@ -40196,6 +40196,57 @@
         return String((item && (item.id || item.wabaId)) || "").trim();
       }
 
+      function metaTpPhoneUiRank(item) {
+        const ui = String((item && item.uiStatus) || "");
+        if (ui === "restrito") return 3;
+        if (ui === "ativo") return 2;
+        if (ui === "pendente") return 1;
+        return 0;
+      }
+
+      function metaTpMergeNumbers(previous, incoming) {
+        const prev = previous || [];
+        const next = incoming || [];
+        const byId = {};
+        const order = [];
+        const put = function (item) {
+          if (!item) return;
+          const id = String(item.phoneNumberId || "").trim();
+          if (!id) return;
+          const cur = byId[id];
+          if (!cur) {
+            byId[id] = item;
+            order.push(id);
+            return;
+          }
+          const preferIncoming = metaTpPhoneUiRank(item) >= metaTpPhoneUiRank(cur);
+          const better = preferIncoming ? item : cur;
+          const other = preferIncoming ? cur : item;
+          const ui =
+            cur.uiStatus === "restrito" || item.uiStatus === "restrito"
+              ? "restrito"
+              : cur.uiStatus === "ativo" || item.uiStatus === "ativo"
+                ? "ativo"
+                : better.uiStatus || other.uiStatus;
+          byId[id] = Object.assign({}, other, better, {
+            displayPhoneNumber: better.displayPhoneNumber || other.displayPhoneNumber || null,
+            verifiedName: better.verifiedName || other.verifiedName || null,
+            metaStatus: better.metaStatus || other.metaStatus || null,
+            wabaId: better.wabaId || other.wabaId || null,
+            uiStatus: ui,
+            canActivate:
+              ui === "ativo"
+                ? Boolean(better.nameNeedsRegister || other.nameNeedsRegister)
+                : Boolean(better.canActivate || other.canActivate),
+          });
+        };
+        prev.forEach(put);
+        next.forEach(put);
+        return order.map(function (id) {
+          return byId[id];
+        });
+      }
+
       function metaTpMergePortfolioBundles(previous, incoming) {
         const prev = previous || [];
         const next = incoming || [];
@@ -40215,8 +40266,8 @@
             return;
           }
           const cur = byId[id];
-          const incomingNums = preferIncoming ? item.numbers : cur.numbers;
-          const keptNums = preferIncoming ? cur.numbers : item.numbers;
+          const incomingNums = item.numbers;
+          const keptNums = cur.numbers;
           byId[id] = Object.assign({}, cur, preferIncoming ? item : {}, {
             name: (preferIncoming ? item.name : cur.name) || cur.name || item.name || null,
             wabaId: (preferIncoming ? item.wabaId : cur.wabaId) || cur.wabaId || item.wabaId || null,
@@ -40239,8 +40290,7 @@
               (preferIncoming ? item.connectionId : cur.connectionId) ||
               cur.connectionId ||
               item.connectionId,
-            numbers:
-              incomingNums && incomingNums.length ? incomingNums : keptNums && keptNums.length ? keptNums : [],
+            numbers: metaTpMergeNumbers(keptNums || [], incomingNums || []),
           });
         };
         prev.forEach(function (item) {
@@ -40334,7 +40384,7 @@
               : '<span class="meta-number-chip is-idle">Disponível</span>';
             const inboxOn = item.inboxEnabled === true;
             const botOn = item.botEnabled === true;
-            const showActivate = Boolean(id) && !restrito && (item.canActivate || !ativo);
+            const showActivate = Boolean(id) && !restrito && item.canActivate === true;
             const activate = showActivate
               ? '<div class="meta-number-activate">' +
                 "<label>" +
