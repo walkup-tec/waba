@@ -2506,37 +2506,11 @@ class MetaWhatsappConnectionService {
         const byBusiness = incomingBusinessId
             ? await this.repository.findByBusinessId(tenant.tenantId, incomingBusinessId)
             : null;
-        const pendingBm = String(pendingToken?.metaBusinessId || "").trim();
-        const pendingConflicts = Boolean(pendingToken &&
-            pendingBm &&
-            incomingBusinessId &&
-            !(0, meta_whatsapp_known_owned_wabas_1.metaBusinessIdsMatch)(pendingBm, incomingBusinessId));
-        const mergeIntoExisting = Boolean(byBusiness && pendingToken && pendingToken.id !== byBusiness.id);
-        let open = mergeIntoExisting && byBusiness
-            ? byBusiness
-            : pendingConflicts
-                ? byBusiness
-                : pendingToken || byBusiness;
-        const repo = this.repository;
-        if (!open &&
-            incomingBusinessId &&
+        const mergeIntoConnected = Boolean(byBusiness &&
+            byBusiness.status === "connected" &&
             pendingToken &&
-            pendingConflicts &&
-            typeof repo.ensureInvitedBusinessConnection === "function") {
-            open = await repo.ensureInvitedBusinessConnection({
-                tenantId: tenant.tenantId,
-                ownerEmail: tenant.ownerEmail,
-                actorEmail: tenant.ownerEmail,
-                metaBusinessId: incomingBusinessId,
-                wabaId: String(input.wabaId || "").trim() || null,
-                phoneNumberId: String(input.phoneNumberId || "").trim() || null,
-                displayPhoneNumber: input.displayPhoneNumber || null,
-                verifiedName: input.verifiedName || null,
-                accessTokenEncrypted: pendingToken.accessTokenEncrypted,
-                tokenType: pendingToken.tokenType,
-                tokenExpiresAt: pendingToken.tokenExpiresAt,
-            });
-        }
+            pendingToken.id !== byBusiness.id);
+        const open = mergeIntoConnected && byBusiness ? byBusiness : pendingToken || byBusiness;
         if (!open) {
             throw new meta_whatsapp_errors_1.MetaWhatsappError("no_pending_connection");
         }
@@ -2553,9 +2527,9 @@ class MetaWhatsappConnectionService {
                 metaBusinessId: businessId || null,
                 displayPhoneNumber: input.displayPhoneNumber || open.displayPhoneNumber,
                 verifiedName: input.verifiedName || open.verifiedName,
-                accessTokenEncrypted: mergeIntoExisting ? pendingToken?.accessTokenEncrypted || null : null,
-                tokenType: mergeIntoExisting ? pendingToken?.tokenType || null : null,
-                tokenExpiresAt: mergeIntoExisting ? pendingToken?.tokenExpiresAt || null : null,
+                accessTokenEncrypted: mergeIntoConnected ? pendingToken?.accessTokenEncrypted || null : null,
+                tokenType: mergeIntoConnected ? pendingToken?.tokenType || null : null,
+                tokenExpiresAt: mergeIntoConnected ? pendingToken?.tokenExpiresAt || null : null,
                 actorEmail: tenant.ownerEmail,
             });
             (0, meta_whatsapp_errors_1.logMetaWhatsappSafe)("assets-claimed", {
@@ -2566,6 +2540,7 @@ class MetaWhatsappConnectionService {
                 hasBusiness: Boolean(row.metaBusinessId),
                 status: row.status,
             });
+            const repo = this.repository;
             if (typeof repo.disconnectEmptyPendingTokens === "function") {
                 await repo.disconnectEmptyPendingTokens(tenant.tenantId, tenant.ownerEmail, row.id);
             }
@@ -2590,18 +2565,6 @@ class MetaWhatsappConnectionService {
             }
             if (businessId) {
                 (0, meta_whatsapp_hidden_business_store_1.unhideBusiness)(tenant.tenantId, businessId);
-            }
-            if (businessId && wabaId) {
-                persistManualCardWaba(tenant.tenantId, {
-                    id: businessId,
-                    name: null,
-                    primaryPageId: null,
-                    primaryPageName: null,
-                    profilePictureUrl: null,
-                    wabaId,
-                    hidden: false,
-                    numbers: [],
-                });
             }
             (0, meta_whatsapp_portfolio_graph_cache_1.invalidateCachedPortfolioGraph)(tenant.tenantId);
             return toMetaWhatsappPublicConnection(row);
@@ -2834,7 +2797,7 @@ class MetaWhatsappConnectionService {
     }
     /**
      * GET {business-id} com o token já conectado e guarda o ID para o Atualizar.
-     * Sem WABA inventada — o card pode ficar vazio até Integrar Meta.
+     * Sem WABA inventada — o card pode ficar vazio até a Meta compartilhar a conta.
      */
     async addManualPortfolioBusiness(auth, rawBusinessId) {
         const tenant = requireTenant(auth);

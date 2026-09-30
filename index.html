@@ -3871,13 +3871,6 @@
           padding: 6px 10px;
           font-size: 12px;
         }
-        .meta-portfolio-integrate {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 8px;
-          margin: 12px 16px 0;
-        }
         .meta-portfolio-add-bm input::placeholder {
           color: rgba(226, 232, 240, 0.45);
         }
@@ -27802,8 +27795,6 @@
           if (businessId && wabaId) {
             extrasSetup.business = { id: businessId };
             extrasSetup.whatsAppBusinessAccount = { ids: wabaId };
-          } else if (businessId) {
-            extrasSetup.business = { id: businessId };
           }
           return {
             config_id: id,
@@ -39633,7 +39624,6 @@
         finishEvent: "",
         advancing: false,
         addNumber: false,
-        integrateBusiness: false,
         portfolios: [],
       };
       let metaTpLogLines = [];
@@ -39801,7 +39791,6 @@
         metaTpSession.finishEvent = "";
         metaTpSession.advancing = false;
         metaTpSession.addNumber = false;
-        metaTpSession.integrateBusiness = false;
         if (keepPortfolios) return;
         metaTpSession.savedBusinessId = "";
         metaTpSession.savedWabaId = "";
@@ -40616,14 +40605,7 @@
           "</span></header>" +
           (selectedNums.length
             ? '<div class="meta-number-list">' + metaTpNumberCardsHtml(selectedNums, selected) + "</div>"
-            : '<p class="meta-portfolio-numbers-empty">Nenhum número neste portfólio.' +
-              (selected && String(selected.id || "").trim()
-                ? "<span>A Meta ainda não compartilhou as contas WhatsApp deste portfólio com o app. Integre este Business Manager para listar as WABAs e os números.</span></p>" +
-                  '<div class="meta-portfolio-integrate">' +
-                  '<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-integrate-portfolio="' +
-                  metaTpEsc(String(selected.id || "")) +
-                  '">Integrar Meta</button></div>'
-                : "<span>Use o + no card à esquerda para adicionar um número.</span></p>")) +
+            : '<p class="meta-portfolio-numbers-empty">Nenhum número neste portfólio.<span>Use o + no card à esquerda para adicionar um número.</span></p>') +
           "</div>";
         Array.prototype.forEach.call(listEl.querySelectorAll(".meta-portfolio-card"), function (cardEl, index) {
           const item = portfolios[index];
@@ -41102,21 +41084,13 @@
             }
           }
 
-          const claimBusinessId = String(
-            metaTpSession.integrateBusiness || metaTpSession.addNumber
-              ? metaTpSession.savedBusinessId || metaTpSession.businessId
-              : metaTpSession.businessId || metaTpSession.savedBusinessId || "",
-          ).trim();
-          if (
-            metaTpSession.exchanged &&
-            (metaTpSession.wabaId || (metaTpSession.integrateBusiness && claimBusinessId))
-          ) {
+          if (metaTpSession.exchanged && metaTpSession.wabaId) {
             const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/complete", {
               method: "POST",
               body: JSON.stringify({
-                wabaId: metaTpSession.wabaId || undefined,
+                wabaId: metaTpSession.wabaId,
                 phoneNumberId: metaTpSession.phoneNumberId || undefined,
-                businessId: claimBusinessId || metaTpSession.businessId || undefined,
+                businessId: metaTpSession.businessId || undefined,
               }),
             });
             if (!response.ok || payload.ok === false) {
@@ -41210,7 +41184,6 @@
             : "";
         if (setupBusinessId) metaTpSession.savedBusinessId = setupBusinessId;
         if (setupBusinessId && setupWabaId) metaTpSession.addNumber = true;
-        else if (setupBusinessId) metaTpSession.integrateBusiness = true;
         if (window.location.protocol !== "https:") {
           metaTpSetStatus("O Embedded Signup exige HTTPS. Abra o Waba em https://waba.draxsistemas.com.br/");
           return false;
@@ -41242,15 +41215,9 @@
           return false;
         }
         window.__wabaMetaTechSignupActive = true;
-        metaTpLog(
-          metaTpSession.addNumber
-            ? "adicionar número"
-            : metaTpSession.integrateBusiness
-              ? "integrar BM"
-              : "início",
-        );
+        metaTpLog(metaTpSession.addNumber ? "adicionar número" : "início");
         if (typeof window.wabaMetaLabSetStep === "function") {
-          window.wabaMetaLabSetStep(metaTpSession.addNumber || metaTpSession.integrateBusiness ? 4 : 2);
+          window.wabaMetaLabSetStep(metaTpSession.addNumber ? 4 : 2);
         }
         metaTpFetchJson("/integrations/meta/whatsapp/start").catch(function () {});
         const onFbLogin = function (response) {
@@ -41281,9 +41248,7 @@
           metaTpSetStatus(String((invoked && invoked.error) || "SDK da Meta não carregou. Verifique bloqueador de anúncios."));
         } else if (invoked.mode === "popup" || invoked.mode === "page") {
           metaTpSetStatus(
-            metaTpSession.integrateBusiness
-              ? "Conclua o Login da Meta na janela. Escolha as contas WhatsApp deste portfólio."
-              : "Conclua o Login da Meta na janela que abrir. Esse fluxo não usa Página do Facebook.",
+            "Conclua o Login da Meta na janela que abrir. Esse fluxo não usa Página do Facebook.",
           );
         }
         return false;
@@ -41297,15 +41262,6 @@
             ? { business: { id: businessId }, whatsAppBusinessAccount: { ids: wabaId } }
             : {};
         return window.wabaConnectMetaWhatsappOficial(event, setup);
-      };
-
-      window.wabaIntegrateMetaPortfolio = function wabaIntegrateMetaPortfolio(event) {
-        const businessId = String(metaTpSession.savedBusinessId || "").replace(/\D/g, "");
-        if (businessId.length < 6) {
-          metaTpSetStatus("Selecione o portfólio à esquerda.");
-          return false;
-        }
-        return window.wabaConnectMetaWhatsappOficial(event, { business: { id: businessId } });
       };
 
       window.wabaActivateMetaWhatsappNumber = async function wabaActivateMetaWhatsappNumber(phoneNumberId, pin, connectionId) {
@@ -41346,13 +41302,6 @@
           event.preventDefault();
           event.stopPropagation();
           window.wabaHideMetaPortfolio(hidePortfolioBtn.getAttribute("data-meta-hide-portfolio"));
-          return;
-        }
-        const integrateBtn = target.closest("[data-meta-integrate-portfolio]");
-        if (integrateBtn) {
-          event.preventDefault();
-          metaTpSession.savedBusinessId = String(integrateBtn.getAttribute("data-meta-integrate-portfolio") || "").trim();
-          window.wabaIntegrateMetaPortfolio(event);
           return;
         }
         const addNumberBtn = target.closest("[data-meta-add-number]");
@@ -41586,11 +41535,7 @@
           metaTpLog(eventName === "CANCEL" ? "fluxo cancelado" : "erro no Embedded Signup");
           return;
         }
-        if (
-          metaTpSession.wabaId ||
-          metaTpSession.phoneNumberId ||
-          META_TP_FINISH_EVENTS[eventName]
-        ) {
+        if (metaTpSession.wabaId || metaTpSession.phoneNumberId) {
           metaTpTryAdvance();
         }
       });
@@ -41638,17 +41583,6 @@
           if (parsed.wabaId) metaTpSession.wabaId = parsed.wabaId;
           if (parsed.phoneNumberId) metaTpSession.phoneNumberId = parsed.phoneNumberId;
           if (parsed.businessId) metaTpSession.businessId = parsed.businessId;
-          var pendingBiz =
-            pending && pending.setup && pending.setup.business
-              ? String(pending.setup.business.id || "").trim()
-              : "";
-          var pendingWaba =
-            pending && pending.setup && pending.setup.whatsAppBusinessAccount
-              ? String(pending.setup.whatsAppBusinessAccount.ids || "").trim()
-              : "";
-          if (pendingBiz) metaTpSession.savedBusinessId = pendingBiz;
-          if (pendingBiz && pendingWaba) metaTpSession.addNumber = true;
-          else if (pendingBiz) metaTpSession.integrateBusiness = true;
           metaTpLog("retorno OAuth da janela Facebook");
           metaTpSetStatus("Facebook concluído neste perfil. Gravando a WABA no Laboratório…");
           window.__WABA_META_ES_OAUTH_RETURN = null;

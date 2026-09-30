@@ -98,12 +98,10 @@ function buildMetaEsSetupPrefill(input) {
     };
     const businessId = String(input.businessId || "").trim();
     const wabaId = String(input.wabaId || "").trim();
+    // Prefill de BM/WABA só no fluxo «adicionar número»: os dois juntos.
     if (businessId && wabaId) {
         setup.business = { id: businessId };
         setup.whatsAppBusinessAccount = { ids: wabaId };
-    }
-    else if (businessId) {
-        setup.business = { id: businessId };
     }
     return setup;
 }
