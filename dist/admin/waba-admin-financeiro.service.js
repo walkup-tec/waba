@@ -10,8 +10,6 @@ const waba_billing_order_repository_1 = require("../billing/waba-billing-order.r
 const waba_billing_service_1 = require("../billing/waba-billing.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
-const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
-const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const maskApiBaseUrl = (raw) => {
     const value = String(raw || "").trim().replace(/\/$/, "");
     if (!value)
@@ -43,12 +41,11 @@ const resolveTransferAuthWebhookPublicUrl = () => {
     return "/webhooks/asaas/transfer-authorization";
 };
 class WabaAdminFinanceiroService {
-    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), billingService = new waba_billing_service_1.WabaBillingService(), splitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService(), systemUserService = new waba_system_user_service_1.WabaSystemUserService(), subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository()) {
+    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), billingService = new waba_billing_service_1.WabaBillingService(), splitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService(), systemUserService = new waba_system_user_service_1.WabaSystemUserService()) {
         this.orderRepository = orderRepository;
         this.billingService = billingService;
         this.splitService = splitService;
         this.systemUserService = systemUserService;
-        this.subscriberRepository = subscriberRepository;
     }
     toAdminOrder(order) {
         const publicOrder = this.billingService.getOrderStatus(order.id);
@@ -196,11 +193,8 @@ class WabaAdminFinanceiroService {
             !(0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(order.ownerEmail))
             .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     }
-    listDisparosOrdersForViewer(viewerEmail = "") {
-        return this.listDisparosOrdersSorted().filter((order) => {
-            const subscriber = this.subscriberRepository.getByEmail(String(order.ownerEmail || "").trim());
-            return (0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(viewerEmail, subscriber);
-        });
+    listDisparosOrdersForViewer(_viewerEmail = "") {
+        return this.listDisparosOrdersSorted();
     }
     listOrders(params) {
         const limitRaw = Number(params?.limit ?? 10);

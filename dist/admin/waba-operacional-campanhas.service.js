@@ -15,7 +15,6 @@ const waba_campaign_spreadsheet_util_1 = require("../disparos/waba-campaign-spre
 const waba_campaign_oficial_control_phones_1 = require("../disparos/waba-campaign-oficial-control-phones");
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
-const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const waba_operacional_dispatches_apis_1 = require("../users/waba-operacional-dispatches-apis");
 const waba_operacional_segments_1 = require("../users/waba-operacional-segments");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
@@ -175,12 +174,6 @@ class WabaOperacionalCampanhasService {
         if (!this.matchesStaffSegmentFilter(intake, staff))
             return false;
         if (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email) || staff.role === "suporte") {
-            if (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email)) {
-                const subscriber = this.subscriberRepository.getByEmail(normalizeEmail(intake.ownerEmail));
-                if (!(0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(staff.email, subscriber)) {
-                    return false;
-                }
-            }
             return true;
         }
         if (staff.role === "indicador") {

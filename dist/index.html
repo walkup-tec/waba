@@ -12061,10 +12061,6 @@
         overflow-wrap: anywhere;
       }
 
-      #admin-subscribers-list-table .admin-subscribers-visible-col {
-        width: 72px;
-      }
-
       #admin-subscribers-list-table .admin-subscribers-num {
         width: 7.5%;
         white-space: nowrap;
@@ -12373,53 +12369,6 @@
 
       .admin-subscribers-origin-icon.is-user {
         background: #a78bfa;
-      }
-
-      .admin-subscribers-visible-col {
-        width: 88px;
-        text-align: center;
-      }
-
-      #admin-subscribers-list-table:not(.show-visibility) .admin-subscribers-visible-col {
-        display: none;
-      }
-
-      .admin-subscribers-visibility-toggle {
-        position: relative;
-        width: 42px;
-        height: 24px;
-        padding: 0;
-        border: 0;
-        border-radius: 999px;
-        background: #334155;
-        cursor: pointer;
-        vertical-align: middle;
-      }
-
-      .admin-subscribers-visibility-toggle::after {
-        content: "";
-        position: absolute;
-        top: 3px;
-        left: 3px;
-        width: 18px;
-        height: 18px;
-        border-radius: 999px;
-        background: #e2e8f0;
-        transition: transform 0.16s ease, background 0.16s ease;
-      }
-
-      .admin-subscribers-visibility-toggle.is-on {
-        background: #22c55e;
-      }
-
-      .admin-subscribers-visibility-toggle.is-on::after {
-        transform: translateX(18px);
-        background: #f8fafc;
-      }
-
-      .admin-subscribers-visibility-toggle:disabled {
-        opacity: 0.55;
-        cursor: wait;
       }
 
       .admin-subscribers-origin-icon:hover,
@@ -24972,7 +24921,6 @@
                       <tr>
                         <th scope="col">Nome</th>
                         <th scope="col" class="admin-subscribers-origin-col">Origem</th>
-                        <th scope="col" class="admin-subscribers-visible-col">Visível</th>
                         <th scope="col">Segmento</th>
                         <th scope="col">CPF ou CNPJ</th>
                         <th scope="col">Data inscrição</th>
@@ -34821,18 +34769,8 @@
         return div.innerHTML;
       }
 
-      let adminSubscribersCanToggleVisibility = false;
-
       function adminSubscribersColspan() {
-        return adminSubscribersCanToggleVisibility ? 11 : 10;
-      }
-
-      function setAdminSubscribersVisibilityColumn(enabled) {
-        adminSubscribersCanToggleVisibility = enabled === true;
-        document.getElementById("admin-subscribers-list-table")?.classList.toggle(
-          "show-visibility",
-          adminSubscribersCanToggleVisibility
-        );
+        return 10;
       }
 
       const ADMIN_ORIGIN_ICON_SITE =
@@ -34863,20 +34801,6 @@
             <span class="admin-subscribers-origin-icon ${originKind === "user" ? "is-user" : "is-site"}" aria-hidden="true">${originIcon}</span>
             <span class="admin-subscribers-origin-label">${originLabel}</span>
           </span>`;
-        const visibleOn = item?.visibleToMasters !== false;
-        const visibilityCell = `<td class="admin-subscribers-visible-col">${
-          adminSubscribersCanToggleVisibility
-            ? `<button
-                type="button"
-                class="admin-subscribers-visibility-toggle${visibleOn ? " is-on" : ""}"
-                role="switch"
-                aria-checked="${visibleOn ? "true" : "false"}"
-                aria-label="${visibleOn ? "Visível para todos os masters" : "Visível somente para Walkup"}"
-                data-subscriber-id="${subscriberId}"
-                data-visible="${visibleOn ? "true" : "false"}"
-              ></button>`
-            : ""
-        }</td>`;
         const rowClass = mergeMasterMenuNewRowClass("admin-assinantes", item?.createdAt, "");
         const rowAttrs = rowClass ? `class="${rowClass}"` : "";
         const newMarker = renderMasterMenuNewMarker("admin-assinantes", item?.createdAt);
@@ -34914,7 +34838,6 @@
                   ${email ? `<span class="admin-subscribers-email">${email}</span>` : ""}
                 </td>
                 <td class="admin-subscribers-origin-col">${originCell}</td>
-                ${visibilityCell}
                 <td>${segment}</td>
                 <td>${cpf}</td>
                 <td>${createdAt}</td>
@@ -38085,12 +38008,6 @@
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível carregar os assinantes.");
           }
-          setAdminSubscribersVisibilityColumn(
-            payload.canToggleVisibility === true ||
-              String(typeof wabaSessionEmail !== "undefined" ? wabaSessionEmail : "")
-                .trim()
-                .toLowerCase() === "walkup@walkuptec.com.br"
-          );
           renderAdminSubscribersTable(payload.items);
         } catch (error) {
           if (tbody) {
@@ -38100,40 +38017,6 @@
           }
           if (summary) summary.textContent = "Falha ao carregar.";
           showToast(resolveAdminSubscriberFetchError(error, "Falha ao carregar assinantes."), "error", 4800);
-        }
-      }
-
-      async function toggleAdminSubscriberVisibility(button) {
-        if (!(button instanceof HTMLButtonElement)) return;
-        const subscriberId = String(button.getAttribute("data-subscriber-id") || "").trim();
-        if (!subscriberId) return;
-        const nextVisible = button.getAttribute("data-visible") !== "true";
-        button.disabled = true;
-        try {
-          const response = await fetchWithTimeout(
-            `/admin/subscribers/${encodeURIComponent(subscriberId)}/visibility`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ visibleToMasters: nextVisible }),
-            },
-            20000
-          );
-          const payload = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            throw new Error(payload.error || "Não foi possível alterar a visibilidade.");
-          }
-          button.classList.toggle("is-on", nextVisible);
-          button.setAttribute("data-visible", nextVisible ? "true" : "false");
-          button.setAttribute("aria-checked", nextVisible ? "true" : "false");
-          button.setAttribute(
-            "aria-label",
-            nextVisible ? "Visível para todos os masters" : "Visível somente para Walkup"
-          );
-        } catch (error) {
-          showToast(error?.message || "Não foi possível alterar a visibilidade.", "error", 4200);
-        } finally {
-          button.disabled = false;
         }
       }
 
@@ -51221,13 +51104,6 @@
         document.getElementById("admin-subscribers-tbody")?.addEventListener("click", (event) => {
           const target = event.target;
           if (!(target instanceof Element)) return;
-          const visibilityBtn = target.closest(".admin-subscribers-visibility-toggle");
-          if (visibilityBtn) {
-            event.preventDefault();
-            event.stopPropagation();
-            void toggleAdminSubscriberVisibility(visibilityBtn);
-            return;
-          }
           if (target.closest(".admin-subscribers-origin-icon")) {
             event.preventDefault();
             event.stopPropagation();

@@ -109,6 +109,7 @@ const waba_campaign_intake_routes_1 = require("./disparos/waba-campaign-intake.r
 const waba_campaign_intake_clone_1 = require("./disparos/waba-campaign-intake-clone");
 const waba_campaign_report_force_complete_1 = require("./disparos/waba-campaign-report-force-complete");
 const waba_campaign_pelli_reopen_aifocus_1 = require("./disparos/waba-campaign-pelli-reopen-aifocus");
+const waba_remove_eduardo_quantumivst_oneshot_1 = require("./users/waba-remove-eduardo-quantumivst-oneshot");
 const waba_campaign_intake_original_link_backfill_1 = require("./disparos/waba-campaign-intake-original-link-backfill");
 const waba_campaign_pelli_response_alias_1 = require("./disparos/waba-campaign-pelli-response-alias");
 const waba_financeiro_split_manual_paid_1 = require("./billing/waba-financeiro-split-manual-paid");
@@ -14329,6 +14330,8 @@ const httpServer = app.listen(PORT, () => {
         console.log(`[campanhas] relatório pontual finalizado: ${forcedReportComplete.message}`);
         const pelliReopen = (0, waba_campaign_pelli_reopen_aifocus_1.runPelliReopenAifocusOneshot)();
         console.log(`[campanhas] Pelli fila aifocus: ${pelliReopen.message}`);
+        const removeEduardo = (0, waba_remove_eduardo_quantumivst_oneshot_1.runRemoveEduardoQuantumivstOneshot)();
+        console.log(`[usuarios] remove Eduardo quantumivst: ${removeEduardo.message}`);
         const originalLinkBackfill = await (0, waba_campaign_intake_original_link_backfill_1.runOriginalResponseLinkBackfillOneshot)();
         console.log(`[campanhas] link original da cliente: ${originalLinkBackfill.message}`);
         const pelliAlias = await (0, waba_campaign_pelli_response_alias_1.runPelliResponseAliasOneshot)();

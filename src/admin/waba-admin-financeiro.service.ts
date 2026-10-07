@@ -7,8 +7,6 @@ import { WabaBillingOrderRepository, type WabaBillingOrder } from "../billing/wa
 import { WabaBillingService } from "../billing/waba-billing.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { isWabaMetricsExcludedOwnerEmail } from "../billing/waba-metrics-excluded-owners";
-import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
-import { canViewerSeeSubscriber } from "../users/waba-subscriber-master-visibility";
 
 const maskApiBaseUrl = (raw: string): string => {
   const value = String(raw || "").trim().replace(/\/$/, "");
@@ -43,7 +41,6 @@ export class WabaAdminFinanceiroService {
     private readonly billingService = new WabaBillingService(),
     private readonly splitService = new WabaFinanceiroSplitService(),
     private readonly systemUserService = new WabaSystemUserService(),
-    private readonly subscriberRepository = new WabaSubscriberRepository(),
   ) {}
 
   private toAdminOrder(order: WabaBillingOrder) {
@@ -212,11 +209,8 @@ export class WabaAdminFinanceiroService {
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   }
 
-  private listDisparosOrdersForViewer(viewerEmail = "") {
-    return this.listDisparosOrdersSorted().filter((order) => {
-      const subscriber = this.subscriberRepository.getByEmail(String(order.ownerEmail || "").trim());
-      return canViewerSeeSubscriber(viewerEmail, subscriber);
-    });
+  private listDisparosOrdersForViewer(_viewerEmail = "") {
+    return this.listDisparosOrdersSorted();
   }
 
   listOrders(params?: { limit?: number; offset?: number; viewerEmail?: string }) {

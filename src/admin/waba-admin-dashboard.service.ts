@@ -9,7 +9,6 @@ import { WabaAdminSubscribersService } from "./waba-admin-subscribers.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaOperacionalCampanhasService } from "./waba-operacional-campanhas.service";
 import { isWabaMetricsExcludedOwnerEmail } from "../billing/waba-metrics-excluded-owners";
-import { canViewerSeeSubscriber } from "../users/waba-subscriber-master-visibility";
 
 export type AdminDashboardAuth = {
   role: string;
@@ -292,17 +291,13 @@ export class WabaAdminDashboardService {
           .filter((campaign) => !isWabaMetricsExcludedOwnerEmail(campaign.subscriberEmail))
       : [];
     const users = capabilities.users ? this.usersService.listUsers() : [];
-    const subscribersByEmail = new Map(
-      subscribers.map((item) => [String(item.email || "").toLowerCase(), item]),
-    );
 
     const disparosOrders = this.orderRepository
       .list()
       .filter((order) => {
         if (order.product !== "waba-disparos") return false;
         if (isWabaMetricsExcludedOwnerEmail(order.ownerEmail)) return false;
-        const owner = String(order.ownerEmail || "").trim().toLowerCase();
-        return canViewerSeeSubscriber(auth.email, subscribersByEmail.get(owner) ?? null);
+        return true;
       })
       .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
 

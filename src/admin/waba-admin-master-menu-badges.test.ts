@@ -5,7 +5,6 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { WALKUP_MASTER_EMAIL } from "../users/waba-subscriber-master-visibility";
 
-const EDUARDO = "eduardo.master@exemplo.com";
 const HIDDEN_EMAIL = "raphaela.oculta@exemplo.com";
 const VISIBLE_EMAIL = "cliente.visivel@exemplo.com";
 const SEEN_AT = "2026-09-24T10:00:00.000Z";
@@ -24,9 +23,9 @@ function seed() {
     version: 1,
     users: [
       {
-        id: "eduardo",
-        fullName: "Eduardo Master",
-        email: EDUARDO,
+        id: "walkup",
+        fullName: "Walkup",
+        email: WALKUP_MASTER_EMAIL,
         passwordHash: "x",
         role: "master",
         createdAt: NEW_AT,
@@ -216,13 +215,6 @@ function seed() {
   writeJson("waba-master-menu-seen.json", {
     version: 1,
     masters: {
-      [EDUARDO]: {
-        "admin-assinantes": SEEN_AT,
-        "admin-campanhas": SEEN_AT,
-        "admin-usuarios": SEEN_AT,
-        "admin-financeiro": SEEN_AT,
-        "admin-chamados": SEEN_AT,
-      },
       [WALKUP_MASTER_EMAIL]: {
         "admin-assinantes": SEEN_AT,
         "admin-campanhas": SEEN_AT,
@@ -234,7 +226,7 @@ function seed() {
   });
 }
 
-describe("badges do menu master respeitam Visível", () => {
+describe("badges do menu master contam itens novos", () => {
   before(() => {
     process.chdir(dataRoot);
     seed();
@@ -245,16 +237,7 @@ describe("badges do menu master respeitam Visível", () => {
     rmSync(dataRoot, { recursive: true, force: true });
   });
 
-  it("Eduardo não conta campanha, financeiro, assinante nem chamado de Visível off", async () => {
-    const { WabaAdminMasterMenuBadgesService } = await import("./waba-admin-master-menu-badges.service");
-    const badges = new WabaAdminMasterMenuBadgesService().getBadges(EDUARDO);
-    assert.equal(badges["admin-campanhas"], 1);
-    assert.equal(badges["admin-financeiro"], 1);
-    assert.equal(badges["admin-assinantes"], 1);
-    assert.equal(badges["admin-chamados"], 1);
-  });
-
-  it("Walkup continua vendo as ações do assinante oculto", async () => {
+  it("conta assinantes, campanhas, financeiro e chamados novos", async () => {
     const { WabaAdminMasterMenuBadgesService } = await import("./waba-admin-master-menu-badges.service");
     const badges = new WabaAdminMasterMenuBadgesService().getBadges(WALKUP_MASTER_EMAIL);
     assert.equal(badges["admin-campanhas"], 3);

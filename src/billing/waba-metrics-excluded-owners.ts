@@ -6,7 +6,6 @@
  */
 export const WABA_METRICS_EXCLUDED_OWNER_EMAILS = [
   "mozart.pmo@gmail.com",
-  "quantumivst@gmail.com",
   "walkup@walkuptec.com.br",
 ] as const;
 

@@ -45,10 +45,6 @@ import { WabaIndicatorCommissionService } from "../indicators/waba-indicator-com
 import { WabaIndicatorProfileRepository } from "../indicators/waba-indicator-profile.repository";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
-import {
-  canViewerSeeSubscriber,
-  resolveVisibleMasterProfitPercents,
-} from "../users/waba-subscriber-master-visibility";
 
 const PERCENT_SUM_TOLERANCE = 0.01;
 
@@ -196,18 +192,14 @@ export class WabaFinanceiroSplitService {
     return this.payoutService.isPayoutEnabled();
   }
 
-  listSettlements(limit = 100, viewerEmail = "") {
+  listSettlements(limit = 100, _viewerEmail = "") {
     this.absorbSyntheticCampaignSupplierSettlements();
     const items = filterOutMetricsExcludedOwners(this.settlementRepository.list(limit));
     const subscribers = this.subscriberRepository.list();
     const byEmail = new Map(
       subscribers.map((item) => [String(item.email || "").trim().toLowerCase(), item]),
     );
-    const visible = items.filter((item) => {
-      const owner = this.normalizeOwnerEmail(item.ownerEmail);
-      return canViewerSeeSubscriber(viewerEmail, byEmail.get(owner) ?? null);
-    });
-    return visible.map((item) => {
+    return items.map((item) => {
       const settled = applyManualBankPaidSplit(item);
       return {
         ...settled,
@@ -568,11 +560,7 @@ export class WabaFinanceiroSplitService {
     }
 
     if (distributableCents > 0 && payProfits && activeParticipants.length) {
-      const subscriber = this.subscriberRepository.getByEmail(order.ownerEmail);
-      const profitParticipants = resolveVisibleMasterProfitPercents(
-        activeParticipants,
-        subscriber,
-      );
+      const profitParticipants = activeParticipants;
       const percents = profitParticipants.map((item) => item.sharePercent);
       const amounts = distributeCentsByPercents(distributableCents, percents);
       for (const [index, participant] of profitParticipants.entries()) {

@@ -9,7 +9,6 @@ exports.filterOutMetricsExcludedOwners = exports.isWabaMetricsExcludedOwnerEmail
  */
 exports.WABA_METRICS_EXCLUDED_OWNER_EMAILS = [
     "mozart.pmo@gmail.com",
-    "quantumivst@gmail.com",
     "walkup@walkuptec.com.br",
 ];
 const EXCLUDED_SET = new Set(exports.WABA_METRICS_EXCLUDED_OWNER_EMAILS.map((email) => email.trim().toLowerCase()));

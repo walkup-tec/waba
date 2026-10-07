@@ -12,7 +12,6 @@ describe("waba-laboratorio-access", () => {
     assert.equal(isWabaLaboratorioOwnerEmail("mozart.pmo@gmail.com"), true);
     assert.equal(isWabaLaboratorioOwnerEmail("Mozart.Pmo@gmail.com"), true);
     assert.equal(isWabaLaboratorioOwnerEmail("walkup@walkuptec.com.br"), false);
-    assert.equal(isWabaLaboratorioOwnerEmail("quantumivst@gmail.com"), false);
   });
 
   it("localhost V02 libera Laboratório para validação", () => {
@@ -25,7 +24,6 @@ describe("waba-laboratorio-access", () => {
     const prod = { WABA_UI_PROFILE: "production", WABA_ENV: "production", RUNTIME_MODE: "production" };
     assert.equal(canAccessWabaLaboratorioMenus("mozart.pmo@gmail.com", prod), true);
     assert.equal(canAccessWabaLaboratorioMenus("walkup@walkuptec.com.br", prod), false);
-    assert.equal(canAccessWabaLaboratorioMenus("quantumivst@gmail.com", prod), false);
     assert.equal(
       canAccessWabaLaboratorioMenus("walkup@walkuptec.com.br", {
         WABA_ENV: "v02",

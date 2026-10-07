@@ -12,7 +12,6 @@ const waba_admin_subscribers_service_1 = require("./waba-admin-subscribers.servi
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
 const waba_operacional_campanhas_service_1 = require("./waba-operacional-campanhas.service");
 const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
-const waba_subscriber_master_visibility_1 = require("../users/waba-subscriber-master-visibility");
 const TREND_DAYS = 30;
 const GROWTH_DAYS = 30;
 const RECENT_ACTIVITY_LIMIT = 20;
@@ -246,7 +245,6 @@ class WabaAdminDashboardService {
                 .filter((campaign) => !(0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(campaign.subscriberEmail))
             : [];
         const users = capabilities.users ? this.usersService.listUsers() : [];
-        const subscribersByEmail = new Map(subscribers.map((item) => [String(item.email || "").toLowerCase(), item]));
         const disparosOrders = this.orderRepository
             .list()
             .filter((order) => {
@@ -254,8 +252,7 @@ class WabaAdminDashboardService {
                 return false;
             if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(order.ownerEmail))
                 return false;
-            const owner = String(order.ownerEmail || "").trim().toLowerCase();
-            return (0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(auth.email, subscribersByEmail.get(owner) ?? null);
+            return true;
         })
             .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
         let financeOverview = null;

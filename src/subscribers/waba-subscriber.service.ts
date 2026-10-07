@@ -8,7 +8,6 @@ import {
   type WabaSubscriberSegment,
 } from "./waba-subscriber-segment";
 import { WabaSubscriberRepository, type WabaSubscriber } from "./waba-subscriber.repository";
-import { defaultVisibleToMastersOnRegister } from "../users/waba-subscriber-master-visibility";
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 const normalizeDigits = (value: string): string => value.replace(/\D/g, "");
@@ -132,10 +131,6 @@ export class WabaSubscriberService {
       aquecedorGranted: aquecedorGranted || undefined,
       indicatorUserId: String(input.indicatorUserId ?? "").trim() || null,
       createdByEmail: normalizeEmail(String(input.createdByEmail ?? "")) || null,
-      visibleToMasters: defaultVisibleToMastersOnRegister({
-        createdByEmail: input.createdByEmail,
-        indicatorUserId: input.indicatorUserId,
-      }),
       createdAt: now,
       updatedAt: now,
     });

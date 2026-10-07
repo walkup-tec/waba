@@ -12,8 +12,8 @@ describe("origem do assinante na lista do master", () => {
     },
     {
       id: "master-1",
-      fullName: "Eduardo Silva",
-      email: "eduardo.master@exemplo.com",
+      fullName: "Carla Master",
+      email: "carla.master@exemplo.com",
       role: "master",
     },
   ];
@@ -29,13 +29,13 @@ describe("origem do assinante na lista do master", () => {
   it("mostra o nome do usuário quando o master cadastrou", () => {
     assert.deepEqual(
       resolveSubscriberOrigin(
-        { email: "a@x.com", createdByEmail: "eduardo.master@exemplo.com" },
+        { email: "a@x.com", createdByEmail: "carla.master@exemplo.com" },
         users,
       ),
       {
         kind: "user",
-        label: "Eduardo Silva",
-        userEmail: "eduardo.master@exemplo.com",
+        label: "Carla Master",
+        userEmail: "carla.master@exemplo.com",
       },
     );
   });

@@ -15,7 +15,6 @@ import {
 import { ensureOficialControlPhonesInLeadsBuffer } from "../disparos/waba-campaign-oficial-control-phones";
 import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
-import { canViewerSeeSubscriber } from "../users/waba-subscriber-master-visibility";
 import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
 import { operacionalServesDispatchesApi } from "../users/waba-operacional-dispatches-apis";
 import {
@@ -401,12 +400,6 @@ export class WabaOperacionalCampanhasService {
     if (!this.matchesStaffApiFilter(intake, staff)) return false;
     if (!this.matchesStaffSegmentFilter(intake, staff)) return false;
     if (staff.role === "master" || isWabaMasterEmail(staff.email) || staff.role === "suporte") {
-      if (staff.role === "master" || isWabaMasterEmail(staff.email)) {
-        const subscriber = this.subscriberRepository.getByEmail(normalizeEmail(intake.ownerEmail));
-        if (!canViewerSeeSubscriber(staff.email, subscriber)) {
-          return false;
-        }
-      }
       return true;
     }
     if (staff.role === "indicador") {

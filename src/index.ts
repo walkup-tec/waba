@@ -203,6 +203,7 @@ import { registerWabaCampaignIntakeRoutes } from "./disparos/waba-campaign-intak
 import { runOptInPtx1000CloneOneshot } from "./disparos/waba-campaign-intake-clone";
 import { runForcedCampaignReportCompleteOneshot } from "./disparos/waba-campaign-report-force-complete";
 import { runPelliReopenAifocusOneshot } from "./disparos/waba-campaign-pelli-reopen-aifocus";
+import { runRemoveEduardoQuantumivstOneshot } from "./users/waba-remove-eduardo-quantumivst-oneshot";
 import { runOriginalResponseLinkBackfillOneshot } from "./disparos/waba-campaign-intake-original-link-backfill";
 import { runPelliResponseAliasOneshot } from "./disparos/waba-campaign-pelli-response-alias";
 import { runManualBankPaidSplitOneshot } from "./billing/waba-financeiro-split-manual-paid";
@@ -16707,6 +16708,8 @@ const httpServer = app.listen(PORT, () => {
     console.log(`[campanhas] relatório pontual finalizado: ${forcedReportComplete.message}`);
     const pelliReopen = runPelliReopenAifocusOneshot();
     console.log(`[campanhas] Pelli fila aifocus: ${pelliReopen.message}`);
+    const removeEduardo = runRemoveEduardoQuantumivstOneshot();
+    console.log(`[usuarios] remove Eduardo quantumivst: ${removeEduardo.message}`);
     const originalLinkBackfill = await runOriginalResponseLinkBackfillOneshot();
     console.log(`[campanhas] link original da cliente: ${originalLinkBackfill.message}`);
     const pelliAlias = await runPelliResponseAliasOneshot();

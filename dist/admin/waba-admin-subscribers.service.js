@@ -132,7 +132,7 @@ class WabaAdminSubscribersService {
         }
         return byEmail;
     }
-    listSubscribers(viewerEmail = "") {
+    listSubscribers(_viewerEmail = "") {
         const intakesByEmail = new Map();
         for (const intake of this.intakeRepository.listAll()) {
             const email = normalizeEmail(intake.ownerEmail);
@@ -146,7 +146,6 @@ class WabaAdminSubscribersService {
         const staffUsers = this.systemUserService.listPublicUsers();
         return this.subscriberRepository
             .list()
-            .filter((subscriber) => (0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(viewerEmail, subscriber))
             .slice()
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .map((subscriber) => {
@@ -175,20 +174,16 @@ class WabaAdminSubscribersService {
                 campaignsCompleted: intakes.filter(isCampaignCompleted).length,
                 origin,
                 createdByEmail: String(subscriber.createdByEmail || "").trim().toLowerCase(),
-                visibleToMasters: (0, waba_subscriber_master_visibility_1.isSubscriberVisibleToMasters)(subscriber),
             };
         });
     }
-    getSubscriberDetail(subscriberId, viewerEmail = "") {
+    getSubscriberDetail(subscriberId, _viewerEmail = "") {
         const id = String(subscriberId ?? "").trim();
         if (!id)
             throw new Error("Assinante inválido.");
         const subscriber = this.subscriberRepository.getById(id);
         if (!subscriber)
             throw new Error("Assinante não encontrado.");
-        if (!(0, waba_subscriber_master_visibility_1.canViewerSeeSubscriber)(viewerEmail, subscriber)) {
-            throw new Error("Assinante não encontrado.");
-        }
         const email = normalizeEmail(subscriber.email);
         const credits = this.creditsService.getCreditsSummary(email);
         const intakes = this.intakeRepository.listByEmail(email);
@@ -222,29 +217,10 @@ class WabaAdminSubscribersService {
             purchaseHistory: this.listPurchaseHistory(email),
         };
     }
-    updateSubscriber(subscriberId, input, viewerEmail = "") {
-        this.getSubscriberDetail(subscriberId, viewerEmail);
+    updateSubscriber(subscriberId, input, _viewerEmail = "") {
+        this.getSubscriberDetail(subscriberId, _viewerEmail);
         this.subscriberService.update(subscriberId, input);
-        return this.getSubscriberDetail(subscriberId, viewerEmail);
-    }
-    setVisibleToMasters(subscriberId, visibleToMasters, viewerEmail) {
-        if (!(0, waba_subscriber_master_visibility_1.isWalkupMasterEmail)(viewerEmail)) {
-            throw new Error("Somente o master Walkup pode alterar a visibilidade.");
-        }
-        const id = String(subscriberId ?? "").trim();
-        if (!id)
-            throw new Error("Assinante inválido.");
-        const subscriber = this.subscriberRepository.getById(id);
-        if (!subscriber)
-            throw new Error("Assinante não encontrado.");
-        this.subscriberRepository.update(id, {
-            visibleToMasters: visibleToMasters === true,
-        });
-        return {
-            id,
-            email: subscriber.email,
-            visibleToMasters: visibleToMasters === true,
-        };
+        return this.getSubscriberDetail(subscriberId, _viewerEmail);
     }
     async resendSubscriberWelcome(subscriberId) {
         const id = String(subscriberId || "").trim();
