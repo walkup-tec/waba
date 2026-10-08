@@ -545,6 +545,97 @@ export function isSoftScrapeError(error: unknown): boolean {
   return /SEARCH_DISPATCH_FAILED|SEARCH_BUTTON_NOT_FOUND|PAGINATION_STALL/i.test(msg);
 }
 
+/** Paginação Oruga + fallbacks (portal troca o markup com alguma frequência). */
+export const PORTAL_PAGINATION_SELECTOR = [
+  'nav[data-oruga="pagination"]',
+  '[data-oruga="pagination"]',
+  "nav.pagination",
+  "ul.pagination-list",
+  ".pagination-list",
+  'nav[aria-label*="página" i]',
+  'nav[aria-label*="pagina" i]',
+].join(", ");
+
+export type SearchAckSnapshot = {
+  url: string;
+  searchButtonDisabled: boolean;
+  loadingNodes: number;
+  pagination: boolean;
+  cnpjNodes: number;
+  dialogs: number;
+  emptyHint?: boolean;
+  blocked?: boolean;
+};
+
+export type SearchWaitOutcome = "results" | "empty" | "blocked" | "searching" | "idle";
+
+/** Texto de “zero empresas” na área de resultados — não confundir com “0 selecionados” do CNAE. */
+export function isPortalSearchEmptyText(text: string): boolean {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return false;
+  return (
+    /pesquisa\s+retornou\s+0\s+empresas/i.test(t) ||
+    /retornou\s+0\s+empresas/i.test(t) ||
+    /nenhum\s+resultado(?:\s+encontrad[oa])?/i.test(t) ||
+    /nenhuma?\s+empresas?\s+encontrad/i.test(t) ||
+    /0\s+empresas?\s+encontrad/i.test(t) ||
+    /sem\s+resultados?\s+(?:para|nesta|encontr)/i.test(t)
+  );
+}
+
+/** CNPJ com máscara; se não houver, 14 dígitos isolados (card sem pontuação). */
+export function collectCnpjTokensFromText(text: string): string[] {
+  const raw = String(text || "");
+  const formatted = raw.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) || [];
+  if (formatted.length) return [...new Set(formatted)];
+  const digits = raw.match(/(?<!\d)\d{14}(?!\d)/g) || [];
+  return [...new Set(digits)];
+}
+
+/**
+ * ACK só com sinal de pesquisa (URL, loading, CTA disabled, paginação, CNPJ, vazio, bloqueio).
+ * Mudança só de dialogs NÃO conta — o modal CNAE oscila e dava ACK falso.
+ */
+export function isSearchAckProgress(before: SearchAckSnapshot, after: SearchAckSnapshot): boolean {
+  if (after.blocked) return true;
+  if (after.emptyHint) return true;
+  if (after.url && before.url && after.url !== before.url) return true;
+  if (after.searchButtonDisabled !== before.searchButtonDisabled) return true;
+  if (after.loadingNodes > before.loadingNodes) return true;
+  if (after.pagination && !before.pagination) return true;
+  if (after.cnpjNodes > before.cnpjNodes) return true;
+  return false;
+}
+
+export function classifySearchWaitOutcome(input: {
+  cnpjNodes: number;
+  pagination: boolean;
+  loadingNodes: number;
+  emptyHint: boolean;
+  blocked: boolean;
+  interceptedTotal?: number | null;
+}): SearchWaitOutcome {
+  if (input.blocked) return "blocked";
+  if (input.cnpjNodes > 0) return "results";
+  if (typeof input.interceptedTotal === "number" && input.interceptedTotal === 0 && input.loadingNodes === 0) {
+    return "empty";
+  }
+  if (input.emptyHint && input.loadingNodes === 0) return "empty";
+  if (input.loadingNodes > 0) return "searching";
+  if (input.pagination) return "searching";
+  if (typeof input.interceptedTotal === "number" && input.interceptedTotal > 0) return "searching";
+  return "idle";
+}
+
+/** Lista com CNAE pedido não pode SEARCH sem o filtro — senão o portal devolve vazio ou trava. */
+export function shouldBlockSearchWithoutCnae(input: {
+  atividadePrincipalCnae?: string | null;
+  cnaeApplied: boolean;
+}): boolean {
+  const code = String(input.atividadePrincipalCnae || "").replace(/\D/g, "");
+  return Boolean(code) && !input.cnaeApplied;
+}
+
 type SearchTransition =
   | { kind: "results"; total: number | null }
   | { kind: "empty" }
@@ -582,6 +673,8 @@ type SearchProbe = {
   iframeCount: number;
   iframeSrcs: string[];
   challengeNodes: number;
+  emptyHint?: boolean;
+  blocked?: boolean;
   buttonDebug: {
     tag: string;
     type: string | null;
@@ -608,7 +701,9 @@ function formatProbeShort(p: SearchProbe): string {
     `cnpj=${p.cnpjNodes} ` +
     `iframes=${p.iframeCount} ` +
     `dialogs=${p.dialogs} ` +
-    `challenge=${p.challengeNodes}`
+    `challenge=${p.challengeNodes}` +
+    (p.emptyHint ? " empty=true" : "") +
+    (p.blocked ? " blocked=true" : "")
   );
 }
 
@@ -815,7 +910,19 @@ async function evaluateOrReconnect<T>(
 /** Cards CNPJ na tela — evaluate leve, sem scroll artificial. */
 async function readScreenCardsLight(page: PageLike): Promise<string[][]> {
   return evaluateOrReconnect(page, "lendo cards CNPJ", () => {
-    const cnpjRe = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/;
+    const formattedRe = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/;
+    const digitsRe = /(^|\D)(\d{14})(\D|$)/;
+    const pickToken = (line: string): { token: string; index: number } | null => {
+      const formatted = line.match(formattedRe);
+      if (formatted && formatted.index != null) {
+        return { token: formatted[1], index: formatted.index };
+      }
+      const digits = line.match(digitsRe);
+      if (digits && digits.index != null) {
+        return { token: digits[2], index: digits.index + digits[1].length };
+      }
+      return null;
+    };
     const seen = new Set<string>();
     const out: string[][] = [];
     const root =
@@ -825,19 +932,19 @@ async function readScreenCardsLight(page: PageLike): Promise<string[][]> {
       .map((s) => s.trim())
       .filter(Boolean);
     let start = lines.findIndex((l) => /encontrado/i.test(l) && /resultado/i.test(l));
-    if (start < 0) start = lines.findIndex((l) => cnpjRe.test(l));
+    if (start < 0) start = lines.findIndex((l) => pickToken(l));
     if (start < 0) start = 0;
     for (const line of lines.slice(Math.max(0, start), start + 400)) {
-      const m = line.match(cnpjRe);
-      if (!m || m.index == null || seen.has(m[1])) continue;
+      const m = pickToken(line);
+      if (!m || seen.has(m.token)) continue;
       const name = line
-        .slice(m.index + m[1].length)
+        .slice(m.index + m.token.length)
         .replace(/^[^A-Za-z0-9]+/, "")
         .replace(/\s+/g, " ")
         .trim();
       if (!name || /^(ativa|baixada|inapta|nula|suspensa)$/i.test(name)) continue;
-      seen.add(m[1]);
-      out.push([m[1], name]);
+      seen.add(m.token);
+      out.push([m.token, name]);
       if (out.length >= 40) break;
     }
     return out;
@@ -1114,12 +1221,12 @@ async function captureSearchDiagnostics(page: PageLike): Promise<void> {
 async function probeSearchState(page: PageLike): Promise<SearchProbe> {
   const topCandidates = await findSearchButtonCandidates(page);
   const winner = topCandidates[0] || null;
-  const rest = await page.evaluate(() => {
+  const rest = await page.evaluate((paginationSel: string) => {
     const clean = (v: unknown) =>
       String(v || "")
         .replace(/\s+/g, " ")
         .trim();
-    const pagination = document.querySelector('nav[data-oruga="pagination"]');
+    const pagination = document.querySelector(paginationSel);
     const current = pagination?.querySelector(
       ['[aria-current="page"]', ".pagination-link.is-current", '[aria-current="true"]'].join(","),
     );
@@ -1128,13 +1235,14 @@ async function probeSearchState(page: PageLike): Promise<SearchProbe> {
         "main a, main p, main span, main div, main li, main h1, main h2, main h3",
       ),
     ).slice(0, 1500);
-    const cnpjRe = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/;
+    const formattedRe = /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/;
+    const digitsRe = /(^|\D)(\d{14})(\D|$)/;
     let cnpjNodes = 0;
     const totalCandidates: string[] = [];
     for (const el of contentNodes) {
       const text = clean(el.textContent);
       if (!text || text.length > 200) continue;
-      if (cnpjRe.test(text)) cnpjNodes += 1;
+      if (formattedRe.test(text) || digitsRe.test(text)) cnpjNodes += 1;
       if (/\b\d[\d.]*\s+(empresas?|resultados?)\b/i.test(text)) totalCandidates.push(text);
     }
     const loadingNodes = document.querySelectorAll(
@@ -1164,10 +1272,21 @@ async function probeSearchState(page: PageLike): Promise<SearchProbe> {
         '[id*="challenge"], [class*="challenge"], iframe[src*="challenge"]',
       ).length,
     };
-  });
+  }, PORTAL_PAGINATION_SELECTOR);
+
+  const sampleTotals = rest.totalCandidates.join(" ");
+  const blocked =
+    rest.challengeNodes > 0 ||
+    isPortalChallengeHint({ url: rest.url });
+  const emptyHint =
+    rest.cnpjNodes === 0 &&
+    !rest.pagination &&
+    (isPortalSearchEmptyText(sampleTotals) || /(?:^|\s)0\s+empresas?\b/i.test(sampleTotals));
 
   return {
     ...rest,
+    emptyHint,
+    blocked,
     searchButtonFound: Boolean(winner),
     searchButtonDisabled: false,
     searchButtonText: winner?.text || null,
@@ -1273,59 +1392,92 @@ async function probeSearchAckLite(page: PageLike): Promise<{
   cnpjNodes: number;
   dialogs: number;
   searchButtonDisabled: boolean;
+  emptyHint: boolean;
+  blocked: boolean;
+  challengeNodes: number;
+  iframeCount: number;
 } | null> {
   try {
-    return await evaluateOrReconnect(page, "probe ACK pesquisa", () => {
-      const pagination = Boolean(document.querySelector('nav[data-oruga="pagination"]'));
-      const loadingNodes = document.querySelectorAll(
-        [
-          '[aria-busy="true"]',
-          ".loading",
-          ".is-loading",
-          ".loader",
-          ".spinner",
-          '[class*="loading"]',
-          '[class*="spinner"]',
-        ].join(","),
-      ).length;
-      const root = (document.querySelector("main") as HTMLElement | null) || document.body;
-      const sample = String(root?.innerText || "").slice(0, 20_000);
-      const cnpjRe = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g;
-      const found = sample.match(cnpjRe) || [];
-      const cnpjNodes = Math.min(20, new Set(found).size);
-      const buttons = Array.from(
-        document.querySelectorAll('button, [role="button"], input[type="submit"]'),
-      ) as HTMLElement[];
-      const searchBtn = buttons.find((el) => {
-        const text = String(
-          el instanceof HTMLInputElement ? el.value : el.textContent || "",
-        )
-          .replace(/\s+/g, " ")
-          .trim()
-          .toLowerCase();
-        const aria = String(el.getAttribute("aria-label") || "")
-          .replace(/\s+/g, " ")
-          .trim()
-          .toLowerCase();
-        return (
-          text.includes("pesquisar") ||
-          text.includes("buscar") ||
-          aria.includes("pesquisar") ||
-          aria.includes("buscar")
-        );
-      });
-      return {
-        url: location.href,
-        pagination,
-        loadingNodes,
-        cnpjNodes,
-        dialogs: document.querySelectorAll('[role="dialog"], .modal, .o-modal').length,
-        searchButtonDisabled: searchBtn
-          ? Boolean((searchBtn as HTMLButtonElement).disabled) ||
-            searchBtn.getAttribute("aria-disabled") === "true"
-          : false,
-      };
-    });
+    const lite = await evaluateOrReconnect(
+      page,
+      "probe ACK pesquisa",
+      () => {
+        const paginationSel = [
+          'nav[data-oruga="pagination"]',
+          '[data-oruga="pagination"]',
+          "nav.pagination",
+          "ul.pagination-list",
+          ".pagination-list",
+        ].join(", ");
+        const pagination = Boolean(document.querySelector(paginationSel));
+        const loadingNodes = document.querySelectorAll(
+          [
+            '[aria-busy="true"]',
+            ".loading",
+            ".is-loading",
+            ".loader",
+            ".spinner",
+            '[class*="loading"]',
+            '[class*="spinner"]',
+          ].join(","),
+        ).length;
+        const root = (document.querySelector("main") as HTMLElement | null) || document.body;
+        const sample = String(root?.innerText || "").slice(0, 20_000);
+        const formatted = sample.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) || [];
+        const found =
+          formatted.length > 0 ? formatted : sample.match(/(?<!\d)\d{14}(?!\d)/g) || [];
+        const cnpjNodes = Math.min(20, new Set(found).size);
+        const buttons = Array.from(
+          document.querySelectorAll('button, [role="button"], input[type="submit"]'),
+        ) as HTMLElement[];
+        const searchBtn = buttons.find((el) => {
+          const text = String(
+            el instanceof HTMLInputElement ? el.value : el.textContent || "",
+          )
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+          const aria = String(el.getAttribute("aria-label") || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+          return (
+            text.includes("pesquisar") ||
+            text.includes("buscar") ||
+            aria.includes("pesquisar") ||
+            aria.includes("buscar")
+          );
+        });
+        const challengeNodes = document.querySelectorAll(
+          '[id*="challenge"], [class*="challenge"], iframe[src*="challenge"]',
+        ).length;
+        const emptyHint =
+          cnpjNodes === 0 &&
+          (/pesquisa\s+retornou\s+0\s+empresas/i.test(sample) ||
+            /retornou\s+0\s+empresas/i.test(sample) ||
+            /nenhum\s+resultado(?:\s+encontrad[oa])?/i.test(sample) ||
+            /nenhuma?\s+empresas?\s+encontrad/i.test(sample) ||
+            /0\s+empresas?\s+encontrad/i.test(sample));
+        return {
+          url: location.href,
+          pagination,
+          loadingNodes,
+          cnpjNodes,
+          dialogs: document.querySelectorAll('[role="dialog"], .modal, .o-modal').length,
+          searchButtonDisabled: searchBtn
+            ? Boolean((searchBtn as HTMLButtonElement).disabled) ||
+              searchBtn.getAttribute("aria-disabled") === "true"
+            : false,
+          emptyHint,
+          challengeNodes,
+          iframeCount: document.querySelectorAll("iframe").length,
+        };
+      },
+    );
+    if (!lite) return null;
+    const blocked =
+      lite.challengeNodes > 0 || isPortalChallengeHint({ url: lite.url });
+    return { ...lite, blocked };
   } catch (error) {
     if (isLeadsScrapeError(error) || isChromiumTargetCrash(error)) throw error;
     return null;
@@ -1350,13 +1502,19 @@ async function waitForSearchAck(
     const tickBudget = Math.min(1200, Math.max(200, deadline - Date.now()));
     const after = await withNodeTimeout(probeSearchAckLite(page), tickBudget, null);
     if (!after) continue;
-    const changed =
-      after.url !== before.url ||
-      after.searchButtonDisabled !== before.searchButtonDisabled ||
-      after.loadingNodes > before.loadingNodes ||
-      after.pagination ||
-      after.cnpjNodes > before.cnpjNodes ||
-      after.dialogs !== before.dialogs;
+    const changed = isSearchAckProgress(
+      {
+        url: before.url,
+        searchButtonDisabled: before.searchButtonDisabled,
+        loadingNodes: before.loadingNodes,
+        pagination: before.pagination,
+        cnpjNodes: before.cnpjNodes,
+        dialogs: before.dialogs,
+        emptyHint: before.emptyHint,
+        blocked: before.blocked,
+      },
+      after,
+    );
     if (!changed) continue;
 
     // Tenta probe completo com teto Node; se travar, sintetiza ACK a partir do lite.
@@ -1370,6 +1528,10 @@ async function waitForSearchAck(
       cnpjNodes: Math.max(before.cnpjNodes, after.cnpjNodes),
       dialogs: after.dialogs,
       searchButtonDisabled: after.searchButtonDisabled,
+      emptyHint: after.emptyHint,
+      blocked: after.blocked,
+      challengeNodes: after.challengeNodes,
+      iframeCount: after.iframeCount,
     };
   }
   return null;
@@ -1748,17 +1910,42 @@ async function dispatchSearchWithAck(
   );
 }
 
+function searchOutcomeFromLite(
+  lite: {
+    cnpjNodes: number;
+    pagination: boolean;
+    loadingNodes: number;
+    emptyHint: boolean;
+    blocked: boolean;
+  },
+  interceptedTotal: number | null,
+): SearchWaitOutcome {
+  return classifySearchWaitOutcome({
+    cnpjNodes: lite.cnpjNodes,
+    pagination: lite.pagination,
+    loadingNodes: lite.loadingNodes,
+    emptyHint: lite.emptyHint,
+    blocked: lite.blocked,
+    interceptedTotal,
+  });
+}
+
 async function waitForSearchTransition(
   page: PageLike,
   timeoutMs: number,
   onProgress?: CasaDosDadosProgress,
   shouldAbort?: () => boolean,
+  getInterceptedTotal?: () => number | null,
 ): Promise<SearchTransition> {
   const started = Date.now();
   const deadline = started + Math.max(5_000, timeoutMs);
   let lastPulse = 0;
   let lastProbe: SearchProbe | undefined;
   let consecutiveLiteMiss = 0;
+  const intercepted = () => {
+    const n = getInterceptedTotal?.();
+    return typeof n === "number" && Number.isFinite(n) ? n : null;
+  };
 
   while (Date.now() < deadline) {
     if (shouldAbort?.()) throw new Error("__MLC_JOB_ABORTED__");
@@ -1777,15 +1964,18 @@ async function waitForSearchTransition(
       continue;
     }
     consecutiveLiteMiss = 0;
-    if (lite.pagination || lite.cnpjNodes > 0) {
-      // Paginação sozinha pode aparecer antes dos cards — exige CNPJ ou grace curto.
-      if (lite.cnpjNodes > 0) {
-        onProgress?.(
-          `SEARCH: resultados detectados — CNPJs=${lite.cnpjNodes}, paginação=${lite.pagination}`,
-        );
-        return { kind: "results", total: null };
-      }
-      // pagination sem CNPJ ainda: continua o loop (não early-return).
+    const outcome = searchOutcomeFromLite(lite, intercepted());
+    if (outcome === "blocked") return { kind: "blocked" };
+    if (outcome === "empty") {
+      const elapsedMs = Date.now() - started;
+      // API com total 0 é definitivo; texto de vazio na tela só após 4s (evita placeholder do form).
+      if (intercepted() === 0 || elapsedMs >= 4_000) return { kind: "empty" };
+    }
+    if (lite.cnpjNodes > 0) {
+      onProgress?.(
+        `SEARCH: resultados detectados — CNPJs=${lite.cnpjNodes}, paginação=${lite.pagination}`,
+      );
+      return { kind: "results", total: intercepted() };
     }
     lastProbe = {
       ...(lastProbe || {
@@ -1803,9 +1993,11 @@ async function waitForSearchTransition(
         totalCandidates: [],
         loadingNodes: lite.loadingNodes,
         dialogs: lite.dialogs,
-        iframeCount: 0,
+        iframeCount: lite.iframeCount,
         iframeSrcs: [],
-        challengeNodes: 0,
+        challengeNodes: lite.challengeNodes,
+        emptyHint: lite.emptyHint,
+        blocked: lite.blocked,
         buttonDebug: null,
       }),
       url: lite.url,
@@ -1814,6 +2006,10 @@ async function waitForSearchTransition(
       loadingNodes: lite.loadingNodes,
       dialogs: lite.dialogs,
       searchButtonDisabled: lite.searchButtonDisabled,
+      iframeCount: lite.iframeCount,
+      challengeNodes: lite.challengeNodes,
+      emptyHint: lite.emptyHint,
+      blocked: lite.blocked,
     };
 
     const elapsed = Math.round((Date.now() - started) / 1000);
@@ -1833,14 +2029,45 @@ async function waitForSearchTransition(
   const alive = await rendererProbe(page, 2000);
   if (!alive) return { kind: "renderer-unresponsive" };
 
+  // Diagnóstico real no timeout — nunca reusar o stub lite (btn=false/challenge=0 mentia na UI).
+  const fullProbe = await withNodeTimeout(
+    probeSearchState(page),
+    3000,
+    null as SearchProbe | null,
+  );
+  const sample = await withNodeTimeout(readResultsSampleText(page, 24_000), 4000, "");
   const finalLite = await withNodeTimeout(probeSearchAckLite(page), 2000, null);
-  if (finalLite && finalLite.cnpjNodes > 0) {
-    return { kind: "results", total: null };
+  const merged: SearchProbe | undefined = fullProbe
+    ? {
+        ...fullProbe,
+        emptyHint:
+          fullProbe.emptyHint ||
+          isPortalSearchEmptyText(sample) ||
+          parseResultTotalFromText(sample) === 0,
+        blocked: fullProbe.blocked || isPortalChallengeHint({ url: fullProbe.url, body: sample }),
+      }
+    : lastProbe;
+  const timeoutOutcome = classifySearchWaitOutcome({
+    cnpjNodes: Math.max(merged?.cnpjNodes || 0, finalLite?.cnpjNodes || 0),
+    pagination: Boolean(merged?.pagination || finalLite?.pagination),
+    loadingNodes: merged?.loadingNodes || finalLite?.loadingNodes || 0,
+    emptyHint: Boolean(
+      merged?.emptyHint ||
+        finalLite?.emptyHint ||
+        isPortalSearchEmptyText(sample) ||
+        intercepted() === 0,
+    ),
+    blocked: Boolean(merged?.blocked || finalLite?.blocked),
+    interceptedTotal: intercepted() ?? parseResultTotalFromText(sample),
+  });
+  if (timeoutOutcome === "blocked") return { kind: "blocked" };
+  if (timeoutOutcome === "empty") return { kind: "empty" };
+  if (timeoutOutcome === "results" || (finalLite && finalLite.cnpjNodes > 0)) {
+    return { kind: "results", total: intercepted() };
   }
   if (finalLite && finalLite.pagination) {
-    // Última chance: ler cards mesmo se o probe leve não contou CNPJs.
     const cards = await withNodeTimeout(readScreenCardsLight(page), 4000, [] as string[][]);
-    if (cards.length > 0) return { kind: "results", total: null };
+    if (cards.length > 0) return { kind: "results", total: intercepted() };
   }
   if (finalLite && finalLite.loadingNodes > 0) {
     const graceDeadline = Date.now() + 30_000;
@@ -1848,21 +2075,24 @@ async function waitForSearchTransition(
       if (shouldAbort?.()) throw new Error("__MLC_JOB_ABORTED__");
       if (!(await rendererProbe(page, 2000))) return { kind: "renderer-unresponsive" };
       const st = await withNodeTimeout(probeSearchAckLite(page), 1500, null);
-      if (st && st.cnpjNodes > 0) return { kind: "results", total: null };
+      if (st && st.cnpjNodes > 0) return { kind: "results", total: intercepted() };
       const cards = await withNodeTimeout(readScreenCardsLight(page), 3000, [] as string[][]);
-      if (cards.length > 0) return { kind: "results", total: null };
+      if (cards.length > 0) return { kind: "results", total: intercepted() };
+      if (st && (st.emptyHint || intercepted() === 0) && st.loadingNodes === 0) {
+        return { kind: "empty" };
+      }
+      if (st && st.blocked) return { kind: "blocked" };
       if (st && st.loadingNodes === 0 && !st.pagination) break;
       const g = Math.round((Date.now() - started) / 1000);
       onProgress?.(`SEARCH: grace loading — ${g}s`);
       await sleepNode(500);
     }
   }
-  // Paginação presente no fim do timeout: ainda assim tentar COPY (cards leitores).
-  if (finalLite?.pagination || lastProbe?.pagination) {
+  if (finalLite?.pagination || lastProbe?.pagination || merged?.pagination) {
     const cards = await withNodeTimeout(readScreenCardsLight(page), 4000, [] as string[][]);
-    if (cards.length > 0) return { kind: "results", total: null };
+    if (cards.length > 0) return { kind: "results", total: intercepted() };
   }
-  return { kind: "timeout-responsive", probe: lastProbe };
+  return { kind: "timeout-responsive", probe: merged || lastProbe };
 }
 
 /** @deprecated use waitForSearchTransition — mantido para next-page short waits */
@@ -2279,7 +2509,8 @@ async function selectAtividadePrincipalCnae(
 }
 
 /**
- * Retorna true se selecionou. false = não trava a extração (demais filtros seguem).
+ * Retorna true se selecionou. false = CNAE pedido não aplicado.
+ * O caller NÃO deve SEARCH sem o filtro — isso gerava timeout 0/N (Corbans).
  * Budget total curto no Xvfb (default ~50s em 2 tentativas).
  */
 async function selectAtividadePrincipalCnaeWithTimeout(
@@ -2351,7 +2582,7 @@ async function selectAtividadePrincipalCnaeWithTimeout(
   }
 
   onProgress?.(
-    `Pesquisando: CNAE ${code} não concluído (${lastErr?.message?.slice(0, 80) || "falha"}) — seguindo sem travar…`,
+    `Pesquisando: CNAE ${code} não concluído (${lastErr?.message?.slice(0, 80) || "falha"}) — SEARCH bloqueado sem o filtro.`,
   );
   return false;
 }
@@ -2534,9 +2765,14 @@ async function applyFilters(
       ),
     ),
   );
-  if (cnaeCode && !cnaeOk) {
-    step(`CNAE ${cnaeCode} pulado após falha — demais filtros ativos seguem…`);
-  } else if (cnaeCode && cnaeOk) {
+  if (shouldBlockSearchWithoutCnae({ atividadePrincipalCnae: cnaeCode, cnaeApplied: cnaeOk })) {
+    throw new LeadsScrapeError(
+      "CNAE_NOT_APPLIED",
+      "new-browser",
+      `CNAE ${cnaeCode} não aplicado — pesquisa sem esse filtro trava ou devolve lista vazia.`,
+    );
+  }
+  if (cnaeCode && cnaeOk) {
     step(`CNAE ${cnaeCode} ok — aplicando só filtros ativos…`);
   }
 
@@ -3057,6 +3293,7 @@ async function scrapeCasaDosDadosLeadsOnce(
               onProgress?.(msg);
             },
             options?.shouldAbort,
+            () => interceptedTotal,
           );
         } catch (resumeSearchErr) {
           markPhase(
@@ -3158,11 +3395,14 @@ async function scrapeCasaDosDadosLeadsOnce(
       const runSearchOnce = async (allowRedispatch: boolean): Promise<SearchTransition> => {
         setPhase("SEARCH", "checando estado pré-CTA…");
         const preLite = await withNodeTimeout(probeSearchAckLite(page), 3000, null);
+        if (preLite && preLite.blocked) {
+          return { kind: "blocked" };
+        }
         if (preLite && (preLite.pagination || preLite.cnpjNodes > 0)) {
           onProgress?.(
             `SEARCH: resultados já presentes — pag=${preLite.pagination} cnpj=${preLite.cnpjNodes}`,
           );
-          return { kind: "results", total: null };
+          return { kind: "results", total: interceptedTotal };
         }
         if (preLite && preLite.loadingNodes > 0 && !allowRedispatch) {
           setPhase("SEARCH", "loading ativo — aguardando sem redisparo…");
@@ -3174,6 +3414,7 @@ async function scrapeCasaDosDadosLeadsOnce(
               onProgress?.(msg);
             },
             options?.shouldAbort,
+            () => interceptedTotal,
           );
         }
 
@@ -3191,14 +3432,15 @@ async function scrapeCasaDosDadosLeadsOnce(
             onProgress?.(msg);
           },
           options?.shouldAbort,
+          () => interceptedTotal,
         );
       };
 
       searchResult = await runSearchOnce(true);
       if (searchResult.kind === "timeout-responsive") {
         const stuckProbe =
-          searchResult.probe ||
-          (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null));
+          (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null)) ||
+          searchResult.probe;
         if (stuckProbe && stuckProbe.loadingNodes > 0) {
           throw new LeadsScrapeError(
             "SEARCH_TIMEOUT_RESPONSIVE",
@@ -3219,14 +3461,14 @@ async function scrapeCasaDosDadosLeadsOnce(
       if (searchResult.kind === "blocked") {
         throw new LeadsScrapeError(
           "PORTAL_BLOCKED",
-          "stop",
+          "new-browser",
           "Cloudflare ou desafio de segurança na pesquisa.",
         );
       }
       if (searchResult.kind === "timeout-responsive") {
         const last =
-          searchResult.probe ||
-          (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null));
+          (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null)) ||
+          searchResult.probe;
         // Sem CNPJ após ACK+timeout sob carga: Chromium novo (same-page só “pausava” o job).
         throw new LeadsScrapeError(
           "SEARCH_TIMEOUT_RESPONSIVE",

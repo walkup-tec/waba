@@ -2,13 +2,19 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   classifyGotoFailure,
+  classifySearchWaitOutcome,
+  collectCnpjTokensFromText,
   createSessionAbortGate,
   isChromiumTargetCrash,
   isKeepaliveProgressMessage,
   isPortalAntiBotBlock,
   isPortalChallengeHint,
+  isPortalSearchEmptyText,
+  isSearchAckProgress,
   LeadsScrapeError,
+  PORTAL_PAGINATION_SELECTOR,
   resolveLeadsPhaseStallMs,
+  shouldBlockSearchWithoutCnae,
 } from "./waba-leads-cnpj-casadosdados.adapter";
 import { resolveCasaDosDadosUserAgent } from "./waba-leads-cnpj-browser-runtime";
 import {
@@ -180,6 +186,135 @@ describe("Leads PJ retomada de cópia zerada", () => {
       }),
       false,
     );
+  });
+});
+
+describe("Leads PJ SEARCH classify/ACK", () => {
+  it("não trata modal CNAE (só dialogs) como ACK de pesquisa", () => {
+    const before = {
+      url: "https://portal.casadosdados.com.br/plataforma/pesquisa",
+      searchButtonDisabled: false,
+      loadingNodes: 0,
+      pagination: false,
+      cnpjNodes: 0,
+      dialogs: 1,
+    };
+    assert.equal(
+      isSearchAckProgress(before, { ...before, dialogs: 2 }),
+      false,
+    );
+    assert.equal(
+      isSearchAckProgress(before, { ...before, loadingNodes: 1 }),
+      true,
+    );
+    assert.equal(
+      isSearchAckProgress(before, { ...before, cnpjNodes: 3 }),
+      true,
+    );
+    assert.equal(
+      isSearchAckProgress(before, { ...before, pagination: true }),
+      true,
+    );
+    assert.equal(
+      isSearchAckProgress(before, { ...before, emptyHint: true }),
+      true,
+    );
+  });
+
+  it("classifica vazio, bloqueio, resultados e idle", () => {
+    assert.equal(
+      classifySearchWaitOutcome({
+        cnpjNodes: 0,
+        pagination: false,
+        loadingNodes: 0,
+        emptyHint: true,
+        blocked: false,
+      }),
+      "empty",
+    );
+    assert.equal(
+      classifySearchWaitOutcome({
+        cnpjNodes: 0,
+        pagination: false,
+        loadingNodes: 0,
+        emptyHint: false,
+        blocked: false,
+        interceptedTotal: 0,
+      }),
+      "empty",
+    );
+    assert.equal(
+      classifySearchWaitOutcome({
+        cnpjNodes: 0,
+        pagination: false,
+        loadingNodes: 0,
+        emptyHint: false,
+        blocked: true,
+      }),
+      "blocked",
+    );
+    assert.equal(
+      classifySearchWaitOutcome({
+        cnpjNodes: 8,
+        pagination: true,
+        loadingNodes: 0,
+        emptyHint: false,
+        blocked: false,
+      }),
+      "results",
+    );
+    assert.equal(
+      classifySearchWaitOutcome({
+        cnpjNodes: 0,
+        pagination: false,
+        loadingNodes: 2,
+        emptyHint: false,
+        blocked: false,
+      }),
+      "searching",
+    );
+    assert.equal(
+      classifySearchWaitOutcome({
+        cnpjNodes: 0,
+        pagination: false,
+        loadingNodes: 0,
+        emptyHint: false,
+        blocked: false,
+      }),
+      "idle",
+    );
+  });
+
+  it("reconhece texto de zero empresas sem confundir com 0 selecionados do CNAE", () => {
+    assert.equal(isPortalSearchEmptyText("Pesquisa retornou 0 empresas"), true);
+    assert.equal(isPortalSearchEmptyText("Nenhum resultado encontrado"), true);
+    assert.equal(isPortalSearchEmptyText("0 selecionados"), false);
+    assert.equal(isPortalSearchEmptyText("Atividade Principal (CNAE)"), false);
+  });
+
+  it("conta CNPJ com máscara e 14 dígitos sem pontuação", () => {
+    assert.deepEqual(collectCnpjTokensFromText("94.361.474/0001-02 - LCT"), ["94.361.474/0001-02"]);
+    assert.deepEqual(collectCnpjTokensFromText("empresa 94361474000102 ativa"), ["94361474000102"]);
+  });
+
+  it("bloqueia SEARCH quando o CNAE pedido não foi aplicado", () => {
+    assert.equal(
+      shouldBlockSearchWithoutCnae({ atividadePrincipalCnae: "6619302", cnaeApplied: false }),
+      true,
+    );
+    assert.equal(
+      shouldBlockSearchWithoutCnae({ atividadePrincipalCnae: "6619302", cnaeApplied: true }),
+      false,
+    );
+    assert.equal(
+      shouldBlockSearchWithoutCnae({ atividadePrincipalCnae: "", cnaeApplied: false }),
+      false,
+    );
+  });
+
+  it("mantém o seletor Oruga e inclui fallback de paginação", () => {
+    assert.match(PORTAL_PAGINATION_SELECTOR, /data-oruga="pagination"/);
+    assert.match(PORTAL_PAGINATION_SELECTOR, /pagination-list/);
   });
 });
 
