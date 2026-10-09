@@ -136,6 +136,7 @@ const proxy_brasil_config_1 = require("./proxy/proxy-brasil.config");
 const evo_instance_proxy_service_1 = require("./proxy/evo-instance-proxy.service");
 const proxy_brasil_campaign_rules_1 = require("./proxy/proxy-brasil-campaign.rules");
 const deploy_marker_1 = require("./deploy-marker");
+const public_site_maintenance_1 = require("./public-site-maintenance");
 const waba_campaign_intake_constants_1 = require("./disparos/waba-campaign-intake.constants");
 const waba_mail_service_1 = require("./mail/waba-mail.service");
 const waba_graceful_shutdown_1 = require("./server/waba-graceful-shutdown");
@@ -465,6 +466,29 @@ const maintenanceHtmlPage = `<!DOCTYPE html>
 <title>Manutenção</title><style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;background:#0f1419;color:#e6edf3;}
 .box{max-width:28rem;padding:2rem;text-align:center;}h1{font-size:1.25rem;margin:0 0 .75rem}p{margin:0;opacity:.85;line-height:1.5}</style></head>
 <body><div class="box"><h1>Manutenção em andamento</h1><p>__MSG__</p></div></body></html>`;
+app.use((req, res, next) => {
+    if (!(0, public_site_maintenance_1.isPublicLandingMaintenanceEnabled)()) {
+        return next();
+    }
+    if (isMaintenanceBypassPath(req.method, req.path)) {
+        return next();
+    }
+    if (req.method !== "GET" && req.method !== "HEAD") {
+        return next();
+    }
+    const hostHeader = String(req.headers.host || "");
+    const forwardedHost = String(req.headers["x-forwarded-host"] || "");
+    if (!(0, public_site_maintenance_1.requestLooksLikePublicLanding)({
+        host: hostHeader,
+        forwardedHost,
+        path: req.path,
+    })) {
+        return next();
+    }
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    return res.status(200).type("html").send((0, public_site_maintenance_1.renderPublicMaintenanceHtml)());
+});
 app.use((req, res, next) => {
     if (!MAINTENANCE_MODE) {
         return next();
@@ -4256,6 +4280,11 @@ app.post("/index.html", (_req, res) => {
     sendIndexHtml(res);
 });
 const sendVendasPage = (res) => {
+    if ((0, public_site_maintenance_1.isPublicLandingMaintenanceEnabled)()) {
+        res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+        res.set("X-Robots-Tag", "noindex, nofollow");
+        return res.type("html").send((0, public_site_maintenance_1.renderPublicMaintenanceHtml)());
+    }
     const vendasPath = path_1.default.join(rootPath, "public-pages", "vendas.html");
     const cadastroPath = path_1.default.join(rootPath, "public-pages", "cadastro.html");
     const sourcePath = (0, fs_1.existsSync)(vendasPath)
@@ -4273,6 +4302,11 @@ const sendVendasPage = (res) => {
     return res.type("html").send(html);
 };
 const sendBetsLandingPage = (res) => {
+    if ((0, public_site_maintenance_1.isPublicLandingMaintenanceEnabled)()) {
+        res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+        res.set("X-Robots-Tag", "noindex, nofollow");
+        return res.type("html").send((0, public_site_maintenance_1.renderPublicMaintenanceHtml)());
+    }
     const betsPath = path_1.default.join(rootPath, "public-pages", "bets.html");
     if (!(0, fs_1.existsSync)(betsPath)) {
         return res.status(404).type("html").send("<p>Landing Bet Waba indisponível.</p>");
