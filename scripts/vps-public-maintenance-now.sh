@@ -1,16 +1,21 @@
 #!/bin/bash
 # VPS — landings em manutenção + tira 502 do Bets (sem Redeploy EasyPanel).
+# Causa do 502: waba_bets_pv saudável mas SEM publish :30211 (só 3000/tcp).
+# EasyPanel não expõe services bets/paginadevendas no main.yaml — usamos overlay
+# (mesmo padrão de sinal-verde.yaml), sem caçar chave no main.
 # NÃO mexe em waba_disparador (:30180), Evolution, nem entryPoints.
 #
 # Cole no SSH (root):
 #   curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/vps-public-maintenance-now.sh" -o /tmp/waba-maint.sh
 #   sed -i 's/\r$//' /tmp/waba-maint.sh && bash /tmp/waba-maint.sh
 #
-# Versão: public-maintenance-now-2026-10-09-v1
+# Versão: public-maintenance-now-2026-10-09-v2
 set -euo pipefail
 
-VERSION="public-maintenance-now-2026-10-09-v1"
-CFG="/etc/easypanel/traefik/config/main.yaml"
+VERSION="public-maintenance-now-2026-10-09-v2"
+CFG_DIR="/etc/easypanel/traefik/config"
+CFG="${CFG_DIR}/main.yaml"
+OVERLAY="${CFG_DIR}/waba-public-maintenance.yaml"
 LOG="/var/log/waba-public-maintenance-now.log"
 DIR="/opt/waba-public-maintenance"
 HTML_URL="https://raw.githubusercontent.com/walkup-tec/waba/master/public-pages/manutencao.html"
@@ -26,20 +31,25 @@ http_code() { curl -sS -o /dev/null -w "%{http_code}" --max-time 12 "$@" 2>/dev/
 [[ "$(id -u)" -eq 0 ]] || { echo "ERRO: rode como root"; exit 1; }
 command -v docker >/dev/null || { echo "ERRO: docker ausente"; exit 1; }
 command -v python3 >/dev/null || { echo "ERRO: python3 ausente"; exit 1; }
-[[ -f "$CFG" ]] || { echo "ERRO: $CFG ausente"; exit 1; }
+[[ -d "$CFG_DIR" ]] || { echo "ERRO: $CFG_DIR ausente"; exit 1; }
 
 log "=== $VERSION ==="
 
 log "ANTES local :30210=$(http_code http://127.0.0.1:30210/) :30211=$(http_code http://127.0.0.1:30211/) :30180=$(http_code http://127.0.0.1:30180/health)"
 log "ANTES https disparos=$(http_code --resolve wabadisparos.com.br:443:127.0.0.1 https://wabadisparos.com.br/) bet=$(http_code --resolve bet.waba.info:443:127.0.0.1 https://bet.waba.info/)"
 docker ps --format '{{.Names}} {{.Status}} {{.Ports}}' | grep -Ei 'bets|paginadevendas|traefik|waba_disparador' | tee -a "$LOG" || true
+if [[ -f "$CFG" ]]; then
+  log "main.yaml trechos (bet/30211/paginadevendas/30210):"
+  grep -nE 'bet\.waba|30211|paginadevendas|30210|wabadisparos' "$CFG" | head -40 | tee -a "$LOG" || log "(nenhum trecho no main.yaml — esperado)"
+fi
 
 for u in \
+  traefik-easypanel-config-guard.service \
   traefik-permanent-paginadevendas-fix.timer traefik-permanent-paginadevendas-watch.service \
   traefik-permanent-bets-pv-fix.timer traefik-permanent-bets-pv-watch.service; do
   systemctl disable --now "$u" 2>/dev/null || true
 done
-log "timers landings OFF (não reverter para o app React)"
+log "timers landings + config-guard OFF"
 
 mkdir -p "$DIR"
 if ! curl -fsSL "$HTML_URL" -o "$DIR/index.html"; then
@@ -71,80 +81,119 @@ docker run -d --name waba-maint-bets --restart unless-stopped \
 sleep 1
 log "nginx pv :${PV_PORT}=$(http_code http://127.0.0.1:${PV_PORT}/) bets :${BETS_PORT}=$(http_code http://127.0.0.1:${BETS_PORT}/)"
 
-cp -a "$CFG" "${CFG}.bak-${VERSION}-$(date +%s)"
+CERT_RESOLVER=""
+CERT_RESOLVER=$(docker service inspect easypanel-traefik --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null \
+  | grep -iE '^TRAEFIK_CERTIFICATESRESOLVERS_' \
+  | head -1 \
+  | sed -E 's/^TRAEFIK_CERTIFICATESRESOLVERS_([^_]+)_.*/\1/i' \
+  | tr '[:upper:]' '[:lower:]' || true)
+[[ -n "$CERT_RESOLVER" ]] || CERT_RESOLVER="letsencrypt"
+log "certResolver=${CERT_RESOLVER}"
 
-python3 - "$CFG" "$PV_URL" "$BETS_URL" <<'PY'
-import re, sys
+[[ -f "$OVERLAY" ]] && cp -a "$OVERLAY" "${OVERLAY}.bak-${VERSION}-$(date +%s)" || true
+
+python3 - "$OVERLAY" "$BETS_URL" "$PV_URL" "$CERT_RESOLVER" <<'PY'
+import json, sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
+bets_url, pv_url, resolver = sys.argv[2:5]
+
+def tls(main, sans):
+    out = {"domains": [{"main": main, "sans": sans}]}
+    if resolver:
+        out["certResolver"] = resolver
+    return out
+
+bets_rule = "Host(`bet.waba.info`) || Host(`waba-bets-pv.achpyp.easypanel.host`)"
+pv_rule = (
+    "Host(`wabadisparos.com.br`) || Host(`www.wabadisparos.com.br`) || "
+    "Host(`wabadisparador.com.br`) || Host(`www.wabadisparador.com.br`) || "
+    "Host(`waba-paginadevendas.achpyp.easypanel.host`)"
+)
+
+data = {
+    "http": {
+        "routers": {
+            "http-waba-maint-bets": {
+                "entryPoints": ["http"],
+                "service": "waba-maint-bets",
+                "rule": bets_rule,
+                "priority": 50000,
+            },
+            "https-waba-maint-bets": {
+                "entryPoints": ["https"],
+                "service": "waba-maint-bets",
+                "rule": bets_rule,
+                "priority": 50000,
+                "tls": tls("bet.waba.info", ["waba-bets-pv.achpyp.easypanel.host"]),
+            },
+            "http-waba-maint-pv": {
+                "entryPoints": ["http"],
+                "service": "waba-maint-pv",
+                "rule": pv_rule,
+                "priority": 50000,
+            },
+            "https-waba-maint-pv": {
+                "entryPoints": ["https"],
+                "service": "waba-maint-pv",
+                "rule": pv_rule,
+                "priority": 50000,
+                "tls": tls(
+                    "wabadisparos.com.br",
+                    [
+                        "www.wabadisparos.com.br",
+                        "wabadisparador.com.br",
+                        "www.wabadisparador.com.br",
+                        "waba-paginadevendas.achpyp.easypanel.host",
+                    ],
+                ),
+            },
+        },
+        "services": {
+            "waba-maint-bets": {
+                "loadBalancer": {
+                    "servers": [{"url": bets_url}],
+                    "passHostHeader": False,
+                }
+            },
+            "waba-maint-pv": {
+                "loadBalancer": {
+                    "servers": [{"url": pv_url}],
+                    "passHostHeader": False,
+                }
+            },
+        },
+    }
+}
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+print(f"wrote {path}")
+PY
+
+if [[ -f "$CFG" ]]; then
+  python3 - "$CFG" "$PV_URL" "$BETS_URL" <<'PY' || true
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
 pv_url, bets_url = sys.argv[2], sys.argv[3]
 text = path.read_text(encoding="utf-8")
-
-def extract_block(text: str, start: int):
-    brace = text.find("{", start)
-    depth, end = 0, brace
-    for i, ch in enumerate(text[brace:], brace):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    return text[start:end], start, end
-
-def set_service_url(block: str, url: str) -> str:
-    block = re.sub(r'("url"\s*:\s*")[^"]+(")', rf"\g<1>{url}\2", block, count=1)
-    if "passHostHeader" not in block:
-        block = block.replace('"loadBalancer": {', '"loadBalancer": {\n          "passHostHeader": false,', 1)
-    else:
-        block = re.sub(r'"passHostHeader"\s*:\s*(?:true|false)', '"passHostHeader": false', block, count=1)
-    return block
-
-svc_pat = re.compile(r'"([^"]+)"\s*:\s*\{', re.M)
-pos = 0
-changed = 0
-while True:
-    m = svc_pat.search(text, pos)
-    if not m:
-        break
-    key = m.group(1)
-    block, bstart, bend = extract_block(text, m.start())
-    if '"loadBalancer"' not in block or '"url"' not in block:
-        pos = bend
-        continue
-    kl = key.lower()
-    new_block = block
-    if "disparador" in kl or "walkup-evo" in kl or "evolution" in kl:
-        pos = bend
-        continue
-    if "bets" in kl and ("bets_pv" in kl or "bets-pv" in kl):
-        new_block = set_service_url(block, bets_url)
-        print(f"service {key} -> {bets_url}")
-        changed += 1
-    elif "paginadevendas" in kl or "pagina-devendas" in kl:
-        new_block = set_service_url(block, pv_url)
-        print(f"service {key} -> {pv_url}")
-        changed += 1
-    if new_block != block:
-        text = text[:bstart] + new_block + text[bend:]
-        pos = bstart + len(new_block)
-    else:
-        pos = bend
-
-if changed < 1:
-    print("ERRO: nenhum service bets/paginadevendas encontrado")
-    sys.exit(2)
-
-path.write_text(text, encoding="utf-8")
-print(f"OK main.yaml ({changed} services)")
+orig = text
+text = text.replace("http://172.17.0.1:30211/", bets_url)
+text = text.replace("http://172.17.0.1:30211", bets_url.rstrip("/"))
+text = text.replace("http://172.17.0.1:30210/", pv_url)
+text = text.replace("http://172.17.0.1:30210", pv_url.rstrip("/"))
+if text != orig:
+    path.write_text(text, encoding="utf-8")
+    print("também atualizou URLs 30210/30211 no main.yaml")
+else:
+    print("main.yaml sem URL 30210/30211 (ok — overlay basta)")
 PY
+fi
 
 cid=$(docker ps -q -f name=easypanel-traefik -f status=running | head -1)
 [[ -n "$cid" ]] || { log "ERRO: Traefik down"; exit 1; }
 docker kill -s HUP "$cid" >/dev/null 2>&1 || true
-log "HUP Traefik ${cid:0:12}"
+log "HUP Traefik ${cid:0:12} overlay=$OVERLAY"
 sleep 8
 
 pv_code="000"
@@ -155,7 +204,7 @@ for i in 1 2 3 4 5 6; do
   if [[ "$pv_code" == "200" && "$bet_code" == "200" ]]; then
     break
   fi
-  log "HTTPS ainda ${pv_code}/${bet_code} (tentativa ${i}/6)"
+  log "HTTPS ainda disparos=${pv_code} bet=${bet_code} (tentativa ${i}/6)"
   sleep 3
 done
 
@@ -172,5 +221,5 @@ if echo "$bet_body" | grep -q "em breve novidades" && echo "$pv_body" | grep -q 
   log "SUCESSO"
   exit 0
 fi
-log "FALHA parcial — log em $LOG"
+log "FALHA parcial — log em $LOG overlay=$(ls -l "$OVERLAY" 2>/dev/null || true)"
 exit 1
