@@ -9,10 +9,10 @@
 #   curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/vps-public-maintenance-now.sh" -o /tmp/waba-maint.sh
 #   sed -i 's/\r$//' /tmp/waba-maint.sh && bash /tmp/waba-maint.sh
 #
-# Versão: public-maintenance-now-2026-10-09-v2
+# Versão: public-maintenance-now-2026-10-09-v3
 set -euo pipefail
 
-VERSION="public-maintenance-now-2026-10-09-v2"
+VERSION="public-maintenance-now-2026-10-09-v3"
 CFG_DIR="/etc/easypanel/traefik/config"
 CFG="${CFG_DIR}/main.yaml"
 OVERLAY="${CFG_DIR}/waba-public-maintenance.yaml"
@@ -74,8 +74,10 @@ docker run -d --name waba-maint-pv --restart unless-stopped \
   -p ${PV_PORT}:80 \
   -v "${DIR}:/usr/share/nginx/html:ro" \
   nginx:alpine >/dev/null
+# :30211 é o probe local do monitor WABA; o Swarm bets_pv não publica essa porta (502/ECONNREFUSED).
 docker run -d --name waba-maint-bets --restart unless-stopped \
   -p ${BETS_PORT}:80 \
+  -p 30211:80 \
   -v "${DIR}:/usr/share/nginx/html:ro" \
   nginx:alpine >/dev/null
 sleep 1
