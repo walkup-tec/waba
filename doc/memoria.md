@@ -1,4 +1,10 @@
-﻿## 2026-11-11 08:00 — Portfólio: recovery no BM focado (Nex Ads …7910)
+﻿## 2026-11-11 08:48 — Nex Ads: + abre ES no BM sem WABA (chip Pendente)
+- Sintoma: Meta mostra 4461 Pendente; Drax WABA— / 0 números; focus-recover em prod não bastou
+- Fix: prefill `setup.business` no +; fillEmptyAdmin sem break; invited no focus-recover; hydrate dropa WABA de outro owner
+- Marker: `DEPLOY-2026-11-11-nex-ads-es-bm-prefill`
+- LOG: doc/LOG-2026-11-11__084800__fix-nex-ads-pending-es-bm-prefill.md
+
+## 2026-11-11 08:00 — Portfólio: recovery no BM focado (Nex Ads …7910)
 - Sintoma: card Ativas sem WABA/números após «Lendo WABA…»; 4461 existe na Meta
 - Fix: metaBusinessIdsMatch em me/businesses; recovery pós-fanout no BM prioritário
 - LOG: doc/LOG-2026-11-11__080000__fix-portfolio-focus-recover-7910.md

@@ -27740,8 +27740,10 @@
             setup && setup.whatsAppBusinessAccount
               ? String(setup.whatsAppBusinessAccount.ids || "").trim()
               : "";
-          if (businessId && wabaId) {
+          if (businessId) {
             extrasSetup.business = { id: businessId };
+          }
+          if (businessId && wabaId) {
             extrasSetup.whatsAppBusinessAccount = { ids: wabaId };
           }
           return {
@@ -41066,7 +41068,9 @@
             ? String(setup.whatsAppBusinessAccount.ids || "").trim()
             : "";
         if (setupBusinessId) metaTpSession.savedBusinessId = setupBusinessId;
-        if (setupBusinessId && setupWabaId) metaTpSession.addNumber = true;
+        if (setupWabaId) metaTpSession.savedWabaId = setupWabaId;
+        // + no card (com ou sem WABA) = fluxo «adicionar/ativar número» neste BM.
+        if (setupBusinessId) metaTpSession.addNumber = true;
         if (window.location.protocol !== "https:") {
           metaTpSetStatus("O Embedded Signup exige HTTPS. Abra o Waba em https://waba.draxsistemas.com.br/");
           return false;
@@ -41140,10 +41144,11 @@
       window.wabaAddMetaWhatsappNumber = function wabaAddMetaWhatsappNumber(event) {
         const businessId = String(metaTpSession.savedBusinessId || "").trim();
         const wabaId = String(metaTpSession.savedWabaId || "").trim();
-        const setup =
-          businessId && wabaId
-            ? { business: { id: businessId }, whatsAppBusinessAccount: { ids: wabaId } }
-            : {};
+        const setup = {};
+        // BM sem WABA na Graph (ex.: Nex Ads com chip Pendente na Meta) ainda precisa
+        // abrir o Embedded Signup no portfólio certo para vincular/ativar o número.
+        if (businessId) setup.business = { id: businessId };
+        if (businessId && wabaId) setup.whatsAppBusinessAccount = { ids: wabaId };
         return window.wabaConnectMetaWhatsappOficial(event, setup);
       };
 

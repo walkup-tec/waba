@@ -50,9 +50,17 @@ describe("meta-es-fb-login", () => {
     assert.equal(withSetup?.extras.setup.whatsAppBusinessAccount?.ids, "waba-1");
     assert.deepEqual(buildMetaEsSetupPrefill({ businessId: "1588459689692010" }), {
       phone: { ...META_ES_OFFICIAL_PHONE_PROFILE },
+      business: { id: "1588459689692010" },
     });
     assert.deepEqual(buildMetaEsFbLoginOptions("1467449278208212", { business: { id: "1588459689692010" } })?.extras, {
-      setup: { phone: { ...META_ES_OFFICIAL_PHONE_PROFILE } },
+      setup: {
+        phone: { ...META_ES_OFFICIAL_PHONE_PROFILE },
+        business: { id: "1588459689692010" },
+      },
+    });
+    assert.deepEqual(buildMetaEsSetupPrefill({ businessId: "2515673625607910" }), {
+      phone: { ...META_ES_OFFICIAL_PHONE_PROFILE },
+      business: { id: "2515673625607910" },
     });
     const plan = planMetaEsTechProviderClick("1467449278208212");
     assert.equal(plan.callFbInit, false);
@@ -239,6 +247,14 @@ describe("meta-es-fb-login", () => {
     assert.equal(withPortfolioParsed.searchParams.get("response_type"), null);
     assert.equal(withPortfolioParsed.searchParams.get("redirect_uri"), null);
     assert.match(String(withPortfolioParsed.searchParams.get("extras") || ""), /1588459689692010/);
+    const bmOnlySetup = buildMetaEsOauthDialogUrl({
+      appId: "1279182514183979",
+      configId: "1590195526041278",
+      redirectUri: "https://waba.draxsistemas.com.br/",
+      setup: { business: { id: "2515673625607910" } },
+    });
+    assert.ok(bmOnlySetup);
+    assert.match(String(new URL(bmOnlySetup).searchParams.get("extras") || ""), /2515673625607910/);
     const suiteOnly = buildMetaEsOauthDialogUrl({
       appId: "1279182514183979",
       configId: "1590195526041278",
@@ -356,19 +372,15 @@ describe("meta-es-fb-login", () => {
     assert.equal(surface.mobileHint, false);
   });
 
-  it("botão + sem WABA não envia extras.setup só com BM", () => {
+  it("botão + sem WABA envia extras.setup.business (Nex Ads / chip Pendente)", () => {
     const html = readFileSync(path.join(process.cwd(), "index.html"), "utf8");
     assert.match(html, /wabaAddMetaWhatsappNumber/);
-    assert.match(
-      html,
-      /businessId && wabaId\s*\n\s*\? \{ business: \{ id: businessId \}, whatsAppBusinessAccount: \{ ids: wabaId \} \}/,
-    );
-    assert.doesNotMatch(html, /if \(metaTpSession\.savedBusinessId\) setup\.business/);
-    assert.match(html, /if \(businessId && wabaId\) \{\s*\n\s*extrasSetup\.business/);
+    assert.match(html, /if \(businessId\) setup\.business = \{ id: businessId \}/);
+    assert.match(html, /if \(businessId && wabaId\) setup\.whatsAppBusinessAccount/);
+    assert.match(html, /if \(businessId\) \{\s*\n\s*extrasSetup\.business/);
     assert.match(html, /phone: \{\s*\n\s*displayName: "Relacionamento e Atendimento"/);
     assert.doesNotMatch(html, /wabaIntegrateMetaPortfolio/);
     assert.doesNotMatch(html, /data-meta-integrate-portfolio/);
     assert.doesNotMatch(html, />Integrar Meta</);
-    assert.doesNotMatch(html, /else if \(businessId\) \{\s*\n\s*extrasSetup\.business/);
   });
 });

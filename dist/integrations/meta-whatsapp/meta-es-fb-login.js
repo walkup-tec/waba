@@ -98,9 +98,16 @@ function buildMetaEsSetupPrefill(input) {
     };
     const businessId = String(input.businessId || "").trim();
     const wabaId = String(input.wabaId || "").trim();
-    // Prefill de BM/WABA só no fluxo «adicionar número»: os dois juntos.
-    if (businessId && wabaId) {
+    /**
+     * Prefill no fluxo «+ / adicionar número»:
+     * - BM sozinho (ex.: Nex Ads sem WABA na Graph) — ES abre no portfólio certo
+     *   para vincular/ativar o chip Pendente que a Meta já mostra no Manager.
+     * - BM + WABA quando o card já tem conta WhatsApp conhecida.
+     */
+    if (businessId) {
         setup.business = { id: businessId };
+    }
+    if (businessId && wabaId) {
         setup.whatsAppBusinessAccount = { ids: wabaId };
     }
     return setup;
@@ -297,8 +304,9 @@ function buildMetaEsOauthDialogUrl(input) {
     const siteOrigin = resolveMetaEsRedirectUri({ configRedirectUri: input.redirectUri });
     if (!appId || !configId || !siteOrigin)
         return null;
-    const businessId = String(input.setup?.business?.id || input.businessId || "").trim();
-    const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || input.wabaId || "").trim();
+    // Prefill só via `setup` (botão +). `businessId` solto não entra no extras.
+    const businessId = String(input.setup?.business?.id || "").trim();
+    const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || "").trim();
     const setup = buildMetaEsSetupPrefill({ businessId, wabaId });
     const parsed = new URL(`${exports.META_ES_ONBOARD_ORIGIN}${exports.META_ES_ONBOARD_PATH}`);
     parsed.searchParams.set("app_id", appId);
@@ -310,6 +318,8 @@ function buildMetaEsOauthDialogUrl(input) {
     void input.display;
     void input.cbt;
     void input.graphVersion;
+    void input.businessId;
+    void input.wabaId;
     return parsed.toString();
 }
 function metaEsOauthPopupFeatures() {
@@ -326,8 +336,8 @@ function buildMetaEsLoginForBusinessDialogUrl(input) {
     if (!appId || !configId || !redirectUri)
         return null;
     const version = String(input.graphVersion || exports.META_ES_JS_SDK_GRAPH_VERSION).trim() || exports.META_ES_JS_SDK_GRAPH_VERSION;
-    const businessId = String(input.setup?.business?.id || input.businessId || "").trim();
-    const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || input.wabaId || "").trim();
+    const businessId = String(input.setup?.business?.id || "").trim();
+    const wabaId = String(input.setup?.whatsAppBusinessAccount?.ids || "").trim();
     const setup = buildMetaEsSetupPrefill({ businessId, wabaId });
     const parsed = new URL(`${exports.META_ES_LFB_ORIGIN}/${version}/dialog/oauth`);
     parsed.searchParams.set("client_id", appId);
@@ -341,6 +351,8 @@ function buildMetaEsLoginForBusinessDialogUrl(input) {
     if (state)
         parsed.searchParams.set("state", state);
     void input.cbt;
+    void input.businessId;
+    void input.wabaId;
     return parsed.toString();
 }
 /**
