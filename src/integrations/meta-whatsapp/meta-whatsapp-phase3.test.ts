@@ -606,4 +606,47 @@ describe("meta-whatsapp phase 3", () => {
     );
     assert.equal(repo.rows[0].status, "pending_confirmation");
   });
+
+  it("complete só com BM Nex Ads descobre WABA e telefone Pendente na Graph", async () => {
+    const repo = new FakeMetaRepo();
+    const graph = async (input: { path: string }) => {
+      if (input.path === "2515673625607910/owned_whatsapp_business_accounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: { data: [{ id: "waba-nex-ads", name: "Nex Ads" }] },
+        };
+      }
+      if (input.path === "2515673625607910/client_whatsapp_business_accounts") {
+        return { ok: true, status: 200, json: { data: [] } };
+      }
+      if (input.path === "waba-nex-ads/phone_numbers") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "phone-nex-4461",
+                display_phone_number: "+55 51 92636-4461",
+                verified_name: "Nex Ads",
+                status: "PENDING",
+                code_verification_status: "VERIFIED",
+              },
+            ],
+          },
+        };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graph as any);
+    await service.exchangeCodeAndStore(authA, { code: "ok-code" });
+    const claimed = await service.attachSessionAssets(authA, {
+      businessId: "2515673625607910",
+    });
+    assert.equal(claimed.businessId, "2515673625607910");
+    assert.equal(claimed.wabaId, "waba-nex-ads");
+    assert.equal(claimed.phoneNumberId, "phone-nex-4461");
+    assert.match(String(claimed.displayPhoneNumber || ""), /92636-4461/);
+  });
 });

@@ -39569,6 +39569,20 @@
         });
       }
 
+      /** Sucesso do + / ES: o BM focado precisa ter WABA ou número — não basta outro card (ex.: Drax). */
+      function metaTpFocusedPortfolioReady() {
+        const focus = String(metaTpSession.savedBusinessId || metaTpSession.businessId || "").trim();
+        if (!focus) return metaTpHasListedNumbers();
+        const card = (metaTpSession.portfolios || []).find(function (item) {
+          return metaTpBusinessIdLabel(item) === focus;
+        });
+        if (!card || card.hidden === true) return false;
+        if (String(card.wabaId || "").trim()) return true;
+        return (card.numbers || []).some(function (row) {
+          return Boolean(String((row && (row.displayPhoneNumber || row.phoneNumberId)) || "").trim());
+        });
+      }
+
       function metaTpPaintConnectProgress(index) {
         const els = metaTpConnectProgressEls();
         const current = Math.max(0, Math.min(META_TP_CONNECT_STEPS.length - 1, Number(index) || 0));
@@ -40969,13 +40983,20 @@
             }
           }
 
-          if (metaTpSession.exchanged && metaTpSession.wabaId) {
+          const claimBusinessId = String(
+            metaTpSession.businessId || metaTpSession.savedBusinessId || "",
+          ).trim();
+          const claimWabaId = String(metaTpSession.wabaId || metaTpSession.savedWabaId || "").trim();
+          const claimPhoneId = String(metaTpSession.phoneNumberId || "").trim();
+          if (metaTpSession.exchanged && (claimWabaId || claimPhoneId || claimBusinessId)) {
+            if (claimBusinessId && !metaTpSession.businessId) metaTpSession.businessId = claimBusinessId;
+            if (claimWabaId && !metaTpSession.wabaId) metaTpSession.wabaId = claimWabaId;
             const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/complete", {
               method: "POST",
               body: JSON.stringify({
-                wabaId: metaTpSession.wabaId,
-                phoneNumberId: metaTpSession.phoneNumberId || undefined,
-                businessId: metaTpSession.businessId || undefined,
+                wabaId: claimWabaId || undefined,
+                phoneNumberId: claimPhoneId || undefined,
+                businessId: claimBusinessId || undefined,
               }),
             });
             if (!response.ok || payload.ok === false) {
@@ -40985,6 +41006,9 @@
               metaTpFinishConnectProgress({ ok: false, message: message });
               return;
             }
+            if (payload.wabaId) metaTpSession.wabaId = String(payload.wabaId);
+            if (payload.phoneNumberId) metaTpSession.phoneNumberId = String(payload.phoneNumberId);
+            if (payload.businessId) metaTpSession.businessId = String(payload.businessId);
             metaTpLog(payload.wabaId ? "WABA claimed" : "WABA ainda ausente");
             if (payload.phoneNumberId) metaTpLog("Phone claimed");
             metaTpSetStatus("");
@@ -41002,7 +41026,7 @@
             if (!response.ok || payload.ok === false) {
               metaTpLog("Graph validation falhou");
               await metaTpReloadPortfoliosAfterConnect();
-              if (metaTpHasListedNumbers()) {
+              if (metaTpSession.addNumber ? metaTpFocusedPortfolioReady() : metaTpHasListedNumbers()) {
                 metaTpSetStatus("");
                 metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
                 window.__wabaMetaTechSignupActive = false;
@@ -41041,15 +41065,24 @@
           if (metaTpSession.exchanged && !metaTpSession.wabaId) {
             metaTpLog("token sem waba_id do postMessage; lendo portfólio na Graph");
             await metaTpReloadPortfoliosAfterConnect();
-            if (metaTpHasListedNumbers()) {
+          }
+          if (metaTpConnectProgressActive) {
+            const focusedOk = metaTpSession.addNumber
+              ? metaTpFocusedPortfolioReady()
+              : metaTpHasListedNumbers();
+            if (focusedOk) {
               metaTpSetStatus("");
               metaTpFinishConnectProgress({ ok: true, hasPortfolios: true });
               window.__wabaMetaTechSignupActive = false;
-              return;
+            } else {
+              metaTpFinishConnectProgress({
+                ok: true,
+                hasPortfolios: false,
+                message: metaTpSession.addNumber
+                  ? "Token gravado, mas o número deste portfólio ainda não apareceu. Clique em Atualizar ou no + de novo."
+                  : "Ainda lendo os números na Meta. Aguarde ou clique em Atualizar.",
+              });
             }
-          }
-          if (metaTpConnectProgressActive) {
-            metaTpFinishConnectProgress({ ok: true, hasPortfolios: metaTpHasListedNumbers() });
           }
         } finally {
           metaTpSession.advancing = false;
@@ -41067,10 +41100,16 @@
           setup && setup.whatsAppBusinessAccount
             ? String(setup.whatsAppBusinessAccount.ids || "").trim()
             : "";
-        if (setupBusinessId) metaTpSession.savedBusinessId = setupBusinessId;
-        if (setupWabaId) metaTpSession.savedWabaId = setupWabaId;
-        // + no card (com ou sem WABA) = fluxo «adicionar/ativar número» neste BM.
-        if (setupBusinessId) metaTpSession.addNumber = true;
+        if (setupBusinessId) {
+          metaTpSession.savedBusinessId = setupBusinessId;
+          // /complete usa businessId — sem isso a WABA não grava no card Nex Ads.
+          metaTpSession.businessId = setupBusinessId;
+          metaTpSession.addNumber = true;
+        }
+        if (setupWabaId) {
+          metaTpSession.savedWabaId = setupWabaId;
+          metaTpSession.wabaId = setupWabaId;
+        }
         if (window.location.protocol !== "https:") {
           metaTpSetStatus("O Embedded Signup exige HTTPS. Abra o Waba em https://waba.draxsistemas.com.br/");
           return false;

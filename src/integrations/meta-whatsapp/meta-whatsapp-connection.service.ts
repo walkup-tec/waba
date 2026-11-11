@@ -3110,19 +3110,77 @@ export class MetaWhatsappConnectionService {
     if (!open) {
       throw new MetaWhatsappError("no_pending_connection");
     }
-    const wabaId = String(input.wabaId || open.wabaId || "").trim();
-    const phoneNumberId = String(input.phoneNumberId || open.phoneNumberId || "").trim();
+    let wabaId = String(input.wabaId || open.wabaId || "").trim();
+    let phoneNumberId = String(input.phoneNumberId || open.phoneNumberId || "").trim();
     const businessId = String(input.businessId || open.metaBusinessId || "").trim();
+    let displayPhoneNumber = String(input.displayPhoneNumber || open.displayPhoneNumber || "").trim();
+    let verifiedName = String(input.verifiedName || open.verifiedName || "").trim();
     if (!wabaId && !phoneNumberId && !businessId) {
       return toMetaWhatsappPublicConnection(open);
+    }
+    /**
+     * + no card Nex Ads (BM sem WABA no postMessage): descobre owned/client na Graph
+     * com o token recém-trocado e grava WABA/telefone no mesmo claim.
+     */
+    if (businessId && (!wabaId || !phoneNumberId)) {
+      try {
+        const token = this.decrypt(open.accessTokenEncrypted);
+        if (token) {
+          const g = withHydrateLimits(this.graph);
+          if (!wabaId) {
+            const owned = await listBusinessWabaIds(g, token, businessId, "owned");
+            const client = owned.length
+              ? []
+              : await listBusinessWabaIds(g, token, businessId, "client");
+            wabaId = String(owned[0] || client[0] || "").trim();
+            logMetaWhatsappSafe("assets-discover-waba", {
+              tenantId: tenant.tenantId,
+              businessId,
+              wabaId: wabaId || null,
+              ownedCount: owned.length,
+              clientCount: client.length,
+            });
+          }
+          if (wabaId && !phoneNumberId) {
+            const phones = await listWabaPhoneNumbersPagedWithFields(
+              g,
+              token,
+              wabaId,
+              META_PHONE_NUMBER_CATALOG_FIELDS,
+            );
+            if (phones.ok) {
+              const first =
+                (phones.json.data || []).find((row) => {
+                  const rec = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+                  return Boolean(String(rec.display_phone_number || rec.id || "").trim());
+                }) || null;
+              if (first && typeof first === "object") {
+                const rec = first as Record<string, unknown>;
+                phoneNumberId = String(rec.id || "").trim();
+                if (!displayPhoneNumber) {
+                  displayPhoneNumber = String(rec.display_phone_number || "").trim();
+                }
+                if (!verifiedName) {
+                  verifiedName = String(rec.verified_name || "").trim();
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        logMetaWhatsappSafe("assets-discover-waba-failed", {
+          tenantId: tenant.tenantId,
+          businessId,
+        });
+      }
     }
     try {
       const row = await this.repository.attachClaimedAssets(tenant.tenantId, open.id, {
         wabaId: wabaId || null,
         phoneNumberId: phoneNumberId || null,
         metaBusinessId: businessId || null,
-        displayPhoneNumber: input.displayPhoneNumber || open.displayPhoneNumber,
-        verifiedName: input.verifiedName || open.verifiedName,
+        displayPhoneNumber: displayPhoneNumber || open.displayPhoneNumber,
+        verifiedName: verifiedName || open.verifiedName,
         accessTokenEncrypted: mergeIntoConnected ? pendingToken?.accessTokenEncrypted || null : null,
         tokenType: mergeIntoConnected ? pendingToken?.tokenType || null : null,
         tokenExpiresAt: mergeIntoConnected ? pendingToken?.tokenExpiresAt || null : null,
@@ -3160,6 +3218,13 @@ export class MetaWhatsappConnectionService {
       }
       if (businessId) {
         unhideBusiness(tenant.tenantId, businessId);
+        if (wabaId) {
+          try {
+            addManualBusiness(tenant.tenantId, businessId, "", wabaId);
+          } catch {
+            // Card manual com WABA descoberta não pode abortar o claim.
+          }
+        }
       }
       invalidateCachedPortfolioGraph(tenant.tenantId);
       return toMetaWhatsappPublicConnection(row);

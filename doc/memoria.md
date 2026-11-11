@@ -1,4 +1,11 @@
-﻿## 2026-11-11 08:48 — Nex Ads: + abre ES no BM sem WABA (chip Pendente)
+﻿## 2026-11-11 12:19 — Nex Ads: claim grava BM + descobre WABA/4461
+- Sintoma: «Conexão concluída» com card Nex Ads ainda WABA— / 0 (falso sucesso de outros BMs)
+- Causa: `/complete` sem `businessId` do card; complete só rodava com waba do postMessage
+- Fix: session.businessId do +; claim com BM; attach descobre owned+phone; sucesso focado
+- Marker: `DEPLOY-2026-11-11-nex-ads-claim-business-id`
+- LOG: doc/LOG-2026-11-11__121900__fix-nex-ads-claim-business-id.md
+
+## 2026-11-11 08:48 — Nex Ads: + abre ES no BM sem WABA (chip Pendente)
 - Sintoma: Meta mostra 4461 Pendente; Drax WABA— / 0 números; focus-recover em prod não bastou
 - Fix: prefill `setup.business` no +; fillEmptyAdmin sem break; invited no focus-recover; hydrate dropa WABA de outro owner
 - Marker: `DEPLOY-2026-11-11-nex-ads-es-bm-prefill`
