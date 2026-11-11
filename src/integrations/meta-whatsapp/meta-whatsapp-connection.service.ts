@@ -1442,7 +1442,7 @@ async function collectNestedPhonesFromMeBusinesses(
     const nodeId = String(
       (node && typeof node === "object" ? (node as { id?: unknown }).id : "") || "",
     ).trim();
-    if (only && nodeId !== only) continue;
+    if (only && !metaBusinessIdsMatch(nodeId, only)) continue;
     const extracted = extractWabasAndPhonesFromBusinessNode(node);
     for (const id of extracted.wabaIds) wabaIds.add(id);
     for (const id of extracted.clientWabaIds) clientWabaIds.add(id);
@@ -2459,6 +2459,79 @@ async function fillEmptyAdminPortfolioCards(
       }
     } catch {
       logMetaWhatsappSafe("portfolio-admin-fanout-failed", { tenantId, businessId: bm });
+    }
+  }
+
+  /**
+   * BM aberto na UI (ex.: Nex Ads …7910) ainda sem WABA/número após o fan-out padrão.
+   * Repete edges owned/client + match por nome com o Graph “cheio” (sem teto do invited).
+   */
+  if (priority) {
+    const focused = out.find((card) => metaBusinessIdsMatch(String(card.id || ""), priority));
+    if (focused && cardNeedsWabaOrNumbers(focused)) {
+      const bm = String(focused.id || "").trim();
+      const ownConnectionId =
+        connectionIdForPortfolioBusiness(openRows, bm) || String(focused.connectionId || "").trim();
+      const fullGraph = withHydrateLimits(rawGraph);
+      try {
+        for (const row of writeTokens) {
+          const token = String(row.token || "").trim();
+          if (!token) continue;
+          const pack = seedByToken.get(token);
+          const ownedIds = await listBusinessWabaIds(fullGraph, token, bm, "owned");
+          const clientIds = await listBusinessWabaIds(fullGraph, token, bm, "client");
+          let seed: PartnerWabaBucket = {
+            wabaIds: [...ownedIds],
+            phones: [],
+          };
+          for (const id of clientIds) {
+            if (isKnownClientWabaForBusiness(bm, id)) continue;
+            if (!seed.wabaIds.includes(id)) seed.wabaIds.push(id);
+          }
+          const fromMaps = mergePartnerBuckets(bm, pack?.maps || [], []);
+          for (const id of fromMaps.wabaIds) {
+            if (isKnownClientWabaForBusiness(bm, id)) continue;
+            if (!seed.wabaIds.includes(id)) seed.wabaIds.push(id);
+          }
+          for (const phone of fromMaps.phones) seed.phones.push(phone);
+          if (!seed.wabaIds.length) {
+            const named = partnerBucketForCardName(
+              pack?.byName,
+              String(focused.name || focused.primaryPageName || ""),
+            );
+            seed = {
+              wabaIds: [...named.wabaIds],
+              phones: [...seed.phones, ...named.phones],
+            };
+          }
+          if (!seed.wabaIds.length && !seed.phones.length) continue;
+          const fanout = await fanOutAdminBusinessNumbers({
+            graph: fullGraph,
+            token: row.token,
+            writeTokens,
+            businessId: bm,
+            seed,
+          });
+          if (
+            applyDiscoveredWabasToCard(focused, {
+              wabaIds: fanout.wabaIds.length ? fanout.wabaIds : seed.wabaIds,
+              phones: fanout.phones.length ? fanout.phones : seed.phones,
+              connectionId: ownConnectionId,
+            })
+          ) {
+            persistManualCardWaba(tenantId, focused);
+            logMetaWhatsappSafe("portfolio-focus-recover", {
+              tenantId,
+              businessId: bm,
+              wabaCount: fanout.wabaIds.length || seed.wabaIds.length,
+              phoneRowCount: (focused.numbers || []).length,
+            });
+          }
+          if (cardHasListedNumbers(focused) && cardHasListedWaba(focused)) break;
+        }
+      } catch {
+        logMetaWhatsappSafe("portfolio-focus-recover-failed", { tenantId, businessId: bm });
+      }
     }
   }
 
