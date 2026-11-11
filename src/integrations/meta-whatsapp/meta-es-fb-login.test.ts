@@ -380,10 +380,8 @@ describe("meta-es-fb-login", () => {
     assert.match(html, /if \(businessId\) \{\s*\n\s*extrasSetup\.business/);
     assert.match(html, /metaTpSession\.businessId = setupBusinessId/);
     assert.match(html, /metaTpFocusedPortfolioReady/);
-    assert.match(
-      html,
-      /businessId: claimBusinessId \|\| undefined/,
-    );
+    assert.match(html, /businessId: claimBusinessId \|\| undefined/);
+    assert.match(html, /if \(exchangeBm\) body\.businessId = exchangeBm/);
     assert.match(html, /phone: \{\s*\n\s*displayName: "Relacionamento e Atendimento"/);
     assert.doesNotMatch(html, /wabaIntegrateMetaPortfolio/);
     assert.doesNotMatch(html, /data-meta-integrate-portfolio/);

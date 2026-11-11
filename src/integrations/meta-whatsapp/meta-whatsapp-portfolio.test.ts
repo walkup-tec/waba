@@ -3494,6 +3494,250 @@ describe("meta portfolio service", () => {
     );
   });
 
+  it("BM convidada Pendente: WABA client órfã (owner nulo) acha o card pelo verified_name do chip", async () => {
+    const NEX_BM = "2515673625607910";
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup-nex",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    const nexPhone = {
+      id: "phone-nex-4461",
+      display_phone_number: "+55 51 92636-4461",
+      verified_name: "Nex Ads",
+      status: "PENDING",
+      code_verification_status: "NOT_VERIFIED",
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "4141369862822598", name: "Grupo Walkup" },
+              { id: NEX_BM, name: "Nex Ads" },
+            ],
+          },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path === NEX_BM) {
+        // BM convidada: token da agência não enxerga os edges WhatsApp do BM.
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: NEX_BM,
+            name: "Nex Ads",
+            owned_whatsapp_business_accounts: { data: [] },
+            client_whatsapp_business_accounts: { data: [] },
+          },
+        };
+      }
+      if (
+        input.path === `${NEX_BM}/owned_whatsapp_business_accounts` ||
+        input.path === `${NEX_BM}/client_whatsapp_business_accounts`
+      ) {
+        return { ok: true, status: 200, json: { data: [] } };
+      }
+      // WABA client compartilhada com a agência, mas com owner_business_info NULO
+      // e nome genérico — só o verified_name "Nex Ads" do chip liga ao card.
+      if (input.path === "4141369862822598/client_whatsapp_business_accounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "waba-nex-orphan",
+                name: "WhatsApp Business Account",
+                phone_numbers: { data: [nexPhone] },
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "waba-nex-orphan") {
+        return { ok: true, status: 200, json: { id: "waba-nex-orphan", name: "WhatsApp Business Account" } };
+      }
+      if (input.path === "waba-nex-orphan/phone_numbers") {
+        return { ok: true, status: 200, json: { data: [nexPhone] } };
+      }
+      if (input.path === "phone-nex-4461") {
+        return { ok: true, status: 200, json: nexPhone };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth, { businessId: NEX_BM });
+    const nex = (assets.portfolios || []).find((item) => item.id === NEX_BM);
+    assert.ok(nex, "card Nex Ads deve existir");
+    assert.equal(nex?.wabaId, "waba-nex-orphan");
+    const numbers = nex?.numbers || [];
+    assert.equal(numbers.length, 1);
+    const phone = numbers[0];
+    assert.equal(phone?.phoneNumberId, "phone-nex-4461");
+    assert.equal(phone?.displayPhoneNumber, "+55 51 92636-4461");
+    assert.equal(phone?.uiStatus, "pendente");
+    assert.equal(phone?.canActivate, true);
+    // A WABA órfã não pode vazar para o card da agência.
+    const walkupCard = (assets.portfolios || []).find((item) => item.id === "4141369862822598");
+    assert.equal(
+      (walkupCard?.numbers || []).some((item) => String(item.phoneNumberId || "") === "phone-nex-4461"),
+      false,
+    );
+  });
+
+  it("BM convidada Pendente: chip com verified_name genérico acha o card pelos dígitos do número (92636-4461)", async () => {
+    const NEX_BM = "2515673625607910";
+    const walkup = {
+      ...connectedRow(),
+      id: "conn-walkup-nex-digits",
+      metaBusinessId: "4141369862822598",
+      wabaId: "1014470201624992",
+      accessTokenEncrypted: encryptMetaToken("token-walkup"),
+    };
+    // Chip Pendente SEM verified_name "Nex Ads" e WABA com nome genérico / owner nulo:
+    // só os dígitos de exibição +55 51 92636-4461 ligam a WABA órfã ao card Nex Ads.
+    const nexPhone = {
+      id: "phone-nex-4461",
+      display_phone_number: "+55 51 92636-4461",
+      verified_name: "",
+      status: "PENDING",
+      code_verification_status: "NOT_VERIFIED",
+    };
+    const graph = async (input: { path: string }) => {
+      if (input.path === "me/businesses") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              { id: "4141369862822598", name: "Grupo Walkup" },
+              { id: NEX_BM, name: "Nex Ads" },
+            ],
+          },
+        };
+      }
+      if (input.path === "1014470201624992") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: "1014470201624992",
+            name: "WABA 01",
+            owner_business_info: { id: "4141369862822598", name: "Grupo Walkup" },
+          },
+        };
+      }
+      if (input.path === "4141369862822598") {
+        return { ok: true, status: 200, json: { id: "4141369862822598", name: "Grupo Walkup" } };
+      }
+      if (input.path === NEX_BM) {
+        // BM convidada: token da agência não enxerga os edges WhatsApp do BM.
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: NEX_BM,
+            name: "Nex Ads",
+            owned_whatsapp_business_accounts: { data: [] },
+            client_whatsapp_business_accounts: { data: [] },
+          },
+        };
+      }
+      if (
+        input.path === `${NEX_BM}/owned_whatsapp_business_accounts` ||
+        input.path === `${NEX_BM}/client_whatsapp_business_accounts`
+      ) {
+        return { ok: true, status: 200, json: { data: [] } };
+      }
+      // WABA client compartilhada com a agência, owner nulo e nome genérico;
+      // o chip não tem verified_name — nada liga por nome, só pelos dígitos.
+      if (input.path === "4141369862822598/client_whatsapp_business_accounts") {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            data: [
+              {
+                id: "waba-nex-orphan",
+                name: "WhatsApp Business Account",
+                phone_numbers: { data: [nexPhone] },
+              },
+            ],
+          },
+        };
+      }
+      if (input.path === "waba-nex-orphan") {
+        return { ok: true, status: 200, json: { id: "waba-nex-orphan", name: "WhatsApp Business Account" } };
+      }
+      if (input.path === "waba-nex-orphan/phone_numbers") {
+        return { ok: true, status: 200, json: { data: [nexPhone] } };
+      }
+      if (input.path === "phone-nex-4461") {
+        return { ok: true, status: 200, json: nexPhone };
+      }
+      return { ok: true, status: 200, json: { data: [] } };
+    };
+    const service = new MetaWhatsappConnectionService(
+      {
+        async listOpenByTenant() {
+          return [walkup];
+        },
+        async findOpenByTenant() {
+          return walkup;
+        },
+      } as any,
+      { exchangeEmbeddedSignupCode: async () => ({ accessToken: "x", tokenType: "bearer", expiresIn: 1 }) },
+      graph as any,
+    );
+    const assets = await service.listPortfolioAssets(auth, { businessId: NEX_BM });
+    const nex = (assets.portfolios || []).find((item) => item.id === NEX_BM);
+    assert.ok(nex, "card Nex Ads deve existir");
+    assert.equal(nex?.wabaId, "waba-nex-orphan");
+    const numbers = nex?.numbers || [];
+    assert.equal(numbers.length, 1);
+    const phone = numbers[0];
+    assert.equal(phone?.phoneNumberId, "phone-nex-4461");
+    assert.equal(phone?.displayPhoneNumber, "+55 51 92636-4461");
+    assert.equal(phone?.uiStatus, "pendente");
+    assert.equal(phone?.canActivate, true);
+    // A WABA órfã não pode vazar para o card da agência.
+    const walkupCard = (assets.portfolios || []).find((item) => item.id === "4141369862822598");
+    assert.equal(
+      (walkupCard?.numbers || []).some((item) => String(item.phoneNumberId || "") === "phone-nex-4461"),
+      false,
+    );
+  });
+
   it("WABA client do Grupo Walkup App (parceiro) hidrata o card da BM dona", async () => {
     const walkupApp = {
       ...connectedRow(),

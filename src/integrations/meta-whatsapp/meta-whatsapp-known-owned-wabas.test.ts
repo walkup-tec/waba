@@ -15,6 +15,8 @@ import {
   knownClientWabaIdsForBusiness,
   knownOwnedWabaIdsForBusiness,
   knownPendingPhonesForBusiness,
+  knownPendingDisplayDigitsForBusiness,
+  knownPendingBusinessIdsForDisplayPhone,
   knownOwnedBusinessesMatch,
   knownWabaIdForPendingPhone,
   metaBusinessIdsMatch,
@@ -23,6 +25,7 @@ import {
   catalogBackfillBusinessIds,
   catalogBusinessLabel,
   isCatalogBackfillBusiness,
+  NEX_ADS_BUSINESS_IDS,
 } from "./meta-whatsapp-known-owned-wabas";
 
 describe("known owned WABAs", () => {
@@ -128,5 +131,17 @@ describe("known owned WABAs", () => {
       "61.687.659 sander roosevelt de souza",
     );
     assert.equal(catalogBusinessLabel("1041827648719609"), "");
+  });
+
+  it("Nex Ads: dígitos do chip Pendente 4461 ligam ao BM …7910 sem inventar phone_number_id", () => {
+    assert.deepEqual([...NEX_ADS_BUSINESS_IDS], ["2515673625607910"]);
+    assert.ok(knownPendingDisplayDigitsForBusiness("2515673625607910").includes("5551926364461"));
+    assert.ok(knownPendingDisplayDigitsForBusiness("2515673625607910").includes("51926364461"));
+    assert.deepEqual(knownPendingBusinessIdsForDisplayPhone("+55 51 92636-4461"), [
+      "2515673625607910",
+    ]);
+    assert.deepEqual(knownPendingBusinessIdsForDisplayPhone("51926364461"), ["2515673625607910"]);
+    assert.deepEqual(knownPendingPhonesForBusiness("2515673625607910"), []);
+    assert.deepEqual(knownPendingDisplayDigitsForBusiness("1041827648719609"), []);
   });
 });

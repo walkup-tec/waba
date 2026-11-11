@@ -1,4 +1,12 @@
-﻿## 2026-11-11 12:19 — Nex Ads: claim grava BM + descobre WABA/4461
+﻿## 2026-11-11 14:44 — Nex Ads: fallback por dígitos + stamp BM no exchange
+- Sintoma: Meta Contas WhatsApp 4461 Pendente; Laboratório sem chip para PIN (após claim/ES/focus)
+- Causa: edges BM vazias; WABA órfã da agência; match só por verified_name; exchange sem businessId
+- Fix: KNOWN_PENDING_DISPLAY_PHONES; byDigits + partnerBucketForCardNameOrDigits; callback grava BM
+- Marker: `DEPLOY-2026-11-11-nex-ads-digits-fallback`
+- LOG: doc/LOG-2026-11-11__144400__fix-nex-ads-digits-fallback.md
+- Residual: se Graph não vê o chip em client da agência → Atribuir parceiro na Meta
+
+## 2026-11-11 12:19 — Nex Ads: claim grava BM + descobre WABA/4461
 - Sintoma: «Conexão concluída» com card Nex Ads ainda WABA— / 0 (falso sucesso de outros BMs)
 - Causa: `/complete` sem `businessId` do card; complete só rodava com waba do postMessage
 - Fix: session.businessId do +; claim com BM; attach descobre owned+phone; sucesso focado

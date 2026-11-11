@@ -189,6 +189,7 @@ export const registerMetaWhatsappIntegrationRoutes = (app: Express): void => {
       const publicStatus = await service.exchangeCodeAndStore(resolveWabaRequestAuth(req), {
         code: String(req.body?.code || "").trim(),
         redirectUri: String(req.body?.redirectUri || req.body?.redirect_uri || "").trim() || undefined,
+        businessId: String(req.body?.businessId || req.body?.business_id || "").trim() || undefined,
         tenantId: String(req.body?.tenantId || req.body?.tenant_id || "").trim() || undefined,
         ownerEmail: String(req.body?.ownerEmail || req.body?.owner_email || "").trim() || undefined,
       });

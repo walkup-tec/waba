@@ -56,6 +56,14 @@ export const FLAVIANE_FERREIRA_TRINDADE_BUSINESS_IDS = ["962298516898955"] as co
 export const NATALLY_CARISSIA_MUNIZ_BEZERRA_BUSINESS_IDS = ["1832926164812406"] as const;
 export const SANDER_ROOSEVELT_BUSINESS_IDS = ["1588459689692010"] as const;
 
+/**
+ * BM convidada Nex Ads — chip +55 51 92636-4461 Pendente. A Graph do app Drax
+ * só expõe esse número por uma WABA client órfã da agência (owner nulo). Não
+ * temos phone_number_id/waba_id prévios (precisam de Graph ao vivo), mas sabemos
+ * BM + nome + dígitos de exibição — suficiente para casar a WABA órfã pelo número.
+ */
+export const NEX_ADS_BUSINESS_IDS = ["2515673625607910"] as const;
+
 const CATALOG_ADMIN_BUSINESS_LABELS: Record<string, string> = {
   "4681844838758316": "60.846.306 Marilza de Castro",
   "962298516898955": "60.845.972 Flaviane Ferreira Trindade",
@@ -293,6 +301,64 @@ export function knownWabaNameForId(wabaId: string): string {
 
 export function knownPendingPhonesForBusiness(businessId: string): KnownOwnedPendingPhone[] {
   return knownOwnedCatalogForBusiness(businessId)?.pendingPhones.slice() || [];
+}
+
+/**
+ * Número Pendente conhecido por BM quando só temos os dígitos de exibição (sem
+ * phone_number_id / waba_id porque dependem de Graph ao vivo). Permite casar a
+ * WABA órfã da agência pelo número mesmo que o chip venha com verified_name
+ * genérico/vazio (fallback do index por nome).
+ */
+export type KnownPendingDisplayPhone = {
+  businessIds: string[];
+  displayDigits: string[];
+  name: string;
+};
+
+export const KNOWN_PENDING_DISPLAY_PHONES: KnownPendingDisplayPhone[] = [
+  {
+    businessIds: [...NEX_ADS_BUSINESS_IDS],
+    displayDigits: ["5551926364461", "51926364461"],
+    name: "Nex Ads",
+  },
+];
+
+/** Dígitos de exibição (normalizados) do número Pendente conhecido do BM. */
+export function knownPendingDisplayDigitsForBusiness(businessId: string): string[] {
+  const wanted = String(businessId || "").trim();
+  if (!wanted) return [];
+  const out = new Set<string>();
+  for (const row of KNOWN_PENDING_DISPLAY_PHONES) {
+    if (!row.businessIds.some((id) => metaBusinessIdsMatch(id, wanted))) continue;
+    for (const digits of row.displayDigits) {
+      const norm = displayPhoneDigits(digits);
+      if (norm) out.add(norm);
+    }
+  }
+  return [...out];
+}
+
+/** BM do número de exibição Pendente (ex.: 51926364461 → Nex Ads …7910). */
+export function knownPendingBusinessIdsForDisplayPhone(
+  displayPhoneNumber: string | null | undefined,
+): string[] {
+  const raw = String(displayPhoneNumber || "").trim();
+  if (!raw) return [];
+  const out = new Set<string>();
+  for (const row of KNOWN_PENDING_DISPLAY_PHONES) {
+    if (row.displayDigits.some((digits) => displayPhonesMatch(raw, digits))) {
+      for (const businessId of row.businessIds) out.add(businessId);
+    }
+  }
+  return [...out];
+}
+
+/** Dois números de exibição são o mesmo chip (tolerante a DDI/9º dígito). */
+export function knownDisplayPhonesMatch(
+  left: string | null | undefined,
+  right: string | null | undefined,
+): boolean {
+  return displayPhonesMatch(left, right);
 }
 
 export function knownPendingPhoneGraphRow(phone: KnownOwnedPendingPhone): Record<string, unknown> {

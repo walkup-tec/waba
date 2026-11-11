@@ -66,9 +66,18 @@ class FakeMetaRepo {
     }
     const now = new Date().toISOString();
     if (existing) {
+      // Espelha o repositório real: o update carimba metaBusinessId e demais campos
+      // do pending_token existente (ex.: card Nex Ads …7910 reaproveitando um órfão null).
       existing.accessTokenEncrypted = input.accessTokenEncrypted;
       existing.ownerEmail = input.ownerEmail;
+      existing.tokenType = input.tokenType || "bearer";
+      existing.tokenExpiresAt = input.tokenExpiresAt || null;
+      existing.configId = input.configId || null;
+      existing.metaBusinessId = input.metaBusinessId || existing.metaBusinessId;
       existing.status = existing.wabaId ? "pending_confirmation" : "pending_token";
+      existing.lastError = null;
+      existing.updatedBy = input.actorEmail;
+      existing.disconnectedAt = null;
       existing.updatedAt = now;
       return existing;
     }
@@ -280,6 +289,16 @@ describe("meta-whatsapp phase 3", () => {
     const service = new MetaWhatsappConnectionService(repo as any, oauthOk, graphNoop as any);
     await service.exchangeCodeAndStore(authA, { code: "ok-code" });
     assert.equal(repo.rows[0].metaBusinessId, null);
+    const stamped = await service.exchangeCodeAndStore(authA, {
+      code: "ok-code-2",
+      businessId: "2515673625607910",
+    });
+    assert.equal(stamped.businessId, "2515673625607910");
+    // O exchange com businessId deve carimbar o pending_token órfão existente
+    // (conn-1) em vez de criar duplicata — Case B: claim gruda no BM 7910.
+    assert.equal(repo.rows.length, 1);
+    assert.equal(repo.rows[0].metaBusinessId, "2515673625607910");
+    assert.equal(repo.rows.some((row) => row.metaBusinessId === "2515673625607910"), true);
     const tenantA = deriveStableMetaTenantId(authA.email);
     hideBusiness(tenantA, "1041827648719609", "Drax Sistemas");
     assert.equal(isHiddenBusiness(tenantA, "1041827648719609"), true);

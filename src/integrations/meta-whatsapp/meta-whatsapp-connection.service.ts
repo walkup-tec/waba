@@ -70,6 +70,8 @@ import {
   equivalentOwnedWabaIdsForBusiness,
   knownOwnedBusinessesMatch,
   knownPendingPhonesForBusiness,
+  knownPendingDisplayDigitsForBusiness,
+  knownDisplayPhonesMatch,
   knownWabaIdForPendingPhone,
   knownWabaNameForId,
   metaBusinessIdsMatch,
@@ -1788,6 +1790,22 @@ function wabaRelatedNamesFromNode(row: unknown): string[] {
   return names;
 }
 
+/**
+ * Nome de exibição dos chips de uma WABA (verified_name). O número Pendente da
+ * BM convidada (ex.: Nex Ads) costuma ter o verified_name do portfólio mesmo
+ * quando a WABA client da agência vem com `owner_business_info` nulo e nome
+ * genérico — indexar por esse nome deixa a WABA achar o card por nome exato.
+ */
+function phoneVerifiedNamesFromWabaPhones(phones: unknown[]): string[] {
+  const names: string[] = [];
+  for (const phone of phones || []) {
+    const rec = phone && typeof phone === "object" ? (phone as Record<string, unknown>) : {};
+    const name = String(rec.verified_name || "").trim();
+    if (name && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
 function normalizePortfolioName(value: string): string {
   return String(value || "")
     .normalize("NFD")
@@ -1845,6 +1863,70 @@ function addToNameBucket(
   }
   if (!bucket.wabaIds.includes(wid)) bucket.wabaIds.push(wid);
   for (const phone of phones) bucket.phones.push(phone);
+}
+
+/** Só dígitos — chave do index por número de exibição (ex.: 5551926364461). */
+function phoneDisplayDigitsKey(value: unknown): string {
+  return String(value || "").replace(/\D/g, "");
+}
+
+/**
+ * Indexa cada chip de uma WABA pelos dígitos do display_phone_number. Fallback
+ * do byName: quando a BM convidada (ex.: Nex Ads) tem um número Pendente conhecido
+ * mas o chip vem com verified_name genérico, o card ainda acha a WABA pelo número.
+ */
+function addPhonesToDigitBucket(byDigits: Map<string, PartnerWabaBucket>, phones: unknown[]): void {
+  for (const phone of phones || []) {
+    const rec = phone && typeof phone === "object" ? (phone as Record<string, unknown>) : {};
+    const key = phoneDisplayDigitsKey(rec.display_phone_number);
+    const wid = String(rec._portfolio_waba_id || "").trim();
+    if (!key) continue;
+    let bucket = byDigits.get(key);
+    if (!bucket) {
+      bucket = emptyPartnerBucket();
+      byDigits.set(key, bucket);
+    }
+    if (wid && !bucket.wabaIds.includes(wid)) bucket.wabaIds.push(wid);
+    bucket.phones.push(phone);
+  }
+}
+
+/** WABA/chips cujo número de exibição casa com algum dígito-alvo conhecido do BM. */
+function partnerBucketForDisplayDigits(
+  byDigits: Map<string, PartnerWabaBucket> | undefined,
+  targetDigits: string[],
+): PartnerWabaBucket {
+  const merged = emptyPartnerBucket();
+  if (!byDigits || !byDigits.size || !targetDigits.length) return merged;
+  for (const [key, bucket] of byDigits) {
+    if (!targetDigits.some((target) => knownDisplayPhonesMatch(key, target))) continue;
+    for (const id of bucket.wabaIds) {
+      if (!merged.wabaIds.includes(id)) merged.wabaIds.push(id);
+    }
+    for (const phone of bucket.phones) merged.phones.push(phone);
+  }
+  return merged;
+}
+
+/**
+ * Seed de WABA/chips do card: tenta o index por nome (verified_name/owner) e,
+ * se vazio, cai no index por dígitos do número Pendente conhecido do BM. Mantém
+ * o par WABA+phones para o fan-out carimbar o chip Pendente no card certo.
+ */
+function partnerBucketForCardNameOrDigits(
+  pack: { byName?: Map<string, PartnerWabaBucket>; byDigits?: Map<string, PartnerWabaBucket> } | undefined,
+  cardName: string,
+  businessId: string,
+): PartnerWabaBucket {
+  const named = partnerBucketForCardName(pack?.byName, cardName);
+  if (named.wabaIds.length) return named;
+  const digits = knownPendingDisplayDigitsForBusiness(businessId);
+  const byDigits = partnerBucketForDisplayDigits(pack?.byDigits, digits);
+  if (!byDigits.wabaIds.length && !byDigits.phones.length) return named;
+  return {
+    wabaIds: [...named.wabaIds, ...byDigits.wabaIds],
+    phones: [...named.phones, ...byDigits.phones],
+  };
 }
 
 function mergeNameBuckets(
@@ -1936,9 +2018,14 @@ async function collectOwnedWabasByBusinessFromMe(
 async function collectAgencyClientWabasByOwner(
   graph: MetaConnectionGraphCaller,
   token: string,
-): Promise<{ byOwner: Map<string, PartnerWabaBucket>; byName: Map<string, PartnerWabaBucket> }> {
+): Promise<{
+  byOwner: Map<string, PartnerWabaBucket>;
+  byName: Map<string, PartnerWabaBucket>;
+  byDigits: Map<string, PartnerWabaBucket>;
+}> {
   const byOwner = new Map<string, PartnerWabaBucket>();
   const byName = new Map<string, PartnerWabaBucket>();
+  const byDigits = new Map<string, PartnerWabaBucket>();
   const fieldSets = [
     [
       "id",
@@ -2006,17 +2093,26 @@ async function collectAgencyClientWabasByOwner(
       const phones = takeWabaPhonesFromNode(row, wabaId);
       for (const ownerId of ownerIds) addToPartnerBucket(byOwner, ownerId, wabaId, phones);
       for (const name of wabaRelatedNamesFromNode(node)) addToNameBucket(byName, name, wabaId, phones);
+      for (const phoneName of phoneVerifiedNamesFromWabaPhones(phones)) {
+        addToNameBucket(byName, phoneName, wabaId, phones);
+      }
+      addPhonesToDigitBucket(byDigits, phones);
     }
   }
-  return { byOwner, byName };
+  return { byOwner, byName, byDigits };
 }
 
 async function collectDebugWabasByOwner(
   graph: MetaConnectionGraphCaller,
   token: string,
-): Promise<{ byOwner: Map<string, PartnerWabaBucket>; byName: Map<string, PartnerWabaBucket> }> {
+): Promise<{
+  byOwner: Map<string, PartnerWabaBucket>;
+  byName: Map<string, PartnerWabaBucket>;
+  byDigits: Map<string, PartnerWabaBucket>;
+}> {
   const byOwner = new Map<string, PartnerWabaBucket>();
   const byName = new Map<string, PartnerWabaBucket>();
+  const byDigits = new Map<string, PartnerWabaBucket>();
   const debug = await listDebugTokenWhatsappTargets(graph, token);
   const pending = new Set<string>(debug.wabaIds);
   const phoneNodes = debug.phoneIds.length ? await fetchPhoneNodes(graph, token, debug.phoneIds) : [];
@@ -2044,6 +2140,10 @@ async function collectDebugWabasByOwner(
     const phones = takeWabaPhonesFromNode(rec, wabaId);
     for (const ownerId of ownerIds) addToPartnerBucket(byOwner, ownerId, wabaId, phones);
     for (const name of wabaRelatedNamesFromNode(rec)) addToNameBucket(byName, name, wabaId, phones);
+    for (const phoneName of phoneVerifiedNamesFromWabaPhones(phones)) {
+      addToNameBucket(byName, phoneName, wabaId, phones);
+    }
+    addPhonesToDigitBucket(byDigits, phones);
   }
   for (const row of phoneNodes) {
     const rec = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
@@ -2062,8 +2162,9 @@ async function collectDebugWabasByOwner(
         "",
     ).trim();
     if (label) addToNameBucket(byName, label, accountId, [row]);
+    addPhonesToDigitBucket(byDigits, [{ ...rec, _portfolio_waba_id: accountId }]);
   }
-  return { byOwner, byName };
+  return { byOwner, byName, byDigits };
 }
 
 async function fanOutAdminBusinessNumbers(input: {
@@ -2411,6 +2512,7 @@ async function fillEmptyAdminPortfolioCards(
       row: PortfolioWriteToken;
       maps: Array<Map<string, PartnerWabaBucket>>;
       byName: Map<string, PartnerWabaBucket>;
+      byDigits: Map<string, PartnerWabaBucket>;
     }
   >();
   for (const row of writeTokens) {
@@ -2425,6 +2527,7 @@ async function fillEmptyAdminPortfolioCards(
       row,
       maps: [owned, agency.byOwner, debug.byOwner],
       byName: mergeNameBuckets(agency.byName, debug.byName),
+      byDigits: mergeNameBuckets(agency.byDigits, debug.byDigits),
     });
   }
 
@@ -2465,9 +2568,10 @@ async function fillEmptyAdminPortfolioCards(
           seed = mergePartnerBuckets(bm, pack?.maps || [], []);
           if (storedWaba && !seed.wabaIds.includes(storedWaba)) seed.wabaIds.unshift(storedWaba);
           if (!seed.wabaIds.length) {
-            const named = partnerBucketForCardName(
-              pack?.byName,
+            const named = partnerBucketForCardNameOrDigits(
+              pack,
               String(card.name || card.primaryPageName || ""),
+              bm,
             );
             seed = {
               wabaIds: [...named.wabaIds],
@@ -2484,9 +2588,10 @@ async function fillEmptyAdminPortfolioCards(
           );
           if (storedWaba && !seed.wabaIds.includes(storedWaba)) seed.wabaIds.unshift(storedWaba);
           if (!seed.wabaIds.length) {
-            const named = partnerBucketForCardName(
-              pack?.byName,
+            const named = partnerBucketForCardNameOrDigits(
+              pack,
               String(card.name || card.primaryPageName || ""),
+              bm,
             );
             seed = {
               wabaIds: [...named.wabaIds],
@@ -2577,9 +2682,10 @@ async function fillEmptyAdminPortfolioCards(
           }
           for (const phone of fromMaps.phones) seed.phones.push(phone);
           if (!seed.wabaIds.length) {
-            const named = partnerBucketForCardName(
-              pack?.byName,
+            const named = partnerBucketForCardNameOrDigits(
+              pack,
               String(focused.name || focused.primaryPageName || ""),
+              bm,
             );
             seed = {
               wabaIds: [...named.wabaIds],
@@ -3015,7 +3121,13 @@ export class MetaWhatsappConnectionService {
 
   async exchangeCodeAndStore(
     auth: WabaRequestAuth,
-    input: { code?: string; redirectUri?: string; tenantId?: string; ownerEmail?: string },
+    input: {
+      code?: string;
+      redirectUri?: string;
+      businessId?: string;
+      tenantId?: string;
+      ownerEmail?: string;
+    },
   ): Promise<MetaWhatsappPublicConnection> {
     const tenant = requireTenant(auth);
     requireConfigured();
@@ -3026,6 +3138,8 @@ export class MetaWhatsappConnectionService {
     if (input.tenantId || input.ownerEmail) {
       logMetaWhatsappSafe("ignored-client-tenant", { tenantId: tenant.tenantId });
     }
+    /** BM do card «+» (ex.: Nex Ads …7910) — grava já no pending_token para o claim/descoberta. */
+    const businessId = String(input.businessId || "").trim();
 
     let exchanged: Awaited<ReturnType<typeof exchangeEmbeddedSignupCode>>;
     try {
@@ -3064,13 +3178,17 @@ export class MetaWhatsappConnectionService {
         tokenType: exchanged.tokenType,
         tokenExpiresAt: metaOauthExpiresAt(exchanged.expiresIn),
         configId: readMetaConfigId() || null,
-        metaBusinessId: null,
+        metaBusinessId: businessId || null,
         actorEmail: tenant.ownerEmail,
       });
+      if (businessId) {
+        unhideBusiness(tenant.tenantId, businessId);
+      }
       logMetaWhatsappSafe("token-stored", {
         tenantId: tenant.tenantId,
         status: row.status,
         connectionId: row.id,
+        hasBusiness: Boolean(row.metaBusinessId),
       });
       return toMetaWhatsappPublicConnection(row);
     } catch (error) {

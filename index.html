@@ -40959,6 +40959,10 @@
             }
             const body = { code: metaTpSession._code };
             if (redirectUri) body.redirectUri = redirectUri;
+            const exchangeBm = String(
+              metaTpSession.businessId || metaTpSession.savedBusinessId || "",
+            ).trim();
+            if (exchangeBm) body.businessId = exchangeBm;
             const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/callback", {
               method: "POST",
               body: JSON.stringify(body),
@@ -41079,7 +41083,7 @@
                 ok: true,
                 hasPortfolios: false,
                 message: metaTpSession.addNumber
-                  ? "Token gravado, mas o número deste portfólio ainda não apareceu. Clique em Atualizar ou no + de novo."
+                  ? "A Meta ainda não compartilhou o WhatsApp Pendente deste portfólio com o app. No Business Manager → Contas do WhatsApp → Atribuir parceiro (Drax/Walkup), ou conclua o + escolhendo o número Pendente. Depois clique em Atualizar."
                   : "Ainda lendo os números na Meta. Aguarde ou clique em Atualizar.",
               });
             }
